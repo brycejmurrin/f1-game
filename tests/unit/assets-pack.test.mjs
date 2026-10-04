@@ -1089,3 +1089,57 @@ test("assets.mjs --help prints usage and exits 0", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /bake-synthetic/);
 });
+
+// ── verify against a BAD manifest (2026-10-04) ─────────────────────────────
+// `verify` joined a model's file onto the pack with no confinement (materials
+// already had one), accepted a model with no md5 at all, and never opened the
+// AX26 body, so an index past the vertex count or a material id past the
+// array's last layer shipped silently. Each case below is one defect in an
+// otherwise-good pack; the good model alone must pass.
+test("verify refuses model files outside the pack, unhashed, or with out-of-range indices/layers", async () => {
+  const os = require("node:os");
+  const crypto = require("node:crypto");
+  const { writeAX26 } = await import("../../tools/gen/assets.mjs");
+  const tri = { pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), idx: new Uint32Array([0, 1, 2]) };
+  const md5 = (b) => crypto.createHash("md5").update(b).digest("hex");
+  const meta = { licence: "CC0", author: "t", source: "t", mat: "CONCRETE" };
+  const run = (models, files) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verify-"));
+    try {
+      fs.mkdirSync(path.join(dir, "models"), { recursive: true });
+      for (const [f, b] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), b);
+      fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ version: 1, materials: null, models, env: {}, credits: [] }));
+      const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
+        { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+      return { status: r.status, out: r.stdout + r.stderr };
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+  const good = writeAX26(tri, "CONCRETE");
+  assert.equal(good.readUInt32LE(4), 2, "precondition: the compact layout");
+  const ok = run({ good: { ...meta, file: "models/good.bin", md5: md5(good), verts: 3, tris: 1 } }, { "models/good.bin": good });
+  assert.equal(ok.status, 0, "the good pack passes:\n" + ok.out);
+
+  // An index past nv: the last u16 is the last index of the v2 body.
+  const badIdx = Buffer.from(good); badIdx.writeUInt16LE(7, badIdx.length - 2);
+  // A material layer past the array: the v2 per-vertex material bytes sit at 20 + nv*21.
+  const badMat = Buffer.from(good); badMat[20 + 3 * 21] = 40;
+  // A v1 body (an emissive colour > 1 forces it) with an out-of-range index too.
+  const v1 = writeAX26({ ...tri, col: new Float32Array(9).fill(2) }, "CONCRETE");
+  assert.equal(v1.readUInt32LE(4), 1, "precondition: the wide layout");
+  const v1Bad = Buffer.from(v1); v1Bad.writeUInt32LE(3, v1Bad.length - 4);
+  const cases = [
+    ["outside the pack", { ...meta, file: "../escape.bin", md5: md5(good) }, {}, /file outside pack/],
+    ["no md5", { ...meta, file: "models/good.bin" }, { "models/good.bin": good }, /md5 missing/],
+    ["index past nv (v2)", { ...meta, file: "models/b.bin", md5: md5(badIdx) }, { "models/b.bin": badIdx }, /indices reach past the 3 vertices/],
+    ["index past nv (v1)", { ...meta, file: "models/b.bin", md5: md5(v1Bad) }, { "models/b.bin": v1Bad }, /indices reach past the 3 vertices/],
+    ["material layer past the array", { ...meta, file: "models/b.bin", md5: md5(badMat) }, { "models/b.bin": badMat }, /material layer 40, outside 0\.\.16/],
+    ["truncated body", { ...meta, file: "models/b.bin", md5: md5(good.subarray(0, good.length - 2)) }, { "models/b.bin": good.subarray(0, good.length - 2) }, /bytes, header says/],
+    ["unknown material name", { ...meta, mat: "PLUTONIUM", file: "models/good.bin", md5: md5(good) }, { "models/good.bin": good }, /not a MAT id/],
+    ["manifest counts drift", { ...meta, file: "models/good.bin", md5: md5(good), verts: 4, tris: 2 }, { "models/good.bin": good }, /manifest says 4 verts/],
+  ];
+  for (const [name, rec, files, want] of cases) {
+    const r = run({ bad: rec }, files);
+    assert.equal(r.status, 1, `${name}: verify must fail\n${r.out}`);
+    assert.match(r.out, want, `${name}: names the defect`);
+  }
+});
