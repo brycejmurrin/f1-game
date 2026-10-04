@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// @doc Every menu and popup plus Display lighting/camera/flyby panels into one preview HTML page.
+// @skill playwright-probe
 // show-menus.mjs — every menu and popup, then the Display survey, into the preview.
 //
 //   node tools/shot/show-menus.mjs
