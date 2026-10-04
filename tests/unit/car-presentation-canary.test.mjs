@@ -455,6 +455,40 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
   }
 });
 
+// putBoundedMesh promotes a hit by STAMP (one Map write) instead of indexOf +
+// splice + push. The contract the counts above rely on is unchanged: a hit
+// promotes, the least recently used is evicted, each victim freed once. Checked
+// against the old array implementation over a long random sequence.
+test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU did", () => {
+  const src = fnSource(read("js/car/car-draw.js"), "function putBoundedMesh(");
+  const body = src.slice(src.indexOf("{") + 1, src.lastIndexOf("}"));
+  const freedNew = [];
+  const make = new Function("G", "_lruStamp",
+    "let _lruTick = 0; return function (cache, order, key, create, max, freeOne) {" + body + "};");
+  const put = make({ gfx: { freeMesh: (m) => freedNew.push(m) } }, new WeakMap());
+  function oldPut(cache, order, key, create, max, free) {
+    if (cache[key]) {
+      if (order[order.length - 1] !== key) { const i = order.indexOf(key); if (i >= 0) order.splice(i, 1); order.push(key); }
+      return cache[key];
+    }
+    const mesh = create(); cache[key] = mesh; order.push(key);
+    while (order.length > max) { const old = order.shift(); const v = cache[old]; delete cache[old]; free(v); }
+    return mesh;
+  }
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const cNew = {}, oNew = [], cOld = {}, oOld = [], freedOld = [];
+  for (let i = 0; i < 4000; i++) {
+    const key = "k" + Math.floor(rnd() * 12);
+    const a = put(cNew, oNew, key, () => ({ key, i }), 5);
+    const b = oldPut(cOld, oOld, key, () => ({ key, i }), 5, (m) => freedOld.push(m));
+    assert.deepEqual(a, b, `step ${i}: the same mesh for ${key}`);
+    assert.deepEqual(Object.keys(cNew).sort(), Object.keys(cOld).sort(), `step ${i}: the same resident keys`);
+  }
+  assert.deepEqual(freedNew, freedOld, "the same victims, in the same order");
+  assert.ok(freedNew.length > 100, "the sequence exercised eviction");
+});
+
 // THE PLAYER'S CASTER IN A FIRST-PERSON VIEW (2026-10-04). Cockpit, helmet and
 // visor draw cockpitBodyMesh (no driver, the player's own halo) at the
 // camera-anchored cockpit matrix; the car and lamp maps cast the EXTERIOR

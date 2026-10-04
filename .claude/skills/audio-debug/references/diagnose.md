@@ -21,7 +21,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Collision thud | White-noise burst scaled to impact `dv` |
 | Rivals / space | Panned, Doppler-shifted voice pool / generated-IR convolver per venue (desktop only) |
 | Team radio FX | `radioSting(channel, seconds)` — key click, a 300 Hz–3.4 kHz hiss bed held for the card's life, squelch tail. Fired from `showAnnounce` (race/count only), channel from `RadioVoice.SPEAKERS`; `coach` is deliberately silent. Level `setRadioFx` / `radioFxLevel()`, store `apex26.radioFx`. NOT a filter on the voice — speechSynthesis has no node in this graph and no browser exposes its output |
-| Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
+| Music | CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()`. Desktop decodes each to PCM (2 cached); a phone STREAMS through one `<audio>` → `createMediaElementSource` → `musicGain` (`streamMusic()` in `soundtrack.js`; `localStorage apex26.musicStream` `"1"`/`"0"` overrides for an A/B). `sw.js` leaves `Range` music requests to the network (Safari needs 206) |
 
 Every tune knob is a constant multiplier, never a function of rev: pitch stays
 monotonic in rev by construction. `__apex.audio()` / `audioTune()` are the
@@ -112,7 +112,7 @@ for exactly these reasons, so find which one applies:
    reads as "paused → music died". A missing `contextState: "running"` after show
    in `GameAudio.debug()` = the resume never ran (iOS interrupted; `onInterrupted`).
 2. `setMusicEnabled(false)` / MUSIC OFF in `#audioset` (persisted; `startMusic` returns early).
-3. Every track failed to decode → `musicLoadFailed` stops the list (`audio-recovery.test.mjs`).
+3. Every track failed to decode (or, streaming, raised a media `error`) → `musicLoadFailed` stops the list (`audio-recovery.test.mjs`). A stream whose `play()` was refused (`NotAllowedError`, iOS with no gesture) logs a warn and retries on the next `startMusic`.
 4. Resume with SOUND off: `setPaused(false)` restarts music only when `soundOn`.
 5. Not a cut-out: the engine duck (`musicGain` × `1 − 0.25·rev`, released by `stopEngine`)
    and the radio duck (`setRadioDuck`, ×0.35 while a line is on air) only LOWER it.

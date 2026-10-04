@@ -4525,7 +4525,7 @@ function updateCar(c, dt, ranked) {
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman) {
+  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both objects
     const applied = AiBand.applyVmax(vmax, AiBand.factor({
       leadProg: _leadHuman.prog, carProg: c.prog,
       trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,

@@ -239,6 +239,11 @@
   width: 132px; height: 16px; border-radius: var(--r-md);
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff))); border: 1px solid rgba(255, 255, 255, 0.4);
   overflow: hidden; position: relative;
+  /* The fill's width is written at frame rate (js/ui/hud.js paintInstruments).
+     Every rule sizing this box gives it a fixed width AND height (here,
+     responsive.css, touch-controls.css), so size containment is free, and
+     strict keeps that per-frame write from dirtying layout/paint outside it. */
+  contain: strict;
 }
 #hud-tach::after {           /* redline zone marker */
   content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 12%;

@@ -564,6 +564,31 @@ test("worn fronts cost front grip and leave the rear alone — that is the point
   assert.equal(s.axleSplit(c).r, 1);
 });
 
+// update() runs the thermal / defect / axle steps through positional bodies and
+// one scratch pair (no literal or array per car per step). Bit-for-bit, one tick
+// must equal the public stepTemp / stepGrain / stepBlister / axleShare chain.
+test("update() is exactly the public step chain — the scratch refactor moved no bit", () => {
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const c = freshCar(s, 0.5, { human: true, speed: 50, axEstSm: -3, axFrac: 0.6, skidIntensity: 0.4, lap: 1 });
+  c.tyreTs = 70; c.tyreTb = 75; c.tyreGrain = 0.1; c.tyreBlister = 0.05;
+  c.tyreWear = 0; c.tyreWearF = 0; c.tyreWearR = 0;
+  const ax = s.axleSplit(c), ax0 = { f: ax.f, r: ax.r };
+  s.update(c, 1 / 60);
+  const amb = T.T_AMBIENT.dry, track = amb + T.T_TRACK_DELTA.dry, life = c.tyre.life, dt = 1 / 60;
+  const t = T.stepTemp(70, 75, { load: c._tyreLoad, vFrac: 50 / 60, amb, track, life, slide: 0.4, dt });
+  assert.equal(c.tyreTs, t[0]); assert.equal(c.tyreTb, t[1]);
+  assert.equal(c.tyreGrain, T.stepGrain(0.1, { ts: t[0], life, slide: 0.4, dt }));
+  assert.equal(c.tyreBlister, T.stepBlister(0.05, { tb: t[1], life, dt }));
+  const sh = T.axleShare(c, 7);
+  assert.ok(c.tyreWear > 0);
+  assert.equal(c.tyreWearF, c.tyreWear * sh[0]); assert.equal(c.tyreWearR, c.tyreWear * sh[1]);
+  // axleSplit hands back one reused answer: read it, do not keep it.
+  assert.equal(ax0.f, 1); assert.equal(ax0.r, 1);
+  const a = s.axleSplit(c);
+  assert.ok(a.f < 1 && a.r > 1, "fronts worked harder on the brakes");
+  assert.equal(s.axleSplit(c), a, "the same scratch object");
+});
+
 test("OFF: the axle split is exactly 1/1, and a stop resets both axles", () => {
   const s = ctxFor({ laps: 10 });
   const c = freshCar(s, 0.5);
