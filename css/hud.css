@@ -615,10 +615,14 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 }
 #hud-pit[data-phase="near-box"]::after,
 #hud-pit[data-phase="stop"]::after { background: var(--you); }
-body.hud-met-timing #hud-pit,
-body.hud-met-compact #hud-pit { display: none !important; }
+/* TIMING and COMPACT drop the tyre chip, but never a PIT cue: #hud-pit is
+   hidden unless a cue is live (and is the only thing that makes the hold-to-pit
+   gesture discoverable, index.html), and the chip's data-pit states are the
+   only feedback that the dwell is registering. So the layouts reach the chip's
+   idle readout only; the player's own TYRE toggle still hides it outright. */
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
+body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyre[data-pit]:not([hidden]) { display: flex !important; }
 /* LAPS LEFT on the set (js/ui/hud.js sets data-laps from the tyre model):
    over the bar, in the code chip's ink, so it reads on fill and plate alike. */
 #hud-tyre-bar::after {
@@ -707,7 +711,7 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    no height term) filled a quarter of a landscape phone under a HUD SIZE
    zoom. ~140x40 CSS px on an 844x390 phone, ~230x66 on 1280x720. */
 #hud-mirror {
-  --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px);
+  --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px);
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   left: 50%; transform: translateX(-50%);
@@ -746,7 +750,7 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
    mirror past its shipped box, and the max() follows it down, never up. */
 body.hud-mirror-on :is(#announce, #hud-flag) {
   --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
-  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7),
+  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px) * 2 / 7),
     calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
@@ -810,7 +814,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
 #hud-flag.flag-vsc { background: #ffb300; color: #201400;
   animation: pulse var(--hud-pulse) ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
-#hud-flag.flag-red { background: var(--slower); color: var(--text); }   /* the red flag: the session is stopped */
+/* THE RED FLAG: the session is stopped. A FIXED flag red, like the yellow and
+   the VSC amber above — not --slower, which COLOUR VISION remaps to an orange
+   and which put light ink at 3.29:1 (2.66:1 deutan) on a weight-800 word that
+   is not large text. --flag-red under --hud-ink-light is 5.6:1 in every
+   palette, and the light inset keyline is a second channel that does not
+   depend on seeing red. */
+#hud-flag.flag-red { background: var(--flag-red); color: var(--hud-ink-light);
+  outline: 2px solid var(--hud-ink-light); outline-offset: -2px; }
 /* BLUE FLAG (js/ui/hud-readouts.js blueFlag): a car a lap up is on your gearbox.
    A plate with a blue edge rather than a blue field: light ink on the palette's
    blue misses AA, and the word does the work. */
@@ -1294,7 +1305,7 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    `translate`/`scale` compose with the translateX(-50%) the centred pieces
    already carry; --hl-o keeps a corner piece growing away from its corner. */
 [data-hl] {
-  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1vh / var(--hud-z, 1));
+  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
 }
@@ -1725,7 +1736,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-rel {
   right: calc(10px + var(--sar) / var(--hud-z));
-  top: calc(38vh / var(--hud-z));
+  top: calc(38svh / var(--hud-z));
   border-left: 3px solid var(--dim);
 }
 #hud-rel > div {
@@ -1745,7 +1756,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
 #hud-strat {
   left: calc(10px + var(--sal) / var(--hud-z));
-  top: calc(40vh / var(--hud-z));
+  top: calc(40svh / var(--hud-z));
   border-left: 3px solid var(--dim);
   min-width: 15ch;
 }
@@ -1755,7 +1766,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 #hud-strat [data-k="uc"] > span { color: inherit; }
 #hud-inputs {
   left: calc(10px + var(--sal) / var(--hud-z));
-  bottom: calc(22vh / var(--hud-z));
+  bottom: calc(22svh / var(--hud-z));
   display: flex;
   align-items: center;
   column-gap: calc(var(--gap) / 2);

@@ -297,10 +297,13 @@ html:has(#pausemenu[open]) #ios-install {
    so a one-shot reveal still lands on its end state — but keyed on the
    player's choice, and scoped to the menus: the title screen and every
    dialog sheet. !important for the backstop's reason: it has to beat every
-   per-element animation shorthand without matching their specificity. */
-:root[data-motion="reduce"] :is(#overlay, .screen) *,
-:root[data-motion="reduce"] :is(#overlay, .screen) *::before,
-:root[data-motion="reduce"] :is(#overlay, .screen) *::after {
+   per-element animation shorthand without matching their specificity.
+   #rotate-device is named on its own: it is neither #overlay nor a .screen,
+   so its .rotate-icon swung `infinite alternate` for a player who had asked
+   for less motion, and only the OS query stopped it. */
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *,
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::before,
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
