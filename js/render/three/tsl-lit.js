@@ -1927,9 +1927,9 @@
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });
 
-        // metallic-flake sparkle (js/render/glx/shaders/glsl-lit.js)
+        // metallic-flake sparkle (js/render/glx/shaders/glsl-lit.js), faded out at range AND inside 4 m (cockpit confetti)
         If(carPaint.greaterThan(0.001).and(litNoL.greaterThan(0.0)).and(matU.sparkle.greaterThan(0.001)), () => {
-          const spFade = clamp(vd.sub(14.0).div(30.0).oneMinus(), 0.0, 1.0).mul(matU.sparkle).toVar();
+          const spFade = clamp(vd.sub(14.0).div(30.0).oneMinus(), 0.0, 1.0).mul(smoothstep(1.5, 4.0, vd)).mul(matU.sparkle).toVar();
           spFade.mulAssign(smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b))));
           If(spFade.greaterThan(0.01), () => {
             const cell = floor(objP.mul(220.0)).toVar();
