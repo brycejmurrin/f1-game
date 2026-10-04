@@ -422,3 +422,27 @@ test("the adaptive delay follows one-way LATENCY, so a slow link interpolates in
   for (let i = 0; i < 100; i++) fast.push(1000 + i * 50, car({ s: i }), 1000 + i * 50 + 20);
   assert.ok(Math.abs(fast.timing().delayMs - 100) < 5, "a 20 ms link keeps the base delay: " + fast.timing().delayMs);
 });
+
+// L8-e: the host relay carries every other player's car in ONE aged packet;
+// each entry keeps the moment its pose was true (header tick − age).
+test("an aged multi-entry packet round-trips every car and its own stamp", () => {
+  const car = (s, lap) => ({ s, x: 1.25, head: 1, speed: 70, gear: 6, lap, braking: true });
+  const bytes = NetSnapshot.encodeAged([
+    { id: 4, car: car(100, 2), at: 10_000 },
+    { id: 9, car: car(250.5, 3), at: 9_960.4 },
+    { id: -1, car: car(1, 1), at: 10_000 },          // no wire id: skipped
+    { id: 7, car: car(5, 1), at: NaN },              // never posed: skipped
+  ]);
+  assert.equal(bytes.length, 6 + 2 * NetSnapshot.AGED_BYTES);
+  const pkt = NetSnapshot.decodeSnapshot(bytes);
+  assert.equal(pkt.type, NetSnapshot.TYPE_AGED);
+  assert.equal(pkt.tick, 10_000, "the header is the newest pose");
+  assert.deepEqual(pkt.cars.map((c) => [c.id, c.s, c.lap, c.age]), [[4, 100, 2, 0], [9, 250.5, 3, 40]]);
+  assert.equal(pkt.cars[1].braking, true);
+  // A plain snapshot still decodes, every entry age 0.
+  const plain = NetSnapshot.decodeSnapshot(NetSnapshot.encodeSnapshot(500, [{ id: 1, car: car(3, 1) }]));
+  assert.equal(plain.type, NetSnapshot.TYPE_SNAPSHOT);
+  assert.equal(plain.cars[0].age, 0);
+  // Truncation is refused for the aged layout too.
+  assert.equal(NetSnapshot.decodeSnapshot(bytes.slice(0, bytes.length - 1)), null);
+});

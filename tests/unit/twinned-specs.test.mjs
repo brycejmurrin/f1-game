@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, deployGateGroups, isTwinned } from "../../tools/ci/twinned-specs.mjs";
+import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, deployGateGroups, isTwinned, partitionArgs } from "../../tools/ci/twinned-specs.mjs";
 import { fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -137,12 +137,30 @@ test("a fully twinned group RUNS its twins, and an empty run never reports a pas
   //
   // What this pins is not the wording but the ARITHMETIC: a verdict line that
   // claims a pass must have run something. `0/0 done` is the shape of the bug.
+  //
+  // STATIC BY DEFAULT (2026-10-04). This used to spawn tools/ci/run-playwright.mjs
+  // on every tooling-fast / deploy-gate run. That process name IS the "live
+  // Playwright run" signal (.claude/hooks/live-run.py, protect-files, the
+  // stop-guard, apex_status), so a node unit test inside the parallel ladder
+  // froze every other checkout's js/ edits and made deploy.mjs refuse other
+  // lanes. The decision and the arithmetic are asserted here from source; the
+  // end-to-end spawn runs only under APEX_RUNNER_E2E=1, by hand or in a serial
+  // lane.
   const spec = "tests/specs/wake-lock.spec.js";       // the cheapest pair, ~4 s
   assert.ok(isTwinned(spec), `${spec} is no longer twinned — pick another pair`);
+  assert.equal(partitionArgs([spec], {}).nothingToRun, true, "a fully twinned run hands Playwright nothing");
+  const runner = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
+  assert.match(runner, /spawnSync\(process\.execPath, \["--test", "--test-reporter=tap", \.\.\.twins\]/,
+    "the dropped specs' twins RUN in node");
+  assert.match(runner, /const ok = r\.status === 0 && failed === 0 && passed > 0;/,
+    "a pass must have run something: passed > 0, never a 0/0 green");
+  assert.match(runner, /passed === null \|\| failed === null[\s\S]{0,300}= run failed/,
+    "an unreadable twin summary is a failure verdict");
+  if (process.env.APEX_RUNNER_E2E !== "1") return;
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/run-playwright.mjs"), spec],
     { cwd: ROOT, encoding: "utf8", timeout: 180000 });
   const out = `${r.stdout || ""}${r.stderr || ""}`;
-  const m = /= run (\w+)\s+\((\d+)\/(\d+) done, (\d+) failed\)/.exec(out);
+  const m = /= run (\w+)\s+\((\d+)\/(\d+) done, (\d+) failed[^)]*\)/.exec(out);
   assert.ok(m, `no verdict line at all:\n${out.slice(-2000)}`);
   assert.equal(m[1], "passed", out.slice(-2000));
   assert.ok(+m[2] > 0 && +m[3] > 0,

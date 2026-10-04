@@ -1906,14 +1906,22 @@ const Input = (function () {
      not-recording, because the pad is polled, not evented — skipping the read
      would also skip the edge bookkeeping and turn a button HELD across the
      pause into a fresh press on resume. */
-  function clearEdges() {
+  /* THE DRIVE EDGES ALONE, at lights-out (game.js). Every consumer of these
+     runs only once the car steps, so a press during the countdown stayed latched
+     and fired on the first green frame: RECOVER re-placed the car at rescue
+     speed, a shift-up started it in 2nd. Camera, radio and mirror are left
+     alone — those work on the grid and are consumed there. */
+  function clearDriveEdges() {
     overtakePressed = false;
     boostTogglePressed = false;
     aeroTogglePressed = false;
     shiftUpPressed = false;
     shiftDownPressed = false;
-    cameraCyclePressed = false;
     recoverPressed = false;
+  }
+  function clearEdges() {
+    clearDriveEdges();
+    cameraCyclePressed = false;
     radioPressed = false;
     mirrorPressed = false;
   }
@@ -2030,7 +2038,7 @@ const Input = (function () {
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,
-    clearEdges,
+    clearEdges, clearDriveEdges,
     get padConnected() { return padConnected; },
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },

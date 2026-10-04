@@ -69,3 +69,19 @@ test("the car is not held at the pit limiter after the standing restart", () => 
     `full throttle for 7.5 s should beat the pit limiter (${limit.toFixed(1)} m/s), ` +
     `got ${player.speed.toFixed(1)} m/s — the lane latch is back`);
 });
+
+test("a stop the red flag interrupts before the set is fitted is not counted", () => {
+  // pitStops is counted at the box latch (pit-lane.js) and the set is fitted
+  // mid-hold. A re-grid in between sent the car out on its OLD tyres with the
+  // stop already spent: think() read lapsAt[pitStops] as done, one short.
+  const a = g.apex, G = g.G;
+  assert.equal(G.state, "race");
+  const [early, fitted] = G.cars.filter((c) => !c.human && !c.retired);
+  early.pitState = "box"; early.pitFitted = false; early.pitStops = 1; early.pitT = 1.5;
+  fitted.pitState = "box"; fitted.pitFitted = true; fitted.pitStops = 1; fitted.pitT = 0.5;
+  const r = a.redFlag();
+  assert.ok(r && r.state === "count", "redFlag() should re-arm the lights");
+  assert.equal(early.pitStops, 0, "the wheels never came off: the stop did not happen");
+  assert.equal(fitted.pitStops, 1, "a set already fitted is a stop taken");
+  assert.equal(early.pitState, "none");
+});

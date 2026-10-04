@@ -1847,6 +1847,11 @@ const PitLane = (function () {
      *  these, by construction cannot fire while the car is inside it. */
     function clearArm(c) {
       if (!c) return;
+      // A stop is counted at the box latch but the set is fitted mid-hold: a
+      // re-grid before the fit leaves on the OLD set, so that stop never
+      // happened — keeping it spent the plan's next stop (think() reads
+      // lapsAt[pitStops]) and left the car one stop short of its strategy.
+      if (c.pitState === "box" && !c.pitFitted) c.pitStops = Math.max(0, (c.pitStops | 0) - 1);
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
       c.pitFitted = false;

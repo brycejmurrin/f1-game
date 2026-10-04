@@ -103,6 +103,35 @@ test("the commit hook's auto-raise absorbs small growth and blocks big growth", 
   }
 });
 
+test("auto-raise absorbs only a per-file LINE count; a tree metric, slack 0 or another metric blocks with its reason", async () => {
+  /* 2026-10-04 review: autoRaise raised every row over by <= 40, so one new
+     zero-reference module raised zeroRefModules 0 -> 1 (or implicitAsserts,
+     rawColor…) and the hook staged it; CI's --base only warns below 40. */
+  const { autoRaise, autoRaiseBlockReason, AUTO_RAISE_METRICS } = await import("../../tools/check/ratchets.mjs");
+  assert.deepEqual([...AUTO_RAISE_METRICS].sort(), ["codeLines", "lines"]);
+  const row = (o) => ({ file: "f.js", metric: "lines", value: 101, ceiling: 100, over: 1, slackMax: 60, ...o });
+  assert.equal(autoRaiseBlockReason(row()), null, "one line over a per-file line ceiling is absorbed");
+  assert.equal(autoRaiseBlockReason(row({ metric: "codeLines" })), null);
+  assert.match(autoRaiseBlockReason(row({ file: "(tree)", metric: "zeroRefModules", tree: true, ceiling: 0, value: 1 })), /tree-wide/);
+  assert.match(autoRaiseBlockReason(row({ slackMax: 0 })), /slack 0/);
+  assert.match(autoRaiseBlockReason(row({ metric: "gMembers" })), /not a line count/);
+  assert.match(autoRaiseBlockReason(row({ over: 41 })), /past the 40-line/);
+  assert.match(autoRaiseBlockReason(row({ missing: true })), /missing/);
+  // End to end on synthetic data (dryRun: never writes): a real file one line
+  // over is raisable, and a slack-0 tree metric one over blocks the lot.
+  const file = "tools/check/ratchets.mjs";
+  const lines = (await measure({ files: { [file]: { lines: 1 } }, tree: {} }))[0].value;
+  const okRun = await autoRaise({ dryRun: true, data: { files: { [file]: { lines: lines - 1 } }, tree: {} } });
+  assert.equal(okRun.ok, true);
+  assert.deepEqual(okRun.raised.map((r) => r.metric), ["lines"]);
+  const bc = (await measure({ files: {}, tree: { bareCatches: 1 } }))[0].value;
+  const blocked = await autoRaise({ dryRun: true, data: {
+    files: { [file]: { lines: lines - 1 } }, tree: { bareCatches: { ceiling: bc - 1, slack: 0 } } } });
+  assert.equal(blocked.ok, false, "a slack-0 tree metric over its ceiling must block, not raise");
+  assert.deepEqual(blocked.blocked.map((r) => r.metric), ["bareCatches"]);
+  assert.match(blocked.blocked[0].reason, /tree-wide/);
+});
+
 test("--base names every ceiling that moved, and only a raise past the hook's absorb fails", () => {
   // The CI step (ci.yml guards: "Ratchet ceilings vs the base") exists because
   // the commit hook's auto-raise rides into the diff as one changed number

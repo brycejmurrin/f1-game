@@ -64,6 +64,19 @@ const LightStore = (() => {
       return track.def.id + "|" + tod + "|" + G.raceWeather;
     }
 
+    // WEATHER DOES NOT MOVE THE SUN. The sun's direction is keyed by track x
+    // time of day only: every weather resolves sunElev/sunAzim from the
+    // "<track>|<tod>|dry" profile (shipped and player alike), and the tuner
+    // writes them there whatever the weather on screen. Until 2026-10-04 each
+    // weather carried its own offsets (paul_ricard dawn swung 144.5 degrees
+    // dry->wet), so a weather-arc stage flip swung the shadows mid-race; the
+    // weather's look is its tint (sunTemp, keyMul, weatherSunMute), which the
+    // arc cross-fades (js/lighting/atmosphere.js).
+    const TOD_KEYED = new Set(["sunElev", "sunAzim"]);
+    function keyFor(id, k) {
+      return k && TOD_KEYED.has(id) ? k.slice(0, k.lastIndexOf("|")) + "|dry" : k;
+    }
+
     // Conditional shipped layer: the wildcard-condition key "*|<tod>" of
     // window.LightPresets (e.g. "*|night"), resolved ONLY on the ULTRA preset
     // with a backend that has per-chunk lamp support, off mobile. This is the
@@ -96,13 +109,13 @@ const LightStore = (() => {
       return c;
     }
 
-    function layers() {
+    function layers(k) {
       const F = window.LightPresets || null;
-      const k = key();
       return [F && F["*"], F && k && F[k], condLayer(F), profiles["*"], k && profiles[k]];
     }
 
     function base(k, d) {
+      k = keyFor(d.id, k);
       let v = d.def;
       const F = window.LightPresets || null;
       if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
@@ -141,13 +154,26 @@ const LightStore = (() => {
       if (reinit && G.isWetRoad()) G.initRainDrops();
     }
 
-    function apply(fromApplyRace) {
+    // opts.holdRebuild (the weather arc's blended re-apply, js/lighting/atmosphere.js):
+    // leave the `rebuild` knobs (lampDensity, poolEnergy, lampRadiusMul, bleedMul,
+    // beamCone, lampGapFill) and the bake inputs at their live values, so a mid-race weather flip never
+    // nulls track._lights and re-bakes the lamp pools. They stay as the session
+    // resolved them (track x time of day x the weather it started in) until the next
+    // un-blended apply: a chip, a slider, a track load.
+    // The lamp-bake inputs are held with them: LampBake.forTrack keys its bake on
+    // (lights, LT.lampNearClamp, budget), and lampBake / tailLightEmit gate it.
+    const BAKE_IDS = new Set(["lampNearClamp", "lampBake", "tailLightEmit"]);
+    const held = (d) => !!d.rebuild || BAKE_IDS.has(d.id);
+    function apply(fromApplyRace, opts) {
       if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
-      const L = layers();
+      const k = key();
+      const L = layers(k), Ld = layers(keyFor("sunElev", k));
+      const hold = !!(opts && opts.holdRebuild);
       let rebuilt = false, reapply = false, reinit = false;
       for (const d of TUNE_DEFS) {
+        if (hold && held(d)) continue;
         let v = d.def;
-        for (const l of L) if (l && typeof l[d.id] === "number") v = l[d.id];
+        for (const l of TOD_KEYED.has(d.id) ? Ld : L) if (l && typeof l[d.id] === "number") v = l[d.id];
         v = clamp(v, d.min, d.max);
         if (LT[d.id] === v) continue;
         LT[d.id] = v;
@@ -163,7 +189,7 @@ const LightStore = (() => {
       if (!d || typeof v !== "number" || !isFinite(v)) return false;
       v = clamp(v, d.min, d.max);
       LT[id] = v;
-      const k = key();
+      const k = keyFor(id, key());
       if (k) {
         const prof = profiles[k] || (profiles[k] = {});
         put(prof, k, d, v);
@@ -206,7 +232,7 @@ const LightStore = (() => {
       // has is left behind rather than copied onto 39 more profiles.
       const from = [];
       for (const d of TUNE_DEFS) {
-        const v = mode === "look" ? LT[d.id] : (profiles[src] || {})[d.id];
+        const v = mode === "look" ? LT[d.id] : (profiles[keyFor(d.id, src)] || {})[d.id];
         if (typeof v === "number" && isFinite(v)) from.push([d, v]);
       }
       if (!from.length) return { ok: false, error: "no-edits", mode, key: src, tod, weather, tracks: 0, changed: 0 };
@@ -215,10 +241,15 @@ const LightStore = (() => {
       for (const t of list) {
         if (!t || !t.id || t.id === srcId) continue;
         const k = t.id + "|" + tod + "|" + weather;
-        out.undo[k] = profiles[k] ? Object.assign({}, profiles[k]) : null;
-        const prof = profiles[k] || (profiles[k] = {});
-        for (const [d, v] of from) if (put(prof, k, d, v)) out.changed++;
-        if (!Object.keys(prof).length) delete profiles[k];
+        // A sun knob lands on the target's "|dry" profile (keyFor), which may be
+        // a second key — snapshot each key once, before the first write.
+        for (const [d, v] of from) {
+          const kk = keyFor(d.id, k);
+          if (!(kk in out.undo)) out.undo[kk] = profiles[kk] ? Object.assign({}, profiles[kk]) : null;
+          const prof = profiles[kk] || (profiles[kk] = {});
+          if (put(prof, k, d, v)) out.changed++;
+          if (!Object.keys(prof).length) delete profiles[kk];
+        }
         out.tracks++;
       }
       return out;
