@@ -567,9 +567,12 @@ the stream position after them is a hard contract (see the rule in Driver rating
 above). So reliability draws from **nothing**: `Reliability.arm()` hashes
 `(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
 is built on, with the seed passed in, because a Grand Prix has no career seed.
-Inside a career the seed is `career.seed` and the round is `career.season.round`;
-outside one they are `simSeed()` and a per-session race counter, so two Grands
-Prix in a row are not handed the same casualties.
+Inside a career the seed is `Career.seasonSeed()` and the round is `career.season.round`;
+in a standalone Season it is the season's OWN seed (`SeasonCal.luckSeed`, stamped
+from the session seed at the season's first draw and saved with it, so a reload
+cannot re-roll a planned retirement or the qualifying draw — game.js `luckSeed()`
+routes every `(seed, round, driver)` draw through it); otherwise `simSeed()` and a
+per-session race counter, so two Grands Prix in a row are not handed the same casualties.
 
 Arming happens once, at the green light (`armReliability` in game.js), and writes
 a plan: `dnfAt`, a fraction of RACE DISTANCE, and `dnfWhy`. `checkRetirements()`

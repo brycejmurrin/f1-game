@@ -1,19 +1,74 @@
 {
+  "id": "/f1-game/",
   "name": "Apex 26",
   "short_name": "Apex 26",
   "description": "Unofficial F1 fan game & data hub — 2026 grid, a 24-round season plus 16 classic circuits in 3D WebGL, tilt to steer, plus live championship data.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "display_override": ["fullscreen", "standalone"],
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
   "orientation": "any",
   "background_color": "#0c0c14",
   "theme_color": "#0c0c14",
   "icons": [
-    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
-  "categories": ["games", "entertainment"]
+  "categories": [
+    "games",
+    "entertainment"
+  ],
+  "screenshots": [
+    {
+      "src": "assets/stills/monza.webp",
+      "sizes": "800x450",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Monza, rendered in the game"
+    },
+    {
+      "src": "assets/stills/spa.webp",
+      "sizes": "800x450",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Spa-Francorchamps, rendered in the game"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Phone controller",
+      "short_name": "Controller",
+      "description": "Steer a game on another screen with this phone",
+      "url": "controller.html",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }

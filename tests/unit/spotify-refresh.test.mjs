@@ -48,7 +48,7 @@ function load(fetchImpl, opts = {}) {
     setTimeout: (fn) => pending.push(fn),
     clearTimeout: (id) => { if (id > 0) pending[id - 1] = null; },
     // The now-playing poll is a 10 s interval: registered, never fired here.
-    setInterval: () => 1, clearInterval: () => {},
+    setInterval: (fn) => { if (opts.intervals) opts.intervals.push(fn); return 1; }, clearInterval: () => {},
     location: {
       origin: "https://game.test", pathname: "/", hostname: "game.test",
       href: "https://game.test/", search: opts.search || "",
@@ -321,4 +321,59 @@ test("a pending connect and delayed command do not resurrect a disconnected sess
   await settle();
   assert.equal(requests.filter(([url]) => url.endsWith("/me/player")).length, 0,
     "old command's delayed poll must not poll the new session");
+});
+
+// ── 401 and 429 from the Web API (2026-10-04) ──────────────────────────────
+// Refresh ran only on LOCAL expiry, so a token refused early stayed dead until
+// its expires_at while the poll repeated the 401; and the poll ignored 429's
+// Retry-After, asking again every 10 s under a modest quota.
+const bearer = (opts) => opts && opts.headers && opts.headers.Authorization;
+
+test("a 401 from the Web API forces one refresh and retries once with the new token", async () => {
+  const seen = [];
+  const { SpotifyMusic, disk } = load((url, opts) => {
+    const u = String(url);
+    seen.push([u.includes("/api/token") ? "token" : u.split("/v1")[1], bearer(opts)]);
+    if (u.includes("/api/token")) return Promise.resolve(jsonResponse({ access_token: "fresh", refresh_token: "r-2", expires_in: 3600 }));
+    if (bearer(opts) === "Bearer revoked") return Promise.resolve(jsonResponse({ error: { status: 401 } }, 401));
+    return Promise.resolve(jsonResponse({ devices: [{ id: "d1" }] }));
+  }, { disk: [[TOKEN_KEY, liveToken("revoked")]] });
+  const got = await SpotifyMusic.devices();
+  assert.deepEqual(seen, [["/me/player/devices", "Bearer revoked"], ["token", undefined], ["/me/player/devices", "Bearer fresh"]],
+    "refused, refreshed, retried — although the stored token was not locally expired");
+  assert.equal(got.devices[0].id, "d1");
+  assert.equal(JSON.parse(disk.get(TOKEN_KEY)).access_token, "fresh");
+});
+
+test("a second 401 after the forced refresh is returned, not retried forever", async () => {
+  let calls = 0;
+  const { SpotifyMusic } = load((url) => {
+    if (String(url).includes("/api/token")) return Promise.resolve(jsonResponse({ access_token: "also-bad", refresh_token: "r-3", expires_in: 3600 }));
+    calls++;
+    return Promise.resolve(jsonResponse({}, 401));
+  }, { disk: [[TOKEN_KEY, liveToken("revoked")]] });
+  const got = await SpotifyMusic.devices();
+  assert.equal(calls, 2, "one request, one retry");
+  assert.equal(got.httpStatus, 401);
+});
+
+test("the now-playing poll waits out a 429's Retry-After", async () => {
+  const intervals = [];
+  let polls = 0, limited = true;
+  const { SpotifyMusic } = load((url, opts) => {
+    const u = String(url);
+    if (u.endsWith("/me/player")) {
+      polls++;
+      if (limited) return Promise.resolve(new Response("", { status: 429, headers: { "Retry-After": "120" } }));
+      return Promise.resolve(jsonResponse({ item: { name: "Track", artists: [] }, is_playing: true }));
+    }
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live")]], intervals });
+  await SpotifyMusic.connect();
+  await settle();
+  assert.equal(polls, 1, "precondition: the first poll went out and was rate limited");
+  assert.equal(intervals.length, 1, "precondition: the 10 s poll interval is registered");
+  limited = false;
+  for (let i = 0; i < 5; i++) { await intervals[0](); await settle(); }
+  assert.equal(polls, 1, "no poll inside the 120 s Retry-After window");
 });
