@@ -256,9 +256,7 @@ body.photo-studio-open #rotate-device { display: none !important; }
    yields — reading through this rule, the card's own presence answered "no"
    and the gate never came back after OPEN CONTROLS › CLOSE. */
 body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
-body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device,
-html:not(:has(> body.rotate-measure)):has(#pausemenu:not([hidden])) #rotate-device,
-html:not(:has(> body.rotate-measure)):has(#pausemenu[open]) #rotate-device {
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
