@@ -12,8 +12,10 @@
   font-variant-numeric: tabular-nums; pointer-events: auto;
 }
 .watch-transport [data-wt="controls"] { display: flex; align-items: end; gap: calc(var(--gap) * 2 / 3); }
+/* --tap, the house comfort floor (44 px, 52 on touch): a fixed 42 px sat under
+   it on every device, and the WATCH bar is a touch surface too. */
 .watch-transport button, .watch-transport select {
-  height: 42px; min-width: 42px; margin: 0;
+  height: var(--tap); min-width: var(--tap); margin: 0;
   padding: calc(var(--gap) * 2 / 3) var(--gap); border: 1px solid var(--card-line);
   border-radius: var(--r-md); background: var(--panel); color: var(--text);
   font: inherit; letter-spacing: normal;

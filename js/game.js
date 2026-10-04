@@ -1073,12 +1073,18 @@ function showAnnounce(msg, dur, kind, quiet) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  // SCREEN READERS hear the card through #announce-live, an always-present,
-  // empty polite region: a region filled while hidden and unhidden in the same
-  // step is not announced by NVDA, JAWS or macOS VoiceOver. Cleared, then set a
-  // beat later so a repeated line is still a change (tetralogical.com/blog/2024/05/01).
-  const live = els.announceLive, said = els.announceWho.textContent + ": " + msg;
-  if (live && !quiet) { live.textContent = ""; clearTimeout(showAnnounce._t); showAnnounce._t = setTimeout(() => { live.textContent = said; }, 60); }
+  // SCREEN READERS hear the card through #announce-live, an always-present polite
+  // region (a region filled while hidden and unhidden in one step is missed by NVDA,
+  // JAWS, VoiceOver: tetralogical.com/blog/2024/05/01). LiveRegion (js/ui/live-region.js)
+  // is its ONE writer — it owns the clear-then-write beat, so a repeated line is still
+  // a change and a flag or HUD line in the same tick cannot overwrite this; a QUIET
+  // card (the caller's flag) is never spoken. game.js never times its own write
+  // (hud-readouts.test.mjs pins that): without the module, a plain set.
+  const said = els.announceWho.textContent + ": " + msg;
+  if (!quiet) {
+    if (typeof LiveRegion !== "undefined") LiveRegion.say(said, kind);
+    else if (els.announceLive) els.announceLive.textContent = said;
+  }
   // A card of small type takes a beat longer to read than a billboard did, and
   // ANN_MIN_S is the floor under every caller's number — the shortest asked for
   // was 1.4 s, which nobody reads at racing speed.
