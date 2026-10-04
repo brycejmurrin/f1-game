@@ -331,7 +331,12 @@
         addBox(out, vadd(a.c, a.u, 12), [18, 0.7, 120], [0.66, 0.68, 0.70], [a.r, a.u, a.t]);
       }
 
-      gantry(0.00, 7.5, [0.14, 0.14, 0.17]);
+      // The start gantry stands over the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
+      // alone put the gantry — and the start lamps it carries — 2.4 km away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.00), 7.5, [0.14, 0.14, 0.17]);
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
 
       const CRIMSON = [0.72, 0.10, 0.11];

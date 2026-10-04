@@ -29,6 +29,12 @@
 // every circuit, so they are asserted as strict zeros — no baseline, no ALLOW
 // hatch, matching tests/unit/prop-clipping.test.mjs and scenery-grounding.
 //
+// The same fleet pass also holds the START LAMPS to a fixture (2026-10-04):
+// js/race/start-lights.js lit only a scenery gantry within 3 % of a lap of
+// the line, and 22 of 52 circuits had none there — the countdown played over
+// an empty sky. Every circuit's five lamps must now hang over its grid,
+// unburied, and a circuit that dresses gantries must stand one at its line.
+//
 // 40 real track builds, pure Node (no browser) — this belongs in
 // `npm run test:sweeps`, not the Playwright projects.
 //
@@ -66,9 +72,71 @@ const I_RAD = 6, I_GLARE = 14;
 // slack for float round-trips, NOT a proximity heuristic.
 const ON_FIXTURE_M = 1.0;
 
-let _T, _LT;
+let _T, _LT, _SL;
 const Tracks = () => (_T || (_T = buildContext()));
 const LightTune = () => (_LT || (_LT = loadLightTune()));
+// js/race/start-lights.js, as game.js runs it: the five countdown lamps.
+const StartLights = () => (_SL || (_SL = (() => {
+  const sb = { Math, WeakMap };
+  vm.createContext(sb);
+  return vm.runInContext(readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb);
+})()));
+// A start lamp row and a start gantry both belong OVER THE GRID: the scenery
+// gantry nearest the line within this many metres of it (arc), the lamps
+// within this many (straight line) of the line's centre.
+const START_M = 40;
+
+// Lamps (of five) with a prop triangle across their first `reach` metres
+// toward the grid. The glow is depth-tested, so a lamp sunk in its housing or
+// inside a beam is dark: measured before the gantry named its row exactly,
+// five circuits' lamps sat inside the housing bar and Jeddah's centre lamp
+// inside a 12.6 m portal leg. Segment–triangle (Möller–Trumbore) over the
+// props triangles near the row; the instanced batches are not in propsGeo.
+function buriedLamps(track, lamps, reach = 2) {
+  const arr = (a) => (a && a._data ? a._data : a);
+  const P = arr(track.propsGeo && track.propsGeo.pos), I = arr(track.propsGeo && track.propsGeo.idx);
+  if (!P || !I) return 0;
+  const c = lamps[2];
+  let rx = lamps[4][0] - lamps[0][0], rz = lamps[4][2] - lamps[0][2];
+  const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+  // Toward the grid (−tangent, start-lights' convention) and down to an eye 30 m back.
+  const eye = [c[0] - rz * 30, track.py[0] + 1.2, c[2] + rx * 30];
+  // Triangles whose box meets the row's (±2 m lateral, + reach): by the whole
+  // triangle, not one corner — a gantry beam's face is one 20 m triangle.
+  const R = 2 + reach, near = [];
+  for (let i = 0; i < I.length; i += 3) {
+    const a = I[i] * 3, b = I[i + 1] * 3, d = I[i + 2] * 3;
+    let ok = true;
+    for (let ax = 0; ax < 3 && ok; ax++) {
+      const lo = Math.min(P[a + ax], P[b + ax], P[d + ax]), hi = Math.max(P[a + ax], P[b + ax], P[d + ax]);
+      ok = hi > c[ax] - R && lo < c[ax] + R;
+    }
+    if (ok) near.push(i);
+  }
+  let hidden = 0;
+  for (const L of lamps) {
+    let dx = eye[0] - L[0], dy = eye[1] - L[1], dz = eye[2] - L[2];
+    const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
+    const hit = near.some((i) => {
+      const a = I[i] * 3, b = I[i + 1] * 3, d = I[i + 2] * 3;
+      const e1 = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]];
+      const e2 = [P[d] - P[a], P[d + 1] - P[a + 1], P[d + 2] - P[a + 2]];
+      const p = [dy * e2[2] - dz * e2[1], dz * e2[0] - dx * e2[2], dx * e2[1] - dy * e2[0]];
+      const det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+      if (Math.abs(det) < 1e-12) return false;
+      const s = [L[0] - P[a], L[1] - P[a + 1], L[2] - P[a + 2]];
+      const u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) / det;
+      if (u < 0 || u > 1) return false;
+      const q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]];
+      const v = (dx * q[0] + dy * q[1] + dz * q[2]) / det;
+      if (v < 0 || u + v > 1) return false;
+      const t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
+      return t > 0 && t < reach;
+    });
+    if (hit) hidden++;
+  }
+  return hidden;
+}
 
 function nightLights(id) {
   const T = Tracks();
@@ -121,7 +189,7 @@ const survey = (() => {
   let out = null;
   return () => {
     if (out) return out;
-    out = { orphans: [], shortPools: [], darkRuns: [] };
+    out = { orphans: [], shortPools: [], darkRuns: [], startLamps: [], startGantry: [], lampHosts: { gantry: [], gate: [] } };
     // process.env.APEX_CIRCUITS narrows the pass to the circuits a circuit-only
     // pull request touched (tools/lib/circuit-scope.cjs); unset = every circuit.
     const { scope } = require("../../tools/lib/circuit-scope.cjs");
@@ -183,6 +251,28 @@ const survey = (() => {
         out.darkRuns.push(`${def.id}: ${cov.toFixed(1)}% of the lap lit, longest dark run ` +
                           `${Math.round(darkM)} m at frac ${(worstAt / track.n).toFixed(3)}`);
       }
+
+      // 4. The five countdown lamps (js/race/start-lights.js) hang over the
+      //    grid, on a structure: the scenery gantry at the line, or the
+      //    engine's start gate. And a circuit that dresses gantries stands one
+      //    over its start line — RS() put nine of them 148 m-2.3 km away.
+      const gantries = track.props.list.filter((r) => r.kind === "gantry" && r.side === 0);
+      let nearest = Infinity;
+      for (const r of gantries) nearest = Math.min(nearest, Math.min(r.k, track.n - r.k) * ds);
+      if (gantries.length && nearest > START_M) {
+        out.startGantry.push(`${def.id}: nearest of ${gantries.length} gantr${gantries.length > 1 ? "ies" : "y"} ` +
+                             `stands ${Math.round(nearest)} m from the start line`);
+      }
+      const lamps = StartLights().create({}, { Particles: { glow() {} } }).lampsFor(track);
+      if (!lamps || lamps.length !== 5) out.startLamps.push(`${def.id}: no start lamps`);
+      else {
+        const c = lamps[2], away = Math.hypot(c[0] - track.px[0], c[2] - track.pz[0]), up = c[1] - track.py[0];
+        if (away > Math.min(START_M, 0.03 * track.total) || !(up > 4 && up < 16))
+          out.startLamps.push(`${def.id}: start lamps ${away.toFixed(1)} m from the line, ${up.toFixed(1)} m up`);
+        const hidden = buriedLamps(track, lamps);
+        if (hidden) out.startLamps.push(`${def.id}: ${hidden} of 5 start lamps buried in geometry (no line of sight to the grid)`);
+        out.lampHosts[nearest <= 0.03 * track.total ? "gantry" : "gate"].push(def.id);
+      }
     }
     return out;
   };
@@ -222,6 +312,30 @@ test("no circuit races through an unlit stretch of road", () => {
     "names the node it actually stands beside (resolvePostNodes in " +
     "js/lighting/track-lights.js) before adding more lamps:\n  " +
     survey().darkRuns.join("\n  "));
+});
+
+test("every circuit's start lamps hang over its grid, on a gantry at the line or the engine's start gate", () => {
+  // Until 2026-10-04 js/race/start-lights.js lit only a scenery gantry within
+  // 3 % of a lap of the line, and 22 of 52 circuits had none: eight dress no
+  // gantry, five span the line with an overheadSpan the registry never saw,
+  // nine authored theirs where RS() lands it 148 m-2.3 km from the grid. The
+  // lamps now fall back to the engine gate every circuit has, and a
+  // start/finish overheadSpan registers itself (`startLights`).
+  assert.deepEqual(survey().startLamps, [],
+    `the countdown lamps must hang within ${START_M} m of the start line, 4-16 m up:\n  ` +
+    survey().startLamps.join("\n  "));
+  const { gantry, gate } = survey().lampHosts;
+  console.log(`start lamps: ${gantry.length} on a scenery gantry, ${gate.length} on the engine gate (${gate.join(" ")})`);
+  // Anti-vacuity, while the whole fleet is in the pass: both hosts are used.
+  if (gantry.length + gate.length >= 52) assert.ok(gantry.length > 0 && gate.length > 0, "both lamp hosts are exercised");
+});
+
+test("a circuit that dresses gantries stands one over its start line", () => {
+  // The _sceneryShift trap (AGENTS.md): a gantry(0.0) authored at the scenery
+  // origin is re-keyed through sl() (brands_hatch, donington) to reach the line.
+  assert.deepEqual(survey().startGantry, [],
+    `re-key the start gantry through sl() so it stands within ${START_M} m of the line:\n  ` +
+    survey().startGantry.join("\n  "));
 });
 
 test("the start-gantry downlights stay fixture-less AND invisible", () => {

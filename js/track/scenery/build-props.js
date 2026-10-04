@@ -770,6 +770,7 @@ const TrackBuildProps = (function () {
     // collision). Same object identity TrackModels.create closes over.
     const modelsOpts = {
       out, water: waterBuf, diagnostics, n, track, px, pz, hw,
+      note,   // the registry, for a start/finish overheadSpan's "gantry" record (models.js)
       rails: surface.rails, upOf, emitFace: emit,
       terrainY: (x, z) => Tracks.terrainY(track, x, z),
       // true = clear; false = on the road; "pit" = inside the pit complex, which
