@@ -27,14 +27,14 @@
       const { cx, cz, radius: rad } = lapBounds();
       const ranges = [
         // near forested wall — wMin/wVar sized so max(w)*0.62 < extra-8 (guard won't fire)
-        { extra: 280, wMin: 160, hMin: 56, hVar: 54, wVar: 80, count: 32, phase: 0.0,
-          opts: { seg: 7, rough: 0.30, forest: [0.10, 0.32, 0.14], rock: [0.28, 0.32, 0.28], snowline: 2 } },
+        { extra: 280, wMin: 160, hMin: 38, hVar: 30, wVar: 80, count: 32, phase: 0.0,
+          opts: { seg: 7, rough: 0.14, forest: [0.10, 0.28, 0.14], rock: [0.12, 0.29, 0.16], snowline: 2 } },
         // mid forested wall — offset to fill the seams of the near ring
-        { extra: 290, wMin: 340, hMin: 92, hVar: 70, wVar: 150, count: 26, phase: 0.5,
-          opts: { seg: 7, rough: 0.32, forest: [0.13, 0.36, 0.17], rock: [0.34, 0.38, 0.36], snowline: 2 } },
+        { extra: 290, wMin: 340, hMin: 58, hVar: 46, wVar: 150, count: 26, phase: 0.5,
+          opts: { seg: 7, rough: 0.17, forest: [0.13, 0.31, 0.18], rock: [0.16, 0.32, 0.20], snowline: 2 } },
         // far hazed range — paler damp grey-green (no snow)
-        { extra: 450, wMin: 380, hMin: 132, hVar: 110, wVar: 150, count: 22, phase: 0.0,
-          opts: { seg: 7, rough: 0.34, forest: [0.18, 0.42, 0.20], rock: [0.46, 0.50, 0.50], snowline: 2 } },
+        { extra: 450, wMin: 380, hMin: 82, hVar: 58, wVar: 150, count: 22, phase: 0.0,
+          opts: { seg: 7, rough: 0.20, forest: [0.20, 0.35, 0.25], rock: [0.23, 0.37, 0.28], snowline: 2 } },
       ];
       for (const rg of ranges) {
         const ring = rad + rg.extra;
@@ -103,15 +103,16 @@
           if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
         }
       });
-      // Hero pine density on the La Source -> Eau Rouge descent (k/n 0.045-0.12).
+      // La Source and the beginning of its descent: the scenery shift maps
+      // authored .045–.12 to racing .003–.078. Keep a modest outer-left
+      // woodland edge and clear the stand-side foreground.
       every(12, (k) => {
         const s = k / n;
         if (s < 0.045 || s > 0.12) return;
-        for (const side of [-1, 1]) {
-          const r = hash(k * 53 + side);
-          pine(k, side, 7 + r * 10, 10 + r * 10, [0.08 + r * 0.05, 0.31, 0.15]);
-          if (r > 0.5) pine(k, side, 20 + r * 10, 13 + r * 9, [0.10 + r * 0.04, 0.28, 0.13]);
-        }
+        const side = -1, r = hash(k * 53 + side);
+        const dist = 26 + r * 12, h = 8 + r * 8;
+        if (crownClear(k, side, dist, h))
+          pine(k, side, dist, h, [0.08 + r * 0.05, 0.29, 0.15], { sparse: true, tiers: 3 });
       });
 
       if (circuitKit) {
@@ -280,8 +281,8 @@
       // disconnected concrete blocks stepped down the hill. spectatorHill walks
       // the arc, so the bank is continuous, carries a standing crowd and
       // indexes its own footprint against the treelines.
-      // Ends at 0.096: past it the bank's top treads ran into a hero-block
-      // pine (clip-audit 2.00 m severe @ racing 0.058).
+      // The relocated bank spans authored .146–.170; the matching OPEN
+      // window below keeps the deep forest ranks clear of its footprint.
       spectatorHill(0.146, 0.170, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
         grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
@@ -484,7 +485,7 @@
       // Ardennes fir walls. dressingExclusions foliage is full-lap, so these
       // bespoke forestEdge belts carry the look. density > 0.6 unlocks the
       // engine back-row stagger; pineFrac high keeps the belt conifer-dominant
-      // (residual tree() → furniture.tree fir).
+      // (the residual tree() calls supply rounded broadleaf crowns).
       const PINE_D = [0.07, 0.24, 0.11], PINE_M = [0.10, 0.30, 0.14], PINE_L = [0.13, 0.34, 0.15];
       // Eau Rouge / Raidillon climb is too steep for forestEdge: crowns plant at
       // trackside height and hang over the valley (float-audit 11–25 m gaps at
@@ -515,10 +516,13 @@
       for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
                                     [0.70,  1, 843], [0.79,  1, 859]]) {
         const a = anchor(K(s), side, 230 + hash(seed) * 35);
+        // Keep the original local relief: mountain() sizes its footing to
+        // 18% of height, and lowering these terrain-adjacent hills buries
+        // whole skirts. Their softer wooded colors still match the backdrop.
         mountain(a.c[0], a.c[2], a.c[1] - 2, 142 + hash(seed + 1) * 34,
                  42 + hash(seed + 2) * 18, { seg: 7, seed,
-                   rough: 0.28, forest: [0.12, 0.31, 0.14],
-                   rock: [0.30, 0.35, 0.31], snowline: 2 });
+                   rough: 0.16, forest: [0.12, 0.29, 0.15],
+                   rock: [0.14, 0.30, 0.17], snowline: 2 });
       }
 
       // Mid-lap + Blanchimont fir belts — dense, pine-led (not broadleaf).
@@ -530,9 +534,18 @@
         col: PINE_D, col2: PINE_M, pineFrac: 0.94 });
       forestEdge(0.42, 0.58,  1, 12, { density: 0.78, hMin: 13, hMax: 24,
         col: PINE_D, col2: PINE_M, pineFrac: 0.93 });
-      forestEdge(0.55, 0.74,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
+      // A bounded mixed edge around racing Pouhon (.508–.588 after the
+      // scenery shift). Substitute species on the existing 4 m row; no extra
+      // ranks or denser scattering. The rest of the woodland stays pine-led.
+      // along() includes both ends: the next belt alone owns the seam node.
+      const mixedEnd = 0.63 - 1 / n;
+      forestEdge(0.55, mixedEnd,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
+        col: PINE_D, col2: PINE_M, pineFrac: 0.80 });
+      forestEdge(0.63, 0.74,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
         col: PINE_D, col2: PINE_M, pineFrac: 0.92 });
-      forestEdge(0.55, 0.74, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
+      forestEdge(0.55, mixedEnd, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
+        col: PINE_M, col2: PINE_L, pineFrac: 0.80 });
+      forestEdge(0.63, 0.74, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
       forestEdge(0.74, 0.88,  1, 12, { density: 0.78, hMin: 13, hMax: 24,
         col: PINE_D, col2: PINE_M, pineFrac: 0.93 });

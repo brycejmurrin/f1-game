@@ -1,5 +1,5 @@
 {
- "_doc": "sha256[0..16) of each Tracks.LIST entry's metadata + materialised points, captured from the pre-extraction tree (d6e01f904) by the parity script in the PR that moved the mapper into js/track/core/def.js. tests/unit/track-def-factory.test.mjs recomputes and compares: a change here is a change to how EVERY circuit builds and must be deliberate.",
+ "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. Re-captured 2026-10-04 for Monza sector positions and Silverstone ownPitStraight/pit architecture metadata. Against shared default 4f71c2b3096b2e8ef2e0e238ae04c77880e5a0fe, all 52 materialised point arrays and the other 50 hashes are identical; newer Bahrain, Kyalami and Spa fixtures are preserved.",
  "hashes": {
   "abudhabi": "dee912e2a0c0788d",
   "albert_park": "1fde6db9dea54c22",
@@ -33,7 +33,7 @@
   "monaco": "beb21539ea9fcb27",
   "mont_tremblant": "242fb2f3e3745eb1",
   "montreal": "fd27e588b6dd9085",
-  "monza": "d50abc1fdb145de0",
+  "monza": "26b870048b7ede07",
   "mosport": "a9d6d0ca576b3b36",
   "mugello": "118c3580fe43dfa4",
   "nurburgring": "2711ede01af73346",
@@ -44,7 +44,7 @@
   "redbull": "c2d1cf3708d7d866",
   "sepang": "bbf0c26b88c0fe56",
   "shanghai": "f978c354a12c9c9f",
-  "silverstone": "707c33d294919f96",
+  "silverstone": "271302c1d8c159e6",
   "singapore": "5f88432eb4b87bfb",
   "sochi": "572b8e4ce0c7c486",
   "spa": "f24ee39c41186d0a",
