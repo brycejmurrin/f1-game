@@ -12,6 +12,24 @@
 "use strict";
 
 const CarDraw = (function () {
+  // WHICH CACHE ENTRY A CAR'S BUILD IS — ONE answer for makeCars and the menu
+  // prep (prepareMenuCarAssets), so the prep's bodies and casters are the race's.
+  // `own`: the player or the MY TEAM hire, on the saved build (getTeamParts); a
+  // career rival runs its R&D shelf (Career.aiSetup); everyone else the factory.
+  // A build that RESOLVES to the team's factory parts is the factory car: no
+  // stamp, no setup, the factory key. CareerAiDev.ensureSeed copies the works
+  // shelf into a team's bag on its first winter, so once R&D had started every
+  // rival carried its own stamp while the prep keyed the factory — ~21 bodies
+  // and ~11 casters rebuilt behind the race-entry card. Same parts, same mesh.
+  function carVisual(team, num, own, getTeamParts) {
+    const setup = own ? getTeamParts(team.id) : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
+    let stamp = "";
+    if (setup) {
+      const ids = Parts.resolveSetup(setup, team).ids, works = Parts.getFactorySetup(team);
+      if (Parts.CATALOG.some((cat) => ids[cat.id] !== works[cat.id])) stamp = Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",");
+    }
+    return { visualSetup: stamp ? setup : null, visStamp: stamp, visPaint: stamp ? stamp + ":" + num : "", visSh: stamp ? stamp + ":sh" : "" };
+  }
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
@@ -65,7 +83,7 @@ const CarDraw = (function () {
     // prep builds 11 real + a MY TEAM / LEGENDS pick + the player's own build <= 13),
     // a career's R&D-stamped ones (one per team) and the TT ghost: <= 26. It also
     // took a painted whole car per mirror rival (+22) until the mirror drew bodies.
-    // teamBodies: 21-23 rivals in a race, 24 for the menu's widest pick (LEGENDS).
+    // teamBodies: 21-23 rivals in a race (the prep's keys: carVisual), 24 for LEGENDS.
     // A hit promotes, so no live key is evicted (car-presentation-canary pins
     // both counts). Was 48 while seat-keyed :sh doubled casters.
     const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;
@@ -338,8 +356,9 @@ const CarDraw = (function () {
       Teams.LIST.forEach((team, ti) => {
         if (!Teams.isReal(team) && ti !== teamPick) return;
         Career.gridDrivers(team).forEach((seat, di) => {
-          const d = Career.driverOverride(team.id, di) || seat;
-          const c = { team, num: d.num, isPlayer: ti === teamPick && di === driverPick };
+          const d = Career.driverOverride(team.id, di) || seat, isPlayer = ti === teamPick && di === driverPick;
+          // makeCars' own keys (carVisual): the player and MY TEAM's hire on the saved build, a career rival on its shelf.
+          const c = Object.assign({ team, num: d.num, isPlayer }, carVisual(team, d.num, ti === teamPick && (isPlayer || !!team.custom), G.getTeamParts));
           if (c.isPlayer) field.unshift(c); else if (!solo) field.push(c);
         });
       });
@@ -348,15 +367,10 @@ const CarDraw = (function () {
       // true): ~32 ms each, and race entry built ~11 (~0.38 s) behind the card.
       // Each is a step of its own after its car, so a slice still holds one
       // build; a team's second seat shares the ":sh" key and is a cache hit.
-      // The player's keys on its OWN build: makeCars stamps the player's car
-      // with visualSetup = getTeamParts and visSh = this same stamp + ":sh".
+      // Every car carries carVisual's stamp, so a caster keys as the race's car
+      // does (the player's and a career rival's OWN build included).
       // warmCarAssets keeps its call, all hits after this (and the safety net).
       const casters = shadowCastersWanted();
-      const ownCaster = (c) => {
-        const own = G.getTeamParts(c.team.id) || null;
-        const stamp = own ? Parts.CATALOG.map((cat) => own[cat.id] || "").join(",") : "";
-        return { team: c.team, num: c.num, visualSetup: own, visSh: stamp ? stamp + ":sh" : "" };
-      };
       const steps = casters ? field.flatMap(c => [c, { caster: c }]) : field;
       let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
       for (const step of steps) {
@@ -369,7 +383,7 @@ const CarDraw = (function () {
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
         const at = performance.now(), c = step.caster || step;
         try {
-          if (step.caster) teamMesh(c.team, c.isPlayer ? ownCaster(c) : c, true);
+          if (step.caster) teamMesh(c.team, c, true);
           else {
             if (c.isPlayer) {
               playerBodyMesh(c.team, c, visualKey);
@@ -1084,6 +1098,6 @@ const CarDraw = (function () {
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.
   let _instance = null;
-  return { create, instance: () => _instance };
+  return { create, carVisual, instance: () => _instance };
 })();
 Object.freeze(CarDraw);
