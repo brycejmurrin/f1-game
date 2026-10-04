@@ -579,3 +579,17 @@ test("a hidden tab still times out a gone peer; a visible stall is still forgive
     if (prior === undefined) delete globalThis.document; else globalThis.document = prior;
   }
 });
+
+// L8-f: a race raises the silence that ends a session (NetPlay's 25 s grace);
+// the lobby keeps the 6 s default.
+test("setTimeoutMs raises the silence that ends the session", () => {
+  const p = pair({ latency: 20 });
+  p.advance(600);
+  assert.equal(p.a.setTimeoutMs(25_000), 25_000);
+  assert.equal(p.a.setTimeoutMs(-1), 25_000, "nonsense is ignored");
+  const t = p.now();   // B stops pumping: silent, its transport still open
+  for (let i = 1; i <= 200; i++) p.a.pump(t + i * 100);   // 20 s of silence
+  assert.equal(p.a.alive(), true, "inside the grace");
+  for (let i = 201; i <= 300; i++) p.a.pump(t + i * 100);  // 30 s
+  assert.equal(p.a.alive(), false, "past it");
+});
