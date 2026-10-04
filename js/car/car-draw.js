@@ -662,7 +662,8 @@ const CarDraw = (function () {
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
-      CarMesh.drawForearms(_rigB, base, lay, deps.resolveLivery(c.team), opt);   // suit sleeves: cuff (rolls) to elbow (car-fixed)
+      // No forearm sleeves (CarMesh.drawForearms): the tubes from the cuffs to
+      // the bottom of the frame read as pipes on the wheel (user, 2026-10-04).
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {
