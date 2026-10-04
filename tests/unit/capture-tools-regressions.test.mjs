@@ -417,7 +417,7 @@ test('camera-only fixture strips remote radio audio without mutating source and 
   const start = source.indexOf('    function playRadio(h) {');
   const end = source.indexOf('\n    function finish()', start);
   let audioCalls = 0;
-  const play = new Function('Audio', 'run', 'G', 'return (' + source.slice(start, end).trim() + ');')(function Audio() { audioCalls++; return { play: () => Promise.resolve() }; }, {}, {});
+  const play = new Function('Audio', 'run', 'G', 'return (' + source.slice(start, end).trim() + ');')(function Audio() { audioCalls++; return { play: () => Promise.resolve() }; }, {}, { soundOn: true });
   play(original.radio[0]); assert.equal(audioCalls, 1, 'unsanitized URL reaches actual Audio constructor');
   audioCalls = 0; play(sanitized.script.radio[0]); assert.equal(audioCalls, 0);
   const fixture = loadFixture({ fixture: 'default', track: 'baku' });
