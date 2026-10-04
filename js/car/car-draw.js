@@ -955,9 +955,10 @@ const CarDraw = (function () {
         const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
         camD2 = dx * dx + dy * dy + dz * dz;
       }
-      // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M a rival keeps its 4 rotating
-      // wheels only — no fixed layers, compound stripes or spin discs.
-      const lite = bare || (!c.isPlayer && FieldLod.wheelsLite(camD2));
+      // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M (reference-lens metres: a
+      // long lens keeps them further out) a rival keeps its 4 rotating wheels
+      // only — no fixed layers, compound stripes or spin discs.
+      const lite = bare || (!c.isPlayer && FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY));
       const tyreCol = !lite && camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
       // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
       // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so

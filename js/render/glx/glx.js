@@ -195,6 +195,10 @@ const GLXBackend = (function () {
   let frameSunColor = null;
   let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
   const _decalSunScr = [0, 0, 0];
+  // drawDecal's frame light, captured in begin(): sun shadow (strength incl.
+  // the key fade, texel, bias knob, range) + fade anchor, and the lamp bake.
+  const _decalSh = new Float32Array(4);
+  let _decalShCtr = null, _decalBake = null, _decalBakeSc = null;
   const _windScr = [0.819, 0.574, 1.0];   // uWind upload scratch (begin())
   let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal + particle lighting
   const _particleFog = { color: [0.5, 0.6, 0.7], density: 0 };   // the lit pass's fog, kept for drawParticles
@@ -809,7 +813,8 @@ const GLXBackend = (function () {
     const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
     litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
     markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
-    decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
+    decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
+      "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
@@ -1249,10 +1254,16 @@ const GLXBackend = (function () {
     if (ctxGone()) return null;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
+    // PREMULTIPLIED: every createTexture() handle is a drawDecal atlas, blended
+    // ONE / ONE_MINUS_SRC_ALPHA. A straight upload let generateMipmap average
+    // the transparent (0,0,0,0) surround into the logo edges — dark fringes.
+    // Both flags go back to false: texSubImage3D from a buffer (the pack
+    // arrays) is INVALID_OPERATION with either set.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -1416,6 +1427,20 @@ const GLXBackend = (function () {
       gl.uniform3fv(decalU.uSunColor, frameDecalSun || frameSunColor);
       gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
+      // Sun map stays on unit 0, the lamp bake (or its dummy) on 12 + 13 — begin() bound both.
+      gl.uniform1i(decalU.uShadowMap, 0); gl.uniform1i(decalU.uLampBake, 12); gl.uniform1i(decalU.uLampBakeIdx, 13);
+      if (SHD && SHD.lightVP) gl.uniformMatrix4fv(decalU.uLightVP, false, SHD.lightVP);
+      gl.uniform4fv(decalU.uShadowP, _decalSh);
+      gl.uniform3fv(decalU.uShadowCtr, _decalShCtr || ZERO3);
+      gl.uniform3fv(decalU.uEye, frameEye || ZERO3);
+      const lb = _decalBake;
+      gl.uniform1f(decalU.uBakeOn, lb ? 1 : 0);
+      if (lb) {
+        gl.uniform4f(decalU.uBakeA, lb.x0, lb.z0, lb.tilesX * lb.T * lb.cell, lb.tilesY * lb.T * lb.cell);
+        gl.uniform3fv(decalU.uBakeScale, _decalBakeSc);
+        gl.uniform3f(decalU.uBakeGrid, lb.tilesX, lb.tilesY, lb.T);
+        gl.uniform2f(decalU.uBakeAtlas, lb.atlasW, lb.atlasH * 2);
+      }
     }
     gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
     // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
@@ -1427,12 +1452,13 @@ const GLXBackend = (function () {
     gl.uniform1i(decalU.uTex, 5);
     gl.activeTexture(gl.TEXTURE0);   // leave unit 0 active + still bound to the shadow map
     setBlend(true);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);   // premultiplied atlas (createTexture)
     setDepthMask(false);
     setCull(false);                 // decals are single quads — draw both faces
     setAlphaWrite(false);    // keep the SSR alpha tag underneath
     bindVAO(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);   // the frame's blend invariant (begin())
     setAlphaWrite(true);
     setCull(true);
     setDepthMask(true);
@@ -1654,6 +1680,8 @@ const GLXBackend = (function () {
     frameSunDir = frame.sunDir;
     frameSunColor = frame.sunColor;
     frameEye = frame.eye;
+    _decalBake = frame.lampBake && frame.lampBake.data && frame.lampBake.indir && frame.lampBakeScale ? frame.lampBake : null;
+    _decalBakeSc = frame.lampBakeScale;
     frameCullDist = frame.cullDist || 0; frameCullFog = frame.cullFog || null;
     frameInvProj = frame.invProj || null;
     frameInvVP = frame.invViewProj || null;
@@ -1841,7 +1869,8 @@ const GLXBackend = (function () {
       // night.
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (frame.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
-      uf1(litU.uShadowStr, _litUf, "shadowStr", (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf);
+      _decalSh[0] = (T && T.shadowStr != null ? T.shadowStr : 1.15) * _hf;
+      uf1(litU.uShadowStr, _litUf, "shadowStr", _decalSh[0]);
       // SHADOW DISTANCE knob: box half-size, drives the receiver-distance fade.
       uf1(litU.uShadowRange, _litUf, "shadowRange", T && T.shadowRange != null ? T.shadowRange : 80.0);
       // Fade anchor: the UNSNAPPED forward-biased ground point the shadow box is
@@ -1849,6 +1878,8 @@ const GLXBackend = (function () {
       // camera, so the fade front never jumps on a box recentre.
       uf3(litU.uShadowCtr, _litUf, "shadowCtr", frame.shadowCtr || frame.eye || ZERO3);
       uf1(litU.uShadowTexel, _litUf, "shadowTexel", 1.0 / SHD.SIZE);
+      _decalSh[1] = 1.0 / SHD.SIZE; _decalSh[2] = _litUf.shadowBias || 0; _decalSh[3] = _litUf.shadowRange || 80;
+      _decalShCtr = frame.shadowCtr || frame.eye || ZERO3;
       // Dynamic car shadow map — unit 8, armed only on frames where game.js ran
       // the car caster pass (carShadowBegin). The texture is always bound while
       // enabled so the sampler2DShadow stays complete even when gated off.
@@ -1890,6 +1921,7 @@ const GLXBackend = (function () {
       gl.bindTexture(gl.TEXTURE_2D, shadowDummyTex);
       ufI(litU.uShadowMap, _litUf, "u.shadow", 0);
       uf1(litU.uShadowStr, _litUf, "shadowStr", 0.0);
+      _decalSh[0] = 0;
       uf1(litU.uCarShadowOn, _litUf, "carShadowOn", 0.0);
       uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
     }

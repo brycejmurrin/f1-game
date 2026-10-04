@@ -195,6 +195,8 @@
  *
  * `opts` object consumed by present() (see GLX.present):
  *   exposure, bloom, ssao, contact, threshold, tune, ...
+ *   threshold is the bloom bright-pass cut in EXPOSED units — every backend
+ *   tests luminance x exposure against it (glsl-post.js BRIGHT_FS).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 "use strict";

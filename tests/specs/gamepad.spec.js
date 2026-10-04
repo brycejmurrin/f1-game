@@ -362,10 +362,13 @@ test.describe("Gamepad menu navigation", () => {
   // is not menu navigation, so it needs the car, not an open menu.
   test("trigger travel is analog", async ({ page }) => {
     await startRaceForPad(page);
+    // A rescaled dead zone (input.js PAD_PEDAL_DZ 0.12), not a 0.12 gate:
+    // travel ramps from 0 at the dead zone to 1 at the stop, no 12 % step.
+    const pedal = (v) => (v - 0.12) / (1 - 0.12);
     const rt = await poll(page, { buttons: { 7: 0.4 } }, () => Input.throttleLevel());
-    expect(rt).toBeCloseTo(0.4, 2);
+    expect(rt).toBeCloseTo(pedal(0.4), 2);
     const lt = await poll(page, { buttons: { 6: 0.55 } }, () => Input.brakeLevel());
-    expect(lt).toBeCloseTo(0.55, 2);
+    expect(lt).toBeCloseTo(pedal(0.55), 2);
   });
 
   test("A activates the focused control", async ({ page }) => {

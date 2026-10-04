@@ -230,7 +230,7 @@ test("a rebound button drives and the old one stops answering", () => {
   const { press, release } = fakePad(sb, fire);
   press(7, 0.8); Input.poll();
   assert.equal(Input.debugState().pad.throttle, true, "RT is gas by default");
-  assert.ok(Math.abs(Input.throttleLevel() - 0.8) < 1e-9, "a trigger is analog");
+  assert.ok(Math.abs(Input.throttleLevel() - (0.8 - 0.12) / 0.88) < 1e-9, "a trigger is analog (past a rescaled 0.12 dead zone)");
   release(7);
   assert.deepEqual(plain(Input.setPadBinding("throttle", 0, 10)), { ok: true, conflict: "recover" });
   press(7, 0.8); Input.poll();

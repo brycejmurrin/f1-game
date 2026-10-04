@@ -268,6 +268,11 @@ function crY(p0, p1, p2, p3, t) {
 // pose instead of from the previous race's last bend.
 const _hangOut = Object.create(null);
 const _hangFast = Object.create(null);
+// snapGameCam's half of a cut: the CamFeel follows are reset beside this.
+function resetSmoothing() {
+  for (const k in _hangOut) delete _hangOut[k];
+  for (const k in _hangFast) delete _hangFast[k];
+}
 function hangReset(key, lambda) {
   _hangOut[key] = 0; _hangFast[key] = 0;
   if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0);
@@ -816,6 +821,6 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
+return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
   HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT };
 })();
