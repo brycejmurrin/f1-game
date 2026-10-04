@@ -55,7 +55,8 @@ const GameAudioToneModel = (function () {
   // for layers that only had a switch.
   // The SHIPPED voice, no longer a pure identity trim over the sample core:
   // pitch down and the rev range widened so the climb to the limiter is
-  // longer, detune off (the chorus that blurred the top end), the sub layer
+  // longer, detune off (the chorus that blurred the top end; on the sample
+  // core 0..1 is no offset — engine.js sampleDetuneCents), the sub layer
   // well back, a hard fast limiter, and the hybrid whine halved. Every value is
   // inside TUNE_RANGE below; the panel's step table still lands on each one.
   const TUNE_DEF = Object.freeze({
@@ -70,9 +71,10 @@ const GameAudioToneModel = (function () {
   // table is chosen so an integer slider position lands on it), and the four
   // pitch-curve fields stay strictly positive, which is the whole of what the
   // pitch invariants need. The far ends are meant to be too much; that is what
-  // ends are for. Reach, at the corners, on the sample core: idle rate 0.075
-  // (IDLE 0.5 x PITCH 0.6) up to a redline rate of 3.96 (IDLE 1.6, REV RANGE
-  // 4, PITCH 1.8) — a 50:1 spread against the stock 2.8:1.
+  // ends are for. Reach, at the corners, on the sample core: idle rate 0.051
+  // (IDLE 0.5 x PITCH 0.6) up to a redline rate of 4.17 (IDLE 1.6, REV RANGE
+  // 4, PITCH 1.8) — an 80:1 spread against the shipped 4.9:1 (engine.js
+  // RATE_IDLE / RATE_SPAN, the same in every gear).
   const TUNE_RANGE = Object.freeze({
     pitch:      [0.60, 1.80], idle:  [0.50, 1.60], revRange: [0.20, 4.00], curve: [0.40, 2.50],
     detune:     [0, 4],       brightness: [0.30, 2.50], gravel: [0, 4],    sub: [0, 4],
