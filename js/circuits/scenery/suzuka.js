@@ -254,7 +254,7 @@
       }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
       // Start gantry — teal/green "SUZUKA" identity bar (photo: dark teal span).
-      overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
+      overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2, startLights: true,
         thickness: 0.9, depth: 1.8, supportGap: 2.8, supportWidth: 1.0,
         color: [0.08, 0.42, 0.40], required: true });
       // White brand / checkered cue on the RIGHT gantry tower (off the racing line).

@@ -427,9 +427,14 @@
         width: 0.35, height: 0.3, color: RED,
       });
       recordBarrier(0.985, 0.055, -1, 8);
+      // The start gantry stands over the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and the
+      // shift alone put the span 402 m before the grid. It carries the
+      // countdown lamps (startLights, js/race/start-lights.js).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       overheadSpan({
-        id: "hungaroring-start-gantry", frac: 0.005, clearance: 7.05,
-        thickness: 0.9, depth: 1.4, supportGap: 2.5,
+        id: "hungaroring-start-gantry", frac: (0.005 + SL) % 1, clearance: 7.05,
+        thickness: 0.9, depth: 1.4, supportGap: 2.5, startLights: true,
         color: [0.30, 0.32, 0.36], required: true,
       });
 

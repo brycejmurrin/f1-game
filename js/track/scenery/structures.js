@@ -335,10 +335,16 @@ const SceneryStructures = (function () {
       const st = (opts && opts.style) || kitOf("gantry", "box");
       const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
+      const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
+      const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)
+      // `lamp`/`face` name the start lamps' row exactly: the measured bounds
+      // the registry swaps in (rounded to 0.1 m, the AABB of whatever was
+      // emitted near it) sank the row inside the housing on five circuits and
+      // put Jeddah's 7.5 m off the road's centre, inside a portal leg.
       ctx.note("gantry", [(aL.c[0] + aR.c[0]) / 2, aL.c[1] + h / 2,
                           (aL.c[2] + aR.c[2]) / 2],
                [Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]), h, 1],
-               { k, side: 0 });          // 0 = straddles the road
+               { k, side: 0, lamp: housing, face: 0.30 });   // side 0 = straddles the road
       const b = [aL.r, u, aL.t];
       const uy = Math.max(0.5, u[1]);
       const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
@@ -381,7 +387,6 @@ const SceneryStructures = (function () {
         post(k, -1, 1.5, legX, legZ);
         if (st !== "cantilever") post(k, 1, 1.5, legX, legZ);
       }
-      const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       // Span legs: half-width + 1.5 m clearance each side + 1 m past each mast.
       overheadSpan({
         id: `gantry-${k}`, frac: s, clearance: h - 0.45,
@@ -390,14 +395,15 @@ const SceneryStructures = (function () {
       });
       // One dark housing bar under the beam's centre: the five lamps
       // js/race/start-lights.js lights during the countdown sit proud of its
-      // grid-facing face (5 × 0.9 m pitch, 0.62 m below the beam top — the
-      // module's DROP/SPACING). Before 2026-10-01 these were three spread grey
-      // boxes with nothing driving them.
+      // grid-facing face (5 × 0.9 m pitch, 0.62 m below the beam's centre —
+      // the record's `lamp`/`face` above). Before 2026-10-01 these were three
+      // spread grey boxes with nothing driving them.
       const gl = NIGHT ? [0.30, 0.31, 0.34] : [0.16, 0.16, 0.19];
-      RAW.addBox(out, [beam[0] - u[0] * 0.62, beam[1] + u[1] * (-0.62), beam[2] - u[2] * 0.62],
-                 [4.9, 0.45, 0.5], gl, b);
+      RAW.addBox(out, housing, [4.9, 0.45, 0.5], gl, b);
     };
-    const flagQuad = (c, t, u, w, h, col) => {
+    // A double-sided quad off a pole: cloth that waves (MAT.FLAG), or `still`
+    // — a rigid board, flat material, no wave.
+    const flagQuad = (c, t, u, w, h, col, still) => {
       const nv = norm(cross(t, u));   // face normal (shared by both sides)
       const push = (reverse) => {
         const base = out.pos.length / 3;
@@ -407,13 +413,14 @@ const SceneryStructures = (function () {
                        c[2] + t[2] * ft * w + u[2] * fu * h);
           out.nrm.push(nv[0], nv[1], nv[2]);
           out.col.push(col[0], col[1], col[2]);
-          out.mat.push(MAT.FLAG + ft * 0.4);   // per-vertex wave weight in the fraction
+          out.mat.push(still ? 0 : MAT.FLAG + ft * 0.4);   // per-vertex wave weight in the fraction
         }
         if (reverse) out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
         else out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       };
       push(false); push(true);   // both windings → visible from either side
     };
+    const MARSHAL_PANEL = [0.06, 0.06, 0.07];   // an unlit LED light panel
     const marshalPost = (k, side, gap, opts) => {
       const st = (opts && opts.style) || kitOf("marshal", "hut");
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
@@ -421,7 +428,15 @@ const SceneryStructures = (function () {
         ctx.noteSuppressed("marshalPost", `marshalPost SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
         return;
       }
-      ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side });
+      // The post's signal panel hangs off the pole at the back of the hut: an
+      // FIA light panel, DARK — it shows nothing under green running, and
+      // js/race/marshal-panels.js lights it (the record's `panel` point, just
+      // proud of its track-facing side) when race control shows a flag. Until
+      // 2026-10-04 this was a waving cloth flag coloured by hash(k) — yellow on
+      // ~72 % of posts, blue on the rest — standing yellows all race long.
+      const polePos = vadd(p.c, p.r, side * 1.4), panelAt = vadd(polePos, p.u, 3.3);
+      const panel = vadd(vadd(vadd(panelAt, p.t, 0.525), p.u, 0.31), p.r, -side * 0.12);
+      ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
       ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
@@ -463,9 +478,7 @@ const SceneryStructures = (function () {
         }
         rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
       }, { kind: "marshalPost", k, side });
-      const polePos = vadd(p.c, p.r, side * 1.4);
-      flagQuad(vadd(polePos, p.u, 3.3), p.t, p.u,
-               1.05, 0.62, hash(k) < 0.72 ? [1.30, 1.02, 0.08] : [0.10, 0.42, 1.25]);
+      flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       blockAt(k, side, gap, 1.3);   // solid hut
     };

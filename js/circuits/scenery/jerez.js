@@ -593,7 +593,9 @@
         else olive(k, side, dist, 5.2 + h * 2.2);
       });
 
-      gantry(0.0, 8, CONC);
+      // The start gantry stands over the REAL line through the sl() above; RS()
+      // alone put it — and the start lamps it carries — 556 m from the grid.
+      gantry(sl(0.0), 8, CONC);
       gantry(0.0345, 7.5, CONC_ALT);
 
       // ── EL OVNI (VIP platform) ───────────────────────────────────────────

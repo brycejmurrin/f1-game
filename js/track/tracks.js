@@ -461,8 +461,7 @@ const Tracks = (function () {
     return out;
   }
 
-  // Props orchestration lives in js/track/scenery/build-props.js (TrackBuildProps).
-  // Guards stay nested there for a later peel; Tracks.build calls TrackBuildProps.build.
+  // Props orchestration lives in js/track/scenery/build-props.js (TrackBuildProps), which Tracks.build calls.
 
   function buildGate(track) {
     const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -480,9 +479,9 @@ const Tracks = (function () {
         [gateX + r[0] * o + u[0] * 3, gateY + r[1] * o + u[1] * 3, gateZ + r[2] * o + u[2] * 3],
         [1, 6, 1], [0.85, 0.1, 0.1], basis);
     }
-    addBox(out,
-      [gateX + u[0] * 6.2, gateY + u[1] * 6.2, gateZ + u[2] * 6.2],
-      [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], basis);
+    const beam = [gateX + u[0] * 6.2, gateY + u[1] * 6.2, gateZ + u[2] * 6.2];
+    track.startGate = { c: beam, t, face: 0.65 };   // start lamps on the beam's grid face when no gantry is at the line (js/race/start-lights.js)
+    addBox(out, beam, [w * 2 + 4, 0.8, 1.2], [0.1, 0.1, 0.12], basis);
     addBox(out,
       [gateX + u[0] * 6.8, gateY + u[1] * 6.8, gateZ + u[2] * 6.8],
       [w * 1.4, 0.6, 0.6], [0.95, 0.95, 0.97], basis);

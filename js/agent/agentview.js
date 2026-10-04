@@ -2388,7 +2388,7 @@ const AgentView = (function () {
           if (!GLX.aabbInFrustum(planes, ch.min, ch.max)) continue;
           const cx = (ch.min[0] + ch.max[0]) / 2, cz = (ch.min[2] + ch.max[2]) / 2;
           const d = distTo(cx, cz);
-          if (cd > 0 && d > cd) continue;            // fog hides it; so does the GPU
+          if (Frustum.radialCulled(ch.min, ch.max, eye[0], eye[1], eye[2], cd, frame.cullFog)) continue;   // the GPU's own rule
           hits.push({ distM: d, bearingDeg: bearingTo(cx, cz),
                       centre: [r1(cx), r1((ch.min[1] + ch.max[1]) / 2), r1(cz)],
                       sizeM: [r1(ch.max[0] - ch.min[0]), r1(ch.max[1] - ch.min[1]),
