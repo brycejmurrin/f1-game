@@ -310,6 +310,9 @@ const CarDraw = (function () {
           // procedural pass draws a rival with one (past 120 m it only drops its decal).
           if (lodWarm) {
             if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
+            // The wing-flap hinge solve (Car3D.aeroFlaps, ~30-225 ms per recipe, memoised):
+            // every rival draws its flap set at any range now, so solve it behind the cover.
+            if (!c.isPlayer) { const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp); Car3D.aeroFlaps(aSt.val, aSt.aero); }
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }
