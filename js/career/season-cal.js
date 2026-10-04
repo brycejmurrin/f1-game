@@ -260,6 +260,7 @@ function resume(saved) {
   s.finishes = finishMap(s.finishes);
   s.roundPts = roundMap(s.roundPts);
   if (typeof s.lastFl !== "string") delete s.lastFl;
+  if (!(Number.isInteger(s.seed) && s.seed > 0 && s.seed <= 0xFFFFFFFF)) delete s.seed;
   // A save from before separate sprint qualifying carries the sprint RESULT as
   // the GP grid. The GP no longer copies it (qualifying, or the championship
   // order: B2.5.4(a)), so the field is dropped; its stage and points stand.
@@ -479,6 +480,60 @@ function rank(season, a, b) {
   return 0;
 }
 
+// A STANDALONE SEASON'S OWN LUCK SEED — Career.seasonSeed()'s counterpart.
+// Reliability, qualifying execution, launches and AI mistakes hash (seed,
+// round, driver); outside a career the seed was the SESSION's, drawn fresh per
+// page load, so quitting and reloading re-rolled a planned retirement. The
+// season stamps one at its first draw and saves it, so a reload replays the
+// same luck. The first stamp of a page load IS the session seed (a seeded or
+// automated session draws exactly what it always did); a later season in the
+// same load mixes a counter in, as seasonSeed() mixes the year, so a restarted
+// championship is not the last one's luck again.
+let luckStamps = 0;
+function luckSeed(season, sessionSeed) {
+  const base = (sessionSeed >>> 0) || 1;
+  if (!season || typeof season !== "object") return base;
+  if (Number.isInteger(season.seed) && season.seed > 0) return season.seed >>> 0;
+  season.seed = (luckStamps ? (base ^ Math.imul(luckStamps, 0x9E3779B1)) >>> 0 : base) || 1;
+  luckStamps++;
+  save(season);
+  return season.seed;
+}
+
+// THE CONSTRUCTORS' ORDER, one rule for every table that prints it (the
+// results sheet, the season sheet, Career.teamStandings → goals and the winter
+// shove): points, then the team's best Grand Prix finish by countback (more
+// wins, then more seconds, … — both cars' rows summed off `finishes`, whose
+// ids are "team:seat"), then the id. Points-only sorts fell back to insertion
+// order on a tie, and career broke it by tier, so two screens could disagree
+// on who was P5.
+function teamFinishes(season) {
+  const out = {};
+  const fin = (season && season.finishes) || {};
+  for (const id of Object.keys(fin)) {
+    const k = id.lastIndexOf(":");
+    const team = k > 0 ? id.slice(0, k) : id;
+    const row = out[team] || (out[team] = []);
+    const f = fin[id] || [];
+    for (let i = 0; i < f.length; i++) if (f[i]) row[i] = (row[i] || 0) + f[i];
+  }
+  return out;
+}
+function rankTeams(season, ids, ptsOf) {
+  const pts = ptsOf || ((id) => (season && season.teamPts && season.teamPts[id]) || 0);
+  const tf = teamFinishes(season);
+  return ids.slice().sort((a, b) => {
+    const d = pts(b) - pts(a);
+    if (d) return d;
+    const fa = tf[a] || [], fb = tf[b] || [];
+    for (let i = 0; i < Math.max(fa.length, fb.length); i++) {
+      const e = (fb[i] || 0) - (fa[i] || 0);
+      if (e) return e;
+    }
+    return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+  });
+}
+
 const SPRINT_SEED_OFFSET = 1000;
 function drawRound(season) {
   const r = season ? season.round : 0;
@@ -562,7 +617,7 @@ return {
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
-  award, scored, rank, netPts, drawRound,
+  award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
   presetIds, preset, shuffled, gpName,
 };
 })();

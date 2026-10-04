@@ -19,9 +19,10 @@ const DataStandings = (function () {
 
     function posText(pos) { return pos != null ? pos : "—"; }
 
-    function driverRows(drivers) {
+    // `tag` labels a table that is not this year's ("LAST SEASON · 2025 FINAL").
+    function driverRows(drivers, tag) {
       const sec = el("div", "dh-standings-col");
-      sec.appendChild(el("h3", "dh-section", "DRIVERS"));
+      sec.appendChild(el("h3", "dh-section", tag ? "DRIVERS — " + tag : "DRIVERS"));
       if (!drivers.length) {
         sec.appendChild(emptyMsg("No driver standings yet — season hasn't started."));
         return sec;
@@ -69,9 +70,9 @@ const DataStandings = (function () {
       return h2hWrap;
     }
 
-    function constructorRows(cons, drivers) {
+    function constructorRows(cons, drivers, tag) {
       const sec = el("div", "dh-standings-col");
-      sec.appendChild(el("h3", "dh-section", "CONSTRUCTORS"));
+      sec.appendChild(el("h3", "dh-section", tag ? "CONSTRUCTORS — " + tag : "CONSTRUCTORS"));
       if (!cons.length) {
         sec.appendChild(emptyMsg("No constructor standings yet."));
         return sec;
@@ -111,13 +112,25 @@ const DataStandings = (function () {
       return sec;
     }
 
+    const both = (year) => Promise.all([F1API.driverStandings(year), F1API.constructorStandings(year)])
+      .then((res) => ({ drivers: res[0] || [], cons: res[1] || [], year }));
+    const any = (t) => t.drivers.length > 0 || t.cons.length > 0;
+
+    // FROM JANUARY TO THE OPENER the current year has no table (api.js reads
+    // the year off the clock), and the tab read "season hasn't started" for
+    // ten weeks. Then the FINAL table of last season is the useful answer —
+    // labelled as such on both headings, never passed off as this year's. A
+    // failed fallback fetch leaves the empty current table as it was.
     function loadStandings() {
-      return Promise.all([F1API.driverStandings(), F1API.constructorStandings()]).then((res) => {
-        const drivers = res[0] || [];
-        const cons = res[1] || [];
+      return both().then((cur) => {
+        const y = F1API.season ? +F1API.season() : NaN;
+        if (any(cur) || !(y > 1950)) return cur;
+        return both(y - 1).then((prev) => (any(prev) ? prev : cur), () => cur);
+      }).then((t) => {
+        const tag = t.year != null ? "LAST SEASON · " + t.year + " FINAL" : "";
         const wrap = el("div", "dh-tabbody dh-standings");
-        wrap.appendChild(driverRows(drivers));
-        wrap.appendChild(constructorRows(cons, drivers));
+        wrap.appendChild(driverRows(t.drivers, tag));
+        wrap.appendChild(constructorRows(t.cons, t.drivers, tag));
         return wrap;
       });
     }

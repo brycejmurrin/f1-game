@@ -62,8 +62,17 @@ const F1API = (function () {
     });
   }
 
-  function driverStandings() {
-    return request(JOLPICA + "/" + season() + "/driverstandings.json", TTL_STANDINGS).then(function (json) {
+  // `year` (optional) asks for another season's table — the Data Hub reads the
+  // FINAL table of last season while the current one has no results yet
+  // (js/data/standings.js). A finished season never changes: TTL_HISTORIC.
+  function standingsUrl(year, what) {
+    const y = year != null ? String(year | 0) : season();
+    return { url: JOLPICA + "/" + y + "/" + what + ".json", ttl: y < season() ? TTL_HISTORIC : TTL_STANDINGS };
+  }
+
+  function driverStandings(year) {
+    const q = standingsUrl(year, "driverstandings");
+    return request(q.url, q.ttl).then(function (json) {
       const sl = jStandingsList(json);
       return arr(sl && sl.DriverStandings).map(function (s) {
         const d = (s && s.Driver) || {};
@@ -82,8 +91,9 @@ const F1API = (function () {
     });
   }
 
-  function constructorStandings() {
-    return request(JOLPICA + "/" + season() + "/constructorstandings.json", TTL_STANDINGS).then(function (json) {
+  function constructorStandings(year) {
+    const q = standingsUrl(year, "constructorstandings");
+    return request(q.url, q.ttl).then(function (json) {
       const sl = jStandingsList(json);
       return arr(sl && sl.ConstructorStandings).map(function (s) {
         const cons = (s && s.Constructor) || {};
@@ -456,6 +466,7 @@ const F1API = (function () {
     // rate-limit queue or hang without the FETCH_TIMEOUT_MS abort.
     request,
     schedule,
+    season,
     driverStandings,
     constructorStandings,
     latestSession,

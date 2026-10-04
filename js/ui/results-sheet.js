@@ -43,6 +43,12 @@ function ptsLabel(season, driverId) {
   const net = SeasonCal.netPts(season, driverId);
   return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
 }
+// [teamId, pts] in SeasonCal.rankTeams order — the one constructors' rule
+// Career.teamStandings uses too (points, countback, id).
+function teamOrder(season) {
+  const tp = season.teamPts || {};
+  return SeasonCal.rankTeams(season, Object.keys(tp)).map((id) => [id, tp[id]]);
+}
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -364,7 +370,7 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
-    const tmList = Object.entries(season.teamPts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const tmList = teamOrder(season).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
       rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
@@ -597,8 +603,7 @@ function buildStandings() {
   tmHead.textContent = "CONSTRUCTORS";
   body.appendChild(tmHead);
 
-  const tmList = Object.entries(season.teamPts)
-    .sort((a, b) => b[1] - a[1]);
+  const tmList = teamOrder(season);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
     rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);

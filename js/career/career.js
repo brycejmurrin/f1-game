@@ -1207,7 +1207,11 @@ function teamStandings() {
   const rows = Teams.LIST
     .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
-  rows.sort((a, b) => b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1));
+  // SeasonCal.rankTeams: the results sheet's order too (points, countback, id).
+  if (typeof SeasonCal !== "undefined" && SeasonCal.rankTeams) {
+    const at = new Map(SeasonCal.rankTeams(career.season, rows.map((r) => r.id)).map((id, i) => [id, i]));
+    rows.sort((a, b) => at.get(a.id) - at.get(b.id));
+  } else rows.sort((a, b) => b.pts - a.pts || (a.id < b.id ? -1 : 1));
   rows.forEach((r, i) => { r.pos = i + 1; });
   return rows;
 }

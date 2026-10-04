@@ -1909,8 +1909,7 @@ function gridUp(preOrder) {
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
     // never a simRnd() draw — the stream's draw count is a contract. Season /
     // career round + seasonSeed match armReliability (docs/BUGS.md B6).
-    const hSeed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer())
-      ? Career.seasonSeed() : simSeed();
+    const hSeed = luckSeed();
     const hRound = isChampionship() ? SeasonCal.drawRound(season) : raceIndex;
     const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
@@ -2458,12 +2457,13 @@ let raceIndex = 0;
 // be simulated). The seed is the CAREER's inside a career and the SIM seed
 // outside one — the two places a run's reproducibility is already anchored.
 // Nothing here draws from simRnd: see js/race/reliability.js.
+// (seed, round, driver) luck: the career's per-season seed, a standalone Season's own (SeasonCal.luckSeed: a reload cannot re-roll it), else the session's.
+const luckSeed = () => (Career.inCareer() ? Career.seasonSeed() : flow === "season" && season ? SeasonCal.luckSeed(season, simSeed()) : simSeed());
 function armReliability(field) {
-  const c = Career.data();
   const team = player ? player.team : Teams.LIST[teamIdx];
   Reliability.arm(field, {
     level: raceReliability,
-    seed: Career.inCareer() && c ? Career.seasonSeed() : simSeed(),   // per season, not per career
+    seed: luckSeed(),   // per season, not per career
     // drawRound(), not season.round: arm() hashes (seed, round, driver) and the
     // two legs of a sprint weekend share a round, so both would retire the same
     // cars. Career and no-sprint seasons get season.round back unchanged.
@@ -5272,7 +5272,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(((typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) ? Career.seasonSeed() : simSeed()) + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(luckSeed() + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
