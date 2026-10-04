@@ -217,3 +217,81 @@ test("every OSM-imported circuit is either surveyed or explicitly flat", () => {
   for (let i = 0; i < built.py.length; i++) { if (built.py[i] < lo) lo = built.py[i]; if (built.py[i] > hi) hi = built.py[i]; }
   assert.ok(hi - lo < 1e-6, `korea's centreline relief must be 0, got ${(hi - lo).toFixed(4)} m`);
 });
+
+// A zero-length segment in a shipped trace (nurburgring pts[130] == pts[131]
+// until 2026-10-04) is harmless on a straight and a NaN tangent anywhere else.
+// The designer rejects spacing under 8 m; shipped data had no check at all.
+// The fix for a duplicate is to NUDGE it, never delete it: startFrac,
+// sceneryStartFrac and hwZones count vertices.
+test("no circuit trace has two control points closer than 1 m", () => {
+  const Tracks = buildContext();
+  const close = [];
+  for (const d of Tracks._vmContext.TrackDefs) {
+    const P = d.path && d.path.pts;
+    if (!P) continue;
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length];
+      const gap = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (gap < 1) close.push(`${d.id} pts[${i}]→[${(i + 1) % P.length}] ${gap.toFixed(2)} m`);
+    }
+  }
+  assert.deepEqual(close, [], "nudge the duplicate along the trace; never delete a vertex");
+});
+
+// Sector splits drive split times, the HUD sector colours and marshal panels;
+// 28 circuits had none and fell back to thirds. Each def now names its own.
+test("every circuit names two ascending sector splits", () => {
+  const Tracks = buildContext();
+  const bad = [];
+  for (const def of Tracks.LIST) {
+    const s = def.sectors;
+    if (!Array.isArray(s) || s.length !== 2) { bad.push(`${def.id}: ${JSON.stringify(s)}`); continue; }
+    if (!(s[0] > 0.15 && s[1] < 0.85 && s[1] - s[0] > 0.15)) bad.push(`${def.id}: ${JSON.stringify(s)} not ~thirds`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+// Spa and Monaco carry hand-authored cosine bumps. They were authored against
+// an older centreline and sat on the wrong corners: Spa crested +84 m BEFORE
+// Eau Rouge and ran Kemmel downhill; Monaco crested before Massenet with
+// Casino at datum. Pin each profile's extremes to the curated turn they belong
+// to (racing-lap fractions, def.turns, 1-based in the messages).
+test("Spa and Monaco elevation extremes sit on their named corners", () => {
+  const Tracks = buildContext();
+  const profile = (id) => {
+    const def = Tracks.LIST.find((t) => t.id === id);
+    const tr = Tracks.buildCenterline(def, { line: false });
+    const n = tr.n, ds = tr.total / n, w = Math.max(1, Math.round(20 / ds));
+    const at = (k) => tr.py[((k % n) + n) % n];
+    const ext = (f0, f1, sign) => {   // extreme of sign*py over [f0, f1)
+      let best = -Infinity, bf = 0;
+      for (let k = Math.round(f0 * n); k < Math.round(f1 * n); k++) {
+        if (sign * at(k) > best) { best = sign * at(k); bf = (((k % n) + n) % n) / n; }
+      }
+      return { y: sign * best, f: bf };
+    };
+    let grade = 0;
+    for (let k = 0; k < n; k++) grade = Math.max(grade, Math.abs(at(k + w) - at(k)) / (w * ds));
+    return { def, ext, grade, T: (i) => def.turns[i - 1] };
+  };
+  const near = (got, turn, label) => {
+    const d = Math.min(Math.abs(got.f - turn), 1 - Math.abs(got.f - turn));
+    assert.ok(d <= 0.02, `${label}: extreme at ${got.f.toFixed(4)} (${got.y.toFixed(1)} m), corner at ${turn} — ${d.toFixed(4)} lap away`);
+  };
+
+  const spa = profile("spa");
+  const top = spa.ext(0, 1, +1), bottom = spa.ext(0, 1, -1);
+  near(top, spa.T(5), "Spa high point = Les Combes");
+  near(bottom, spa.T(17), "Spa low point = Stavelot");
+  const eauRouge = spa.ext(spa.T(1), spa.T(3), -1);
+  near(eauRouge, spa.T(2), "Spa valley = Eau Rouge");
+  assert.ok(top.y - eauRouge.y > 60, `Kemmel must climb well above Eau Rouge (${(top.y - eauRouge.y).toFixed(1)} m)`);
+  assert.ok(spa.grade < 0.18, `Raidillon is ~17 %; nothing on the lap may exceed 18 % (got ${(spa.grade * 100).toFixed(1)} %)`);
+
+  const mc = profile("monaco");
+  const crest = mc.ext(0, 1, +1), low = mc.ext(0, 1, -1);
+  near(crest, mc.T(6), "Monaco high point = Casino");
+  near(low, mc.T(12), "Monaco low point = the harbour chicane");
+  assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
+  assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
+});

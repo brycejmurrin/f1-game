@@ -23,11 +23,24 @@
     dressingExclusions: [{ kind: "foliage", s0: 0, s1: 1 }],
     // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
     pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
+    // Elevation, re-authored 2026-10-04 against THIS centreline (the old four
+    // bumps put an 84 m crest before Eau Rouge and ran Kemmel downhill). Shape
+    // from SRTM 30 m (Open Topo Data, api.opentopodata.org/v1/srtm30m, cubic)
+    // sampled at the bacinger/f1-circuits be-1925 trace vertices, 363-469 m
+    // ASL; least-squares cosine fit, rms 3.9 m. `s` is authored about
+    // sceneryStartFrac: racing arc = s - 0.0298 (the comments give the arc).
+    // Built: La Source +5, Eau Rouge valley -25 (arc 0.13), Raidillon climb
+    // max ~15 % at 0.16, high point +51 at Les Combes/Malmedy (0.35), low
+    // point -53 at Stavelot (0.71), back up through Blanchimont to the line.
     elevations: [
-      { s: 0.075, halfM: 360, rise: -18 }, // Eau Rouge compression
-      { s: 0.155, halfM: 920, rise: 84 },  // Raidillon crest / Kemmel plateau
-      { s: 0.46, halfM: 760, rise: 24 },   // rolling high ground before the descent
-      { s: 0.72, halfM: 680, rise: -18 },  // Stavelot valley
+      { s: 0.0598, halfM: 300, rise: 6 },    // arc 0.030 La Source, above the line
+      { s: 0.1638, halfM: 400, rise: -26 },  // arc 0.134 Eau Rouge valley
+      { s: 0.2298, halfM: 450, rise: 14 },   // arc 0.200 Raidillon exit onto Kemmel
+      { s: 0.3798, halfM: 1300, rise: 51 },  // arc 0.350 Kemmel climb to Les Combes
+      { s: 0.5798, halfM: 700, rise: -30 },  // arc 0.550 Pouhon descent
+      { s: 0.7398, halfM: 1200, rise: -53 }, // arc 0.710 Stavelot, the low point
+      { s: 0.8898, halfM: 600, rise: -19 },  // arc 0.860 Blanchimont climb
+      { s: 0.9848, halfM: 250, rise: -12 },  // arc 0.955 bus-stop dip
     ],
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon

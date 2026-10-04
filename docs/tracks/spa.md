@@ -14,12 +14,14 @@ Moody, overcast-leaning daylight (`ATM.dampArdennes`). Walls of dark forest gree
 - Fog tint: `[0.55, 0.60, 0.62]`, dense (`fogDensity` ≈ 0.0032).
 
 ## 3. Elevation
-Huge ~102 m total elevation change — the defining feature.
-- s≈0.00–0.04: La Source hairpin, then a downhill plunge toward the valley floor.
-- s≈0.05–0.09: **Eau Rouge** (left, low point) flicking into **Raidillon** — a steep ~17% climb over a blind crest.
-- s≈0.09–0.18: continued climb up the **Kemmel** straight to a high plateau at Les Combes.
-- s≈0.18–0.85: rolling descent and climbs through forest corners down to Stavelot, then back up.
-- s≈0.85–1.00: fast Blanchimont, drop into Bus Stop, climb back to start/finish.
+Huge ~102 m total elevation change — the defining feature (SRTM 30 m along the
+trace: 363–469 m ASL). Racing-lap fractions of THIS centreline (`def.turns`):
+- 0.00–0.035: the pit straight climbs ~6 m to **La Source** (T1, 0.035).
+- 0.035–0.135: downhill plunge to the valley floor at **Eau Rouge** (T2, 0.143), ~-25 m.
+- 0.135–0.20: **Raidillon** (T3, 0.1615) — the steepest grade on the lap, ~17 %, over a blind crest.
+- 0.20–0.35: the **Kemmel** straight keeps climbing to the high point at **Les Combes** (T4–T6, ~+51 m).
+- 0.35–0.71: descent through Malmedy, Rivage, **Pouhon** (0.52) and the Fagnes plateau to the low point at **Stavelot** (T17, 0.715, ~-53 m).
+- 0.71–1.00: the long climb through **Blanchimont**, a dip into the **Bus Stop** (T19–T20), back up to the line.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
