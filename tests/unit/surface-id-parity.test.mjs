@@ -290,3 +290,93 @@ test("car materials: wet look, ground AO, metal env, sidewall and carbon agree o
     assert.ok(!/color\s*(\*=|\.mulAssign\()[^;\n]*gpao/.test(s) && !/color = color \*[^;\n]*gpao/.test(s),
       `${name}: the ground AO darkens the whole colour — it must stay on the ambient term`);
 });
+
+// Full-line comments out, so prose that names a statement cannot satisfy or
+// trip a pin on it.
+const code = (p) => read(p).replace(/^[ \t]*\/\/.*$/gm, "");
+
+test("lamps and the baked lamp pools light the base BEFORE the lacquer's ccTrans absorb on every backend", () => {
+  // The clearcoat env mirror darkens the base it sits over (color *= ccTrans)
+  // and then adds the reflection. GLX and TLX run the bake + punctual-lamp loop
+  // before that multiply; WGX ran them after it, so at night car paint, glass
+  // and visors took lamp light the other two darken (~1.4x face-on).
+  const order = {
+    GLX: ["js/render/glx/shaders/glsl-lit.js", /for \(int i = 0; i < MAX_LIGHTS; i\+\+\)/, /float bakeW = /,
+          /color = max\(color, vec3\(0\.0\)\);/, /color \*= ccTrans;/],
+    TLX: ["js/render/three/tsl-lit.js", /Loop\(\{ start: int\(0\), end: int\(MAX_LIGHTS\)/, /const bakeW = /,
+          /color\.assign\(max\(color, vec3\(0\.0\)\)\);/, /color\.mulAssign\(ccTrans\)/],
+    WGX: ["js/render/webgpu/wgsl-chunks.js", /let r = lampContrib\(/, /let bakeW = /,
+          /color = max\(color, vec3<f32>\(0\.0\)\);/, /color = color \* ccTrans;/],
+  };
+  for (const [name, [file, lamp, bake, clamp, cc]] of Object.entries(order)) {
+    const s = code(file);
+    const at = (re) => { const m = s.match(re); assert.ok(m, `${name}: ${re} not found in ${file}`); return m.index; };
+    const ccAt = at(cc);
+    assert.equal(s.match(new RegExp(cc.source, "g")).length, 1, `${name}: expected exactly one ccTrans absorb`);
+    for (const [what, re] of [["the first lamp loop", lamp], ["the baked lamp-pool weight", bake], ["the >= 0 clamp after the lamps", clamp]])
+      assert.ok(at(re) < ccAt, `${name}: ${what} runs AFTER the lacquer's ccTrans absorb — lamp light escapes the darkening the other backends apply`);
+  }
+  // WGX has two loops (per-chunk baked + global); neither may follow the absorb.
+  const w = code("js/render/webgpu/wgsl-chunks.js");
+  const wcc = w.indexOf("color = color * ccTrans;");
+  const calls = [...w.matchAll(/let r = lampContrib\(/g)].map((m) => m.index);
+  assert.equal(calls.length, 2, "WGX: expected the per-chunk and the global lamp loop");
+  assert.ok(calls.every((i) => i < wcc), "WGX: a lampContrib loop runs after color = color * ccTrans");
+});
+
+test("road paint reaches the edge lines on WGX: roadMarkings is not gated on the asphalt id", () => {
+  // GLX/TLX call roadMarkings on every fragment (it returns on hw <= 0.5). WGX
+  // gated it on vMatId == 16, but its road ids come from the LUT with an inset,
+  // so the 0.2 m edge-line band was never asphalt and never painted.
+  const glx = code("js/render/glx/shaders/glsl-lit.js");
+  assert.match(glx, /applyMaterial\(int\(vMat \+ 0\.5\), albedo, rough, vDist\);\s*\n\s*roadMarkings\(albedo, rough\);/,
+    "GLX: roadMarkings follows applyMaterial unconditionally (the reference)");
+  const w = code("js/render/webgpu/wgsl-chunks.js");
+  const call = w.indexOf("roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane, F.pitBox);");
+  assert.ok(call > 0, "WGX: the roadMarkings call moved — re-point this pin");
+  const before = w.slice(w.lastIndexOf("applyMaterial(i32(vMatId + 0.5)", call), call);
+  assert.ok(before.length > 0 && !/vMatId[^;\n]*== 16|if \(/.test(before),
+    "WGX: roadMarkings is gated again (" + before.trim().split("\n").pop() + ") — the edge lines sit outside the asphalt id");
+  // The surface under the paint: GLX stamps ASPHALT out to |x| = hw, so the
+  // per-fragment LUT inset must stay inside the 0.2 m edge-line band.
+  const inset = w.match(/let lutAsphalt = abs\(fromWorld\.y\) < fromWorld\.z - ([\d.]+);/);
+  assert.ok(inset, "WGX: the per-fragment asphalt classification moved — re-point this pin");
+  assert.ok(Number(inset[1]) <= 0.2,
+    `WGX: the asphalt inset ${inset[1]} m leaves bare FLAT tarmac outside the edge line, where GLX has ASPHALT`);
+});
+
+test("the baked normal map has its own fade on WGX, not the procedural bump's early returns", () => {
+  // GLX/TLX apply the baked map as a separate call after the procedural bump.
+  // WGX called it from INSIDE applyMaterialNormal, after that function's own
+  // footprint early-returns, so the baked relief cut out in a seam well inside
+  // its own (fp/sc - 0.02)/0.30 fade.
+  const w = code("js/render/webgpu/wgsl-chunks.js");
+  const body = w.match(/fn applyMaterialNormal\([^)]*\)[^{]*\{[\s\S]*?\n\}/);
+  assert.ok(body, "WGX: fn applyMaterialNormal not found");
+  assert.ok(!/applyMaterialTexNormal\(/.test(body[0]),
+    "WGX: applyMaterialNormal calls applyMaterialTexNormal again — the baked map inherits the bump's early returns");
+  const bump = w.indexOf("applyMaterialNormal(i32(vMatId + 0.5), &N");
+  const tex = w.indexOf("applyMaterialTexNormal(i32(vMatId + 0.5), &N");
+  assert.ok(bump > 0 && tex > bump, "WGX fs_main: applyMaterialTexNormal must run right after applyMaterialNormal, as GLX does");
+  const glx = code("js/render/glx/shaders/glsl-lit.js");
+  assert.match(glx, /applyMaterialNormal\(int\(vMat \+ 0\.5\), N, vDist\);\s*\n\s*applyMaterialTexNormal\(int\(vMat \+ 0\.5\), N, vDist\);/,
+    "GLX: the two normal calls are separate statements (the reference)");
+});
+
+test("no material pack means no baked mix on WGX, as on GLX", () => {
+  // GLX uploads uMatTexMix = matAlbedoTex ? mix : 0. WGX packed the knob
+  // regardless, and the 1x1 placeholder's alpha 255 read as roughness 1.0, so
+  // a failed or pending pack pushed every world surface toward matte.
+  assert.match(code("js/render/glx/glx.js"), /"matTexMix", matAlbedoTex \? mix : 0\)/, "GLX reference moved — re-point this pin");
+  const d135 = code("js/render/webgpu/wgx.js").match(/d\[135\] = ([^;]+);/);
+  assert.ok(d135, "WGX: the params8.w (matTexMix) write moved — re-point this pin");
+  assert.match(d135[1], /^_matAlbedoOn \?[\s\S]*: 0$/,
+    `WGX: d[135] = ${d135[1]} — it must be 0 unless a baked albedo array is bound`);
+  // ...and a MAT with no baked layer (scale 0) keeps its procedural look on the
+  // hoisted path too (GLX matTexUV and TLX both require scale > 0).
+  const w = code("js/render/webgpu/wgsl-chunks.js");
+  const fn = w.match(/fn applyMaterial\([^)]*\)[^{]*\{[\s\S]*?\n\}/);
+  assert.ok(fn, "WGX: fn applyMaterial not found");
+  assert.match(fn[0], /let hoisted = packOn && [^;]*matScale\(mid\) > 0\.0;/,
+    "WGX: the hoisted baked-albedo path must require matScale(mid) > 0, as GLX/TLX do");
+});

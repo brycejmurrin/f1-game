@@ -332,13 +332,28 @@ const WGX = (function () {
     // to the centre-most vertex per station makes neighbouring samples
     // along-track BY CONSTRUCTION, rather than by a distance test that cannot
     // tell the two apart.
+    // ...AT lat 0, not at a vertex: buildRoad has no lat-0 column (the centre
+    // line's sit at +-0.30), so "the centre-most vertex" was the -0.30 one and
+    // every sample sat 0.30 m off centre — all WGX paint (edge lines, dashes,
+    // pit lane), the asphalt test and the bury hole shifted 0.30 m sideways vs
+    // GLX. Interpolate the nearest vertex either side to lat 0; a station with
+    // one side only keeps its centre-most vertex, as before.
     const byStation = new Map();
     for (let i = 0; i < raw.length; i++) {
       const r = raw[i], key = Math.round(r.s * 100);
-      const prev = byStation.get(key);
-      if (!prev || Math.abs(r.lat) < Math.abs(prev.lat)) byStation.set(key, r);
+      let st = byStation.get(key);
+      if (!st) { st = { neg: null, pos: null }; byStation.set(key, st); }
+      const side = r.lat < 0 ? "neg" : "pos";
+      if (!st[side] || Math.abs(r.lat) < Math.abs(st[side].lat)) st[side] = r;
     }
-    raw = [...byStation.values()];
+    raw = [];
+    for (const { neg, pos } of byStation.values()) {
+      if (neg && pos && pos.lat > 0) {
+        const t = -neg.lat / (pos.lat - neg.lat);
+        raw.push({ px: neg.px + (pos.px - neg.px) * t, pz: neg.pz + (pos.pz - neg.pz) * t,
+                   s: neg.s, hw: neg.hw, lat: 0 });
+      } else raw.push(neg && (!pos || Math.abs(neg.lat) < Math.abs(pos.lat)) ? neg : pos);
+    }
     raw.sort((a, b) => a.s - b.s);
     const MAX_S = 2000;
     // Decimating STATIONS, not vertices: with one point per station this stride
@@ -3264,7 +3279,10 @@ const WGX = (function () {
       d[132] = f.lampFog != null ? f.lampFog : 0;
       d[133] = SHD.lampArmed ? 1 : 0;
       d[134] = SHD.lampIdx;
-      d[135] = (T && T.matTexMix != null) ? T.matTexMix : 1;
+      // params8.w = BAKED MATERIALS mix, forced to 0 with no albedo array bound
+      // (GLX: uMatTexMix = matAlbedoTex ? mix : 0). The 1x1 placeholder's alpha
+      // 255 otherwise read as rough 1.0 and pushed every world surface matte.
+      d[135] = _matAlbedoOn ? ((T && T.matTexMix != null) ? T.matTexMix : 1) : 0;
       // params9 (floats 136..139): LIT tuner knobs. Always pack the resolved value — WGSL reads them directly, so 0
       // is a real "off", not an unset slot. Defaults = shipped GLX look.
       d[136] = (T && T.ambContactDark != null) ? T.ambContactDark : 1.0;
