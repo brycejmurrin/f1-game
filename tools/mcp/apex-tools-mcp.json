@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.9.0"
+    "version": "1.10.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -39,6 +39,8 @@
     "apex_session_status",
     "apex_who_is_on_it",
     "apex_ci_status",
+    "apex_hud_shot",
+    "apex_hud_survey",
     "apex_track",
     "apex_job_start",
     "apex_job_status",

@@ -472,7 +472,7 @@ const DataRealRace = (function () {
   }
 
   function create(deps) {
-    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, teamChip, fmtDateTime, findTeam, close, isOpen } = deps;
+    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, invalidateOther, teamChip, fmtDateTime, findTeam, close, isOpen } = deps;
     let bodyGen = 0;
     let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
     let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
@@ -483,7 +483,10 @@ const DataRealRace = (function () {
     let loading = null;    // {done, total} while the positions load
     let requestGen = 0, replayUi = null, traceError = "", partialTraces = null;
     let driveAction = null;
-    function cancel() { ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
+    // A download in flight leaves ~20 queued /location requests in the transport's
+    // FIFO that every other tab would wait behind; drop them (showTab cancels this
+    // tab BEFORE it starts the next tab's load).
+    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -516,7 +519,7 @@ const DataRealRace = (function () {
       return ensureSession(false).then(() => {
         const wrap = el("div");
         if (generation !== bodyGen) return wrap;
-        wrap.appendChild(buildPicker((meta) => renderBody(meta, body)));
+        wrap.appendChild(buildPicker((meta) => { renderBody(meta, body); if (invalidateOther) invalidateOther("race"); }));
         const body = el("div");
         wrap.appendChild(body);
         renderBody(sel.meta, body);

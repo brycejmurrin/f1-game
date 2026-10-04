@@ -170,6 +170,8 @@
     "tests/unit/damage.test.mjs",
     "tests/unit/data-api-status.test.mjs",
     "tests/unit/data-hub-offline.test.mjs",
+    "// The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).",
+    "tests/unit/data-hub-picker.test.mjs",
     "tests/unit/data-lazy-loader.test.mjs",
     "// The RESULTS tab drives OpenF1's session_result, whose duration and gap",
     "// change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.",
@@ -336,6 +338,7 @@
     "tests/unit/hud-readouts.test.mjs",
     "tests/unit/hud-relative.test.mjs",
     "tests/unit/hud-strategy.test.mjs",
+    "tests/unit/hud-survey.test.mjs",
     "tests/unit/hud-tyres.test.mjs",
     "tests/unit/image-grade-shaders.test.mjs",
     "tests/unit/import-models-workflow.test.mjs",
@@ -1100,7 +1103,8 @@
     },
     "test:mcp": {
       "files": [
-        "tests/unit/environment-json.test.mjs"
+        "tests/unit/environment-json.test.mjs",
+        "tests/unit/hud-survey.test.mjs"
       ],
       "kind": "node"
     },
