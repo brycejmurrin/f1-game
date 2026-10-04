@@ -17,6 +17,20 @@ const CAR_DECAL_CACHE_MAX = 24;
 // Is this decal sheet for the ROUNDED car? The same switch Car3D.build reads
 // (CarShade.on(teamId)); an imported body never is.
 const decalRound = (legacyBody, teamId) => !legacyBody && typeof CarShade !== "undefined" && CarShade.on(teamId);
+// A colour's "r,g,b" key at 0.01 (the toFixed(2) every colour-keyed cache here
+// uses), memoised per ARRAY and re-derived the moment its numbers move: the
+// key build ran per wheel and per flap, per car, per frame. A new array (a
+// livery edit) simply misses and builds the same string the old code did.
+const _colKeys = new WeakMap();
+function colKey3(c) {
+  let e = typeof c === "object" ? _colKeys.get(c) : null;
+  if (e && e.r === c[0] && e.g === c[1] && e.b === c[2]) return e.k;
+  const k = c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2);
+  if (typeof c !== "object") return k;
+  if (!e) { e = {}; _colKeys.set(c, e); }
+  e.r = c[0]; e.g = c[1]; e.b = c[2]; e.k = k;
+  return k;
+}
 function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
@@ -310,12 +324,41 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
+// The decal key, memoised per PARTS object (teamDecalState hands the same one
+// back until rev / ruleset move; bodyAnchors already keys on that identity):
+// aeroStyleOf builds a whole recipe and the key is ~6 concats + a map/join,
+// per drawn car per frame. Every other input is compared, so a new livery
+// (finShape / spineHeight), a GLB swap (legacyBody) or the CarShade switch
+// (round) rebuilds through the string path below — still the backing store.
+const _decalKeyMemo = new WeakMap(), _decalNoParts = {};
 function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
+  const round = decalRound(legacyBody, teamId);
+  const pk = parts == null ? _decalNoParts : typeof parts === "object" ? parts : null;
+  const m = pk && _decalKeyMemo.get(pk);
+  let k;
+  if (m && m.aLvl === aLvl && m.legacy === legacyBody && m.team === teamId && m.fin === finShape
+    && m.spine === spineHeight && m.round === round) k = m.k;
+  else {
+    k = decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round);
+    if (pk) _decalKeyMemo.set(pk, { aLvl, legacy: legacyBody, team: teamId, fin: finShape, spine: spineHeight, round, k });
+  }
+  if (!_carDecalMeshes[k]) {
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(aLvl == null ? 2 : Number(aLvl), parts, legacyBody, teamId, finShape || "standard", spineHeight));
+    _carDecalOrder.push(k);
+    while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
+      const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
+      if (mesh && _gfx.freeMesh) _gfx.freeMesh(mesh);
+      delete _carDecalMeshes[old];
+    }
+  }
+  return _carDecalMeshes[k];
+}
+function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round) {
   const anchorParts = legacyBody ? null : parts;
   // spineHeight reaches the cache key through anchors.key (the lift is in it),
   // and so does the rounded car ("|r": its flank is draped at the loft's rings).
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, decalRound(legacyBody, teamId)) : { key: "legacy" };
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
@@ -336,17 +379,7 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight)
                    : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
-  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
-  if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId, shapeK, spineHeight));
-    _carDecalOrder.push(k);
-    while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
-      const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
-      if (mesh && _gfx.freeMesh) _gfx.freeMesh(mesh);
-      delete _carDecalMeshes[old];
-    }
-  }
-  return _carDecalMeshes[k];
+  return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
 function getCockpitDecalMesh(parts, teamId) {
@@ -438,7 +471,7 @@ function getSpinDisc() {
 // outside the brake ring's band, so the two never overlap.
 const _compoundRings = new Map();
 function getCompoundRing(col) {
-  const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
+  const key = colKey3(col);   // per wheel per car per frame: the memoised key
   let m = _compoundRings.get(key);
   if (m) return m;
   const out = { pos: [], nrm: [], col: [], idx: [] };
@@ -473,7 +506,7 @@ const _crewMeshes = new Map();
 const CREW_CACHE_MAX = 32;   // one per team colour on the grid, with room for custom liveries
 const CREW_PEOPLE = 6;       // four gunmen + front and rear jack ops
 function getCrewMesh(col) {
-  const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
+  const key = colKey3(col);
   let m = _crewMeshes.get(key);
   if (m) return m;
   const P = typeof GaragePrims !== "undefined" ? GaragePrims : null;
@@ -578,16 +611,28 @@ const FLAP_CACHE_MAX = 128;
 // per car per frame, so an indexOf+splice reorder on every hit is not free
 // here. Distinct flap signatures per race stay well under 128, so eviction
 // order is moot at realistic cardinality.
+// The full key per (flap record, colour, finish), memoised on the RECORD (the
+// solved records are shared and immutable, and each carries its cacheKey):
+// a hit allocates nothing. Bounded per record so a livery editor's colour
+// sweep cannot grow it without limit; a clear only costs a rebuilt string.
+const _flapKeyMemo = new WeakMap(), FLAP_DEF_COL = Object.freeze([0.9, 0.9, 0.1]);
 // One element's key: its solve (cacheKey carries level + recipe), colour, finish.
+// Finish is part of the key: the same element/level/colour renders a different
+// MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
 function _flapKey(g, aLvl, style, c, finish) {
-  const sig = g.cacheKey || (g.id + aLvl + "|" + (style ? [
-    style.frontSweep, style.frontTaper, style.frontRise,
-    style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
-  // Colour, spelled out rather than mapped+joined — same 0.01 resolution, no
-  // array and no closure. The whole key build runs per flap per car per frame.
-  // Finish is part of the key: the same element/level/colour renders a different
-  // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
-  return sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + (finish || "");
+  const ck = colKey3(c), fin = finish || "";
+  if (!g.cacheKey) {
+    return g.id + aLvl + "|" + (style ? [
+      style.frontSweep, style.frontTaper, style.frontRise,
+      style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d") + "|" + ck + "|" + fin;
+  }
+  let byCol = _flapKeyMemo.get(g);
+  if (!byCol || byCol.size > 64) { byCol = new Map(); _flapKeyMemo.set(g, byCol); }
+  let byFin = byCol.get(ck);
+  if (!byFin) { byFin = new Map(); byCol.set(ck, byFin); }
+  let key = byFin.get(fin);
+  if (key === undefined) { key = g.cacheKey + "|" + ck + "|" + fin; byFin.set(fin, key); }
+  return key;
 }
 function _flapPut(cache, order, max, key, data) {
   const mesh = cache[key] = _gfx.createMesh(data);
@@ -605,7 +650,7 @@ function _flapPut(cache, order, max, key, data) {
   return mesh;
 }
 function getAeroFlap(aLvl, col, idx, style, el, finish) {
-  const c = col || [0.9, 0.9, 0.1];
+  const c = col || FLAP_DEF_COL;
   // aLvl is passed through RAW — catalog options use fractional levels and the
   // wing geometry depends on the exact value, so it must not be truncated here
   // either (it is part of the cache key for the same reason).
@@ -624,7 +669,7 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
 const _flapSets = {}, _flapSetOrder = [];
 const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
 function getAeroFlapSet(aLvl, col, style, finish, open, only) {
-  const c = col || [0.9, 0.9, 0.1], flaps = Car3D.aeroFlaps(aLvl, style);
+  const c = col || FLAP_DEF_COL, flaps = Car3D.aeroFlaps(aLvl, style);
   if (!flaps.length) return null;
   const key = _flapKey(flaps[0], aLvl, style, c, finish) + (open ? "|X|" : "|Z|") + (only || "");
   if (_flapSets[key]) return _flapSets[key];
@@ -955,9 +1000,16 @@ function _wheelRimRound(out, GRIP, acc) {
 // join the key, so a garage livery edit (resolveLivery is store.rev-invalidated
 // upstream) or a WHEEL change frees and rebuilds it. liv may be null — the
 // wheel then falls back to the neutral carbon look.
-let cockpitWheelMesh = null, _cockpitWheelKey = "";
+// The resolved livery is one object per store rev (resolveLivery memo) and its
+// colours are never written in place, so the SAME object + style is the same
+// key: return before the tints, the toFixed map/joins and the concat (every
+// frame on the default camera). A draft or an edit is a new object and takes
+// the string path, which still owns the free-and-rebuild.
+let cockpitWheelMesh = null, _cockpitWheelKey = "", _wheelLiv, _wheelStyle;
 const _wheelTint = (c, k) => c ? [c[0] * k, c[1] * k, c[2] * k] : null;
 function getCockpitWheel(liv, style) {
+  if (cockpitWheelMesh && liv === _wheelLiv && style === _wheelStyle) return cockpitWheelMesh;
+  _wheelLiv = liv; _wheelStyle = style;
   const st = COCKPIT_WHEELS.includes(style) ? style : COCKPIT_WHEELS[0];
   // Livery colours are display-range; against the near-black rig they glare,
   // so team colour lands at ~45% (grips/straps) and ~55% (the 12-o'clock
@@ -1327,8 +1379,10 @@ function _classicScreen() {
   const frame = [[ct[0], ct[1]], [ct[1], st(1)], [ct[0], st(-1)], [sb(1), st(1)], [sb(-1), st(-1)]];
   return { panels, frame };
 }
-let _cabinMesh = null, _cabinKey = "";
+let _cabinMesh = null, _cabinKey = "", _cabinKind, _cabinLiv;   // same identity early-out as getCockpitWheel
 function getCockpitCabin(kind, liv) {
+  if (_cabinMesh && kind === _cabinKind && liv === _cabinLiv) return _cabinMesh;
+  _cabinKind = kind; _cabinLiv = liv;
   const tint = (c, k, d) => c ? [c[0] * k, c[1] * k, c[2] * k] : d;
   const col = tint(liv && liv.c1, 0.55, [0.25, 0.05, 0.05]), acc = tint(liv && (liv.accent || liv.c2), 0.6, [0.6, 0.6, 0.62]);
   const key = kind + "|" + col.concat(acc).map((v) => v.toFixed(2)).join(",");
@@ -1575,10 +1629,13 @@ function drawRetroTelemetry(mat,c,kph,t) {
     _gfx.draw(getOtLamp(c.otT>0),_retroM,_RETRO_FX);
   }
 }
-const _wheelStatus = {};
+const _wheelStatus = {}, _wheelStatusIx = [];   // ix: (mph, 0..4, 0..4) -> mesh, no key string per frame
 function getWheelStatus(mph,throttle,brake) {
+  const ix = (throttle | 0) === throttle && (brake | 0) === brake && throttle >= 0 && throttle <= 4 && brake >= 0 && brake <= 4
+    ? (mph ? 25 : 0) + throttle * 5 + brake : -1;
+  if (ix >= 0 && _wheelStatusIx[ix]) return _wheelStatusIx[ix];
   const key=(mph?1:0)+'|'+throttle+'|'+brake;
-  if(_wheelStatus[key])return _wheelStatus[key];
+  if(_wheelStatus[key])return ix >= 0 ? (_wheelStatusIx[ix] = _wheelStatus[key]) : _wheelStatus[key];
   const out={pos:[],nrm:[],col:[],idx:[]};
   _rigLabel(out,mph?'MPH':'KPH',-.034,.001,-.037,.0013,[.35,.75,.78]);
   for(const [x,n,col,label] of [[-.036,throttle,[.16,.85,.35],'T'],[.005,brake,[.95,.18,.12],'B']]) {
@@ -1586,8 +1643,11 @@ function getWheelStatus(mph,throttle,brake) {
     _rigBox(out,x,-.016,-.034,.026,.003,.002,[.04,.055,.06]);
     if(n>0)_rigBox(out,x-.013+.013*n/4,-.016,-.036,.026*n/4,.003,.001,col);
   }
-  return _wheelStatus[key]=_gfx.createMesh(out);
+  _wheelStatus[key]=_gfx.createMesh(out);
+  if (ix >= 0) _wheelStatusIx[ix] = _wheelStatus[key];
+  return _wheelStatus[key];
 }
+const _AX_PULSE = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };   // pooled: a fresh literal defeated TLX's matKeyFor memo
 function drawWheelExtras(mat, c, t) {
   const mph=typeof AppearanceOpts!=='undefined' && AppearanceOpts.units()==='mph';
   _gfx.draw(getWheelStatus(mph,Math.round(Math.max(0,Math.min(1,c.throttleDemand||0))*4),Math.round(Math.max(0,Math.min(1,c.brakeDemand||0))*4)),mat,_AX_FX);
@@ -1599,9 +1659,8 @@ function drawWheelExtras(mat, c, t) {
   M4.mulTo(_axM, mat, _axT);
   _gfx.draw(getAeroBar(false), _axM, _AX_FX);
   _axM[0] *= ax; _axM[1] *= ax; _axM[2] *= ax;
-  _gfx.draw(getAeroBar(true), _axM, ax < 0.999
-    ? { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.65 + 0.35 * Math.sin(t * 20) }
-    : _AX_FX);
+  if (ax < 0.999) _AX_PULSE.alpha = 0.65 + 0.35 * Math.sin(t * 20);
+  _gfx.draw(getAeroBar(true), _axM, ax < 0.999 ? _AX_PULSE : _AX_FX);
 }
 // The pre-race grid strobe, in one place: game.js draws from it and
 // __apex.carEffects() reports from it, so the hook cannot drift from the draw.

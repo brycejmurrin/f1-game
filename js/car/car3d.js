@@ -501,22 +501,21 @@ const Car3D = (function () {
     }
     return sig;
   }
-  // One-entry last-args cache in front of the Map: drawAeroFlaps asks twice
-  // per car per frame with the same (level, style), and the key concat was
-  // the only allocation left on that path.
-  let _flapLastLvl = null, _flapLastSt = null, _flapLastHit = null;
+  // Per-STYLE-object front cache (style -> Map(level -> records)): a one-entry
+  // last-args cache missed on every car change (each car has its own recipe).
+  const _flapByStyle = new WeakMap();
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
-    if (aLvl === _flapLastLvl && st0 === _flapLastSt) return _flapLastHit;
+    let byLvl = _flapByStyle.get(st0), hit = byLvl && byLvl.get(aLvl); if (hit) return hit;
     const key = aLvl + "|" + flapSig(st0);
-    let hit = _flapSpecs.get(key);
+    hit = _flapSpecs.get(key);
     if (!hit) {
       hit = solveFlapsGeom(aLvl, st0);
       for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
       _flapSpecs.set(key, hit);
     }
-    _flapLastLvl = aLvl; _flapLastSt = st0; _flapLastHit = hit;
-    return hit;
+    if (!byLvl) _flapByStyle.set(st0, byLvl = new Map());
+    byLvl.set(aLvl, hit); return hit;
   }
   function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
@@ -919,34 +918,35 @@ const Car3D = (function () {
   // stalk carries the lamp with it. Cached per (team, scale): game.js asks
   // once per drawn car per frame, and a fresh pair of objects there is garbage
   // in the hot loop.
-  const _mirrorAnchorCache = new Map();
+  const _mirrorAnchorCache = new Map(), _mirrorAnchorLast = new Map();   // last: teamId -> [raw scale, anchors], no key string on a hit
   function mirrorLightAnchors(teamId, mirrorScale) {
+    const last = _mirrorAnchorLast.get(teamId); if (last && last[0] === mirrorScale) return last[1];
     const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1));
     const k = teamId + "|" + mScale.toFixed(3);
     let a = _mirrorAnchorCache.get(k);
-    if (a) return a;
+    if (a) { _mirrorAnchorLast.set(teamId, [mirrorScale, a]); return a; }
     const mSty = teamStyleOf(teamId).mirror;
     const mx = (0.34 + (mSty === 1 ? 0.035 : 0)) * mScale;
     const mW = mSty === 1 ? 0.235 : 0.215;
     const y = 0.735 + (mSty === 2 ? -0.032 : 0);
     a = Object.freeze([{ x: -(mx + mW / 2 + 0.004), y, z: 0.26 }, { x: mx + mW / 2 + 0.004, y, z: 0.26 }]);
-    _mirrorAnchorCache.set(k, a);
-    return a;
+    _mirrorAnchorCache.set(k, a); _mirrorAnchorLast.set(teamId, [mirrorScale, a]); return a;
   }
   // The COCKPIT build's mirror GLASS faces (the driver-facing side of the
   // face(0.012, mz-0.038) block in build()'s ckpt branch), 1 mm toward the eye:
   // car-draw.js lays a sky-tint fallback there while the HUD mirror pass is not
   // drawing. Per side [a,b,c,d] (inboard-low, outboard-low, outboard-high, inboard-high).
   const _ckMirrorCache = new Map();
+  let _ckLastIn = {}, _ckLastQ = null;   // last raw scale -> quads: the per-frame call builds no toFixed key
   function cockpitMirrorGlass(mirrorScale) {
+    if (mirrorScale === _ckLastIn) return _ckLastQ;
     const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1)), k = mScale.toFixed(3);
-    if (_ckMirrorCache.has(k)) return _ckMirrorCache.get(k);
+    if (_ckMirrorCache.has(k)) { _ckLastIn = mirrorScale; return (_ckLastQ = _ckMirrorCache.get(k)); }
     const mx = 0.60 * mScale, mW = 0.215, mH = 0.075, mY = 0.780, toe = 0.030, ins = 0.012, z = 0.92 - 0.038 - 0.001;
     const y0 = mY - mH / 2 + ins, y1 = mY + mH / 2 - ins, zi = z + toe * ins / mW, zo = z + toe * (1 - ins / mW);
     const q = [-1, 1].map((s) => { const xi = s * (mx - mW / 2 + ins), xo = s * (mx + mW / 2 - ins);
       return [[xi, y0, zi], [xo, y0, zo], [xo, y1, zo], [xi, y1, zi]]; });
-    _ckMirrorCache.set(k, q);
-    return q;
+    _ckMirrorCache.set(k, q); _ckLastIn = mirrorScale; return (_ckLastQ = q);
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});

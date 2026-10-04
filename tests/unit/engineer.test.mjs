@@ -504,3 +504,17 @@ test("senseOf reads the cars around the player: the threat, the car ahead, and t
   behind.prog = 0;   // nobody inside the loss window: clear air
   assert.equal(eng.senseOf(c).rejoin, "");
 });
+
+// update() fills one scratch per instance (senseInto) instead of a ~30-field
+// literal per step; senseOf, the public read, still hands out a fresh object
+// with the same fields, so the two cannot disagree on what callFor sees.
+test("senseOf stays a fresh snapshot; update's scratch sense is the same state", () => {
+  const { eng, tyres } = sessionFor();
+  const c = carOn(tyres, { wear: 0.8 });
+  const a = eng.senseOf(c), b = eng.senseOf(c);
+  assert.notEqual(a, b, "a fresh object per call");
+  assert.deepEqual(a, b);
+  assert.equal(Object.keys(a).length, 28, "every field the literal had");
+  c.local = true;
+  assert.equal(eng.update(c, 1 / 60), eng.callFor(a)[0], "update says what callFor reads off the snapshot");
+});
