@@ -211,6 +211,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
+  "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
@@ -375,9 +376,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
+  "tests/unit/hud-relative.test.mjs",
+  "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",

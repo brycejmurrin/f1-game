@@ -53,6 +53,7 @@ const DYNAMIC_CAMS = new Set(["tv", "trackside"]);
 export const ELEMENT_TOGGLES = Object.freeze({
   pos: "pos", lap: "lap", time: "time", best: "best", delta: "delta", sectors: "sectors", speed: "speed",
   gear: "gearbox", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", limits: "limits",
+  damage: "damage", rel: "rel", strat: "strat", inputs: "inputs",
 });
 
 export const ENUMS = Object.freeze({
@@ -87,7 +88,7 @@ export const PRESETS = Object.freeze({
 });
 // HudLayout.ELEMENTS ids and LIM (js/ui/hud-layout.js).
 export const LAYOUT_IDS = Object.freeze(["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce",
-  "gearbox", "energy", "tyre", "ot", "aero", "bb"]);
+  "gearbox", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"]);
 export const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
 // Percent ranges the CLI accepts; the game clamps to its own (HUD 70..200,
 // UI 40..200, BUTTON 40..300 — js/ui/scale.js).
@@ -111,6 +112,9 @@ export const HUD_TARGETS = Object.freeze([
   ["announce", "#announce"], ["gearbox", "#hud-gearbox"], ["speed", "#hud-speed"], ["energy", "#hud-energy"],
   ["tyre", "#hud-tyre"], ["ot", "#hud-ot"], ["aero", "#hud-aero"], ["bb", "#hud-bb"], ["pit", "#hud-pit"],
   ["bcTower", "#bc-tower"],
+  // Shown only by an event or an opt-in (DAMAGE past Damage.SHOW; RELATIVE /
+  // STRATEGY / INPUTS ship off): measured for clashes when drawn, never expected.
+  ["damage", "#hud-damage"], ["rel", "#hud-rel"], ["strat", "#hud-strat"], ["inputs", "#hud-inputs"],
 ].map(([key, sel]) => Object.freeze({ key, sel, role: "hud" }))
   .concat(["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero", "shift-up", "shift-down",
     "btn-steer-left", "btn-steer-right", "pausebtn", "btn-cam", "hud-mirror-chip"]
@@ -126,7 +130,7 @@ const bad = (m) => { throw new CellError(m); };
 export function validateOffsets(o) {
   if (!o || typeof o !== "object" || Array.isArray(o)) bad("preset offsets must be an object {id: {x, y, s}}");
   const keys = Object.keys(o);
-  if (!keys.length || keys.length > LAYOUT_IDS.length) bad("preset offsets: 1..14 element ids");
+  if (!keys.length || keys.length > LAYOUT_IDS.length) bad(`preset offsets: 1..${LAYOUT_IDS.length} element ids`);
   const out = {};
   for (const id of keys) {
     if (!LAYOUT_IDS.includes(id)) bad(`preset offsets: unknown element ${id} (one of ${LAYOUT_IDS.join(", ")})`);

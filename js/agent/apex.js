@@ -824,6 +824,17 @@ const api = {
     const c = o.car != null ? (G.cars || [])[o.car] : G.player;
     return G.tyres.info(c);
   },
+  // DISPLAY-ONLY damage readout (js/race/damage.js) for car `i` (default: the
+  // player): {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a
+  // synthetic impact {long, lat, sev} in the car's frame (+long nose, +lat right);
+  // "reset" repairs. Nothing in physics reads it — a screenshot/test door only.
+  damage(i, hit) {
+    const c = i != null ? (G.cars || [])[i] : G.player;
+    if (!c || typeof Damage === "undefined") return null;
+    if (hit === "reset") Damage.reset(c);
+    else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
+    return Damage.state(c);
+  },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
     // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
