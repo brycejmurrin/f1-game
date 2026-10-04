@@ -985,6 +985,7 @@ const LAZY_WORKER = [
 // shared roll math, and the pad module. No game, no renderer, no store.
 const CONTROLLER = [
   "js/core/log.js",
+  "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers
   "js/net/bytes.js",
   "js/net/nostr.js",
   "js/net/rendezvous.js",
