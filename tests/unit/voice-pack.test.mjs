@@ -73,10 +73,17 @@ test("a complete performance wins over fragments, including internal pauses and 
 
 // ── 2. The committed packs cover what each channel says ─────────────────────
 
+// EVERY VOICE ON EVERY CHANNEL: a voice's own channel is `<id>`, every other
+// channel `<id>-<speaker>` (VoicePack.packFor). All of them ship.
+const SPEAKERS_ALL = Object.keys(J(RadioVoice.PACK_VOICE));
 const PACKS = {};
-for (const id of Object.keys(J(VoicePack.VOICES))) {
-  PACKS[id] = { man: JSON.parse(read(`assets/voice/${id}.json`)), bin: fs.statSync(path.join(ROOT, `assets/voice/${id}.bin`)).size };
+const COMBOS = [];   // [voice, speaker, pack]
+for (const id of Object.keys(J(VoicePack.VOICES))) for (const sp of SPEAKERS_ALL) {
+  const pk = VoicePack.packFor(id, sp);
+  COMBOS.push([id, sp, pk]);
+  PACKS[pk] = { man: JSON.parse(read(`assets/voice/${pk}.json`)), bin: fs.statSync(path.join(ROOT, `assets/voice/${pk}.bin`)).size };
 }
+const packsFor = (sp) => COMBOS.filter(([, s2]) => s2 === sp).map(([, , pk]) => pk);
 const hasIn = (id) => (k) => Object.prototype.hasOwnProperty.call(PACKS[id].man.clips, k);
 const MAN = PACKS.george.man;
 const hasKey = hasIn("george");
@@ -101,20 +108,23 @@ test("every pack is one contiguous, licensed, small file", () => {
     assert.ok(bin < 8 * 1024 * 1024, `${id} exceeds the 8 MB complete-recording budget`);
     total += bin;
   }
-  assert.ok(total < 32 * 1024 * 1024, `the six selectable packs total ${(total / 1048576).toFixed(2)} MB`);
+  assert.equal(Object.keys(PACKS).length, Object.keys(J(VoicePack.VOICES)).length * SPEAKERS_ALL.length, "every voice ships every channel");
+  // Repository weight, not a player's download: a player fetches one pack per channel in use.
+  assert.ok(total < 120 * 1024 * 1024, `all ${Object.keys(PACKS).length} packs total ${(total / 1048576).toFixed(2)} MB`);
   const defaults = Object.values(J(RadioVoice.PACK_VOICE)).reduce((n, id) => n + PACKS[id].bin, 0);
   assert.ok(defaults < 18 * 1024 * 1024, "selected defaults stay within an 18 MB race download; alternatives load only when selected");
 });
 
-test("every selectable pack includes its complete calls and the same fallback vocabulary as its channel", () => {
-  for (const [id, spec] of Object.entries(J(VoicePack.VOICES))) {
-    const base = RadioVoice.PACK_VOICE[spec.speaker];
+test("every voice's pack for every channel includes that channel's complete calls and fallback vocabulary", () => {
+  for (const [id, sp, pk] of COMBOS) {
+    const base = RadioVoice.PACK_VOICE[sp];
+    assert.equal(PACKS[pk].man.voice, J(VoicePack.VOICES)[id].voice, pk + " is " + id + "'s voice");
     for (const key of Object.keys(PACKS[base].man.clips)) {
-      if (!key.startsWith("@line:")) assert.ok(hasIn(id)(key), id + ": " + key);
+      if (!key.startsWith("@line:")) assert.ok(hasIn(pk)(key), pk + ": " + key);
     }
-    for (const { key, text } of fullPhrases(id)) {
-      assert.ok(hasIn(id)(key), id + ": " + text);
-      assert.deepEqual(J(VoicePack.compose(text, hasIn(id))), [{ k: key }]);
+    for (const { key, text } of fullPhrases(id, sp)) {
+      assert.ok(hasIn(pk)(key), pk + ": " + text);
+      assert.deepEqual(J(VoicePack.compose(text, hasIn(pk))), [{ k: key }]);
     }
   }
 });
@@ -146,7 +156,7 @@ test("every commentary line composes from the commentator's pack, for every driv
         gap: RadioLines.gapText(0.7), time: RadioLines.timeText(80 + i * 1.7), why: RadioLines.WHY.mechanical, n: 3, laps: 4 });
       if (!text) return;
       n++;
-      if (!VoicePack.compose(say(text), hasIn(RadioVoice.PACK_VOICE.announcer))) misses.push(text);
+      for (const pk of packsFor("announcer")) if (!VoicePack.compose(say(text), hasIn(pk))) misses.push(pk + ": " + text);
     });
   }
   assert.ok(n > 300, "the sweep is real");
@@ -160,8 +170,8 @@ test("every line the game was heard saying in a race composes from its own chann
   const corpus = JSON.parse(read("tools/gen/voice-corpus.json"));
   const misses = [];
   let n = 0;
-  for (const [speaker, id] of Object.entries(J(RadioVoice.PACK_VOICE))) {
-    for (const line of corpus[speaker] || []) { n++; if (!VoicePack.compose(line, hasIn(id))) misses.push(speaker + ": " + line); }
+  for (const [, speaker, pk] of COMBOS) {
+    for (const line of corpus[speaker] || []) { n++; if (!VoicePack.compose(line, hasIn(pk))) misses.push(pk + ": " + line); }
   }
   assert.ok(n > 50, "the corpus is real: " + n);
   assert.deepEqual(misses, [], "re-run tools/gen/voicepack.mjs for the channel named");
@@ -181,7 +191,7 @@ test("every engineer line, lap times included, composes from the pack, for every
           time: RadioLines.timeText(64.9 + i * 2.3), delta: RadioLines.gapText(0.4) });
         if (!text) return;   // a slot this sweep does not fill (the radio check's pair of gaps)
         n++;
-        if (!VoicePack.compose(say(text), hasKey)) misses.push(text);
+        for (const pk of packsFor("radio")) if (!VoicePack.compose(say(text), hasIn(pk))) misses.push(pk + ": " + text);
       });
     }
   }
@@ -236,7 +246,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   const sb = sandbox(["js/audio/radio-voice.js"], {
     window: { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } },
     GameAudio: { setRadioDuck: (b) => ducks.push(b), radioStingStop() {} },
-    VoicePack: { create: () => fakePack, choices: VoicePack.choices },
+    VoicePack: { create: () => fakePack, choices: VoicePack.choices, packFor: VoicePack.packFor },
   });
   const saved = new Map(packOn == null ? [] : [["radioPack", packOn]]);
   if (voiceTune) saved.set("voiceTune", voiceTune);
@@ -258,16 +268,25 @@ test("a line the pack covers is played from it, after the courtesy figure, and s
   assert.equal(r.ducks.at(-1), false, "and comes back when it ends");
 });
 
-test("a selected engineer is persisted, prepared and played; invalid or cross-channel choices are refused", () => {
+test("a selected engineer is persisted, prepared and played; any voice may take any channel, an unknown one is refused", () => {
   const r = radio();
   assert.equal(r.v.setRecordedVoice("radio", "michael"), true);
   assert.equal(r.v.recordedVoice("radio"), "michael");
   assert.equal(r.saved.get("voiceTune").radio.pack, "michael");
   assert.equal(r.reload().recordedVoice("radio"), "michael", "the selected pack survives reload");
-  assert.equal(r.v.setRecordedVoice("radio", "bella"), false);
   assert.equal(r.v.setRecordedVoice("radio", "missing"), false);
   assert.equal(r.v.say("BOX BOX BOX", 3, "info"), true);
-  assert.equal(r.packCalls.find((c) => c.id).id, "michael");
+  assert.equal(r.packCalls.find((c) => c.id).id, "michael", "a voice on its own channel speaks from its own pack");
+  // The commentator's voice on the team radio: the same voice, the radio's words.
+  assert.equal(r.v.setRecordedVoice("radio", "bella"), true);
+  assert.equal(r.v.recordedPack("radio"), "bella-radio");
+  r.packCalls.length = 0;
+  assert.equal(r.v.say("BOX BOX BOX", 3, "info"), true);
+  assert.equal(r.packCalls.find((c) => c.id).id, "bella-radio");
+  for (const sp of SPEAKERS_ALL) {
+    assert.deepEqual(J(VoicePack.choices(sp)).map((c) => c.id).sort(), Object.keys(J(VoicePack.VOICES)).sort(), sp + " offers every voice");
+    assert.equal(J(VoicePack.choices(sp))[0].id, RadioVoice.PACK_VOICE[sp], sp + ": the shipped default heads the list");
+  }
 });
 
 test("pre-race announcer source is independent of the recorded race radio", () => {

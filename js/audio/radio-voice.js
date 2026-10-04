@@ -189,7 +189,7 @@ const RadioVoice = (function () {
       say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
-      recordedVoice: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
+      recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
       announcerPackOn: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
@@ -218,6 +218,11 @@ const RadioVoice = (function () {
     const recordedVoice = (sp) => {
       const chosen = tune[sp] && tune[sp].pack;
       return recordedVoices(sp).some((v) => v.id === chosen) ? chosen : PACK_VOICE[sp];
+    };
+    // The PACK the chosen voice speaks this channel from (any voice, any channel).
+    const recordedPack = (sp) => {
+      const id = recordedVoice(sp);
+      return typeof VoicePack !== "undefined" && VoicePack.packFor ? VoicePack.packFor(id, sp) || id : id;
     };
     // The pre-race presenter remains independent of the race-radio source.
     const announcerPackOn = () => {
@@ -356,7 +361,7 @@ const RadioVoice = (function () {
     function ensureVoices() {
       if (!pack) return;
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
-      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn) pack.ensure(recordedVoice(sp));
+      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn) pack.ensure(recordedPack(sp));
     }
     function stop() {
       stopVoice();
@@ -398,7 +403,7 @@ const RadioVoice = (function () {
       // fetching) — never speech synthesis in a race (PACK_VOICE above).
       if (pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
-        last.reason = pack.ready && !pack.ready(recordedVoice(p.speaker)) ? "pack-loading" : "not-recorded";
+        last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
         return false;
       }
       if (!api) { last.reason = "no-api"; return false; }
@@ -415,7 +420,7 @@ const RadioVoice = (function () {
      * no pending timer. False — the pack is off, still loading, or does not
      * cover every word — leaves recorded-mode calls on the card. */
     function speakPack(p, audition) {
-      const id = recordedVoice(p.speaker);
+      const id = recordedPack(p.speaker);
       if (!pack || (!packOn && !audition) || !id) return false;
       pack.ensure(id);
       const tok = { pack: true };
@@ -581,7 +586,7 @@ const RadioVoice = (function () {
       // with RECORDED selected, TEST must not promise a different voice.
       activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
       if (pack && (sp === "announcer" ? announcerPackOn() : packOn)) {
-        const id = recordedVoice(sp), gen = previewGen;
+        const id = recordedPack(sp), gen = previewGen;
         const play = () => gen === previewGen && G.soundOn && speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 15000 }, true);
         if (pack.load && !pack.ready(id)) { pack.load(id).then((ready) => { if (ready) play(); }); return true; }
         return !!play();
@@ -614,7 +619,7 @@ const RadioVoice = (function () {
       sayPreRace: (msg, life, lead) => (say(msg, life, "race", lead, true) ? last.leadMs / 1000 + last.secs : false),
       /** The installed voices a channel may be given, as plain rows for a <select>. */
       voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
-      recordedVoice, recordedVoices, announcerPackOn,
+      recordedVoice, recordedPack, recordedVoices, announcerPackOn,
       setRecordedVoice(speaker, id) {
         if (!recordedVoices(speaker).some((v) => v.id === id)) return false;
         if (G.announcer && G.announcer.stop) G.announcer.stop();

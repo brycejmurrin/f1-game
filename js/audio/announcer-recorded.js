@@ -26,7 +26,7 @@ const RecordedAnnouncer = (() => {
       stop();
       const p = pack();
       if (!p || !G.soundOn) return false;
-      const id = G.radio.recordedVoice("announcer"), gen = generation;
+      const id = G.radio.recordedPack ? G.radio.recordedPack("announcer") : G.radio.recordedVoice("announcer"), gen = generation;
       const end = budgetMs > 0 ? Date.now() + budgetMs : Infinity;
       live = true;
       if (budgetMs > 0) deadline = setTimeout(stop, budgetMs);
@@ -63,7 +63,7 @@ const RecordedAnnouncer = (() => {
     function readMs(lines) {
       const p = pack();
       if (!p) return 0;
-      const id = G.radio.recordedVoice("announcer");
+      const id = G.radio.recordedPack ? G.radio.recordedPack("announcer") : G.radio.recordedVoice("announcer");
       p.ensure(id);
       if (!p.ready(id)) return 0; // The loading screen keeps its normal flyby while loading.
       const covered = lines.map((text) => planLine(p, id, text).plan).filter(Boolean);
