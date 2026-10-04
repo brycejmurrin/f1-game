@@ -201,12 +201,18 @@ buenos_aires, jacarepagua — all 0.0, confirmed by both estimators.
 
 ### Not located — do not guess
 
-**bahrain** and **jeddah** keep their current values.
+**jeddah** keeps its current value. **bahrain moved 0.2250 → 0.0000 on
+2026-10-04** (`sceneryStartFrac: 0.2250` keeps its dressing in place):
 
-- bahrain is only *bounded*: OSM pit lane way 187123422 runs
-  26.02985,50.51052 → 26.03420,50.51071 and main grandstand way 187123419
-  centres 26.03207,50.51014, so the line lies between them at lon ≈ 50.5103.
-  A bound is not a coordinate. Its current 0.225 already measures straight.
+- 0.225 sat on a 370 m diagonal after a hairpin, first apex a LEFT; the real
+  T1 is a right. The start coordinate 26.0325,50.5106 snaps to vertex 0, 3.8 m
+  off the centreline (runner-up branch 186 m); OSM pit lane way 187123422
+  (26.02985,50.51052 → 26.03420,50.51071) lies 9.5–11.8 m RIGHT of that same
+  straight, fracs 0.958 → 0.048, and main grandstand way 187123419
+  (26.03207,50.51014) 39 m LEFT at 0.003. That straight is the lap's longest
+  (1052 m, heading N), followed by R hairpin / L / R kink / 524 m / R = T1–T4.
+  `pit.side` flipped −1 → +1 to match; turns re-seated by the
+  rotate-markings formula (shift 0.27027); sectors left alone (see §6).
 - jeddah: no usable source found. Its current 0.9625 measures **in a corner**
   (mean |k| 0.0173), so it is the one circuit still known-wrong.
 
