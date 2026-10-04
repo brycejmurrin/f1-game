@@ -903,6 +903,15 @@ test("the radio card's top-row slot ends at a touch dock group in the tower's ro
   assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under the tower's rows does not bound it");
 });
 
+test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {
+  const h = fitHarness(), x = () => h.root.style.getPropertyValue("--radio-top-x");
+  assert.equal(x(), "558.0px", "the shipped tower ends at 550");
+  h.paint(h.top, { s: 1.1, o: "top left" });          // BIG-style growth: the painted tower now ends further right
+  const painted = h.top.getBoundingClientRect().right;
+  h.sb.GameHud.invalidateFit();                        // HudLayout.apply's call — no HUD tick follows
+  assert.equal(x(), (painted + 8).toFixed(1) + "px", "the card follows the tower on screen");
+});
+
 test("the mirror's PAINTED bottom is published for the centre column (MOVE & SIZE can grow or lower it)", () => {
   const h = fitHarness(), b = () => h.root.style.getPropertyValue("--mir-paint-b");
   const mir = h.dom.byId("hud-mirror");

@@ -1603,7 +1603,20 @@ function resetRace() {
 // (data-hl on the element) and HUD ELEMENTS (body[data-hud-hide]) change
 // attributes it cannot see, so either waited out the 3 s same-key backoff.
 // HudLayout.apply and HudElements.apply call GameHud.invalidateFit().
-function invalidateFit() { _fitKey = ""; _fitRetry = 0; }
+// THE PIECES THAT FOLLOW ANOTHER PIECE'S PAINTED BOX re-derive AT ONCE: the radio
+// card's top-row slot hangs off the tower as drawn, --mir-paint-b off the mirror
+// as drawn, and the next HUD tick can be a long way off (a frozen headless page
+// draws one frame per capture). Saved survey reports had the card at the PREVIOUS
+// layout's tower edge + 8 (BIG: x 829 against a tower ending at 866). Two rect
+// reads per apply, only once the fit has found the tower; the caps still wait
+// for the tick.
+function invalidateFit() {
+  _fitKey = ""; _fitRetry = 0;
+  if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
+  const root = document.documentElement;
+  radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
+  mirrorClear(root);
+}
 _invalidateFit = invalidateFit;
 return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit };
 }
