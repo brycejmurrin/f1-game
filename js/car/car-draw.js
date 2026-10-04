@@ -771,8 +771,19 @@ const CarDraw = (function () {
     // the spin they hold, and nothing else — no fixed layers, compound stripes,
     // spin discs, brake rings or far flares (those are Particles, which a second
     // camera would emit twice). Pass dt 0 with it: the main pass advances the spin.
+    // FIELD WHEEL INSTANCING: a backend that declares queueInstanced (TLX)
+    // takes a RIVAL's wheel layers into its instance queue, keyed by layer —
+    // 0 rotating, 1 fixed, 2 compound stripe, 3 spin disc, 4 brake ring (the
+    // flush order) — and emits a handful of instanced draws after the car loop
+    // (flushDecals). It answers false for a draw it did not take; that draw,
+    // and every draw on GLX/WGX, goes through draw() exactly as before. The
+    // player and the mirror's bare wheels never queue.
+    function drawW(iq, mesh, m, opt, layer) {
+      if (!(iq && G.gfx.queueInstanced(mesh, m, opt, layer))) G.gfx.draw(mesh, m, opt);
+    }
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
       const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team, c);
+      const iq = !bare && !c.isPlayer && typeof G.gfx.queueInstanced === "function";
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
@@ -839,7 +850,7 @@ const CarDraw = (function () {
         // Push the widened wheels outward so they don't intersect the tub.
         L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
-        G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
+        drawW(iq, wd.rear ? wm.R : wm.F, _wheelWorld, opt, 0);
         if (lite) {
           // Past the LOD distance only the rotating wheel draws, but the far
           // brake flare (40-240 m, Particles, outside the pool) is exactly this
@@ -922,14 +933,14 @@ const CarDraw = (function () {
       }
       // Run 1: the fixed wheel layers, one bind for up to four draws, then
       // the compound stripes (one shared ring per colour).
-      for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], opt);
-      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], opt);
+      for (let i = 0; i < _wqN; i++) drawW(iq, _wqMesh[i], _wq[i], opt, 1);
+      for (let i = 0; i < _cqN; i++) drawW(iq, _cqMesh[i], _cq[i], opt, 2);
       _cqN = 0;
       // Run 2: the blended rings, after every opaque wheel of this car.
       const ro = _ringOpts;
       for (let i = 0; i < _rqN; i++) {
         ro.emissive = _rqEmis[i]; ro.alpha = _rqAlpha[i];
-        G.gfx.draw(_rqMesh[i] || getBrakeRing(), _rq[i], ro);
+        drawW(iq, _rqMesh[i] || getBrakeRing(), _rq[i], ro, _rqMesh[i] ? 3 : 4);
       }
       _wqN = 0; _rqN = 0;
     }
@@ -1025,6 +1036,9 @@ const CarDraw = (function () {
     // The render loop drains the decal queue once per frame, after the bodies.
     function beginDecals() { _decalCount = 0; }
     function flushDecals(night) {
+      // The field's queued wheel layers first: they drew before the decals
+      // when each car drew its own (decals are depth-tested, write no depth).
+      if (typeof G.gfx.flushInstanced === "function") G.gfx.flushInstanced();
       for (let i = 0; i < _decalCount; i++)
         drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
     }

@@ -1738,6 +1738,196 @@ const TLX = (function () {
           if (!_instAlive.has(im)) im.visible = false;
         }
       }
+      // ── wheel-inst-queue (pure: tests/unit/tlx-wheel-inst.test.mjs lifts it) ──
+      // FIELD WHEEL INSTANCING. Every rival's wheels, fixed layers, compound
+      // stripes, spin discs and brake rings are SHARED meshes (car-draw.js
+      // getFieldWheelMeshes / CarMesh rings), but each draw() was its own pooled
+      // Mesh, render object and per-object uniform update — ~84 rotating wheels
+      // alone with a full field in view. queueInstanced() records them here and
+      // flushInstanced() (after the car loop) emits ONE InstancedMesh draw per
+      // group, the group key being:
+      //   geometry x material (the full matKey: blend state, opaque/translucent)
+      //   x WINDING (sign of the 3x3 determinant: three keys frontFace on the
+      //     OBJECT's matrixWorld, so a mirrored instance must sit in an object
+      //     whose own matrix is mirrored — see emitInstGroup)
+      //   x quantised emissive / alpha (per-draw uniforms in tsl-lit perObject,
+      //     one value per object; 1/32 bins, the group keeps its FIRST exact value
+      //     so the night wheels' 0.12 is drawn as 0.12, not a bin centre)
+      //   x layer (the caller's flush phase: 0 rotating, 1 fixed, 2 compound,
+      //     3 spin disc, 4 brake ring — the disc must blend under its ring).
+      // Flush order is (layer, first-seen), so a frame's emits are deterministic.
+      // A NEGATIVE-determinant group's matrices are stored as S*W (S = scale
+      // x -1): the object carries S, so world = S*(S*W) = W and det(S) < 0
+      // gives the same frontFace the plain mesh with matrixWorld W had.
+      const INSTQ_BINS = 32;
+      function createInstQueue() {
+        const byGeo = new Map();   // geo -> Map(mat -> Map(code -> group))
+        const live = [];           // groups touched since the last flush
+        let stamp = 1, seq = 0, queued = 0;
+        const stat = { queued: 0, groups: 0, flushes: 0 };
+        const byLayerThenSeq = (a, b) => a.layer - b.layer || a.seq - b.seq;
+        function push(geo, mat, em, al, layer, w) {
+          const e = em !== undefined ? em : 0, a = al !== undefined ? al : 1;
+          const det = w[0] * (w[5] * w[10] - w[6] * w[9]) + w[1] * (w[6] * w[8] - w[4] * w[10]) + w[2] * (w[4] * w[9] - w[5] * w[8]);
+          const neg = det < 0;
+          const qe = Math.min(511, Math.max(0, Math.round(e * INSTQ_BINS))) || 0;
+          const qa = Math.min(INSTQ_BINS, Math.max(0, Math.round(a * INSTQ_BINS))) || 0;
+          const L = layer | 0;
+          const code = (neg ? 1 : 0) + 2 * (qe + 512 * (qa + (INSTQ_BINS + 1) * L));
+          let byMat = byGeo.get(geo);
+          if (!byMat) { byMat = new Map(); byGeo.set(geo, byMat); }
+          let byCode = byMat.get(mat);
+          if (!byCode) { byCode = new Map(); byMat.set(mat, byCode); }
+          let g = byCode.get(code);
+          if (!g) { g = { geo, mat, neg, em: e, al: a, layer: L, seq: 0, n: 0, m: new Float32Array(16 * 8), stamp: 0 }; byCode.set(code, g); }
+          if (g.stamp !== stamp) { g.stamp = stamp; g.n = 0; g.seq = seq++; g.em = e; g.al = a; live.push(g); }
+          if ((g.n + 1) * 16 > g.m.length) { const nm = new Float32Array(g.m.length * 2); nm.set(g.m); g.m = nm; }
+          const o = g.n * 16, m = g.m;
+          for (let k = 0; k < 16; k++) m[o + k] = w[k];
+          if (neg) { m[o] = -m[o]; m[o + 4] = -m[o + 4]; m[o + 8] = -m[o + 8]; m[o + 12] = -m[o + 12]; }   // S*W: row 0
+          g.n++;
+          queued++;
+          return g;
+        }
+        function flush(emit) {
+          if (live.length > 1) live.sort(byLayerThenSeq);
+          let groups = 0;
+          for (let i = 0; i < live.length; i++) { const g = live[i]; if (g.n > 0 && g.geo) { groups++; emit(g); } }
+          stat.queued = queued; stat.groups = groups; stat.flushes++;
+          reset();
+          return groups;
+        }
+        // Discard without emitting (a new frame began over an unflushed queue).
+        function reset() { live.length = 0; stamp++; seq = 0; queued = 0; }
+        // The geometry was freed: forget its groups, and empty any still queued.
+        function drop(geo) {
+          const byMat = byGeo.get(geo);
+          if (!byMat) return;
+          for (const byCode of byMat.values()) for (const g of byCode.values()) { g.n = 0; g.geo = null; }
+          byGeo.delete(geo);
+        }
+        return { push, flush, reset, drop, stat, pending: () => queued };
+      }
+      // ── end wheel-inst-queue ──
+      // apex26.tlxWheelInst=0 is the off-switch (read once at create, like the
+      // other tlx A/B knobs): every queueInstanced() then answers false and the
+      // caller draws through draw() exactly as before.
+      let _wheelInstOn = true;
+      try { _wheelInstOn = localStorage.getItem("apex26.tlxWheelInst") !== "0"; } catch (_) { /* no storage: on */ }
+      const _instQ = createInstQueue();
+      const _instGeoOf = new Map();    // source geometry -> clone sharing its attributes (+ instanceTint)
+      const _instPool = new Map();     // clone -> Map(material -> [pos list, neg list]) of pooled batches
+      let _instFlushN = 0, _instMeshes = 0, _instPruneAt = 0;
+      const _instS = new THREE.Matrix4().makeScale(-1, 1, 1);
+      // The clone shares every BufferAttribute (no copy; three keys GPU buffers
+      // on the attribute) and adds the instance-rate tint the instanced lit graph
+      // multiplies in (all ones). The source keeps no instance attribute, so its
+      // plain draws (the player, the mirror's bare wheels) are unchanged.
+      function _cloneForInst(src) {
+        const g = new THREE.BufferGeometry();
+        if (src.index) g.setIndex(src.index);
+        for (const name of Object.keys(src.attributes)) g.setAttribute(name, src.attributes[name]);
+        g.setDrawRange(src.drawRange.start, src.drawRange.count);
+        return g;
+      }
+      function instGeoFor(src) {
+        let g = _instGeoOf.get(src);
+        if (!g) { g = _cloneForInst(src); _instGeoOf.set(src, g); }
+        return g;
+      }
+      // `probe`: a warm-only mesh, kept out of the scene and the registry.
+      function _newInstMesh(clone, mat, neg, need, probe) {
+        const want = Math.max(128, need | 0);
+        // Padded past the UBO limit like createInstancedBatch, so these share
+        // the instanced lit program with the scenery batches.
+        const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, want) : want;
+        const im = new THREE.InstancedMesh(clone, mat, cap);
+        im.matrixAutoUpdate = false;
+        im.matrixWorldAutoUpdate = false;
+        im.frustumCulled = false;   // as every pooled draw() mesh: TLX never culled a per-car draw
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.userData.tlxInstCap = cap;
+        _instColorAttr(im, cap);
+        if (neg) im.matrix.copy(_instS);
+        im.matrixWorld.copy(im.matrix);
+        if (probe) return im;
+        im.visible = false;
+        scene.add(im);
+        _instRegistry.push(im);
+        _instMeshes++;
+        return im;
+      }
+      function _dropInstMesh(im) {
+        const ix = _instRegistry.indexOf(im);
+        if (ix >= 0) _instRegistry.splice(ix, 1);
+        try { scene.remove(im); } catch (_) { /* detached */ }
+        try { im.dispose(); } catch (_) { /* never rendered */ }
+        _instMeshes--;
+      }
+      // (clone, material, winding, OCCURRENCE): acquireMesh's scheme, so the
+      // InstancedMesh a group lands on is stable frame to frame and three's
+      // render-object cache stays bounded by the distinct groups.
+      function acquireInstBatch(clone, mat, neg, need) {
+        let byMat = _instPool.get(clone);
+        if (!byMat) { byMat = new Map(); _instPool.set(clone, byMat); }
+        let lists = byMat.get(mat);
+        if (!lists) { lists = [[], []]; byMat.set(mat, lists); }
+        const list = lists[neg ? 1 : 0];
+        if (list.stamp !== _instFlushN) { list.stamp = _instFlushN; list.n = 0; }
+        const k = list.n++;
+        let b = list[k];
+        if (b && need > b.imesh.userData.tlxInstCap) { _dropInstMesh(b.imesh); b = null; }
+        if (!b) { b = list[k] = { __tlx: true, geo: clone, instances: 0, visible: 0, imesh: _newInstMesh(clone, mat, neg, need), seen: 0 }; }
+        b.seen = _poolNow;
+        return b;
+      }
+      function emitInstGroup(g) {
+        const b = acquireInstBatch(instGeoFor(g.geo), g.mat, g.neg, g.n);
+        _writeInstanceMatrices(b.imesh, g.m, null, g.n);
+        b.instances = b.visible = b.imesh.count;
+        pushRec(null, null, g.mat, g.em, g.al, 0, null, b);
+      }
+      function queueInstanced(mesh, model, opts, layer) {
+        if (!_wheelInstOn || !mesh || !mesh.geo || !model || _mirActive || _envActive || skipBatches()) return false;
+        _instQ.push(mesh.geo, materialFor(opts, false, true), drawEm(opts), drawAl(opts), layer, model);
+        return true;
+      }
+      function flushInstanced() {
+        if (!_instQ.pending()) return 0;
+        _instFlushN++;
+        const n = _instQ.flush(emitInstGroup);
+        // Idle sweep on the clock (prunePool's cadence): a batch keyed on a
+        // material matCache has since evicted is never drawn again.
+        if (!_warmPending && _poolNow - _instPruneAt > PRUNE_EVERY_MS) {
+          _instPruneAt = _poolNow;
+          for (const byMat of _instPool.values()) for (const [mat, lists] of byMat) {
+            for (const list of lists) {
+              let w = 0;
+              for (let i = 0; i < list.length; i++) {
+                const b = list[i];
+                if (_poolNow - b.seen < PRUNE_IDLE_MS) list[w++] = b; else _dropInstMesh(b.imesh);
+              }
+              list.length = w;
+            }
+            if (!lists[0].length && !lists[1].length) byMat.delete(mat);
+          }
+        }
+        return n;
+      }
+      // freeMesh: the source geometry is going, so are its clone and batches.
+      function dropInstGeo(src) {
+        _instQ.drop(src);
+        const clone = _instGeoOf.get(src);
+        if (!clone) return;
+        _instGeoOf.delete(src);
+        const byMat = _instPool.get(clone);
+        if (byMat) for (const lists of byMat.values()) for (const list of lists) for (const b of list) _dropInstMesh(b.imesh);
+        _instPool.delete(clone);
+        // Disposing the clone releases the shared attributes' GPU buffers too —
+        // harmless: the source is disposed right after (three's attribute
+        // DataMap delete is idempotent).
+        try { clone.dispose(); } catch (_) { /* never uploaded */ }
+      }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
       // MEASURED (docs/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
       // wrapper #0 whatever geometry happened to be first that frame, and the
@@ -2036,6 +2226,12 @@ const TLX = (function () {
       const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
         { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
       const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
+      // FIELD WHEEL INSTANCING moves the rival ring/disc onto the INSTANCED lit
+      // graph: the same first-braking-zone variant (alpha < 1) plus its opaque
+      // twin (a ring at full heat reaches alpha 1), on an InstancedMesh probe.
+      // The opaque WHEEL variants need nothing extra: the grid draws them, so
+      // the scene warm compiles them.
+      const _LATE_LIT_INST = [_LATE_LIT[0], { roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 }];
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
         for (const n of Object.keys(g.attributes).sort()) {
@@ -2052,6 +2248,7 @@ const TLX = (function () {
       function mintLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
         for (const o of _LATE_LIT) materialFor(o, false, false);
+        if (_wheelInstOn) for (const o of _LATE_LIT_INST) materialFor(o, false, true);
         if (_lateFxOn()) for (const o of _LATE_FX) materialFor(o, false, false);
       }
       async function warmLateLit() {
@@ -2081,6 +2278,20 @@ const TLX = (function () {
             m.frustumCulled = false;
             m.scale.x = sx; m.updateMatrixWorld(true);
             await renderer.compileAsync(m, camera, scene);
+          }
+        }
+        if (_wheelInstOn && !skipBatches()) {
+          for (const o of _LATE_LIT_INST) {
+            const mat = materialFor(o, false, true);
+            for (const g of geos.values()) for (const neg of [false, true]) {
+              // A throwaway clone (not instGeoFor's cache, which would pin a
+              // track geometry) in the live pool's capacity class: under the
+              // uboInstCap pad the probe would compile a uniform-block program
+              // the race never draws.
+              const m = _newInstMesh(_cloneForInst(g), mat, neg, 1, true);
+              m.count = 1;
+              await renderer.compileAsync(m, camera, scene);
+            }
           }
         }
         if (!_lateFxOn()) return;
@@ -3039,7 +3250,7 @@ const TLX = (function () {
         uploadTexture(h) {
           try { if (h && h.tex) renderer.initTexture(h.tex); } catch (_) { /* first draw uploads it */ }
         },
-        freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
+        freeMesh(m) { if (m && m.geo) { dropInstGeo(m.geo); disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
@@ -3624,6 +3835,12 @@ const TLX = (function () {
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,
+        // FIELD WHEEL INSTANCING (TLX only; GLX/WGX do not declare it and
+        // car-draw.js draws through draw() there). queueInstanced answers false
+        // when it did not take the draw — off-switch, software WebGPU
+        // (skipBatches), a mirror/env pass — and the caller then draw()s it.
+        queueInstanced,
+        flushInstanced,
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         warm() {
@@ -3736,6 +3953,7 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
           _instAlive.clear();
+          _instQ.reset();   // a queue the last frame never flushed is stale, not late
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
@@ -4602,6 +4820,10 @@ const TLX = (function () {
           memState() {
             const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.length,
                         geoKeys: meshByGeo.size, batch: _poolBatch,
+                        // Field wheel instancing: the LAST flush's queued draws
+                        // and the instanced draws they became.
+                        wheelInst: { on: _wheelInstOn, queued: _instQ.stat.queued, groups: _instQ.stat.groups,
+                                     flushes: _instQ.stat.flushes, meshes: _instMeshes, clones: _instGeoOf.size },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
