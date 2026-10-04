@@ -103,8 +103,12 @@ single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
 A routed spec that loses the budget to smaller ones rides as **overflow** —
-up to two more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
-instead of being skipped; what is still left is skipped by name. The
+up to six more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
+instead of being skipped. A routed spec that declares a per-test timeout at or
+over the gate's 180 s runs in the **over-budget pool** (`overbudget-<k>` jobs,
+up to eight jobs' worth, each capped from its own declaration). What is still
+left is dropped by name, and a dropped spec turns `Selected specs (verdict)`
+red on a pull request (2026-10-04). The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with a 60-minute budget, twelve
 jobs' worth of overflow and `--stale-first` ordering — so a routed spec no
@@ -351,8 +355,10 @@ nothing ran could be committed and fail only at tooling-fast or the deploy gate.
 2. **A row in the §5 coverage table** below: what it covers.
 3. **Nothing to regenerate for the counts** — no doc quotes the ladder sizes or an exact spec count (floors like "120+" only; `gen-ladder-figures.mjs` measures).
 4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
-   GL-heavy, and declare `test.setTimeout` above 180 s if it boots a race, so the
-   selected CI gate excludes it by name instead of timing out on a slow runner.
+   GL-heavy, and declare the `test.setTimeout` it really needs if it boots a
+   race. A declaration at or over the selected gate's 180 s no longer opts a
+   spec out of CI (2026-10-04): a routed one runs in the selector's over-budget
+   pool, in a job whose kill timer derives from that declaration.
 
 A new GROUP is the same plus its `package.json` key, a §2 row here, and a
 `tools/ci/nightly-group.mjs` ROTATION / EXCLUDED / UNSCHEDULED entry.
@@ -1047,19 +1053,25 @@ publish is never cancelled by a later tick.
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
 
-Branch protection requires checks by **fixed name**. Matrix job names change
-per run, and path-filtered jobs that skip would block merges if required
-directly. Two always-judged checks close that:
+Branch protection requires checks by **fixed name**, and matrix job names
+change per run. A job skipped by its own `if:` reports **Success** to branch
+protection; only a workflow skipped by a path/branch filter stays Pending
+([GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
+Two always-judged checks give the gate fixed names:
 
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
-  `tools/ci/ci-verdict.mjs`. A needed job skipped by its `if:` is a pass; a
-  needed failure or cancel fails the aggregator. Advisory jobs
-  (`baseline-trial`) never fail it. This is the one stable required check for
-  the whole workflow.
+  `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
+  needed only `selected`, so an all-dropped plan passed `CI` while the verdict
+  failed). A needed job skipped by its `if:` is a pass; a needed failure or
+  cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
+  It is the only check that also carries smoke, the sweeps, renderer-macos and
+  xr, so branch protection should require it (an owner setting).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
-  name for the change-aware gate. `select` must succeed; `selected` success
-  passes; `selected` skipped with nothing dropped is an empty-plan pass; a
-  Pages call with unaffordable dropped specs warns rather than fails. Uses
+  name for the change-aware gate. `select` must succeed and `selected` must
+  pass or skip; **any dropped routed spec is a red** on a push or PR
+  (2026-10-04; before, `dropped` was read only when `selected` was skipped).
+  A Pages call with dropped specs warns rather than fails. It also writes the
+  failing-spec carry-forward once, from every shard's junit. Uses
   `!cancelled()` so a draft→ready cancel does not red the superseded run.
 
 ### What runs on PRs versus nightly
