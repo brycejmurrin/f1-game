@@ -1,6 +1,35 @@
 # Circuit de Spa-Francorchamps — Visual Design Brief
 
-**Setting:** DAY, green theme (Ardennes forest). ~7.0 km, 20 turns, clockwise.
+**Setting:** DAY, green theme (Ardennes forest). 2025 FIA layout: 7.004 km, 19 numbered corners, clockwise; the game currently has 20 curated markers.
+
+## Accuracy references and placement limits
+
+The [official circuit overview](https://www.spa-francorchamps.be/en/the-circuit)
+shows rolling wooded Ardennes terrain. Backdrop relief and colors should follow
+that character; the procedural mountain emitter still classifies its upper
+faces as rock even when their color is forest green. Mixed broadleaf/conifer
+woodland should replace existing placements, with bounded deterministic recipes.
+
+The [Spa Grand Prix seating guide](https://www.spagrandprix.com/en/news/16_where-to-sit-at-the-belgian-grand-prix)
+and [ELMS's January 12, 2022 report](https://www.europeanlemansseries.com/en/news/all-change-at-spa-francorchamps-61df2080cd561e2412cb7b04/11259)
+identify the permanent covered Raidillon stand. The current scenery registers
+the Gold 3 stand row at authored fractions .142/.154/.166 on the outside-right
+of the descent, with its jumbotron at .159 and a grass spectator bank spanning
+.146–.170. These correspond approximately to racing fractions .10–.13. The
+inside-left Raidillon terrace is authored at .200 (racing about .158), and the
+brook follows authored .176–.191 through the valley. The earlier Gold 3 calls
+at .075/.085/.105 placed the stands near rendered La Source and are obsolete.
+This registration follows the game's road trace and new valley profile; stand
+dimensions, roof form and spectator banks remain artistic approximations,
+not independently surveyed footprints.
+
+The 2025 FIA event map lists 7004 m and 19 corners; the game retains 20 curated
+markers. The current source describes its 64-knot elevation profile as a fit
+to SRTM 30 m samples of the imported road trace, with canopy smoothing and an
+authored Raidillon climb. That coarse fit improves the valley registration;
+it does not establish surveyed grades or exact trackside elevations. Confirm
+plan scale, road heights and landmark footprints independently before making
+survey-level accuracy claims.
 
 ## 1. Setting
 Carved into the hilly Ardennes forest of eastern Belgium. Roads thread through dense pine and deciduous woodland on steep terrain. Notoriously changeable weather — often misty, damp, and wet even when one part of the track is dry.
@@ -14,26 +43,32 @@ Moody, overcast-leaning daylight (`ATM.dampArdennes`). Walls of dark forest gree
 - Fog tint: `[0.55, 0.60, 0.62]`, dense (`fogDensity` ≈ 0.0032).
 
 ## 3. Elevation
-Huge ~102 m total elevation change — the defining feature (SRTM 30 m along the
-trace: 363–469 m ASL). Racing-lap fractions of THIS centreline (`def.turns`):
-- 0.00–0.035: the pit straight climbs ~6 m to **La Source** (T1, 0.035).
-- 0.035–0.135: downhill plunge to the valley floor at **Eau Rouge** (T2, 0.143), ~-25 m.
-- 0.135–0.20: **Raidillon** (T3, 0.1615) — the steepest grade on the lap, ~17 %, over a blind crest.
-- 0.20–0.35: the **Kemmel** straight keeps climbing to the high point at **Les Combes** (T4–T6, ~+51 m).
-- 0.35–0.71: descent through Malmedy, Rivage, **Pouhon** (0.52) and the Fagnes plateau to the low point at **Stavelot** (T17, 0.715, ~-53 m).
-- 0.71–1.00: the long climb through **Blanchimont**, a dip into the **Bus Stop** (T19–T20), back up to the line.
+Approximately 102 m of real-world relief is a defining feature. The current
+source intends about 101 m of relief; the positions below are approximate
+**racing-lap fractions**, distinct from the authored scenery fractions in §4.
+
+- s≈0.035: La Source, followed by the descent toward the valley floor.
+- s≈0.14: **Eau Rouge** low point; **Raidillon** climbs toward its blind crest around s≈0.165. The source targets a peak grade near 18% with an authored climb.
+- s≈0.165–0.36: **Kemmel** rises toward the Les Combes summit.
+- s≈0.36–0.71: rolling descent through Bruxelles and Pouhon to the Stavelot low area.
+- s≈0.71–1.00: climb back through Blanchimont and Bus Stop to start/finish.
 
 ## 4. Landmarks & surroundings by lap position
+
+This table uses **authored scenery fractions**. Updated valley entries describe
+the current placement; the remaining visual brief is not a surveyed map.
+
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | 0.00 | L | near | Modern pit/paddock: long low white-grey box, repeated garage bays |
 | 0.00 | R | mid | Main grandstand: tiered grey slab box facing pit straight |
 | 0.02 | R | near | La Source hairpin grandstand: short steep stack of seat-boxes |
 | 0.05 | both | far | Forest ridgelines: jagged green box silhouettes rising on both sides |
-| 0.06 | L | near | Eau Rouge: thickened concrete wall at valley base, red/white kerb strip |
-| 0.07–0.09 | R | mid | **Gold 3** Raidillon amphitheatre: large dual-bay concrete stand + jumbotron + stepped banking slabs |
+| 0.172–0.192 | L | near | Eau Rouge valley wall, brook and service crossing |
+| 0.142–0.170 | R | mid | **Gold 3**: roofed stand row, dual-bay jumbotron and grass spectator bank |
+| 0.200 | L | mid | Raidillon inside-bank timber terrace |
 | 0.10 | L | far | Old pit building: weathered cream/grey long box on the original straight |
-| 0.16 | R | mid | Les Combes grandstand: open tiered box, forest wall directly behind |
+| 0.068 | R | near | La Source exit grandstand |
 | 0.40 | both | far | Dense forest banks: continuous dark-green box masses hemming the track |
 | 0.55 | L | near | Pouhon marshal posts: small orange-capped pole-boxes |
 | 0.78 | R | mid | Stavelot run-off + barrier boxes against treeline |
@@ -41,7 +76,7 @@ trace: 363–469 m ASL). Racing-lap fractions of THIS centreline (`def.turns`):
 | 0.97 | both | near | Marshal posts: small white/orange boxes flanking pit entry |
 
 ## 5. Track features
-- Eau Rouge/Raidillon: signature left-right-uphill compression — exaggerate the vertical box rise.
+- Eau Rouge/Raidillon: signature left-right-uphill compression — align the valley and climb with the elevation profile.
 - Kemmel: long, gently climbing straight — clean, open, sparse trackside boxes.
 - Fast forced forest sweepers (Pouhon, Blanchimont) — wide green walls close to the edge.
 - Generous red/white kerbs and grey run-off boxes at corner exits.
@@ -51,7 +86,7 @@ trace: 363–469 m ASL). Racing-lap fractions of THIS centreline (`def.turns`):
 - Crowd the track with tall dark-green forest boxes; the green theme should dominate every horizon.
 - Keep tarmac/concrete cool grey, kept dull to sell the damp, overcast mood.
 - Use heavier fog and earlier box fade than other tracks to evoke Ardennes mist.
-- Cluster grandstand seat-boxes at La Source, Les Combes, Bus Stop, pit straight, and the oversized Raidillon Gold-3 amphitheatre; leave mid-forest sections bare.
+- Cluster grandstand seat-boxes at La Source, Les Combes, Bus Stop, pit straight, and Raidillon Gold 3; keep woodland clear of spectator banks.
 - Contrast the modern white pit/paddock box against the lone weathered old pit building for history.
 - Pouhon: orange marshal-post cluster on the left; Stavelot: grey runoff apron + tyre/armco against the treeline.
 

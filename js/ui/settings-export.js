@@ -773,6 +773,41 @@ function create(G) {
       loadBtn("cr-career-load", "LOAD CAREER FILE",
         "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
         applyCareer, "CAREER SAVES"));
+    const protection = document.createElement("button");
+    protection.type = "button";
+    protection.textContent = "PROTECT LOCAL SAVES";
+    const status = document.createElement("p");
+    status.className = "adv-help";
+    status.style.flexBasis = "100%";
+    status.setAttribute("role", "status");
+    status.setAttribute("data-help", "keep");
+    const storage = typeof navigator !== "undefined" && navigator.storage;
+    let revision = 0;
+    async function checkProtection(request) {
+      const current = ++revision;
+      protection.disabled = true;
+      try {
+        const protectedSaves = await (request ? storage.persist() : storage.persisted());
+        if (current !== revision) return;
+        protection.disabled = protectedSaves || typeof storage.persist !== "function";
+        protection.textContent = protectedSaves ? "LOCAL SAVES PROTECTED" : "PROTECT LOCAL SAVES";
+        status.textContent = protectedSaves
+          ? "Browser storage protection is enabled. Clearing site data still removes saves. Save a career file for a separate backup."
+          : "Browser storage protection is not enabled. Save a career file regularly to keep a separate backup.";
+      } catch (_) {
+        if (current !== revision) return;
+        protection.disabled = !storage || typeof storage.persist !== "function";
+        status.textContent = "Storage protection could not be confirmed. Save a career file to keep a separate backup.";
+      }
+    }
+    protection.onclick = () => { if (!protection.disabled) { tick(); checkProtection(true); } };
+    status.textContent = "Storage protection is unavailable in this browser. Save a career file to keep a separate backup.";
+    protection.disabled = !storage || typeof storage.persist !== "function";
+    if (storage && typeof storage.persisted === "function") {
+      status.textContent = "Checking browser storage protection…";
+      checkProtection(false);
+    }
+    wrap.append(protection, status);
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };

@@ -63,7 +63,10 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.28, 0.62],
+    // FIA 2025 event map: S1 233 m before T4, S2 215 m before T8.
+    // Racing-arc fractions: turns[3/7] - offset / built total 5777.158737 m;
+    // use the built lap, not path.len or control-index width-zone fractions.
+    sectors: [0.26536876, 0.58048447],
     // T7 is Lesmo 2 (the R27 apex at 0.4321); it read 0.3827, the second
     // apex of Lesmo 1, until 2026-10-04 — board 7 stood on Lesmo 1's exit.
     turns: [0.0962, 0.1022, 0.1288, 0.3057, 0.3122, 0.3692, 0.4321, 0.6177, 0.6309, 0.6497, 0.8387],

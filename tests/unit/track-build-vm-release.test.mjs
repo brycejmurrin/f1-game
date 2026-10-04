@@ -168,10 +168,13 @@ const STRIP = {
   // → start gantry on the real line 263920/241547 (2026-10-04: gantry(0.0)
   //   re-keyed from 624 m past the grid to the line; same emission, 17 fewer
   //   of its triangles buried or enclosed where it stands now)
-  // → elevation on the real corners 262127/239844 (2026-10-04: the crest
+  // → open sea + city fill + near foothills 282536/260163 (2026-10-04: the
+  //   beige out-world fix in scenery/monaco.js — ~340 sea slabs, ~900 city
+  //   blocks, four hills inside the 900 m far plane)
+  // → elevation on the real corners 280743/258460 (2026-10-04: the crest
   //   moved from arc 0.12 to Massenet/Casino, so props re-seat on new ground
   //   and the scenery's height-gated emitters place fewer prims)
-  monaco: { before: 262127, after: 239844 },
+  monaco: { before: 280743, after: 258460 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -186,9 +189,11 @@ const STRIP = {
   //   the Racing Kit tip; measured 2026-10-02)
   // → white Haas 340719/313802 (the same +8 as monaco: the Haas bay's
   //   HDR-bright box cannot enclose; emission unchanged)
-  // → T7 on Lesmo 2 340575/313658 (2026-10-04: turns[6] 0.3827 → 0.4321,
+  // → track-realism batch (2026-10-04): 14 terrain-conforming gravel-margin
+  //   patches add 264 triangles. All survive; existing strip count is unchanged.
+  // → T7 on Lesmo 2 340839/313922 (2026-10-04: turns[6] 0.3827 → 0.4321,
   //   so corner board 7 and its footing stand at Lesmo 2's apex)
-  monza: { before: 340575, after: 313658 },
+  monza: { before: 340839, after: 313922 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

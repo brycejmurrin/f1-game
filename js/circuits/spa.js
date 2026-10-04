@@ -23,25 +23,26 @@
     dressingExclusions: [{ kind: "foliage", s0: 0, s1: 1 }],
     // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
     pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
-    // Elevation, re-authored 2026-10-04 against THIS centreline (the old four
-    // bumps put an 84 m crest before Eau Rouge and ran Kemmel downhill). Shape
-    // from SRTM 30 m (Open Topo Data, api.opentopodata.org/v1/srtm30m, cubic)
-    // sampled at the bacinger/f1-circuits be-1925 trace vertices, 363-469 m
-    // ASL; least-squares cosine fit, rms 3.9 m. `s` is authored about
-    // sceneryStartFrac: racing arc = s - 0.0298 (the comments give the arc).
-    // Built: La Source +5, Eau Rouge valley -25 (arc 0.13), Raidillon climb
-    // max ~15 % at 0.16, high point +51 at Les Combes/Malmedy (0.35), low
-    // point -53 at Stavelot (0.71), back up through Blanchimont to the line.
-    elevations: [
-      { s: 0.0598, halfM: 300, rise: 6 },    // arc 0.030 La Source, above the line
-      { s: 0.1638, halfM: 400, rise: -26 },  // arc 0.134 Eau Rouge valley
-      { s: 0.2298, halfM: 450, rise: 14 },   // arc 0.200 Raidillon exit onto Kemmel
-      { s: 0.3798, halfM: 1300, rise: 51 },  // arc 0.350 Kemmel climb to Les Combes
-      { s: 0.5798, halfM: 700, rise: -30 },  // arc 0.550 Pouhon descent
-      { s: 0.7398, halfM: 1200, rise: -53 }, // arc 0.710 Stavelot, the low point
-      { s: 0.8898, halfM: 600, rise: -19 },  // arc 0.860 Blanchimont climb
-      { s: 0.9848, halfM: 250, rise: -12 },  // arc 0.955 bus-stop dip
-    ],
+    // Elevation: 64 raised-cosine knots, one every 1/64 lap (≈109 m) with
+    // halfM = 2 × spacing (≈217 m). At that overlap the bumps sum to a
+    // constant, so the road is a smooth (C1, no flat at each knot) blend of
+    // the knot rises and the lap closes on itself. Knot j sits at s = j/64 in
+    // this def's AUTHORING frame — tracks.js / def.js remap it (fmap about
+    // sceneryStartFrac, then + _sceneryShift): racing ≈ s − 0.0298.
+    // Rises are a least-squares fit to SRTM 30 m over the bacinger trace
+    // (Open Topo Data, 2026-10-04, 5-tap smoothed for canopy noise), with the
+    // Eau Rouge/Raidillon section authored where 30 m pixels blunt the climb:
+    // La Source (+5 m) → DESCENT to the Eau Rouge floor (racing ≈0.14, −25 m)
+    // → Raidillon peaks ≈18 % (racing ≈0.165) → Kemmel climbs to Les Combes
+    // (≈0.36, +51 m, the summit) → down through Bruxelles/Pouhon to Stavelot
+    // (≈0.71, −49 m) → back up via Blanchimont to the Bus Stop. Relief ≈101 m.
+    // Refit: scratch tooling, not shipped — re-derive from SRTM, keep 64 knots.
+    // Knots 12/13 eased by 1-2 m (-11/3 → -10/1) so the steepest 20 m of
+    // Raidillon reads 17.7 %, under the 18 % the real climb tops out at
+    // (circuit-def-fields pins it).
+    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -10, 1, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
+      5, 1, -2, -5, -10, -15, -18, -20, -20, -19, -19, -20, -21, -21, -23, -25, -25, -23, -22, -20, -17, -16, -15, -13, -11, -10, -7, -5, -5, -2, -3, -5]
+      .map((rise, j) => ({ s: j / 64, halfM: 217, rise })),
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
       { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes

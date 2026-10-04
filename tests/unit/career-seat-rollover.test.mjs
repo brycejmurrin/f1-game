@@ -57,7 +57,7 @@ function load() {
       ],
     },
     Parts: { getFactorySetup: () => ({}) },
-    Tracks: { LIST: [] },
+    Tracks: { LIST: [], SEASON: [] },
     // Flat, so the rival pick is deterministic and the market stays parked.
     DriverRatings: {
       get: (code) => ({ code, pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 }),
@@ -70,6 +70,8 @@ function load() {
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx,
+    { filename: "js/career/season-cal.js" });
   return vm.runInContext("Career", ctx);
 }
 
@@ -99,4 +101,54 @@ test("a DRIVER career still honours the seat the player picked", () => {
   Career.engage(true);
   assert.equal(Career.data().seat, 1,
     "the junior-seat choice is real for a driver career — only MY TEAM is pinned");
+});
+
+
+test("constructor ties use the same tier policy in standings and winter history", () => {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.season.teamPts = { haas: 25, custom: 25 }; // reverse of the expected tie order
+  c.season.round = 24;
+  assert.deepEqual(Array.from(Career.teamStandings(), (r) => r.id), ["custom", "haas"]);
+  Career.rollover();
+  assert.equal(c.history[0].cPos, 1);
+  assert.equal(c.history[0].cPts, 25);
+});
+
+test("a driver poached in winter cannot be immediately signed back", () => {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 2, hire: "DVL" });
+  Career.engage(true);
+  const c = Career.data();
+  c.season.pts["custom:1"] = 100;
+  c.season.round = 24;
+  Career.rollover();
+  const pending = Career.hirePending();
+  assert.equal(pending.kind, "left", "seed 2 poaches an outperforming DVL");
+  c.dev["custom:1"] = { pace: 3 };
+  const before = JSON.stringify(c);
+  assert.equal(Career.hireDriver(pending.code, 1), false);
+  assert.equal(JSON.stringify(c), before, "refusal preserves contract, money and development");
+  assert.equal(Career.renewHire(1), false);
+  const replacement = Career.freeAgents().find((a) => a.code !== pending.code);
+  assert.equal(Career.hireDriver(replacement.code, 1), true);
+  assert.equal(c.roster[0].code, replacement.code);
+  assert.equal(Career.hirePending(), null);
+});
+
+test("an ordinary expiring hire can still accept the renewal offer", () => {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 1, hire: "DVL" });
+  Career.engage(true);
+  const c = Career.data();
+  c.season.round = 24;
+  Career.rollover();
+  const pending = Career.hirePending();
+  assert.equal(pending.kind, "renew");
+  assert.equal(Career.renewHire(1), true);
+  assert.equal(c.roster[0].code, pending.code);
+  assert.equal(c.roster[0].salary, pending.ask);
+  assert.equal(Career.hirePending(), null);
 });
