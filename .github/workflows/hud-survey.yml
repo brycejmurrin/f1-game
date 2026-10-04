@@ -1,0 +1,159 @@
+name: HUD survey
+
+# The race-HUD survey (tools/shot/hud-survey.mjs) on GitHub's runners, sharded,
+# on Mesa llvmpipe — the exhaustive matrix is ~4 h of SwiftShader in a cloud
+# container. OPT-IN, dispatch only: nothing requires it, nothing reads it but a
+# person. Each shard runs whole boot groups (`--shard i/n`), uploads its report
+# dir, and one merge job combines them (`--merge`) into a single
+# report.json / findings.md / index.html artifact.
+#
+# Same runner setup as browser-group.yml: setup-apex (Node 22 + npm ci), the
+# cached Playwright Chromium, Mesa llvmpipe + Xvfb (APEX_GL=llvmpipe → the
+# survey's `--gl llvmpipe`, playwright.config.js's flag swap).
+#
+# Docs: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
+#       https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations (matrix jobs)
+#       https://docs.github.com/en/actions/tutorials/store-and-share-data (artifacts)
+#       https://cli.github.com/manual/gh_run_download (`gh run download`, as spec-timings.yml: no unpinned download action)
+
+on:
+  workflow_dispatch:
+    inputs:
+      matrix:
+        description: "quick (13 cells) | full (pairwise, ~33) | leads (audit repros, ~28) | exhaustive (~470)"
+        required: false
+        default: leads
+        type: choice
+        options: [quick, full, leads, exhaustive]
+      shards:
+        description: "runners to split the matrix across (whole boot groups each)"
+        required: false
+        default: "4"
+        type: choice
+        options: ["1", "2", "4", "8", "12"]
+      shots:
+        description: "screenshots (off = measure only, skips the lit-frame wait)"
+        required: false
+        default: true
+        type: boolean
+      track:
+        description: "base circuit id"
+        required: false
+        default: monza
+        type: string
+
+run-name: "HUD survey ${{ inputs.matrix }} on ${{ github.ref_name }} (${{ inputs.shards }} shards)"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hud-survey-${{ github.ref_name }}-${{ inputs.matrix }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Inputs go through env, never into the shell text. The --list call
+      # validates the matrix + track and prints the cost before any runner is spent.
+      - name: Plan shards
+        id: plan
+        env:
+          SHARDS: ${{ inputs.shards }}
+          MATRIX: ${{ inputs.matrix }}
+          TRACK: ${{ inputs.track }}
+        run: |
+          set -eu
+          node tools/shot/hud-survey.mjs --list --matrix "$MATRIX" --track "$TRACK" > /dev/null
+          node -e 'const n = Number(process.env.SHARDS); if (!(n >= 1 && n <= 12)) process.exit(1); console.log("shards=" + JSON.stringify(Array.from({ length: n }, (_, i) => i + 1)))' >> "$GITHUB_OUTPUT"
+
+  shard:
+    name: "${{ inputs.matrix }} (${{ matrix.shard }}/${{ inputs.shards }})"
+    needs: [plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Mesa llvmpipe + Xvfb
+        uses: ./.github/actions/mesa-xvfb
+      - name: Survey shard
+        env:
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+          MATRIX: ${{ inputs.matrix }}
+          TRACK: ${{ inputs.track }}
+          SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
+          OUT: artifacts/hud-survey/shard-${{ matrix.shard }}
+          SHOTS: ${{ inputs.shots }}
+        run: |
+          set -eu
+          extra=""
+          if [ "$SHOTS" != "true" ]; then extra="--no-shots"; fi
+          node tools/shot/hud-survey.mjs --matrix "$MATRIX" --track "$TRACK" --shard "$SHARD" --gl llvmpipe --out "$OUT" $extra
+      - name: Upload shard report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hud-survey-shard-${{ matrix.shard }}
+          path: artifacts/hud-survey/shard-${{ matrix.shard }}/
+          retention-days: 14
+          if-no-files-found: warn
+
+  merge:
+    name: Merge reports
+    needs: [shard]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Fetch the shard reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          mkdir -p artifacts/hud-survey/in
+          gh run download "$RUN_ID" --repo "$REPO" --pattern 'hud-survey-shard-*' --dir artifacts/hud-survey/in
+      - name: Merge
+        env:
+          MATRIX: ${{ inputs.matrix }}
+        run: |
+          set -eu
+          # gh extracts ONE matched artifact straight into --dir, several into one subdir each.
+          if [ -f artifacts/hud-survey/in/report.json ]; then set -- artifacts/hud-survey/in; else set -- artifacts/hud-survey/in/*; fi
+          node tools/shot/hud-survey.mjs --merge "$@" --out artifacts/hud-survey/merged
+          {
+            echo "## HUD survey — $MATRIX"
+            head -c 60000 artifacts/hud-survey/merged/findings.md
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload merged report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hud-survey-${{ inputs.matrix }}
+          path: artifacts/hud-survey/merged/
+          retention-days: 30

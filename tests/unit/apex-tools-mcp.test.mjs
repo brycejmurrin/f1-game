@@ -154,7 +154,8 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // Sixteen pinned wrappers, including readiness and read-only session checks.
+  // Eighteen pinned wrappers, including readiness, read-only session checks
+  // and the race-HUD survey pair.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
@@ -164,6 +165,8 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_hud_shot",
+    "apex_hud_survey",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
@@ -607,6 +610,20 @@ test("week-2 dryRun refuses lock_held by a live PID (no Chromium)", () => {
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "lock_held");
     assert.ok(body.fix);
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
+test("the HUD survey wraps are browser tools: a held lock refuses both", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    for (const name of ["apex_hud_shot", "apex_hud_survey"]) {
+      const r = callCli(name, { dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+      assert.equal(r.status, 1, r.stderr);
+      assert.equal(JSON.parse(r.stdout).error, "lock_held", name);
+    }
   } finally {
     try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
   }

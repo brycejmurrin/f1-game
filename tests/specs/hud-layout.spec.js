@@ -15,6 +15,7 @@
 // the notch is exactly where a 59px inset eats the width these rules assume.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
 const VIEWS = [
   // iPhone 15 Pro landscape: 59px of notch either side, 21px home indicator.
@@ -147,102 +148,71 @@ async function race(page, steer, manual, ins, opts) {
   } else await page.waitForTimeout(300);
 }
 
-const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i]) => {
-  // CTRL is bare ids (buttons: getElementById is enough, and every one is #id
-  // in practice); HUD can name a CONTAINER by class (see the comment on HUD
-  // above), so resolve through querySelector with an implicit `#` for a bare id.
-  const box = (id) => {
-    const el = document.querySelector(id.startsWith(".") || id.startsWith("#") ? id : "#" + id);
-    if (!el) return null;
-    const cs = getComputedStyle(el);
-    if (el.hidden || cs.display === "none" || cs.visibility === "hidden"
-        || parseFloat(cs.opacity) === 0) return null;
-    const b = el.getBoundingClientRect();
-    if (!b.width || !b.height) return null;
-    // Round buttons are compared as CIRCLES, not as boxes. The controls are
-    // border-radius:50%, and they sit on an arc — i.e. diagonally offset from
-    // each other — where two bounding rects can overlap while the circles they
-    // contain are comfortably apart. Testing rects there fails a layout that is
-    // visually and physically fine, and would have forced the arc back into a
-    // column for no reason.
-    const rad = parseFloat(cs.borderRadius) || 0;
-    const round = rad >= b.width * 0.45;
-    return { id, x: b.x, y: b.y, r: b.right, b: b.bottom,
-             round, cx: b.x + b.width / 2, cy: b.y + b.height / 2, rr: b.width / 2 };
-  };
-  const vis = c.map(box).filter(Boolean), hb = h.map(box).filter(Boolean);
-  const hit = (a, d) => !(a.r <= d.x + 0.5 || d.r <= a.x + 0.5 || a.b <= d.y + 0.5 || d.b <= a.y + 0.5);
-  // Two circles touch only when their centres are closer than the sum of radii.
-  const clash = (a, d) => (a.round && d.round)
-    ? Math.hypot(a.cx - d.cx, a.cy - d.cy) < a.rr + d.rr - 0.5
-    : hit(a, d);
-  const overlaps = [], hudClash = [];
-  for (let x = 0; x < vis.length; x++)
-    for (let y = x + 1; y < vis.length; y++)
-      if (clash(vis[x], vis[y])) overlaps.push(`${vis[x].id}+${vis[y].id}`);
-  // HUD readouts keep the CONSERVATIVE rect test against buttons: a number
-  // drawn across a circle's bounding corner is still a number you cannot read.
-  for (const a of hb) for (const d of vis) if (hit(a, d)) hudClash.push(`${a.id}+${d.id}`);
-  // …AND AGAINST EACH OTHER. This pair was missing, and that is exactly how the
-  // gap strip shipped painting over the POS/LAP/TIME/BEST plates on a notched
-  // landscape phone: .hud-gaps and .hud-top share a `top`, neither sets a
-  // z-index, and nothing here ever compared two HUD boxes. A defect ledger
-  // entry claimed this coverage was closed when only HUD-vs-buttons was.
-  for (let x = 0; x < hb.length; x++)
-    for (let y = x + 1; y < hb.length; y++)
-      if (hit(hb[x], hb[y])) hudClash.push(`${hb[x].id}+${hb[y].id}`);
-  // The safe area binds the HUD clusters too — they are inset by --sal/--sar in
-  // their own CSS, so a miss there is a real clip on the notch side.
-  const unsafe = [...vis, ...hb].filter((e) => e.x < i.sal - 0.5 || e.r > w - i.sar + 0.5
-                                || e.y < i.sat - 0.5 || e.b > ht - i.sab + 0.5)
-                    .map((e) => e.id);
-  let diagnostics = null;
-  if (hudClash.length) {
-    const root = document.documentElement;
-    const topRules = (el) => {
-      const matched = [];
-      const walk = (rules, href, nesting) => {
-        for (const rule of rules) {
-          if (rule.media && !matchMedia(rule.media.mediaText).matches) continue;
-          if (rule.constructor.name === "CSSSupportsRule" && !CSS.supports(rule.conditionText)) continue;
-          if (rule.selectorText && rule.style && rule.style.getPropertyValue("top")) {
-            try {
-              if (el.matches(rule.selectorText)) matched.push({ href, nesting,
-                selector: rule.selectorText, top: rule.style.getPropertyValue("top"),
-                priority: rule.style.getPropertyPriority("top") });
-            } catch { /* A browser-specific selector is not diagnostic evidence. */ }
-          }
-          if (rule.cssRules) walk(rule.cssRules, href,
-            [...nesting, rule.cssText.slice(0, rule.cssText.indexOf("{")).trim()]);
+const measure = async (page, ctrl, hud, W, H, ins) => {
+  // THE BOX PROBE AND THE CLASH RULES live in tools/lib/hud-geometry.mjs since
+  // 2026-10-03, shared with tools/shot/hud-survey.mjs (the HUD survey across
+  // devices x cameras x presets), so the spec and the survey cannot disagree on
+  // what an overlap is. The rules are unchanged — read them there: round
+  // buttons compare as CIRCLES, readouts vs buttons and readouts vs readouts as
+  // conservative RECTS (a number drawn across a circle's bounding corner is
+  // still unreadable; the readout-vs-readout pair is how the gap strip shipped
+  // over the POS/LAP/TIME/BEST plates), and the safe area binds both, because
+  // the clusters are inset by --sal/--sar in their own CSS.
+  // CTRL is bare ids; HUD can name a CONTAINER by class (see HUD above).
+  const targets = [...ctrl.map((k) => ({ key: k, sel: k, role: "ctrl" })),
+                   ...hud.map((k) => ({ key: k, sel: k, role: "hud" }))];
+  const recs = await page.evaluate(probeHudElements, { targets });
+  const r = analyzeOverlap(recs, W, H, ins);
+  // Diagnostics only on a readout clash: why the fit pass let it through.
+  const hb = recs.filter((e) => e.visible && e.role === "hud");
+  r.diagnostics = r.hudClash.length ? await page.evaluate(hudClashDiagnostics, hb) : null;
+  return r;
+};
+
+const hudClashDiagnostics = (hb) => {
+  const root = document.documentElement;
+  const topRules = (el) => {
+    const matched = [];
+    const walk = (rules, href, nesting) => {
+      for (const rule of rules) {
+        if (rule.media && !matchMedia(rule.media.mediaText).matches) continue;
+        if (rule.constructor.name === "CSSSupportsRule" && !CSS.supports(rule.conditionText)) continue;
+        if (rule.selectorText && rule.style && rule.style.getPropertyValue("top")) {
+          try {
+            if (el.matches(rule.selectorText)) matched.push({ href, nesting,
+              selector: rule.selectorText, top: rule.style.getPropertyValue("top"),
+              priority: rule.style.getPropertyPriority("top") });
+          } catch { /* A browser-specific selector is not diagnostic evidence. */ }
         }
-      };
-      for (const sheet of document.styleSheets) {
-        if (sheet.disabled || (sheet.media.length && !matchMedia(sheet.media.mediaText).matches)) continue;
-        try { walk(sheet.cssRules, sheet.href || "inline", []); }
-        catch { /* Cross-origin sheets cannot be inspected. */ }
+        if (rule.cssRules) walk(rule.cssRules, href,
+          [...nesting, rule.cssText.slice(0, rule.cssText.indexOf("{")).trim()]);
       }
-      return matched;
     };
-    const detail = (selector) => {
-      const el = document.querySelector(selector);
-      if (!el) return null;
-      const cs = getComputedStyle(el), rect = el.getBoundingClientRect();
-      return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom },
-        currentCSSZoom: el.currentCSSZoom, zoom: cs.zoom, transform: cs.transform,
-        cssHeight: cs.height, top: cs.top, display: cs.display, fontSize: cs.fontSize,
-        inlineStyle: el.style.cssText,
-        variables: Object.fromEntries(["--hud-top-h", "--hud-z", "--sat", "--hud-scale"]
-          .map((name) => [name, cs.getPropertyValue(name)])), matchedTopRules: topRules(el) };
-    };
-    diagnostics = { hb, bodyClass: document.body.className,
-      publishedHeight: root.style.getPropertyValue("--hud-top-h"),
-      publishedZoom: root.style.getPropertyValue("--hud-z-top"),
-      computedHeight: getComputedStyle(root).getPropertyValue("--hud-top-h"),
-      computedZoom: getComputedStyle(root).getPropertyValue("--hud-z-top"),
-      tower: detail(".hud-top"), map: detail("#minimap"), gaps: detail(".hud-gaps") };
-  }
-  return { overlaps, hudClash, unsafe, count: vis.length, diagnostics };
-}, [ctrl, hud, W, H, ins]);
+    for (const sheet of document.styleSheets) {
+      if (sheet.disabled || (sheet.media.length && !matchMedia(sheet.media.mediaText).matches)) continue;
+      try { walk(sheet.cssRules, sheet.href || "inline", []); }
+      catch { /* Cross-origin sheets cannot be inspected. */ }
+    }
+    return matched;
+  };
+  const detail = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+    const cs = getComputedStyle(el), rect = el.getBoundingClientRect();
+    return { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom },
+      currentCSSZoom: el.currentCSSZoom, zoom: cs.zoom, transform: cs.transform,
+      cssHeight: cs.height, top: cs.top, display: cs.display, fontSize: cs.fontSize,
+      inlineStyle: el.style.cssText,
+      variables: Object.fromEntries(["--hud-top-h", "--hud-z", "--sat", "--hud-scale"]
+        .map((name) => [name, cs.getPropertyValue(name)])), matchedTopRules: topRules(el) };
+  };
+  return { hb, bodyClass: document.body.className,
+    publishedHeight: root.style.getPropertyValue("--hud-top-h"),
+    publishedZoom: root.style.getPropertyValue("--hud-z-top"),
+    computedHeight: getComputedStyle(root).getPropertyValue("--hud-top-h"),
+    computedZoom: getComputedStyle(root).getPropertyValue("--hud-z-top"),
+    tower: detail(".hud-top"), map: detail("#minimap"), gaps: detail(".hud-gaps") };
+};
 
 for (const v of VIEWS) {
   test.describe(v.name, () => {

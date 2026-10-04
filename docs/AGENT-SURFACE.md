@@ -1,7 +1,8 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only fifteen CLIs are wrapped as `apex_*` (sixteen tools: `apex_garage` is a
+do the work. Only sixteen CLIs are wrapped as `apex_*` (eighteen tools: `apex_status` is
+built in, `apex_hud_shot` / `apex_hud_survey` share `hud-survey.mjs`, and `apex_garage` is a
 
 session over one of them).
 
@@ -159,7 +160,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Fifteen wraps, sixteen tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Seventeen wraps, eighteen tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -167,7 +168,9 @@ and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-
 flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
 `apex_doctor` capability and skill diagnostics; 13 → 16 on 2026-10-02 for
 `apex_session_status`, `apex_who_is_on_it` and `apex_ci_status`, the three
-read-only session checks).
+read-only session checks; 16 → 18 on 2026-10-04 for `apex_hud_shot` and
+`apex_hud_survey`, the race-HUD survey — one CLI, `shot/hud-survey.mjs`, two
+wraps: one cell vs a matrix).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -188,6 +191,8 @@ read-only session checks).
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
 | `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
+| `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
+| `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -207,6 +212,15 @@ Pins the wrap always applies (you cannot override them):
 - `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
   `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
+- `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,
+  never `--plan` / `--self-test` / `--url`; `apex_hud_shot` always passes
+  `--device` and `--cam` (one cell, never the quick matrix); every knob is an
+  enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
+  under `artifacts/` or `scratch/`) are validated by the CLI's own pure
+  validators before the lock; `matrix: exhaustive` (~4 h) is refused without
+  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). Results carry `structuredContent`, its
+  serialized copy as the first text block, and `resource_link`s (PNG /
+  findings.md / index.html / report.json)
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 
