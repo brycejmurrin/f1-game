@@ -1371,21 +1371,23 @@ const {
   getLiveries, resolveLivery, wingColorOf,
 } = customLiv;
 
-// Draw a car's two MOVEABLE wing elements (active aero) at flap blend `blend`
+// Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
 // (0 = Z-mode, 1 = X-mode), given that car's world model matrix. Shared by the
-// in-race draw loop and the GARAGE preview turntable, so the wings a player
-// inspects in the garage are the same geometry at the same angles as the ones
-// that open on track.
+// in-race draw loop, the mirror / PiP (CarDraw.drawMirrorCar) and the GARAGE
+// turntable, so the wings a player inspects are the ones that open on track.
+// At rest (blend 0 or 1), or `still` (the nearer rest pose: a rival past
+// FieldLod.flapsM(), the mirror / PiP), ONE baked set (CarMesh.getAeroFlapSet).
 const _flapWorld = new Float32Array(16);
 // `only` limits the draw to one wing ("front"/"rear") — the COCKPIT body build
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
-function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
+function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const finish = resolveLivery(team).finish || null;
+  if (still || b === 0 || b === 1) { const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only); if (set) gfx.draw(set, modelMat, mat); return; }
   const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
   for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
     const fg = flaps[i];
@@ -1668,9 +1670,6 @@ function makeCars() {
       const lane = clamp((idx % 2 ? 1 : -1) * ((idx >> 1) / half) * 0.78
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
-      const visualSetup = (isP || mate) ? getTeamParts(team.id)
-        : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
-      const visStamp = visualSetup ? Parts.CATALOG.map((cat) => visualSetup[cat.id] || "").join(",") : "";
       cars.push({
         team, name: d.name, code: d.code, driverId: seasonDriverId(team.id, di), num: d.num,
         // Role flags — see setCarRole. Today the only human IS the local player,
@@ -1701,9 +1700,7 @@ function makeCars() {
         tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
-        visualSetup, visStamp,
-        visPaint: visStamp ? visStamp + ":" + d.num : "",
-        visSh: visStamp ? visStamp + ":sh" : "",
+        ...CarDraw.carVisual(team, d.num, isP || mate, getTeamParts),   // visualSetup/visStamp/visPaint/visSh: the menu prep's cache keys too
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
         gear: 1, rpm: IDLE_RPM, shiftT: 0, boostOn: false,
         energy: 1, otT: 0, otE: 0, deploying: false,
@@ -6507,14 +6504,6 @@ const _gradeDawn  = { shadow: [0.90, 0.96, 1.10], hi: [1.12, 1.00, 0.90], str: 0
 const _gradeDay   = { shadow: [0.90, 0.98, 1.13], hi: [1.13, 1.04, 0.87], str: 0.34 };
 const _gradeOut = { shadow: null, hi: null, str: 0 };
 const _presentOpts = {};
-// ── Exhaust heat haze (composite post) ───────────────────────────────────────
-// The player-car draw loop records the tailpipe's world position + plume
-// strength; render() projects it to screen UV just before present() and hands
-// {u, v, str} to the composite pass, which UV-warps a small rising region
-// (COMPOSITE_FS uHaze*). Off on memory-limited phones (mobileTier).
-const _hazeWorld = [0, 0, 0];
-let _hazeStr = 0;
-const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
@@ -7398,7 +7387,7 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-  _hazeStr = 0; shadowPass.beginFrame();   // per-frame accumulators: the haze strength is re-recorded by the player block below (the menu flyby breaks before any car, so a stale one warped a fixed world point forever), car shadows flush in one batch after the loop
+  carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
@@ -7566,23 +7555,7 @@ function render(dt) {
       const skid = c.skidIntensity || 0;
       skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
-    // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
-    // strength for this frame (projected to screen UV just before present()).
-    // Any time of day, throttle-driven via exhaustPop, strongest under active
-    // boost. Skipped on memory-limited phones (mobileTier — same gate as the
-    // other post extras). Anchor is pushed well behind/above the body so the
-    // composite warp (which already skips car-paint pixels) sits in the air
-    // wake rather than on the rear wing from chase cam.
-    if (c.isPlayer) {
-      const _hzDep = isErsDeploying(c);
-      _hazeStr = gfx.mobileTier ? 0 : (c.exhaustPop || 0) * (_hzDep ? 1.0 : 0.45);
-      if (_hazeStr > 0.02) {
-        // Behind/above the tailpipe (up +0.85, fwd −3.5 on the car frame).
-        _hazeWorld[0] = tmpMat[12] + tmpMat[4] * 0.85 - tmpMat[8] * 3.5;
-        _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
-        _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
-      }
-    }
+    carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
     // because the car's world basis (tmpMat / tmpP / tmpF / tmpR) is already
@@ -7717,21 +7690,16 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
-    // Distance-gated for RIVALS like the brake rings — 4 flaps x 21 AI is ~84
-    // draws a frame, each its own mesh. The cue is the car AHEAD opening its
-    // wings: FieldLod.flapsM() is 80 m (150 m with apex26.fieldLod=0, generous
-    // next to the rings' 40 m because a swinging wing stays legible). The
+    // MOVING only for RIVALS within FieldLod.flapsM() (80 m; 150 m with
+    // apex26.fieldLod=0) — the cue is the car AHEAD opening its wings. Past it
+    // the whole set is ONE static mesh at the nearer rest pose, never dropped:
+    // dropping it stripped every far rival's rear wing to its main plane. The
     // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
-      let drawFlaps = true;
-      if (!c.isPlayer) {
-        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < FieldLod.flapsM() ** 2;
-      }
-      if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
-      }
+      const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
+        !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
     // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
@@ -7947,7 +7915,7 @@ function render(dt) {
   // lamp loop + 4 blur passes + a nearest-lamp re-sort) — a top GPU cost on
   // the phones that overheat/jetsam at night. Shedding it up-front beats
   // waiting for the perf governor to watch the device struggle to tier 4.
-  // Same hard gate as the exhaust-haze pass above (gfx.mobileTier).
+  // Same hard gate as the exhaust haze (gfx.mobileTier, at present).
   const _lampVol = (frame.lights && _sunLumGR < 0.45 && !gfx.mobileTier)
     ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.
@@ -8026,23 +7994,8 @@ function render(dt) {
   po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
   po.ssrNear  = _ssrLow ? -1.0 : -2.5;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
-  // EXHAUST HEAT HAZE: project the recorded tailpipe position through the
-  // frame's view-proj to a screen UV for the composite warp. Near-field only —
-  // fades out past ~45 m so TV/orbit long shots stay clean.
-  po.haze = null;
-  if (_hazeStr > 0.02) {
-    const m = _mVP, hx = _hazeWorld[0], hy = _hazeWorld[1], hz = _hazeWorld[2];
-    const cw = m[3] * hx + m[7] * hy + m[11] * hz + m[15];
-    if (cw > 0.1) {
-      const cu = (m[0] * hx + m[4] * hy + m[8] * hz + m[12]) / cw * 0.5 + 0.5;
-      const cv = (m[1] * hx + m[5] * hy + m[9] * hz + m[13]) / cw * 0.5 + 0.5;
-      if (cu > -0.2 && cu < 1.2 && cv > -0.2 && cv < 1.2) {
-        _hazeOpts.u = cu; _hazeOpts.v = cv;
-        _hazeOpts.str = _hazeStr * clamp(1.4 - cw / 40, 0, 1);
-        if (_hazeOpts.str > 0.02) po.haze = _hazeOpts;
-      }
-    }
-  }
+  // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
+  po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
