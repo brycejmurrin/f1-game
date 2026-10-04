@@ -174,7 +174,7 @@
       // Pit wall + start gantry
       wall(0.97, 0.04, -1, 3, 1.1, [0.85, 0.85, 0.85]);
       overheadSpan({
-        id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5,
+        id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5, startLights: true,
         thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
       });
       // Main Grandstand length held at 118 m (was 140) so restoring T1 seating

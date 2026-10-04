@@ -4,7 +4,10 @@
    post under VSC or the safety car, a waved red under a red flag, and a green
    at every post for a few seconds when a caution clears. Until 2026-10-01 the
    post flags were coloured at build by a hash and never changed (the second
-   graphics-detail survey, item 4).
+   graphics-detail survey, item 4) — and until 2026-10-04 that waving hash flag
+   still stood on every post beside these panels, yellow on ~72 % of them. The
+   post now carries a dark panel board (`panel` on its registry record) and
+   the glow lights exactly that board.
 
    Built like js/race/start-lights.js: no geometry and no uniform — each lit
    frame re-spawns one additive glow particle per panel (Particles.glow, life
@@ -44,8 +47,13 @@ const MarshalPanels = (function () {
       for (const r of list) {
         if (r.kind !== "marshalPost" || !(r.k >= 0)) continue;
         const frac = r.k / track.n;
-        // The registry's y is the hut's centre (h tall); the panel sits above the roof.
-        posts.push({ x: r.x, y: r.y + r.h / 2 + 0.45, z: r.z, sector: frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2 });
+        const sector = frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2;
+        // The post's own dark panel (`panel`, js/track/scenery/structures.js
+        // marshalPost) lights up; a record without one glows above the roof
+        // (the registry's y is the hut's centre, h tall).
+        const pp = r.panel;
+        posts.push(pp ? { x: pp[0], y: pp[1], z: pp[2], sector }
+                      : { x: r.x, y: r.y + r.h / 2 + 0.45, z: r.z, sector });
       }
       const out = posts.length ? posts : null;
       _postsBy.set(track, out);

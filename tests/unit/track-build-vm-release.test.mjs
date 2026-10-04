@@ -165,7 +165,10 @@ const STRIP = {
   //   .buildStatic off the team colour — now carries an HDR-bright box, which
   //   hidden-faces never lets enclose, so 8 indices it used to strip stay.
   //   Bisected: the Haas colour alone moves both circuits by +8.)
-  monaco: { before: 263920, after: 241530 },
+  // → start gantry on the real line 263920/241547 (2026-10-04: gantry(0.0)
+  //   re-keyed from 624 m past the grid to the line; same emission, 17 fewer
+  //   of its triangles buried or enclosed where it stands now)
+  monaco: { before: 263920, after: 241547 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

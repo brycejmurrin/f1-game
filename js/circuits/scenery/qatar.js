@@ -275,7 +275,12 @@
         }, { required: true });
       })();
 
-      gantry(0.012, 7.5, [0.12, 0.12, 0.14]);
+      // The start gantry stands over the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
+      // alone put gantry(0.012) — and the start lamps it carries — 1.6 km away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.0), 7.5, [0.12, 0.12, 0.14]);
       // Slim timing mast at S/F (race control lives on qatar-pit-slab).
       tower(K(0.985), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
