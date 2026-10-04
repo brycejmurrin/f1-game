@@ -327,13 +327,17 @@ const round = (recs) => recs.map((r) => {
 async function cdpShot(page, file) {
   // CDP directly, not page.screenshot(): Playwright's path waits on
   // document.fonts.ready, which hung GHA smoke shards (probe-page.mjs).
+  // file null: a 1x1 capture whose only job is to PRODUCE a frame (see the
+  // measure step) — measure-only runs need the frame, not the pixels.
   const session = await page.context().newCDPSession(page);
   try {
+    const opts = { format: "png", captureBeyondViewport: false };
+    if (!file) opts.clip = { x: 0, y: 0, width: 1, height: 1, scale: 1 };
     const { data } = await Promise.race([
-      session.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false }),
+      session.send("Page.captureScreenshot", opts),
       sleep(60000).then(() => { throw new Error("CDP captureScreenshot timed out after 60 s"); }),
     ]);
-    fs.writeFileSync(file, Buffer.from(data, "base64"));
+    if (file) fs.writeFileSync(file, Buffer.from(data, "base64"));
   } finally { try { await session.detach(); } catch { /* closed */ } }
 }
 
@@ -383,10 +387,22 @@ async function runGroup(browser, group, plan, log) {
           }
         }
         const targets = HUD_TARGETS.map((t) => ({ ...t }));
-        // SETTLE before measuring: fitHud re-fits on its own tick and the HUD
-        // eases between layouts, so a probe 300 ms after applyCell caught boxes
-        // mid-move (2026-10-04 quick run: gearbox reported over OT/AERO while the
-        // shot showed it in place). Re-probe until two reads agree, 3 s cap.
+        // SHOT FIRST, MEASURE AFTER. Here (headless, frozen sim) a MOVE & SIZE
+        // change only reaches the boxes when a frame is produced: probing before
+        // the capture read the PREVIOUS cell's layout every time (2026-10-04,
+        // HUD_SURVEY_DEBUG: corners cell probed big's boxes, light probed
+        // corners'), while the PNG was right. The capture produces that frame;
+        // measure-only runs force one with a 1x1 capture (awaitPresentedFrame
+        // did not: its probe still read the previous cell). Then re-probe
+        // until two reads agree (fitHud re-fits on its own tick), 3 s cap.
+        if (plan.shots) {
+          const file = path.join(plan.out, "shots", `${cell.id}.png`);
+          await cdpShot(page, file);
+          rec.shot = path.relative(ROOT, file);
+          rec.shotRel = path.relative(plan.out, file);
+        } else {
+          await cdpShot(page, null);
+        }
         let records = await page.evaluate(probeHudElements, { targets, fonts: true });
         for (let k = 0, prev = JSON.stringify(round(records)); k < 20; k++) {
           await sleep(150);
@@ -396,12 +412,6 @@ async function runGroup(browser, group, plan, log) {
           prev = cur;
         }
         const transientRecords = await page.evaluate(probeWithTransients, { src: probeHudElements.toString(), arg: { targets } });
-        if (plan.shots) {
-          const file = path.join(plan.out, "shots", `${cell.id}.png`);
-          await cdpShot(page, file);
-          rec.shot = path.relative(ROOT, file);
-          rec.shotRel = path.relative(plan.out, file);
-        }
         // The fit pass's own outputs, read at measure time (fitHud writes them on its tick, not in applyCell).
         const fit = await page.evaluate(hudFitState);
         // Lead extras LAST: a `settle` check mutates the HUD (the next cell resets it).
