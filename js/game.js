@@ -4099,7 +4099,13 @@ function clearMenuScreens() {
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
+  // Measured WITHOUT css/responsive.css's pause-card rule (body.rotate-measure):
+  // that rule hides the gate while the card is up, and the card is what this
+  // function decides to hide — read through it, the gate could never return.
+  const body = typeof document !== "undefined" ? document.body : null;
+  if (body) body.classList.add("rotate-measure");
   const active = getComputedStyle(box).display !== "none";
+  if (body) body.classList.remove("rotate-measure");
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
   // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
@@ -4113,10 +4119,6 @@ function syncRotateBlocker(moveFocus) {
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
   if (paused) els.pausemenu.hidden = active || photoMode;
-  // Re-read after the pause card settles: setPaused above re-enters this with
-  // the card still up, which css/responsive.css lets hide the blocker, and that
-  // nested call wrote aria-hidden="true" onto a blocker that is now painting.
-  box.setAttribute("aria-hidden", getComputedStyle(box).display !== "none" ? "false" : "true");
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
