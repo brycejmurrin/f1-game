@@ -4501,8 +4501,9 @@ function updateCar(c, dt, ranked) {
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
-  // ...along the NOSE for a human (c.speed runs along it): a car spun round on a climb faces DOWNhill. AI drive the tangent.
-  const slopeNose = c.human ? slopeSin * Math.cos(Math.atan2(smp.t[0], smp.t[2]) - (c.head || 0)) : slopeSin;
+  // ...signed along the NOSE for a human (c.speed runs along it): spun past 90 deg on a climb it faces DOWNhill. The sign only, so
+  // ordinary driving (nose within 90 deg of the tangent) is bit-identical to the characterization baseline. AI drive the tangent.
+  const slopeNose = c.human && Math.cos(Math.atan2(smp.t[0], smp.t[2]) - (c.head || 0)) < 0 ? -slopeSin : slopeSin;
   const k = Tracks.curvature(track, c.s);
   c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
   const dd = DIFF[difficulty] || DIFF.normal;   // an imported settings file can carry any string; quali-model.js falls back the same way
