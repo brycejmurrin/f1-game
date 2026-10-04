@@ -22,6 +22,10 @@
  *     build finishing during the countdown disarmed it (gated on "race" only).
  *   - FIELD SECTORS: a car that reversed over a sector line and drove on timed
  *     the fragment as a sector — the player path's sectorValid, per car.
+ *   - DROPPED SIM: a 5-step frame reported its whole leftover physAcc as
+ *     dropped, sub-step remainder included — which carries, not drops.
+ *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
+ *     its shared start, and each re-show was a fresh squelch and voice line.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -187,5 +191,41 @@ test("a car that reverses over a sector line never records the fragment as a fie
     for (let i = 0; i < 60 * 10 && c._secIdx !== 1; i++) g.step(1);
     assert.equal(c._secIdx, 1, "drove forward into S2 again");
     assert.ok(!(G.fieldSectorBests[0] < 10), `the fragment is not an S1 best (${G.fieldSectorBests[0]})`);
+  } finally { g.close(); }
+});
+
+test("a backlogged frame reports only the whole steps it drops, never the remainder it carries", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    g.apex.headless(true);
+    const Perf = vm.runInContext("PerfGov", g.ctx), DT = vm.runInContext("PhysicsConsts.FIXED_DT", g.ctx);
+    const t0 = g.sandbox.performance.now() + 1000;
+    g.pumpFrame(t0);
+    g.pumpFrame(t0 + 500 * DT);    // half a step: physAcc now carries a remainder
+    Perf.resetFrameStats();
+    g.pumpFrame(t0 + 500 * DT + 250);   // the 0.25 s clamp: 5 steps run, the rest is backlog
+    const dropped = Perf.frameStats().droppedSimS, k = dropped / DT;
+    assert.equal(Perf.frameStats().physicsSteps, 5);
+    assert.ok(k > 0.5, `a 0.25 s frame drops backlog (${dropped})`);
+    assert.ok(Math.abs(k - Math.round(k)) < 1e-6, `dropped is whole steps, not the carried remainder (${k.toFixed(4)} steps)`);
+  } finally { g.close(); }
+});
+
+test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3 s refresh", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);
+    assert.equal(G.state, "count");
+    G.netPlay.awaitingStart = () => true;   // a room still waiting for its shared start
+    vm.runInContext("globalThis.__stings = 0; GameAudio.radioSting = ((f) => function (...a) { globalThis.__stings++; return f.apply(this, a); })(GameAudio.radioSting);", g.ctx);
+    let t = g.sandbox.performance.now() + 1000;
+    g.pumpFrame(t);
+    for (let i = 0; i < 60 * 20; i++) g.pumpFrame(t += 1000 / 60);   // the card expires and re-shows in one frame, every ANN_MIN_S
+    assert.equal(G.state, "count", "still waiting");
+    assert.equal(g.sandbox.document.getElementById("announce").hidden, false, "the card is still up");
+    assert.match(g.sandbox.document.getElementById("announce-text").textContent, /WAITING FOR PLAYERS/);
+    assert.equal(g.sandbox.__stings, 1, "one squelch for the wait, not one per refresh");
   } finally { g.close(); }
 });

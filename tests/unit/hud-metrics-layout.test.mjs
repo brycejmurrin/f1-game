@@ -145,3 +145,19 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
   assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
   assert.match(mm, /classList.contains\("hud-hidden"\)/);
 });
+
+// ONE DEFAULT. The store default is "full" (and settings-export.js's def), but
+// an unknown stored value and the façade setter fell back to "auto": a garage
+// file listed it as CHANGED, and the appearance studio — which offered no AUTO
+// chip — showed no layout selected (review 2026-10-04, verify-core #16).
+test("an unknown HUD layout falls back to the shipped FULL, and the studio can show AUTO", () => {
+  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio.js"), "utf8");
+  const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
+  assert.match(game, /store\.get\("hudMetricsLayout", "full"\)/);
+  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
+  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(v\) < 0\) v = "full";\s*\n\s*hudMetricsLayout = v;/);
+  assert.match(exp, /k: "hudMetricsLayout", lane: "json", group: "hud", def: "full"/);
+  assert.match(studio, /choice\(hud, "Layout", "hudMetricsLayout", \[\["auto", "Auto"\]/,
+    "AUTO is a pause-menu choice, so the studio row must be able to show it selected");
+});
