@@ -14,6 +14,14 @@
 //   {"id":4,"sheet":"overview"}                               → {id, ok, png, n}   (every shot so far)
 //   {"id":5,"diff":["t3-eye","t3-eye-night"]}                 → {id, ok, delta, png}
 //   {"id":6,"status":true}                                    → {id, ok, track, shots, uptimeMs}
+//   {"id":7,"batch":[{shot spec}, …],"sheet":"name"}          → {id, ok, shots:[…], failed:[…], sheet}
+//   {"id":8,"survey":"quick"|"standard","tods":true}          → the shot list built from trackInfo, then a batch
+//   {"id":9,"reset":{"frac":0.2,"speed":40}}                  → obs()          (driving ops: headless physics)
+//   {"id":10,"act":{"steer":0,"throttle":true},"n":60}        → obs() after n ticks
+//   {"id":11,"rollout":{"seconds":6,"input":{…}}}             → __apex.rollout digest
+//   {"id":12,"world":"drive"} / {"field":"brief"}             → world() / field()  (brief | drive | full)
+// Long ops (batch, survey) print {"id","progress","total","note"} lines first.
+// --root <dir> serves ANOTHER checkout's js/css/assets (track-compare.mjs).
 //
 // Cameras are shot.mjs's: park | eye | orbit | cinematic | trackside, with
 // az/el/dist/side/tod/hud. The first line it prints is {"ready":true,…}; stdin
@@ -40,6 +48,7 @@ if (!argv.includes("--serve")) {
   process.exit(2);
 }
 const outDir = resolve(ROOT, flag("--out", "artifacts/track-session"));
+const SERVE_ROOT = resolve(ROOT, flag("--root", "."));
 mkdirSync(outDir, { recursive: true });
 const send = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 
@@ -70,6 +79,7 @@ async function shot(op) {
     side: Number(op.side) === -1 ? -1 : 1, hud: !!op.hud };
   const frame = await page.evaluate((o) => {
     const a = window.__apex;
+    if (a.headless) a.headless(false);   // a driving op may have left render off — a shot would be stale
     a.go(); a.park(o.frac); a.freeze(true);
     if (a.setTimeOfDay) a.setTimeOfDay(o.tod);
     if (a.hud) a.hud(o.hud);
@@ -151,6 +161,63 @@ async function diff(a, b) {
   return { delta: +(changed / (width * height)).toFixed(4), png: file };
 }
 
+/** Many shots in one op; a failed shot is reported and skipped, not fatal. */
+async function batch(id, list, sheetName) {
+  if (!Array.isArray(list) || !list.length) throw new Error("batch needs a non-empty list of shot specs");
+  if (list.length > 200) throw new Error("batch is capped at 200 shots");
+  const done = [], failed = [];
+  for (let i = 0; i < list.length; i++) {
+    const spec = list[i] || {};
+    send({ id, progress: i, total: list.length, note: `shot ${i + 1}/${list.length} ${spec.shot || ""}`.trim() });
+    try { const r = await shot({ ...spec, shot: spec.shot ?? spec.name ?? true }); done.push({ name: basename(r.png, ".png"), png: r.png, spread: r.spread }); }
+    catch (e) { failed.push({ i, spec, error: String(e.message || e) }); }
+  }
+  send({ id, progress: list.length, total: list.length, note: "sheet" });
+  const sh = sheetName && done.length ? await sheet(String(sheetName), 0) : null;
+  return { shots: done, failed, sheet: sh && sh.png };
+}
+
+/** A shot list built from the circuit itself: overview, then per named corner
+ *  an approach eye, an apex orbit and a trackside; `tods` adds dawn/dusk/night
+ *  at the first two corners. `quick` keeps the overview + 4 corners. */
+async function surveyList(preset, tods, maxCorners) {
+  const info = await page.evaluate(() => {
+    const a = window.__apex, t = a.trackInfo ? a.trackInfo({ what: "corners" }) : null;
+    const list = (t && (t.corners || t.turns)) || [];
+    const fr = list.map((c) => ({ name: String(c.name || c.label || c.turn || c.id || "").replace(/[^A-Za-z0-9_-]+/g, "-"), frac: c.frac ?? c.apexFrac ?? c.f }))
+      .filter((c) => typeof c.frac === "number");
+    return fr.length ? fr : (a.corners ? a.corners().map((f, i) => ({ name: `c${i + 1}`, frac: f })) : []);
+  });
+  const cap = maxCorners || (preset === "quick" ? 4 : 40);
+  const corners = info.slice(0, cap);
+  const shots = [0, 0.25, 0.5, 0.75].map((f) => ({ shot: `sv-ov-${f}`, frac: f, cam: "orbit", el: 60, dist: 400 }));
+  for (const [i, c] of corners.entries()) {
+    const n = `sv-${String(i + 1).padStart(2, "0")}-${c.name || "corner"}`.slice(0, 60);
+    shots.push({ shot: `${n}-eye`, frac: +Math.max(0, c.frac - 0.004).toFixed(4), cam: "eye" });
+    shots.push({ shot: `${n}-orbit`, frac: +c.frac.toFixed(4), cam: "orbit", az: 45, el: 25, dist: 60 });
+    if (preset !== "quick") shots.push({ shot: `${n}-ts`, frac: +c.frac.toFixed(4), cam: "trackside", side: 1, dist: 40 });
+  }
+  if (tods) for (const c of corners.slice(0, 2)) for (const tod of ["dawn", "dusk", "night"]) {
+    shots.push({ shot: `sv-tod-${c.name || "c"}-${tod}`.slice(0, 70), frac: c.frac, cam: "orbit", az: 45, el: 25, dist: 60, tod });
+  }
+  return shots;
+}
+
+/** A driving op: headless physics through the __apex obs/act loop. Shots turn
+ *  rendering back on. */
+async function drive(fn, arg) {
+  const r = await page.evaluate(async ({ src, arg: o }) => {
+    try {
+      const a = window.__apex;
+      if (a.info().state !== "race") { a.go(); }
+      const v = await new Function("a", "o", "return (" + src + ")(a, o)")(a, o);
+      return { value: v == null ? null : JSON.parse(JSON.stringify(v)) };
+    } catch (e) { return { err: String((e && e.message) || e) }; }
+  }, { src: fn.toString(), arg });
+  if (r.err) throw new Error(r.err);
+  return { value: r.value };
+}
+
 async function handle(op) {
   if (op.status) return { track, shots: shots.length, uptimeMs: Date.now() - started };
   if (op.track) {
@@ -167,6 +234,13 @@ async function handle(op) {
     if (r.err) throw new Error(r.err);
     return { value: r.value };
   }
+  if (op.batch) return batch(op.id, op.batch, op.sheet);
+  if (op.survey) return batch(op.id, await surveyList(String(op.survey), !!op.tods, Number(op.maxCorners) || 0), op.sheet || `survey-${track}`);
+  if (op.reset) return drive((a, o) => { if (a.headless) a.headless(true); return a.reset(o.frac ?? 0, o.speed, o.x); }, op.reset);
+  if (op.act) return drive((a, o) => a.act(o.input, o.dt, o.n), { input: op.act, dt: op.dt, n: Math.min(Math.max(Number(op.n) || 1, 1), 7200) });
+  if (op.rollout) return drive((a, o) => a.rollout(o), op.rollout);
+  if (op.world) return drive((a, o) => a.world({ detail: o }), op.world === true ? "drive" : String(op.world));
+  if (op.field) return drive((a, o) => a.field({ detail: o }), op.field === true ? "brief" : String(op.field));
   if (op.sheet) return sheet(op.sheet === true ? "sheet" : String(op.sheet), Number(op.cols) || 0);
   if (op.diff) return diff(op.diff[0], op.diff[1]);
   if (op.shot != null || op.frac != null || op.cam != null) return shot(op);
@@ -175,7 +249,7 @@ async function handle(op) {
 
 (async () => {
   const id = String(flag("--track", "monza"));
-  const srv = await startStaticServer(ROOT);
+  const srv = await startStaticServer(SERVE_ROOT);
   try {
     const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
     page = await browser.newPage({ viewport: { width: 1280, height: 720 } });

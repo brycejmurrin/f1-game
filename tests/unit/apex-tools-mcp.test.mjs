@@ -170,6 +170,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_job_cancel",
     "apex_job_start",
     "apex_job_status",
+    "apex_physics_audit",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
@@ -1199,4 +1200,55 @@ test("thumbBlock returns an MCP image block a client can render", async () => {
     const meta = await sharp(Buffer.from(b.data, "base64")).metadata();
     assert.equal(meta.width, 640);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("2026-10-04: session ops, new job kinds and physics audit pin their argv", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const ok = (name, args, re) => {
+    const r = callCli(name, { dryRun: true, ...args });
+    assert.equal(r.status, 0, `${name} ${JSON.stringify(args)}: ${r.stdout}${r.stderr}`);
+    if (re) assert.match(JSON.stringify(body(r).argv), re, name);
+  };
+  const bad = (name, args, code = "bad_args") => {
+    const b = body(callCli(name, args));
+    assert.equal(b.ok, false, `${name} ${JSON.stringify(args)} should refuse`);
+    assert.equal(b.error, code, `${name} ${JSON.stringify(args)}: ${b.message}`);
+  };
+  ok("apex_job_start", { kind: "compare", ref: "HEAD~1", track: "spa", preset: "standard" }, /track-compare\.mjs","--ref","HEAD~1","--track","spa","--preset","standard/);
+  bad("apex_job_start", { kind: "compare", ref: "--exec=x", track: "spa" });
+  bad("apex_job_start", { kind: "compare", ref: "a b", track: "spa" });
+  ok("apex_job_start", { kind: "backend_compare", track: "monza", frac: 0.3, cam: "eye", backends: "webgl2,three" }, /backend-compare\.mjs","monza","0\.3","eye","--backends","webgl2,three"/);
+  ok("apex_job_start", { kind: "profile_gameloop", track: "spa", mode: "render" }, /profile-gameloop\.mjs","spa","render"/);
+  bad("apex_job_start", { kind: "profile_gameloop", mode: "gpu" });
+  ok("apex_job_start", { kind: "glx_census", track: "vegas", tod: "day", frames: 60 }, /glx-call-census\.mjs","vegas","day","60"/);
+  ok("apex_job_start", { kind: "lighting_ab", knobs: "lampFog.base,pcss.penScale" }, /ab-lighting\.mjs","run","lampFog\.base","pcss\.penScale"/);
+  ok("apex_job_start", { kind: "physics_check", mode: "grip" }, /check-physics\.mjs","grip"/);
+  bad("apex_job_start", { kind: "physics_check", mode: "nitro" });
+  ok("apex_job_start", { kind: "ai_pace", track: "monza", laps: 2, diff: "hard" }, /ai-pace\.mjs","--track","monza","--laps","2","--diff","hard","--json"/);
+  ok("apex_physics_audit", { check: "ai_band", track: "spa", seconds: 30 }, /ai-band\.mjs","--track","spa","--seconds","30","--json"/);
+  bad("apex_physics_audit", { check: "ai_pace" });
+  for (const op of ["batch", "survey", "reset", "act", "rollout", "world", "field"]) bad("apex_track", { op }, "track_not_open");
+  const st = body(callCli("apex_status", {}));
+  assert.equal(typeof st.browserFree, "boolean");
+  assert.match(st.summary, /^(free|busy)/);
+});
+
+test("job registry: a restart marks a dead job lost and keeps its record", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "registry-test-"));
+  try {
+    const dir = path.join(root, "artifacts", "logs", "apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "registry.json"), JSON.stringify([
+      { id: "verify_all-x-1", kind: "verify_all", state: "running", pid: 2147483646, started: Date.now() - 1000, log: path.join(dir, "a.log"), out: path.join(dir, "a.out"), argv: [] },
+      { id: "verify_all-y-2", kind: "verify_all", state: "done", exit: 0, pid: 1, started: 1, ended: 2, log: path.join(dir, "b.log"), out: path.join(dir, "b.out"), argv: [] },
+    ]));
+    const toolResult = (b, o = {}) => ({ content: [{ type: "text", text: JSON.stringify(b) }], ...(o.isError ? { isError: true } : {}) });
+    const ex = createExtras({ ROOT: root, toolResult, refuse: (e, m) => toolResult({ ok: false, error: e, message: m }, { isError: true }),
+      acquireLock: () => null, releaseLock: () => {}, occupancyRefuse: () => null, assertSafeOut: (x) => x, knownCircuits: () => ["monza"],
+      runSpawn: async () => toolResult({ ok: true }), splitOut: (t) => ({ out: null, rest: t }), log: () => {}, mockMode: () => false });
+    const list = JSON.parse(ex.handlers.apex_job_status({}).content[0].text).jobs;
+    assert.equal(list.find((j) => j.jobId === "verify_all-x-1").state, "lost", "a running record whose pid is gone is lost");
+    assert.equal(list.find((j) => j.jobId === "verify_all-y-2").state, "done");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

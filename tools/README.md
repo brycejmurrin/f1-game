@@ -182,6 +182,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
 | **shot/show-menus.mjs** | Shoot every menu/popup plus the Display survey into one preview HTML page. | — |
 | **shot/show.mjs** | One phone HTML page: menus then car angles, with embedded JPEGs for offline preview. | — |
+| **shot/track-compare.mjs** | Before/after visual diff: one shot list on `--ref` (a worktree) and the working tree; Δ per pair + side-by-side sheet. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
 ### `tools/gfx/`

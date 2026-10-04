@@ -279,6 +279,35 @@ close returns `{survivors:0, lockFree:true}` and a status right after reads free
 Not built: `apex_car_shot` — an `apex_garage` session already renders any team
 from any angle in seconds, and `render-car.mjs` needs a server on :3456.
 
+## Week-9 (2026-10-04: batch, survey, driving, compare, restart-safe jobs — 26 → 27 tools)
+
+Measured live over stdio on an idle container:
+
+- `apex_track` `survey` `quick` on monza: the shot list is built from
+  `trackInfo` corners (T1–T4: overview, approach eye, apex orbit) and run as one
+  op — 12 shots in ~2 min with a `notifications/progress` per shot when the
+  client sent `_meta.progressToken`, plus a contact sheet thumbnail.
+- `batch`: 3 shots + 1 bad spec → 3 done, 1 reported in `failed`, not fatal.
+- Driving ops in the same session: `reset` (speedKph 144), `act` 120 ticks,
+  `rollout` 4 s (distance, speeds, corner minima), `world` / `field` — and the
+  next shot turns rendering back on (headless would freeze the canvas).
+- Idle auto-close (`APEX_SESSION_IDLE_MS`, default 10 min) for `apex_track` and
+  `apex_garage`. First cut closed a session mid-batch (the clock counted from
+  the op's START); the clock now pauses while an op runs.
+- Jobs survive a server restart: children are `unref`ed, recorded in
+  `artifacts/logs/apex-jobs/registry.json`, and a browser job's lock is handed
+  to the JOB's pid on exit. Measured: restart with `survey_track` running →
+  new server shows it `orphaned`, `apex_status` busy (lock held by the job),
+  `apex_track open` refused `lock_held`, `apex_job_cancel` → survivors 0, lock
+  free.
+- `compare` job (`shot/track-compare.mjs`): monza `quick`, HEAD~1 vs the
+  working tree, 12 pairs. At full resolution identical scenes differed 2–4 %
+  (anti-aliasing shimmer on tree and fence edges), so the score is taken on a
+  quarter-size, blurred copy: identical scenes ≤ 0.13 %, a different view
+  73.5 %; `changed` counts pairs over 0.5 %.
+- `apex_physics_audit` `ai_band` (30 s sim): ~12 s; `apex_status` gained
+  `browserFree` and a one-line `summary`.
+
 ### Locking
 
 Exclusive `scratch/apex-browser.lock` (gitignored). Week-1 including

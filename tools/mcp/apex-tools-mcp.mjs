@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.10.0";
+const SERVER_VERSION = "1.11.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -306,6 +306,15 @@ export function acquireLock(tool) {
     );
   }
   return null;
+}
+
+/** Hand the browser lock (if this server holds it) to another live process —
+ *  a background job that outlives the server keeps the lock until it exits. */
+export function handLock(pid, tool) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+    if (Number(raw.pid) === process.pid) fs.writeFileSync(LOCK_PATH, JSON.stringify({ pid, since: Date.now(), tool, handedFrom: process.pid }));
+  } catch { /* no lock */ }
 }
 
 export function releaseLock() {
@@ -651,12 +660,23 @@ const CATALOG = [
     name: "apex_track",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,side,tod,name} / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
+    description: "Browser (lock first) — a PERSISTENT track session: open {track} once (~30 s), then shot / batch {shots:[…]} / survey {preset:quick|standard, tods} / eval / track / sheet / diff, and driving ops reset / act / rollout / world / field — seconds each; close frees the lock (auto-close after 10 min idle). Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        op: { type: "string", enum: ["open", "shot", "eval", "track", "sheet", "diff", "status", "close"] },
+        op: { type: "string", enum: ["open", "shot", "batch", "survey", "eval", "track", "sheet", "diff", "reset", "act", "rollout", "world", "field", "status", "close"] },
+        shots: { type: "array", maxItems: 200, items: { type: "object" }, description: "batch: shot specs {name, frac, cam, az, el, dist, side, tod, hud}." },
+        preset: { type: "string", enum: ["quick", "standard"], description: "survey: quick = overview + 4 corners; standard = every named corner (+ trackside)." },
+        tods: { type: "boolean", description: "survey: add dawn/dusk/night at the first two corners." },
+        maxCorners: { type: "integer", minimum: 1, maximum: 40 },
+        speed: { type: "number", description: "reset: m/s." },
+        lateral: { type: "number", description: "reset: metres off the centreline (+ right)." },
+        input: { type: "object", description: "act / rollout: {steer:-1..1, throttle:bool, brake:bool}." },
+        ticks: { type: "integer", minimum: 1, maximum: 7200, description: "act: physics ticks at 1/60 s (default 60)." },
+        seconds: { type: "number", minimum: 0.05, maximum: 120, description: "rollout: sim seconds (default 5)." },
+        samples: { type: "integer", minimum: 2, maximum: 60, description: "rollout: trace waypoints." },
+        detail: { type: "string", description: "world / field detail level (default drive / race)." },
         track: { type: "string", description: "Circuit id (open; op track switches)." },
         frac: { type: "number", minimum: 0, maximum: 1 },
         cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
@@ -679,12 +699,23 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once: compare (before/after visual diff vs a git ref), surveys, UI matrix, renderer compare, profiles, lighting A/B, sweeps. Browser kinds hold the lock until they exit; jobs survive a server restart. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
+        ref: { type: "string", description: "compare: git ref to compare the working tree against (HEAD~1, a branch, a sha)." },
+        preset: { type: "string", enum: ["quick", "standard"], description: "compare: shot list built from the circuit." },
+        frac: { type: "number", minimum: 0, maximum: 1, description: "backend_compare: lap fraction." },
+        cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"], description: "backend_compare camera." },
+        backends: { type: "string", description: "backend_compare: comma list of webgl2,three,webgpu." },
+        mode: { type: "string", description: "profile_gameloop: physics | render. physics_check: bank | grip | roadfollow | steer." },
+        tod: { type: "string", enum: ["day", "night"], description: "glx_census." },
+        frames: { type: "integer", minimum: 5, maximum: 400, description: "glx_census." },
+        knobs: { type: "string", description: "lighting_ab: comma list of knob ids, or all." },
+        laps: { type: "integer", minimum: 1, maximum: 5, description: "ai_pace." },
+        diff: { type: "string", enum: ["easy", "normal", "hard", "pro"], description: "ai_pace difficulty." },
         track: { type: "string", description: "survey_track: circuit id." },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
@@ -784,6 +815,26 @@ const CATALOG = [
         url: { type: "string" },
       },
       required: ["track"],
+    },
+  },
+  {
+    name: "apex_physics_audit",
+    week: 8,
+    kind: "tree",
+    description: "Tree — offline AI/physics check in the node VM, no browser: ai_band (the AI rubber band vs a human on track: band shares, forward/reverse, ~25 s). ai_pace and the browser physics probes take minutes: apex_job_start. Skill: ai-racecraft.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        check: { type: "string", enum: ["ai_band"] },
+        track: { type: "string" },
+        diff: { type: "string", enum: ["easy", "normal", "hard", "pro"] },
+        seconds: { type: "number", minimum: 10, maximum: 180, description: "Sim seconds (default 60)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["check"],
     },
   },
 ];
@@ -1477,6 +1528,8 @@ function handleStatus(args = {}) {
     return toolResult({
       ok: true,
       mock: true,
+      browserFree: true,
+      summary: "free (mock)",
       lock: { held: false },
       chromeDaemon: { up: false, port: null },
       testBg: { recorded: false, running: [] },
@@ -1486,13 +1539,20 @@ function handleStatus(args = {}) {
     });
   }
   const chromePort = daemonPort();
+  const lock = lockInfo(), testBg = testBgStatus(), playwright = playwrightLive(), loadavg = os.loadavg();
+  // One answer up front: `playwright.live` is true for the harness's own idle
+  // Playwright MCP on every call, which read as "busy" to agents.
+  const blockers = [lock.held && `lock held by ${lock.tool || `pid ${lock.pid}`}`, chromePort != null && "probe chrome daemon up",
+    testBg.browserRunning && testBg.browserRunning.length && "test-bg browser run", playwright.busy && "Playwright browser busy"].filter(Boolean);
   return toolResult({
     ok: true,
-    lock: lockInfo(),
+    browserFree: blockers.length === 0,
+    summary: blockers.length ? `busy: ${blockers.join("; ")}` : `free (load ${loadavg[0].toFixed(2)}${loadavg[0] >= 3 ? " — wait for < 3" : ""})`,
+    lock,
     chromeDaemon: { up: chromePort != null, port: chromePort },
-    testBg: testBgStatus(),
-    playwright: playwrightLive(),
-    loadavg: os.loadavg(),
+    testBg,
+    playwright,
+    loadavg,
     knownGap: KNOWN_GAP,
   });
 }
@@ -1725,7 +1785,19 @@ export async function garageOpen(args, { spawnChild = spawn, readyTimeoutMs = 18
   }
   return toolResult({ ok: true, op: "open", argv, ...ready });
 }
+// The same idle rule as apex_track: an open garage nobody closes holds the lock.
+const GARAGE_IDLE_MS = Number(process.env.APEX_SESSION_IDLE_MS) || 600000;
+let garageIdle = null;
+function touchGarageIdle() {
+  clearTimeout(garageIdle);
+  if (!garage) return;
+  garageIdle = setTimeout(() => { log(`apex_garage idle ${GARAGE_IDLE_MS} ms — closing`); garageClose("idle"); }, GARAGE_IDLE_MS);
+  garageIdle.unref();
+}
 async function handleGarage(args = {}) {
+  try { return await handleGarageOp(args); } finally { touchGarageIdle(); }
+}
+async function handleGarageOp(args = {}) {
   const op = String(args.op || "status");
   const gated = gateBrowserArgs(args);
   if (gated) return gated;
@@ -1772,7 +1844,7 @@ function garageCommand(op, args) {
 }
 process.on("exit", () => { if (garage) garageClose("server exit"); });
 
-function dispatch(name, args = {}, { signal = null } = {}) {
+function dispatch(name, args = {}, { signal = null, progress = null } = {}) {
   if (typeof name !== "string") return refuse("bad_args", "tool name must be a string", "Use a name from tools/list.");
   if (!name.startsWith(PREFIX)) {
     return refuse(
@@ -1798,7 +1870,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (Object.hasOwn(extras().handlers, name)) {
     const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
     if (gate) return gate;
-    return extras().handlers[name](args, { signal });
+    return extras().handlers[name](args, { signal, progress });
   }
 
   const kind = toolKind(known);
@@ -1951,7 +2023,7 @@ let extrasInst = null;
 function extras() {
   if (!extrasInst) {
     extrasInst = createExtras({ ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
-      knownCircuits, runSpawn, splitOut, log, mockMode });
+      knownCircuits, runSpawn, splitOut, log, mockMode, handLock });
   }
   return extrasInst;
 }
@@ -1963,6 +2035,9 @@ const RESOURCES = [
   ["docs/AGENT-SURFACE.md", "Which CLIs are wrapped as apex_*, their pins, and what stays CLI-only."],
   ["docs/research/APEX-TOOLS-MCP.md", "apex-tools MCP design, refuse table and measured history."],
 ].map(([rel, description]) => ({ uri: `file:///${rel}`, name: path.basename(rel), description, mimeType: "text/markdown", rel }));
+
+/** Where notifications/progress go: stdio's writeRpc under `serve`; none for one-shot `call`. */
+let progressSink = null;
 
 /** tools/call requests still running, by JSON-RPC id, for notifications/cancelled. */
 const inflight = new Map();
@@ -2018,7 +2093,13 @@ async function handleRpc(msg) {
     const ctl = new AbortController();
     inflight.set(String(mid), ctl);
     try {
-      const result = await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal });
+      // notifications/progress when the client asked for it (params._meta.progressToken):
+      // batch / survey shots report each frame; some clients extend their timeout on it.
+      // https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/progress
+      const token = params._meta && params._meta.progressToken;
+      const progress = token == null || !progressSink ? null
+        : (p, total, message) => progressSink({ jsonrpc: "2.0", method: "notifications/progress", params: { progressToken: token, progress: p, total, message } });
+      const result = await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal, progress });
       return ctl.signal.aborted ? null : { jsonrpc: "2.0", id: mid, result };
     } catch (e) {
       return {
@@ -2045,6 +2126,7 @@ async function handleRpc(msg) {
 }
 
 function cmdServe() {
+  progressSink = writeRpc;
   const rl = require("readline").createInterface({
     input: process.stdin,
     crlfDelay: Infinity,

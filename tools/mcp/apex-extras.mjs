@@ -89,6 +89,7 @@ export function createExtras(ctx) {
     if (!sess) return null;
     const s = sess; sess = null;
     for (const p of s.pending.values()) { clearTimeout(p.timer); p.reject(new Error(`session closed: ${reason}`)); }
+    clearTimeout(s.idleTimer);
     const tree = processTree(s.child.pid);
     try { s.child.stdin.end(); } catch { /* gone */ }
     const summary = { closed: true, reason, uptimeMs: Date.now() - s.started, shots: s.shots };
@@ -102,13 +103,22 @@ export function createExtras(ctx) {
     })();
     return summary;
   }
-  function sessSend(cmd, timeoutMs = 240000) {
+  function sessSend(cmd, timeoutMs = 240000, onProgress = null) {
     return new Promise((resolve, reject) => {
       const id = ++sess.seq;
       const timer = setTimeout(() => { if (sess) sess.pending.delete(id); reject(new Error(`no reply within ${timeoutMs} ms`)); }, timeoutMs);
-      sess.pending.set(id, { resolve, reject, timer });
+      sess.pending.set(id, { resolve, reject, timer, onProgress });
       sess.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
     });
+  }
+  // A session nobody closes would hold the browser lock forever: close it
+  // after IDLE_MS without an op (APEX_SESSION_IDLE_MS, default 10 min).
+  const IDLE_MS = Number(process.env.APEX_SESSION_IDLE_MS) || 600000;
+  function touchIdle() {
+    if (!sess) return;
+    clearTimeout(sess.idleTimer);
+    sess.idleTimer = setTimeout(() => { log(`apex_track idle ${IDLE_MS} ms — closing`); sessClose("idle"); }, IDLE_MS);
+    sess.idleTimer.unref();
   }
   async function trackOpen(args) {
     const track = needTrack(args.track || "monza");
@@ -134,6 +144,7 @@ export function createExtras(ctx) {
         let msg; try { msg = JSON.parse(line); } catch { continue; }
         if ("ready" in msg) { s.onReady(msg); continue; }
         const p = s.pending.get(msg.id);
+        if (p && msg.progress != null && msg.ok === undefined) { if (p.onProgress) p.onProgress(msg.progress, msg.total, msg.note); continue; }
         if (p) { s.pending.delete(msg.id); clearTimeout(p.timer); p.resolve(msg); }
       }
     });
@@ -145,6 +156,7 @@ export function createExtras(ctx) {
       if (sess === s) sessClose(`exit ${code ?? sig}`);   // releases once the tree is gone
     });
     const r = await ready;
+    if (r && r.ready) touchIdle();
     if (!r || !r.ready) {
       const why = sess === s ? sessClose("not ready") : null;
       if (s.closing) await s.closing;
@@ -152,7 +164,9 @@ export function createExtras(ctx) {
     }
     return toolResult({ ok: true, op: "open", ...r, hint: "Now op shot / eval / track / sheet / diff; op close when done (the browser lock is held until then)." });
   }
-  async function handleTrack(args = {}) {
+  const SHOT_KEYS = ["frac", "cam", "az", "el", "dist", "side", "tod", "hud"];
+  const shotSpec = (o) => { const r = { shot: o.name || o.shot || true }; for (const k of SHOT_KEYS) if (o[k] != null) r[k] = o[k]; return r; };
+  async function handleTrack(args = {}, { progress } = {}) {
     const op = String(args.op || "status");
     try {
       if (op === "open") return await trackOpen(args);
@@ -176,15 +190,28 @@ export function createExtras(ctx) {
       if (!Array.isArray(args.diff) || args.diff.length !== 2) return refuse("bad_args", "diff needs two shot names", 'Pass {"op":"diff","diff":["a","b"]}.');
       cmd.diff = args.diff.map(String);
     } else if (op === "status") cmd.status = true;
-    else return refuse("bad_args", `unknown op ${op}`, "open | shot | eval | track | sheet | diff | status | close");
+    else if (op === "batch") {
+      if (!Array.isArray(args.shots) || !args.shots.length) return refuse("bad_args", "batch needs shots: [{frac,cam,…,name}]", 'Pass {"op":"batch","shots":[{"frac":0.1,"cam":"eye","name":"a"}]}.');
+      cmd.batch = args.shots.map(shotSpec); cmd.sheet = args.name || "batch";
+    } else if (op === "survey") { cmd.survey = args.preset || "quick"; cmd.tods = !!args.tods; cmd.sheet = args.name || `survey-${sess.track}`; if (args.maxCorners) cmd.maxCorners = args.maxCorners; }
+    else if (op === "reset") cmd.reset = { frac: args.frac ?? 0, speed: args.speed, x: args.lateral };
+    else if (op === "act") { cmd.act = args.input || { steer: 0, throttle: true, brake: false }; cmd.n = args.ticks || 60; }
+    else if (op === "rollout") cmd.rollout = { seconds: args.seconds ?? 5, input: args.input, samples: args.samples ?? 12 };
+    else if (op === "world") cmd.world = args.detail || "drive";
+    else if (op === "field") cmd.field = args.detail || "brief";
+    else return refuse("bad_args", `unknown op ${op}`, "open | shot | batch | survey | eval | track | sheet | diff | reset | act | rollout | world | field | status | close");
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, op, command: cmd });
     try {
-      const reply = await sessSend(cmd);
+      clearTimeout(sess.idleTimer);   // idle means no op RUNNING: a long batch must not be closed under itself
+      const long = op === "batch" || op === "survey";
+      const reply = await sessSend(cmd, long ? 3600000 : 240000, long && progress ? progress : null);
+      touchIdle();
       delete reply.id;
       if (op === "shot" && reply.ok) sess.shots++;
       if (op === "track" && reply.ok) sess.track = reply.track;
       const result = toolResult({ op, ...reply }, { isError: reply.ok === false });
-      return (op === "shot" || op === "sheet" || op === "diff") && reply.ok ? withImage(result, reply.png, args.image) : result;
+      const png = op === "batch" || op === "survey" ? reply.sheet : reply.png;
+      return ["shot", "sheet", "diff", "batch", "survey"].includes(op) && reply.ok ? withImage(result, png, args.image) : result;
     } catch (e) {
       return refuse("track_failed", String(e.message || e), "Retry; if the session died, op open again.");
     }
@@ -192,8 +219,26 @@ export function createExtras(ctx) {
 
   // ── apex_job_*: long CLIs in the background ───────────────────────────────
   const JOB_DIR = path.join(ROOT, "artifacts", "logs", "apex-jobs");
+  const REGISTRY = path.join(JOB_DIR, "registry.json");
   const jobs = new Map();
   let jobSeq = 0;
+  // Jobs outlive a server restart on disk: a detached child keeps running, so
+  // its record (pid = process-group id, log, out) must too, or its jobId is
+  // lost while it still holds CPU — and, for browser kinds, Chromium.
+  const saveRegistry = () => {
+    try {
+      fs.mkdirSync(JOB_DIR, { recursive: true });
+      const rows = [...jobs.values()].map(({ child, ...j }) => ({ ...j, pid: j.pid ?? (child && child.pid) }));
+      fs.writeFileSync(REGISTRY, JSON.stringify(rows.slice(-50), null, 1));
+    } catch (e) { log(`job registry write failed: ${e.message}`); }
+  };
+  try {
+    for (const j of JSON.parse(fs.readFileSync(REGISTRY, "utf8"))) {
+      if (j.state === "running") j.state = j.pid && alive(j.pid) ? "orphaned" : "lost";
+      if (j.state === "lost" && !j.ended) j.ended = Date.now();
+      jobs.set(j.id, j);
+    }
+  } catch { /* no registry yet */ }
   const list = (v, what) => {
     if (v == null || v === "") return null;
     const s = Array.isArray(v) ? v.join(",") : String(v);
@@ -222,11 +267,35 @@ export function createExtras(ctx) {
         const t = list(a.team, "team");
         return { browser: false, argv: nodeArgv("car/livery-contrast.mjs", "--json", ...(t ? [`--team=${t}`] : [])) };
       }
+      case "compare": {
+        const ref = String(a.ref || "");
+        if (!/^[A-Za-z0-9._\/~^-]{1,80}$/.test(ref) || ref.startsWith("-")) throw Object.assign(new Error("ref"), { refuse: refuse("bad_args", "ref must be a git ref (branch, tag, sha, HEAD~1)", 'e.g. {"kind":"compare","ref":"HEAD~1","track":"spa"}') });
+        const preset = a.preset === "standard" ? "standard" : "quick";
+        return { browser: true, argv: nodeArgv("shot/track-compare.mjs", "--ref", ref, "--track", needTrack(a.track), "--preset", preset) };
+      }
+      case "ai_pace": return { browser: false, argv: nodeArgv("check/ai-pace.mjs", "--track", needTrack(a.track || "monza"), "--laps", String(Math.min(Math.max(Number(a.laps) || 1, 1), 5)), ...(a.diff ? ["--diff", pick(a.diff, ["easy", "normal", "hard", "pro"], "diff")] : []), "--json") };
+      case "physics_check": return { browser: true, argv: nodeArgv("check/check-physics.mjs", pick(a.mode || "steer", ["bank", "grip", "roadfollow", "steer"], "mode")) };
+      case "backend_compare": {
+        const b = list(a.backends, "backends");
+        return { browser: true, argv: nodeArgv("shot/backend-compare.mjs", needTrack(a.track || "monza"), String(num01(a.frac ?? 0.1)), pick(a.cam || "orbit", ["park", "eye", "orbit", "cinematic", "trackside"], "cam"),
+          ...(b ? ["--backends", b] : []), "--out", path.join(ROOT, "artifacts", "backend-compare")) };
+      }
+      case "profile_gameloop": return { browser: true, argv: nodeArgv("shot/profile-gameloop.mjs", needTrack(a.track || "monza"), pick(a.mode || "physics", ["physics", "render"], "mode")) };
+      case "glx_census": return { browser: true, argv: nodeArgv("gfx/glx-call-census.mjs", needTrack(a.track || "vegas"), pick(a.tod || "night", ["day", "night"], "tod"), String(Math.min(Math.max(Number(a.frames) || 40, 5), 400))) };
+      case "lighting_ab": {
+        const k = list(a.knobs || "all", "knobs");
+        return { browser: true, argv: nodeArgv("lighting/ab-lighting.mjs", "run", ...k.split(",")) };
+      }
       case "verify_all": return { browser: false, argv: nodeArgv("track/verify-track.cjs", "--all", "--quiet") };
       case "float_all": return { browser: false, argv: nodeArgv("track/float-audit.cjs", "--all") };
       default: throw Object.assign(new Error("kind"), { refuse: refuse("bad_args", `unknown job kind ${kind}`, `One of: ${JOB_KINDS.join(", ")}.`) });
     }
   }
+  const pick = (v, allowed, what) => {
+    if (!allowed.includes(String(v))) throw Object.assign(new Error(what), { refuse: refuse("bad_args", `${what} must be one of ${allowed.join(", ")}`, "") });
+    return String(v);
+  };
+  const num01 = (v) => { const n = Number(v); if (!(n >= 0 && n <= 1)) throw Object.assign(new Error("frac"), { refuse: refuse("bad_args", "frac must be 0..1", "") }); return n; };
   const tail = (file, n = 40) => {
     try { const t = fs.readFileSync(file, "utf8").split("\n"); return t.slice(-n - 1).join("\n").trim(); } catch { return ""; }
   };
@@ -236,7 +305,7 @@ export function createExtras(ctx) {
       // stdout and stderr each — a CLI that reports on stdout (verify-track)
       // left the stderr-only tail empty.
       v.tail = [tail(j.out, 30), tail(j.log, 20)].filter(Boolean).join("\n--- stderr ---\n");
-      if (j.state !== "running") { const o = ctx.splitOut(fs.readFileSync(j.out, "utf8")); if (o.out != null) v.out = o.out; }
+      if (j.state !== "running") { try { const o = ctx.splitOut(fs.readFileSync(j.out, "utf8")); if (o.out != null) v.out = o.out; } catch { /* no output file */ } }
     }
     return v;
   };
@@ -246,7 +315,7 @@ export function createExtras(ctx) {
     try { plan = jobPlan(kind, args); } catch (e) { if (e.refuse) return e.refuse; throw e; }
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, browser: plan.browser });
     if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv });
-    const running = [...jobs.values()].filter((j) => j.state === "running");
+    const running = [...jobs.values()].filter((j) => j.state === "running" || j.state === "orphaned");
     if (running.length >= 2) return refuse("jobs_busy", `${running.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
     fs.mkdirSync(JOB_DIR, { recursive: true });
@@ -255,19 +324,30 @@ export function createExtras(ctx) {
     const logFd = fs.openSync(log, "w"), outFd = fs.openSync(out, "w");
     const child = spawn(plan.argv[0], plan.argv.slice(1), { cwd: ROOT, detached: true, stdio: ["ignore", outFd, logFd] });
     fs.closeSync(logFd); fs.closeSync(outFd);
-    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, state: "running", exit: null, started: Date.now(), ended: null, log, out };
+    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started: Date.now(), ended: null, log, out };
     jobs.set(id, j);
+    saveRegistry();
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
       if (j.state === "running") j.state = code === 0 ? "done" : "failed";
       // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
       if (j.browser && !j.cancelTree) releaseLock();
+      saveRegistry();
     });
     child.on("error", (e) => { j.state = "failed"; j.exit = String(e.message); j.ended = Date.now(); if (j.browser) releaseLock(); });
+    child.unref();   // a job outlives this server: it is detached, logged to files and on the registry
     return toolResult({ ok: true, ...jobView(j), hint: "apex_job_status {jobId} for progress; the result lands in out when state is done." });
   }
+  // An orphan (started by a previous server) has no exit event here: settle it
+  // from its pid. Its exit code is unknown; its output file still holds the result.
+  const refreshOrphans = () => {
+    let changed = false;
+    for (const j of jobs.values()) if (j.state === "orphaned" && !(j.pid && alive(j.pid))) { j.state = "finished"; j.exit = "unknown (orphan)"; j.ended = Date.now(); changed = true; }
+    if (changed) saveRegistry();
+  };
   function jobStatus(args) {
+    refreshOrphans();
     if (!args.jobId) return toolResult({ ok: true, jobs: [...jobs.values()].map((j) => jobView(j)) });
     const j = jobs.get(String(args.jobId));
     if (!j) return refuse("unknown_job", `no job ${args.jobId} in this server process`, "apex_job_status {} lists them.");
@@ -277,17 +357,27 @@ export function createExtras(ctx) {
     const j = jobs.get(String(args.jobId || ""));
     if (!j) return refuse("unknown_job", `no job ${args.jobId}`, "apex_job_status {} lists them.");
     let survivors;
-    if (j.state === "running") {
+    if (j.state === "running" || j.state === "orphaned") {
+      const orphan = j.state === "orphaned";
       j.state = "cancelled";
-      j.cancelTree = processTree(j.child.pid);
+      j.cancelTree = processTree(j.pid || (j.child && j.child.pid));
       survivors = (await killTreeAndWait(j.cancelTree)).survivors.length;
+      if (orphan) { j.ended = Date.now(); j.exit = "cancelled"; }
       if (j.browser) releaseLock();
+      saveRegistry();
     }
     return toolResult({ ok: true, ...jobView(j), survivors });
   }
   process.on("exit", () => {
-    for (const j of jobs.values()) if (j.state === "running") { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }
-    if (sess) { try { process.kill(-sess.child.pid, "SIGKILL"); } catch { /* gone */ } }
+    // Jobs keep running across a restart (the next server finds them as
+    // "orphaned" and can cancel them). A browser job's lock moves to the JOB's
+    // pid, so it stays held until that process exits — otherwise the stale-lock
+    // reaper would free it while Chromium still runs.
+    for (const j of jobs.values()) {
+      if (j.state === "running" && j.browser && j.pid) ctx.handLock && ctx.handLock(j.pid, `apex_job:${j.kind}`);
+    }
+    saveRegistry();
+    if (sess) { try { process.kill(-sess.child.pid, "SIGKILL"); } catch { /* gone */ } }   // a session dies with its server
   });
 
   // ── apex_ui_fit / apex_ui_shot: one screen × viewport ─────────────────────
@@ -363,10 +453,22 @@ export function createExtras(ctx) {
       hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !ok });
   }
 
+  async function physicsAudit(args, { signal }) {
+    if (args.check !== "ai_band") return refuse("bad_args", "check must be ai_band", "ai_pace and the browser physics probes take minutes: apex_job_start {kind:\"ai_pace\"|\"physics_check\"}.");
+    let track; try { track = needTrack(args.track || "monza"); } catch (e) { return e.refuse; }
+    const seconds = Math.min(Math.max(Number(args.seconds) || 60, 10), 180);
+    const argv = nodeArgv("check/ai-band.mjs", "--track", track, "--seconds", String(seconds), "--json",
+      ...(args.diff ? ["--diff", String(args.diff)] : []));
+    if (args.diff && !["easy", "normal", "hard", "pro"].includes(String(args.diff))) return refuse("bad_args", "diff must be easy, normal, hard or pro", "");
+    if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
+    if (mockMode()) return toolResult({ ok: true, mock: true, argv });
+    return runSpawn(argv, { timeoutMs: 240000, allowExit: new Set([0, 1]), signal });
+  }
+
   return {
     thumbBlock,
     handlers: {
-      apex_track: (a) => handleTrack(a),
+      apex_track: (a, o) => handleTrack(a, o),
       apex_job_start: (a) => jobStart(a),
       apex_job_status: (a) => jobStatus(a),
       apex_job_cancel: (a) => jobCancel(a),
@@ -374,8 +476,9 @@ export function createExtras(ctx) {
       apex_ui_shot: (a, o) => uiShot(a, o),
       apex_car_audit: (a, o) => carAudit(a, o),
       apex_track_audit: (a, o) => trackAudit(a, o),
+      apex_physics_audit: (a, o) => physicsAudit(a, o),
     },
   };
 }
 
-export const JOB_KINDS = ["survey_track", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all"];
+export const JOB_KINDS = ["survey_track", "compare", "ui_gallery", "ui_matrix", "flicker_gate", "backend_compare", "profile_gameloop", "glx_census", "lighting_ab", "physics_check", "frame_fleet", "parts_sweep", "livery_contrast", "ai_pace", "verify_all", "float_all"];

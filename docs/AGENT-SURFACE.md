@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Twenty-six `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
+do the work. Twenty-seven `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -159,7 +159,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Twenty-six tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Twenty-seven tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -174,7 +174,15 @@ flicker-gate, frame-report --fleet, parts-sweep, livery-contrast in the
 background), `apex_ui_fit`/`apex_ui_shot` (one menu screen × viewport, ~15 s)
 and `apex_car_audit`/`apex_track_audit` (offline checks, seconds); 24 → 26 on
 2026-10-04 for `apex_hud_shot` and `apex_hud_survey`, the race-HUD survey —
-one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
+one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix); 26 → 27 on
+2026-10-04 for `apex_physics_audit` (`ai-band` in the VM). The same day
+`apex_track` gained `batch` / `survey` (a shot list built from the circuit's
+corners) and the driving ops `reset` / `act` / `rollout` / `world` / `field`,
+auto-closes after 10 min idle (as does `apex_garage`), and `apex_job_start`
+gained `compare` (`shot/track-compare.mjs`: the same shots on a git ref and the
+working tree, diffed), `backend_compare`, `profile_gameloop`, `glx_census`,
+`lighting_ab`, `physics_check` and `ai_pace`; jobs are recorded on disk and
+survive a server restart).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -199,6 +207,7 @@ one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
 | `apex_ui_shot` | `ui/layout-audit.mjs` | browser | survey-ui-matrix |
 | `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
 | `apex_track_audit` | `track/float-audit.cjs` | tree | survey-track |
+| `apex_physics_audit` | `check/ai-band.mjs` | tree | ai-racecraft |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
@@ -231,6 +240,11 @@ Pins the wrap always applies (you cannot override them):
   callers pass values (ids, comma lists), never flags; at most two jobs run;
   browser kinds hold the lock until they exit; `apex_job_cancel` kills the group
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
+- `apex_track` driving ops run headless physics; the next shot turns rendering
+  back on. `batch` ≤ 200 shots; `act` ≤ 7200 ticks; `rollout` ≤ 120 s
+- `apex_job_start` `compare` → `ref` is a git ref (never a flag); the worktree is
+  `scratch/compare/<sha>`; output `artifacts/track-compare/`
+- `apex_physics_audit` → `ai_band` only; `ai_pace` (≈100 s) is a job
 - `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
 - `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,
   never `--plan` / `--self-test` / `--url`; `apex_hud_shot` always passes
