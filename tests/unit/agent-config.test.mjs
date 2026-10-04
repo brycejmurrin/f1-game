@@ -165,7 +165,7 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
     'echo "pkill -f chrome"',
     "echo 'note: && pkill -f chrome is bad'",
     "printf '%s' 'x; /usr/bin/pkill -f chrome'",
-    "git commit -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
+    "git commit --dry-run -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
   ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 

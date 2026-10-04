@@ -3182,7 +3182,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
 // RendererBoot.start() itself, booted in a VM: the canary's strike ledger
 // across cold boots that share one localStorage. `bindPick` = the deferred
 // backend's create() succeeds; GLX always attaches.
-function rendererBootRun(ls, { bindPick = true } = {}) {
+function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [] } = {}) {
   const ss = new Map();
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
@@ -3194,20 +3194,41 @@ function rendererBootRun(ls, { bindPick = true } = {}) {
       getItem: (k) => (ss.has(k) ? ss.get(k) : null),
       setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
     },
-    navigator: {}, location: { reload() { throw new Error("no reload expected"); } },
+    ApexXR: { bootPick: () => xrPick },
+    navigator: { gpu: {} }, location: { reload() { throw new Error("no reload expected"); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
-    GLX: { init: () => true },
+    GLX: { init: () => { calls.push("GLX.init"); return true; } },
     Gfx: { create: async () => (bindPick ? { api: "three" } : null) },
   });
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
   seedLog(ctx);
+  if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx);
   vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
   return vm.runInContext("RendererBoot", ctx).create({
-    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async () => {},
+    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async (files) => {
+      calls.push(...files);
+      if (files.includes("tlx.js")) ctx.TLX = { create: async () => { calls.push("TLX.create"); return { api: "three" }; } };
+    },
   });
 }
+
+test("XR's resolved backend reaches Gfx without changing the saved 2D renderer", async () => {
+  for (const saved of [null, "webgl2", "webgpu", "three"]) {
+    const ls = new Map(saved ? [["apex26.gfxBackend", saved]] : []), calls = [];
+    const rb = rendererBootRun(ls, { xrPick: "three", realGfx: true, calls });
+    const boot = await rb.start();
+    assert.equal(boot.bound, true, "XR binds TLX over saved " + saved);
+    assert.equal(boot.gfx.api, "three");
+    assert.deepEqual(calls, ["tlx.js", "TLX.create"]);
+    assert.equal(ls.get("apex26.gfxBackend") ?? null, saved, "the 2D choice survives XR");
+  }
+  const ls = new Map([["apex26.gfxBackend", "three"]]), calls = [];
+  assert.equal((await rendererBootRun(ls, { xrPick: "webgl2", realGfx: true, calls }).start()).bound, false);
+  assert.deepEqual(calls, ["GLX.init"], "ordinary VR still selects GLX without loading TLX");
+  assert.equal(ls.get("apex26.gfxBackend"), "three");
+});
 
 test("a GLX fallback boot that proves itself does not erase the pick's crash strike", async () => {
   // A phone whose THREE dies inside its first ~5 s (before PROVE_FRAMES). The

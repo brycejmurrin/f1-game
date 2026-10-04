@@ -139,8 +139,8 @@ function migrateSlots() {
     // a stale key left behind by a half-finished migration must not clobber it.
     while (next[f] < SLOTS && store.get(slotKey(f, next[f]), null)) next[f]++;
     if (next[f] >= SLOTS) continue;
-    if (!store.set(slotKey(f, next[f]), c)) continue;
-    store.set(item.source, null);
+    if (!store.set(slotKey(f, next[f]), c, { migration: true })) continue;
+    store.set(item.source, null, { migration: true });
     next[f]++;
   }
 }
@@ -181,25 +181,25 @@ function load() {
     outer: for (const f of FLAVOURS)
       for (let i = 0; i < SLOTS; i++) {
         const c = readSlot(f, i);
-        if (c) { slotFlavour = f; slotIdx = i; career = c; setLive(); break outer; }
+        if (c) { slotFlavour = f; slotIdx = i; career = c; setLive({ migration: true }); break outer; }
       }
   armRevision();
   // migrateCareer() is pure (it must not write, or reading a slot would rewrite
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
-  save();
+  save({ migration: true });
   applyRegs();
   return career;
 }
-function setLive() { store.set("careerSlot", `${slotFlavour}:${slotIdx}`); }
+function setLive(options) { store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
 let lastSave = { ok: true, durable: true, reason: null };
-function writeResult(key, value) {
-  if (typeof store.write === "function") return store.write(key, value);
-  const durable = store.set(key, value) !== false;
+function writeResult(key, value, options) {
+  if (typeof store.write === "function") return store.write(key, value, options);
+  const durable = store.set(key, value, options) !== false;
   return { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
 }
-function save() {
+function save(options) {
   if (career) {
     // A storage event invalidates GameStore's parsed cache, but this module owns a
     // long-lived object reference. Never write that reference over a newer save
@@ -210,7 +210,7 @@ function save() {
       lastSave = { ok: false, durable: false, reason: "conflict" };
       return career;
     }
-    lastSave = writeResult(liveSlotKey(), career);
+    lastSave = writeResult(liveSlotKey(), career, options);
     armRevision();
   }
   return career;
