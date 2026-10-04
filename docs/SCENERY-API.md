@@ -579,9 +579,11 @@ if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
 (`Assets.models()` lists the ids the installed pack actually has; the old
 `api.bakedModels()` re-export was dropped — no circuit ever called it.)
 
-Never async: `js/render/shared/assets.js` prefetches every model at boot precisely so
-prop placement cannot vary with network timing — the same circuit must build
-identically every time.
+Never async: `ensureScenery` (`js/core/lazy-bundles.js`) loads the models a circuit's
+scenery closure names before its build (`Assets.modelsReady(ms, src)`, capped at 4 s),
+so prop placement cannot vary with network timing — the same circuit must build
+identically every time. The set is read from the closure's SOURCE, so spell every
+model id as a string literal: a computed id is never fetched and keeps its fallback.
 
 ### Atmosphere / colour packs (`api.ATM` / `api.COL`)
 

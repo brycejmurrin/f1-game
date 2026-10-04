@@ -1066,14 +1066,36 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
   assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
 });
 
-test("ensureScenery awaits Assets.modelsReady before any build", () => {
+test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
   const i = src.indexOf("function ensureScenery(");
   assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
   const fn = src.slice(i, src.indexOf("\n}\n", i));
-  assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
-  assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
-  assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");
+  assert.match(fn, /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "ensureScenery no longer waits for the circuit's baked models");
+  assert.match(fn, /return p\.then\(models\)/, "the models are resolved from the closure once the scenery script lands");
+  assert.match(fn, /return models\(\)\.then/, "a resident or inline scenery must still wait for its models");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.doesNotMatch(game, /Assets\.loadModels\(\)/, "boot must not prefetch the whole model pack again");
+});
+
+test("modelsReady(ms, src) fetches only the models a scenery closure names", async () => {
+  const urls = [];
+  const fetch = async (url) => {
+    urls.push(url);
+    if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: {
+      a_one: { file: "models/a_one.bin" }, b_two: { file: "models/b_two.bin" }, c_three: { file: "models/c_three.bin" } } }) };
+    return { ok: true, arrayBuffer: async () => MODEL_V2() };
+  };
+  const assets = assetLoader({ setTimeout, clearTimeout, fetch });
+  const scenery = function (api) { const { bakedModel } = api; for (const [id] of [["a_one"], ["c_three"]]) bakedModel(id); bakedModel('a_one'); bakedModel("not_in_pack"); };
+  assert.equal(await assets.modelsReady(1000, String(scenery)), 2);
+  assert.ok(assets.modelSync("a_one") && assets.modelSync("c_three"));
+  assert.equal(assets.modelSync("b_two"), null, "a model no closure names is never fetched");
+  assert.deepEqual(urls.filter((u) => /\.bin$/.test(u)).sort(), ["assets/pack/models/a_one.bin", "assets/pack/models/c_three.bin"]);
+  const n = urls.length;
+  assert.equal(await assets.modelsReady(1000, ""), 0, "a circuit that names no model resolves at once");
+  assert.equal(await assets.modelsReady(1000, "function(){ building(); }"), 0);
+  assert.equal(urls.length, n, "no model fetch for a closure without models (the manifest is cached)");
 });
 
 test("unknown bake flag is refused before rewriting the pack", () => {
