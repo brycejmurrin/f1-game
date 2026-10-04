@@ -259,8 +259,8 @@ body:not(.rotate-probe):has(#pausemenu[open]) #rotate-device {
   visibility: hidden !important;
   pointer-events: none !important;
 }
-html:has(#pausemenu:not([hidden])) body:not(.rotate-probe) #rotate-device,
-html:has(#pausemenu[open]) body:not(.rotate-probe) #rotate-device {
+html:has(#pausemenu:not([hidden])):not(:has(.rotate-probe)) #rotate-device,
+html:has(#pausemenu[open]):not(:has(.rotate-probe)) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
