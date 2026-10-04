@@ -35,6 +35,7 @@ globalThis.localStorage = {
 };
 
 globalThis.NetBytes = eval(fs.readFileSync(path.join(ROOT, "js/net/bytes.js"), "utf8") + ";NetBytes");
+globalThis.NetSdp = eval(fs.readFileSync(path.join(ROOT, "js/net/sdp.js"), "utf8") + ";NetSdp");   // verifyFor binds it at call time
 const NetRendezvous = eval(
   fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous");
 
@@ -503,10 +504,14 @@ test("waitFor() still gives up on a relay that is refusing every poll", async ()
 });
 
 // ── the public Nostr topic is derived from the STRETCHED key ─────────────────
-test("the Nostr topic costs a PBKDF2 per guessed code, not one SHA-256", async () => {
+test("the Nostr topic costs a PBKDF2 per guessed code, and the verification code is the MITM check", async () => {
   // The `x` tag is plaintext on public relays. A topic that is a cheap hash of
   // the code turns ~30 bits of code into a minutes-long brute force; this
-  // proves each topic is HKDF over the 120 000-round PBKDF2 output.
+  // proves each topic is HKDF over the 120 000-round PBKDF2 output. The salt
+  // below is a CONSTANT, so that cost is paid once for the whole code space
+  // (a precomputable table), not once per room — which is why the pairing is
+  // authenticated by the verification code asserted at the end, not by the
+  // stretch.
   const code = NetRendezvous.makeCode();
   const offer = await NetRendezvous.topic(code, "offer");
   const answer = await NetRendezvous.topic(code, "answer");
@@ -544,6 +549,33 @@ test("the Nostr topic costs a PBKDF2 per guessed code, not one SHA-256", async (
     await NetRendezvous.topic(other, "offer");
     assert.equal(derives, 1, "one PBKDF2 per new code");
   } finally { delete crypto.subtle.deriveBits; }
+
+  // THE VERIFICATION STEP. Same pair of DTLS fingerprints on both screens ->
+  // same 4 letters (order-free, colon/case-free); a middleman's certificate on
+  // either leg -> a different code, which the host sees and REMOVEs.
+  const host = "AB:".repeat(31) + "01", guest = "cd".repeat(31) + "02", mitm = "EF:".repeat(31) + "03";
+  const onHost = await NetRendezvous.verifyCode(host, guest);
+  const onGuest = await NetRendezvous.verifyCode(guest.toUpperCase(), host.replace(/:/g, "").toLowerCase());
+  assert.equal(NetRendezvous.VERIFY_LEN, 4);
+  assert.match(onHost, new RegExp("^[" + NetRendezvous.ALPHABET + "]{4}$"), "4 letters, room-code alphabet");
+  assert.equal(onGuest, onHost, "both screens show the same code");
+  assert.notEqual(await NetRendezvous.verifyCode(host, mitm), onHost, "a middleman's leg reads differently");
+  assert.equal(await NetRendezvous.verifyCode(host, null), null, "no fingerprint, no code");
+  assert.notEqual(onHost, code.slice(0, 4), "independent of the room code");
+});
+
+test("verifyFor reads both fingerprints off a connected peer connection and never rejects", async () => {
+  const sdp = (fp) => "v=0\r\na=ice-ufrag:abcd\r\na=fingerprint:sha-256 " + fp + "\r\n";
+  const fpA = Array.from({ length: 32 }, (_, i) => (i * 7 & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const fpB = Array.from({ length: 32 }, (_, i) => (i * 13 & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const host = { localDescription: { sdp: sdp(fpA) }, remoteDescription: { sdp: sdp(fpB) } };
+  const guest = { localDescription: { sdp: sdp(fpB) }, remoteDescription: { sdp: sdp(fpA) } };
+  const v = await NetRendezvous.verifyFor(host);
+  assert.match(v, /^[A-Z2-9]{4}$/);
+  assert.equal(await NetRendezvous.verifyFor(guest), v, "host and guest agree");
+  assert.equal(await NetRendezvous.verifyCode(fpA, fpB), v);
+  assert.equal(await NetRendezvous.verifyFor(undefined), null, "a loopback transport has no pc");
+  assert.equal(await NetRendezvous.verifyFor({ localDescription: null }), null);
 });
 
 

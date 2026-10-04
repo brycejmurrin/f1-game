@@ -170,6 +170,18 @@ $("pm-phonepad").onclick = () => {
 }
 
 function wireLifecycle() {
+// UPDATE READY: re-read version.json when the tab comes back (≤ 1 per 10 min)
+// and when a newer worker takes control; the chip shows outside races only and
+// reloads once the store and ghosts are flushed.
+const updates = UpdateCheck.create({
+  inRace: () => UiLayers.inRace(),
+  chip: () => $("update-chip"),
+  persist: () => { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); return store.mirrorFlush && store.mirrorFlush(); },
+});
+const chip = $("update-chip");
+if (chip) chip.addEventListener("click", () => { updates.apply(); });
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => updates.newerActive());
+document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry

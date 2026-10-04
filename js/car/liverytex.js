@@ -33,10 +33,11 @@ const LiveryTex = (function () {
   // AI at half is the change. At racing distance an AI car is a few hundred
   // pixels and 512x640 is ample; what a fixed downshift would cost is the
   // CLOSE-UP, so photo mode asks for the full tier for every car it draws
-  // (js/car/car-draw.js drawCarDecals). That upgrade is demand-driven — the
-  // tier is part of the decal cache key, and getCarDecalTexture runs per DRAWN
-  // car — so flying the photo camera to one car mints ONE full atlas, not
-  // twenty-one, and there is no stall on entering the mode.
+  // (js/car/car-draw.js decalTextureFor). That upgrade is lazy and bounded: the
+  // tier is part of the decal cache key, at most one full atlas is built per
+  // frame (the uncached car nearest the photo camera), at most PHOTO_ATLAS_MAX
+  // are held, and they are freed when the mode closes — so entering photo mode
+  // on a grid is not twenty-one atlas builds in one frame.
   //
   // Pure on purpose: rasterising a livery needs a browser (see the boundary
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and

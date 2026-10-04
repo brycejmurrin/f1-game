@@ -674,6 +674,7 @@ function onCarLineFinish(c, cross) {
 function onIncidentLineCross(c, cross, newS) {
   if (!c || !cross || RaceControl.deferLine(c, cross, newS, onIncidentLineCross)) return;
   if (cross.direction < 0) {
+    if (cross.changed) c._secValid = false;
     if (cross.changed && c.isPlayer) {
       sectorIdx = sectorAt(newS); sectorStartT = c.lapTime; sectorValid = false;
       if (isTimeTrial()) restartTTRecorders();
@@ -2084,6 +2085,9 @@ function dropTrackWorld() {
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
+// The race arms the sentinel and then enters "count", not "race": a stepped build
+// abandoned by startRace() finishes during the countdown and must not disarm it.
+function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
@@ -2102,7 +2106,7 @@ async function loadTrackStepped(idx, live) {
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
     if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
   } finally {
-    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+    try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
   if (!built) return false;
   _loadTrackBody(idx, def, built, prevId);
@@ -2129,7 +2133,7 @@ function loadTrack(idx) {
   } finally {
     // Only disarm if a RACE is not the thing that armed it — a build during a
     // live race must not clear the race's own flag.
-    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+    try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
 }
 // Every GPU resource a built track owns (the old world before a rebuild, or a
@@ -2973,8 +2977,10 @@ function endRace(forcedOrder) {
   // field with nothing. Below that it is not classified. c.classified carries
   // the verdict to the points tables (SeasonCal.award, career settlement).
   // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
-  // laps COMPLETED is c.lap - 1 for every car.
-  const winDone = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) - 1 : 0;
+  // laps COMPLETED is c.lap - 1 for every car. With no finisher (the only human
+  // retired, finishDelay ended it early) the leader on the road is the reference.
+  const ref = fin.length ? fin : run;
+  const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
   const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
   for (const c of cars) c.classified = (!c.retired && !c.dsq) || lateOut.includes(c);
   const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
@@ -3328,7 +3334,7 @@ const G = {
   initRainDrops: () => initRainDrops(),
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
-  applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
+  applyLightTune: (fromApplyRace, opts) => applyLightTune(fromApplyRace, opts),
   // Stable bindings consumed by js/agent/apex.js (functions hoist; consts are
   // initialised before ApexApi.create(G) runs at the end of boot).
   smp, smp2, canvas,
@@ -4314,6 +4320,8 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
+      // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
+      Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
       // Qualifying normally never gets here: js/race/flying-start.js rolls the
@@ -5708,13 +5716,13 @@ function updateCar(c, dt, ranked) {
       coastCut: xCoastCut(c), vTopNow: vTop(), tyres,
     });
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // world velocity = forward + lateral slip. NOTE the perp (fz, -fx) is the
-    // LEFT vector (right of forward is (-fz, fx) — measured against the track's
-    // own right vector), so +vLat is leftward slip. The model is self-consistent
-    // with that sign; only this label was ever wrong, but a camera tuner once copied it
-    // into real knob directions once — check there before reusing this basis.
-    const vWx = c.speed * fx + c.vLat * fz;
-    const vWz = c.speed * fz - c.vLat * fx;
+    // world velocity = forward + lateral slip along the car's RIGHT vector (-fz, fx),
+    // the track's own right (tracks.js r = t×up). PlayerForces integrates +vLat as
+    // RIGHT (axle slip vLat ± a·r, transport −u·r, +r = nose right); writing it back
+    // along the LEFT vector (fz, −fx), as this did until 2026-10-04, mirrored the
+    // body-slip angle in the world (β_world = −β_dyn, VM-measured) — docs/PHYSICS.md §Frame.
+    const vWx = c.speed * fx - c.vLat * fz;
+    const vWz = c.speed * fz + c.vLat * fx;
     // …and MOVE THE CAR, in world metres. This is the whole model: a rigid body
     // going where its own tyres point. The road is not in this equation.
     //
@@ -5886,11 +5894,12 @@ function updateCar(c, dt, ranked) {
     const ns = sectorAt(c.s);
     if (ns !== c._secIdx) {
       const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
-      if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
+      // _secValid is the player's sectorValid, per car: after a BACKWARD entry the next forward exit times a fragment.
+      if (fwd && c._secValid !== false && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
         const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
       }
-      c._secIdx = ns; c._secT0 = c.lapTime;
+      c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
     }
   }
   // Sector detection (curated splits via sectorAt). Must run before finish-line
@@ -6265,7 +6274,7 @@ const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // (LightStore.create(G), assigned with the other modules below). These six are
 // thin passes through to it, kept so every call site here reads unchanged.
 function ltKey() { return ltStore.key(); }
-function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
+function applyLightTune(fromApplyRace, opts) { ltStore.apply(fromApplyRace, opts); }
 function setLightTune(id, v) {
   // A deliberate re-enable of PER-CHUNK LAMPS clears the crash latch. It is set
   // on a real context loss (js/render/glx/glx.js) and persisted so a reboot into the
@@ -7844,7 +7853,7 @@ function render(dt) {
   // so onboard views get the same field as the chase cam — no water-on-glass
   // beading and no wiper (there is nothing to wipe).
   if (isWetRoad() && Particles.rainActive()) Particles.rainUpdate(dt, camEye, isRaining());
-  startLights.update();   // the gantry's lit lamps, re-spawned each count frame
+  startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
   Particles.draw();
@@ -8263,7 +8272,7 @@ const { openTimeTrial, consumeGhostHash, openCareer, openCareerSlots, refreshCar
     // Point the shared car UI at the contract without overwriting GP preferences.
     const ti = Teams.LIST.findIndex((t) => t.id === c.team);
     if (ti >= 0) teamIdx = ti;
-    driverIdx = c.seat;
+    driverIdx = c.seat; clampDriverIdx();   // a hand-edited or imported save can carry any seat
     recomputePlayerMods();
   }
   },

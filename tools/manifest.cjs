@@ -400,6 +400,7 @@ const FULL = [
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
   "js/ui/platform-session.js", // PlatformSession: platform, phone pairing and tab lifecycle wiring
+  "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/game.js",
 ];
 
@@ -996,6 +997,7 @@ const TRACK_WORKER_EXTRA = [
 // shared roll math, and the pad module. No game, no renderer, no store.
 const CONTROLLER = [
   "js/core/log.js",
+  "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers
   "js/net/bytes.js",
   "js/net/nostr.js",
   "js/net/rendezvous.js",
