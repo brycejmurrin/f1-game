@@ -461,7 +461,7 @@ function buildTTResults() {
     btn.id = "res-daily-share";
     btn.textContent = "COPY DAILY RESULT";
     btn.onclick = () => {
-      const text = G.daily.shareText(Ghost.medal());
+      const text = G.daily.shareText();   // today's medal, from today's best (daily-challenge.js)
       ApexClipboard.write(text).then((ok) => {
         btn.textContent = ok ? "COPIED" : text;
       }, () => { btn.textContent = text; });

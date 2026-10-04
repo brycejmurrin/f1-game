@@ -165,3 +165,26 @@ test("a damaged save normalises instead of throwing", () => {
   stored.set("daily.v1", "[]");
   assert.deepEqual(host(d.data().streak), { count: 0, last: null });
 });
+
+test("with no medal passed, the share line carries TODAY's — from today's best, not the stored ghost's", () => {
+  // results-sheet.js passed Ghost.medal(), whose records context has no day in
+  // it: a later Daily on the same circuit and conditions read another day's GOLD
+  // next to today's slower lap. Today's best against the reference pole decides.
+  const { G } = load();
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    Tracks: { LIST: [{ id: "spa", name: "SPA" }], SEASON: [{ id: "spa", name: "SPA" }] },
+    Quali: { medalFor: (t, pole) => (t <= pole ? "gold" : t <= pole * 1.03 ? "silver" : null) },
+  });
+  seedLog(ctx); seedHash32(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  d.open("2026-09-03");
+  d.record(84);                                   // within 3 % of pole: silver
+  assert.match(d.shareText(), / · SILVER( · |$)/);
+  d.record(81.5);                                 // beats the pole: gold
+  assert.match(d.shareText(), / · GOLD( · |$)/);
+  assert.doesNotMatch(d.shareText(null), /GOLD|SILVER/, "an explicit null still means no medal");
+  const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.doesNotMatch(src, /shareText\(Ghost\.medal\(\)\)/, "the results sheet no longer passes the ghost's medal");
+});

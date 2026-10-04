@@ -62,12 +62,14 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
 
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
  *  same head_sha cancelled seconds in (AGENTS.md rule 8's designed dedupe) is
- *  superseded, not a red. */
+ *  superseded, not a red. `created_at` has one-second resolution and the two
+ *  runs of that dedupe often share the second, so a tie goes to the higher run
+ *  id (ids only grow) — never to whichever the API happened to list first. */
 export function latestPerWorkflow(runs) {
   const by = new Map();
   for (const r of runs) {
-    const cur = by.get(r.name);
-    if (!cur || Date.parse(r.created_at) > Date.parse(cur.created_at)) by.set(r.name, r);
+    const cur = by.get(r.name), t = Date.parse(r.created_at), ct = cur ? Date.parse(cur.created_at) : -Infinity;
+    if (!cur || t > ct || (t === ct && r.id > cur.id)) by.set(r.name, r);
   }
   return [...by.values()];
 }

@@ -86,6 +86,8 @@ test("pickRun: the newest dispatch of THIS group on THIS branch since the dispat
   assert.equal(pickRun(runs, { branch: "b", group: "ui", sinceMs: t0 }).id, 6);
   assert.equal(pickRun(runs, { branch: "b", group: "u", sinceMs: t0 }), null, "a prefix of a group is not that group");
   assert.equal(pickRun([], { branch: "b", group: "ui", sinceMs: t0 }), null);
+  assert.equal(pickRun([run(7), run(8)], { branch: "b", group: "ui", sinceMs: t0 }).id, 8, "a same-second tie: the higher id");
+  assert.equal(pickRun([run(8), run(7)], { branch: "b", group: "ui", sinceMs: t0 }).id, 8, "…in either listing order");
 });
 
 test("failLines: the reporter's failures from a shard log, Actions timestamps stripped", () => {

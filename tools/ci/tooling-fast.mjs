@@ -308,6 +308,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-panel.test.mjs",
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
@@ -513,6 +514,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // lines wait for the straight and die when stale, commentary only while
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
+  "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
