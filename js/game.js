@@ -2691,7 +2691,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam + TV director; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges

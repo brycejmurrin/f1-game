@@ -699,3 +699,20 @@ test("an open menu still takes a key that was already down, and the on-screen pe
   assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
   assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
 });
+
+test("a calibrated stick still reaches full lock on BOTH sides, and a pedal on axis 2 is not free-look", () => {
+  const { Input, sb, fire } = boot();
+  const { pad } = fakePad(sb, fire);
+  Input.setPadRest(0.1);
+  const steerAt = (v) => { pad.axes[0] = v; Input.poll(); return Input.debugState().pad.steer; };
+  assert.equal(steerAt(0.1), 0, "the calibrated rest is centre");
+  assert.ok(Math.abs(steerAt(1) - 1) < 1e-9, "the short side used to top out at ~89%: " + steerAt(1));
+  assert.ok(Math.abs(steerAt(-1) + 1) < 1e-9, "the long side still reaches full lock");
+  pad.axes[0] = 0;
+  pad.axes[2] = -1;   // a wheel's throttle pedal at rest
+  Input.poll();
+  assert.ok(Math.abs(Input.lookStick().x) > 0.5, "unmapped axis 2 is the right stick");
+  Input.setPadAxisMap({ steer: 0, throttle: 2, brake: null });
+  Input.poll();
+  assert.equal(Input.lookStick().x, 0, "a pedal mapped to axis 2 does not pan free-look");
+});
