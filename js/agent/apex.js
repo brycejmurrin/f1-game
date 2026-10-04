@@ -52,7 +52,7 @@ function settled(promise, out) {
 // post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
 // is the guard that keeps it honest.
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
-  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
+  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
@@ -680,6 +680,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
+    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -693,6 +694,10 @@ const api = {
       k: Tracks.curvature(G.track, G.player.s),
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
+      // The racing-line assist's pursuit target (game.js updateCar): the AI
+      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // corner's sign alone says nothing (past an apex the line is outside).
+      lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
   },
   // Look-ahead road sampler for closed-loop driving (the autopilot harness):

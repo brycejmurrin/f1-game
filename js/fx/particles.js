@@ -1,7 +1,7 @@
 /* Apex 26 — shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft
  * billboards drawn in two batches a frame through gfx.drawParticles(), plus
- * one-frame FLARES (flare: a far car's brake glow) appended to the additive
- * batch outside the pool, plus the
+ * one-frame FLARES (flare: a far car's brake glow, the start gantry's lamps,
+ * the marshal panels) appended to the additive batch outside the pool, plus the
  * RAIN STREAK FIELD (rain*): falling drops in a box around the camera, each one a
  * pre-expanded world-space quad appended to the alpha batch — the same shader on
  * every backend draws it as a soft streak (see rainFill). */
@@ -24,9 +24,16 @@ const Particles = (function () {
   let _mobile = false;        // gfx.mobileTier at init — the spray plume shrinks with the pool
 
   // ONE-FRAME FLARES: additive discs drawn in THIS frame's additive batch and
-  // dropped after it. Not pool particles — a pooled glow() outlives its frame
+  // dropped after it. Not pool particles — a pooled disc outlives its frame
   // (life > dt or it dies in update() before it is drawn), so one re-spawned
-  // every frame on a MOVING car stacks a trail of copies behind it.
+  // every frame stacks copies: on a MOVING car a trail behind it, on a fixed
+  // lamp a brightness that scales with the display's refresh rate (the start
+  // lights summed 1.1× at 30 Hz and 7× at 144 Hz until 2026-10-04, and the
+  // marshal panels filled the whole mobile pool at 120 Hz).
+  // LAMP_RESERVE is held back for the race's own lamps (start gantry 5 + marshal
+  // panels 16, js/race/*): the cars' far brake flares are drawn first each frame
+  // and stop at FLARE_MAX − LAMP_RESERVE, so they can never starve a lamp.
+  const LAMP_RESERVE = 24;
   let FLARE_MAX = 0, _flN = 0;
   let _fl = null;             // [x, y, z, size, r, g, b, alpha] per flare
 
@@ -41,7 +48,7 @@ const Particles = (function () {
     // Tight pool on the mobile memory tier: fewer live quads, same behaviour.
     _mobile = !!(gfx && gfx.mobileTier);
     MAX = _mobile ? 96 : 256;
-    FLARE_MAX = _mobile ? 24 : 48;
+    FLARE_MAX = (_mobile ? 24 : 48) + LAMP_RESERVE;
     _fl = new Float32Array(FLARE_MAX * 8);
     _flN = 0;
     _px = new Float32Array(MAX); _py = new Float32Array(MAX); _pz = new Float32Array(MAX);
@@ -70,17 +77,35 @@ const Particles = (function () {
 
   function rnd(k) { return (Math.random() * 2 - 1) * k; }
 
+  // A rate·dt request → a whole count, rounding the fraction stochastically. The
+  // ceiling only stops a hitch flooding the pool: it sits above anything an
+  // emitter asks within update()'s own 0.1 s step (plank sparks 110/s ×
+  // particleMul 2 = 22), so emission is frame-rate independent down to 10 fps.
+  // It was 4 until 2026-10-04, which cut plank embers below ~27.5 fps.
+  const BURST_MAX = 24;
   function nOf(count) {
     if (!(count > 0)) return 0;
-    if (count > 4) count = 4;
+    if (count > BURST_MAX) count = BURST_MAX;
     let n = Math.floor(count);
     if (Math.random() < count - n) n++;
     return n;
   }
 
+  // A full pool RECYCLES the particle nearest its end (largest age/life) rather
+  // than dropping the new one: the newest emission is usually the nearest to the
+  // camera, the oldest a fading far plume. A linear scan, paid only when full.
+  function oldest() {
+    let best = 0, bestK = -1;
+    for (let i = 0; i < _n; i++) {
+      const k = _age[i] / _life[i];
+      if (k > bestK) { bestK = k; best = i; }
+    }
+    return best;
+  }
+
   function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav, additive) {
-    if (_n >= MAX || !MAX) return;      // pool full → drop (never allocate)
-    const i = _n++;
+    if (!MAX) return;                   // never allocate
+    const i = _n < MAX ? _n++ : oldest();
     _px[i] = x; _py[i] = y; _pz[i] = z;
     _vx[i] = vx; _vy[i] = vy; _vz[i] = vz;
     _age[i] = 0; _life[i] = life;
@@ -132,8 +157,7 @@ const Particles = (function () {
   // so a field of bottoming cars never starves the collision sparks and smoke.
   function scrape(x, y, z, vx, vz, count) {
     const m = mul(); if (m <= 0) return;
-    if (_n >= MAX * 0.6) return;
-    for (let n = nOf(count * Math.min(m, 2)); n > 0; n--) {
+    for (let n = nOf(count * Math.min(m, 2)); n > 0 && _n < MAX * 0.6; n--) {
       const k = 0.45 + Math.random() * 0.35;
       spawn(x + rnd(0.3), y + rnd(0.02), z + rnd(0.3),
         vx * k + rnd(1.8), 0.5 + Math.random() * 2.4, vz * k + rnd(1.8),
@@ -169,18 +193,12 @@ const Particles = (function () {
     }
   }
 
-  // A steady emissive disc: a lamp re-spawned every frame by its owner (the
-  // start gantry, js/race/start-lights.js). Additive, no motion, no gravity;
-  // `life` just outlives one frame so the next spawn replaces it.
-  function glow(x, y, z, size, r, g, b, alpha, life) {
-    spawn(x, y, z, 0, 0, 0, life > 0 ? life : 0.1, size, 0, r, g, b, alpha, 0, 0, true);
-  }
-
   // One-frame additive disc (see FLARE_MAX): returns false when the frame's
-  // flare budget is spent. A lamp, not an effect — like glow(), it ignores
-  // particleMul.
-  function flare(x, y, z, size, r, g, b, alpha) {
-    if (_flN >= FLARE_MAX || !(alpha > 0.004)) return false;
+  // flare budget is spent. A lamp, not an effect: it ignores particleMul.
+  // `lamp` = a steady race lamp (start gantry, marshal panel) re-issued every
+  // frame by its owner; only those may draw on LAMP_RESERVE.
+  function flare(x, y, z, size, r, g, b, alpha, lamp) {
+    if (_flN >= (lamp ? FLARE_MAX : FLARE_MAX - LAMP_RESERVE) || !(alpha > 0.004)) return false;
     const o = _flN++ * 8;
     _fl[o] = x; _fl[o + 1] = y; _fl[o + 2] = z; _fl[o + 3] = size;
     _fl[o + 4] = r; _fl[o + 5] = g; _fl[o + 6] = b; _fl[o + 7] = alpha;
@@ -199,10 +217,9 @@ const Particles = (function () {
   // it is the one alpha effect big enough to cost real overdraw.
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
-    if (_n >= MAX * 0.75) return;
     const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
     const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1;
-    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / (1 + shed)); n > 0; n--) {
+    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / (1 + shed)); n > 0 && _n < MAX * 0.75; n--) {
       spawn(x + rnd(0.4), y + rnd(0.12), z + rnd(0.4),
         bvx + rnd(1.4), 1.2 + Math.random() * 1.8, bvz + rnd(1.4),
         (1.1 + Math.random() * 0.8) * lifeK,
@@ -241,8 +258,13 @@ const Particles = (function () {
   }
 
   function draw() {
+    // The shower draws only on a frame its owner advanced it (rainUpdate, which
+    // game.js calls only while the road is wet): a field nobody updates is a
+    // frozen box of streaks at a stale eye — what a drying weather arc left
+    // hanging for the rest of the race until 2026-10-04.
+    const rainLive = _rainFed; _rainFed = false;
     if (!_gfx || !_gfx.drawParticles) { _flN = 0; return; }
-    if (!_n && !_flN && !(_rainN && _rainOn)) return;
+    if (!_n && !_flN && !(rainLive && _rainN && _rainOn)) return;
     let pa = 0, pb = 0;
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];
@@ -276,7 +298,7 @@ const Particles = (function () {
     _flN = 0;                    // one frame: drawn once, then gone
     // The shower rides in the SAME alpha call: TLX keeps one vertex stream per
     // blend group and a second drawParticles() in a frame overwrites the first.
-    pa = rainFill(_vertA, pa);
+    if (rainLive) pa = rainFill(_vertA, pa);
     if (pa) _gfx.drawParticles(_vertA, pa, false);
     if (pb) _gfx.drawParticles(_vertB, pb, true);
   }
@@ -308,6 +330,7 @@ const Particles = (function () {
   const RAIN_EXPO = 0.022;                             // s — the "shutter" that turns apparent velocity into streak length
   const RAIN_COL = [0.69, 0.78, 0.91];                 // the overlay's #afc8e8
   let _rainOn = false, _rainN = 0, _rainLastShown = 0, _rainRaining = false;
+  let _rainFed = false;                                // rainUpdate ran since the last draw()
   let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
   let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
   const _rainEye = [0, 0, 0];
@@ -380,6 +403,7 @@ const Particles = (function () {
     if (!(dt > 0)) dt = 0;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
     _rainRaining = !!raining;
+    _rainFed = true;
     if (_rainEyeOk && dt > 0) {
       const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
       if (dx * dx + dy * dy + dz * dz < 40 * 40) { _camVel[0] = dx / dt; _camVel[1] = dy / dt; _camVel[2] = dz / dt; }
@@ -463,7 +487,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, glow,
+  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray,
            flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive };
 })();
 Object.freeze(Particles);

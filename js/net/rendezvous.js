@@ -180,8 +180,14 @@ const NetRendezvous = (function () {
   // THE PUBLIC TOPIC comes from the STRETCHED key, never from the code. The
   // Nostr `x` tag is plaintext on every relay (NIP-01): as a bare SHA-256 of
   // the code (one guess = one hash over ~30 bits) a reader of public traffic
-  // could recover a live code in minutes and open its envelopes. Each guess
-  // pays the 120 000-round PBKDF2 in keyFor().
+  // could recover a live code in minutes and open its envelopes. A guess now
+  // pays the 120 000-round PBKDF2 in keyFor() — BUT the salt is a constant, so
+  // that cost is paid ONCE for the whole 31^6 code space (~1e14 iterations: a
+  // GPU-day, then a lookup table for every future room), not once per room.
+  // Stretching slows a casual reader; it does not stop a determined one from
+  // opening an offer or posting an answer first. What does stop the attack
+  // that matters — someone sitting between the two players — is verifyCode()
+  // below, shown on both screens once connected.
   // PROTOCOL rides in the info string: a build on another protocol meets on a
   // different topic and never half-talks to this one (the handshake's build
   // check is the loud refusal once a link is up).
@@ -207,6 +213,39 @@ const NetRendezvous = (function () {
   }
 
   const aad = (slot) => enc().encode(String(slot || ""));
+
+  // THE VERIFICATION CODE: 4 letters from the room-code alphabet, derived from
+  // BOTH ends' DTLS fingerprints (sorted, so both screens compute the same
+  // string). The fingerprints are what DTLS actually authenticates, so a peer
+  // in the middle — one who opened the sealed offer with a precomputed code
+  // table and answered it himself — holds a different certificate on each leg,
+  // and the two screens show different codes. The room code is the rendezvous;
+  // this is the check that the person who arrived is the one you invited. The
+  // host compares it aloud and removes a guest whose code differs.
+  // 31^4 ≈ 9.2e5 values: a middleman must grind that many certificates INSIDE
+  // the connect window to collide, which is the bound the docs state.
+  const VERIFY_LEN = 4;
+  async function verifyCode(fpA, fpB) {
+    const norm = (f) => String(f || "").replace(/[^0-9a-f]/gi, "").toLowerCase();
+    const a = norm(fpA), b = norm(fpB);
+    if (!a || !b) return null;
+    const pair = a < b ? a + "|" + b : b + "|" + a;
+    const d = new Uint8Array(await crypto.subtle.digest("SHA-256",
+      enc().encode("apex26-verify-v1|" + pair)));
+    let out = "";
+    for (let i = 0; i < d.length && out.length < VERIFY_LEN; i++) {
+      if (d[i] < RAND_LIMIT) out += ALPHABET[d[i] % ALPHABET.length];   // unbiased, as makeCode()
+    }
+    return out.length === VERIFY_LEN ? out : null;
+  }
+  // From a CONNECTED RTCPeerConnection: our certificate and the one we saw.
+  // Never rejects; null for a loopback/fake transport with no descriptions.
+  async function verifyFor(pc) {
+    try {
+      const fp = (d) => (d && d.sdp && NetSdp.fingerprint ? NetSdp.fingerprint(d.sdp) : null);
+      return await verifyCode(fp(pc && pc.localDescription), fp(pc && pc.remoteDescription));
+    } catch (e) { return null; }
+  }
 
   async function seal(code, text, slot) {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
@@ -383,7 +422,7 @@ const NetRendezvous = (function () {
   return {
     ALPHABET, CODE_LEN, PRIVATE_CODE_LEN, POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
     configured, usingPrivateRelay, setUrl, setSessionUrl, baseUrl, swap, hostRoom,
-    seal, open, sealPrivate, openPrivate,
+    seal, open, sealPrivate, openPrivate, verifyCode, verifyFor, VERIFY_LEN,
     makeCode, normalise, valid,
     put, get: httpGet, waitFor,
   };

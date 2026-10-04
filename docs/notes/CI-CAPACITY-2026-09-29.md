@@ -108,8 +108,13 @@ Expected shape per PR push: ~8–12 jobs (ready) and ~6–9 (draft), down from
   `ci.yml` accepts `merge_group` so a merge queue can replace the per-PR
   `sync-pr` loop (the repository setting is the other half). Later the same
   day: GitHub offers the merge queue only to organisation-owned repositories,
-  so classic branch protection landed instead — a PR required, the eight
-  fast-tier checks required, no bypass — and with it `ci.yml`'s
+  so classic branch protection landed instead — a PR required, the
+  fast-tier checks required (eight then; twelve by 2026-10-04, after the node
+  slices split: Structural guards, Parts option-resolution census, Driving
+  model, Select specs for this change, Docs guards, Selected specs (verdict)
+  and the six `Pure-node unit suites (…)`), `enforcement_level: non_admins`
+  so admins bypass it, and `CI` (the aggregator that also carries smoke, the
+  sweeps, renderer-macos and xr) NOT required — and with it `ci.yml`'s
   `pull_request` trigger lost its `paths-ignore` (a required check that never
   reports blocks a prose-only PR for good; the node plan keeps such a run to
   guards plus seconds), `docs-guards.yml` runs on every PR with its early

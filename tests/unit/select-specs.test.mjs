@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
+  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, shouldRunMegaOnThisShard, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
@@ -113,7 +114,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
-    + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + x.unreadable.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
 });
 
@@ -129,7 +130,7 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
     "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan");
 });
 
-test("a spec that reserves more than the selected-gate timeout is EXCLUDED by name", () => {
+test("a spec that reserves more than the selected-gate timeout runs in the OVER-BUDGET POOL, never the budget", () => {
   // The cost model's blind spot, measured on CI run 31233088772: the selector
   // billed every test at ~80 s while 8 of its 10 picks declared their own
   // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
@@ -143,9 +144,15 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
     `bahrain-foundation now declares ${own} ms — find a new worst example for this pin`);
   const r = fit([pin, "tests/specs/boot-guard.spec.js"], 15);
-  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), [pin]);
+  // 2026-10-04: a ROUTED over-budget spec runs in its own pool. It used to be
+  // named in overBudgetSpecs and run by nothing but the 11-night rota.
+  assert.deepEqual(r.overBudgetRun.map((s) => s.file), [pin]);
+  assert.deepEqual(r.overBudgetSpecs, [], "nothing dropped while the pool has room");
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
     "the spec that fits the selected-gate budget must still be selected");
+  // With no pool at all it is dropped BY NAME, never silently.
+  const none = fit([pin, "tests/specs/boot-guard.spec.js"], 15, { overBudgetShards: 0 });
+  assert.deepEqual(none.overBudgetSpecs.map((s) => s.file), [pin]);
   // imola keeps its high declaration but is ADAPTED — never overBudgetSpecs.
   const imola = fit(["tests/specs/imola-foundation.spec.js"], 15);
   assert.deepEqual(imola.overBudgetSpecs, []);
@@ -346,9 +353,10 @@ test("each missed case is attributed to the bucket that actually excluded it", (
   // The two that ARE the `>=` policy (still declare >= 180 s), so a future
   // change that makes them unreachable (or selectable) has to say so here.
   // props-over-road left this set on 2026-09-30 (one test per circuit at 120 s).
+  // Since 2026-10-04 the over-budget pool runs them: a miss here is a regression.
   for (const f of ["tests/specs/terrain-over-road.spec.js",
                    "tests/specs/audio-smoke.spec.js"]) {
-    assert.match(by[f].why, /^over budget/, `${f} should be the >= per-test policy`);
+    assert.ok(by[f].hit, `${f} declares >= the per-test cap and must still RUN (over-budget pool): ${by[f].why}`);
   }
   // The push-blind hole this workstream closed: props-over-road must stay under
   // the selected gate's per-test cap so a js/track edit can select it again.
@@ -431,9 +439,11 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     "it boots a full race per case and cannot pass there; see Pages #1967");
 
   const r = fit(["tests/specs/hud-layout.spec.js"], 26);
-  assert.deepEqual(r.selected, [], "the gate must not select it");
-  assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
-    "and must NAME it as over budget — silent truncation reads as covered");
+  assert.deepEqual(r.selected, [], "the budgeted gate must not select it");
+  assert.ok(r.overBudgetRun.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
+    "it runs in the over-budget pool, whose job is capped from its own declaration");
+  const job = shards(r).find((j) => j.specs.split(" ").includes("tests/specs/hud-layout.spec.js"));
+  assert.ok(job && job.perTest >= own / 1000, `its job's per-test cap clears its ${own / 1000}s declaration`);
 });
 
 test("every race-fixture spec the gate has starved DECLARES a budget above it", () => {
@@ -461,8 +471,8 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
       `${spec} declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
       "it boots a race fixture and cannot pass there; see Pages #2048");
     const r = fit([spec], 26);
-    assert.deepEqual(r.selected, [], `the gate must not select ${spec}`);
-    assert.ok(r.overBudgetSpecs.some((x) => x.file === spec), `${spec} must be NAMED as over budget`);
+    assert.deepEqual(r.selected, [], `the budgeted gate must not select ${spec}`);
+    assert.ok(r.overBudgetRun.some((x) => x.file === spec), `${spec} must run in the over-budget pool`);
   }
 });
 
@@ -667,7 +677,7 @@ test("the TRACKED infra list names where the selector tools ACTUALLY live", () =
   assert.ok(hit("tools/manifest.cjs"), "manifest.cjs is still at tools/, not tools/ci/");
 });
 
-test("an over-budget spec the diff EDITS still runs; one merely routed still does not", () => {
+test("an over-budget spec runs whether the diff EDITS it or merely routes it", () => {
   /* 56 of 119 specs declare >= the gate's 180 s, and the over-budget test used
      to `continue` BEFORE ranking — so 47% of the suite could not be selected by
      any change, including a change that edits the spec itself.
@@ -683,9 +693,19 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
   assert.equal(edited.overBudgetSpecs.length, 0);
   assert.equal(edited.selected.length, 0, "…but never inside the budgeted set");
 
+  // 2026-10-04: a merely ROUTED one runs too, in the over-budget pool — it
+  // used to be excluded, and post-edit.sh told authors to declare > 180 s to
+  // join it. Only an exhausted pool drops it, by name.
   const routed = fit([over], 30, { rank: () => 3, db: EMPTY });
-  assert.deepEqual(routed.overBudgetSpecs.map((s) => s.file), [over], "a merely ROUTED one is still excluded");
+  assert.deepEqual(routed.overBudgetRun.map((s) => s.file), [over], "a merely ROUTED one runs in the pool");
+  assert.deepEqual(routed.overBudgetSpecs, []);
   assert.equal(routed.oversize.length, 0);
+  const full = fit([over], 30, { rank: () => 3, db: EMPTY, overBudgetShards: 0 });
+  assert.deepEqual(full.overBudgetSpecs.map((s) => s.file), [over], "an exhausted pool drops it BY NAME");
+  const rjobs = shards(routed, EMPTY).filter((x) => x.specs.includes(over));
+  const declared = maxDeclaredTimeout(over) / 1000;
+  assert.ok(rjobs.length >= 1 && rjobs.every((j) => j.perTest === declared && j.timeout === shardCapMin(j.sec, declared)),
+    "a routed over-budget job is capped at the spec's own per-test timeout too");
 
   // Every job carrying it has a kill timer derived from the spec's OWN
   // declared per-test figure, not the gate's: a 180 s cap for a spec that says
@@ -722,8 +742,11 @@ test("mega-sweep over-budget specs never overflow into a shared selected job", (
   });
   assert.ok(!cut.overflow.some((s) => s.file === mega),
     "a gate-over-declared mega-sweep must not ride as overflow");
-  assert.ok(cut.skipped.some((s) => s.file === mega) || cut.oversize.some((s) => s.file === mega),
-    "it stays oversize or skipped by name — never silently packed");
+  assert.ok(cut.oversize.some((s) => s.file === mega) || cut.overBudgetRun.some((s) => s.file === mega),
+    "it runs as oversize or in the over-budget pool — never silently packed");
+  const megaJobs = shards(cut, EMPTY).filter((j) => j.specs.split(" ").includes(mega));
+  assert.ok(megaJobs.length >= 1 && megaJobs.every((j) => j.specs === mega),
+    "wherever it runs, it runs ALONE: nothing inherits its Chromium");
 
   // When it DOES run (edited → oversize slot), shards() gives it a solo job so
   // nothing inherits its Chromium after the all-circuits walk.
@@ -791,7 +814,7 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   assert.ok(!fs.existsSync(path.join(ROOT, ghost)), "the point of this test is that it is absent");
   const r = fit([ghost], 60, { rank: () => 3 });
   assert.deepEqual(r.unreadable.map((s) => s.file), [ghost]);
-  for (const k of ["selected", "skipped", "unreachable", "oversize", "overBudgetSpecs"]) {
+  for (const k of ["selected", "skipped", "unreachable", "oversize", "overBudgetRun", "overBudgetSpecs"]) {
     assert.equal((r[k] || []).length, 0, `${k} must not claim a spec that could not be read`);
   }
 });
@@ -879,6 +902,8 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
 
 test("a per-circuit data file resolves to the circuits whose rows changed", () => {
   // Build a two-commit repo so dataCircuits reads a real base, for both shapes.
+  // artifacts/ is gitignored, so a fresh clone or worktree has none.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const tmp = fs.mkdtempSync(path.join(ROOT, "artifacts", "dc-"));
   try {
     const git = (...a) => execFileSync("git", a, { cwd: tmp, encoding: "utf8" });
@@ -894,4 +919,54 @@ test("a per-circuit data file resolves to the circuits whose rows changed", () =
     fs.writeFileSync(path.join(tmp, flat), "{not json");
     assert.equal(dataCircuits(flat, "HEAD", tmp), null, "unreadable -> null, and the caller keeps it infra");
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("every job in a plan has a UNIQUE name, and the budgeted ones are selected-<i>", () => {
+  /* Run 37198214523 (PR #842): three budgeted jobs all named `selected` raced
+     for one carry-forward cache key ("Unable to reserve cache") and uploaded
+     three artifacts called spec-timings-junit-selected-selected. A whole-suite
+     plan at a small budget forces several budgeted bins plus overflow and
+     over-budget bins. */
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  const r = fit(specs, 10, { db: EMPTY });
+  const plan = shards(r, EMPTY);
+  const names = plan.map((j) => j.name);
+  assert.equal(new Set(names).size, names.length, `duplicate job names: ${names.join(", ")}`);
+  assert.ok(names.filter((n) => /^selected-\d+$/.test(n)).length >= 1, "the budgeted bins are selected-<i>");
+  assert.ok(!names.includes("selected"), "no bare `selected` name is left for a cache key to collide on");
+  assert.ok(names.some((n) => /^overbudget-\d+$/.test(n)), "routed declared-slow specs get overbudget-<k> jobs");
+  // The over-budget pool never shares a bin with the budgeted specs: a 300-540 s
+  // declaration must not raise a `selected-<i>` job's kill timer.
+  const ob = new Set(r.overBudgetRun.map((x) => x.file));
+  for (const j of plan.filter((x) => x.name.startsWith("selected-")))
+    assert.ok(j.specs.split(" ").every((f) => !ob.has(f)), `${j.name} carries an over-budget-pool spec`);
+});
+
+test("a routed over-budget spec is never silently dropped: run, or named, and every run spec is in a job", () => {
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  for (const opts of [{}, { overBudgetShards: 1 }, { overBudgetShards: 0 }]) {
+    const r = fit(specs, 10, { db: EMPTY, ...opts });
+    const over = specs.filter((f) => maxDeclaredTimeout(f) >= SELECTED_GATE.perTestTimeoutSec * 1000);
+    const accounted = new Set([...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun, ...r.overBudgetSpecs,
+      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByVmTwin].map((x) => x.file));
+    for (const f of over) assert.ok(accounted.has(f), `${f} is in no bucket (${JSON.stringify(opts)})`);
+    const planned = new Set(shards(r, EMPTY).flatMap((j) => j.specs.split(" ")));
+    for (const x of [...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun])
+      assert.ok(planned.has(x.file), `${x.file} is meant to run but no job carries it (${JSON.stringify(opts)})`);
+    const poolSec = r.overBudgetRun.reduce((n, x) => n + x.sec, 0);
+    assert.ok(poolSec <= (opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS) * TARGET_SHARD_SEC,
+      `the pool spends ${poolSec} s, over its allowance`);
+  }
+  assert.ok(MAX_OVERFLOW_SHARDS >= 2 && MAX_OVER_BUDGET_SHARDS >= 1, "both allowances exist");
+});
+
+test("post-edit.sh no longer tells authors to declare > 180 s to escape the gate", () => {
+  const hook = fs.readFileSync(path.join(ROOT, ".claude/hooks/post-edit.sh"), "utf8");
+  assert.doesNotMatch(hook, /above 180 s|excludes it by name/,
+    "declaring a big timeout no longer opts a spec out of CI; the advice must not come back");
+  const step = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
+  assert.match(step, /overBudgetRun/, "the CI step names the specs the over-budget pool runs");
+  assert.match(step, /::warning::DROPPED/, "a dropped spec is an annotation on the PR");
 });
