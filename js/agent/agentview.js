@@ -454,7 +454,8 @@ const AgentView = (function () {
 
       return {
         turn: best.turn, dir: best.dir, radiusM: best.radiusM,
-        severity: best.severity, distM, timeS: r1(distM / v),
+        severity: best.severity, distM,
+        timeS: speed < 1 ? null : r1(distM / v),   // null when stopped: dist/0.1 read as ~2300 s
         apexSpeedKph: best.apexSpeedKph,
         straightAfterM: best.straightAfterM,
         exitsOntoStraight: best.exitsOntoStraight,
@@ -554,10 +555,15 @@ const AgentView = (function () {
     // every rival, ~45 lines of noise each. A rival needs a name, a gap, a side
     // and a closing rate; nothing else is actionable at 200 km/h.
     function rivals(limit) {
-      const p = G.player, out = [];
+      const p = G.player, out = [], L = G.track.total;
       for (const c of G.cars) {
         if (c.isPlayer) continue;
-        let gap = c.prog - p.prog;              // + = ahead of us
+        // ON THE ROAD, not in the standings: prog is cumulative, so a lapped car
+        // 10 m ahead read as 5767 m behind and "clear". Wrap to the nearest
+        // lap for the physical gap; the standing goes in lapsAhead.
+        const raw = c.prog - p.prog;
+        let gap = raw - Math.round(raw / L) * L;  // + = ahead of us, |gap| <= L/2
+        const lapsAhead = Math.round((raw - gap) / L);
         const ahead = gap >= 0;
         const gapM = Math.abs(gap);
         const lateralM = (c.x || 0) - (p.x || 0);
@@ -569,6 +575,10 @@ const AgentView = (function () {
           team: teamIdOf(c),                     // a string id, NOT the object
           rel: ahead ? "ahead" : "behind",
           gapM: r1(gapM),
+          lapsAhead,                             // standing: -1 = a lap down on us
+          speedKph: r1((c.speed || 0) * 3.6),
+          lap: c.lap || 0,
+          retired: !!c.retired,
           gapS: r2(gapM / Math.max(p.speed, 5)),
           lateralM: r1(lateralM),
           side: lateralM > 0.5 ? "right" : lateralM < -0.5 ? "left" : "same line",
@@ -606,7 +616,11 @@ const AgentView = (function () {
                     'call field({detail:"full"})');
       }
       const total = G.track.total;
-      const sorted = G.cars.slice().sort((a, b) => b.prog - a.prog);
+      // Running cars by distance, the retired classified behind them (as the
+      // game's own rank and world().ego.pos do) — not a plain prog sort.
+      const byProg = (a, b) => b.prog - a.prog;
+      const sorted = G.cars.filter((c) => !c.retired).sort(byProg)
+        .concat(G.cars.filter((c) => c.retired).sort(byProg));
       const leader = sorted[0];
       const rows = sorted.map((c, i) => {
         const ahead = sorted[i - 1];
@@ -619,6 +633,7 @@ const AgentView = (function () {
           code: c.code || null,
           team: teamIdOf(c),
           isPlayer: !!c.isPlayer,
+          retired: !!c.retired,
           lap: c.lap || 0,
           gapToLeaderS: i === 0 ? 0 : r2(gapLeadM / Math.max(leader.speed || v, 5)),
           intervalS: i === 0 ? 0 : r2(intervalM / v),
@@ -1852,6 +1867,14 @@ const AgentView = (function () {
                     "dt, seconds and policyHz must be finite numbers",
                     "omit them for the defaults (dt 1/60, seconds 5, policyHz 10)");
       }
+      if (o.policyHz != null && o.policyHz <= 0) {
+        return fail("BadArgumentError", "policyHz must be greater than 0",
+                    "omit it for 10 Hz, or pass e.g. policyHz: 20");
+      }
+      if (G.state !== "race" && G.state !== "count") {
+        return fail("RaceOverError", "rollout() needs a running race (state is " + G.state + ")",
+                    'start one with __apex.race("<id>") then go()');
+      }
       if (o.policy != null && typeof o.policy !== "function") {
         return fail("BadArgumentError", "policy must be a function",
                     "policy is world => ({steer,throttle,brake}); use `input` for "
@@ -1891,8 +1914,16 @@ const AgentView = (function () {
       const terminalEvents = []; let lastSeenReason = null;
       const cornerMin = {};
       const samples = [];
+      // THE SIM STOPS AT THE FLAG. Ticking on in "results" repeated the last
+      // frame: 20 s asked from 0.985 of the final lap ran 3.6 s of race and
+      // averaged 16 s of frozen frames into speed/offTrack. Stop, and say so.
+      let ran = 0, stoppedEarly = null;
 
       for (let i = 0; i < ticks; i++) {
+        if (G.state !== "race" && G.state !== "count") {   // count = a red-flag restart, still this race
+          stoppedEarly = { atS: r2(G.raceT - startT), reason: "state:" + G.state };
+          break;
+        }
         if (policy && i % policyEvery === 0) {
           let inp = null;
           try { inp = policy(world({ detail: "brief" })); }
@@ -1908,6 +1939,7 @@ const AgentView = (function () {
         }
         syncRenderAnchors(G.cars);
         update(dt);
+        ran++;
 
         const sp = p.speed || 0;
         if (sp < minSpeed) minSpeed = sp;
@@ -1951,7 +1983,7 @@ const AgentView = (function () {
           }
         }
 
-        if (i % sampleEvery === 0 || i === ticks - 1) {
+        if (i % sampleEvery === 0 || i === ticks - 1 || G.state === "results") {
           samples.push({ t: r2(G.raceT - startT), frac: +(p.s / G.track.total).toFixed(4),
                          speedKph: r1(sp * 3.6), lateralM: r1(p.x), gear: p.gear || 1 });
         }
@@ -1965,16 +1997,17 @@ const AgentView = (function () {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
-        ran: { ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
-               policy: policy ? "closed-loop at " + (o.policyHz || 10) + " Hz"
+        ran: { ticks: ran, requestedTicks: ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
+               stoppedEarly,
+               policy: policy ? "closed-loop at " + r1(1 / (policyEvery * dt)) + " Hz"
                               : "open-loop constant input" },
         from: { frac: +startFrac.toFixed(4), lap: startLap },
         to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
         distanceM: r1((p.prog || 0) - startProg),
         speedKph: { min: r1(minSpeed * 3.6), max: r1(maxSpeed * 3.6),
-                    mean: r1(sumSpeed / ticks * 3.6), final: r1((p.speed || 0) * 3.6) },
+                    mean: r1(sumSpeed / Math.max(1, ran) * 3.6), final: r1((p.speed || 0) * 3.6) },
         offTrack: { events: offEvents, seconds: r2(offTicks * dt),
-                    pct: r1(offTicks / ticks * 100) },
+                    pct: r1(offTicks / Math.max(1, ran) * 100) },
         minClearanceM: r1(minClear),
         wallContacts: contacts,
         lapsCompleted: lapsDone,
@@ -1986,7 +2019,7 @@ const AgentView = (function () {
                     last: terminalEvents.length
                       ? terminalEvents[terminalEvents.length - 1] : null },
         samples,
-        note: "a digest of " + ticks + " physics ticks — call world() for the "
+        note: "a digest of " + ran + " physics ticks — call world() for the "
               + "current state, this describes the interval",
       };
     }
