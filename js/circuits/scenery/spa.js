@@ -17,7 +17,12 @@
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
 
-      gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
+      // The start gantry stands over the REAL line, re-keyed through sl() (the
+      // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
+      // alone put the gantry — and the start lamps it carries — 296 m away.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      gantry(sl(0.0), 7.5, [0.26, 0.28, 0.32]);
 
       const { cx, cz, radius: rad } = lapBounds();
       const ranges = [

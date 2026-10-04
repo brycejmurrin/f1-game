@@ -1976,6 +1976,28 @@ test("presentStatus names the three screenshot paths in plain language", () => {
   assert.match(G.presentStatus(), /AUTO is three WebGL2/);
 });
 
+test("TLX shadow depth camera remaps GL clip z to WebGPU's [0,1] (Z01), like the main camera", () => {
+  // The shadow camera loads the game's GL lightVP verbatim. On three's WebGPU
+  // backend (the default desktop path) that clipped casters nearer than
+  // mid-depth and stored raw z where tsl-lit compares 0.5z+0.5.
+  const sh = code("js/render/three/tlx-shadow.js");
+  const body = fnBody(sh, "beginPass");
+  assert.match(body, /if\s*\(\s*isWebGPU\s*\)/, "beginPass branches on the WebGPU backend");
+  assert.match(body, /\[c \* 4 \+ 2\]\s*=\s*0\.5 \* lightVP\[c \* 4 \+ 2\]\s*\+\s*0\.5 \* lightVP\[c \* 4 \+ 3\]/, "row 2 := 0.5*row2 + 0.5*row3 (Z01 * lightVP)");
+  assert.match(body, /projectionMatrix\.fromArray\(\s*isWebGPU\s*\?\s*_lvpZ01\s*:\s*lightVP\s*\)/, "the depth camera gets the remapped matrix on WebGPU only");
+  assert.match(body, /dst\.set\(\s*lightVP\s*\)/, "the shader-side matrix stays the raw GL lightVP");
+  // Behaviour: Z01 * M maps M's clip z in [-w, w] to [0, w] for every column.
+  const M = Float32Array.from({ length: 16 }, (_, i) => (i * 7 % 11) - 5);
+  const out = Float32Array.from(M);
+  for (let c = 0; c < 4; c++) out[c * 4 + 2] = 0.5 * M[c * 4 + 2] + 0.5 * M[c * 4 + 3];
+  for (const p of [[1, 2, 3, 1], [-4, 0.5, 2, 1]]) {
+    const clip = (m) => [0, 1, 2, 3].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r] * p[3]);
+    const a = clip(M), b = clip(out);
+    assert.ok(Math.abs(b[2] - (0.5 * a[2] + 0.5 * a[3])) < 1e-4, "z' = 0.5 z + 0.5 w");
+    assert.deepEqual([b[0], b[1], b[3]].map((v) => +v.toFixed(4)), [a[0], a[1], a[3]].map((v) => +v.toFixed(4)), "x, y, w unchanged");
+  }
+});
+
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
   const tlx = code("js/render/three/tlx.js");
   const post = code("js/render/three/tlx-post.js");

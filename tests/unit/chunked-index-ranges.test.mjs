@@ -411,16 +411,17 @@ test("the per-chunk merge only extends a run under all four guards", () => {
     "a run must stay contiguous in the index buffer");
   // The cull path must flush, not `continue` past an invisible chunk.
   //
-  // Matched on the SHAPE — the radial term, then whatever else the cull grew,
-  // then the flush — rather than on the exact condition text. The first cut
+  // Matched on the SHAPE — the radial term (Frustum.radialCulled since the
+  // 2026-10-04 fog-wall cull; `> cd2)` before it), then whatever else the cull
+  // grew, then the flush — rather than on the exact condition text. The first cut
   // pinned `> cd2)) { flush(); continue; }` verbatim and went red the day a
   // third cull term (occlusion, 2026-09-16) was appended, which is a guard
   // failing for the one reason a guard must not: the thing it protects was
   // still true. The force is unchanged, because what it is really asserting is
   // that the cull branch ENDS in flush() and never in a bare continue.
-  assert.match(loop, /> cd2\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/,
+  assert.match(loop, /radialCulled\(ch\.min, ch\.max, ex, ey, ez, cd, cf\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/,
     "an invisible chunk must break the open run — a bare continue would merge across it");
-  assert.doesNotMatch(loop, /> cd2\)[\s\S]{0,140}?\) \{ continue; \}/,
+  assert.doesNotMatch(loop, /radialCulled\(ch\.min, ch\.max, ex, ey, ez, cd, cf\)[\s\S]{0,140}?\) \{ continue; \}/,
     "the cull branch must not `continue` without breaking the open run");
   // The two draw paths enforce the SAME invariant by different means, and only
   // one of them can be pinned by reading the source. drawElements must FLUSH,
@@ -434,7 +435,7 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   // the cull's continue, never before it.
   const file = loop.indexOf("GI.used[g] !== GI.epoch");
   assert.ok(file > 0, "the multi-draw bucketing moved — this guard is reading the wrong slice");
-  assert.ok(file > loop.search(/> cd2\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/),
+  assert.ok(file > loop.search(/radialCulled\(ch\.min, ch\.max, ex, ey, ez, cd, cf\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/),
     "a chunk must be filed under its group only AFTER the cull test, or multi-draw draws what the cull removed");
   // And the equivalence itself, which no source shape can establish, is proved
   // by running both paths over a fixture with a culled hole in the middle of

@@ -709,3 +709,87 @@ test("the entry hatch is paint inside the road edge, from the road's start to wh
   }
   assert.equal(TM.pitHatch(narrowOnce()).length, 0, "a painted lane has no entry road to hatch");   // .length: the array is the VM realm's
 });
+
+// PAINT STANDS CLEAR OF WHAT IT IS PAINTED ON. The entry/exit lines, the
+// chevrons and the boxes ride the lane ribbon's own mesh and depth bias, so
+// geometry is all that separates them from it — and they were flat planes at
+// the ribbon's own lift off one spline sample: on Monza 140 of the 240 box
+// vertices sat BELOW the lane (-6.5..+8.4 mm), Bahrain 144 (-8.1..+6.9), Spa
+// +-29 mm, the chevrons to -16 mm, and the paint z-fought the tarmac. The
+// hatch, in the road's own (unbiased) buffer, stood 5.1 mm over Spa's road.
+// Measured against the RIBBON'S AND THE ROAD'S REAL TRIANGLES (never the
+// helper that laid the paint), at every vertex and a barycentric grid inside
+// every paint triangle. And every paint triangle faces UP: the decal mesh is
+// drawn single-sided, and four of the five box quads were wound down —
+// culled on all three backends, so only the team's front bar ever showed.
+const MIN_PAINT_GAP = 0.010;
+function trisOf(out, from = 0, to = out.idx.length) {
+  const V = (i) => [out.pos[i * 3], out.pos[i * 3 + 1], out.pos[i * 3 + 2]], T = [];
+  for (let i = from; i + 2 < to; i += 3) T.push([V(out.idx[i]), V(out.idx[i + 1]), V(out.idx[i + 2])]);
+  return T;
+}
+/** The highest surface triangle over (x, z), or null — a 2 m XZ grid over `tris`. */
+function surfaceY(tris) {
+  const CELL = 2, grid = new Map(), cellOf = (x, z) => Math.floor(x / CELL) + "," + Math.floor(z / CELL);
+  tris.forEach((T, i) => {
+    const xs = T.map((p) => p[0]), zs = T.map((p) => p[2]);
+    for (let cx = Math.floor(Math.min(...xs) / CELL); cx <= Math.floor(Math.max(...xs) / CELL); cx++)
+      for (let cz = Math.floor(Math.min(...zs) / CELL); cz <= Math.floor(Math.max(...zs) / CELL); cz++) {
+        const key = cx + "," + cz;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(i);
+      }
+  });
+  return (x, z) => {
+    let best = null;
+    for (const i of grid.get(cellOf(x, z)) || []) {
+      const [a, b, c] = tris[i];
+      const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+      if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d;
+      const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d, l3 = 1 - l1 - l2;
+      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+      const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
+      if (best === null || y > best) best = y;
+    }
+    return best;
+  };
+}
+function clearance(paint, under, N = 6) {
+  let min = Infinity, n = 0, missed = 0, down = 0;
+  for (const [a, b, c] of paint) {
+    const ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    if (Math.abs(ny) < 1e-9) continue;            // the chevron head's degenerate half
+    if (ny < 0) down++;
+    for (let i = 0; i <= N; i++) for (let j = 0; i + j <= N; j++) {
+      const u = i / N, v = j / N, w = 1 - u - v;
+      const P = [0, 1, 2].map((q) => w * a[q] + u * b[q] + v * c[q]);
+      const y = under(P[0], P[2]);
+      if (y === null) { missed++; continue; }
+      n++;
+      if (P[1] - y < min) min = P[1] - y;
+    }
+  }
+  return { min, n, missed, down };
+}
+
+test("pit paint stands >= 10 mm clear of the lane (and the hatch of the road), every triangle facing up", () => {
+  const TM = ctxOnce().TrackMesh, fresh = () => ({ pos: [], nrm: [], col: [], idx: [] });
+  assert.equal(typeof TM.buildPitMarks, "function", "the lane's paint is its own builder, so the ribbon can be measured alone");
+  for (const id of ["monza", LEFT, "spa"]) {
+    const t = buildOnce(id);
+    const lane = TM.buildPitLane(t, fresh()), marks = TM.buildPitMarks(t, fresh());
+    const ribbon = surfaceY(trisOf(lane, 0, lane.idx.length - marks.idx.length));
+    for (const [what, buf] of [["entry/exit lines + chevrons", marks], ["boxes", TM.buildPitBoxes(t, fresh())]]) {
+      const c = clearance(trisOf(buf), ribbon);
+      assert.ok(c.n > 100 && c.missed === 0, `${id} ${what}: ${c.n} samples over the ribbon, ${c.missed} off it`);
+      assert.ok(c.min >= MIN_PAINT_GAP, `${id} ${what}: ${(c.min * 1000).toFixed(1)} mm over the lane at the lowest (>= 10 mm)`);
+      assert.equal(c.down, 0, `${id} ${what}: ${c.down} triangles wound DOWN — culled, the decal mesh is single-sided`);
+    }
+    const road = TM.buildRoad(t), hatch = TM.buildPitHatch(t, Object.assign(fresh(), { mat: [], trk: [] }));
+    const c = clearance(trisOf(hatch), surfaceY(trisOf(road, 0, t.n * 13 * 6)));   // the 13 surface quads per node row
+    assert.ok(c.n > 100 && c.missed === 0, `${id} hatch: ${c.n} samples over the road, ${c.missed} off it`);
+    assert.ok(c.min >= MIN_PAINT_GAP, `${id} hatch: ${(c.min * 1000).toFixed(1)} mm over the road at the lowest (>= 10 mm)`);
+    assert.equal(c.down, 0, `${id} hatch: ${c.down} triangles wound down`);
+  }
+});

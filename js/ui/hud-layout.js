@@ -131,6 +131,7 @@ const HudLayout = (function () {
   let prof = null;           // the HUD style apply() last painted (setCam notices a change)
   let preview = null;        // the camera set the settings fold is editing, while it is open
   let previewProf = null;    // …and the style it is editing (pinned when the fold opens)
+  let foldEl = null;         // the MOVE & SIZE <details>, once built
   let selected = null;       // the element the fold has selected (outlined while peeking)
   let onModeChange = null;   // the fold's repaint, while it is built (style / camera changed)
 
@@ -284,6 +285,13 @@ const HudLayout = (function () {
   // same correction, so neighbours keep their spacing.
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+    // The fold is never collapsed when SETTINGS closes (or a race resumes), so
+    // its preview outlived the page and pinned the edited layout over every
+    // camera for the session. A fold no longer on screen hands back the camera's.
+    if (preview && !(foldEl && foldEl.open && foldEl.getClientRects && foldEl.getClientRects().length)) {
+      if (foldEl) foldEl.open = false;
+      preview = null; previewProf = null; selected = null; apply();
+    }
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset -> [{ el, e, r }]
@@ -467,7 +475,7 @@ const HudLayout = (function () {
     const sum = el("summary", { id: "pm-hudlayout-sum", className: "adv-more-btn" });
     const body = el("div", { id: "pm-hudlayout-body", attrs: { role: "group", "aria-label": "HUD element position and size" } });
     const fold = el("details", { className: "pm-renderer-sub" }, [sum, body]);
-    fold.id = "pm-hudlayout";   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
+    fold.id = "pm-hudlayout"; foldEl = fold;   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
     let editing = cam, editingProf = profile(), sel = IDS[0];
     const paintSum = () => { sum.textContent = "MOVE & SIZE · " + (isShipped(undefined, editingProf) ? "SHIPPED" : "CUSTOM"); };
 

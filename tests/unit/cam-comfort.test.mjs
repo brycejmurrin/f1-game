@@ -66,3 +66,34 @@ test("mode-switch boots CamComfort; game.js camComfort ORs it", () => {
   const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(g, /CamComfort\.active\(\)/);
 });
+
+test("boot ignores navigator.xr: desktop Chromium exposes it with no headset", () => {
+  const CC = load();
+  const s = rawStore();
+  assert.equal(CC.boot(s, { maxTouchPoints: 0, xr: {} }, {}), null);
+  assert.equal(s.raw(CC.KEY), null);
+});
+
+test("boot drops the old XR auto value on a non-touch device, keeps it on touch", () => {
+  const CC = load();
+  const withDel = (init) => { const s = rawStore(init); s.rawDel = (k) => { s._disk.delete(k); return true; }; return s; };
+  const desk = withDel({ [CC.KEY]: "on" });
+  assert.equal(CC.boot(desk, { maxTouchPoints: 0, xr: {} }, {}), null);
+  assert.equal(desk.raw(CC.KEY), null);
+  assert.equal(CC.active(desk), false);
+  const phone = withDel({ [CC.KEY]: "on" });
+  CC.boot(phone, { maxTouchPoints: 5 }, {});
+  assert.equal(phone.raw(CC.KEY), "on");
+});
+
+test("an explicit MOTION: ON wins over the touch auto-pick", () => {
+  const CC = load();
+  const s = rawStore({ [CC.KEY]: "on" });
+  let motion = null;
+  s.get = (k, d) => (k === "motion" && motion !== null ? motion : d);
+  assert.equal(CC.active(s), true);
+  motion = "on";
+  assert.equal(CC.active(s), false);
+  motion = "reduce";
+  assert.equal(CC.active(s), true);
+});

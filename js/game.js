@@ -2533,10 +2533,15 @@ async function startRaceBody() {
     // return) and quitToMenu() lower it, so this arm left the menu behind a
     // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
     loadingScreen.stop();
+    // A conflict can surface on RESTART or the next round, with the race HUD,
+    // in-race class and engine still up: tear all of it down to the title.
+    if (careerSaveConflict || seasonSaveConflict) {
+      quitToMenu();
+      announce("SAVE CONFLICT — reload " + (careerSaveConflict ? "career" : "season"), 3, "info");
+      return false;
+    }
     setState("menu", "save-conflict"); $("race-settings").hidden = true;
-    if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
-    else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
-    else { buildSelect(); els.select.hidden = false; }
+    buildSelect(); els.select.hidden = false;
     return false;
   }
   resultsCam.reset();   // restore a montage before replacing the previous field
@@ -6872,42 +6877,30 @@ function render(dt) {
   frame.upViewDir = _upVS;
   frame.eye = camEye;
   const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
-  // Radial draw-distance cull for chunked scenery.
-  // Free/debug camera: mobile caps at 700 m (the pushed-out photo-mode far
-  // plane can frame a whole ~5 M-vert city and jetsam-kill the tab); desktop
-  // keeps the full vista (gfx.begin also thins the fog under dbgCam, so a
-  // fog-derived cull would visibly pop there).
-  // Normal play: fog-wall radial cull — past ~95% fog opacity (3/density) a
-  // chunk is invisible anyway, so skip it. Only kicks in when that distance is
-  // inside the far plane (900 m as-shipped, scaled by the RENDER DISTANCE
-  // knob; night city 0.004 -> 750 m, fog/rain closer); clear day (0.0012 ->
-  // 2.5 km) stays uncapped — zero visual change there.
-  // Feature-shedding tier 3+ also caps the radius at the far plane: scenery
-  // vertex/draw load is the one big cost class the resolution scale and shed
-  // passes don't touch, and by tier 3 the device has proven it can't afford
-  // the full vista (the fog wall hides most of the cut).
-  // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
-  // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
-  // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
-  // The THINNING the cinematic and the debug camera render through, or null for
-  // an ordinary frame. Read by gfx.begin() far below; named here because the
-  // cull right underneath has to know that this frame's fog wall is not where
-  // frame.fogDensity says it is — thinning the draw while culling scenery at the
-  // unthinned wall is a hard edge of missing world instead of a vista.
+  // Radial draw-distance cull for chunked scenery, in two halves every backend's
+  // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
+  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
+  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
+  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
+  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
+  // plane (scenery vertex/draw load is the one big cost class the resolution
+  // scale and shed passes don't touch). Otherwise the sphere that contains the
+  // frustum (far-plane corners sit farther than farPlane) — look-identical.
+  // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
+  // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
+  // culled scenery at 250 m with no fog drawn). A chunk goes once even its
+  // nearest point raised to its top is 99.99 % fogged: HEIGHT-AWARE, because one
+  // eye-level radius (3/density, 750 m at night) culled floodlights, hotels and
+  // hills while only 65-70 % fogged. Off (density 0) under dbgCam/cine: they
+  // render a THINNED fog (_fogMul, read by gfx.begin() far below), and culling
+  // at frame.fogDensity's unthinned wall is a hard edge of missing world.
   const _fogMul = cine ? FlybySeq.FOG
     : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
-  const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
-  const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
-  // Sphere that contains the perspective frustum (far-plane corners sit
-  // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
+  const _cullFog = frame.cullFog || (frame.cullFog = [0, 0]);
+  _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
+  _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  // The cinematic takes the debug camera's rule for the same reason it takes its
-  // far plane — and the same MOBILE CAP. loadTrack()'s own comment calls the
-  // build's transient peak "the moment a near-limit phone gets jetsam killed",
-  // and this frame runs seconds after it; framing a whole ~5 M-vert city there
-  // is not a risk worth a nicer horizon.
-  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
-    : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
   // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
   // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
   // different lenses for months with nothing able to see it, because every hook
@@ -8620,7 +8613,11 @@ els.resNext.onclick = () => {
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
-    els.results.hidden = true;
+    // The full return-to-menu teardown first, then the hub on top of it (the
+    // title's own CAREER path). Hiding the sheet alone left state "results":
+    // the hub's GARAGE drew the frozen race frame, and a race started later
+    // from MAIN MENU sat on PREPARING… forever (every intro gates on "menu").
+    quitToMenu();
     trackIdx = Career.trackIndex();
     openCareer();
     return;

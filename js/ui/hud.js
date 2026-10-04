@@ -114,7 +114,7 @@ let _hudVisKey = "";
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const prof = G.hudProfile || "standard";
-  // MAP AUTO: hide onboard (cockpit/hood/tcam) or MINIMAL so the view stays clear.
+  // MAP AUTO: hide onboard (cockpit/hood/tcam/visor/helmet) or MINIMAL so the view stays clear.
   const hideMap = resolveHudVis(G.hudMapVis, onboard || prof === "minimal");
   // GAPS do not AUTO-hide onboard — from a cockpit you cannot see the car
   // behind you. GAPS: OFF still hides it. MINIMAL still auto-hides chrome.
@@ -512,7 +512,10 @@ function fitHud() {
   // which has no getComputedStyle — the same guard metrics-overlay.js carries.
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
+  // DELTA unhides inside the centred tower mid-race (first valid best lap, or a
+  // ghost in TT): it widens the tower, so it is part of the key, not left to the
+  // 3 s same-key re-measure with the tower painted over the gap strip.
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD

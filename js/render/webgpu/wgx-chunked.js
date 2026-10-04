@@ -285,7 +285,7 @@ const WGXChunked = (function () {
       // says it currently holds THIS frame's camera planes. Terrain, road,
       // props, glass and water each re-derived the same six planes per frame.
       if (cull && !core.fcPlanesIsFrame) { Frustum.extractPlanes(core.frameViewProj, core.fcPlanes); core.fcPlanesIsFrame = true; }
-      const cd = core.frameCullDist, cd2 = cd * cd;
+      const cd = core.frameCullDist, cf = core.frameCullFog;   // Frustum.radialCulled: hard radius + fog wall
       const ex = core.frameEye ? core.frameEye[0] : 0, ey = core.frameEye ? core.frameEye[1] : 0, ez = core.frameEye ? core.frameEye[2] : 0;
       const chunks = mesh.chunks;
       // Per-chunk lamps: one DrawU slot per visible chunk carrying that chunk's
@@ -336,8 +336,8 @@ const WGXChunked = (function () {
           for (let i = 0; i < chunks.length; i++) {
             const ch = chunks[i];
             if (cull) {
-              const dist2 = Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez);
-              if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+              if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) ||
+                  Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
             }
             const cslot = core.allocDrawSlot();
             if (cslot < 0) break;
@@ -379,8 +379,8 @@ const WGXChunked = (function () {
       _mrMaskL = maskL; _mrSlot = slot; _mrPass = core.litPass; _mrRoad = o.surfaceId === 16;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        const dist2 = Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez);
-        if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) {
+        if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) ||
+            Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) {
           _mrFlush();
           continue;
         }

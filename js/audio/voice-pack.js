@@ -20,8 +20,10 @@
  * tool writes are exactly the keys the game looks up.
  */
 const VoicePack = (() => {
-  // Author-time generator and player picker share this catalogue. A pack only
-  // contains its channel's words; the spotter shares the engineer's voice.
+  // Author-time generator and player picker share this catalogue. `speaker` is
+  // the voice's OWN channel; every voice can speak every channel (packFor), each
+  // from a pack holding only that channel's words. The spotter speaks in the
+  // engineer's chosen voice, from that voice's radio pack.
   const VOICES = Object.freeze({
     george: { name: "George · British", voice: "bm_george", speaker: "radio", speed: 1.12 },
     michael: { name: "Michael · American", voice: "am_michael", speaker: "radio", speed: 1.08 },
@@ -30,8 +32,13 @@ const VoicePack = (() => {
     emma: { name: "Emma · British", voice: "bf_emma", speaker: "control", speed: 1.06 },
     heart: { name: "Heart · American", voice: "af_heart", speaker: "coach", speed: 1.02 },
   });
-  const choices = (speaker) => Object.entries(VOICES).filter(([, v]) => v.speaker === speaker)
+  // Every voice, the channel's own ones first (the shipped default heads the list).
+  const choices = (speaker) => Object.entries(VOICES)
+    .sort(([, a], [, b]) => (b.speaker === speaker) - (a.speaker === speaker))
     .map(([id, v]) => ({ id, name: v.name }));
+  /** The pack a voice speaks `speaker` from: `<id>` on its own channel,
+   *  `<id>-<speaker>` on any other (tools/gen/voicepack.mjs --speaker). */
+  const packFor = (id, speaker) => (VOICES[id] ? (VOICES[id].speaker === speaker || !speaker ? id : id + "-" + speaker) : null);
   // Full utterances retain their punctuation and performance. Keep them in a
   // separate namespace so older fragment packs remain valid.
   const lineKey = (text) => "@line:" + String(text || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
@@ -235,5 +242,5 @@ const VoicePack = (() => {
     };
   }
 
-  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, VOICES, PAUSE, MAX_WORDS, SLACK_S });
+  return Object.freeze({ create, norm, compose, keyOf, lineKey, choices, packFor, VOICES, PAUSE, MAX_WORDS, SLACK_S });
 })();

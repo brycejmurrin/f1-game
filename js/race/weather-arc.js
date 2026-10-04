@@ -146,6 +146,15 @@ const WeatherArc = (function () {
       const seq = arc.seq;
       const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
       if (G.raceWeather !== want) { setWeatherLive(want, true); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
+      // The rain loop follows wetness (isRaining, ≥ 0.72), which an arc ramps
+      // continuously — the stage flips above land below it (dry→rain's "rain"
+      // flip at 2/3 reads 0.667), so the loop was stopped there and never
+      // started when the road crossed the line. Re-decide on each crossing.
+      const raining = G.isRaining();
+      if (raining !== arc.raining) {
+        if (arc.raining !== undefined && G.soundOn) { if (raining) GameAudio.startRain(); else GameAudio.stopRain(); }
+        arc.raining = raining;
+      }
       if (f >= 1) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
         arc = null;   // arc complete — weather stays at `to`
