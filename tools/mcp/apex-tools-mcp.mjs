@@ -26,12 +26,13 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
+import { createExtras, JOB_KINDS, processTree, killTreeAndWait } from "./apex-extras.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.8.0";
+const SERVER_VERSION = "1.9.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -404,6 +405,7 @@ const CATALOG = [
         dist: { type: "number" },
         side: { type: "number" },
         hud: { type: "boolean" },
+        image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         tod: { type: "string" },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -573,6 +575,148 @@ const CATALOG = [
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
       },
+    },
+  },
+  // 16 → 24 on 2026-10-03: a persistent track session, background jobs for the
+  // minutes-long CLIs, one-cell UI checks, and the offline car / track audits.
+  // Handlers live in tools/mcp/apex-extras.mjs.
+  {
+    name: "apex_track",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,side,tod,name} / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        op: { type: "string", enum: ["open", "shot", "eval", "track", "sheet", "diff", "status", "close"] },
+        track: { type: "string", description: "Circuit id (open; op track switches)." },
+        frac: { type: "number", minimum: 0, maximum: 1 },
+        cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
+        az: { type: "number" }, el: { type: "number" }, dist: { type: "number" },
+        side: { type: "number", enum: [-1, 1] },
+        tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
+        hud: { type: "boolean" },
+        name: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$", description: "Shot or sheet file name (no extension)." },
+        expr: { type: "string", description: "eval: an __apex expression, `a` is __apex." },
+        diff: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 },
+        image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
+        out: { type: "string", description: "open: output dir under artifacts/ or scratch/." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_job_start",
+    week: 7,
+    kind: "tree",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: JOB_KINDS },
+        track: { type: "string", description: "survey_track: circuit id." },
+        oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
+        screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
+        viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
+        scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
+        site: { type: "string", description: "flicker_gate: comma list of site ids (default all)." },
+        team: { type: "string", description: "livery_contrast: one team id (default every team — slow)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["kind"],
+    },
+  },
+  {
+    name: "apex_job_status",
+    week: 7,
+    kind: "tree",
+    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. No jobId lists every job this server started. Skill: check-changes.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" }, dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
+    name: "apex_job_cancel",
+    week: 7,
+    kind: "tree",
+    description: "Tree — stop a running background job: kills its process group (and the Chromium it launched) and releases the browser lock. Skill: check-changes.",
+    inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" }, dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } }, required: ["jobId"] },
+  },
+  {
+    name: "apex_ui_fit",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — layout geometry for ONE menu screen × viewport (× interface scale): clipped, offscreen, small taps, truncation, under-hardware, starved, deep scroll — as numbers, ~15 s. Full matrix: apex_job_start ui_matrix. Skill: ui-menu-a11y.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape." },
+        scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["screen"],
+    },
+  },
+  {
+    name: "apex_ui_shot",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — PNG + structured DOM of ONE menu screen at one viewport (layout-audit --screen), ~15 s, with a thumbnail in the result. Every screen: apex_job_start ui_gallery. Skill: survey-ui-matrix.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        screen: { type: "string" },
+        viewport: { type: "string" },
+        image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["screen"],
+    },
+  },
+  {
+    name: "apex_car_audit",
+    week: 7,
+    kind: "tree",
+    description: "Tree — offline car checks, no browser: ladder (is any paid part dominated by a cheaper one, <1 s) or crest (team crest legibility, ~35 s; optional teams). parts_sweep / livery_contrast take minutes: apex_job_start. Skill: garage-parts-livery.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        check: { type: "string", enum: ["ladder", "crest"] },
+        teams: { type: "array", items: { type: "string" }, maxItems: 12 },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["check"],
+    },
+  },
+  {
+    name: "apex_track_audit",
+    week: 7,
+    kind: "tree",
+    description: "Tree — one circuit's offline health in one call (~4 s, no browser): verify-track build guard + float-audit floating/sunken prop clusters. Confirm suspects with apex_track shots. Skill: survey-track.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        track: { type: "string" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["track"],
     },
   },
 ];
@@ -987,11 +1131,14 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
     try {
       child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, detached: true });
     } catch (e) { spawnErr = e; }
+    // On a timeout or cancel: snapshot the WHOLE tree first (Playwright puts
+    // Chromium in its own process group, so a group kill missed it and the
+    // browser outlived the lock by ~7 s), kill it, and settle only once it is gone.
+    let treeGone = null;
     const killTree = (why) => {
       if (!child || child.exitCode != null || stopped) return;
       stopped = why;
-      try { process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { /* gone */ } }
-      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
+      treeGone = killTreeAndWait(processTree(child.pid));
     };
     const timer = setTimeout(() => killTree("timeout"), timeoutMs);
     const onAbort = () => killTree("cancelled");
@@ -1030,7 +1177,8 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
       }
-      resolve(toolResult(body, { isError: !body.ok }));
+      const result = toolResult(body, { isError: !body.ok });
+      if (treeGone) treeGone.then(() => resolve(result)); else resolve(result);
     };
     if (!child) return finish(null, null);
     running.add(child);
@@ -1416,6 +1564,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (Object.hasOwn(extras().handlers, name)) {
+    const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
+    if (gate) return gate;
+    return extras().handlers[name](args, { signal });
+  }
 
   const kind = toolKind(known);
   const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
@@ -1448,7 +1601,16 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     if (took) return took;
     // Released when the child exits — after a cancel too, never while a
     // Chromium still runs.
-    return runSpawn(argv, { timeoutMs: 180000, env, signal }).finally(releaseLock);
+    const run = runSpawn(argv, { timeoutMs: 180000, env, signal }).finally(releaseLock);
+    // apex_shot: attach the frame as a thumbnail so the caller sees it in the
+    // result (image:false opts out). The path is on shot.mjs's "wrote" line.
+    if (name !== "apex_shot" || args.image === false) return run;
+    return run.then(async (r) => {
+      const m = /wrote (\S+\.png)/.exec(JSON.parse(r.content[0].text).stdout || "");
+      if (r.isError || !m) return r;
+      try { r.content.push(await extras().thumbBlock(m[1])); } catch (e) { log(`thumb failed: ${e.message}`); }
+      return r;
+    });
   }
 
   if (name === "apex_rotate_markings_check") {
@@ -1546,6 +1708,24 @@ function rpcError(id, code, message) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+let extrasInst = null;
+/** apex_track / apex_job_* / apex_ui_* / apex_*_audit handlers (tools/mcp/apex-extras.mjs). */
+function extras() {
+  if (!extrasInst) {
+    extrasInst = createExtras({ ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
+      knownCircuits, runSpawn, splitOut, log, mockMode });
+  }
+  return extrasInst;
+}
+
+// MCP resources: the references an agent reads before calling __apex hooks,
+// served without booting anything.
+const RESOURCES = [
+  ["docs/DEBUG-HOOKS.md", "__apex dev API reference: every hook, its arguments and return shape."],
+  ["docs/AGENT-SURFACE.md", "Which CLIs are wrapped as apex_*, their pins, and what stays CLI-only."],
+  ["docs/research/APEX-TOOLS-MCP.md", "apex-tools MCP design, refuse table and measured history."],
+].map(([rel, description]) => ({ uri: `file:///${rel}`, name: path.basename(rel), description, mimeType: "text/markdown", rel }));
+
 /** tools/call requests still running, by JSON-RPC id, for notifications/cancelled. */
 const inflight = new Map();
 
@@ -1579,7 +1759,7 @@ async function handleRpc(msg) {
       id: mid,
       result: {
         protocolVersion: PROTOCOL,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
         instructions:
           "Local CLI wrap (apex_*). Skills say when; tools/ CLIs do the work; " +
@@ -1611,6 +1791,14 @@ async function handleRpc(msg) {
     } finally {
       inflight.delete(String(mid));
     }
+  }
+  if (method === "resources/list") {
+    return { jsonrpc: "2.0", id: mid, result: { resources: RESOURCES.map(({ rel, ...r }) => r) } };
+  }
+  if (method === "resources/read") {
+    const res = RESOURCES.find((r) => r.uri === (msg.params && msg.params.uri));
+    if (!res) return rpcError(mid, -32002, `Resource not found: ${msg.params && msg.params.uri}`);
+    return { jsonrpc: "2.0", id: mid, result: { contents: [{ uri: res.uri, mimeType: res.mimeType, text: fs.readFileSync(path.join(ROOT, res.rel), "utf8") }] } };
   }
   if (method === "ping") {
     return { jsonrpc: "2.0", id: mid, result: {} };

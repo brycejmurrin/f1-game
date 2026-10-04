@@ -157,6 +157,54 @@ test("every front-wing top flap reaches its endplates after taper and tip rise",
   assert.deepEqual(detached, []);
 });
 
+test("T-camera bar and LED ride the same snorkel-aware pod datum", () => {
+  // The housing lives in part("engineCover") at podY/podZ. The horizontal T bar
+  // and green LED used to be literals at y 0.955 / 0.988 in part("helmet"), so
+  // every snorkel engine (most of the 2026 factory grid) left a second camera
+  // wing ~15 cm under the real pod. Bodywork, not driver: the bar must track
+  // the pod whether or not a helmet is in the mesh.
+  const ACC = [0.123, 0.456, 0.789];
+  const LED = [0.12, 0.75, 0.28];
+  const DARK = [0.05, 0.05, 0.05];
+  const engines = [
+    { id: "snorkel", visual: { in: 1.3, snork: 1, twin: 1, inlet: 2, outlet: 2,
+      podWidth: 1, shoulderHeight: 1.08, undercut: 1.08, coke: 1.06,
+      tailWidth: 0.96, coverHeight: 1 } },
+    { id: "chimney", visual: { in: 1.22, snork: 0, twin: 0, inlet: 2, outlet: 2,
+      podWidth: 1.03, shoulderHeight: 1.05, undercut: 0.97, coke: 1.05,
+      tailWidth: 1.01, coverHeight: 1.06, chimney: 3 } },
+  ];
+  const midY = (pts) => {
+    let lo = Infinity, hi = -Infinity;
+    for (const p of pts) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1]; }
+    return (lo + hi) / 2;
+  };
+  for (const engine of engines) {
+    for (const noDriver of [false, true]) {
+      const mesh = S.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+        noWheels: true, noDriver,
+        livery: { accent: ACC, tcam: "accent" },
+        parts: { engine: 1, _visual: { engine: engine.visual } },
+      });
+      const pod = verticesFor(mesh, ACC)
+        .filter((p) => Math.abs(p[0]) < 0.08 && p[2] > -0.50 && p[2] < -0.10);
+      const led = verticesFor(mesh, LED)
+        .filter((p) => Math.abs(p[0]) < 0.05 && p[2] > -0.50 && p[2] < -0.10);
+      const bar = verticesFor(mesh, DARK)
+        .filter((p) => Math.abs(p[0]) > 0.10 && Math.abs(p[0]) < 0.16
+          && p[2] > -0.45 && p[2] < -0.15 && p[1] > 0.85 && p[1] < 1.25);
+      assert.ok(pod.length > 0, `${engine.id}: no T-cam pod housing`);
+      assert.ok(led.length > 0, `${engine.id} noDriver=${noDriver}: no T-cam LED`);
+      assert.ok(bar.length > 0, `${engine.id} noDriver=${noDriver}: no T-cam bar`);
+      const podY = midY(pod), ledY = midY(led), barY = midY(bar);
+      assert.ok(Math.abs(barY - podY) < 0.04,
+        `${engine.id}: T-bar y ${barY.toFixed(3)} vs pod y ${podY.toFixed(3)}`);
+      assert.ok(Math.abs(ledY - podY) < 0.05,
+        `${engine.id}: T-cam LED y ${ledY.toFixed(3)} vs pod y ${podY.toFixed(3)}`);
+    }
+  }
+});
+
 test("functionalEmissive stays reserved for the FIA rain light", () => {
   // The nose running lights are SURFACES.glass for this reason: id 25 is both
   // `emissive` and `functionalEmissive`, and the rain light owns it. A decorative

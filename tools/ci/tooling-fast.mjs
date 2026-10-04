@@ -386,6 +386,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
+  // The night lamp-shadow map holds one flood while the car sits between two:
+  // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
+  "tests/unit/lamp-shadow-pick.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -470,6 +473,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Faenza Street fit on McLaren silently photographed as medium.
   "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
+  "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
@@ -514,6 +518,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  // Field-step pose snapshots: traffic scans read last tick's prog/x/speed so
+  // a car updated earlier in the same tick cannot look like a pass. Source
+  // pin of game.js's snap loop + red-flag first-gear restart + coast estimate.
+  // ~instant.
+  "tests/unit/race-step-snap.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP

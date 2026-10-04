@@ -348,6 +348,11 @@ test("the free stop under a caution pulls a planned stop forward", () => {
   // ...but not from the other end of the race: a stop 30 laps early is not free,
   // it is a wasted set.
   assert.equal(now({ cautionLevel: 3, lapsToStop: A.STRAT.CAUTION_REACH + 1 }), "");
+  // ...nor onto a set that cannot carry the stint it lengthens: an SC on lap 2
+  // of 12 pulled a lap-7 stop forward onto a soft that could not reach the
+  // flag, and 21 of 21 one-stop plans ran two or three stops.
+  assert.equal(now({ cautionLevel: 3, lapsToStop: 3, fits: false }), "");
+  assert.equal(now({ cautionLevel: 2, lapsToStop: 3, fits: true }), "caution");
   // A local yellow (level 1) does not neutralise the field, so it is not free.
   assert.equal(now({ cautionLevel: 1, lapsToStop: 1 }), "");  // …and a RED FLAG (4) is not a pit window at all: the field is held, and
   // arms made under it leaked into green when the restart was refused.

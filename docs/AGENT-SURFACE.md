@@ -1,9 +1,9 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only fifteen CLIs are wrapped as `apex_*` (sixteen tools: `apex_garage` is a
+do the work. Twenty-four `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
 
-session over one of them).
+sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
 ```
 need → skill (when / don'ts)
@@ -159,7 +159,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Fifteen wraps, sixteen tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Twenty-four tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -167,7 +167,12 @@ and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-
 flyby render answers in minutes; 12 → 13 on 2026-10-01 for the read-only
 `apex_doctor` capability and skill diagnostics; 13 → 16 on 2026-10-02 for
 `apex_session_status`, `apex_who_is_on_it` and `apex_ci_status`, the three
-read-only session checks).
+read-only session checks; 16 → 24 on 2026-10-03 for `apex_track` (a persistent
+track session: boot once, then shots in ~10–25 s instead of ~45 s each),
+`apex_job_start`/`_status`/`_cancel` (survey-track, layout-audit matrices,
+flicker-gate, frame-report --fleet, parts-sweep, livery-contrast in the
+background), `apex_ui_fit`/`apex_ui_shot` (one menu screen × viewport, ~15 s)
+and `apex_car_audit`/`apex_track_audit` (offline checks, seconds)).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -184,6 +189,14 @@ read-only session checks).
 | `apex_session_status` | `ci/session-status.mjs` | tree | steward |
 | `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
 | `apex_ci_status` | `ci/ci-watch.mjs` | tree | steward |
+| `apex_track` | `shot/track-session.mjs` | browser | survey-track |
+| `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
+| `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
+| `apex_job_cancel` | `mcp/apex-extras.mjs` | tree | check-changes |
+| `apex_ui_fit` | `ui/layout-audit.mjs` | browser | ui-menu-a11y |
+| `apex_ui_shot` | `ui/layout-audit.mjs` | browser | survey-ui-matrix |
+| `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
+| `apex_track_audit` | `track/float-audit.cjs` | tree | survey-track |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
@@ -207,6 +220,14 @@ Pins the wrap always applies (you cannot override them):
 - `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
   `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
+- `apex_track` → one session per server: `open` takes the browser lock until
+  `close` (or the server exits); `cam`/`tod`/`frac` are enum- and range-checked,
+  `track` must be a `Tracks.LIST` id, `out` stays under `artifacts/`/`scratch/`
+- `apex_job_start` → `kind` from a fixed list, each with its own argv builder;
+  callers pass values (ids, comma lists), never flags; at most two jobs run;
+  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group
+- `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
+- `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 

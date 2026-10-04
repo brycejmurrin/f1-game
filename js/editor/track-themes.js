@@ -12,9 +12,11 @@ const TrackThemes = (function () {
 
   // Picker / share-code order. The share code (TrackCodec, PR2) stores the INDEX
   // into this list, so append only — never reorder or remove.
-  const ORDER = ["parkland", "alpine", "oasis", "desertnight", "harbour", "marina", "tilke", "autumn"];
+  const ORDER = ["parkland", "alpine", "oasis", "desertnight", "harbour", "marina", "tilke", "autumn",
+    "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight"];
 
   const pal = (base, extra) => Object.assign({}, base || {}, extra || {});
+  const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
 
   const PRESETS = {
     parkland: {
@@ -49,6 +51,7 @@ const TrackThemes = (function () {
       swatch: ["#3e2723", "#ffb74d"],
       theme: "desert", sceneryTheme: "night-event", night: true, street: false,
       pal: pal(ATM.warmNight, { runoff: [0.30, 0.26, 0.20] }),
+      dayPal: pal(ATM.dustyBowl, { runoff: COL.desertSand }),
       terrainOuter: 120, flatTerrain: true, elevStyle: "flat", terrainMat: "SAND",
       furniture: { tree: "palm", fol: [0.26, 0.38, 0.18], lamp: "arm", lc: [1.0, 0.82, 0.50], sparse: true },
       standSet: ["sandstone", "darkSteel", "alu"],
@@ -74,6 +77,7 @@ const TrackThemes = (function () {
       swatch: ["#0d1b2a", "#e040fb"],
       theme: "street_night", sceneryTheme: "night-event", night: true, street: true,
       pal: pal(ATM.coolNight),
+      dayPal: pal(ATM.rivieraDay),
       terrainOuter: 36, flatTerrain: false, elevStyle: "flat", baseHW: 6.0,
       furniture: { tree: "palm", fol: [0.22, 0.40, 0.18], lamp: "arm", lc: [0.90, 0.95, 1.0] },
       standSet: ["navy", "darkSteel", "alu"],
@@ -97,6 +101,81 @@ const TrackThemes = (function () {
       terrainOuter: 140, flatTerrain: false, elevStyle: "rolling",
       furniture: { tree: "broadleafFall", fol: [0.62, 0.34, 0.12], lamp: "none" },
       standSet: ["concrete", "terracotta", "steel"],
+    },
+    tuscany: {
+      label: "TUSCAN HILLS", blurb: "Golden grass, cypress rows, terracotta stands on warm rolling hills.",
+      swatch: ["#c0a040", "#5d6b2f"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: { grass: [0.40, 0.42, 0.18], runoff: [0.62, 0.50, 0.32], zenith: [0.26, 0.46, 0.80], horizon: [0.86, 0.78, 0.60], fog: [0.84, 0.76, 0.60], sunColor: [1.0, 0.90, 0.70], sun: [1.0, 0.92, 0.72] },
+      terrainOuter: 150, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "cypress", fol: [0.16, 0.28, 0.14], lamp: "none", treeCrown: "columnar" },
+      standSet: ["terracotta", "sandstone", "concrete"],
+    },
+    coast: {
+      label: "CLIFFTOP COAST", blurb: "Umbrella pines above a blue sea, headlands on the horizon.",
+      swatch: ["#2e6b3a", "#1e88e5"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: pal(ATM.rivieraDay, { grass: [0.24, 0.40, 0.18] }),
+      terrainOuter: 120, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "stonePine", fol: [0.20, 0.36, 0.16], lamp: "none" },
+      standSet: ["sandstone", "alu", "pastel"],
+    },
+    savanna: {
+      label: "SAVANNA PLAINS", blurb: "Golden grassland, flat-topped acacias, far blue mesas.",
+      swatch: ["#c8a050", "#8d6e3f"],
+      theme: "desert", sceneryTheme: "desert", night: false, street: false,
+      pal: pal(ATM.dustyBowl, { grass: [0.56, 0.48, 0.24], runoff: [0.62, 0.40, 0.24], horizon: [0.88, 0.74, 0.52], sunColor: [1.0, 0.86, 0.62] }),
+      terrainOuter: 130, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "acacia", fol: [0.34, 0.40, 0.16], lamp: "none", sparse: true },
+      standSet: ["orange", "sandstone", "alu"],
+    },
+    ardennes: {
+      label: "MISTY FOREST", blurb: "Damp grey sky, deep pine valleys, forested ridges in the mist.",
+      swatch: ["#26402c", "#90a4ae"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: pal(ATM.dampArdennes),
+      terrainOuter: 160, flatTerrain: false, elevStyle: "hilly",
+      furniture: { tree: "fir", fol: [0.14, 0.28, 0.16], lamp: "none" },
+      standSet: ["darkSteel", "steel", "crimson"],
+    },
+    airfield: {
+      label: "AIRFIELD", blurb: "Flat old runways under an overcast sky, hangars and windbreaks.",
+      swatch: ["#4f7a3a", "#b0bec5"],
+      theme: "green", sceneryTheme: "permanent", night: false, street: false,
+      pal: pal(ATM.britishOvercast),
+      terrainOuter: 120, flatTerrain: true, elevStyle: "flat",
+      furniture: { tree: "broad", fol: [0.22, 0.38, 0.18], lamp: "none", sparse: true },
+      standSet: ["steel", "alu", "scaffold"],
+    },
+    canyon: {
+      label: "RED ROCK CANYON", blurb: "Rust-red ground, scrub trees, towering sandstone buttes.",
+      swatch: ["#b5532e", "#f0a868"],
+      theme: "desert", sceneryTheme: "desert", night: false, street: false,
+      pal: pal(ATM.dustyBowl, { grass: [0.62, 0.32, 0.18], runoff: [0.66, 0.42, 0.26], horizon: [0.92, 0.70, 0.52], fog: [0.86, 0.64, 0.48], zenith: [0.24, 0.46, 0.82] }),
+      terrainOuter: 130, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "acacia", fol: [0.36, 0.38, 0.18], lamp: "none", sparse: true },
+      standSet: ["terracotta", "orange", "sandstone"],
+    },
+    winter: {
+      label: "WINTER SNOW", blurb: "Snow to the horizon, dark firs, white peaks under a cold sun.",
+      swatch: ["#eceff1", "#1b3a2a"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: { zenith: [0.30, 0.48, 0.78], horizon: [0.80, 0.86, 0.94], fog: [0.84, 0.88, 0.94], fogDensity: 0.0018, grass: [0.86, 0.88, 0.92], runoff: [0.70, 0.72, 0.76],
+        sunColor: [1.0, 0.97, 0.92], ambientSky: [0.62, 0.68, 0.80], ambientGround: [0.52, 0.54, 0.58], sunDir: [0.5, 0.4, 0.3] },
+      terrainOuter: 160, flatTerrain: false, elevStyle: "hilly", terrainMat: "SNOW",
+      furniture: { tree: "fir", fol: [0.12, 0.24, 0.16], lamp: "none" },
+      standSet: ["darkSteel", "crimson", "alu"],
+    },
+    twilight: {
+      label: "TWILIGHT RESORT", blurb: "Purple dusk sky, a floodlit lagoon, a hotel over the start.",
+      swatch: ["#4a2a5e", "#ff8a65"],
+      theme: "modern", sceneryTheme: "night-event", night: true, street: false,
+      pal: { zenith: [0.10, 0.08, 0.22], horizon: [0.52, 0.26, 0.30], fog: [0.30, 0.18, 0.24], fogDensity: 0.0020, ambientSky: [0.60, 0.48, 0.62], ambientGround: [0.40, 0.32, 0.34],
+        sunColor: [0.95, 0.55, 0.40], grass: [0.14, 0.18, 0.14], runoff: [0.08, 0.40, 0.44] },
+      dayPal: { grass: [0.22, 0.44, 0.20], runoff: COL.aquaRunoff },
+      terrainOuter: 120, flatTerrain: true, elevStyle: "flat",
+      furniture: { tree: "palm", fol: [0.20, 0.36, 0.18], lamp: "post", lc: [0.95, 0.90, 1.0] },
+      standSet: ["navy", "teal", "alu"],
     },
   };
 
@@ -130,20 +209,78 @@ const TrackThemes = (function () {
     return out;
   }
 
+  // ── SCENERY OPTIONS: per-design knobs on top of the preset ────────────────
+  // Each is an index into its list and index 0 means "as the theme has it", so
+  // a design that never touched them stores, encodes (TrackCodec FLAG.look),
+  // ids (CustomTracks.canonical) and builds exactly as before. The share code
+  // stores the INDEXES: append only.
+  const LOOK = Object.freeze({
+    time: Object.freeze(["auto", "day", "dusk", "night"]),
+    trees: Object.freeze(["normal", "few", "many"]),
+    crowd: Object.freeze(["normal", "few", "packed"]),
+  });
+  /** A stored / decoded look → { time, trees, crowd } names, or null when every
+   *  knob is at its default (nothing to store). Unknown names fall to default. */
+  function sanitizeLook(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const out = {};
+    let any = false;
+    for (const k of Object.keys(LOOK)) {
+      const v = LOOK[k].includes(raw[k]) ? raw[k] : LOOK[k][0];
+      out[k] = v; if (v !== LOOK[k][0]) any = true;
+    }
+    return any ? out : null;
+  }
+  /** The design's look with every knob filled in (defaults where absent). */
+  function lookOf(design) {
+    return sanitizeLook(design && design.look) || { time: LOOK.time[0], trees: LOOK.trees[0], crowd: LOOK.crowd[0] };
+  }
+  /** DUSK: the preset's day palette under a low, warm sun. */
+  function duskPal(base) {
+    const g = base.grass || [0.18, 0.42, 0.16];
+    return Object.assign({}, base, {
+      zenith: [0.20, 0.22, 0.42], horizon: [0.92, 0.58, 0.38], fog: [0.80, 0.56, 0.42], fogDensity: 0.0020,
+      sun: [1.0, 0.66, 0.38], sunColor: [1.0, 0.62, 0.34], sunDir: [0.8, 0.16, 0.3],
+      ambientSky: [0.50, 0.44, 0.52], ambientGround: [0.30, 0.24, 0.20], grass: rgb(g, 0.85),
+    });
+  }
+  /** NIGHT on a day preset: its grass and run-off dimmed under the fleet's night sky. */
+  function nightPalFor(p) {
+    const base = p.pal || {};
+    return pal(p.theme === "desert" ? ATM.warmNight : ATM.coolNight, {
+      grass: rgb(base.grass || [0.18, 0.42, 0.16], 0.45), runoff: rgb(base.runoff || [0.55, 0.42, 0.28], 0.5),
+    });
+  }
+  const STREET_THEME = { day: "street_day", night: "street_night" };
+  const DAY_CITY_M = 3600;   // harbour's cityM: the day city's budget-safe length
+
   /** The def fields a design inherits from its theme — what js/editor/custom-tracks.js
    *  spreads into the raw def before TrackDef.fromRaw copies them onto the LIST entry.
-   *  `design` (optional) scales the length-dependent ones (cityGaps). */
+   *  `design` (optional) scales the length-dependent ones (cityGaps) and carries
+   *  the scenery options (look: TIME OF DAY here; TREES / CROWD in sceneryFor). */
   function defFields(id, design) {
     const p = get(id);
+    const look = lookOf(design);
     const out = {
       theme: p.theme, sceneryTheme: p.sceneryTheme, night: !!p.night, street: !!p.street,
       pal: clone(p.pal), terrainOuter: p.terrainOuter, flatTerrain: !!p.flatTerrain,
       furniture: clone(p.furniture), standSet: clone(p.standSet),
     };
+    const dayBase = p.night ? (p.dayPal || {}) : p.pal;
+    if (look.time === "day" && p.night) { out.night = false; out.pal = clone(dayBase); }
+    else if (look.time === "dusk") { out.night = false; out.pal = clone(duskPal(dayBase)); }
+    else if (look.time === "night" && !p.night) {
+      out.night = true; out.pal = clone(nightPalFor(p));
+      // Lights along the lap: the theme's lamp, or a plain post where it has none.
+      if (out.furniture.lamp === "none") Object.assign(out.furniture, { lamp: "post", lc: [1.0, 0.92, 0.78] });
+    }
+    if (out.street) out.theme = STREET_THEME[out.night ? "night" : "day"];
+    if (look.trees === "few") out.furniture.sparse = true;
     if (p.cityStyle) out.cityStyle = clone(p.cityStyle);
     if (p.pit) out.pit = clone(p.pit);
     if (p.terrainMat) out.terrainMat = p.terrainMat;   // "SAND" / "SNOW": the ground beyond the verge (js/track/core/mesh.js)
-    const gaps = design ? cityGaps(lapM(design), p.cityM) : null;
+    // A night street preset run by DAY gets the day city — and its thinning.
+    const gaps = design ? cityGaps(lapM(design), p.cityM || (out.theme === "street_day" ? DAY_CITY_M : 0)) : null;
     if (gaps) out.dressingExclusions = gaps;
     return out;
   }
@@ -210,10 +347,25 @@ const TrackThemes = (function () {
     return { n, total, ds, straights: uniq, slow, outward, far, cx, cz, radius, pitSide, K };
   }
 
-  const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
-
+  /** CROWD: FEW keeps one single-tier stand and at most one bank; PACKED adds a
+   *  tier (≤ 3), the second stand, a bank at every slow corner and a stand at
+   *  the slowest. A street preset (hills 0) stays off the kerbside. */
+  function crowdOpts(look, opts) {
+    const c = look ? look.crowd : "normal";
+    if (c === "few") return Object.assign({}, opts, { tiers: 1, second: false, stand: false, hills: Math.min(1, opts.hills != null ? opts.hills : 3) });
+    if (c === "packed") return Object.assign({}, opts, { tiers: Math.min(3, (opts.tiers || 1) + 1), second: true, stand: opts.hills !== 0, hills: opts.hills === 0 ? 0 : 3 });
+    return opts;
+  }
+  /** TREES: FEW plants 40 % of the belts; MANY 160 % (≤ 80 % of BELT_REF_M) and a second, taller row. */
+  function treeOpts(look, opts) {
+    const t = look ? look.trees : "normal", cov = opts.coverage || 0.35;
+    if (t === "few") return Object.assign({}, opts, { coverage: cov * 0.4, second: false });
+    if (t === "many") return Object.assign({}, opts, { coverage: Math.min(0.8, cov * 1.6), second: true });
+    return opts;
+  }
   /** Grandstands on the pit straight (opposite the pit complex) + banks at the slow corners. */
   function stands(api, sv, h, opts) {
+    opts = crowdOpts(sv.look, opts);
     const { grandstandEx, spectatorHill } = api;
     const side = -sv.pitSide, L = sv.total;
     const startLen = Math.min(140, Math.max(60, sv.straights.length ? sv.straights[0].lenM * 0.25 : 90));
@@ -228,6 +380,7 @@ const TrackThemes = (function () {
   }
   /** Forest belts along the longest straights (and a sprinkling of corners), ≤ coverage of the lap. */
   function belts(api, sv, h, opts) {
+    opts = treeOpts(sv.look, opts);
     const { forestEdge } = api;
     let covered = 0;
     const budget = (opts.coverage || 0.35) * Math.min(sv.total, BELT_REF_M);
@@ -332,7 +485,72 @@ const TrackThemes = (function () {
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta" })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, rMin: 160, rMax: 300, h0: 12, h1: 10, cols: [[0.36, 0.40, 0.18], [0.44, 0.38, 0.16]] })],
     ],
+    tuscany: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.25, gap: 36, col: [0.18, 0.28, 0.12], col2: [0.30, 0.34, 0.14], pineFrac: 0.7, hMin: 10, hMax: 18, density: 0.3 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta", livery2: "sandstone", grass: [0.46, 0.44, 0.20] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 26, rMin: 160, rMax: 320, h0: 16, h1: 14, cols: [[0.52, 0.46, 0.22], [0.38, 0.40, 0.18], [0.60, 0.50, 0.28]] })],
+    ],
+    coast: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.12, 0.34, 0.52], second: false, size: [900, 0.2, 1100] })],
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.2, gap: 34, col: [0.18, 0.34, 0.16], col2: [0.22, 0.38, 0.18], pineFrac: 0.6, hMin: 10, hMax: 16 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 2, livery: "sandstone", livery2: "alu" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 18, rMin: 200, rMax: 360, h0: 18, h1: 16, cols: [[0.40, 0.42, 0.26], [0.50, 0.46, 0.34]] })],
+    ],
+    savanna: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.15, gap: 40, col: [0.36, 0.40, 0.16], col2: [0.42, 0.42, 0.18], pineFrac: 0, hMin: 7, hMax: 11, density: 0.2 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 2, livery: "orange", livery2: "sandstone", grass: [0.58, 0.50, 0.26] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 10, rMin: 1200, rMax: 1800, w0: 900, w1: 500, h0: 140, h1: 120, rough: 0.15, snowline: 1.6, rock: [0.46, 0.44, 0.50], forest: [0.40, 0.40, 0.30] })],
+    ],
+    ardennes: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.5, gap: 28, col: [0.10, 0.22, 0.12], col2: [0.16, 0.30, 0.16], pineFrac: 0.6, hMin: 14, hMax: 24, density: 0.32, second: true })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 700, rMax: 1200, w0: 700, w1: 400, h0: 160, h1: 120, rough: 0.25, snowline: 1.6, rock: [0.30, 0.32, 0.30], forest: [0.12, 0.22, 0.14] })],
+    ],
+    airfield: [
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 3, livery: "steel", livery2: "scaffold" })],
+      ["hangars", (api, sv, h) => hangars(api, sv, h)],
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.15, gap: 60, col: [0.20, 0.34, 0.16], col2: [0.24, 0.38, 0.18], pineFrac: 0.1, hMin: 8, hMax: 13, density: 0.3 })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 18, h0: 5, h1: 4, cols: [[0.22, 0.38, 0.20], [0.26, 0.40, 0.22]] })],
+    ],
+    canyon: [
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 2, livery: "terracotta", livery2: "orange", grass: [0.58, 0.34, 0.20] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 14, rMin: 500, rMax: 1000, w0: 400, w1: 300, h0: 120, h1: 160, rough: 0.5, snowline: 1.6, rock: [0.62, 0.30, 0.18], forest: [0.56, 0.28, 0.16] })],
+    ],
+    winter: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.45, gap: 30, col: [0.10, 0.22, 0.14], col2: [0.14, 0.26, 0.18], pineFrac: 0.95, hMin: 12, hMax: 22, density: 0.3, second: true })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson", grass: [0.84, 0.86, 0.90] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 280, h1: 180, rough: 0.3, snowline: 0.2, snow: [0.96, 0.97, 1.0], rock: [0.40, 0.42, 0.46], forest: [0.12, 0.22, 0.16] })],
+    ],
+    twilight: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.04, 0.10, 0.16], second: false, size: [500, 0.2, 600] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 14, hills: 2, stand: true, livery: "navy", livery2: "teal" })],
+      ["hotel", (api, sv) => { if (api.building) api.building(api.K(0.03), -sv.pitSide, 110, 40, 34, 40, { kind: "slab" }); }],
+      ["floods", (api, sv, h) => floods(api, sv, h, { cool: false })],
+    ],
   };
+  /** Three low hangars set well back on the outside of the second-longest
+   *  straight (the longest is the pit straight, its pits and stands). */
+  function hangars(api, sv, h) {
+    if (!api.building || !sv.straights.length) return;
+    const st = sv.straights[1] || sv.straights[0], side = sv.outward(st.k0);
+    for (let i = 0; i < 3; i++) {
+      const f = st.s0 + ((st.s1 - st.s0 + 1) % 1) * (0.25 + i * 0.25);
+      api.building(api.K(f % 1), side, 90 + h("hangar", i) * 30, 48, 14, 36, { wall: [0.56, 0.58, 0.60] });
+    }
+  }
+
+  /** The preset's dressers plus what the scenery options add: flood masts at
+   *  NIGHT on a day preset, a forest belt where MANY TREES meets a preset with
+   *  none (not on a street, where the city fills the ground). */
+  function dressersFor(themeId, look) {
+    const list = DRESS[themeId].slice(), p = get(themeId), has = (n) => list.some((d) => d[0] === n);
+    if (look.time === "night" && !p.night && !has("floods")) list.push(["floods", (api, sv, h) => floods(api, sv, h, { cool: p.theme !== "desert" })]);
+    if (look.trees === "many" && !p.street && !has("belts")) {
+      const fol = (p.furniture && p.furniture.fol) || [0.22, 0.40, 0.20];
+      list.push(["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.2, gap: 40, col: fol, col2: rgb(fol, 0.85), pineFrac: p.furniture && p.furniture.tree === "fir" ? 0.9 : 0.2, hMin: 8, hMax: 14, density: 0.3 })]);
+    }
+    return list;
+  }
 
   /** The generated `scenery(api)` closure for a design. An inline closure beats
    *  the js/circuits/scenery registry (build-props.js resolves def.scenery
@@ -351,17 +569,18 @@ const TrackThemes = (function () {
         Log.warn("track", "custom scenery " + themeId + " failed (survey) — generic dressing only: " + (e && e.message || e));
         return;
       }
+      sv.look = lookOf(design);
       let failed = 0;
-      for (const [name, dress] of DRESS[themeId]) {
+      for (const [name, dress] of dressersFor(themeId, sv.look)) {
         try { dress(api, sv, h); } catch (e) {
           failed++;
           Log.warn("track", "custom scenery " + themeId + " failed (" + name + ") — the other dressers stand: " + (e && e.message || e));
         }
       }
-      Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " straights=" + sv.straights.length + " slow=" + sv.slow.length + (failed ? " failed=" + failed : ""));
+      Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " look=" + sv.look.time + "/" + sv.look.trees + "/" + sv.look.crowd + " straights=" + sv.straights.length + " slow=" + sv.slow.length + (failed ? " failed=" + failed : ""));
     };
   }
 
-  return { ORDER, PRESETS, has, get, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
+  return { ORDER, PRESETS, LOOK, has, get, sanitizeLook, lookOf, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
 })();
 Object.freeze(TrackThemes);

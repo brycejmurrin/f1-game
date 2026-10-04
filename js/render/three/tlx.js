@@ -671,6 +671,18 @@ const TLX = (function () {
       // pipeline cache and is not compiled into the program text.
       if (renderer._nodes && typeof renderer._nodes.getForRenderCacheKey === "function") {
         renderer._nodes.getForRenderCacheKey = function (ro) {
+          // ONE KEY PER RENDER OBJECT, computed once. three calls this twice for
+          // the same object: to STORE its node-builder state (inside the pass
+          // that draws it) and to DELETE it when the object is disposed (from
+          // a track free, between passes). attachKey() below reads the CURRENT
+          // attachment state, so the delete-time key differed from the store-
+          // time key, the delete missed, and every freed prop batch's builder
+          // state — its node graph and shader text — stayed in nodeBuilderCache
+          // for the session: +14 MB per round of picker picks, 65 entries at
+          // usedTimes 0 after three rounds (tools/gfx/mem-census.mjs, measured
+          // 2026-10-04). A render object belongs to one render context, so its
+          // attachment state cannot change after the first call.
+          if (ro.__tlxNbKey !== undefined) return ro.__tlxNbKey;
           const mat = ro.material;
           const geo = ro.geometry;
           const fam = (mat && typeof mat.customProgramCacheKey === "function")
@@ -712,7 +724,7 @@ const TLX = (function () {
           // came from EVERY pooled mesh, and pooled meshes are still "M".
           const inst = ro.object && ro.object.isInstancedMesh
             ? "I" + ro.object.id : "M";
-          return fam + "|" + attrs + "|" + idx + "|" + inst + "|" + attachKey();
+          return (ro.__tlxNbKey = fam + "|" + attrs + "|" + idx + "|" + inst + "|" + attachKey());
         };
       }
       // ...but the ATTACHMENT STATE has to stay in the key. A WGSL fragment
