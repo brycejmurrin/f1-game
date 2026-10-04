@@ -316,7 +316,19 @@ const IncidentSim = (function () {
         const vFwd = vWx * fxh + vWz * fzh;     // signed: negative IS facing-backwards
         const vSide = vWx * fzh - vWz * fxh;    // + = sliding right, the c.vLat convention
         const vHoriz = Math.hypot(vWx, vWz);    // magnitude only — the settle band below wants it
-        const speed = fin(vFwd) ? vFwd : (lg ? lg.speed : 0);
+        let speed = fin(vFwd) ? vFwd : (lg ? lg.speed : 0);
+        // AN AI CAR MOVES ALONG THE ROAD (c.s += c.speed*dt), not its nose, so
+        // its signed speed is the velocity ON THE TANGENT. Against the body's
+        // heading, a rival spun 180 deg while still sliding forwards came back
+        // at -20 m/s and reversed down the track into the pack behind. A human
+        // keeps the body-relative sign: its c.head is the real heading.
+        if (!c.human && G.track && G.smp) {
+          try {
+            Tracks.sample(G.track, tf.s, G.smp);
+            const vT = vWx * G.smp.t[0] + vWz * G.smp.t[2];
+            if (fin(vT)) speed = vT;
+          } catch (e) { /* keep the body-relative speed */ }
+        }
         let wx = px, wz = pz;
         if (G.worldFromTrack) {
           try {

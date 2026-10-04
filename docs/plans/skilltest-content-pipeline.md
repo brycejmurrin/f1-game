@@ -91,7 +91,7 @@ Verdict key: **works** · **works with caveats** · **broken** · **not testable
 | `audit-aero.mjs` | works | `--help` OK (alias) | — | — |
 | `render-car.mjs` | works with caveats | `--help` OK; needs `:3456` for real render | — | — |
 | `cockpit-pale-sweep.mjs` | not testable | Help sweep hung earlier; needs mesh/browser path | — | Proposal: `--help` + document offline vs browser |
-| `emblems.mjs` | works | `--check` / `--png=` offline (replaced `trace-logo.mjs`, retired 2026-10-03: it re-traced real team logos) | — | — |
+| `trace-logo.mjs` | not testable | Author-time git-history logo bake | — | skip |
 
 ## Tools — `tools/lighting/`
 

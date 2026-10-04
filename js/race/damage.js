@@ -91,16 +91,15 @@ const Damage = (function () {
     r.cool = COOL_S;
   }
 
-  /** Car-to-car contact: game.js collideFx(a, b, impact), every pair, before
-   *  its player-only early-out. `trackLen` (m) wraps the prog difference: prog
-   *  counts laps, so a lapped pair touching nose-to-tail is ~L apart in prog and
-   *  the unwrapped sign booked a rear hit as a FRONT one (and the reverse). */
-  function contact(a, b, impact, trackLen) {
+  /** Car-to-car contact: game.js collideFx(a, b, impact, lapLen), every pair,
+   *  before its player-only early-out. `prog` is race distance, so a car
+   *  lapping a backmarker is ~a lap apart: wrap to the nearest lap. */
+  function contact(a, b, impact, lapLen) {
     if (!a || !b) return;
     const pa = Number.isFinite(a.prog) ? a.prog : a.s || 0;
     const pb = Number.isFinite(b.prog) ? b.prog : b.s || 0;
     let dl = pb - pa;
-    if (trackLen > 0) dl = ((dl + trackLen / 2) % trackLen + trackLen) % trackLen - trackLen / 2;
+    if (lapLen > 0) dl -= Math.round(dl / lapLen) * lapLen;
     const dx = (b.x || 0) - (a.x || 0);
     hitAt(a, dl, dx, impact);
     hitAt(b, -dl, -dx, impact);

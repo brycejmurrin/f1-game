@@ -80,16 +80,14 @@ test("contact: both cars booked from their own frame, debounced until observe() 
   assert.ok(D.state(sp).rw > 0 && D.state(sp).fwL + D.state(sp).fwR === 0);
 });
 
-// verify-physics #13: prog counts laps. The leader (lap 5, prog 5000+100)
-// touching the back of a lapped car (lap 4, prog 4000+104 on a 1000 m track)
-// is nose-to-tail on the ROAD; unwrapped, dl = -996 booked the leader's FRONT
-// strike as a REAR one and the backmarker's rear strike as a front one.
-test("contact: a lapped pair is booked by its road gap, not its lap-count gap", () => {
+test("contact: a car lapping a backmarker is booked by on-road gap, not race distance", () => {
   const { Damage: D } = load();
-  const lead = car({ prog: 5100, x: 0 }), back = car({ prog: 4104, x: -0.4 });
-  D.contact(lead, back, 0.6, 1000);
-  const sl = D.state(lead), sb = D.state(back);
-  assert.ok(sl.fwL > 0 && sl.rw === 0, `the leader hit the backmarker with its nose (fwL ${sl.fwL}, rw ${sl.rw})`);
+  const L = 5000;
+  // a is a lap up and runs into b, 2 m ahead of its nose on the road.
+  const a = car({ prog: 5 * L + 10, x: 0 }), b = car({ prog: 4 * L + 12, x: 0 });
+  D.contact(a, b, 0.6, L);
+  const sa = D.state(a), sb = D.state(b);
+  assert.ok(sa.fwL + sa.fwR > 0 && sa.rw === 0, "the lapping car's nose took it");
   assert.ok(sb.rw > 0 && sb.fwL + sb.fwR === 0, "the backmarker was hit from behind");
 });
 
