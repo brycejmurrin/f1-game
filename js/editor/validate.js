@@ -29,7 +29,7 @@ const TrackValidate = (function () {
     startBackRed: 150, startBackAmber: 240, gridM: 198,     // ENTRY_MIN; ENTRY_MIN + ENTRY_ROAD + MOUTH_RUN; 14 + 23·8
     startFwdRed: 70, startFwdAmber: 240,                    // EXIT_MIN + ROAD_MIN; EXIT_M + EXIT_ROAD + MERGE_RUN
     bridgeSep: 7,                                           // overheadSpan's 4.8 m clearance + deck
-    foldFrac: 0.67, foldAmberFrac: 0.8,                     // node-scale radius / half-width (see the fold rule)
+    foldFrac: 0.65, foldAmberFrac: 0.8,                     // node-scale radius / half-width (see the fold rule)
     ptsMin: 8, ptsMax: 200, ptsAmber: 180, spacing: 8, hwMin: 5, hwMax: 8,
   });
   // The clearance scan's grid cell: a 3×3 neighbourhood sees every pair closer
@@ -157,6 +157,9 @@ const TrackValidate = (function () {
       // circuits verify-track knows fold and ≥ 0.70 on every other (bahrain
       // read 0.57 until its start line moved 2026-10-04 and re-phased its
       // dense samples to 0.640; mexico 0.702 is the closest non-fold).
+      // 0.65, not higher: the designer's START FROM trace of Spa's corrected
+      // elevation build reads 0.660-0.665 on this measure and must stay a
+      // non-fold (track-insight START FROM).
       let kMax = 0, kAt = 0, fold = null, foldAmber = null;
       const P = (i) => [px[(i + n) % n], pz[(i + n) % n]];
       for (let k = 0; k < n; k++) {
