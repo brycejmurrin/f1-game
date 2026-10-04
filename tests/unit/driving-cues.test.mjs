@@ -108,3 +108,45 @@ test("cornerSide maps +k to LEFT and -k to RIGHT", () => {
   // From s=100, look covers the -k peak at 120..145.
   assert.equal(ctx.DrivingCues.cornerSide(track, 100, 60, 8), -1);
 });
+
+test("one call per turn: a long sweeper is called ONCE, and the next turn on the same side is called again", () => {
+  // Was: lastCallS = the car's position, so any turn still inside the lookahead
+  // re-fired every CALL_COOLDOWN_M — a 400 m sweeper said "L" six times. A
+  // same-side call now needs straight road since the last one.
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 500 && u < 900) return 0.02;    // a 400 m left sweeper
+    if (u > 1400 && u < 1500) return 0.03;  // straight between, then another left
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 300, speed: 60, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  for (let i = 0; i < 1300; i++) { ctx._t = i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L", "L"], "the sweeper once, the later left once");
+});
+
+test("the call memory resets when the cues stand down (a new race starts clean)", () => {
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => (s > 500 && s < 900 ? 0.02 : 0);
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 300, speed: 60, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  for (let i = 0; i < 400; i++) { ctx._t = i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
+  assert.equal(ctx._calls.length, 1);
+  G.state = "results"; ctx.DrivingCues.tick();          // the race ends
+  G.state = "race"; G.player.s = 300;                    // the next one, same corner ahead
+  for (let i = 0; i < 400; i++) { ctx._t = 10000 + i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
+  assert.equal(ctx._calls.length, 2, "the first call of the next race is not suppressed");
+});

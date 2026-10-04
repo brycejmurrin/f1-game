@@ -33,7 +33,7 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 | 0.05 | R | mid | **Turn 1 Grandstand**: covered single-tier cream shell with blue seating (~72 m), truss roof — outside of the Michael Schumacher Corner overtaking zone |
 | 0.048 | L | mid | **Schumacher Corner marker**: trackside board naming T1 (renamed 2014); design of the real plaque is UNCERTAIN — naming only |
 | 0.18 | R | mid | University Grandstand (triple): three stacked grey slabs, ~16 m |
-| 0.52 | R | mid | T9–10 Beyon (ex-Batelco) complex marked by lightBanks only — covered stand deferred to stay ≤ ship props-tris (ticket-compare / 3ddigitalvenue) |
+| 0.52 | R | mid | **Beyon (ex-Batelco)** covered single-tier stand (`bahrain-beyon-grandstand`) on the infield of the T9–10 DRS straight + opposite light bank / TV wall (oversteer48 / bahrain.gp; lean mesh — full `grandstandEx` exceeds props-tris) |
 | 0.97 | R | mid | Victory-approach stand: covered seating (~48 m) near final corner / pit entry |
 | 0.20 | both | mid | Floodlight masts: tall dual-arm cool-white poles + lens banks, **~36–42 m** |
 | 0.30 | L | far | Sculpted dunes: low rounded tan wedges, 3–6 m |

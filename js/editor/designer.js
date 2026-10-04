@@ -17,6 +17,7 @@ const TrackDesigner = (function () {
   const TOOLS = [["select", "SELECT"], ["draw", "DRAW"], ["straight", "STRAIGHT"], ["corner", "CORNER"], ["hairpin", "HAIRPIN"], ["chicane", "CHICANE"], ["sbend", "S-BEND"]];
   const STEPS = { L: 10, R: 5, deg: 5 };
   const PARAM_LABEL = { L: "LENGTH m", R: "RADIUS m", deg: "ANGLE °" };
+  const LOOK_ROWS = [["time", "TIME OF DAY"], ["trees", "TREES"], ["crowd", "CROWD"]];
   /** The HOW TO tab's text, one table (docs/TRACK-DESIGNER.md is the long form):
    *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
   const HOWTO = Object.freeze({
@@ -25,7 +26,7 @@ const TrackDesigner = (function () {
       { n: 2, title: "Shape", text: "Drag the white points to bend the road; tap the road to add a point, and double-tap a point (or DELETE POINT) to remove it. Pinch or wheel to zoom, drag empty space to pan, and FIT VIEW recentres the circuit." },
       { n: 3, title: "Corners", text: "Choose CORNER, HAIRPIN, CHICANE or S-BEND, set its radius, angle and LEFT or RIGHT, then tap the point where it should begin (STRAIGHT works the same way with a length). To reshape a corner already there, tap its row under TURNS and press REPLACE THE SELECTED SPAN — UNDO takes either back." },
       { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
-      { n: 5, title: "Look", text: "Pick a theme — the scenery, time of day and terrain follow it. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
+      { n: 5, title: "Look", text: "Pick one of sixteen themes and tune it with TIME OF DAY (AUTO keeps the theme's own sky; NIGHT adds floodlights), TREES and CROWD. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
       { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings (FIA lines are Grade 1 advice). Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
     ]),
@@ -333,6 +334,17 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { theme: id }), "theme");
     return true;
   }
+  /** A scenery option (TrackThemes.LOOK): one UNDO entry; all at default stores none. */
+  function setLook(key, v) {
+    if (!TrackThemes.LOOK[key] || !TrackThemes.LOOK[key].includes(v)) return false;
+    const cur = TrackThemes.lookOf(design);
+    if (cur[key] === v) return false;
+    const look = TrackThemes.sanitizeLook(Object.assign({}, cur, { [key]: v }));
+    const next = Object.assign({}, design);
+    if (look) next.look = look; else delete next.look;
+    commit(next, "look");
+    return true;
+  }
   function setWidth(hw) {
     hw = Math.round(Math.min(CustomTracks.LIMITS.hwMax, Math.max(CustomTracks.LIMITS.hwMin, hw)) * 10) / 10;
     if (hw === design.baseHW) return false;
@@ -628,6 +640,20 @@ const TrackDesigner = (function () {
       ui.themes.appendChild(b);
     }
     theme.appendChild(ui.themes);
+    ui.themeBlurb = el("div", "td-hint", "");
+    theme.appendChild(ui.themeBlurb);
+    // Scenery options (TrackThemes.LOOK): one chip row per knob, under its theme.
+    ui.look = {};
+    for (const [key, label] of LOOK_ROWS) {
+      const row = el("div", "td-row");
+      row.appendChild(el("span", "", label));
+      for (const v of TrackThemes.LOOK[key]) {
+        const b = btn(v.toUpperCase(), "sel-chip", () => setLook(key, v)); b.dataset.look = key + ":" + v;
+        b.setAttribute("aria-label", label + " " + v); b.setAttribute("aria-pressed", "false");
+        row.appendChild(b);
+      }
+      ui.look[key] = row; theme.appendChild(row);
+    }
     // circuit
     const circuit = group("4 DETAILS");
     ui.name = el("input", "td-input"); ui.name.type = "text"; ui.name.maxLength = CustomTracks.LIMITS.name; ui.name.autocomplete = "off"; ui.name.spellcheck = false;
@@ -769,6 +795,12 @@ const TrackDesigner = (function () {
       ui.shapeLabel.textContent = "2 CORNERS · " + stampExample();
     }
     for (const b of ui.themes.children) { const on = b.dataset.theme === design.theme; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
+    ui.themeBlurb.textContent = TrackThemes.get(design.theme).blurb || "";
+    const look = TrackThemes.lookOf(design);
+    for (const key of Object.keys(ui.look)) for (const b of ui.look[key].children) {
+      if (!b.dataset || !b.dataset.look) continue;
+      const on = b.dataset.look === key + ":" + look[key]; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     ui.width._refresh();
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
@@ -1597,7 +1629,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     addBump, setBump, removeBump, selectBump,

@@ -69,7 +69,11 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // (the lap-line write) are absent on a cold car; a car classified in one
   // episode would start the next with both. finPos/retired/dnf* are DECLARED
   // by makeCars, so gridUp() restores their declared values instead.
-  "_coastHeld", "lastLap"];
+  "_coastHeld", "lastLap",
+  // Field-step pose snapshots (game.js update()): written every tick before
+  // updateCar so traffic scans read last step's poses. Absent on a cold car;
+  // a warm one would hand the next episode a stale sibling pose on frame 0.
+  "_snapProg", "_snapX", "_snapSpeed"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {

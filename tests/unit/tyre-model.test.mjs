@@ -70,6 +70,16 @@ test("fitting preserves the ordinary AI null-tread competent-field sentinel", ()
   assert.equal(car.tyre.tread, 0);
 });
 
+test("…but an AI with a pit plan (wear on) carries the tread of the set it is fitted", () => {
+  // Left null, an AI still on slicks as the rain came in cornered on full wets.
+  const s = ctxFor();
+  const car = { lap: 1, tread: null, human: false, pitPlan: { start: "hard" } };
+  s.fit(car, T.classRecord("wet"));
+  assert.equal(car.tread, 2);
+  s.fit(car, T.classRecord("soft"));
+  assert.equal(car.tread, 0, "slicks in the rain are slicks");
+});
+
 test("an AI plan overrides a MY TEAM mate's saved starting tyre", () => {
   const savedWet = TYRES.find((o) => o.id === "wet_full");
   const mate = { human: false, tyreOpt: savedWet, pitPlan: { start: "hard" }, tyreClass: "soft" };

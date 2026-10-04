@@ -32,8 +32,19 @@ const ReplayBuf = (function () {
   }
 
   // Pure: interpolate one car's floats between two frames (Ghost.at shape).
-  function lerpCar(out, a, b, u) {
+  // `L` (the lap length, G.track.total) makes arc `s` wrap-aware: a car
+  // crossing the line goes L-1.3 -> 1.37, and a plain lerp swept it (and the
+  // camera on it) through the whole lap the other way in one sample. Without L
+  // (or L <= 0) `s` lerps plainly, as before.
+  function lerpCar(out, a, b, u, L) {
     for (let i = 0; i < FLOATS; i++) out[i] = a[i] + (b[i] - a[i]) * u;
+    if (L > 0) {
+      let ds = b[0] - a[0];
+      if (ds > L * 0.5) ds -= L; else if (ds < -L * 0.5) ds += L;   // M4.wrapDelta, inlined: the ring is dependency-free
+      let s = a[0] + ds * u;
+      if (s < 0) s += L; else if (s >= L) s -= L;
+      out[0] = s;
+    }
     // Heading (2) and mesh yaw (8), without allocating per sampled car.
     for (let i = 2; i <= 8; i += 6) {
       let delta = b[i] - a[i];
@@ -157,11 +168,11 @@ const ReplayBuf = (function () {
       }
       const t0 = times[i0], t1 = times[i1];
       if (i1 !== i0 && t1 > t0) u = (tt - t0) / (t1 - t0);
-      const cars = [];
+      const cars = [], L = (G.track && G.track.total) || 0;
       for (let c = 0; c < nCars; c++) {
         readCar(_a, i0, c);
         readCar(_b, i1, c);
-        lerpCar(_o, _a, _b, u);
+        lerpCar(_o, _a, _b, u, L);
         cars.push({
           s: _o[0], x: _o[1], head: _o[2], speed: _o[3],
           px: _o[4], py: _o[5], pz: _o[6], steer: _o[7], yawVis: _o[8],

@@ -286,3 +286,37 @@ test("toRaw maps hwZone ARC fractions to INDEX fractions exactly on unequal spac
   const z = C.toRaw(it).hwZones[0];
   assert.ok(Math.abs(z.s0 - 3 / 8) < 1e-4 && Math.abs(z.s1 - 5 / 8) < 1e-4, JSON.stringify(z));
 });
+
+test("TIME OF DAY: AUTO keeps the preset; NIGHT lights a day preset; DAY / DUSK un-light a night one (street presets swap city); TREES FEW thins the roadside", () => {
+  const { T, C } = boot();
+  const withLook = (theme, look) => T.defFields(theme, { theme, look, lengthM: 3400 });
+  for (const id of T.ORDER) assert.deepEqual(plain(withLook(id, undefined)), plain(T.defFields(id, { theme: id, lengthM: 3400 })), id + ": no look = the preset");
+  // NIGHT on a day preset: night flag, a dark sky, and a lamp where the theme had none.
+  const pn = withLook("parkland", { time: "night" });
+  assert.equal(pn.night, true);
+  assert.notEqual(pn.furniture.lamp, "none", "lamps at night");
+  assert.ok(pn.pal.zenith[2] < 0.2, "a night sky");
+  assert.equal(withLook("savanna", { time: "night" }).pal.zenith[0], T.defFields("desertnight").pal.zenith[0], "desert presets take the warm night");
+  // DAY / DUSK on a night preset.
+  const md = withLook("marina", { time: "day" });
+  assert.equal(md.night, false); assert.equal(md.theme, "street_day", "a street preset by day gets the day city");
+  assert.ok(md.dressingExclusions === undefined, "a 3.4 km lap is under the day city's budget length");
+  assert.ok(T.defFields("marina", { theme: "marina", look: { time: "day" }, lengthM: 7000 }).dressingExclusions, "…and a 7 km one thins it like harbour");
+  assert.equal(withLook("harbour", { time: "night" }).theme, "street_night");
+  const dusk = withLook("desertnight", { time: "dusk" });
+  assert.equal(dusk.night, false);
+  assert.ok(dusk.pal.sunDir[1] < 0.3, "a low sun");
+  assert.equal(withLook("parkland", { time: "day" }).night, false, "DAY on a day preset changes nothing");
+  assert.deepEqual(plain(withLook("parkland", { time: "day" })), plain(withLook("parkland", undefined)));
+  // TREES FEW → sparse roadside planting.
+  assert.equal(withLook("parkland", { trees: "few" }).furniture.sparse, true);
+  // Every preset × time builds a palette the factory accepts.
+  for (const id of T.ORDER) for (const time of T.LOOK.time) {
+    const f = withLook(id, { time });
+    assert.ok(["green", "desert", "street_day", "street_night", "modern"].includes(f.theme), id + "/" + time);
+    assert.ok(f.pal && Array.isArray(f.pal.grass) && f.pal.grass.every(Number.isFinite), id + "/" + time + " grass");
+  }
+  // The stored record keeps a look only when it is off default, and the id follows it.
+  assert.equal(C.sanitize(design({ look: { time: "auto", trees: "normal", crowd: "normal" } })).look, undefined);
+  assert.notEqual(C.sanitize(design({ look: { crowd: "packed" } })).id, C.sanitize(design()).id);
+});

@@ -209,10 +209,12 @@ function create(G) {
         otherArmed ? "ALL MODES?" : (armedImport === id ? "IMPORT?" : "IMPORT"));
       imp.type = "button";
       imp.setAttribute("data-cr-act", "import");
-      const what = `${modeName} slot ${s.i + 1}`;
+      // The backup restores ITS saved slots (empty rows leave a slot alone);
+      // the card only picks the mode, so the label must not name this slot.
       imp.setAttribute("aria-label", otherArmed
         ? `Confirm: import the other career mode too`
-        : (armedImport === id ? `Confirm: import backup into ${what}` : `Import career backup into ${what}`));
+        : (armedImport === id ? `Confirm: restore the backup's ${modeName} saves`
+          : `Import career backup: restores its ${modeName} saves`));
       imp.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
