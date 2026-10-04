@@ -65,33 +65,39 @@ const Assets = (function () {
     return blob;
   }
 
+  // Every strip decode passes these. The albedo strip's ALPHA is roughness,
+  // not coverage, so the bitmap must stay straight: `premultiplyAlpha:
+  // "default"` is UA-chosen and Chromium premultiplies it (MEASURED 2026-10-04,
+  // artifacts/probe/run-premul.mjs: layer 4 meanR 152.6 straight vs 61.5
+  // default — the metal layer at 40 %). WebGL ignores UNPACK_PREMULTIPLY_ALPHA
+  // for an ImageBitmap, so construction is the only place to say it. The PNG
+  // is untagged; "none" keeps the bytes the bake wrote (GLX texSubImage3D,
+  // TLX/WGX readLayerBytes all see the same values).
+  // https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#imagebitmapoptions
+  const BITMAP_OPTS = Object.freeze({ premultiplyAlpha: "none", colorSpaceConversion: "none" });
+
   async function _decodeStrip(blob, size, present) {
     const out = new Array(MAT_LAYERS);
     try {
       for (let i = 0; i < MAT_LAYERS; i++) {
         if (!present[i]) continue;
-        out[i] = await createImageBitmap(blob, 0, i * size, size, size);
+        out[i] = await createImageBitmap(blob, 0, i * size, size, size, BITMAP_OPTS);
       }
       return out;
     } catch (_) {
       // The cropping overload of createImageBitmap has a patchy history on
-      // Safari. Fall back to one full-strip decode plus canvas crops, which
-      // every engine supports — slower and it allocates, but it is the
-      // difference between iOS getting baked materials and not.
+      // Safari with a Blob source. Fall back to one full-strip decode and crop
+      // each layer out of that ImageBitmap — the same overload on an already
+      // decoded source, with the same options. NOT a 2D canvas: a canvas
+      // backing store is premultiplied (and colour-managed) in every engine,
+      // so a drawImage crop quantises or darkens every low-alpha layer.
       _releaseStrip(out);
-      const full = await createImageBitmap(blob);
+      const full = await createImageBitmap(blob, BITMAP_OPTS);
       const alt = new Array(MAT_LAYERS);
       try {
-        const cv = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const c2d = cv.getContext("2d");
-        if (!c2d) throw new Error("no-2d-context");
         for (let i = 0; i < MAT_LAYERS; i++) {
           if (!present[i]) continue;
-          c2d.clearRect(0, 0, size, size);
-          c2d.drawImage(full, 0, i * size, size, size, 0, 0, size, size);
-          alt[i] = await createImageBitmap(cv);
+          alt[i] = await createImageBitmap(full, 0, i * size, size, size, BITMAP_OPTS);
         }
         return alt;
       } catch (e) {
@@ -101,6 +107,61 @@ const Assets = (function () {
         if (full.close) { try { full.close(); } catch { /* already closed/detached: nothing left to free */ } }
       }
     }
+  }
+
+  // Raw RGBA8 bytes of each layer, straight alpha, no colour management — the
+  // bytes GLX's texSubImage3D samples. For backends that need pixels rather
+  // than a TexImageSource (TLX's DataArrayTexture, WGX's writeTexture).
+  // A 2D canvas cannot do this: drawImage()+getImageData() premultiplies
+  // through the backing store and colour-manages (tlx.js createTextureArray
+  // has the 2026-08-17 measurement). One scratch WebGL2 context uploads each
+  // layer with every unpack conversion off and reads it back from an FBO.
+  // `data` holds n pages of size*size*4; returns the indices it wrote.
+  function readLayerBytes(size, images, n, data) {
+    const page = size * size * 4;
+    const done = [];
+    const pending = [];
+    for (let i = 0; i < n; i++) {
+      const img = images[i];
+      if (!img) continue;
+      // ArrayBuffer.isView, not instanceof: a byte layer may come from another realm.
+      const raw = (ArrayBuffer.isView(img) && img.BYTES_PER_ELEMENT === 1) ? img
+        : (typeof ImageData !== "undefined" && img instanceof ImageData) ? img.data : null;
+      if (raw) {
+        if (raw.length >= page) { data.set(raw.subarray(0, page), i * page); done.push(i); }
+      } else pending.push(i);
+    }
+    if (!pending.length) return done;
+    let cv = null;
+    try {
+      cv = (typeof OffscreenCanvas !== "undefined")
+        ? new OffscreenCanvas(size, size)
+        : Object.assign(document.createElement("canvas"), { width: size, height: size });
+    } catch (_) { return done; }
+    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+    if (!gl) return done;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    const tex = gl.createTexture();
+    const fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    for (const i of pending) {
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
+        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
+          new Uint8Array(data.buffer, data.byteOffset + i * page, page));
+        done.push(i);
+      } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
+    }
+    gl.deleteFramebuffer(fbo);
+    gl.deleteTexture(tex);
+    const lose = gl.getExtension("WEBGL_lose_context");
+    if (lose) { try { lose.loseContext(); } catch (_) { /* already lost */ } }
+    return done.sort((a, b) => a - b);
   }
 
   function _releaseStrip(imgs) {
@@ -407,7 +468,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, unload, adopt, state,
+  return { init, supported, manifest, load, unload, adopt, state, readLayerBytes,
            model, modelSync, models, loadModels, modelsReady, env, credits, MAT_LAYERS };
 })();
 

@@ -285,7 +285,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
     "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
-  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?renderer\.dispose/,
+  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,
     "failed renderer.init must dispose before AUTO WebGPU→WebGL2 retry");
   assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
@@ -4059,7 +4059,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // ALL of them, not just the one we came to change. Today ours is three's set
   // byte for byte except alpha:
   //   three: { antialias: currentSamples > 0, alpha: !0, depth: e.depth, stencil: e.stencil }
-  //   ours:  { antialias: !isMobile,           alpha: false, depth: true,  stencil: false }
+  //   ours:  { antialias: false,               alpha: false, depth: true,  stencil: false }
   // and those agree only because TLX overrides neither depth nor stencil, so
   // the renderer holds three's defaults — depth true, stencil false. Should a
   // three bump default stencil back to true, its passes would want a stencil
@@ -4075,9 +4075,12 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // Not cosmetic either: three's antialias becomes samples>0 on the DEFAULT
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
-  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
-  assert.match(tlx, /antialias:\s*forceWebGL\s*\?\s*!isMobile\s*:\s*!_liteGpu\b/,
-    "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
+  // 2026-10-04: false on BOTH (GLX parity, glx.js antialias:false). The canvas
+  // only receives the FXAA quad; a 4x multisampled default framebuffer there
+  // was ~75 MB at 1080p of resolve bought for nothing.
+  assert.match(ctx[1], /antialias:\s*false/, "context AA must track the renderer's forceWebGL path (off)");
+  assert.match(tlx, /antialias:\s*forceWebGL\s*\?\s*false\s*:\s*!_liteGpu\b/,
+    "the WebGL2 path asks for no canvas MSAA; lite WebGPU (phone / WebKit / software) must not ask for MSAA 4");
 });
 
 test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
@@ -5564,7 +5567,7 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   assert.equal(opened, 2);
 });
 
-test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+test("TLX scene MSAA: preset-driven on the desktop WebGL2 backend only, depth resolved", () => {
   // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
   // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
   // samples now go to the scene target, on the desktop WebGL2 backend only:
@@ -5572,8 +5575,8 @@ test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolv
   // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
   const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
-    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(tlx, /sceneSamples:\s*\(_sceneSamples = sceneSamplesFor\(renderer, forceWebGL, isMobile\)\)/,
+    "tlx.js decides the scene sample count through the preset rule (GLX post.js parity)");
   assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
     "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
 });
@@ -5714,4 +5717,71 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
   assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
   assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
+});
+
+// 2026-10-04 (L4-b): the preset rule GLX applies in glx/post.js — 4x only on
+// GRAPHICS: ULTRA, 2x below, 0 on phones and native WebGPU, clamped to what
+// the HDR format supports. Executed, not pattern-matched.
+function tlxSceneSamples({ store = {}, forceWebGL = true, isMobile = false, cMax = 8, dMax = 8, hdr = true } = {}) {
+  const body = fnBody(code("js/render/three/tlx.js"), "sceneSamplesFor");
+  const localStorage = { getItem: (k) => (k in store ? store[k] : null) };
+  const gl = { RENDERBUFFER: 1, RGBA16F: 2, RGBA8: 3, DEPTH_COMPONENT24: 4, SAMPLES: 5,
+    getExtension: (n) => (hdr && n === "EXT_color_buffer_float" ? {} : null),
+    getInternalformatParameter: (t, fmt) => {
+      assert.equal(fmt === 2 || fmt === 3 || fmt === 4, true);
+      if (fmt !== 4) assert.equal(fmt, hdr ? 2 : 3, "the colour query follows the HDR format");
+      return fmt === 4 ? [dMax] : [cMax];
+    } };
+  const fn = new Function("localStorage", "renderer", "forceWebGL", "isMobile", body);
+  return fn(localStorage, { backend: { gl } }, forceWebGL, isMobile);
+}
+test("TLX scene MSAA follows the GRAPHICS preset like glx/post.js (ULTRA 4x, else 2x, phones/WebGPU 0)", () => {
+  assert.equal(tlxSceneSamples(), 2, "unset preset = desktop HIGH = 2x");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("high") } }), 2);
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") } }), 4);
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": "ultra" } }), 4, "a raw probe string still compares");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxHigh": "1" } }), 4, "legacy gfxHigh=1 with no preset = ULTRA");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") }, cMax: 2 }), 2, "clamped to the format");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") }, dMax: 1 }), 0, "1x is no MSAA");
+  assert.equal(tlxSceneSamples({ hdr: false }), 2, "an RGBA8 scene queries RGBA8");
+  assert.equal(tlxSceneSamples({ isMobile: true, store: { "apex26.gfxPreset": JSON.stringify("ultra") } }), 0, "phones: FXAA alone");
+  assert.equal(tlxSceneSamples({ forceWebGL: false }), 0, "native WebGPU cannot resolve a depth attachment");
+});
+
+// 2026-10-04 (L4-b): r186 WebGLBackend.dispose() ends with
+// WEBGL_lose_context.loseContext(). On the forceWebGL path that is #game's own
+// context, and the GLX fallback _fail() boots next gets the same object back
+// from getContext("webgl2"). The abort path must dispose three without it.
+test("TLX abort path disposes three without losing #game's WebGL2 context", () => {
+  const tlx = code("js/render/three/tlx.js");
+  const body = fnBody(tlx, "disposeKeepingContext");
+  const run = new Function("r", body);
+  // three's WebGLBackend shape: dispose() reaches extensions.get("WEBGL_lose_context").
+  function webglRenderer() {
+    const log = [];
+    const ext = { get(name) { log.push("get:" + name); return name === "WEBGL_lose_context" ? { loseContext() { log.push("LOST"); } } : { name }; } };
+    const backend = { isWebGPUBackend: false, extensions: ext };
+    return { log, backend, dispose() {
+      log.push("dispose");
+      const e = backend.extensions.get("WEBGL_lose_context");
+      if (e) e.loseContext();
+      assert.deepEqual(backend.extensions.get("OES_x"), { name: "OES_x" }, "other lookups still reach three");
+      return Promise.resolve();
+    } };
+  }
+  const gl = webglRenderer();
+  run(gl);
+  assert.ok(gl.log.includes("dispose"), "three still frees its own objects");
+  assert.ok(!gl.log.includes("LOST"), "the shared context must survive the dispose");
+  // No extensions object to neuter: skip the dispose rather than lose the context.
+  const bare = { backend: { isWebGPUBackend: false }, dispose() { throw Error("must not dispose"); } };
+  run(bare);
+  // The WebGPU backend has no loseContext: it disposes as before.
+  let gpuDisposed = 0;
+  run({ backend: { isWebGPUBackend: true }, dispose() { gpuDisposed++; return Promise.reject(Error("device lost")); } });
+  assert.equal(gpuDisposed, 1);
+  // Both teardown sites route through it; no raw renderer.dispose() remains there.
+  assert.match(tlx, /disposeKeepingContext\(_abortRenderer\)/, "the create() catch uses the context-keeping dispose");
+  assert.match(tlx, /disposeKeepingContext\(renderer\);[^\n]*\n\s*throw e;/, "the init() failure path uses it too");
+  assert.doesNotMatch(tlx, /_abortRenderer\.dispose\(\)/, "no raw dispose on the abort path");
 });
