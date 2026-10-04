@@ -687,13 +687,16 @@ const Car3D = (function () {
     }
     return { half: W.half, stations: st8, elem };
   }
-  // The driver-number board on the endplate: a fixed-height board anchored LOW,
-  // its bottom a small gap above the plate base. The plate base barely moves with
-  // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
-  // the short low-DF plate and low-on-a-tall-plate for max DF — never floating.
+  // The driver-number board on the endplate: anchored LOW, its bottom a small
+  // gap above the plate base. The plate base barely moves with DF while the top
+  // shoots up, so a low anchor reads grounded on the short low-DF plate and
+  // low-on-a-tall-plate for max DF — never floating. Height is 0.20 on a tall
+  // plate; on the tier-0 plank (sy 0.22) it shrinks so the board stays on the
+  // plate (car-shade / sponsorBoard) instead of poking past the crown.
   function numberBoard(aLvl, style) {
-    const ep = endplateGeom(aLvl, style), h = 0.20;
-    return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
+    const ep = endplateGeom(aLvl, style), gap = 0.05;
+    const h = Math.min(0.20, Math.max(0.12, ep.sy - gap - 0.02));
+    return { cy: ep.cy - ep.sy * 0.5 + gap + h * 0.5, h };
   }
   // The blade OUTLINES a livery may pick (liv.finShape). "standard" is the one
   // frozen shape every car carried; the others keep its base line — the root
