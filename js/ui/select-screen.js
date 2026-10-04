@@ -949,8 +949,11 @@ function openTrackDetail() {
   if (drsWrap && drsList) {
     if (dz && dz.length) {
       const trackLen = (t.lengthKm || 5) * 1000;
+      // A zone across the line ends past 1 lap (z.b > 1): print its end in
+      // the next lap's metres, so it reads "5480 m – 320 m", not past the length.
+      const lapM = function (f) { const m = Math.round(f * trackLen); return m > trackLen ? m - trackLen : m; };
       drsList.innerHTML = dz.map(function (z, i) {
-        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + Math.round(z.a * trackLen) + ' m &ndash; ' + Math.round(z.b * trackLen) + ' m</div>';
+        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + lapM(z.a) + ' m &ndash; ' + lapM(z.b) + ' m</div>';
       }).join("");
       drsWrap.hidden = false;
     } else {
