@@ -1004,3 +1004,31 @@ test("phone samples bunched into one millisecond still reach the filter", () => 
   for (let i = 0; i < 30; i++) { clock.t += 16; v = Input.steer(); }
   assert.ok(v > 0.1, "the burst's newer roll was applied, not dropped (odt 0 returned the old value): " + v);
 });
+
+// Cold start through the REAL XR seam (vr-emulated.spec.js drives the same
+// path under IWER): one mapFrame -> inject on a fresh Input carries a finite
+// `steer` and NO `roll`, and the first frame's steer/pedals are finite.
+test("XR from a cold start: the first injected stick sample is finite all the way through Input", () => {
+  const { Input, sb, clock } = bootInput();
+  for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+  const XrInput = vm.runInContext("XrInput", sb);
+  const pad = (axes, buttons) => ({ axes, buttons: buttons.map((v) => ({ value: v, pressed: v > 0.5 })) });
+  const sources = [
+    { handedness: "left", targetRayMode: "tracked-pointer", gamepad: pad([0, 0, 0.9, 0], [0.8, 0, 0, 0, 0, 0]) },
+    { handedness: "right", targetRayMode: "tracked-pointer", gamepad: pad([0, 0, 0, 0], [1, 1, 0, 0, 1, 1]) },
+  ];
+  const seen = [];
+  const real = Input.remoteSample;
+  const spy = { remoteSample: (s) => { seen.push(s); return real(s); }, remoteEvent: Input.remoteEvent };
+  clock.t = 5000;
+  const mapped = XrInput.mapFrame(sources, null);
+  assert.ok(XrInput.inject(spy, mapped));
+  const s = seen[0];
+  assert.ok(Number.isFinite(s.steer) && s.steer > 0.5, "a finite rightward stick: " + s.steer);
+  assert.equal(s.roll, undefined, "no roll: the stick is not dressed as a lean");
+  const steer = Input.steer(1 / 60);
+  assert.ok(Number.isFinite(steer) && steer > 0.5, "the very first frame steers, finite: " + steer);
+  assert.ok(Number.isFinite(Input.throttleLevel()) && Input.throttleLevel() > 0.5);
+  assert.ok(Number.isFinite(Input.brakeLevel()) && Input.brakeLevel() > 0.5);
+  assert.ok(Input.lookingBack(), "squeeze is the look-back hold bit");
+});
