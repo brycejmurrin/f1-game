@@ -1707,9 +1707,13 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    trace itself swaps to still bars in JS). */
 #hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 #hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+/* The race HUD's dark plate (--look-hud-bg: rgba(8 8 14 / .78) in every
+   theme, the HIGH CONTRAST plate under HC), not the menu's --plate-opaque,
+   which turns pale under LIGHT while #hud keeps the dark --text: pale boxes
+   of white ink (live shot, 2026-10-04). */
 #hud-rel, #hud-strat, #hud-inputs {
   position: absolute;
-  background: var(--plate-opaque);
+  background: var(--look-hud-bg);
   color: var(--text);
   border-radius: var(--r-sm);
   font-family: var(--font-hud);
