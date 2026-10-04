@@ -44,7 +44,12 @@ const VoicePack = (() => {
   const lineKey = (text) => "@line:" + String(text || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
   const PAUSE = Object.freeze({ ".": 0.1, "!": 0.1, "?": 0.1, ",": 0.05, ";": 0.08, ":": 0.08 });
   const MAX_WORDS = 12;          // longest key the greedy matcher tries
-  const CACHE_MAX = 80;          // decoded clips kept
+  const CACHE_MAX = 80;          // decoded clips kept (second bound)
+  // DECODED SECONDS kept per voice (perf-memory M-5): 80 clips had no size cap,
+  // and an announcer clip averages ~2 s (up to 6.5 s), so a voice could pin
+  // ~160 s ≈ 30 MB of PCM. Evicted clips re-decode from the kept .bin.
+  // ~190 KB per decoded second: 24 s ≈ 4.6 MB on a phone, 90 s ≈ 17 MB desktop.
+  const CACHE_S = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 24 : 90;
   // A composed line may run this far past the card's budget — never more than
   // RadioVoice.LEAD_RESERVE_S, or the card hides under the last syllable.
   const SLACK_S = 0.2;
@@ -114,7 +119,7 @@ const VoicePack = (() => {
     let spoke = 0, missed = 0, lastSeq = null;
 
     function voice(id) {
-      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map() });
+      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), secs: 0 });
     }
     /** Start fetching a voice. Idempotent; never throws; boot never waits on it. */
     function ensure(id) {
@@ -150,18 +155,25 @@ const VoicePack = (() => {
       return { seq, secs };
     }
 
+    const clipS = (v, k) => Math.max(0, +(v.man.clips[k] || [])[2] || 0);
     function decode(v, k) {
       // Decoded buffers belong to the AudioContext that made them; a rebuilt
       // context (GameAudio.rebuildCtx) starts the cache again.
       const gen = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
-      if (v.gen !== gen) { v.cache.clear(); v.gen = gen; }
+      if (v.gen !== gen) { v.cache.clear(); v.secs = 0; v.gen = gen; }
       const hit = v.cache.get(k);
       if (hit) { v.cache.delete(k); v.cache.set(k, hit); return hit; }   // LRU touch
       const [off, len] = v.man.clips[k];
       const p = GameAudio.decodeClip(v.bin.slice(off, off + len));
       v.cache.set(k, p);
-      p.catch(() => v.cache.delete(k));
-      while (v.cache.size > CACHE_MAX) v.cache.delete(v.cache.keys().next().value);
+      v.secs += clipS(v, k);
+      p.catch(() => { if (v.cache.get(k) === p) { v.cache.delete(k); v.secs -= clipS(v, k); } });
+      // Oldest first, never the clip just added: a line already holds its
+      // promises, so an eviction only means the next use decodes again.
+      while (v.cache.size > 1 && (v.cache.size > CACHE_MAX || v.secs > CACHE_S)) {
+        const old = v.cache.keys().next().value;
+        v.cache.delete(old); v.secs -= clipS(v, old);
+      }
       return p;
     }
 
@@ -238,7 +250,8 @@ const VoicePack = (() => {
       ensure, ready, plan, speak, stop, remaining,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
-      debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq }),
+      debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,
+        cache: Object.fromEntries(Object.values(voices).map((v) => [v.id, { clips: v.cache.size, secs: +v.secs.toFixed(2) }])), cacheS: CACHE_S }),
     };
   }
 
