@@ -133,7 +133,7 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
 // PRO's value. WEIGHT (carWeight, hand-wired) did the same. Only a preset-owned
 // row may clear the chip. SteerTuning.create runs in a VM against a stub DOM, a
 // disk-backed store and an Input whose every setter is a no-op.
-function bootTuning() {
+function bootTuning(input = {}) {
   const els = {};
   const noop = () => {};
   const mk = () => ({ value: "", textContent: "", hidden: false, oninput: null, onclick: null,
@@ -147,17 +147,32 @@ function bootTuning() {
   const sb = {
     Math, Object, Array, Number, String, JSON, isFinite,
     Log: { info: noop, warn: noop, debug: noop, error: noop },
-    Input: new Proxy({}, { get: () => noop }),
+    Input: new Proxy(input, { get: (target, key) => target[key] || noop }),
     SettingRow: { wire: noop, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
   };
-  sb.window = { matchMedia: () => ({ matches: false }), addEventListener: noop };
+  const listeners = {};
+  sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: "js/input/steer-tuning.js" });
   vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
-  return { $, disk, move };
+  return { $, disk, move, fire: (t) => { for (const f of listeners[t] || []) f(); } };
 }
+
+test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
+  let supported = false;
+  const { $, fire } = bootTuning({ hapticsSupported: () => supported });
+  assert.equal($("pm-haptics-item").hidden, true);
+  supported = true; fire("apexhapticschange");
+  assert.equal($("pm-haptics-item").hidden, false);
+  supported = false; fire("apexhapticschange");
+  assert.equal($("pm-haptics-item").hidden, true);
+  supported = true; fire("gamepadconnected");
+  assert.equal($("pm-haptics-item").hidden, false);
+  supported = false; fire("gamepaddisconnected");
+  assert.equal($("pm-haptics-item").hidden, true);
+});
 const PRESET_STORE = table("PRESET_STORE");
 const presetOwned = (key) => Object.prototype.hasOwnProperty.call(PRESET_STORE, key);
 // Every wireTune row, read from the source so a row added later is covered too.

@@ -74,8 +74,12 @@ const NetPlay = (function () {
   // last rise (so toggling s across the line does not count laps). The grid
   // (lap 0, s just short of the line) crosses once without the mid-lap sight.
   // A lower wire lap is taken as is: it only ranks the sender lower.
+  // AND A LAP TAKES TIME: nothing bounded how far s moved between packets, so
+  // a modified guest cycling s 0.5T -> 0.9T -> 0.05T met the crossing rule
+  // three packets a lap (5 laps in 1.5 s of wire). A rise also needs a whole
+  // lap at the wire's speed ceiling of race clock since the last one.
   const MID_LO = 0.25, MID_HI = 0.75;
-  function gateLap(c, st, total) {
+  function gateLap(c, st, total, now) {
     const prev = Math.max(0, Math.floor(Number(c.lap) || 0));
     let lap = prev;
     if (!(total > 0)) lap = Math.min(st.lap, prev);
@@ -83,9 +87,11 @@ const NetPlay = (function () {
     // A fall re-arms the next rise, so it nets zero: needed when an
     // extrapolated sample crossed early and the next real packet is short.
     else if (st.lap < prev) { lap = st.lap; c._nMid = true; }
-    else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)) {
+    else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)
+             && !(Number.isFinite(now) && Number.isFinite(c._nRiseT) && now - c._nRiseT < total / SPEED_LIMIT)) {
       lap = prev + 1;
       c._nMid = false;
+      c._nRiseT = now;   // the grid crossing too: no real lap beats total / SPEED_LIMIT
     }
     if (total > 0 && st.s > total * MID_LO && st.s < total * MID_HI) c._nMid = true;
     return lap;
@@ -359,11 +365,18 @@ const NetPlay = (function () {
     }
 
     const _clamped = {};                  // poseRemote's scratch; never escapes
+    // A below-target finish is a lapped car taking an ALREADY raised flag,
+    // never permission for a guest to raise it. The opening crossing cannot
+    // finish anyone (RaceControl.lineTransition uses the same lap > 1 rule).
+    function finishAllowed(lap) {
+      return lap > 1 && (role !== "host" || lap > G.lapsTarget ||
+        G.cars.some((c) => c.finished && !c.retired));
+    }
     function poseRemote(c, st) {
       // clampWire (module scope) — the same clamp the predicted sample gets.
       st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
       // HOST: a guest's lap is EARNED, not declared (gateLap, module scope).
-      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0);
+      if (role === "host") st.lap = gateLap(c, st, (G.track && G.track.total) || 0, G.raceT);
       c.s = st.s;
       c.x = st.x;
       c.xVis = st.x;
@@ -399,13 +412,22 @@ const NetPlay = (function () {
       // The crossing that finishes THIS car: the owner's reported lap when a
       // `fin` is waiting (a lapped car is flagged out short of the target), the
       // target otherwise.
+      // A short finish may arrive before the winner's delayed pose. Hold it
+      // briefly, but never let an early claim survive until a later real flag.
+      if (c._nFinLap <= G.lapsTarget && Number.isFinite(c._nFin) && Math.abs(c._nFin - G.raceT) > FIN_SLACK_S) {
+        c._nFin = null; c._nFinLap = null;
+      }
       const finLap = Number.isFinite(c._nFin) && c._nFinLap != null ? c._nFinLap : G.lapsTarget + 1;
-      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap >= finLap && !st.extrapolated) {
+      if (!c.finished && !c.retired && G.lapsTarget > 0 && c.lap >= finLap && !st.extrapolated && finishAllowed(finLap)) {
         // A `fin` that arrived before this pose crossed (LAP handler) is used now.
         const pf = c._nFin;
         c.finished = true;
         c.finishT = Number.isFinite(pf) && Math.abs(pf - G.raceT) <= FIN_SLACK_S ? pf : G.raceT;
         c._nFin = null; c._nFinLap = null;
+        // A held short finish was not relayed before the authoritative flag.
+        if (role === "host" && finLap <= G.lapsTarget && Number.isFinite(pf)) {
+          broadcast(EV.LAP, { lap: finLap, code: c.code, driverId: c.driverId, fin: c.finishT, invalid: true });
+        }
       }
 
       if (G.track) {
@@ -616,7 +638,8 @@ const NetPlay = (function () {
             const total = (G.track && G.track.total) || 0;
             const lt = Number(d.time), best = Number(d.best);
             const ltOk = !d.invalid && lapTimeOk(lt, total), bestOk = lapTimeOk(best, total);
-            const finOk = Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
+            const finLap = finishLap(d.lap);
+            const finOk = finLap > 1 && Number.isFinite(fin) && fin > 0 && Math.abs(fin - (G.raceT || 0)) <= FIN_SLACK_S;
             if (fr && ltOk) fr.car.lastLap = lt;
             if (fr && bestOk && !(fr.car.best <= best)) fr.car.best = best;
             if (fr && finOk && !fr.car.retired) {
@@ -627,8 +650,7 @@ const NetPlay = (function () {
               // (RaceControl.lineTransition), and gating on the target parks
               // its `fin` in _nFin for good — the other peer then waits out
               // the 360 s/lap hard cap for a rival that has already finished.
-              const finLap = finishLap(d.lap);
-              if (fr.car.lap >= finLap) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
+              if (fr.car.lap >= finLap && finishAllowed(finLap)) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
               else { fr.car._nFin = fin; fr.car._nFinLap = finLap; }
             }
             // A RETIREMENT is the owner's word too. The 13 B snapshot has no
@@ -652,7 +674,7 @@ const NetPlay = (function () {
               const ownerLap = Number(d.lap);
               const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
               const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
-                code: fr.car.code, driverId: fr.car.driverId, fin: finOk ? fin : undefined, invalid: !!d.invalid,
+                code: fr.car.code, driverId: fr.car.driverId, fin: finOk && finishAllowed(finLap) ? fin : undefined, invalid: !!d.invalid,
                 retired: ret || undefined };
               for (const [sid, os] of sessions) {
                 if (sid !== id) { try { os.sendEvent(EV.LAP, out); } catch (e) { /* peer closed */ } }
@@ -769,7 +791,7 @@ const NetPlay = (function () {
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         G.setCarRole(car, true, false);
-        car._nFin = null; car._nFinLap = null; car._nMid = false;     // gateLap / pending-fin state, per race
+        car._nFin = null; car._nFinLap = null; car._nMid = false; car._nRiseT = null;   // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }

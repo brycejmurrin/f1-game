@@ -64,15 +64,16 @@ const GameStore = (function () {
     // record, Log carries it once, and
     // __apex.persistState() exposes it so the failure is testable rather than
     // inferred from a player's reload.
-    set(k, v) {
-      return this.write(k, v).durable;
+    set(k, v, options) {
+      return this.write(k, v, options).durable;
     },
     // Structured companion to set(). New domain save boundaries use this so a
     // write failure cannot be collapsed into an ignored boolean. `ok` describes
     // whether the requested value remains usable in this session; `durable`
     // describes whether it will survive a reload. The cache write below makes
-    // ok:true even when durable:false, by design.
-    write(k, v) {
+    // ok:true even when durable:false, by design. Automatic load-time repairs
+    // pass {migration:true}; only those yield to an outstanding mirror restore.
+    write(k, v, options) {
       const key = "apex26." + k;
       let durable = true;
       try { setRoomy(key, JSON.stringify(v)); }
@@ -82,7 +83,7 @@ const GameStore = (function () {
       this.rev++;
       // Mirrored even when the disk write failed: a quota-refused career save
       // is exactly the write the durable copy exists for.
-      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v), durable);
+      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v), durable, options);
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
@@ -226,10 +227,9 @@ const GameStore = (function () {
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
-  // Keys THIS tab holds the newest value of (it wrote one the quota refused, or
-  // restored a refused row): its later lsOk:true saves supersede that row — only
-  // a PEER's lsOk:true write is the stale downgrade the B5 guard refuses.
-  const _ownNewer = new Set();
+  // Compare the last COMMITTED/restored payload, not permanent key ownership:
+  // another tab can supersede our quota-refused row without a storage event.
+  const _mirrorSeen = new Map();
   let _mirrorTimer = null;
   let _mirrorFlight = null;         // serialize bursts so an older transaction cannot finish last
   let _restoreDone = false;         // flush waits for mirrorRestore: a boot re-save must not overwrite the row it restores
@@ -270,10 +270,14 @@ const GameStore = (function () {
   // lsOk: did localStorage accept this same write? A row stored with lsOk
   // false holds a value NEWER than the disk's copy (the quota refused it), so
   // restore must prefer it even though the key is present on disk.
-  function mirrorQueue(key, json, lsOk) {
+  function mirrorQueue(key, json, lsOk, options) {
     if (typeof indexedDB === "undefined" || !indexedDB) return;
-    if (lsOk === false) _ownNewer.add(key);
-    _mirrorPending.set(key, { v: json, lsOk: lsOk !== false, own: _ownNewer.has(key) });
+    const prior = _mirrorPending.get(key);
+    // A refused delete needs a tombstone: removing its mirror would leave the
+    // undeleted localStorage value as the only surviving copy at the next boot.
+    const v = json === null && lsOk === false ? "null" : json;
+    const user = !(options && options.migration) || !!(prior && prior.user);
+    _mirrorPending.set(key, { v, lsOk: lsOk !== false, user });
     mirror.pending = _mirrorPending.size;
     if (_mirrorTimer !== null) return;
     if (typeof setTimeout !== "function") { mirrorFlush(); return; }
@@ -310,9 +314,8 @@ const GameStore = (function () {
       if (!db) { res(false); return; }
       let t;
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
-      const os = t.objectStore(MIRROR_STORE);
+      const os = t.objectStore(MIRROR_STORE), committed = new Map();
       for (const [k, e] of batch) {
-        if (e.v === null) { os.delete(k); continue; }
         // Cross-tab: a quota-refused (lsOk:false) row is the only durable copy
         // of a newer save. A peer tab that never saw storage events can still
         // flush lsOk:true with an OLDER value — refuse that downgrade (BUGS.md B5).
@@ -320,11 +323,16 @@ const GameStore = (function () {
         const getReq = os.get(k);
         getReq.onsuccess = () => {
           const prev = getReq.result;
-          if (prev && prev.lsOk === false && e.lsOk === true && e.v !== prev.v && !e.own) return;
-          os.put({ k, v: e.v, lsOk: e.lsOk });
+          const value = e.v === null ? "null" : e.v;
+          if (prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) return;
+          if (e.v === null) os.delete(k); else os.put({ k, v: e.v, lsOk: e.lsOk });
+          committed.set(k, e.v);
         };
       }
-      t.oncomplete = () => { mirror.flushed += batch.size; res(true); };
+      t.oncomplete = () => {
+        for (const [k, v] of committed) { if (v === null) _mirrorSeen.delete(k); else _mirrorSeen.set(k, v); }
+        mirror.flushed += committed.size; res(true);
+      };
       t.onerror = t.onabort = () => { res(false); };
     })).then((ok) => {
       if (!ok && batch.size) {
@@ -369,16 +377,16 @@ const GameStore = (function () {
       const restored = [];
       for (const row of rows) {
         if (!row || typeof row.k !== "string" || typeof row.v !== "string" || !mirrorKey(row.k)) continue;
+        _mirrorSeen.set(row.k, row.v);
+        // Automatic load/migration saves may be stale; explicit imports, edits
+        // and deletions made while IDB opens are newer and must survive restore.
+        const p = _mirrorPending.get(row.k);
+        if (p && p.user) continue;
         let present = null;
         try { present = localStorage.getItem(row.k); } catch (e) { return 0; }   // storage unreadable: nothing to restore into
         const newer = row.lsOk === false && present !== row.v;
         if (present !== null && !newer) continue;
-        if (newer) {
-          // Drop the boot's re-save of the stale disk copy; a genuinely new
-          // write in the meantime (a different value) is kept and wins.
-          const p = _mirrorPending.get(row.k);
-          if (p && p.v === present) _mirrorPending.delete(row.k);
-        }
+        if (newer && p) _mirrorPending.delete(row.k);
         let landed = true;
         try { localStorage.setItem(row.k, row.v); } catch (e) { landed = false; }
         if (!landed) {
@@ -386,13 +394,10 @@ const GameStore = (function () {
           // Still no room, but the session must run on the newer value, not the
           // stale disk copy: serve it from the cache; the row stays lsOk:false.
           try { store._cache.set(row.k, parseStored(row.v, row.k)); } catch (e) { continue; }
-          _ownNewer.add(row.k);             // this session runs on the newest value: its saves supersede the row
         } else {
-          // The disk has it now — and this session runs on it, so its later
-          // saves supersede the row. Without _ownNewer the row stayed
-          // lsOk:false (the flush guard refuses a non-own put over it), and
-          // the NEXT boot restored this stale value over every save since.
-          if (newer) { _ownNewer.add(row.k); mirrorQueue(row.k, row.v, true); }
+          // Heal the refusal marker too, or a later boot can restore this row
+          // over newer disk progress. The payload comparison also covers peers.
+          if (newer) mirrorQueue(row.k, row.v, true, { migration: true });
           store._cache.delete(row.k);
         }
         store._keyRev.set(row.k, (store._keyRev.get(row.k) || 0) + 1);

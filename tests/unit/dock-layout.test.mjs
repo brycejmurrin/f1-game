@@ -131,3 +131,50 @@ test("store.subscribe on steerMode reloads that scheme's offsets", () => {
   listeners[0]({ key: "steerMode" });
   assert.equal(left.style.transform, "", "singular key notify must clear buttons offset");
 });
+
+// create() itself, in a context that records its window/document listeners
+// and the settings MutationObserver, so the two lifecycle edges are testable.
+function bootCreate() {
+  const winL = {}, docL = {}, observers = [];
+  const settings = { hidden: false };
+  const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings };
+  const bodyAttrs = {};
+  const ctx = {
+    Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
+    window: { innerWidth: 400, innerHeight: 800, addEventListener(t, fn) { winL[t] = fn; } },
+    document: {
+      documentElement: {},
+      body: { setAttribute(k, v) { bodyAttrs[k] = v; }, removeAttribute(k) { delete bodyAttrs[k]; } },
+      addEventListener(t, fn) { docL[t] = fn; },
+    },
+    MutationObserver: function (cb) { this.observe = () => observers.push(cb); },
+    getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
+  };
+  vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
+  const bag = ctx.DockLayout.normalize({});
+  bag.buttons.L = { x: 0, y: 0.35 };
+  const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set() {} };
+  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => "buttons" });
+  return { ctx, api, winL, observers, settings, els, bodyAttrs };
+}
+
+test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
+  const { ctx, winL, els } = bootCreate();
+  const before = els["dock-left"].style.transform;
+  assert.match(before, /-280\.0px\)/, "0.35 of an 800 px-tall portrait pad");
+  ctx.window.innerWidth = 800; ctx.window.innerHeight = 400;
+  assert.equal(typeof winL.resize, "function", "create() must listen for resize");
+  winL.resize();
+  assert.match(els["dock-left"].style.transform, /-140\.0px\)/, "the same fraction of the landscape pad");
+});
+
+test("closing SETTINGS ends REPOSITION, so the dock does not drag during the race", () => {
+  const { api, observers, settings, bodyAttrs } = bootCreate();
+  api.setEditing(true);
+  assert.equal(bodyAttrs["data-dock-edit"], "1");
+  assert.equal(observers.length, 1, "create() must watch #pmsettings");
+  settings.hidden = true;
+  observers[0]();
+  assert.equal(api.editing(), false);
+  assert.equal(bodyAttrs["data-dock-edit"], undefined);
+});
