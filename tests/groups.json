@@ -998,6 +998,7 @@
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/specs/render-boot.spec.js",
         "tests/specs/tlx-probes.spec.js",
+        "tests/specs/track-switch-memory.spec.js",
         "tests/specs/webgl-probes.spec.js"
       ],
       "kind": "browser"

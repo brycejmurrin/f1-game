@@ -2657,6 +2657,26 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   const ck = fnBody(src, "getForRenderCacheKey = function");
   assert.match(ck, /isInstancedMesh[\s\S]{0,80}ro\.object\.id/,
     "the cache key must carry ro.object.id for an instanced mesh — three bakes the instance buffer into the node graph");
+  // THE KEY IS STABLE PER RENDER OBJECT. three calls getForRenderCacheKey to
+  // STORE a node-builder state (inside the pass that draws the object) and to
+  // DELETE it when the object is disposed (from a track free, between passes).
+  // The key ends with attachKey(), the CURRENT attachment state, so the delete
+  // missed and every freed prop batch's node graph and shader text stayed in
+  // nodeBuilderCache: +14 MB per round of picker picks, 65 entries at usedTimes
+  // 0 after three rounds (tools/gfx/mem-census.mjs, 2026-10-04). Run the real
+  // body with an attachment state that changes between the two calls.
+  let attach = "2m";
+  const keyFn = new Function("attachKey", "return function (ro) {" + ck + "};")(() => attach);
+  const ro = { material: { customProgramCacheKey: () => "tlx-lit-instanced-mrt" },
+    geometry: { attributes: { position: 1, normal: 1 }, index: {} },
+    object: { isInstancedMesh: true, id: 215 } };
+  const stored = keyFn(ro);
+  attach = "1";   // the free happens outside the pass that created the state
+  assert.equal(keyFn(ro), stored,
+    "the delete-time key must equal the store-time key, or freed batches' builder states are never released");
+  assert.match(stored, /\|I215\|2m$/, "the stored key still carries the instance identity and the creating pass's attachment state");
+  const other = { material: ro.material, geometry: ro.geometry, object: { isInstancedMesh: true, id: 216 } };
+  assert.notEqual(keyFn(other), stored, "a different instanced object still gets its own key");
   // apex26.tlxForceHw is the same argument generalised: EVERY software skip in
   // this file hides a path only a player's GPU executes, so each one needs a
   // switch that puts it back. softContent() must always take a part name —
