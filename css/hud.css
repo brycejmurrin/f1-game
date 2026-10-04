@@ -1681,4 +1681,74 @@ body.hud-prof-minimal #hud-damage,
 body.hud-bcam #hud-damage,
 body.bc-on #hud-damage,
 body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
+/* OPT-IN READOUTS — RELATIVE (js/ui/hud-relative.js), STRATEGY
+   (js/ui/hud-strategy.js), INPUTS (js/ui/hud-inputs.js). Shipped off
+   (js/ui/hud-elements.js), placed by MOVE & SIZE (js/ui/hud-layout.js).
+   No class tokens: rows are keyed on data-k / data-self / data-lap. Each
+   follows the band it sits in (top band zoom for the two panels, bottom band
+   for the trace), and offsets divide by that zoom like every other anchor.
+   Hidden in MINIMAL, on a broadcast camera and in a WATCH, like the sector
+   box; nothing here animates, so REDUCE MOTION has nothing to take out (the
+   trace itself swaps to still bars in JS). */
+#hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+#hud-rel, #hud-strat, #hud-inputs {
+  position: absolute;
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  padding: calc(var(--gap) / 4) calc(var(--gap) / 2);
+}
+#hud-rel {
+  right: calc(10px + var(--sar) / var(--hud-z));
+  top: calc(38vh / var(--hud-z));
+  border-left: 3px solid var(--dim);
+}
+#hud-rel > div {
+  display: grid;
+  grid-template-columns: 3.2ch 3.6ch 4.6ch 3.2ch 3ch;
+  column-gap: calc(var(--gap) / 2);
+  align-items: baseline;
+  border-left: 3px solid var(--rel-team, transparent);
+  padding-left: calc(var(--gap) / 3);
+}
+#hud-rel [data-k="gap"] { text-align: right; }
+#hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
+#hud-rel [data-k="lap"] { font-weight: 800; }
+#hud-rel > div[data-self] { background: color-mix(in oklab, var(--you) 26%, transparent); font-weight: 800; }
+/* A lap UP (lapping you) reads red, a lap DOWN blue — the "+1L" / "-1L" text says it first. */
+#hud-rel > div[data-lap="up"] { color: var(--slower); }
+#hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
+#hud-strat {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  top: calc(40vh / var(--hud-z));
+  border-left: 3px solid var(--dim);
+  min-width: 15ch;
+}
+#hud-strat > div { display: flex; justify-content: space-between; column-gap: var(--gap); }
+#hud-strat > div > span { color: var(--dim); letter-spacing: 0.06em; }
+#hud-strat [data-k="uc"] { color: var(--faster); font-weight: 800; }
+#hud-strat [data-k="uc"] > span { color: inherit; }
+#hud-inputs {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  bottom: calc(22vh / var(--hud-z));
+  display: flex;
+  align-items: center;
+  column-gap: calc(var(--gap) / 2);
+}
+#hud-inputs-cv { display: block; width: 128px; height: 48px; background: color-mix(in oklab, var(--carbon) 70%, transparent); }
+#hud-inputs-gear { font-size: var(--fs-3); font-weight: 800; min-width: 1.4ch; text-align: center; }
+#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden],
+body[data-hud-hide~="rel"] #hud-rel,
+body[data-hud-hide~="strat"] #hud-strat,
+body[data-hud-hide~="inputs"] #hud-inputs,
+body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
+body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
+body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
+body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
+:root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */

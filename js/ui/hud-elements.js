@@ -1,8 +1,8 @@
 /* Apex 26 — per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD).
    Extends MAP/GAPS with independent on/off for the other chrome pieces.
    Store key `hudElements` is a JSON object of id → "on"|"off". Missing keys
-   default ON. Applies as space-separated body[data-hud-hide~="…"] so CSS can
-   hide without new class tokens (cssClasses ratchet is tight).
+   default ON (the opt-in readouts default OFF). Applies as space-separated
+   body[data-hud-hide~="…"] so CSS can hide without new class tokens (cssClasses ratchet is tight).
    Checklist UI is injected at runtime into #pm-hud-details — zero shellNodes. */
 const HudElements = (function () {
   "use strict";
@@ -27,7 +27,13 @@ const HudElements = (function () {
     ["bb", "BRAKE BIAS"],
     ["limits", "TRACK LIMITS"],
     ["damage", "DAMAGE"],
+    // OPT-IN readouts (third field "off" = shipped hidden): js/ui/hud-relative.js,
+    // js/ui/hud-strategy.js, js/ui/hud-inputs.js. Stored only when it differs.
+    ["rel", "RELATIVE", "off"],
+    ["strat", "STRATEGY", "off"],
+    ["inputs", "INPUTS", "off"],
   ];
+  const dflt = (e) => e[2] || "on";
 
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
   let state = readState();
@@ -35,22 +41,24 @@ const HudElements = (function () {
   function readState() {
     const raw = store ? store.get(K, null) : null;
     const out = {};
-    for (let i = 0; i < ELEMENTS.length; i++) out[ELEMENTS[i][0]] = "on";
+    for (let i = 0; i < ELEMENTS.length; i++) out[ELEMENTS[i][0]] = dflt(ELEMENTS[i]);
     if (!raw || typeof raw !== "object") return out;
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0];
-      if (raw[id] === "off") out[id] = "off";
+      if (raw[id] === "off" || raw[id] === "on") out[id] = raw[id];
     }
     return out;
   }
 
   function persist() {
     if (!store) return;
-    // Store only the offs — compact, defaults stay on for new keys.
+    // Store only what differs from the shipped default — compact, and a new
+    // key keeps its own default (on, or off for the opt-in readouts).
     const slim = {};
     let any = false;
-    for (const id of Object.keys(state)) {
-      if (state[id] === "off") { slim[id] = "off"; any = true; }
+    for (let i = 0; i < ELEMENTS.length; i++) {
+      const id = ELEMENTS[i][0];
+      if (state[id] !== dflt(ELEMENTS[i])) { slim[id] = state[id]; any = true; }
     }
     store.set(K, any ? slim : {});
   }
@@ -109,7 +117,7 @@ const HudElements = (function () {
     const list = document.createElement("div");
     list.id = "pm-hud-elements-list";
     for (let i = 0; i < ELEMENTS.length; i++) {
-      const [id, label] = ELEMENTS[i];
+      const id = ELEMENTS[i][0], label = ELEMENTS[i][1];
       const row = document.createElement("label");
       row.setAttribute("data-hud-el-row", id);
       const box = document.createElement("input");

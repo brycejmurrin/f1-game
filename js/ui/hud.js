@@ -901,6 +901,7 @@ function updateHud(force, dtMs) {
   // shift showed up to 100 ms late. All three go through the write cache, so a
   // frame that changes nothing writes nothing; everything else stays at 10 Hz.
   paintInstruments(player);
+  if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);   // opt-in INPUTS trace: samples per frame, draws at 10 Hz itself
   if (_trace && G.track) _trace.sample(player, G.track.total);   // the race DELTA's best-lap reference
   hudT -= dtMs;
   if (!force && hudT > 0) return;
@@ -1155,6 +1156,8 @@ function updateHud(force, dtMs) {
     win(els.gapA, a); win(els.gapB, b);
   }
   paintHudDelta(player, timeTrial);
+  if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
+  if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
     if (!_secRows) buildSecRows();

@@ -1,0 +1,173 @@
+/* Apex 26 — the opt-in RELATIVE box (iRacing-style) for GameHud.
+   SETTINGS › DISPLAY › HUD › RELATIVE (js/ui/hud-elements.js, shipped off),
+   placed by MOVE & SIZE (js/ui/hud-layout.js "rel").
+
+   The two cars AHEAD and two BEHIND on the ROAD — by arc position, not race
+   order, so a backmarker you are about to lap is in it and the leader a lap up
+   behind you is too — with the player's own row between them. Each row:
+   race position, 3-letter code on the team's colour bar, the gap in seconds
+   (- in front, + behind), the tyre letter (PIT while in the lane), and a
+   +1L / -1L marker for a car a lap up (red) or down (blue): text first, colour
+   second, so the meaning never rides on hue alone.
+
+   THE GAP IS THE GAP CHIPS' OWN MEASURE (js/ui/hud.js gapText): metres of arc
+   over max(the player's speed, 0.26 x vTop), smoothed per row (EMA 0.3 at the
+   10 Hz HUD tick) and reset when a row's car changes. Nothing is re-derived
+   from physics, and nothing here writes to a car: the HUD only reads.
+
+   Pure core (unit-tested in tests/unit/hud-relative.test.mjs): relDist,
+   lapsApart, select (fixed slots, allocation-free), fmtGap. tick(G, player)
+   is the one js/ui/hud.js call, at the HUD tick. Rows are built at runtime
+   inside the static #hud-rel (index.html) — no shell nodes per row, no class
+   tokens (data-k / data-lap / data-self attributes; css/hud.css). */
+const HudRelative = (function () {
+  "use strict";
+
+  const AHEAD = 2, BEHIND = 2, ROWS = AHEAD + 1 + BEHIND, SELF = AHEAD;
+  const EMA = 0.3;
+
+  /** Metres car `os` is in FRONT of `ps` on a lap of `total`, in (-total/2, total/2]. */
+  function relDist(ps, os, total) {
+    let d = (os || 0) - (ps || 0);
+    if (!(total > 0)) return d;
+    d %= total;
+    if (d > total / 2) d -= total;
+    else if (d <= -total / 2) d += total;
+    return d;
+  }
+  /** Whole laps between two cars' race distances, beyond what the road shows:
+   *  +1 = `o` is a lap UP on `p` (lapping it), -1 = a lap down. */
+  function lapsApart(pProg, oProg, rel, total) {
+    if (!(total > 0)) return 0;
+    const n = Math.round(((oProg || 0) - (pProg || 0) - rel) / total);
+    return n === 0 ? 0 : n;   // never -0
+  }
+
+  // The row slots: allocated once, rewritten every tick.
+  const rows = [];
+  for (let i = 0; i < ROWS; i++) rows.push({ car: null, rel: 0, laps: 0, self: i === SELF });
+  const _ac = [null, null], _ad = [0, 0], _bc = [null, null], _bd = [0, 0];
+
+  /** Fill `out` (ROWS slots, default the module's own) with the road
+   *  neighbours of `player`: [ahead 2, ahead 1, player, behind 1, behind 2].
+   *  Retired cars are skipped. Returns how many neighbours were found. */
+  function select(cars, player, total, out) {
+    out = out || rows;
+    _ac[0] = _ac[1] = _bc[0] = _bc[1] = null;
+    const n = cars ? cars.length : 0;
+    for (let i = 0; i < n; i++) {
+      const o = cars[i];
+      if (!o || o === player || o.retired) continue;
+      const d = relDist(player.s, o.s, total);
+      if (d > 0) {
+        if (!_ac[0] || d < _ad[0]) { _ac[1] = _ac[0]; _ad[1] = _ad[0]; _ac[0] = o; _ad[0] = d; }
+        else if (!_ac[1] || d < _ad[1]) { _ac[1] = o; _ad[1] = d; }
+      } else {
+        if (!_bc[0] || d > _bd[0]) { _bc[1] = _bc[0]; _bd[1] = _bd[0]; _bc[0] = o; _bd[0] = d; }
+        else if (!_bc[1] || d > _bd[1]) { _bc[1] = o; _bd[1] = d; }
+      }
+    }
+    put(out[0], _ac[1], _ad[1], player, total);
+    put(out[1], _ac[0], _ad[0], player, total);
+    put(out[SELF], player, 0, player, total);
+    put(out[3], _bc[0], _bd[0], player, total);
+    put(out[4], _bc[1], _bd[1], player, total);
+    return (_ac[0] ? 1 : 0) + (_ac[1] ? 1 : 0) + (_bc[0] ? 1 : 0) + (_bc[1] ? 1 : 0);
+  }
+  function put(r, car, d, player, total) {
+    r.car = car; r.rel = car ? d : 0;
+    r.laps = car && car !== player ? lapsApart(player.prog, car.prog, d, total) : 0;
+  }
+
+  /** "-1.2" for a car 1.2 s in front, "+0.8" behind; one decimal under 10 s,
+   *  whole seconds to 99, then "99+". The sign is the meaning, never a colour. */
+  function fmtGap(sec, ahead) {
+    const a = Math.abs(sec);
+    const v = !Number.isFinite(a) ? "--" : a >= 99.5 ? "99+" : a < 9.95 ? a.toFixed(1) : String(Math.round(a));
+    return (ahead ? "-" : "+") + v;
+  }
+  const lapText = (n) => (n > 0 ? "+" + n + "L" : n < 0 ? n + "L" : "");
+
+  // ---- the DOM (only when the readout is on) ------------------------------
+  const doc = typeof document !== "undefined" ? document : null;
+  let root = null, built = null;   // #hud-rel, and per row {el, pos, code, gap, tyre, lap}
+  const sm = new Array(ROWS).fill(NaN), smWho = new Array(ROWS).fill(null);
+  const last = [];                 // per row: the write cache
+  for (let i = 0; i < ROWS; i++) last.push({ who: null, rank: -1, pos: "", q: NaN, gap: "", tyre: "", lap: 0, team: "" });
+
+  function build() {
+    root = doc && doc.getElementById("hud-rel");
+    if (!root) return false;
+    built = [];
+    for (let i = 0; i < ROWS; i++) {
+      const el = doc.createElement("div");
+      el.setAttribute("role", "listitem");
+      if (i === SELF) el.setAttribute("data-self", "");
+      const mk = (k) => { const s = doc.createElement("span"); s.setAttribute("data-k", k); el.appendChild(s); return s; };
+      const r = { el, pos: mk("pos"), code: mk("code"), gap: mk("gap"), tyre: mk("tyre"), lap: mk("lap") };
+      el.hidden = true;
+      root.appendChild(el);
+      built.push(r);
+    }
+    return true;
+  }
+  const isOn = () => typeof HudElements === "undefined" || HudElements.isOn("rel");
+  /** The same team-colour memo js/ui/hud.js teamCss keeps on the team entry. */
+  function teamCss(G, t) {
+    if (!t || !G.cssCol) return "";
+    const rev = G.store ? G.store.rev : 0;
+    if (t._cssColor == null || t._cssRev !== rev) { t._cssColor = G.cssCol(t.color); t._cssRev = rev; }
+    return t._cssColor;
+  }
+  function hideAll() { if (root && !root.hidden) root.hidden = true; }
+
+  /** js/ui/hud.js, once per HUD tick (10 Hz). Reads G; never writes a car. */
+  function tick(G, player) {
+    if (!doc || !player) return;
+    if (!root && !build()) return;
+    const cars = G.cars, track = G.track;
+    if (!isOn() || G.timeTrial || !track || !cars || cars.length < 2) { hideAll(); return; }
+    const b = doc.body;
+    // MINIMAL and the broadcast cameras hide it in CSS — skip the work too.
+    if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
+    if (root.hidden) root.hidden = false;
+    select(cars, player, track.total, rows);
+    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
+    for (let i = 0; i < ROWS; i++) {
+      const r = rows[i], dom = built[i], c = last[i], car = r.car;
+      if (!car) { if (!dom.el.hidden) dom.el.hidden = true; c.who = null; smWho[i] = null; continue; }
+      if (dom.el.hidden) dom.el.hidden = false;
+      // Strings are built only when what they say changed: the gap is compared
+      // as signed tenths, the rest as the numbers/objects they come from.
+      let dirty = false;
+      if (i !== SELF) {
+        const raw = Math.abs(r.rel) / vFloor;
+        if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
+        else sm[i] += (raw - sm[i]) * EMA;
+        const q = Math.round(sm[i] * 10) * (r.rel > 0 ? -1 : 1);
+        if (c.q !== q) { c.q = q; c.gap = fmtGap(sm[i], r.rel > 0); dom.gap.textContent = c.gap; dirty = true; }
+      }
+      if (c.rank !== (car.rank || 0)) { c.rank = car.rank || 0; c.pos = c.rank ? "P" + c.rank : "-"; dom.pos.textContent = c.pos; dirty = true; }
+      if (c.who !== car) { c.who = car; dom.code.textContent = car.code || "---"; dirty = true; }
+      const team = teamCss(G, car.team);
+      if (c.team !== team) { c.team = team; dom.el.style.setProperty("--rel-team", team || "transparent"); }
+      const tyre = car.pitState === "lane" || car.pitState === "box" ? "PIT" : (car.tyre && car.tyre.code) || "-";
+      if (c.tyre !== tyre) { c.tyre = tyre; dom.tyre.textContent = tyre; dirty = true; }
+      if (c.lap !== r.laps) {
+        c.lap = r.laps; dirty = true;
+        dom.lap.textContent = lapText(r.laps);
+        if (r.laps > 0) dom.el.setAttribute("data-lap", "up");
+        else if (r.laps < 0) dom.el.setAttribute("data-lap", "down");
+        else dom.el.removeAttribute("data-lap");
+      }
+      if (dirty) dom.el.setAttribute("aria-label", rowLabel(c.pos, car.code, i === SELF, c.gap, r.rel > 0, tyre, r.laps));
+    }
+  }
+  /** The words a screen reader says for one row. */
+  function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
+    return pos + " " + (code || "") + (self ? ", you" : ", " + gap.slice(1) + " seconds " + (ahead ? "ahead" : "behind"))
+      + ", tyre " + tyre + (laps > 0 ? ", " + laps + " lap up" : laps < 0 ? ", " + -laps + " lap down" : "");
+  }
+
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, rows });
+})();
