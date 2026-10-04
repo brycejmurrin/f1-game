@@ -308,15 +308,28 @@ const RealReplay = (function () {
     }
     function seek(t) {
       if (!run || !Number.isFinite(t)) return;
-      run.T = clamp(t, -30, run.duration); run.fired.clear();
+      const T = clamp(t, -30, run.duration);
+      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
+      reposition(T, null, true);
+    }
+    // Scrubbing and reel cuts cross the same timeline boundary. Release all
+    // history, pose the new subject, then reset the camera and repaint once.
+    function reposition(t, highlight, paint = false) {
+      run.T = t; run.fired.clear();
       // A discontinuity must release the prior audio and all broadcast history.
       if (run.audio) { run.audio.pause(); run.audio = null; }
-      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= run.T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
       pose(true);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
-      if (bc) { bc.resetTiming(); bc.refresh(bcState); }
+      if (bc) bc.resetTiming();
+      if (highlight) {
+        const c = carOfNum(highlight.num);
+        if (c && !c.retired && !(bc && bc.status() && bc.status().locked)) setFollow(c);
+        else if (!run.follow) follow(+1);
+        if (bc) bc.onCut(highlight.kind);
+      }
+      if (bc) bc.refresh(bcState);
       if (G.refreshHud) G.refreshHud(true);
-      if (G.snapGameCam) G.snapGameCam(true);
+      if (G.snapGameCam) G.snapGameCam(paint);
       if (transport) transport.paint();
     }
     function setPaused(v) {
@@ -341,12 +354,7 @@ const RealReplay = (function () {
     }
 
     function cutTo(h) {
-      run.T = h.t - LEAD_S;
-      run.fired = new Set();
-      const c = h.num != null ? [...run.cars.keys()].find((x) => run.cars.get(x).num === h.num) : null;
-      pose(true);
-      if (c && !c.retired && !(bc && bc.status() && bc.status().locked)) setFollow(c); else if (!run.follow) follow(+1); else if (G.snapGameCam) G.snapGameCam();
-      if (bc) bc.onCut(h.kind);
+      reposition(h.t - LEAD_S, h);
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
 

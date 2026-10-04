@@ -303,3 +303,32 @@ test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched loo
   const vant = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   assert.match(vant, /function resetSmoothing\(\) \{\n  for \(const k in _hangOut\) delete _hangOut\[k\];\n  for \(const k in _hangFast\) delete _hangFast\[k\];/);
 });
+
+// A snap (startRace / restart → snapGameCam) must also zero the eased bend
+// hang: the first live frame used to ease from the previous race's hairpin
+// and pop the chase eye ~4 m sideways off a straight grid.
+test("a snapped chase frame clears the bend hang the next live frame eases from", () => {
+  let K = 0;
+  const n = 1000, total = 4000;
+  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
+    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
+    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
+    surface: { heightAt: () => -0.12 } };
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
+    curvature: () => K,
+    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
+    GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
+    Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
+  vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
+  const live = (s) => ctx.GC.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, dt: 1 / 60, att: {} }).eye[0];
+  K = 0.06; for (let i = 0; i < 180; i++) live(500);       // sit in a left hairpin
+  K = 1e-5;
+  const snap = ctx.GC.vantage(track, "chase", 100, 0, 0, 0, { carPos: [0, 100], carHead: 0, snap: true, att: {} }).eye[0];
+  const first = live(100);
+  assert.ok(Math.abs(first - snap) < 0.1, `first live frame ${first.toFixed(3)} vs snap ${snap.toFixed(3)}`);
+});

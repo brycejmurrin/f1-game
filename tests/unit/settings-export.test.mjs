@@ -916,7 +916,7 @@ test("career round-trip: export then import restores the slot through migrateCar
   assert.equal(JSON.parse(dst.disk.get("apex26.careerSlot")), "driver:0");
 });
 
-test("careerRow injects two buttons without a static shell id in index.html", () => {
+test("careerRow injects file controls without a static shell id in index.html", () => {
   const src = read("js/ui/settings-export.js");
   assert.match(src, /function careerRow\(/);
   assert.match(src, /cr-career-save/);
@@ -924,6 +924,43 @@ test("careerRow injects two buttons without a static shell id in index.html", ()
   assert.equal(/id="cr-career-file"/.test(read("index.html")), false,
     "career file controls are injected — they must not add shellNodes");
   assert.match(read("js/career/career-ui.js"), /SettingsExport\.careerRow/);
+});
+
+function protectionUI(storage) {
+  const dom = makeDom();
+  const b = boot({ globals: { document: dom.document, navigator: { storage } } });
+  b.SettingsExport.create(b.G);
+  const row = b.SettingsExport.careerRow();
+  return { button: row.children[2], status: row.children[3] };
+}
+
+test("save protection only requests persistence on a click and reports the actual grant", async () => {
+  let requests = 0;
+  const { button, status } = protectionUI({ persisted: async () => false,
+    persist: async () => { requests++; return requests > 1; } });
+  await new Promise(setImmediate);
+  assert.equal(requests, 0);
+  assert.match(status.textContent, /not enabled/);
+  button.click(); await new Promise(setImmediate);
+  assert.equal(requests, 1);
+  assert.equal(button.disabled, false, "a denied request must not claim protection");
+  assert.match(status.textContent, /not enabled/);
+  button.click(); await new Promise(setImmediate);
+  assert.equal(button.disabled, true);
+  assert.match(status.textContent, /protection is enabled/);
+  assert.match(status.textContent, /Clearing site data still removes saves/);
+});
+
+test("unsupported and rejected persistence APIs retain an actionable backup reminder", async () => {
+  const unavailable = protectionUI(undefined);
+  assert.equal(unavailable.button.disabled, true);
+  assert.match(unavailable.status.textContent, /Save a career file/);
+  const broken = protectionUI({ persisted() { throw Error("blocked"); }, persist() { throw Error("blocked"); } });
+  await Promise.resolve();
+  assert.equal(broken.button.disabled, false);
+  broken.button.click(); await Promise.resolve();
+  assert.match(broken.status.textContent, /could not be confirmed/);
+  assert.match(broken.status.textContent, /separate backup/);
 });
 
 test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {

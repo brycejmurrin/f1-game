@@ -241,3 +241,38 @@ test("a place gained under a caution and still owed at the FINISH is charged at 
   assert.equal(e.sec, 10);
   assert.equal(w.info().owed, 0);
 });
+
+
+test("a caution pass on the finishing step is charged once, including another same-step finisher", () => {
+  for (const rivalFinished of [false, true]) {
+    const w = R.createPassWatch(5), f = field(2);
+    w.tick(f.p, f.all, 3, DT);
+    f.p.prog = 115; f.p.finished = true; f.p.finishT = 100;
+    if (rivalFinished) {
+      f.rivals[0].finished = true; f.rivals[0].finishT = 100.005;
+      f.rivals[0].prog = 116; // overshoot cannot overturn the crossing clock
+    }
+    const e = w.tick(f.p, f.all, 3, DT);
+    assert.equal(e && e.type, "penalty");
+    assert.equal(e.sec, 10);
+    assert.equal(w.info().owed, 0);
+    f.p.prog = 1000; // post-flag coasting past the next car is not an offence
+    assert.equal(w.tick(f.p, f.all, 3, DT), null);
+    w.reset();
+    assert.equal(w.tick(f.p, f.all, 3, DT), null, "reset forgets the completed race");
+  }
+});
+
+
+test("a lapped finisher gains no position by crossing before a car one lap ahead", () => {
+  const w = R.createPassWatch(5);
+  const winner = { lap: 5, prog: 4001, finished: true, finishT: 99 };
+  const player = { lap: 3, prog: 2999.9 };
+  const ahead = { lap: 4, prog: 3999.8 };
+  const cars = [winner, player, ahead];
+  w.tick(player, cars, 3, DT);
+  Object.assign(player, { lap: 4, prog: 3000.2, finished: true, finishT: 100.01 });
+  Object.assign(ahead, { lap: 5, prog: 4000.1, finished: true, finishT: 100.02 });
+  assert.equal(w.tick(player, cars, 3, DT), null, "the later crossing remains one lap ahead in the classification");
+  assert.equal(w.info().owed, 0);
+});

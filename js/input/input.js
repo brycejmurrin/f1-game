@@ -69,7 +69,11 @@ const Input = (function () {
   let padBrake = false;
   let padThrottleVal = 0;
   let padBrakeVal = 0;
-  let padPrevButtons = [];     // previous frame's pressed state, for rising edges
+  let padPrevButtons = [];     // previous frame's pressed state, for rising edges — the ACTIVE pad's
+  // One array PER PAD: pickPad can hand a different pad each frame (newest
+  // timestamp), and a single shared array let pad B's frame overwrite pad A's
+  // held Start, so one press fired twice (pause, unpause).
+  const padPrevByIndex = new Map();
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
@@ -344,7 +348,11 @@ const Input = (function () {
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
-  function setRemoteHaptics(fn) { remoteHaptics = typeof fn === "function" ? fn : null; }
+  function setRemoteHaptics(fn) {
+    const had = !!remoteHaptics;
+    remoteHaptics = typeof fn === "function" ? fn : null;
+    if (had !== !!remoteHaptics && typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexhapticschange"));
+  }
 
   // Drive the FULL tilt pipeline with an explicit timestep instead of wall-clock:
   // feed a raw tilt angle (deg) and dt (s), get back the steer command (-1..1)
@@ -468,7 +476,7 @@ const Input = (function () {
   }
 
   const bindings = InputBindings.create({
-    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = false; },
+    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
     onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
     activePad,
   });
@@ -608,6 +616,11 @@ const Input = (function () {
     const v = axes[i];
     return (typeof v === "number" && isFinite(v)) ? v : 0;
   }
+  // A wheel can assign either right-stick slot to a pedal or steering. Those
+  // axes belong to driving, including a pedal's -1 rest position.
+  function readLookAxis(axes, i) {
+    return i === padAxisMap.steer || i === padAxisMap.throttle || i === padAxisMap.brake ? 0 : readPadAxis(axes, i);
+  }
   /* Scaled-radial shaping, which on a single axis degenerates to scaled-axial
      — but the RESCALE is the part that matters and the part we lacked. A bare
      `if (|x| < dz) x = 0` leaves a step at the boundary: output jumps from 0
@@ -720,7 +733,7 @@ const Input = (function () {
        treating it as "let go of everything" free of side effects. Alt gets the
        same treatment for Alt+Tab on Windows, for the same reason. */
     if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
-      keyLeft = keyRight = keyThrottle = keyBrake = false;
+      keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false;   // look-back is held too
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
         driving gate — but still below a TEXT-FIELD check, because P in a field
@@ -985,7 +998,10 @@ const Input = (function () {
     }
   }
   // The pad that drives, or null. (getGamepads() can return holes / stale slots.)
-  function activePad() { return pickPad(readPads()); }
+  function activePad() { return pickPad(readPads(), null, wheelFirst()); }
+  // A set-up wheel (a saved non-default axis map) or its wizard capturing:
+  // between never-used pads the non-standard one ranks first (below).
+  function wheelFirst() { return !!axisCaptureCb || !padAxesAreDefault(); }
   /* WHICH PAD DRIVES: THE ONE BEING USED. getGamepads() lists pads in
      connection-slot order, so first-connected-wins let a wheel base, a flight
      stick or an idle second controller in slot 0 ignore the pad in the
@@ -1001,7 +1017,9 @@ const Input = (function () {
      being picked up off the desk does not flip it. Gamepad.timestamp is not
      the signal — it advances on every noisy reading. Only when no pad has
      been used yet (a fresh page) does the old order decide: standard first,
-     then the newest timestamp, then slot order so an idle pair stays stable.
+     then the newest timestamp, then slot order so an idle pair stays stable —
+     EXCEPT once a WHEEL is set up (a saved non-default axis map) or its wizard
+     is capturing, when the non-standard device ranks first in that tie-break.
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/mapping
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
@@ -1032,8 +1050,10 @@ const Input = (function () {
     for (const k of padUse.keys()) if (!live.has(k)) padUse.delete(k);
   }
   // `lastUse(pad, slot)` -> ms of its last use, 0 = never. Defaults to the
-  // module's own record; the unit test passes its own.
-  function pickPad(pads, lastUse) {
+  // module's own record; the unit test passes its own. `pickPad(pads, true)`
+  // still means "prefer the wheel" with the module's own use record.
+  function pickPad(pads, lastUse, preferWheel) {
+    if (typeof lastUse === "boolean") { preferWheel = lastUse; lastUse = null; }
     if (!pads) return null;
     const useOf = typeof lastUse === "function" ? lastUse
       : (p, i) => { const r = padUse.get(padKey(p, i)); return r ? r.usedAt : 0; };
@@ -1042,7 +1062,7 @@ const Input = (function () {
       const p = pads[i];
       if (!p || !p.connected) continue;
       const u = +useOf(p, i) || 0;
-      const std = p.mapping === "standard";
+      const std = (p.mapping === "standard") !== !!preferWheel;   // "ranks first", flipped for a wheel
       const t = Number.isFinite(p.timestamp) ? p.timestamp : 0;
       const better = !best || u > bestU ||
         (u === bestU && ((std && !bestStd) || (std === bestStd && t > bestT)));
@@ -1123,7 +1143,11 @@ const Input = (function () {
     }
     const pads = readPads();
     notePadUse(pads, nowMs());
-    const pad = pickPad(pads);
+    const pad = pickPad(pads, null, wheelFirst());
+    if (pad) {
+      if (!padPrevByIndex.has(pad.index)) padPrevByIndex.set(pad.index, []);
+      padPrevButtons = padPrevByIndex.get(pad.index);
+    }
     if (!pad) {
       padConnected = false;
       padSteer = 0; padThrottle = false; padBrake = false;
@@ -1133,6 +1157,7 @@ const Input = (function () {
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
+      padPrevByIndex.clear();
       padMenu.reset();
       if (inputSource === "controller") inputSource = null;
       return;
@@ -1166,9 +1191,8 @@ const Input = (function () {
     // throttle/brake/steer axis is a control, not a stick (pad-menu's
     // padNavDirOf skips the mapped pedals for the same reason).
     {
-      const lookAxis = (i) => pad.mapping === "standard" &&
-        i !== padAxisMap.steer && i !== padAxisMap.throttle && i !== padAxisMap.brake;
-      const rx = lookAxis(2) ? readPadAxis(axes, 2) : 0, ry = lookAxis(3) ? readPadAxis(axes, 3) : 0;
+      const lookAxis = (i) => pad.mapping === "standard" ? readLookAxis(axes, i) : 0;
+      const rx = lookAxis(2), ry = lookAxis(3);
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {
@@ -1807,6 +1831,7 @@ const Input = (function () {
       padSteerAnalog = false; padLookBack = false;
       padDpadVal = 0; padDpadT = 0;
       padPrevButtons.length = 0;
+      if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
       padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }

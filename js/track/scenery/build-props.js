@@ -2267,7 +2267,7 @@ const TrackBuildProps = (function () {
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (typeof SceneryPits !== "undefined" && track.pit) {
-      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
                                        night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.

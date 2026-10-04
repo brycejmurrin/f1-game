@@ -64,6 +64,8 @@
       // emissive-window tones (bright warm amber for lit interiors)
       const LIT_WIN = [0.95, 0.82, 0.40];  // warm amber — Wing/tower lit windows
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
+      const GLASS_WING = [0.16, 0.24, 0.32], WING_WHITE = [0.94, 0.95, 0.96];
+      const WING_DIST = 31;   // anchor dist so the Wing front face clears the garage rear (lat 38)
 
       every(110, (kk) => {
         for (const side of [-1, 1]) {
@@ -211,6 +213,24 @@
         [0.940,  1, 16, 52, {}],                             // National straight (old pits side)
       ]) stand(s, side, gap, len, opts);
 
+      // ── Chapel exit / Hangar Straight (built racing frac ~0.70–0.78) ──────
+      // Measured sparse: 0–17 props per 0.02 bucket on the left (vs 300–900
+      // elsewhere). The real Hangar Straight has grandstands at Chapel and
+      // along the straight; this file's authored frame is racing − 0.524.
+      stand(0.186, -1, 15, 56, { tiers: 2, roof: "truss" });
+      stand(0.222, -1, 15, 48, {});
+      stand(0.246, -1, 15, 44, {});
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:silverstone:hangar-hospitality", frac: 0.204,
+          side: -1, gap: 42, size: [16, 8, 40], modules: 4,
+        });
+      }
+      for (let i = 0; i < 7; i++) {
+        billboard(k(0.196 + i * 0.006), -1, 6, 8, 3.5,
+          [[0.85, 0.16, 0.14], [0.12, 0.36, 0.70], [0.94, 0.76, 0.10]][i % 3]);
+      }
+
       // ── The Wing — wave-3 hero: zig-zag roof + red/white edge trim ──────────
       // Research photo: long low white-grey slab, dark glass band, multi-peak
       // wing roofline with a continuous red/white border on the leading edge.
@@ -299,7 +319,13 @@
         }
       }
 
-      stand(0.46, 1, 12, 110, { tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
+      // Hamilton Straight stand faces the Wing from the opposite side.
+      // Circuit-credited built aerial (photo year unknown):
+      // https://www.grandprix.com/photos/cfb499a3-9c15-409a-89ad-847dec0a233c/aerial-photograph-of-the-silverstone-wing
+      // Measured row midpoint: racing .0033358, scenery shift .5232951.
+      // The old .46 anchor sat on Club's curve; keep the stand on the straight.
+      stand(0.48004, -1, 12, 110, { tiers: 3, roof: "cantilever", suites: true,
+        endWalls: true, pylons: true, roofCol: [0.78, 0.80, 0.82] });
       // Tall stepped seating boxes flanking The Wing (research priority).
       stand(0.442, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
       stand(0.498, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
@@ -350,8 +376,52 @@
       for (let i = 0; i < 4; i++) {
         plane(k(0.470 + i * 0.0042), 1, 21, 12 + (i % 2) * 1.5, COPSE2,
               { stages: 2, spread: 0.8 });
-        plane(k(0.470 + i * 0.0042), 1, 39, 12 + ((i + 1) % 2) * 1.5, COPSE2,
-              { stages: 2, spread: 0.8 });
+      }
+
+      // ── The Wing building + wave roof (behind the engine's garage block) ──
+      // The facades above are superseded by the pit complex, so from the
+      // track the Wing read as a plain 9 m garage block (parent TLX capture,
+      // built frac 0.00–0.03). The real Wing (2011, Populous) is a 390 m,
+      // three-storey glazed pit/paddock building under a blade-like wave
+      // roof. Here: plinth + glazed upper storeys whose front face stands
+      // just behind the garages' rear wall (measured lat 38 m), four roof
+      // crests (zig-zag prisms) dressed with overhanging white blades. The
+      // plane-tree row at dist 39 stood exactly here and was removed.
+      {
+        const a = anchor(k(0.479), 1, WING_DIST), rN = [-a.r[0], -a.r[1], -a.r[2]];
+        const b = [a.r, a.u, a.t], L = 128, P = 32, TROUGH = 14.5, RISE = 5;
+        const at = (rr, uu, tt) => vadd(vadd(vadd(a.c, a.r, rr), a.u, uu), a.t, tt);
+        modelGroup("silverstone-wing-wave-roof", {
+          center: at(8.2, 9, 0), size: [21, 24, L + 4], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, at(8.2, 1.5, 0), [16.4, 7, L], [0.86, 0.86, 0.88], b);         // garage-level plinth
+          stage._mat = MAT.GLASS;
+          addBox(stage, at(8.2, 9.7, 0), [16, 9.8, L - 1], GLASS_WING, b);            // glazed storeys
+          stage._mat = MAT.METAL;
+          addBox(stage, at(8.2, 9.6, 0), [16.6, 0.5, L + 0.4], [0.90, 0.91, 0.93], b); // floor band
+          for (let j = 0; j < L / P; j++) {
+            const tc = -L / 2 + (j + 0.5) * P;
+            // Crest volume: ridge along r, base on the glazing top.
+            stage._mat = MAT.CONCRETE;
+            addPrism(stage, at(8.2, TROUGH, tc), [P, RISE, 16.2], [0.80, 0.81, 0.84], [a.t, a.u, rN]);
+            // Two blades per crest, lying on the prism slopes, 19 m wide so
+            // they overhang front and back like the Wing's canopy.
+            stage._mat = MAT.METAL;
+            const half = P / 2, len = Math.hypot(half, RISE);
+            for (const s of [-1, 1]) {
+              // T runs along the slope in +t; N is its outward (upward)
+              // normal. (T, N) is (t, u) rotated by ∓θ, so [r, N, T] keeps
+              // the handedness of [r, u, t] and the winding stays outward.
+              const ct = half / len, cu = RISE / len;
+              const mix = (pt, pu) => [a.t[0] * pt + a.u[0] * pu, a.t[1] * pt + a.u[1] * pu, a.t[2] * pt + a.u[2] * pu];
+              const T = mix(ct, -s * cu), N = mix(s * cu, ct);
+              const mid = vadd(at(7.4, TROUGH + RISE / 2, tc + s * half / 2), N, 0.25);
+              addBox(stage, mid, [19 + (s > 0 ? 0.3 : 0), 0.6, len + 0.4], WING_WHITE, [a.r, N, T]);
+            }
+          }
+          stage._mat = 0;
+        });
       }
 
       // Double-arm floodlight columns — distinctive at circuits (white/silver poles, twin heads)
@@ -468,8 +538,10 @@
       forestEdge(0.71, 0.75,  1, 18, { density: 0.4,  hMin: 9, hMax: 14, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Aintree outer copse
       forestEdge(0.35, 0.39, -1, 19, { density: 0.3,  hMin: 9, hMax: 13, col: COPSE, col2: COPSE2, pineFrac: 0.2  }); // Vale outer field copse
       // Very thin Hangar Straight fringe only — silhouette hangars need sky behind them
-      forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
-      forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
+      // Keep the Hangar airfield horizon open: density .08 still means 8 m
+      // trunk spacing; use an explicit sparse 24 m rhythm in these far belts.
+      forestEdge(0.18, 0.28,  1, 160, { spacing: 24, density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
+      forestEdge(0.18, 0.28, -1, 160, { spacing: 24, density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
       // Hangar Straight's RAF T2 halls: three long, shallow barrel silhouettes
       // parallel to the old perimeter track. Keep the 8%-density fringe above;
@@ -750,7 +822,7 @@
       }
 
       for (const [id, s, side, gap, len] of [
-        ["wing",     0.475, 1, 44, 92],
+        ["wing",     0.475, 1, 60, 92],   // was gap 44 — now behind the Wing building
         ["paddock",  0.930, 1, 46, 84],
         ["camping",  0.775, 1, 40, 110],
         ["infield",  0.320, -1, 38, 120],

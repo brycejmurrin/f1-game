@@ -51,6 +51,7 @@ function bootInput() {
     performance: { now: () => clock.t },
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+    dispatchEvent: (e) => { for (const f of listeners[e.type] || []) f(e); return true; },
     removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
     navigator: { vibrate: (ms) => { vibrated.push(ms); return true; } },
     screen: {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
@@ -111,7 +112,7 @@ function pair(opts = {}) {
   const phone = { roll: null, thr: 0, brk: 0, held: 0, buzz: [], huds: [] };
   const session = PhonePad.padSession(padEnd, {
     roll: () => phone.roll, thr: () => phone.thr, brk: () => phone.brk, held: () => phone.held,
-  }, { now: () => clock.t, heartbeat: false, vibrate: (ms) => phone.buzz.push(ms), onHud: (h) => phone.huds.push(h) });
+  }, { now: () => clock.t, heartbeat: false, vibrate: opts.phoneHaptics === false ? undefined : (ms) => phone.buzz.push(ms), onHud: (h) => phone.huds.push(h) });
   let closed = 0;
   const dash = { value: null };   // what the desktop's sampler returns (null = nothing to send)
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => dash.value, onClose: () => { closed++; } });
@@ -311,6 +312,61 @@ test("the desktop's vibrate() is forwarded to the phone while it is the live sou
   Input.vibrate(40);
   frame(false); frame(false);
   assert.deepEqual(phone.buzz, [40], "the kerb reaches the phone in the player's hand");
+});
+
+test("a capable phone exposes haptics on pairing, respects strength/off, and hides on disconnect", () => {
+  const { Input, phone, frame, link, sb } = pair();
+  let changes = 0;
+  sb.addEventListener("apexhapticschange", () => changes++);
+  assert.equal(Input.hapticsSupported(), false, "desktop has no motor and the hello is pending");
+  frame(false);
+  assert.equal(Input.hapticsSupported(), true, "capability arrives before a steering sample");
+  assert.equal(changes, 1);
+  frame();
+  Input.setHaptics(0.5); Input.vibrate(80);
+  frame(false); frame(false);
+  assert.deepEqual(phone.buzz, [40]);
+  Input.setHaptics(0); Input.vibrate(80);
+  frame(false); frame(false);
+  assert.deepEqual(phone.buzz, [40], "OFF prevents the remote command");
+  link.close();
+  assert.equal(Input.hapticsSupported(), false);
+  assert.equal(changes, 2);
+});
+
+test("a phone without a vibrator does not advertise haptics", () => {
+  const { Input, frame } = pair({ phoneHaptics: false });
+  frame();
+  assert.equal(Input.remoteActive(), true);
+  assert.equal(Input.hapticsSupported(), false);
+});
+
+test("missing, malformed, or wrong-protocol phone capabilities cannot enable haptics", () => {
+  const { Input, hostEnd } = pair({ phoneHaptics: false });
+  for (const hi of [
+    { t: "hi", side: "pad", p: 1 },
+    { t: "hi", side: "pad", p: 1, haptics: "true" },
+    { t: "hi", side: "pad", p: 999, haptics: true },
+    { t: "hi", side: "host", p: 1, haptics: true },
+  ]) {
+    hostEnd._emit("message", NetTransport.EVENT, JSON.stringify(hi));
+    assert.equal(Input.hapticsSupported(), false);
+  }
+});
+
+test("phone capabilities arriving before both RTC channels open survive the host open callback", () => {
+  const { Input } = bootInput();
+  const cb = {};
+  const transport = { status: "connecting", onMessage: (f) => { cb.message = f; }, onOpen: (f) => { cb.open = f; },
+    onClose: (f) => { cb.close = f; }, send: () => true, pump() {}, close() { cb.close(); } };
+  const link = PhonePad.link(transport, { input: Input, pump: false });
+  assert.equal(Input.hapticsSupported(), false);
+  cb.message(NetTransport.EVENT, JSON.stringify({ t: "hi", side: "pad", p: 1, haptics: true }));
+  assert.equal(Input.hapticsSupported(), true, "reliable EVENT channel can deliver before STATE opens");
+  transport.status = "open"; cb.open();
+  assert.equal(Input.hapticsSupported(), true, "opening the second channel must not erase the hello");
+  link.close();
+  assert.equal(Input.hapticsSupported(), false);
 });
 
 test("silence makes the source stale in 700 ms, and the keyboard takes over meanwhile", () => {
@@ -522,6 +578,58 @@ function fakeEl() {
   return el;
 }
 
+test("the phone controller accepts a full private relay token and explains an incomplete one", async () => {
+  const dom = { codeIn: fakeEl(), status: fakeEl() };
+  dom.codeIn.maxLength = 8;
+  const page = PhonePad.pad(dom, { deps: { privateRelay: () => true, normalise: (c) => c, valid: () => false } });
+  assert.equal(dom.codeIn.maxLength, 32);
+  assert.equal(dom.codeIn.placeholder, "PRIVATE ROOM TOKEN");
+  assert.equal((await page.connect("ABC123")).error, "bad_code");
+  assert.match(dom.status.textContent, /full 32-character token/);
+});
+
+test("a fresh phone learns the private Worker only on CONNECT, with its token confined to the fragment", async () => {
+  const secret = "ABCDEFGH23456789ABCDEFGH23456789";
+  const endpoint = "https://relay.test/custom/base";
+  const url = PhonePad.padUrl(secret, "https://game.test/index.html", endpoint);
+  const parsed = new URL(url);
+  assert.equal(parsed.search, ""); assert.equal(parsed.pathname, "/controller.html");
+  assert.equal(parsed.hash, "#pad=" + secret + "&relay=" + encodeURIComponent(endpoint));
+  let selected = null;
+  const calls = [], swaps = [];
+  const dom = { codeIn: fakeEl(), status: fakeEl() };
+  const ctl = PhonePad.pad(dom, { href: url, deps: {
+    privateRelay: () => !!selected,
+    setSessionUrl(value) { calls.push(value); selected = value; return true; },
+    normalise: (c) => c, valid: (c) => !!selected && c.length === 32,
+    prefetchIce: async () => null, rtc: () => ({ close() {} }),
+    swap: async (o) => { swaps.push({ code: o.code, endpoint: selected }); return { ok: false, error: "expired" }; },
+  } });
+  assert.equal(dom.codeIn.value, secret); assert.equal(dom.codeIn.maxLength, 32);
+  assert.deepEqual(calls, [], "opening a QR URL must not change relay configuration");
+  await ctl.connect(dom.codeIn.value);
+  assert.deepEqual(calls, [endpoint]);
+  assert.deepEqual(swaps, [{ code: secret, endpoint }]);
+});
+
+test("public QR clears a previous private document override, while invalid relay metadata makes no network request", async () => {
+  for (const relay of [null, "http://remote.test", "https://u:p@relay.test", "https://relay.test/?secret=x", "https://relay.test/#x", "%E0%A4%A"]) {
+    let selected = "https://previous.test", changes = 0, network = 0;
+    const href = "https://game.test/controller.html#pad=ABC234" + (relay === null ? "" : "&relay=" + encodeURIComponent(relay));
+    const ctl = PhonePad.pad({ codeIn: fakeEl(), status: fakeEl() }, { href, deps: {
+      privateRelay: () => !!selected, setSessionUrl(value) { selected = value; changes++; return true; },
+      normalise: (c) => c, valid: (c) => !selected && c.length === 6,
+      prefetchIce: async () => { network++; }, rtc: () => null,
+    } });
+    assert.equal(changes, 0);
+    const result = await ctl.connect("ABC234");
+    assert.equal(changes, relay === null ? 1 : 0);
+    assert.equal(network, relay === null ? 1 : 0);
+    assert.equal(result.error, relay === null ? "no_transport" : "bad_relay");
+  }
+  assert.throws(() => PhonePad.padUrl("ABC234", "https://game.test/", "http://remote.test"), /Invalid private pairing/);
+});
+
 test("pad(): the page's pedals, paddles and LCD are wired through to the wire and back", async () => {
   const desk = bootInput();
   const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(3) });
@@ -653,7 +761,8 @@ function hostHarness(over = {}) {
     linked: () => ui.linkedN++, lost: () => ui.lostN++, hud: () => null };
   const room = { stopped: 0, onJoiner: null, stop() { room.stopped++; } };
   const deps = Object.assign({
-    rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234",
+    rtc: () => hostEnd, prefetchIce: async () => null, makeCode: () => "ABC234", relayUrl: () => "https://relay.test/base",
+    usingPrivateRelay: () => false,
     createInvite: async () => ({ ok: true, code: "OFFER" }),
     acceptAnswer: async () => ({ ok: true }),
     hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
@@ -839,7 +948,7 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   // while it drives, and the player's own camera comes back when the phone is gone.
   assert.match(gameJs, /const VISOR_CAM = CamModes\.CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
   assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && G.camMode !== VISOR_CAM\) \{ phonePadCam = G.camMode; G\.setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
-  assert.match(gameJs, /phonePad\.cancel\(\); phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
+  assert.match(gameJs, /phonePad\.cancel\(\);\s+phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
   assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
@@ -971,5 +1080,114 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     const el = lcd();
     PhonePad.paintHud(el, back);
     assert.ok(el.body.classes.has("menu"), why + ": the phone shows the MENU PAD");
+  }
+});
+
+test("wheel pedal axes never feed onboard free-look; an ordinary right stick still does", () => {
+  const { Input, sb, clock } = bootInput();
+  const pad = { index: 0, connected: true, id: "wheel", mapping: "", axes: [0, 0, -1, -1],
+    buttons: Array.from({ length: 18 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  const cam = vm.createContext({ Input, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } });
+  vm.runInContext(read("js/camera/feel.js"), cam);
+  const feel = vm.runInContext("CamFeel", cam);
+  Input.setPadAxisMap({ throttle: 2, brake: 3 });
+  for (const pedal of [-1, 0, 1]) {
+    pad.axes[2] = pad.axes[3] = pedal;
+    for (let i = 0; i < 120; i++) {
+      clock.t += STEP; Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+    }
+    assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "pedal rest and travel leave the view centered");
+    // Pedal travel (pedal + 1) / 2 through input.js's rescaled 0.12 dead zone (padPedalLevel).
+    const lvl = ((pedal + 1) / 2) > 0.12 ? (((pedal + 1) / 2) - 0.12) / 0.88 : 0;
+    assert.ok(Math.abs(Input.throttleLevel() - lvl) < 1e-12, "the mapped throttle still drives");
+    assert.ok(Math.abs(Input.brakeLevel() - lvl) < 1e-12, "the mapped brake still drives");
+  }
+  Input.setPadAxisMap({ steer: 2, brake: 3 });
+  Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+  assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "a custom steering axis is owned by driving too");
+  Input.setPadAxisMap(null); pad.mapping = "standard";
+  pad.axes[2] = 0.5; pad.axes[3] = -0.5;
+  Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
+  assert.ok(feel.freeLookState().yaw > 0 && feel.freeLookState().pitch > 0, "unmapped right stick retains free-look");
+});
+
+test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
+  const elements = new Map(), loads = [], hosts = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
+  const context = vm.createContext({ G, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    ensureNet: () => new Promise((resolve) => loads.push(resolve)),
+    PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
+      const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
+    } },
+  });
+  vm.runInContext(read("js/ui/platform-session.js"), context);
+  vm.runInContext("PlatformSession.create(G, { ensureNet }).wirePhone();", context);
+  const btn = G.$("pm-phonepad"), box = G.$("pm-phonepad-box");
+  btn.onclick(); assert.equal(btn.textContent, "STOP PAIRING");
+  btn.onclick(); assert.equal(box.hidden, true);
+  loads[0](true); await settle();
+  assert.equal(hosts.length, 0, "a cancelled bundle completion cannot start a host");
+  btn.onclick(); btn.onclick(); btn.onclick();
+  loads[1](false); await settle();
+  assert.equal(G.$("pm-phonepad-status").textContent, "Loading…", "stale failures leave the new attempt alone");
+  assert.equal(hosts.length, 0);
+  loads[2](true); await settle();
+  assert.equal(hosts.length, 1, "only the newest start creates a host");
+  hosts[0].options.linked(); assert.equal(G.camMode, 0, "a linked phone switches to visor");
+  btn.onclick();
+  assert.equal(G.camMode, 1, "UNPAIR restores the prior camera");
+  assert.equal(hosts[0].cancelled, 1, "STOP owns and cancels the sole host");
+  assert.equal(box.hidden, true);
+  btn.onclick(); loads[3](false); await settle();
+  assert.equal(btn.textContent, "STEER THIS GAME WITH A PHONE", "a load failure offers retry, not a misleading STOP");
+});
+
+test("host(): private relay swaps one offer/answer and the linked phone can drive", async () => {
+  let request, accepted, publicRooms = 0;
+  const h = hostHarness({ usingPrivateRelay: () => true,
+    makeCode: () => "ABCDEFGH23456789ABCDEFGH23456789",
+    hostRoom: async () => { publicRooms++; return { ok: false, error: "not_supported" }; },
+    swap: async (o) => { request = o; o.onTick(); return { ok: true, payload: "PRIVATE ANSWER" }; },
+    acceptAnswer: async (transport, answer) => { accepted = { transport, answer }; return { ok: true }; },
+  });
+  await settle();
+  assert.equal(publicRooms, 0, "the private mailbox never uses the public multi-guest API");
+  assert.equal(request.code, "ABCDEFGH23456789ABCDEFGH23456789"); assert.equal(request.mine, "OFFER");
+  assert.equal(h.ui.qrs[0].url, PhonePad.padUrl(request.code, null, "https://relay.test/base"));
+  assert.equal(request.slot, "offer"); assert.equal(request.want, "answer");
+  assert.equal(accepted.transport, h.hostEnd); assert.equal(accepted.answer, "PRIVATE ANSWER");
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  assert.ok(request.token.cancelled, "linking stops the rendezvous");
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(100);
+  assert.ok(h.Input.throttleLevel() > 0.79, "the accepted answer installs the real Input link");
+  h.ctl.cancel(); assert.equal(h.hostEnd.status, "closed"); assert.equal(h.Input.remoteActive(), false);
+});
+
+test("host(): cancelling a private exchange ignores a late answer and closes the transport", async () => {
+  let resolve, request, accepted = 0;
+  const h = hostHarness({ usingPrivateRelay: () => true,
+    swap: (o) => { request = o; return new Promise((r) => { resolve = r; }); },
+    acceptAnswer: async () => { accepted++; return { ok: true }; },
+  });
+  await settle(); h.ctl.cancel();
+  assert.ok(request.token.cancelled); assert.equal(h.hostEnd.status, "closed");
+  resolve({ ok: true, payload: "LATE ANSWER" }); await settle();
+  assert.equal(accepted, 0); assert.equal(h.ui.linkedN, 0); assert.equal(h.ctl.state().phase, "cancelled");
+});
+
+test("host(): private exchange and unreadable-answer failures release their transport", async () => {
+  for (const badAnswer of [false, true]) {
+    const h = hostHarness({ usingPrivateRelay: () => true,
+      swap: async () => badAnswer ? { ok: true, payload: "BAD ANSWER" } : { ok: false, message: "Relay offline" },
+      acceptAnswer: async () => ({ ok: false, message: "Unreadable answer" }),
+    });
+    await settle();
+    assert.equal(h.ctl.state().phase, "failed"); assert.equal(h.hostEnd.status, "closed");
+    assert.match(h.ui.said.at(-1), badAnswer ? /Unreadable answer/ : /Relay offline/);
+    assert.equal(h.ui.linkedN, 0); h.ctl.cancel();
   }
 });

@@ -444,7 +444,7 @@ const F1API = (function () {
     return request(url, sessionTtl(sessionKey)).then(function (list) {
       return arr(list).map(function (p) {
         p = p || {};
-        return { num: num(p.driver_number), lap: num(p.lap_number), duration: num(p.pit_duration) };
+        return { num: num(p.driver_number), lap: num(p.lap_number), duration: num(p.lane_duration ?? p.pit_duration) };
       });
     });
   }
