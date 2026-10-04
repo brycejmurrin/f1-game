@@ -3268,3 +3268,9 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 ## 2026-10-01 — Merge #710 modelsReady await
 
 `js/game.js` lines 9691 → 9697 and codeLines 5312 → 5313. Ship tip after Merge #710 (`modelsReady` join in `ensureScenery` so a track build waits for the baked model pack) grew past both ceilings (measure: lines 9697, codeLines 5313; prior tip ~9690/9691). First snap to 9696 alone still failed PR CI — the lines metric counts a trailing empty split, and codeLines also moved +1. Deliberate raise for the intentional boot fix — not an extraction.
+
+## 2026-10-04 — VS FRIEND lobby teardown + sync-pr ratchet cure (`js/net/lobby.js`, `js/game.js`)
+
+`js/net/lobby.js` lines 1884 → **1887** on the feature tip (+3: two comment lines and `_peers.clear(); _ready.clear(); clashClear(); myRank = Infinity` when the room ends so relayed guest profiles do not survive into the next room), then 1891 → **1894** after syncing the deploy tip (base had already absorbed other lobby growth to 1891; the union is base + the three teardown lines).
+
+A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.

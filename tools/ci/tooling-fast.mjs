@@ -785,6 +785,31 @@ export function scheduleLongestFirst(files, timings = {}) {
     .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
 }
 
+/** Pull the diagnosable TAP failure lines from a child's stdout+stderr.
+ *  Node's TAP puts deepEqual diffs under `error: |-` and array members under
+ *  `actual:` / `expected:` as `0: …` rows — keeping only the bare keys left
+ *  Structural guards red on 2026-10-04 with empty Expected/Received
+ *  (run 37171017859, ratchets.test.mjs). */
+export function tapFailureDetail(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  let inError = false;
+  for (const L of lines) {
+    if (/^\s+(error:|name: 'AssertionError'|expected:|actual:|operator:)/.test(L)) {
+      out.push(L);
+      inError = /^\s+error:/.test(L);
+      continue;
+    }
+    // Indexed actual/expected members: `    0: 'js/net/lobby.js lines: …'`
+    if (/^\s+\d+:/.test(L)) { out.push(L); inError = false; continue; }
+    // YAML block-scalar body under `error: |-` (the deepEqual +/- dump).
+    if (inError && /^\s{4,}\S/.test(L)) { out.push(L); continue; }
+    if (inError && /^\s*$/.test(L)) { out.push(L); continue; }
+    inError = false;
+  }
+  return out;
+}
+
 /* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
  * handle, a never-settled await) runs until the CI job's timeout-minutes, and
  * the job reports `cancelled` with every START line but no verdict — the shape
@@ -909,10 +934,9 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
         for (const L of notoks) emit(`  | ${L}`);
       }
       // Assertion bodies sit under each `not ok` TAP block. Keep them short
-      // (name/error/expected/actual) so a FAIL is diagnosable without dumping
-      // the whole TAP stream into the sequential log.
-      const detail = text.split("\n").filter((L) =>
-        /^\s+(error:|name: 'AssertionError'|expected:|actual:|operator:)/.test(L));
+      // (name/error/expected/actual + deepEqual body) so a FAIL is diagnosable
+      // without dumping the whole TAP stream into the sequential log.
+      const detail = tapFailureDetail(text);
       for (const L of detail.slice(0, 40)) emit(`  | ${L.trimEnd()}`);
       if (detail.length > 40) emit(`  | … ${detail.length - 40} more assertion lines`);
       if (!notoks.length && !detail.length) {
