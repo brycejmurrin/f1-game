@@ -1196,7 +1196,10 @@ const AiDrive = (function () {
     if (ctx.wear >= 1 && wornPays(ctx)) return "worn";
     if (ctx.stopsLeft <= 0) return "";
     // VSC and SC (2, 3) are the free stop; a red flag (4) is not a pit window.
-    if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
+    // …and only onto a set that can carry the stint it lengthens (ctx.fits,
+    // as for the rival calls): an early SC pulled a one-stop's stop six laps
+    // forward onto a set that could not reach the flag — a second stop.
+    if (ctx.cautionLevel >= 2 && ctx.cautionLevel < 4 && ctx.fits !== false && ctx.lapsToStop <= CAUTION_REACH) return "caution";
     if (!ctx.rivalUsed && ctx.fits !== false && ctx.lapsToStop <= UNDERCUT_REACH && (ctx.wear || 0) >= UNDERCUT_MIN_WEAR) {
       if (ctx.rivalBehindBoxed && (ctx.react || 0) >= TEMPER.REACT_MIN) return "cover";
       if (ctx.stuckBehind && ctx.lapsToStop <= UNDERCUT_LAPS && (ctx.attack || 0) >= TEMPER.ATTACK_MIN) return "undercut";

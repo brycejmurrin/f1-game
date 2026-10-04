@@ -174,7 +174,7 @@
       // Pit wall + start gantry
       wall(0.97, 0.04, -1, 3, 1.1, [0.85, 0.85, 0.85]);
       overheadSpan({
-        id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5,
+        id: "bahrain-start-gantry", frac: 0.005, clearance: 8.5, startLights: true,
         thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
       });
       // Main Grandstand length held at 118 m (was 140) so restoring T1 seating
@@ -417,13 +417,58 @@
           duneWedge(k, side, 52 + i * 20, 34 + hash(k * 3 + side) * 22, 3.6 + hash(k * 5) * 2.0);
         }
       }
-      // Beyon (ex-Batelco) sits at T9–10 on the real map (ticket-compare /
-      // 3ddigitalvenue). A full truss stand + the prior steel bay blew the
-      // props-tris ratchet after T1 seating was restored; lightBanks +
-      // marshal posts still mark the complex until a cheaper mesh fits.
-      lightBank(K(0.51), 1, 38);
-      lightBank(K(0.54), -1, 38);
-      marshalPost(K(0.50), -1, 26);
+      // Beyon (ex-Batelco) — covered single-tier on the infield right of the
+      // T9–10 DRS straight (oversteer48 / bahrain.gp / tickets.gp seating maps).
+      // A full grandstandEx blew the props-tris ratchet after T1 seating was
+      // restored; this lean modelGroup (shell + seat face + roof + posts) is
+      // the cheaper mesh the prior lightBank-only marker was waiting for.
+      // Sources: https://oversteer48.com/best-seats-bahrain-gp-grandstand-guide/
+      //          https://www.bahrain.gp/en/map-of-the-grandstands-24
+      {
+        const a = anchor(K(0.520), 1, 38), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], 18)) {
+          modelGroup("bahrain-beyon-grandstand", {
+            center: vadd(a.c, a.u, 8), size: [18, 16, 86], basis: b,
+          }, (stage) => {
+            // Same nesting as bahrain-university-grandstand: stacked slabs with
+            // the seat strip hung OUTSIDE the track-facing face (side +1 → −r),
+            // and no separate end-wall boxes (those shared the shell's end faces
+            // and tripped flatCoplanar).
+            const slabs = [
+              [0.0,  14, 5.2, 78, STAND_CREAM],
+              [5.2,  11, 4.6, 70, [0.78, 0.76, 0.72]],
+            ];
+            stage._mat = MAT.CONCRETE;
+            for (const [y0, w, h, len, col] of slabs) {
+              addBox(stage, vadd(a.c, a.u, y0 + h * 0.5), [w, h, len], col, b);
+              stage._mat = MAT.FABRIC;
+              addBox(stage, vadd(vadd(a.c, a.r, -(w * 0.5 + 0.6)), a.u, y0 + h * 0.55),
+                [1.2, h * 0.72, len * 0.92], SEAT_BLUE, b);
+              stage._mat = MAT.CONCRETE;
+            }
+            // Covered roof resting on the top tier (Beyon is covered).
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 10.15), [12.5, 0.6, 72], PIT_CREAM, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 9.7),
+              [0.4, 0.7, 70], STEEL, b);
+            for (const t of [-28, -10, 10, 28]) {
+              addCyl(stage, vadd(vadd(a.c, a.r, -6.6), a.t, t),
+                0.20, 9.8, STEEL, 5, b);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      // Night banks + broadcast furniture the stand faces (TV screen in sight
+      // per bahrain.gp ticket notes — videoWall call lives with the other
+      // videoWall sites below, after the helper is defined). One bank opposite,
+      // not a second full stand.
+      lightBank(K(0.505), -1, 34);
+      lightBank(K(0.545), 1, 42);
+      cameraTower(K(0.525), -1, 40, { h: 20 });
+      billboard(K(0.530), 1, 14, 12, 4, [0.05, 0.45, 0.75]);
+      marshalPost(K(0.500), -1, 26);
+      marshalPost(K(0.535), 1, 28);
       // Desert backdrop slab behind open section — fills the distant horizon
       backdrop(K(0.50), -1, 140, [260, 15, 12], SAND);
 
@@ -730,11 +775,12 @@
       marquee(K(0.83),  1, 40, 11, 36);
       marquee(K(0.26),  1, 54, 12, 40);
       marquee(K(0.50), -1, 62, 11, 34);
-      // Video walls facing the main and T1 grandstands.
+      // Video walls facing the main, T1, and Beyon grandstands.
       videoWall(K(0.02),  1, 40, 12, 7);
       videoWall(K(0.055), 1, 46, 11, 6.5);
       videoWall(K(0.81),  1, 40, 12, 7);
       videoWall(K(0.42),  1, 40, 11, 6.5);
+      videoWall(K(0.518), -1, 32, 14, 7);
 
       grandstandEx(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE, { endWalls: true });
       grandstandEx(0.71,  1, 26, 40, null, null,

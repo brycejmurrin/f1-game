@@ -69,7 +69,11 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // (the lap-line write) are absent on a cold car; a car classified in one
   // episode would start the next with both. finPos/retired/dnf* are DECLARED
   // by makeCars, so gridUp() restores their declared values instead.
-  "_coastHeld", "lastLap"];
+  "_coastHeld", "lastLap",
+  // Field-step pose snapshots (game.js update()): written every tick before
+  // updateCar so traffic scans read last step's poses. Absent on a cold car;
+  // a warm one would hand the next episode a stale sibling pose on frame 0.
+  "_snapProg", "_snapX", "_snapSpeed"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -820,6 +824,17 @@ const api = {
     const c = o.car != null ? (G.cars || [])[o.car] : G.player;
     return G.tyres.info(c);
   },
+  // DISPLAY-ONLY damage readout (js/race/damage.js) for car `i` (default: the
+  // player): {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a
+  // synthetic impact {long, lat, sev} in the car's frame (+long nose, +lat right);
+  // "reset" repairs. Nothing in physics reads it — a screenshot/test door only.
+  damage(i, hit) {
+    const c = i != null ? (G.cars || [])[i] : G.player;
+    if (!c || typeof Damage === "undefined") return null;
+    if (hit === "reset") Damage.reset(c);
+    else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
+    return Damage.state(c);
+  },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
     // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
@@ -1269,6 +1284,7 @@ const api = {
     return { head: G.player.head };
   },
   go() {
+    if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
@@ -1817,7 +1833,7 @@ const api = {
       skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
       skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
       skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
-      cullDist: G.frame.cullDist,   // metres; scenery beyond this is culled (0 = uncapped, only under the debug free-cam)
+      cullDist: G.frame.cullDist, cullFog: G.frame.cullFog && G.frame.cullFog.slice(),   // the HARD radius in m (0 = uncapped) + the fog wall [density, height falloff] Frustum.radialCulled also culls past
       moonK: G.frame.moonK,         // weather-gated clear-moon floor (0 under cloud/fog/wet)
       moonGate: G.frame.moonGate,   // max(moonK, the moonShadow>0.5 escape hatch) — what the prop/car shadow casts actually gate on
       lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for

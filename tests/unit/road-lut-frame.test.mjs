@@ -61,3 +61,33 @@ test("the road LUT never hands the shader a rotated track frame", () => {
     "swaps lateral x with along-track s and paints the centre line down the length of the " +
     "road on WebGPU:\n  " + bad.join("\n  "));
 });
+
+test("the road LUT samples the centreline at lat 0, not the -0.30 m centre-line column", () => {
+  // buildRoad (js/track/core/mesh.js) has NO lat-0 column: the dashed centre
+  // line's columns sit at +-0.30 / +-0.35. Collapsing each station to "the
+  // centre-most vertex" therefore kept the -0.30 one, and every WGX lateral x
+  // read 0.30 m off — the edge lines, dashes, pit lane, asphalt test and bury
+  // hole all shifted sideways against GLX (one edge line landed on the kerb).
+  // A straight ribbon with that exact column layout: every sample must sit on
+  // the axis.
+  const bake = loadBake();
+  const hw = 6, n = 60, ds = 4;
+  const offs = [-hw - 2.2, -hw - 0.4, -hw, -hw + 0.2, -hw + 0.25, -0.35, -0.30,
+                0.30, 0.35, hw - 0.25, hw - 0.2, hw, hw + 0.4, hw + 2.2];
+  const pos = [], trk = [], mat = [];
+  for (let k = 0; k < n; k++) {
+    offs.forEach((o, v) => {
+      pos.push(k * ds, 0, o);
+      trk.push(k * ds, o, hw);
+      mat.push(v <= 1 || v >= 12 ? 9 : 16);
+    });
+  }
+  const lut = bake(pos, trk, mat);
+  assert.ok(lut && lut[0] === 12345, "the bake returned no road LUT for a plain straight ribbon");
+  const lateral = [];
+  for (let o = 8; o < lut.length; o += 4) if (lut[o] < 1e5) lateral.push(lut[o + 1]);
+  assert.ok(lateral.length >= n, `only ${lateral.length} samples baked for ${n} stations`);
+  const worst = Math.max(...lateral.map(Math.abs));
+  assert.ok(worst < 1e-3,
+    `a baked sample sits ${worst.toFixed(3)} m off the centreline — WGX road paint shifts sideways by that much vs GLX`);
+});

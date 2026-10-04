@@ -159,7 +159,9 @@
  *   shadowCtr:vec3                 shadow-box snap anchor (look-biased);
  *                                  shader fade uses eye XZ + this Y
  *                                  (defaults to eye)
- *   cullDist:number                far cull distance
+ *   cullDist:number                far cull distance — the HARD chunk radius (0 = none)
+ *   cullFog:[density, h]           the fog wall chunks are also culled past
+ *                                  (Frustum.radialCulled, height-aware; null = none)
  *   noEnv:bool                     disable env-cube sheen (menu preview)
  *   tune:object                    live LIGHTING TUNER knobs (LT.*); defaults in
  *                                  the backend MUST mirror LightTune.TUNE_DEFS

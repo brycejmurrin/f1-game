@@ -709,6 +709,22 @@ test("the pick locks once the weekend is under way", () => {
   assert.equal(Career.chooseObjective(2), false);
 });
 
+test("a SIMULATED quali or a started race locks the pick too, for that round only", () => {
+  // Neither leaves a stage, a qualiOrder or a sprintOrder in a career save (a
+  // simulated quali is never persisted), so the briefs used to unlock again with
+  // the grid already known. markWeekendStarted() stamps the round instead.
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(1);
+  Career.markWeekendStarted();             // q-sim, or startRaceBody
+  assert.equal(Career.objectiveLocked(), true);
+  assert.equal(Career.chooseObjective(2), false, "no re-pick after seeing the grid");
+  assert.equal(Career.objectivePick(0), 1);
+  career.season.round = 1;                  // the next round
+  assert.equal(Career.objectiveLocked(), false, "keyed on the round: the next weekend starts unlocked");
+  assert.equal(Career.chooseObjective(2), true);
+});
+
 test("the choices are drawn from the seed, so reloading cannot reroll them", () => {
   const a = hub(), b = hub();
   assert.equal(JSON.stringify(a.objectiveChoices(3)), JSON.stringify(b.objectiveChoices(3)));

@@ -363,6 +363,8 @@ interface GameCtx {
   readonly track: TrackModel | null;
   readonly cars: CarState[];
   readonly player: CarState | null;
+  /** js/race/flying-start.js — the qualifying / time-trial rolling start (stop() hands the wheel back). */
+  readonly flyingStart: { update(dt: number): void; stop(): void; owns(c: CarState): boolean; active(): boolean };
   season: SeasonState | null;
   /** flow/session are the authority; seasonMode/timeTrial are derived views. */
   flow: FlowMode;
@@ -860,6 +862,7 @@ declare const StartLights: GameModuleFactory;
 declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const FlyingStart: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;

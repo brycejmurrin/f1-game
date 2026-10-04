@@ -6,12 +6,30 @@
    the shadow batches and the ground/attitude matrices, and reads the caches
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
-   raceTimeOfDay / track / teamIdx / driverIdx / headlessMode / frame), the four
-   helpers that could not leave game.js through deps (resolveLivery,
+   dbgCam / state / raceTimeOfDay / track / teamIdx / driverIdx / headlessMode /
+   frame), the four helpers that could not leave game.js through deps (resolveLivery,
    partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
 
 const CarDraw = (function () {
+  // WHICH CACHE ENTRY A CAR'S BUILD IS — ONE answer for makeCars and the menu
+  // prep (prepareMenuCarAssets), so the prep's bodies and casters are the race's.
+  // `own`: the player or the MY TEAM hire, on the saved build (getTeamParts); a
+  // career rival runs its R&D shelf (Career.aiSetup); everyone else the factory.
+  // A build that RESOLVES to the team's factory parts is the factory car: no
+  // stamp, no setup, the factory key. CareerAiDev.ensureSeed copies the works
+  // shelf into a team's bag on its first winter, so once R&D had started every
+  // rival carried its own stamp while the prep keyed the factory — ~21 bodies
+  // and ~11 casters rebuilt behind the race-entry card. Same parts, same mesh.
+  function carVisual(team, num, own, getTeamParts) {
+    const setup = own ? getTeamParts(team.id) : (Career.inCareer() && Career.aiSetup ? Career.aiSetup(team) : null);
+    let stamp = "";
+    if (setup) {
+      const ids = Parts.resolveSetup(setup, team).ids, works = Parts.getFactorySetup(team);
+      if (Parts.CATALOG.some((cat) => ids[cat.id] !== works[cat.id])) stamp = Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",");
+    }
+    return { visualSetup: stamp ? setup : null, visStamp: stamp, visPaint: stamp ? stamp + ":" + num : "", visSh: stamp ? stamp + ":sh" : "" };
+  }
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
@@ -65,7 +83,7 @@ const CarDraw = (function () {
     // prep builds 11 real + a MY TEAM / LEGENDS pick + the player's own build <= 13),
     // a career's R&D-stamped ones (one per team) and the TT ghost: <= 26. It also
     // took a painted whole car per mirror rival (+22) until the mirror drew bodies.
-    // teamBodies: 21-23 rivals in a race, 24 for the menu's widest pick (LEGENDS).
+    // teamBodies: 21-23 rivals in a race (the prep's keys: carVisual), 24 for LEGENDS.
     // A hit promotes, so no live key is evicted (car-presentation-canary pins
     // both counts). Was 48 while seat-keyed :sh doubled casters.
     const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;
@@ -310,6 +328,9 @@ const CarDraw = (function () {
           // procedural pass draws a rival with one (past 120 m it only drops its decal).
           if (lodWarm) {
             if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
+            // The wing-flap hinge solve (Car3D.aeroFlaps, ~30-225 ms per recipe, memoised):
+            // every rival draws its flap set at any range now, so solve it behind the cover.
+            if (!c.isPlayer) { const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp); Car3D.aeroFlaps(aSt.val, aSt.aero); }
             CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
             if (c.isPlayer) CarMesh.getErsLight();
           }
@@ -335,8 +356,9 @@ const CarDraw = (function () {
       Teams.LIST.forEach((team, ti) => {
         if (!Teams.isReal(team) && ti !== teamPick) return;
         Career.gridDrivers(team).forEach((seat, di) => {
-          const d = Career.driverOverride(team.id, di) || seat;
-          const c = { team, num: d.num, isPlayer: ti === teamPick && di === driverPick };
+          const d = Career.driverOverride(team.id, di) || seat, isPlayer = ti === teamPick && di === driverPick;
+          // makeCars' own keys (carVisual): the player and MY TEAM's hire on the saved build, a career rival on its shelf.
+          const c = Object.assign({ team, num: d.num, isPlayer }, carVisual(team, d.num, ti === teamPick && (isPlayer || !!team.custom), G.getTeamParts));
           if (c.isPlayer) field.unshift(c); else if (!solo) field.push(c);
         });
       });
@@ -345,15 +367,10 @@ const CarDraw = (function () {
       // true): ~32 ms each, and race entry built ~11 (~0.38 s) behind the card.
       // Each is a step of its own after its car, so a slice still holds one
       // build; a team's second seat shares the ":sh" key and is a cache hit.
-      // The player's keys on its OWN build: makeCars stamps the player's car
-      // with visualSetup = getTeamParts and visSh = this same stamp + ":sh".
+      // Every car carries carVisual's stamp, so a caster keys as the race's car
+      // does (the player's and a career rival's OWN build included).
       // warmCarAssets keeps its call, all hits after this (and the safety net).
       const casters = shadowCastersWanted();
-      const ownCaster = (c) => {
-        const own = G.getTeamParts(c.team.id) || null;
-        const stamp = own ? Parts.CATALOG.map((cat) => own[cat.id] || "").join(",") : "";
-        return { team: c.team, num: c.num, visualSetup: own, visSh: stamp ? stamp + ":sh" : "" };
-      };
       const steps = casters ? field.flatMap(c => [c, { caster: c }]) : field;
       let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
       for (const step of steps) {
@@ -366,7 +383,7 @@ const CarDraw = (function () {
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
         const at = performance.now(), c = step.caster || step;
         try {
-          if (step.caster) teamMesh(c.team, c.isPlayer ? ownCaster(c) : c, true);
+          if (step.caster) teamMesh(c.team, c, true);
           else {
             if (c.isPlayer) {
               playerBodyMesh(c.team, c, visualKey);
@@ -482,6 +499,25 @@ const CarDraw = (function () {
           { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: haloSz, num,
             parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
       }, COCKPIT_BODY_CACHE_MAX);
+    }
+    // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
+    // deps.cockpitCaster): in cockpit, helmet and visor, the mesh and matrix the
+    // car loop's cockpit branch draws the body with — the same mode test, and
+    // GameCams.cockpitViewmodelAxes over the same inputs (the player's road
+    // sample and interpolated yawVis, the final eye, the mode's seat), written
+    // into `out`. null in every other view: the exterior silhouette casts.
+    // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
+    const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
+    function cockpitCaster(c, smp, yv, out) {
+      const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
+      if (id !== "cockpit" && id !== "helmet" && id !== "visor") return null;
+      const seat = id === "visor" ? "visor" : "cockpit";
+      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat));
+      out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
+      out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
+      out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
+      out[12] = _ckP[0]; out[13] = _ckP[1]; out[14] = _ckP[2]; out[15] = 1;
+      return cockpitBodyMesh(c.team, c);
     }
     // Hub transform (translate + upscale) + scratch matrices for the steering roll
     // and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
@@ -953,6 +989,10 @@ const CarDraw = (function () {
       const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
       if (!body) { G.gfx.draw(teamMesh(c.team, c), mat, paint); return; }
       G.gfx.draw(body, mat, paint);
+      // The moveable wing elements are not in the body: the static set (ONE
+      // draw, the nearer rest pose), or every wing here was its main plane only.
+      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      deps.drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, mat, paint, aSt.aero, null, true);
       _mirWheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, mat, 0, _mirWheelOpts, false, 0, 1, true);
     }
@@ -1064,7 +1104,7 @@ const CarDraw = (function () {
     }
 
     return (_instance = {
-      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
+      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
@@ -1077,6 +1117,6 @@ const CarDraw = (function () {
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.
   let _instance = null;
-  return { create, instance: () => _instance };
+  return { create, carVisual, instance: () => _instance };
 })();
 Object.freeze(CarDraw);

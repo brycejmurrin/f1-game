@@ -2,7 +2,8 @@
    from a column-major view-proj (m[col*4+row]) plus conservative AABB tests.
    One backend-neutral home so GLX chunked, TLX chunked, and WGX never drift on
    near-plane convention (GL clip w+z >= 0 on a raw GL matrix — WebGPU Z01 is
-   applied only on GPU upload). bucketInstances is the shared instance-cell
+   applied only on GPU upload). radialCulled is the draw-distance + fog-wall
+   cull the three chunk loops share; bucketInstances is the shared instance-cell
    binning the three createInstancedBatch paths feed to cullInstances. */
 "use strict";
 
@@ -43,6 +44,33 @@ const Frustum = (function () {
     const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
     const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
     return dx * dx + dy * dy + dz * dz;
+  }
+
+  // THE RADIAL CULL every backend's chunk loop runs (GLX chunked.js, TLX
+  // tlx-chunked.js, WGX wgx-chunked.js): true when the chunk AABB [mn, mx],
+  // seen from (ex, ey, ez), is to be SKIPPED. Two independent limits:
+  //   cd   the hard radius, frame.cullDist (0 = none) — the far-plane sphere,
+  //        the tier-3 cap, the env probe's and the mirror's budgets;
+  //   fog  the FOG WALL, frame.cullFog = [density, heightFalloff] (null, or
+  //        density 0, = none). Every lit shader fogs a fragment by
+  //          f = 1 - exp(-(density * dist * exp(-max(y - eyeY, 0) * h))^2)
+  //        so a chunk goes only when that exponent passes FOG_CULL_FD at its
+  //        NEAREST point raised to its TOP edge — a lower bound on every
+  //        fragment it holds. 3 is f >= 1 - e^-9 (99.99 %), and with h = 0 it
+  //        is the old single radius ceil(3 / density) to the metre. That one
+  //        radius for every height culled floodlights, hotels and hills at
+  //        65-70 % fog — they stand above the eye, where the fog thins — so
+  //        they popped out at 300-750 m in night, dusk, wet and fog sessions.
+  const FOG_CULL_FD = 3;
+  function radialCulled(mn, mx, ex, ey, ez, cd, fog) {
+    const d2 = aabbDist2(mn, mx, ex, ey, ez);
+    if (cd > 0 && d2 > cd * cd) return true;
+    const dens = fog ? fog[0] : 0;
+    if (!(dens > 0)) return false;
+    const r = FOG_CULL_FD / dens;                 // the fog wall at eye level
+    if (d2 <= r * r) return false;                // inside it: no exp() for the near field
+    const lift = mx[1] - ey, h = fog[1];
+    return !(lift > 0 && h > 0) || Math.sqrt(d2) * Math.exp(-lift * h) > r;
   }
 
   // Six planes per call. Pass `out` (6×Float32Array(4)) to reuse a caller pool —
@@ -93,6 +121,6 @@ const Frustum = (function () {
     return [...buckets.values()];
   }
 
-  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, bucketInstances };
+  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, FOG_CULL_FD, bucketInstances };
 })();
 Object.freeze(Frustum);

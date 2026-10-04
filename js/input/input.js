@@ -1023,7 +1023,14 @@ const Input = (function () {
   // `cancel` Event TopModal already listens for) dispatched at `document` —
   // never a second focus-mover. See padDispatchKey/padActivate/padEscape below
   // and their header comment for why B needs its own branch.
+  let remoteWas = false;        // the phone was live on the previous poll
   function pollGamepad() {
+    // A PHONE CONTROLLER GOING QUIET is the same interruption as an unplugged
+    // pad (a call, an app switch, a flat battery): its pedals already zero at
+    // REMOTE_STALE_MS, but the race ran on with the car coasting into a wall.
+    const rAct = remoteActive();
+    if (remoteWas && !rAct && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's handler must not break polling */ } }
+    remoteWas = rAct;
     if (!padConnected) {
       // Recovery re-probe, ~1 s throttle. gamepadconnected fires only on
       // connection / first input (MDN) — it never re-fires for a pad that is

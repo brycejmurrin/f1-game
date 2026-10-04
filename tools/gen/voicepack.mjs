@@ -71,12 +71,25 @@ const RUNS = {
 };
 export const VOICES = Object.freeze(Object.fromEntries(Object.entries(sandbox(["js/audio/voice-pack.js"]).VoicePack.VOICES)
   .map(([id, v]) => [id, { ...v, runs: RUNS[v.speaker] }])));
+export const SPEAKERS = Object.freeze(Object.keys(RUNS));
+
+/* ANY VOICE ON ANY CHANNEL (VoicePack.packFor): a voice speaks its own
+ * channel from `<id>`, and every other channel from `<id>-<speaker>` — the
+ * same voice and speed, that channel's phrases. The spec is the voice's, with
+ * the channel (and its card sources) swapped in. */
+export function specFor(id, speaker) {
+  const v = VOICES[id];
+  if (!v) throw new Error("unknown voice " + id + " (" + Object.keys(VOICES).join(", ") + ")");
+  const sp = speaker || v.speaker;
+  if (!RUNS[sp]) throw new Error("unknown speaker " + sp + " (" + SPEAKERS.join(", ") + ")");
+  return { ...v, speaker: sp, runs: RUNS[sp], pack: sp === v.speaker ? id : id + "-" + sp };
+}
 
 // A replacement voice must also cover older calls retained in its shipped
 // channel pack, even when the current phrase harvester no longer emits them.
-export function fallbackVocabulary(id) {
-  const base = sandbox(["js/audio/radio-voice.js"]).RadioVoice.PACK_VOICE[VOICES[id].speaker];
-  if (base === id) return [];
+export function fallbackVocabulary(id, speaker) {
+  const base = sandbox(["js/audio/radio-voice.js"]).RadioVoice.PACK_VOICE[specFor(id, speaker).speaker];
+  if (base === specFor(id, speaker).pack) return [];
   const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/voice", base + ".json"), "utf8"));
   return Object.keys(man.clips).filter((key) => !key.startsWith("@line:")).map((key) => ({ key, text: key }));
 }
@@ -104,9 +117,8 @@ export function feedFiles() {
 export const CORPUS = "tools/gen/voice-corpus.json";
 
 /** Every phrase pack `id` should hold: [{ key, text }], de-duplicated by key. */
-export function phrases(id = "george") {
-  const spec = VOICES[id];
-  if (!spec) throw new Error("unknown voice " + id + " (" + Object.keys(VOICES).join(", ") + ")");
+export function phrases(id = "george", speaker) {
+  const spec = specFor(id, speaker);
   const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/spotter.js", "js/data/teams.js", "js/data/legends.js"]);
   const { norm, keyOf } = sb.VoicePack;
   const speakable = sb.RadioVoice.speakable;
@@ -209,14 +221,14 @@ export function phrases(id = "george") {
     }
     for (const line of corpus[spec.speaker] || []) for (const t of norm(line)) if (typeof t === "string" && /^[a-z][a-z']*$/.test(t)) add(t);
   }
-  for (const p of fallbackVocabulary(id)) add(p.key, p.text);
-  for (const p of fullPhrases(id)) add(p.key, p.text);
+  for (const p of fallbackVocabulary(id, speaker)) add(p.key, p.text);
+  for (const p of fullPhrases(id, speaker)) add(p.key, p.text);
   return [...out].map(([key, text]) => ({ key, text }));
 }
 
 /** Whole calls first, fragments only for unbounded numbers and names. */
-export function fullPhrases(id) {
-  const spec = VOICES[id];
+export function fullPhrases(id, speaker) {
+  const spec = specFor(id, speaker);
   const sb = sandbox(["js/audio/voice-pack.js", "js/audio/radio-voice.js", "js/race/radio-lines.js",
     "js/data/circuit-lore.js", "js/audio/announcer.js"]);
   const out = new Map();
@@ -259,7 +271,8 @@ async function build() {
   const { KokoroTTS } = await import(req.resolve("kokoro-js"));
   const ffmpeg = arg("ffmpeg", null) || req("ffmpeg-static");
   const id = arg("id", "george"), dtype = arg("dtype", "q4");
-  if (!VOICES[id]) throw new Error("unknown voice " + id);
+  const spec = specFor(id, arg("speaker", null));
+  const pack = spec.pack;   // the file written: <id>, or <id>-<speaker> for a channel that is not the voice's own
   const voice = arg("voice", VOICES[id].voice);
   const speed = +arg("speed", String(VOICES[id].speed));
   // A word said on its own gets a whole sentence's prosody, which is slow:
@@ -275,7 +288,7 @@ async function build() {
   const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
   fs.mkdirSync(cache, { recursive: true });
   fs.mkdirSync(outDir, { recursive: true });
-  const list = flag("append") ? [...fallbackVocabulary(id), ...fullPhrases(id)] : phrases(id);
+  const list = flag("append") ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
   const tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
     dtype, device: "cpu", session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
   });
@@ -284,9 +297,9 @@ async function build() {
   const chunks = [];
   let off = 0, i = 0;
   if (flag("append")) {
-    const old = JSON.parse(fs.readFileSync(path.join(outDir, id + ".json"), "utf8"));
+    const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
     if (old.voice !== voice) throw new Error("--append cannot mix different voices");
-    const bin = fs.readFileSync(path.join(outDir, id + ".bin"));
+    const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));
     Object.assign(clips, old.clips); chunks.push(bin); off = bin.length;
   }
   for (const { key, text } of list) {
@@ -313,13 +326,13 @@ async function build() {
     off += buf.length;
     if (i % 25 === 0) console.log(`[voicepack] ${i}/${list.length}`);
   }
-  fs.writeFileSync(path.join(outDir, id + ".bin"), Buffer.concat(chunks));
-  const man = { v: 1, id, voice, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips };
-  fs.writeFileSync(path.join(outDir, id + ".json"), JSON.stringify(man) + "\n");
-  console.log(`[voicepack] ${id}: ${list.length} clips, ${(off / 1024).toFixed(0)} KB`);
+  fs.writeFileSync(path.join(outDir, pack + ".bin"), Buffer.concat(chunks));
+  const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips };
+  fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
+  console.log(`[voicepack] ${pack}: ${list.length} clips, ${(off / 1024).toFixed(0)} KB`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  if (flag("list")) for (const p of phrases(arg("id", "george"))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
+  if (flag("list")) for (const p of phrases(arg("id", "george"), arg("speaker", null))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
   else await build();
 }

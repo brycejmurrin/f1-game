@@ -5,6 +5,10 @@ const RendererBoot = (function () {
 function create(deps) {
 const { $, els, canvas, ensureDataHub, loadBackendScripts } = deps;
 const BACKEND_FILES = ApexRoster.DEFERRED;
+// The boot canary's strike count (start() writes it, proved() clears it) and
+// whether a DEFERRED backend actually took the canvas on THIS load.
+const STRIKE_KEY = "apex26.gfxProbeStrikes";
+let _backendBound = false;
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it.
 function preloadThreeVendor() {
@@ -43,7 +47,6 @@ function showGraphicsUnavailable() {
 }
 async function start() {
 let gfx = null;
-let _backendBound = false;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   // Refresh apex26.xrCaps before sync bootPick (ms); first armed boot may still be 2D.
@@ -78,7 +81,6 @@ try {
   // probe silently retired a working choice forever. The first strike reverts
   // THIS BOOT ONLY and leaves the pick alone; only a SECOND consecutive strike
   // retires it (bounding a genuinely broken device to two attempts, no reload loop).
-  const STRIKE_KEY = "apex26.gfxProbeStrikes";
   if (armed && !skipClaim) {
     pref = "webgl2";
     let strikes = 2;   // unreadable storage cannot count strikes: treat as final
@@ -190,7 +192,19 @@ if (!gfx) {
 return { gfx, bound: _backendBound };
 }
 
-return { start, backendPreference };
+// game.js calls this once the boot has presented PROVE_FRAMES world frames. A
+// backend that PROVED itself owes nothing for an older strike — without this,
+// one kill months ago plus one today retires the pick on what looks like a
+// first failure. Only the PICK can prove, though: the GLX boot a first strike
+// reverts to (or a claim-skip / refused create) is not the pick running, and
+// clearing the strike there looped a backend killed in its first ~5 s forever
+// (crash → GLX clears the strike → crash → GLX …) instead of retiring it.
+function proved() {
+  if (!_backendBound) return false;
+  try { localStorage.removeItem(STRIKE_KEY); } catch (_) { /* blocked storage */ }
+  return true;
+}
+return { start, backendPreference, proved };
 }
   return { create };
 })();

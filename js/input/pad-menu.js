@@ -168,7 +168,14 @@ const InputPadMenu = (function () {
     function padEscape() {
       const layer = window.UiLayers && window.UiLayers.top();
       if (!layer) return;
-      if (layer.tagName === "DIALOG") {
+      // A NESTED modal (the Data Hub's telemetry popup: a showModal() dialog
+      // inside #datahub, not a UiLayers entry) owns BACK, as it owns keyboard
+      // Escape in js/ui/modal.js — cancelling the layer closed the whole hub.
+      let inner = null;
+      try { inner = Array.from(document.querySelectorAll(":modal")).filter((m) => m !== layer && layer.contains(m)).pop() || null; } catch (_) { /* no :modal support */ }
+      if (inner && inner.tagName === "DIALOG") {
+        inner.dispatchEvent(new Event("cancel", { cancelable: true }));
+      } else if (layer.tagName === "DIALOG") {
         layer.dispatchEvent(new Event("cancel", { cancelable: true }));
       } else {
         padDispatchKey("Escape");

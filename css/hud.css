@@ -631,6 +631,14 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   color: var(--text); text-shadow: var(--hud-halo);
 }
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+/* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
+   LARGER) inside a bar whose height every layout pins in px (14-18), so the
+   ERS label was cut in half: scroll 22 vs client 16 at 1280x720, 20 vs 13 on
+   a phone (survey 2026-10-04). A min-height of one label line plus the border
+   wins over each of those heights at the two raised sizes only — NORMAL keeps
+   its shipped bar. */
+:root:is([data-text-size="large"], [data-text-size="larger"]) #hud-energy { min-height: calc(var(--fs-micro) * 1.2 + 2px); }
+:root:is([data-text-size="large"], [data-text-size="larger"]) .hud-energy-label { line-height: 1.15; }
 #hud-ot {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
@@ -728,9 +736,13 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
    caution, broadcast, dropped strip) is max(own slot, --mir-bot + gap): a
    separate "step down" rule lost to them — the compact and caution rules come
    later or weigh more, so on a phone the radio card sat on the mirror. */
+/* --mir-paint-b is the frame AS PAINTED (js/ui/hud.js mirrorClear, screen px,
+   0 unless it crosses this centre column): MOVE & SIZE can grow or lower the
+   mirror past its shipped box, and the max() follows it down, never up. */
 body.hud-mirror-on :is(#announce, #hud-flag) {
   --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
-  --mir-bot: calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
+  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7),
+    calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
 /* BESIDE THE MIRROR where there is room — the card shares the mirror's row
@@ -936,9 +948,12 @@ body[data-density="compact"] #announce {
 }
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
-   together on a broadcast, never one over the other. */
-body:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+   together on a broadcast, never one over the other. It steps aside ONLY where
+   the card's other slot really applies: the beside-the-mirror rule also needs
+   .hud-mirror-on, so a bare .hud-mirror-side used to cancel the step while the
+   card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1646,4 +1661,114 @@ body[data-helmet-cam] #hud::before {
       transparent 7%, transparent 93%, color-mix(in oklab, var(--carbon) 70%, transparent)),
     color-mix(in oklab, var(--bg) 7%, transparent);
 }
+
+/* DAMAGE CHIP (#hud-damage, js/ui/hud-damage.js). DISPLAY ONLY — the record it
+   draws (js/race/damage.js) feeds nothing back. Right edge, one chip-height
+   under the track-limits slot so the two never stack on each other. Parts are
+   tinted by data-lvl (0 clean … 3 severe); the text beside the glyph carries the
+   same news for anyone the hue does not reach. Hidden in MINIMAL, under a
+   broadcast camera, in a WATCH and by DISPLAY › HUD › DAMAGE. */
+#hud-damage {
+  position: fixed;
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.4);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.5);
+  background: color-mix(in srgb, black calc(72% * var(--hud-panel-a-eff)), transparent);
+  border-radius: var(--r-sm);
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+#hud-damage[hidden] { display: none; }
+#hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
+#hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
+#hud-damage [data-part="body"] { fill: none; }
+#hud-damage [data-part="knock"][data-lvl="0"] { display: none; }
+#hud-damage [data-lvl="1"] { fill: var(--sec-slow); }
+#hud-damage [data-lvl="2"] { fill: color-mix(in srgb, var(--sec-slow) 50%, var(--slower)); }
+#hud-damage [data-lvl="3"] { fill: var(--slower); }
+body.hud-prof-minimal #hud-damage,
+body.hud-bcam #hud-damage,
+body.bc-on #hud-damage,
+body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
+/* OPT-IN READOUTS — RELATIVE (js/ui/hud-relative.js), STRATEGY
+   (js/ui/hud-strategy.js), INPUTS (js/ui/hud-inputs.js). Shipped off
+   (js/ui/hud-elements.js), placed by MOVE & SIZE (js/ui/hud-layout.js).
+   No class tokens: rows are keyed on data-k / data-self / data-lap. Each
+   follows the band it sits in (top band zoom for the two panels, bottom band
+   for the trace), and offsets divide by that zoom like every other anchor.
+   Hidden in MINIMAL, on a broadcast camera and in a WATCH, like the sector
+   box; nothing here animates, so REDUCE MOTION has nothing to take out (the
+   trace itself swaps to still bars in JS). */
+#hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+#hud-rel, #hud-strat, #hud-inputs {
+  position: absolute;
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  padding: calc(var(--gap) / 4) calc(var(--gap) / 2);
+}
+#hud-rel {
+  right: calc(10px + var(--sar) / var(--hud-z));
+  top: calc(38vh / var(--hud-z));
+  border-left: 3px solid var(--dim);
+}
+#hud-rel > div {
+  display: grid;
+  grid-template-columns: 3.2ch 3.6ch 4.6ch 3.2ch 3ch;
+  column-gap: calc(var(--gap) / 2);
+  align-items: baseline;
+  border-left: 3px solid var(--rel-team, transparent);
+  padding-left: calc(var(--gap) / 3);
+}
+#hud-rel [data-k="gap"] { text-align: right; }
+#hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
+#hud-rel [data-k="lap"] { font-weight: 800; }
+#hud-rel > div[data-self] { background: color-mix(in oklab, var(--you) 26%, transparent); font-weight: 800; }
+/* A lap UP (lapping you) reads red, a lap DOWN blue — the "+1L" / "-1L" text says it first. */
+#hud-rel > div[data-lap="up"] { color: var(--slower); }
+#hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
+#hud-strat {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  top: calc(40vh / var(--hud-z));
+  border-left: 3px solid var(--dim);
+  min-width: 15ch;
+}
+#hud-strat > div { display: flex; justify-content: space-between; column-gap: var(--gap); }
+#hud-strat > div > span { color: var(--dim); letter-spacing: 0.06em; }
+#hud-strat [data-k="uc"] { color: var(--faster); font-weight: 800; }
+#hud-strat [data-k="uc"] > span { color: inherit; }
+#hud-inputs {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  bottom: calc(22vh / var(--hud-z));
+  display: flex;
+  align-items: center;
+  column-gap: calc(var(--gap) / 2);
+}
+#hud-inputs-cv { display: block; width: 128px; height: 48px; background: color-mix(in oklab, var(--carbon) 70%, transparent); }
+#hud-inputs-gear { font-size: var(--fs-3); font-weight: 800; min-width: 1.4ch; text-align: center; }
+#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden] { display: none !important; }
+body[data-hud-hide~="rel"] #hud-rel,
+body[data-hud-hide~="strat"] #hud-strat,
+body[data-hud-hide~="inputs"] #hud-inputs { display: none !important; }
+body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
+body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
+body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
+body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
+/* TOUCH: the opt-in readouts ship where the touch columns sit (RELATIVE over
+   BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04 HUD survey,
+   844x390 cockpit), so on a touch screen they show once MOVE & SIZE places
+   them, the same deal as BRAKE BIAS (js/ui/hud-layout.js HIDE_RULES). */
+body:not(.desktop) :is(#hud-rel, #hud-strat, #hud-inputs):not([data-hl-user]) { display: none; }
+:root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */

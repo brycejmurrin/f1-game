@@ -20,7 +20,7 @@ export function resourceDiff(before, after) {
 export async function pendingWatchCancellation() {
   let release, pendingRequests = 0, launches = 0;
   const context = vm.createContext({
-    F1API: { locationData: () => { pendingRequests++; return new Promise((resolve) => { release = (value) => { pendingRequests--; resolve(value); }; }); } },
+    F1API: { locationData: () => { pendingRequests++; return new Promise((resolve) => { release = (value) => { pendingRequests--; resolve(value); }; }); }, cancelAll() {} },
     RealRace: { launch: () => { launches++; return true; } },
     Log: { info() {}, warn() {} },
   });

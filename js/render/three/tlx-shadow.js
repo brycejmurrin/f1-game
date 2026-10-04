@@ -374,9 +374,19 @@
       try { m.dispose(); } catch (_) { /* */ }
     }
 
+    // three WebGPU rasterises z in [0,1] and adds no remap of its own, so a GL
+    // lightVP (z in [-1,1]) clipped every caster nearer than mid-depth and
+    // stored raw z where the lit shaders compare 0.5z+0.5. Fold the same Z01
+    // tlx.js applies to the main camera into the depth camera only (row 2 :=
+    // 0.5*row2 + 0.5*row3); `dst` stays the GL matrix the shaders project with.
+    const _lvpZ01 = new Float32Array(16);
     function beginPass(rt, lightVP, dst) {
       dst.set(lightVP);
-      shadowCam.projectionMatrix.fromArray(lightVP);
+      if (isWebGPU) {
+        _lvpZ01.set(lightVP);
+        for (let c = 0; c < 4; c++) _lvpZ01[c * 4 + 2] = 0.5 * lightVP[c * 4 + 2] + 0.5 * lightVP[c * 4 + 3];
+      }
+      shadowCam.projectionMatrix.fromArray(isWebGPU ? _lvpZ01 : lightVP);
       shadowCam.projectionMatrixInverse.copy(shadowCam.projectionMatrix).invert();
       target = rt;
       cur = pools.get(rt);
