@@ -11,9 +11,10 @@
  * binary put through it has to be base64'd (+33 % and a full main-thread
  * encode). One four-minute MP3 blows the whole quota. IndexedDB stores Blobs
  * natively, asynchronously, with a quota measured in a share of free disk, and
- * hands the bytes back as a Blob we can turn into an object URL that the
- * existing fetch()+decodeAudioData path in js/audio/engine.js already knows how
- * to play. The rest of the game's persistence (js/core/store.js) stays on
+ * hands the bytes back as a Blob we can turn into an object URL that
+ * js/audio/soundtrack.js streams through an <audio> element (never a full
+ * decodeAudioData: MAX_BYTES bounds bytes, not PCM — see USER_DECODE_MAX_S
+ * there). The rest of the game's persistence (js/core/store.js) stays on
  * localStorage — this is the one thing that cannot live there.
  *
  * THE FEATURE MUST NEVER THROW AT THE CALLER. IndexedDB is absent or poisoned

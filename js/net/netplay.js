@@ -408,7 +408,7 @@ const NetPlay = (function () {
       c._prevS = c.s;
     }
 
-    function onState(bytes, from, fromId) {
+    function onState(bytes, from, fromId, arrivedAt) {
       if (!active || !remotes.size) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
@@ -447,10 +447,15 @@ const NetPlay = (function () {
         ownOnly = remoteFor(fromId);
         if (ownOnly == null) return;
       }
+      // ARRIVAL, not frame time: the transport stamps each message as it lands
+      // (session.js passes it through); G.netNow is the rAF tick that DRAINED
+      // the inbox, up to a frame later, which read as a frame of extra lag and
+      // jitter in the adaptive delay. A transport with no stamp falls back.
+      const arrival = Number.isFinite(arrivedAt) ? arrivedAt : G.netNow;
       for (const entry of pkt.cars) {
         if (ownOnly != null && entry.id !== ownOnly) continue;
         const r = remotes.get(entry.id);
-        if (r) r.interp.push(t, entry, G.netNow);
+        if (r) r.interp.push(t - (entry.age || 0), entry, arrival);   // an aged (relayed) entry keeps its own stamp
       }
     }
 
@@ -465,7 +470,7 @@ const NetPlay = (function () {
         ));
       }
       s.clearHandlers();
-      s.onState((bytes) => onState(bytes, s, id));
+      s.onState((bytes, at) => onState(bytes, s, id, at));
       s.onClose((why) => {
         lastReason = why;
         sessions.delete(id);
@@ -957,6 +962,7 @@ const NetPlay = (function () {
     }
 
     const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
+    const _relay = [];                                             // host relay scratch: {id, car, at}
     // `poseAt` (optional): when the local car's pose is, on the same clock as
     // `now` — the game loop publishes last frame's physics, which is older
     // than the frame. Absent (a test pumping by hand), the pose is `now`.
@@ -1053,7 +1059,12 @@ const NetPlay = (function () {
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
       }
       if (localCar && now - lastPublish >= PUBLISH_MS) {
-        lastPublish = now;
+        // A FIXED 20 Hz, whatever the frame rate. `lastPublish = now` dropped
+        // the phase remainder every time: 50 ms is three 60 Hz frames and a
+        // bit, so the rate alternated 15-20 Hz, sat at 15 Hz at 30 fps and
+        // ~19 Hz at 144. Advance by the period instead; after a stall longer
+        // than two periods, restart the phase rather than burst to catch up.
+        lastPublish = now - lastPublish > 2 * PUBLISH_MS ? now : lastPublish + PUBLISH_MS;
         _pubOne[0] = _pubOwn; _pubOwn.id = G.wireId(localCar); _pubOwn.car = localCar;
         // Bounded: a pose from the future, or one older than a stall's worth,
         // is a clock we cannot trust — stamp the frame instead.
@@ -1062,15 +1073,24 @@ const NetPlay = (function () {
         // Live map is safe here: sendState delivers nothing (Map iterators
         // tolerate a removal, and only pump() can run onClose).
         for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
+        // THE RELAY: ONE DATAGRAM PER GUEST, every other player's car in it.
+        // It was one per car per guest — 3 own + 3 × 2 relays = 9 sends a tick
+        // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
+        // An aged packet (NetSnapshot.encodeAged) keeps each car's own
+        // presentedAt stamp, which is why it was split in the first place.
         if (role === "host" && sessions.size > 1) {
+          _relay.length = 0;
           for (const r of remotes.values()) {
             const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
             if (id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
-            _pubOwn.id = id; _pubOwn.car = r.car;
-            const relay = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne);
+            _relay.push({ id, car: r.car, at });
+          }
+          if (_relay.length) {
             for (const [sid, s] of sessions) {
-              if (remoteFor(sid) === id) continue;   // never back to the car's own driver
-              try { s.sendState(relay); } catch (e) { /* as above */ }
+              const own = remoteFor(sid);
+              const forGuest = _relay.filter((e) => e.id !== own);   // never back to the car's own driver
+              if (!forGuest.length) continue;
+              try { s.sendState(NetSnapshot.encodeAged(forGuest)); } catch (e) { /* as above */ }
             }
           }
         }

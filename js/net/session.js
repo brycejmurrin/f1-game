@@ -204,8 +204,17 @@ const NetSession = (function () {
 
     function pump(now) {
       const gap = lastNow ? now - lastNow : 0;   // 0 = never pumped, not a stall
-      if (gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
-      if (gap > cfg.stallForgiveMs && firstPumpAt != null) firstPumpAt += gap;
+      // A STALL is THIS page not running (a GC, a compile, a frozen tab): the
+      // peer was not silent, we were not listening, so the gap is forgiven.
+      // A HIDDEN tab is different: it pumps on purpose at the platform's slow
+      // timer cadence (platform-session.js's 500 ms interval, ~1 s in Chrome;
+      // the lobby's 25 ms one throttled to 1 Hz), and every such pump read as a
+      // stall — so `now - lastHeardAt` froze and a peer who had quit was only
+      // noticed 6 s after the tab came back. Hidden, the transport still stamps
+      // each arrival as it lands, so silence is real silence: no forgiveness.
+      const hidden = typeof document !== "undefined" && !!document.hidden;
+      if (!hidden && gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
+      if (!hidden && gap > cfg.stallForgiveMs && firstPumpAt != null) firstPumpAt += gap;
       lastNow = now;
       if (firstPumpAt == null && transport.status !== "connecting") firstPumpAt = now;
       if (transport.pump) transport.pump(now);

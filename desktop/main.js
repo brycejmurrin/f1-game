@@ -24,6 +24,7 @@ const {
   registerScheme,
   handleScheme,
 } = require("./app-protocol");
+const permissions = require("./lib/permissions.cjs");
 
 const ORIGIN = `${SCHEME}://${HOST}`;
 const SMOKE = process.argv.includes("--smoke");
@@ -59,7 +60,7 @@ if (envFlag("APEX_DESKTOP_NO_SANDBOX")) {
   app.commandLine.appendSwitch("no-sandbox");
 }
 
-/** Deny-by-default session permissions; open http(s) externally only. */
+/** Allow-listed session permissions for app://apex/ only (lib/permissions.cjs); open http(s) externally only. */
 function hardenWebContents(contents) {
   contents.setWindowOpenHandler(({ url }) => {
     try {
@@ -75,9 +76,8 @@ function hardenWebContents(contents) {
       && (url === ORIGIN || url === `${ORIGIN}/` || url.startsWith(`${ORIGIN}/`));
     if (!ok) event.preventDefault();
   });
-  contents.session.setPermissionRequestHandler((_wc, _permission, callback) => {
-    callback(false);
-  });
+  contents.session.setPermissionRequestHandler(permissions.requestHandler(ORIGIN));
+  contents.session.setPermissionCheckHandler(permissions.checkHandler(ORIGIN));
 }
 
 function createWindow() {
