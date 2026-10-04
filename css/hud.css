@@ -1646,4 +1646,39 @@ body[data-helmet-cam] #hud::before {
       transparent 7%, transparent 93%, color-mix(in oklab, var(--carbon) 70%, transparent)),
     color-mix(in oklab, var(--bg) 7%, transparent);
 }
+
+/* DAMAGE CHIP (#hud-damage, js/ui/hud-damage.js). DISPLAY ONLY — the record it
+   draws (js/race/damage.js) feeds nothing back. Right edge, one chip-height
+   under the track-limits slot so the two never stack on each other. Parts are
+   tinted by data-lvl (0 clean … 3 severe); the text beside the glyph carries the
+   same news for anyone the hue does not reach. Hidden in MINIMAL, under a
+   broadcast camera, in a WATCH and by DISPLAY › HUD › DAMAGE. */
+#hud-damage {
+  position: fixed;
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.4);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.5);
+  background: color-mix(in srgb, black calc(72% * var(--hud-panel-a-eff)), transparent);
+  border-radius: var(--r-sm);
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+#hud-damage[hidden] { display: none; }
+#hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
+#hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
+#hud-damage [data-part="body"] { fill: none; }
+#hud-damage [data-part="knock"][data-lvl="0"] { display: none; }
+#hud-damage [data-lvl="1"] { fill: var(--sec-slow); }
+#hud-damage [data-lvl="2"] { fill: color-mix(in srgb, var(--sec-slow) 50%, var(--slower)); }
+#hud-damage [data-lvl="3"] { fill: var(--slower); }
+body.hud-prof-minimal #hud-damage,
+body.hud-bcam #hud-damage,
+body.bc-on #hud-damage,
+body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 } /* @layer hud */

@@ -264,6 +264,7 @@ const FULL = [
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
   "js/race/reliability.js",
+  "js/race/damage.js",         // Damage: DISPLAY-ONLY per-car damage readout (collideFx / wall pin → HUD chip, __apex.damage)
   "js/physics/tyre-model.js",
   "js/physics/grip-steer.js",
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
@@ -345,6 +346,7 @@ const FULL = [
   "js/ui/appearance-opts.js",
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
+  "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-layout.js",     // per-element HUD move/size (cockpit + other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT

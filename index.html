@@ -594,6 +594,10 @@
   <div id="bc-pip" aria-hidden="true" hidden><span class="bc-pip-label"></span></div>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
+  <!-- DAMAGE (js/race/damage.js → js/ui/hud-damage.js): DISPLAY ONLY — a
+       top-down car glyph whose parts are tinted by data-lvl 0..3, plus a text
+       fallback; shown only while a part is past Damage.SHOW. -->
+  <div id="hud-damage" role="img" aria-label="Car damage: none" hidden><svg viewBox="0 0 20 36" aria-hidden="true" focusable="false"><path data-part="body" d="M8 5h4l1 8v15l-1 3H8l-1-3V13z"/><rect data-part="fwL" x="1" y="1" width="8" height="3" rx="1"/><rect data-part="fwR" x="11" y="1" width="8" height="3" rx="1"/><rect data-part="floor" x="4" y="14" width="12" height="13" rx="2"/><rect data-part="rw" x="3" y="32" width="14" height="3" rx="1"/><circle data-part="knock" cx="17" cy="9" r="2"/></svg><span data-dmg-text></span></div>
   <!-- No live role: a live region filled and unhidden in the same step is the
        pattern NVDA, JAWS and VoiceOver miss (see #announce-live below), so
        js/ui/hud.js sayFlag() speaks each flag change through #announce-live
@@ -3577,6 +3581,7 @@
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/damage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/grip-steer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
@@ -3656,6 +3661,7 @@
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>

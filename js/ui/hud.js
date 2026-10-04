@@ -917,6 +917,7 @@ function updateHud(force, dtMs) {
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
+  if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");

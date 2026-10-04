@@ -59,6 +59,7 @@ const HudLayout = (function () {
     ["ot", "OVERTAKE", "#hud-ot", "bottom center"],
     ["aero", "AERO", "#hud-aero", "bottom center"],
     ["bb", "BRAKE BIAS", "#hud-bb", "bottom center"],
+    ["damage", "DAMAGE", "#hud-damage", "top right"],
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "other"]);

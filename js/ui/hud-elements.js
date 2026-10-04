@@ -26,6 +26,7 @@ const HudElements = (function () {
     ["aero", "AERO"],
     ["bb", "BRAKE BIAS"],
     ["limits", "TRACK LIMITS"],
+    ["damage", "DAMAGE"],
   ];
 
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;

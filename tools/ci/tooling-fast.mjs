@@ -211,6 +211,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
+  "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
