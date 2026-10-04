@@ -23,6 +23,7 @@
  *
  * Run: node --test tests/unit/css-tokens.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -119,7 +120,7 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
 });
 
 test("stacked season setup has one reachable vertical scroll owner", () => {
-  const css = stripComments(fs.readFileSync(path.join(ROOT, "css/menus.css"), "utf8"));
+  const css = stripComments(readCssSource("css/menus.css"));
   const body = css.match(/#ss-inner:not\(\[data-pair="on"\]\)\s*>\s*#ss-body\s*\{([^}]*)\}/);
   assert.ok(body, "stacked #ss-inner needs an explicit #ss-body layout branch");
   assert.match(body[1], /overflow-y\s*:\s*auto\b/,

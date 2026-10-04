@@ -332,6 +332,7 @@ interface TyreSession {
   /** Wear as a fraction of the compound's life, 0..2. */
   spent(c: CarState): number;
   info(c: CarState): Record<string, unknown> | null;
+  belowWindow(c: CarState | null): number;
   severity(): number;
   level(): TyreLevel;
   setLevel(v: TyreLevel): TyreLevel;
@@ -362,6 +363,8 @@ interface GameCtx {
   readonly track: TrackModel | null;
   readonly cars: CarState[];
   readonly player: CarState | null;
+  /** js/race/flying-start.js — the qualifying / time-trial rolling start (stop() hands the wheel back). */
+  readonly flyingStart: { update(dt: number): void; stop(): void; owns(c: CarState): boolean; active(): boolean };
   season: SeasonState | null;
   /** flow/session are the authority; seasonMode/timeTrial are derived views. */
   flow: FlowMode;
@@ -406,10 +409,11 @@ interface GameCtx {
   readonly pits: PitSession;
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
-  readonly roadWetness: () => number;
+  /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
+  readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
-  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown> };
+  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
   /**
    * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
@@ -759,6 +763,10 @@ interface GameCtx {
   readonly daily: any;
   /** Fly a flag by script — level 1-3 holds it at least that high; 0 releases it (js/race/race-control.js hold). */
   readonly holdCaution: (level: number, cause?: string) => number;
+  /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
+  readonly resetEpisodeOwners: () => void;
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */
@@ -817,8 +825,11 @@ declare const RadioVoice: GameModuleFactory;
 declare const RecordedAnnouncer: GameModuleFactory;
 declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
+// js/fx/car-fx.js — create(G, { skids }): plank sparks + AI lock-up marks (reads G.vTop only).
+declare const CarFx: GameModuleFactory;
 declare const PlayerForces: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
+declare const DrivingCues: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
@@ -838,6 +849,8 @@ declare const NetLobby: GameModuleFactory;
 declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
+declare const ReplayBuf: GameModuleFactory;
+declare const ResultsCam: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
@@ -845,8 +858,11 @@ declare const RaceControl: GameModuleFactory;
 // `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
 // TypeScript keeps the two in separate declaration spaces.
 declare const WeatherArc: GameModuleFactory;
+declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const FlyingStart: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
@@ -855,6 +871,7 @@ declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
+declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
@@ -865,9 +882,14 @@ declare const Spotter: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
+declare const DockLayout: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
 
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
+
+declare const PlatformSession: GameModuleFactory;
+
+declare const TitleFlow: GameModuleFactory;

@@ -26,6 +26,71 @@ test("boots to __apex with no script errors", () => {
   assert.deepEqual(g.record.scripts.filter((s) => s.error), [], "an injected script threw");
   assert.deepEqual(g.record.rejections, [], "an unhandled rejection escaped boot");
   assert.ok(g.G && g.G.track && g.G.player, "the G façade was not captured");
+  assert.equal(g.G.gfx.mirrorBegin, undefined, "the inert renderer must not advertise a mirror target");
+});
+
+test("failed automatic race boot releases harness resources", async () => {
+  const before = process.listenerCount("unhandledRejection");
+  await assert.rejects(createGame({ track: "not-a-circuit" }), (error) => {
+    assert.match(error.message, /unknown circuit/);
+    assert.deepEqual(error.resources, { closed: true, timers: 0, rafFrames: 0, rejectionListeners: 0 });
+    return true;
+  });
+  assert.equal(process.listenerCount("unhandledRejection"), before);
+});
+
+test("nodeAt wraps fractions behind the start line and setPhysics rejects poisoned patches atomically", () => {
+  const A = g.apex, before = JSON.stringify(A.tuning());
+  assert.deepEqual(A.nodeAt(-0.002), A.nodeAt(0.998));
+  for (const field of ["frontGrip", "playerGrip", "drift", "maxSlip", "roadFollow", "yawDamp", "pace", "maxTilt", "deadzone", "tiltCutoff"]) {
+    for (const value of [NaN, Infinity, "3"]) assert.throws(() => A.setPhysics({ pace: 2, [field]: value }), /must be finite/);
+  }
+  assert.throws(() => A.setPhysics({ frontGrip: -1 }), /nonnegative/);
+  assert.equal(JSON.stringify(A.tuning()), before, "invalid patch must not partially mutate tuning");
+});
+
+test("cameraState returns detached damping snapshots and separate render/simulation clocks", () => {
+  const A = g.apex, first = A.cameraState(), expected = JSON.stringify(first);
+  assert.equal(first.eye.length, 3); assert.equal(first.target.length, 3);
+  assert.equal(first.previousAnchor.length, 2); assert.equal(first.nextAnchor.length, 2);
+  for (const value of [...first.eye, ...first.target, first.fov, first.renderFrame, first.simulationTime, first.renderTime]) assert.ok(Number.isFinite(value));
+  first.eye[0] = 100000; first.target[1] = -100000; first.previousAnchor[0] = 100000;
+  assert.equal(JSON.stringify(A.cameraState()), expected, "editing a snapshot cannot change camera damping state");
+  const cold = A.cameraState();
+  g.step(1);
+  const warm = A.cameraState();
+  assert.ok(warm.simulationTime > cold.simulationTime);
+  assert.equal(warm.renderFrame, cold.renderFrame, "VM sim ticks do not invent render frames");
+});
+
+test("reset clears caution holds and queued debris without changing same-seed rollout", () => {
+  const A = g.apex;
+  const physical = () => {
+    const snapshot = A.physState();
+    // Coaching state is a UI/session diagnostic, not the physical rollout.
+    // Preserve every other diagnostic and all unrounded physics values.
+    if (snapshot.driving && snapshot.driving.coach) delete snapshot.driving.coach;
+    return JSON.stringify(snapshot);
+  };
+  A.headless(true);
+  A.reset(0.1, 30, 0, 42);
+  A.act({ steer: 0, throttle: true }, 1 / 60, 2);
+  const cold = physical();
+  g.G.holdCaution(3, "previous episode");
+  A.act({}, 1 / 60, 1);
+  assert.equal(A.caution().level, 3, "the hold was really active");
+  const D = require("node:vm").runInContext("DebrisWorld", g.ctx);
+  D.burst(3, 8);
+  assert.equal(D.status().queued, 3, "real impact queue is populated before resetting");
+  A.reset(0.1, 30, 0, 42);
+  assert.equal(A.caution().level, 0);
+  assert.equal(D.status().stepped, 0);
+  assert.equal(D.status().spawned, 0);
+  assert.equal(D.status().queued, 0);
+  A.act({ steer: 0, throttle: true }, 1 / 60, 2);
+  assert.equal(physical(), cold);
+  assert.equal(A.caution().level, 0, "held SC does not return next tick");
+  A.headless(false);
 });
 
 // SPLIT OUT OF THE CONTRACT ABOVE, and the wall moved 5 s -> 12 s. The four

@@ -107,6 +107,8 @@ export const ADAPTED = {
     "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
   "tests/specs/cota-foundation.spec.js":
     "COTA runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter; m-cota-amphi-renamed proves the required amphitheater id is watched",
+  "tests/specs/imola-foundation.spec.js":
+    "Imola runtime foundation through __apex model/geometry/elevation diagnostics; 2/2 under the adapter; m-imola-senna-renamed proves the required memorial id is watched",
   "tests/specs/physics-fixes.spec.js":
     "pure __apex physics reads (wall scrub, lap-distance continuity); 2/2 under the adapter in 27 s vs 110 s of browser; mutant m-wall-scrub-flat proves it bites",
   "tests/specs/logging.spec.js":
@@ -150,6 +152,8 @@ export const BROWSER_ONLY = {
   // drag half became statically portable (the auto-throttle test that drives a
   // real race moved to touch-pedals.spec.js) and immediately appeared in
   // twinDebt. RUNNING it settles the question the static scan cannot.
+  "tests/specs/qatar-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
+  "tests/specs/suzuka-foundation.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on waitForFunction (track never settles in the VM — measured 45 s, 2026-09-30); structural boot, not a flake",
   "tests/specs/touch-steer.spec.js": "8/9 in 1.7 s, and the ninth is structural: the release ramp advances by min(0.1, elapsed) of WALL CLOCK, and waitForTimeout advances no clock in the VM, so `lifting off ramps back to centre` reads ~0.99 where a browser reads 0. Proved rather than guessed: raising the poll gap from 20 ms to 120 ms changes the browser ladder completely (0.53 -> 1.00 over the same ticks) and moves the VM reading 0.9835 -> 0.9874 — it is not polling too fast, time is not passing",
 };
 

@@ -148,6 +148,8 @@ test("trim(from) drops the primitive records and the live-buffer set", () => {
 // tip engine grounding (tyre footings, marshal boards, hoarding legs, cable
 // posts, pit exit signal): ship merge had restored the pre-audit STRIP
 // numbers; tip then moved both circuits again.
+// Re-measured 2026-10-01: venue facilities, supported crowd heads and camera
+// guard panels; secondary facade panes reduced to pay for nearby detail.
 const STRIP = {
   // ship 293659/258313 → audit 287677/252433 → tip 287821/258089
   // → fix-top-counts 285112/256710 (yachts/pontoons under the quay land no
@@ -155,14 +157,30 @@ const STRIP = {
   // → merged follow-ups 286489/257979 (yachts moored in open water, not
   // dropped; engine-helpers plinth sink)
   // → track limits 285994/257518 (two moored hulls over the road hole dropped)
-  monaco: { before: 285994, after: 257518 },
+  // → start-gantry lights 285946/257466 (the gantry housing is one bar, not three boxes: −48 indices)
+  // → full-track-scenery onto tip aa4197c 263920/241522 (venue facilities +
+  //   secondary facade pane reduction; measured 2026-10-02)
+  // → white Haas 263920/241530 (2026-10-03: the VF-26 team colour went dark
+  //   graphite → white, js/data/teams.js; its garage bay — GarageScene
+  //   .buildStatic off the team colour — now carries an HDR-bright box, which
+  //   hidden-faces never lets enclose, so 8 indices it used to strip stay.
+  //   Bisected: the Haas colour alone moves both circuits by +8.)
+  monaco: { before: 263920, after: 241530 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
   // → bahrain hollow-stand guard: grandstandEx suppresses when crowdBank
   // places 0 risers, so monza's fold-site shells (no seating) no longer emit
   // → back to ship emission 342395; strip after 315572
-  monza: { before: 342395, after: 315572 },
+  // → start-gantry lights 342347/315520 (one housing bar per gantry: −48 indices)
+  // → Racing Kit barriers/pylons 341367/314511 (k_barrierwhite ×1.5 / k_pylon
+  //   ×1.3 replace the synthetic construction barrier/cone along the Rettifilo:
+  //   fewer indices per stamp; measured on the tip merge, 2026-10-02)
+  // → full-track-scenery onto tip aa4197c 340719/313794 (venue + clearance on
+  //   the Racing Kit tip; measured 2026-10-02)
+  // → white Haas 340719/313802 (the same +8 as monaco: the Haas bay's
+  //   HDR-bright box cannot enclose; emission unchanged)
+  monza: { before: 340719, after: 313802 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

@@ -10,7 +10,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api } from "../../tools/ci/ci-watch.mjs";
+import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
 const job = (id, name, status, conclusion, steps = []) => ({ id, name, status, conclusion, steps, html_url: `u/${id}` });
@@ -22,6 +23,15 @@ test("the newest run per workflow wins, so a superseded push run is not a red", 
   ]);
   assert.deepEqual(runs.map((r) => r.id), [2], "only the newest CI run counts");
   assert.equal(verdict(runs, { 2: [job(9, "guards", "completed", "success")] }).state, "passed");
+});
+
+test("a same-second tie goes to the higher run id, whatever order the API lists them in", () => {
+  const cancelled = run(10, "CI", "completed", "cancelled", "2026-10-03T07:15:09Z");   // the draft run the ready run cancelled
+  const live = run(11, "CI", "in_progress", null, "2026-10-03T07:15:09Z");
+  for (const order of [[cancelled, live], [live, cancelled]]) {
+    assert.deepEqual(latestPerWorkflow(order).map((r) => r.id), [11], "the newer (higher-id) run counts");
+  }
+  assert.equal(verdict(latestPerWorkflow([live, cancelled]), { 11: [] }).state, "running", "not a false `cancelled`");
 });
 
 test("verdict: failed as soon as a job fails, done only when every run completed", () => {
@@ -95,4 +105,192 @@ test("no run yet: none only without a PR; a conflicting PR is blocked, never gre
   assert.equal(noneVerdict({ number: 537, mergeable_state: "blocked" }, 11 * MIN, 3), "indexing");
   assert.equal(noneVerdict(null, 4 * MIN, 1), "indexing", "not `none` — a docs-only verdict needs the checks empty too");
   assert.equal(noneVerdict({ number: 321, mergeable_state: "dirty" }, 4 * MIN, 2), "indexing");
+});
+
+test("githubToken: env wins; else gh auth token; never invents a token", () => {
+  assert.equal(githubToken({ env: { GH_TOKEN: "from-gh" }, gh: () => "from-cli" }), "from-gh");
+  assert.equal(githubToken({ env: { GITHUB_TOKEN: "from-actions" }, gh: () => "from-cli" }), "from-actions");
+  assert.equal(githubToken({ env: {}, gh: () => "from-cli" }), "from-cli");
+  assert.equal(githubToken({ env: {}, gh: () => null }), null);
+  assert.match(NO_TOKEN_HINT, /gh auth login/);
+});
+
+const SHA = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
+const associated = `commits/${SHA}/pulls?per_page=100&page=1`;
+const pr = (number = 738, head = SHA, state = "open") => ({ number, state, head: { sha: head } });
+
+test("exact commit-associated PR lookup ignores a stale broad list and confirms current head/conflicts", () => {
+  const calls = [];
+  const lookup = openPrFor(SHA, (endpoint) => {
+    calls.push(endpoint);
+    if (endpoint.startsWith("pulls?")) return { json: [] }; // stale broad discovery must never decide absence
+    if (endpoint === associated) return { json: [pr()] };
+    if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "dirty" } };
+    throw new Error("unexpected endpoint " + endpoint);
+  });
+  assert.equal(lookup.state, "found");
+  assert.equal(lookup.pr.head.sha, SHA);
+  assert.equal(noneVerdict(lookup.pr, 240000, 0), "blocked");
+  assert.deepEqual(calls, [associated, "pulls/738"]);
+});
+
+test("commit associations require an open exact current head, not closed or historical associations", () => {
+  const calls = [];
+  const result = openPrFor(SHA, (endpoint) => {
+    calls.push(endpoint);
+    return { json: endpoint === associated ? [pr(1, SHA, "closed"), pr(2, "a".repeat(40))] : pr(2, "a".repeat(40)) };
+  });
+  assert.equal(result.state, "none");
+  assert.equal(result.pr, null);
+  assert.deepEqual(calls, [associated, "pulls/2"], "closed associations skip detail; historical open heads need current confirmation");
+  const changed = openPrFor(SHA, (endpoint) => endpoint === associated ? { json: [pr()] } : { json: pr(738, "a".repeat(40)) });
+  assert.equal(changed.state, "unknown", "a changing discovery snapshot does not establish absence");
+  assert.match(changed.error, /changed/);
+});
+
+test("stale association head cannot hide the current exact-head open PR", () => {
+  const calls = [];
+  const result = openPrFor(SHA, (endpoint) => {
+    calls.push(endpoint);
+    if (endpoint === associated) return { json: [pr(738, "a".repeat(40))] };
+    if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "dirty" } };
+    throw new Error(endpoint);
+  });
+  assert.equal(result.state, "found");
+  assert.equal(noneVerdict(result.pr, 240000), "blocked");
+  assert.deepEqual(calls, [associated, "pulls/738"]);
+});
+
+test("malformed association or individual PR head remains unknown, never absence", () => {
+  for (const head of ["a", "g".repeat(40), "a".repeat(39), "a".repeat(41), null]) {
+    for (const state of ["open", "closed"]) {
+      const result = openPrFor(SHA, () => ({ json: [pr(738, head, state)] }));
+      assert.equal(result.state, "unknown", `association ${state} head ${head}`);
+      assert.match(result.error, /malformed/);
+    }
+    const result = openPrFor(SHA, (endpoint) => ({ json: endpoint === associated ? [pr()] : pr(738, head) }));
+    assert.equal(result.state, "unknown", `individual head ${head}`);
+    assert.match(result.error, /malformed/);
+  }
+});
+
+test("detail lookup budget spans pages and never declares absence from unchecked open associations", () => {
+  const calls = [];
+  const result = openPrFor(SHA, (endpoint) => {
+    calls.push(endpoint);
+    if (endpoint === associated) return { json: [
+      ...Array.from({ length: 90 }, (_, i) => pr(i + 100, SHA, "closed")),
+      ...Array.from({ length: 10 }, (_, i) => pr(i + 1, "a".repeat(40))),
+    ] };
+    if (endpoint === `commits/${SHA}/pulls?per_page=100&page=2`) return { json: [pr()] };
+    if (/^pulls\/[1-9]0?$/.test(endpoint)) return { json: pr(Number(endpoint.split("/")[1]), "a".repeat(40)) };
+    throw new Error("unexpected request beyond bound: " + endpoint);
+  });
+  assert.equal(result.state, "unknown");
+  assert.match(result.error, /10 PR detail requests/);
+  assert.equal(calls.filter((endpoint) => endpoint.startsWith("pulls/")).length, 10);
+  assert.ok(!calls.includes("pulls/738"), "eleventh detail call is never issued");
+  assert.equal(calls.length, 12, "two association pages plus the ten-detail budget");
+});
+
+test("PR lookup transport, shape and detail errors remain unknown instead of no PR", () => {
+  for (const response of [{ error: "HTTP 502" }, { json: null }, { json: {} }, { json: [{}] }]) {
+    assert.equal(openPrFor(SHA, () => response).state, "unknown", JSON.stringify(response));
+  }
+  for (const response of [{ error: "HTTP 403" }, { json: null }, { json: { number: 738 } }]) {
+    const result = openPrFor(SHA, (endpoint) => endpoint === associated ? { json: [pr()] } : response);
+    assert.equal(result.state, "unknown", JSON.stringify(response));
+  }
+  assert.equal(openPrFor(SHA, () => { throw new Error("connection reset"); }).state, "unknown");
+});
+
+test("association pagination confirms later-page current heads and never blesses partial lists", () => {
+  const full = Array.from({ length: 100 }, (_, i) => pr(i + 1, SHA, "closed"));
+  const calls = [];
+  const result = openPrFor(SHA, (endpoint) => {
+    calls.push(endpoint);
+    if (endpoint === associated) return { json: full };
+    if (endpoint === `commits/${SHA}/pulls?per_page=100&page=2`) return { json: [pr()] };
+    if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "dirty" } };
+    throw new Error(endpoint);
+  });
+  assert.equal(result.state, "found");
+  assert.equal(calls.length, 3);
+  assert.equal(openPrFor(SHA, (endpoint) => endpoint === associated ? { json: full } : { error: "HTTP 502" }).state, "unknown");
+  assert.equal(openPrFor(SHA, () => ({ json: full })).state, "unknown", "bounded incomplete discovery is not absence");
+});
+
+test("API polling asks HTTP caches to revalidate and preserves failed HTTP/JSON as errors", () => {
+  const result = api(associated, { env: { GH_TOKEN: "fixture-only-token" }, run(command, args, options) {
+    assert.equal(command, "curl");
+    assert.ok(args.includes("Cache-Control: no-cache"));
+    assert.ok(args.includes("https://api.github.com/repos/brycejmurrin/f1-game/" + associated));
+    assert.ok(!args.some((arg) => arg.includes("fixture-only-token")), "auth stays off argv");
+    assert.match(options.input, /Authorization: Bearer fixture-only-token/);
+    return { status: 0, stdout: "[]\n200" };
+  } });
+  assert.deepEqual(result, { json: [] });
+  for (const [stdout, error] of [["{}\n403", "HTTP 403"], ["{}\n502", "HTTP 502"], ["not JSON\n200", "bad JSON"]]) {
+    assert.equal(api(associated, { env: { GH_TOKEN: "fixture" }, run: () => ({ status: 0, stdout }) }).error, error);
+  }
+});
+
+function afterThreeMinutes(request, options = {}) {
+  const lines = []; let clockCalls = 0;
+  return watchSha(SHA, { interval: 1, deadline: Infinity, once: false,
+    now: () => clockCalls++ === 0 ? 0 : 240000,
+    wait: async () => { throw new Error("unexpected polling after terminal evidence"); },
+    report: (line) => lines.push(line), request, ...options }).then((code) => ({ code, lines }));
+}
+
+test("no-run watcher reports current conflicting PR as blocked even when broad discovery is stale", async () => {
+  const result = await afterThreeMinutes((endpoint) => {
+    if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [] } };
+    if (endpoint === associated) return { json: [pr()] };
+    if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "dirty" } };
+    if (endpoint.endsWith("/check-runs?per_page=1")) return { json: { total_count: 0 } };
+    if (endpoint.startsWith("pulls?")) return { json: [] };
+    throw new Error(endpoint);
+  });
+  assert.equal(result.code, 1);
+  assert.ok(result.lines.some((line) => line.includes("= ci blocked — PR #738")));
+  assert.ok(!result.lines.some((line) => line.includes("= ci none")));
+});
+
+test("no-run watcher never returns green when PR or commit-check discovery is unknown", async () => {
+  for (const failure of ["associated", "detail", "checks", "checks-shape"]) {
+    const result = await afterThreeMinutes((endpoint) => {
+      if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [] } };
+      if (endpoint === associated) return failure === "associated" ? { error: "HTTP 502" } : { json: failure === "detail" ? [pr()] : [] };
+      if (endpoint === "pulls/738") return { error: "HTTP 403" };
+      if (endpoint.endsWith("/check-runs?per_page=1")) return failure === "checks" ? { error: "HTTP 502" } : { json: {} };
+      throw new Error(endpoint);
+    });
+    assert.equal(result.code, 3, failure);
+    assert.ok(result.lines.some((line) => line.includes("= ci unknown")), failure);
+    assert.ok(!result.lines.some((line) => line.includes("= ci none") || line.includes("= ci passed")), failure);
+  }
+});
+
+test("confirmed absence still needs successful PR and zero-check evidence; indexed checks keep waiting", async () => {
+  for (const count of [0, 2]) {
+    const result = await afterThreeMinutes((endpoint) => {
+      if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [] } };
+      if (endpoint === associated) return { json: [] };
+      if (endpoint.endsWith("/check-runs?per_page=1")) return { json: { total_count: count } };
+      throw new Error(endpoint);
+    }, { once: true });
+    assert.equal(result.code, count ? 124 : 0);
+    if (count) { assert.ok(result.lines.some((line) => /run search is lagging/.test(line))); assert.ok(!result.lines.some((line) => line.includes("= ci none —"))); }
+    else assert.ok(result.lines.some((line) => line.includes("= ci none —")));
+  }
+});
+
+test("job-list API failure cannot turn a completed successful run into a zero-job green verdict", async () => {
+  const result = await afterThreeMinutes((endpoint) => endpoint.startsWith("actions/runs?")
+    ? { json: { workflow_runs: [run(1, "CI", "completed", "success", "2026-10-01T00:00:00Z")] } }
+    : { error: "HTTP 502" });
+  assert.equal(result.code, 3);
+  assert.ok(result.lines.some((line) => line.includes("= ci unknown")));
+  assert.ok(!result.lines.some((line) => line.includes("= ci passed")));
 });

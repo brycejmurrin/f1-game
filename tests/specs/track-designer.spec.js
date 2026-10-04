@@ -4,7 +4,7 @@
 // randomised design passes the WYSIWYG validator, SAVE appends it to
 // Tracks.LIST as a custom entry, RACE hands it to the ordinary picker flow,
 // __apex.race() builds and drives it, and a reload resolves the stored id.
-import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, TRACK_MS, clickLive } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 1180, height: 720 };
 
@@ -238,6 +238,64 @@ test.describe("Track designer", () => {
     expect(floor.refused).toBe(true);
   });
 
+  test("TURNS row selects a span and REPLACE re-stamps it green", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    const st = await randomiseGreen(page, 7);
+    expect(st.corners.length).toBeGreaterThanOrEqual(3);
+    // TURNS is the design pane's second .td-issues list (5 CHECKS is the first): one info row per corner.
+    const rows = page.locator('#trackdesigner .td-pane[data-pane="design"] .td-issues').nth(1).locator(".td-issue");
+    await expect(rows).toHaveCount(st.corners.length);
+    await expect(rows.nth(1)).toHaveAttribute("data-level", "info");
+    await expect(rows.nth(1)).toHaveText(/^T2 · (LEFT|RIGHT) \d+° · R \d+ m · \d+ km\/h · \d+ m$/);
+    const c = st.corners[1];
+    await rows.nth(1).click();
+    const picked = await page.evaluate(() => TrackDesigner.state());
+    expect([picked.sel, picked.span, picked.tool]).toEqual([c.i0, c.i1, c.fit.kind]);
+    expect(picked.design.pts).toEqual(st.design.pts);
+    const replace = page.locator("#trackdesigner button", { hasText: /^REPLACE THE SELECTED SPAN$/ });
+    await expect(replace).toBeVisible();
+    await replace.click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.red).toBe(0);
+    expect(after.undo, "REPLACE is one UNDO entry").toBe(picked.undo + 1);
+    expect(after.design.pts).not.toEqual(st.design.pts);
+    expect(after.design.pts.slice(0, c.i0 + 1)).toEqual(st.design.pts.slice(0, c.i0 + 1));
+  });
+
+  test("strip tap adds a hill; the preview's py rises there", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    const st = await randomiseGreen(page, 7);
+    expect(st.design.elevations).toEqual([]);
+    const strip = page.locator('#trackdesigner .td-stage > canvas[data-role="profile"]');
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("tabindex", "0");
+    const box = await strip.boundingBox();
+    expect(box && box.height).toBeGreaterThan(10);
+    // A quarter of the way along the strip, near its floor (no grip there yet).
+    const flat = await page.evaluate(() => Array.from(TrackValidate.check(TrackDesigner.state().design).tr.py));
+    await strip.click({ position: { x: box.width / 4, y: box.height - 4 } });
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.design.elevations.length === 1; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.undo, "one UNDO entry").toBe(st.undo + 1);
+    const hill = after.design.elevations[0];
+    expect([hill.halfM, hill.rise]).toEqual([160, 6]);
+    expect(Math.abs(hill.s - 0.25)).toBeLessThan(0.02);
+    await expect(strip).toHaveAttribute("data-arrows", "own");
+    await expect(strip).toHaveAttribute("aria-label", /^Elevation profile\. Hill 1 of 1: \+6 m over 320 m at /);
+    // The engine-built preview carries it: py at the hill's top is ~6 m above the flat build.
+    const rise = await page.evaluate((f) => {
+      const tr = TrackValidate.check(TrackDesigner.state().design).tr, h = TrackDesigner.state().design.elevations[0];
+      const k = Math.round(h.s * tr.n) % tr.n;
+      return tr.py[k] - f[Math.round(h.s * f.length) % f.length];
+    }, flat);
+    expect(rise).toBeGreaterThan(5);
+    expect(rise).toBeLessThan(7);
+    await expect(page.locator("#trackdesigner .td-row", { hasText: "HILL m" })).toBeVisible();
+  });
+
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);
@@ -267,5 +325,79 @@ test.describe("Track designer", () => {
     await expect(fixAll).toBeHidden();
     await expect(page.locator("#trackdesigner .td-msg")).toContainText("UNDO to revert");
     expect((await page.evaluate(() => TrackDesigner.save())).ok).toBe(true);
+  });
+
+  test("TECHNICAL shows 4 cards; USE is green", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    const pane = page.locator('#trackdesigner .td-pane[data-pane="design"]');
+    const tech = pane.locator("button", { hasText: /^TECHNICAL$/ });
+    // The cards are the design pane's second .td-grid (START FROM's is the first, hidden).
+    const grid = pane.locator(".td-grid").nth(1);
+    const t0 = Date.now();
+    await tech.click();
+    await expect(tech).toHaveAttribute("aria-pressed", "true");
+    await page.waitForFunction(() => {
+      const g = document.querySelectorAll('#trackdesigner .td-pane[data-pane="design"] .td-grid')[1];
+      return !!g && !g.hasAttribute("aria-busy") && TrackDesigner.state().candidates.length === 4;
+    }, null, { polling: 100, timeout: 30_000 });
+    test.info().annotations.push({ type: "designed-ms", description: String(Date.now() - t0) });
+    const cards = grid.locator(".td-card");
+    await expect(cards).toHaveCount(4);
+    await expect(cards.nth(0).locator(".td-card-meta")).toHaveText(/^\d+\.\d km · \d+ corners · \d+ passing$/);
+    const before = await page.evaluate(() => TrackDesigner.state());
+    await cards.nth(0).locator("button", { hasText: /^USE$/ }).click();
+    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.red).toBe(0);
+    expect(after.undo, "USE is one UNDO entry").toBe(before.undo + 1);
+    expect(after.design.seed).toBe(before.candidates[0].seed);
+  });
+
+  test("TEST HERE drives from the selected point and returns", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 7);
+    // Select point 13 (index 12) as the keyboard does: `]` steps from none to 0, 1, …
+    const sel = await page.evaluate(() => {
+      const c = document.querySelector("#trackdesigner .td-stage canvas");
+      c.focus();
+      for (let i = 0; i < 13; i++) c.dispatchEvent(new KeyboardEvent("keydown", { key: "]", bubbles: true, cancelable: true }));
+      return TrackDesigner.state().sel;
+    });
+    expect(sel).toBe(12);
+    // Where the car should land: the node of the engine's own build nearest control 12.
+    const want = await page.evaluate(() => {
+      const st = TrackDesigner.state(), tr = TrackValidate.check(st.design).tr, p = st.design.pts[12];
+      let k = 0, best = Infinity;
+      for (let j = 0; j < tr.n; j++) { const d = (tr.px[j] - p[0]) ** 2 + (tr.pz[j] - p[1]) ** 2; if (d < best) { best = d; k = j; } }
+      return { s: k * tr.total / tr.n, total: tr.total };
+    });
+    // A script click, as the EDIT IN DESIGNER chip above: headless(true) stops the frames actionability waits for.
+    const pressed = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("#trackdesigner .td-rail button")].find((x) => x.textContent === "TEST HERE");
+      if (!b || b.getAttribute("aria-disabled") !== "false") return false;
+      b.click();
+      return true;
+    });
+    expect(pressed).toBe(true);
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: TRACK_MS });
+    const run = await page.evaluate(() => ({ info: window.__apex.info(), ph: window.__apex.physState(), open: TrackDesigner.isOpen(), id: TrackDesigner.state().design.originId }));
+    expect(run.open).toBe(false);
+    expect(run.info.timeTrial).toBe(true);
+    expect(run.info.track).toBe(run.id);
+    expect(run.ph).not.toBeNull();
+    const ds = Math.abs(run.ph.s - want.s);
+    expect(Math.min(ds, want.total - ds), `on the selected point: s ${run.ph.s} vs ${want.s}`).toBeLessThanOrEqual(20);
+    // PAUSE > QUIT (CONFIRM QUIT is on by default: arm, then quit) hands the screen back.
+    await clickLive(page, "pausebtn");
+    await clickLive(page, "pm-quit");
+    await clickLive(page, "pm-quit");
+    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: 15_000 });
+    const back = await page.evaluate(() => ({ state: window.__apex.info().state, sel: TrackDesigner.state().sel, msg: (document.querySelector("#trackdesigner .td-msg") || {}).textContent }));
+    expect(back.state).toBe("menu");
+    expect(back.sel).toBe(12);
+    expect(back.msg).toContain("Back from the test drive");
   });
 });

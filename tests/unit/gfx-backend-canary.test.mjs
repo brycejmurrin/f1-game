@@ -19,6 +19,7 @@
  *
  * Run: node --test tests/unit/gfx-backend-canary.test.mjs
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -36,10 +37,14 @@ import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+// These guards span boot and frame-loop ownership; load the extracted owners explicitly.
+const read = (p) => p === "js/game.js"
+  ? ["js/render/renderer-boot.js", "js/core/lazy-bundles.js", "js/ui/platform-session.js", p].map(readFile).join("\n")
+  : readFile(p);
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
-const code = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -718,7 +723,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   // a merged check and never be cleared. Computed keys (`setItem(_rk, …)`) are
   // invisible to the literal regex and are named here so a new one is noticed.
   const lsResettable = new Set(G.RENDERER_LS_KEYS), ssResettable = new Set(G.RENDERER_SS_KEYS);
-  const COMPUTED_OK = new Set(["_rk", "rk"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
+  const COMPUTED_OK = new Set(["_rk", "rk", "PROBE_KEY", "STRIKE_KEY"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
   const written = new Set();   // "ls:key" / "ss:key"
   const renderDir = path.join(ROOT, "js/render");
   const stack = [renderDir];
@@ -1671,7 +1676,7 @@ test("terminal graphics failure hides interactive game UI and offers recovery co
 test("terminal graphics recovery works before the late menu wiring", async () => {
   const src = read("js/game.js");
   const from = src.indexOf("function showGraphicsUnavailable()");
-  const to = src.indexOf("let _claimSkipped", from);
+  const to = src.indexOf("async function start()", from);
   assert.ok(from >= 0 && to > from, "early graphics-recovery block found");
 
   function element(tag, id) {
@@ -2091,7 +2096,7 @@ test("latches come down BEFORE early returns — the shape that bricked the GLX 
   // A tab RETURN is not a race start: it must re-arm the sentinel without
   // resetting the derived frame budget (sentinelArm(true) does both).
   const game = read("js/game.js");
-  assert.match(game, /else if \(state === "race" \|\| state === "count"\) PerfGov\.sentinelResume\(\);/,
+  assert.match(game, /else if \(G.state === "race" \|\| G.state === "count"\) PerfGov\.sentinelResume\(\);/,
     "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
   assert.match(read("js/perf/governor.js"), /function sentinelResume\(\)/);
   // The env-probe latch has the same player-reachable reset as the chunk latch.
@@ -3046,9 +3051,9 @@ test("the boot probe disarms on hide and on a clean exit", () => {
   // quits inside those 5 s is silently reverted to WebGL2 on their next boot.
   assert.match(g, /function _disarmProbeOnLeave\(\)/,
     "there must be one place that drops the probe when the tab leaves");
-  assert.match(g, /if \(document\.hidden\) _disarmProbeOnLeave\(\)/,
+  assert.match(g, /if \(document\.hidden\) disarmProbeOnLeave\(\)/,
     "a hidden tab disarms: a background kill is housekeeping, not a crash");
-  assert.match(g, /pagehide[\s\S]{0,120}_disarmProbeOnLeave\(\)/,
+  assert.match(g, /pagehide[\s\S]{0,120}disarmProbeOnLeave\(\)/,
     "and a clean exit disarms, which visibilitychange does not always precede");
 });
 
@@ -3329,6 +3334,27 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
+  // A released geometry (freeMesh / chunked free) is parked out of every slot
+  // AT ONCE: a slot is otherwise parked only by its target's next pass, which
+  // cannot run while the next track builds — so every chunk geometry of the
+  // old track stayed reachable through a hidden caster across the build peak.
+  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo\) continue;\s*m\.visible = false; m\.geometry = parkedGeo;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
+    "shadowSys.releaseGeometry parks every slot still pointing at the geometry AND drops its render object");
+  assert.match(sh, /releaseGeometry,\n/, "and exports it");
+  assert.match(tlxSrc, /function releaseGeometry\(geo\) \{[\s\S]*?meshByGeo\.delete\(geo\);\s*if \(shadowSys && shadowSys\.releaseGeometry\) shadowSys\.releaseGeometry\(geo\);/,
+    "TLX's own releaseGeometry hands the geometry to the shadow pools too");
+  // THE LEAK ITSELF (2026-10-02): three keeps a RenderObject — geometry, vertex
+  // buffers, GPU buffers — until the OBJECT or MATERIAL dispatches "dispose";
+  // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
+  // dropped without the event pinned every chunk of every freed track (~17 MB
+  // of JS heap per picker pick, measured). Both drop paths go through one helper.
+  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
+    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
+  assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+    "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -3522,20 +3548,24 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
-  assert.match(game, /if \(state === "results"\) return;/,
-    "results keeps the last race present — physics already stopped, re-drawing is unpaid");
+  assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
+    "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
     "endRace clears the 2D rain overlay the way quitToMenu already did");
+  // ResultsCam.live() + heldWarm: order pins below use the full render body.
   const renderBody = fnSource(game, "function render(dt)");
   for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
     assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
   }
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
     "the visibility gate precedes the garage-preview return");
-  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
+  const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
+  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
+  assert.match(renderBody, /!resultsCam\.live\(\)/,
+    "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
@@ -3555,7 +3585,9 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
-  assert.match(game, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05\) \{/, "the flame draws for every car, not only the player");
+  // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
+  assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
+  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
 });
@@ -3762,7 +3794,9 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
 test("WGX SAA widens roughness before wet like GLX", () => {
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const saa = chunks.indexOf("let saaVar = mix(saaVarGeo, saaVarPeel");
-  const wet = chunks.indexOf("if (wetness > 0.001)");
+  // Prefix, not the full condition: the road block is gated off car surfaces
+  // ("&& !classifiedCar") and the car wet look follows it — both after SAA.
+  const wet = chunks.indexOf("if (wetness > 0.001");
   assert.ok(saa > 0 && wet > saa,
     "SAA after wet extra-widens puddle edges — GLX widens, then polishes");
   assert.match(chunks, /a = rough \* rough;/,
@@ -4234,6 +4268,13 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
   const tool = read("tools/gfx/tlx-pack-check.cjs");
+  const chunked = read("js/render/three/tlx-chunked.js");
+  // packAttr gained an optional fmt24 arg (WebGPU pad4). The lift regex must
+  // still match the shipping signature or the CLI throws before any check runs.
+  assert.match(chunked, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
+    "tlx-chunked packAttr signature drifted — update tools/gfx/tlx-pack-check.cjs");
+  assert.match(tool, /kind\(\?:, fmt24\)\?/,
+    "tlx-pack-check lift regex must allow the optional fmt24 arg");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -4812,6 +4853,12 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
     const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
+    let casters = false;
+    const shadowCastersWanted = () => casters;
+    const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
+    const Parts = { CATALOG: [{ id: "aero" }, { id: "tyres" }] };
+    G.getTeamParts = () => ({ aero: "hi" });
     const setTimeout = fn => {
       yields++;
       if (yields === 2) {
@@ -4841,6 +4888,17 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     await prepare(current);
     assert.equal(calls.length, 7, "cheap cache lookups still consult current assets");
     assert.equal(yields, 0, "cache hits do not pay one timer per driver");
+    if (cancel !== "none") continue;
+    // THE CASTERS in the same sliced loop: each its own step after its car (one
+    // build per yielded task, as before), keyed (team, car, true) like the shadow
+    // passes; the player's on its OWN build, makeCars' stamp + ":sh".
+    casters = true; calls.length = 0; yields = 0; clock = 0;
+    performance.now = () => (clock += 8);
+    await prepare(current);
+    assert.deepEqual(calls.filter(c => c[0] === "caster"),
+      [["caster", 99, true, "hi,:sh"], ["caster", 1, true, "sh"], ["caster", 3, true, "sh"]]);
+    assert.deepEqual(calls.map(c => c[0]), ["player", "cockpit", "atlas", "caster", "field", "atlas", "caster", "field", "atlas", "caster"]);
+    assert.equal(yields, 6, "a caster takes a slice of its own");
   }
 });
 
@@ -5100,11 +5158,11 @@ const lazyRequire = createRequire(import.meta.url);
 const LAZY_ROOT = new URL("../../", import.meta.url);
 const source = (path) => fs.readFileSync(new URL(path, LAZY_ROOT), "utf8");
 const manifest = lazyRequire("../../tools/manifest.cjs");
-const game = source("js/game.js");
+const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
-const end = game.indexOf("\n// Baked asset pack", begin);
+const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end)} return gfx; })()`;
+const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -5350,4 +5408,156 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   _softBlit = false; _softReadPending = true;
   assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
   assert.equal(opened, 2);
+});
+
+test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+  // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
+  // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
+  // samples now go to the scene target, on the desktop WebGL2 backend only:
+  // phones keep the GLX mobile recipe and the native-WebGPU path cannot
+  // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
+  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
+    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
+    "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
+});
+
+// THE COCKPIT'S LIVE MIRROR GLASS on GLX (post.js mirror.glass, glx.js
+// drawMirrorGlass): the mirror target sampled INSIDE the main pass, on the
+// lens mesh. Driven on the recording mock: the chain is built in mirrorEnd —
+// before the main pass samples it, never at composite time — on a spare unit;
+// the glass binds the target on that unit and leaves unit 0 (the shadow map)
+// active; and it refuses whenever there is nothing safe to show.
+test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 restored, and every refusal", () => {
+  const h = bootGlx();
+  const G = h.GLX, gl = h.gl;
+  const id = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const glass = G.createTexMesh({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const rect = [0.4, 0.1, 0.2, 0.06];
+  assert.equal(typeof G.drawMirrorGlass, "function");
+  // Nothing rendered yet: refused, nothing drawn.
+  G.begin(h.frame());
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "no mirror image yet");
+  assert.equal(h.count("drawElements"), 0);
+
+  // The pass. While it is open the target is the bound draw buffer: refused.
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true);
+  const mirFBO = h.calls.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1];
+  assert.ok(mirFBO && mirFBO.fbo, "mirrorBegin binds the mirror FBO");
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "an open mirror pass would sample its own target");
+  assert.equal(h.count("drawElements"), 0);
+  G.mirrorEnd();
+  const mip = h.calls.findIndex((c) => c[0] === "generateMipmap");
+  assert.ok(mip >= 0, "mirrorEnd builds the target's mip chain");
+  const before = h.calls.slice(0, mip);
+  assert.notEqual(before.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1], mirFBO,
+    "the chain is built with the OUTPUT framebuffer bound, never the target's own");
+  assert.equal(before.filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE5, "on the spare unit");
+  const mirTex = before.filter((c) => c[0] === "bindTexture").at(-1)[1][1];
+  assert.ok(mirTex && mirTex.texture, "the mirror texture is bound for generateMipmap");
+  assert.equal(h.calls.slice(mip).find((c) => c[0] === "activeTexture")[1][0], gl.TEXTURE0, "unit 0 active again");
+
+  // The main pass: drawn, sampling the target on unit 5; unit 0 never rebound.
+  G.begin(h.frame());
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, null), true);
+  let unit = null, mirOn0 = false;
+  for (const [name, args] of h.calls) {
+    if (name === "activeTexture") unit = args[0];
+    if (name === "bindTexture" && args[1] === mirTex && unit === gl.TEXTURE0) mirOn0 = true;
+  }
+  assert.equal(mirOn0, false, "unit 0 keeps the shadow map");
+  const bind = h.calls.findIndex((c) => c[0] === "bindTexture" && c[1][1] === mirTex);
+  assert.ok(bind > 0, "the glass binds the mirror target");
+  assert.equal(h.calls.slice(0, bind).filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE5);
+  assert.ok(h.calls.some((c) => c[0] === "uniform1i" && c[1][0] && c[1][0].name === "uTex" && c[1][1] === 5), "uTex samples unit 5");
+  assert.equal(h.calls.filter((c) => c[0] === "activeTexture").at(-1)[1][0], gl.TEXTURE0, "unit 0 left active");
+  const prog = h.calls.filter((c) => c[0] === "useProgram").at(-1)[1][0];
+  const fs = prog.shaders.map((sh) => sh.source).join("\n");
+  assert.match(fs, /outColor = vec4\(texture\(uTex, vUV\)\.rgb, 1\.0\)/, "MIRROR_GLASS_FS: unlit, alpha 1");
+  assert.doesNotMatch(fs, /discard/, "opaque: no alpha test");
+  assert.equal(h.count("drawElements"), 1);
+  assert.ok(h.calls.some((c) => c[0] === "colorMask" && c[1].every((v) => v === true)), "alpha written (the not-car-paint tag)");
+  assert.equal(h.count("enable", (a) => a[0] === gl.BLEND), 0, "no blend");
+  const draw = h.calls.findIndex((c) => c[0] === "drawElements");
+  assert.ok(h.calls.slice(0, draw).some((c) => c[0] === "disable" && c[1][0] === gl.CULL_FACE), "both faces");
+  assert.ok(h.calls.slice(draw).some((c) => c[0] === "enable" && c[1][0] === gl.CULL_FACE), "culling restored");
+  assert.equal(G.mirrorState().glass, 1, "mirrorState counts the glass");
+
+  // The composite no longer builds the chain (the glass already sampled it this frame).
+  G.mirrorRect(rect);
+  h.reset();
+  G.present({});
+  assert.equal(G.mirrorState().composites, 1, "the composite ran");
+  assert.equal(h.count("generateMipmap"), 0, "present() builds no mip chain");
+
+  // flip false = the broadcast PiP owns the target: refused; the mirror back: drawn.
+  G.begin(h.frame());
+  G.mirrorRect(rect, false);
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "never on the PiP");
+  G.mirrorRect(rect);
+  assert.equal(G.drawMirrorGlass(glass, id, null), true);
+  assert.equal(G.mirrorState().glass, 2);
+
+  // A dead target (an incomplete framebuffer at a new size): refused for good.
+  h.answers.checkFramebufferStatus = () => 0;
+  assert.equal(G.mirrorBegin(h.frame(), 128, 32), false);
+  assert.equal(G.mirrorState().dead, true);
+  G.begin(h.frame());
+  assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
+  assert.equal(G.mirrorState().glass, 2);
+});
+
+// The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
+// own body runs against stubs of what it closes over — one opaque record while
+// mirRT holds an image, every refusal GLX makes — and the warm compiles the
+// glass material in the SCENE pass's render context, both winding signs.
+test("TLX live mirror glass: one record on mirRT, the same refusals, warmed under the scene target", () => {
+  const body = fnBody(code("js/render/three/tlx.js"), "drawMirrorGlass");
+  const run = (st) => {
+    const recs = [];
+    const make = new Function("st", "recs", `
+      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
+      const draw = function (mesh, model, opts) {${body}};
+      return { draw, glass: () => _mirGlass };`);
+    const t = make(st, recs);
+    const ok = t.draw({ geo: "glassGeo" }, "model", null);
+    return { ok, recs, glass: t.glass() };
+  };
+  const tex = { rt: true }, mat = { glassMat: true };
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+    fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
+  const r = run(live);
+  assert.equal(r.ok, true);
+  assert.equal(r.glass, 1);
+  assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
+  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+    ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
+    const x = run(Object.assign({}, live, over));
+    assert.equal(x.ok, false, why);
+    assert.equal(x.recs.length + x.glass, 0, why + ": nothing recorded");
+  }
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const mrt = spanBack(tlx, "renderer.setMRT(usePost ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
+  assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
+  assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
+    "the glass compiles under the scene pass's target, where it draws");
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+    "both winding signs of the real material");
+  assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
+  const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");
+  assert.match(glass, /m\.transparent = false;/);
+  assert.match(glass, /m\.depthWrite = true;/);
+  assert.match(glass, /m\.side = THREE\.DoubleSide;/);
+  assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
+  assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
+  assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
 });

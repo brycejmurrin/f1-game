@@ -478,18 +478,25 @@ window.SheetShape = (function () {
   function watchScale() {
     if (typeof MutationObserver !== "function") return;
     let lastScale = document.documentElement.style.getPropertyValue("--ui-scale");
-    let raf = 0;
+    let raf = 0, generation = 0;
     new MutationObserver(() => {
       const s = document.documentElement.style.getPropertyValue("--ui-scale");
       if (s === lastScale) return;
       lastScale = s;
-      /* AFTER LAYOUT. A sync reclassify can still see the pre-scale client
-         box even when --ui-scale has updated (roomOwn now reads the declared
-         scale, but shape/pair still use clientWidth/Height). One rAF is the
-         first frame with the new zoom applied; coalescing matches
-         watchKeyboard. */
+      /* The first pass may change --sheet-scale through classifyFit while
+         local client dimensions still describe the previous layout. Re-ask
+         once after the next paint; a newer UI SIZE cancels both old passes. */
+      const revision = ++generation;
       if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => { raf = 0; reclassify(); });
+      const settle = (again) => {
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          if (revision !== generation) return;
+          reclassify();
+          if (again) settle(false);
+        });
+      };
+      settle(true);
     }).observe(document.documentElement,
       { attributes: true, attributeFilter: ["style"] });
   }

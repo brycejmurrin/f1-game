@@ -191,6 +191,10 @@
     })();
     glowMat.opacityNode = float(1.0);
 
+    // Lit + fogged (GLX PARTICLE_FS parity, 2026-10-01): the alpha group is
+    // shaded as a small sphere — hemisphere ambient on the quad's up plus a
+    // wrap of the key, floodlit floor 0.18 — and both groups take the lit
+    // pass's exp² fog on the eye distance (alpha → fog colour, additive → out).
     function particleMaterial(additive) {
       const m = fxMaterial({ additive, doubleSided: true, key: additive ? "tlx-fx-pt-add" : "tlx-fx-pt" });
       m.positionNode = billboardPosition(attribute("fxSize", "float"));
@@ -200,7 +204,17 @@
         fall.mulAssign(fall);            // soft-disc falloff, zero at the rim
         return float(attribute("fxAlpha", "float")).mul(fall);
       })();
-      const col = vec3(attribute("fxColor", "vec3"));
+      const col = Fn(() => {
+        const c = vec3(attribute("fxColor", "vec3")).toVar();
+        if (!additive) {
+          const up = float(attribute("fxCorner", "vec2").y).mul(0.5).add(0.5);
+          const lit = mix(vec3(U.ambGround), vec3(U.ambSky), up).add(vec3(U.sunColor).mul(0.45));
+          c.mulAssign(max(lit, vec3(0.18)));
+        }
+        const fd = length(cameraPosition.sub(vec3(positionGeometry))).mul(U.fogDensity);
+        const fog = float(1.0).sub(exp(fd.mul(fd).negate()));
+        return additive ? c.mul(fog.oneMinus()) : mix(c, vec3(U.fogColor), fog);
+      })();
       if (additive) {                    // vec4(col*a, 1) into ONE/ONE
         m.colorNode = col.mul(soft);
         m.opacityNode = float(1.0);
@@ -210,7 +224,6 @@
       }
       return m;
     }
-    const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
 
     // Car decals (DECAL_VS/FS): sun + hemisphere lit so marks sit INTO the
     // paint's shading; uGlow lifts them at night. Frame uniforms are fx-local
@@ -222,6 +235,8 @@
       sunColor: uniform(new THREE.Vector3(1.0, 0.98, 0.9)),   // keyMul-scaled
       ambSky:   uniform(new THREE.Vector3(0.3, 0.32, 0.36)),  // ambientMul-scaled
       ambGround: uniform(new THREE.Vector3(0.2, 0.19, 0.18)),
+      fogColor:  uniform(new THREE.Vector3(0.5, 0.6, 0.7)),    // the lit pass's fog (particles)
+      fogDensity: uniform(0.0),                                 // fogDensityMul-scaled
     };
     // Same fix as tsl-lit.js's SHARED_UNIFORMS, same pin (apex26.tlxSharedUniforms):
     // a plain uniform() is objectGroup, so each of the ~22 decal render objects
@@ -229,6 +244,8 @@
     // renderGroup shares one buffer per program per render() call; the per-object
     // texture binding stays per object, as matU does beside lit's shared U.
     if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);
+    // After U: the particle graphs read its frame light and fog.
+    const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
@@ -312,6 +329,32 @@
       return m;
     }
 
+    // THE COCKPIT'S LIVE MIRROR GLASS (GLX MIRROR_GLASS_FS; tlx.js
+    // drawMirrorGlass): the mirror target on the housings' glass, in the MAIN
+    // scene pass. Unlit and OPAQUE — not an fxMaterial: it writes depth and,
+    // with no mrtNode of its own, takes the scene MRT's ssrTag 1 ("not car
+    // paint"); its alpha is 1. Sampled at the mesh's (u, v) as given: three's
+    // TextureNode flips a render-target texture itself on WebGPU (setupUV,
+    // isRenderTargetTexture), so v = 0 is the image bottom on both of three's
+    // paths. One material per target texture — mirRT.texture survives setSize.
+    let _glassMat = null;
+    function mirrorGlassMaterial(tex) {
+      if (_glassMat && _glassMat.__tlxTex === tex) return _glassMat;
+      if (_glassMat) _evicted.push(_glassMat);   // still in this frame's drawList: present() disposes
+      const m = new THREE.MeshBasicNodeMaterial();
+      m.side = THREE.DoubleSide;
+      m.transparent = false;
+      m.depthWrite = true;
+      m.depthTest = true;
+      m.fog = false;
+      m.lights = false;
+      m.colorNode = texture(tex).rgb;
+      m.opacityNode = float(1.0);
+      m.customProgramCacheKey = () => "tlx-fx-mirror-glass";
+      m.__tlxTex = tex;
+      return (_glassMat = m);
+    }
+
     /** begin(frame) -> decal-pass uniforms (js/render/glx/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
     function updateFrame(frame) {
@@ -327,10 +370,13 @@
       const ag = frame.ambientGround || [0.2, 0.19, 0.18];
       U.ambSky.value.set(as[0] * aM, as[1] * aM, as[2] * aM);
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
+      const fc = frame.fogColor;
+      if (fc) U.fogColor.value.set(fc[0], fc[1], fc[2]);
+      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
-             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, updateFrame, flushEvicted };
+             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, mirrorGlassMaterial, updateFrame, flushEvicted };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });

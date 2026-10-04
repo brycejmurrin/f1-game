@@ -157,9 +157,21 @@ const PauseOpts = (function () {
     arm(btn);
   }
 
+  // Pause-card build stamp (was an IIFE in game.js). Reads apex-build meta —
+  // the assets that actually loaded — so a stale shell cannot lie.
+  function paintBuild() {
+    if (!hasDoc) return;
+    const tag = document.getElementById("pm-build");
+    if (!tag) return;
+    const meta = document.querySelector('meta[name="apex-build"]');
+    const build = meta && meta.content;
+    tag.textContent = build ? ("build " + build) : "build unknown";
+  }
+
   function initUI() {
     wireRows();
     paintSummary();
+    paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
     if (!pm || pm._pauseOptsWired) return;
     pm._pauseOptsWired = true;
@@ -176,7 +188,12 @@ const PauseOpts = (function () {
   function wireRows() {
     if (typeof SettingRow === "undefined" || !SettingRow.build) return;
     const body = hasDoc ? document.getElementById("pm-pausemenu-body") : null;
-    if (!body || body.dataset.pauseRowsMounted) return;
+    if (!body) return;
+    if (body.dataset.pauseRowsMounted) {
+      for (const [id, read] of [["pm-pauselayout", layoutMode], ["pm-pauseside", sideMode],
+        ["pm-pausedim", dimMode], ["pm-pauseconfirm", confirmMode]]) paintRow(id, read());
+      return;
+    }
     body.dataset.pauseRowsMounted = "1";
     // One fold help (not four per-row lines): same copy the shell used to carry
     // as #pm-pausemenu-help before the rows moved out of index.html.

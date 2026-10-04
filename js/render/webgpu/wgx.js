@@ -1197,6 +1197,7 @@ const WGX = (function () {
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
+    let pGlass = null;   // the cockpit's live mirror glass: DECAL's vs_main + fs_glass (drawMirrorGlass)
     let _fxQuadSlot = 0, _fxDecalSlot = 0, _fxQuadOverflow = 0;
     const FX_QUAD_SLOTS = 64, FX_DECAL_SLOTS = 128, FX_STRIDE = 256;
     const FX_F32_STRIDE = FX_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
@@ -1205,7 +1206,9 @@ const WGX = (function () {
     const quadFxRing = new Float32Array(FX_QUAD_SLOTS * FX_F32_STRIDE);
     const decalFxRing = new Float32Array(FX_DECAL_SLOTS * FX_F32_STRIDE), _DECAL_SUN = [1, 0.95, 0.9], _DECAL_ASKY = [0.3, 0.32, 0.36], _DECAL_AGR = [0.2, 0.19, 0.18];
     const _fxQuadDynOff = [0], _fxDecalDynOff = [0];
-    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 — glow still uses this scratch
+    const fxScratch = new Float32Array(56);   // >= DECAL 224 B / 4 (PARTICLE 144 B / 4 = 36) — glow still uses this scratch
+    // The particle pass's frame light + fog, captured where the lit frame block is packed.
+    const _particleFrame = { sun: [1, 0.98, 0.9], ambSky: [0.3, 0.32, 0.36], ambGround: [0.2, 0.19, 0.18], fogColor: [0.5, 0.6, 0.7], fogDensity: 0 };
     // Camera-facing glow billboard corner template (mirror GLX _glowCorners).
     const _glowCorners = [[-1, 0], [1, 0], [1, 1], [-1, 0], [1, 1], [-1, 1]];
 
@@ -1692,6 +1695,26 @@ const WGX = (function () {
           depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal" },
           ..._fxMS,
         });
+        // THE LIVE MIRROR GLASS beside it: the same module, layout and vertex
+        // buffer, fs_glass OPAQUE — no blend, all four channels (alpha 1 is
+        // the SSR "not car paint" tag), depth written under the lit pass's
+        // less-equal. Built eagerly so wgx-validate's Dawn pass sees it; its
+        // own try, so a refusal costs the glass (fallback) and never the FX.
+        try {
+          pGlass = device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout] }),
+            vertex: { module: decalMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.DECAL_VERTEX_BYTES,
+              attributes: [
+                { shaderLocation: 0, offset: 0,  format: "float32x3" },
+                { shaderLocation: 1, offset: 12, format: "float32x3" },
+                { shaderLocation: 2, offset: 24, format: "float32x2" },
+              ] }] },
+            fragment: { module: decalMod, entryPoint: "fs_glass", targets: [{ format: SCENE_FORMAT, writeMask: GPUColorWrite.ALL }] },
+            primitive: { topology: "triangle-list", cullMode: "none" },
+            depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less-equal" },
+            ..._fxMS,
+          });
+        } catch (_) { pGlass = null; }
         decalUBO = device.createBuffer({ size: FX_DECAL_SLOTS * FX_STRIDE, usage: _UCD });
         if (_Fx.PARTICLE) {
           const pMod = device.createShaderModule({ code: _Fx.PARTICLE });
@@ -3124,6 +3147,9 @@ const WGX = (function () {
       const L = f.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       d[48]=fogDensity; d[49]=fogHeight; d[50]=f.time != null ? f.time : 0; d[51]=nL;
+      // The particle pass reads the same frame light and fog (drawParticles).
+      _particleFrame.sun = sc; _particleFrame.ambSky = [as[0]*ambM, as[1]*ambM, as[2]*ambM];
+      _particleFrame.ambGround = [ag[0]*ambM, ag[1]*ambM, ag[2]*ambM]; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
       d[52]=T && T.keyMul != null ? T.keyMul : 1;
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
@@ -3875,11 +3901,14 @@ const WGX = (function () {
     let mirSampleView = null, _mirSamp = null;
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
     let _mirUBO = null, _mirBG = null;
+    // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
+    // dropped with it — a resize must never leave it naming a destroyed view.
+    let _mirGlassBG = null, _mirGlass = 0;
     const _mirData = new Float32Array(4);
     function _mirrorFree() {
       try { if (mirTex) mirTex.destroy(); } catch (_) { /* already invalid */ }
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
-      mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; mirW = mirH = 0; _mirRenders = 0;
+      mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null; mirW = mirH = 0; _mirRenders = 0;
     }
     function mirrorBegin(frame, w, h) {
       // litPass/encoder set = begin() already ran this frame (or a probe face
@@ -3953,6 +3982,42 @@ const WGX = (function () {
       mp.draw(3, 1, 0, 0);
       mp.end();
       _mirComposites++;
+    }
+
+    // THE COCKPIT'S LIVE GLASS (gfx.js drawMirrorGlass; GLX post.js mirror.glass):
+    // the mirror target — mipped by its own submit in mirrorEnd, before this
+    // pass — on the glass mesh, one decal-ring slot through pGlass. Refused (the
+    // caller lays its fallback) with no image yet, a dead target, the PiP (flip
+    // false), a mirror pass still open (the target is that pass's attachment:
+    // a usage conflict), no main pass, or a pass whose sample count pGlass was
+    // not built for. uvRect (0, 1, 1, -1) is the (u, 1 - v) read fs_glass wants.
+    function drawMirrorGlass(mesh, model, opts) {
+      if (_mirEncoder || _mirDead || !mirSampleView || !_mirRenders || !_mirFlip) return false;
+      if (!_fxReady || !pGlass || !litPass || _envEncoder || _passSamples !== (MSAA_COUNT > 1 ? MSAA_COUNT : 1)) return false;
+      if (!mesh || !mesh.count || !mesh.vbuf || !model || _fxDecalSlot >= FX_DECAL_SLOTS) return false;
+      if (!_mirGlassBG) {
+        try {
+          if (!_mirSamp) _mirSamp = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
+          _mirGlassBG = device.createBindGroup({ layout: fxDecalLayout, entries: [
+            { binding: 0, resource: { buffer: decalUBO, offset: 0, size: _Fx.DECAL_UNIFORM_BYTES } },
+            { binding: 1, resource: mirSampleView },
+            { binding: 2, resource: _mirSamp },
+          ] });
+        } catch (_) { _mirGlassBG = null; return false; }
+      }
+      const slot = _fxDecalSlot++, base = slot * FX_F32_STRIDE, s = decalFxRing;
+      s.set(model.length > 16 && model.subarray ? model.subarray(0, 16) : model, base);
+      s.set(frameVPGpu, base + 16);
+      s[base + 48] = 0; s[base + 49] = 1; s[base + 50] = 1; s[base + 51] = -1;   // uvRect: (u, 1 - v)
+      s[base + 52] = 1; s[base + 53] = 1; s[base + 54] = 1; s[base + 55] = 0;    // tint 1, no glow
+      _setPipe(litPass, pGlass);
+      _fxDecalDynOff[0] = slot * FX_STRIDE;
+      _setBG0(litPass, _mirGlassBG, _fxDecalDynOff);
+      _setVB0(litPass, mesh.vbuf);
+      _setIB(litPass, mesh.ibuf, mesh.indexFormat);
+      litPass.drawIndexed(mesh.count);
+      _mirGlass++;
+      return true;
     }
 
     // Reset the probe to the placeholder (track change / camera reset) so a stale cube
@@ -4881,7 +4946,13 @@ const WGX = (function () {
       s.set(frameVPGpu, 0);
       const eye = frameEye || [0, 0, 0];
       s[16] = eye[0]; s[17] = eye[1]; s[18] = eye[2]; s[19] = additive ? 1 : 0;
-      device.queue.writeBuffer(particleUBO[i], 0, s, 0, 20);
+      // Lit + fogged (PARTICLE fs_main): the decals' frame light and the lit pass's fog.
+      const pf = _particleFrame;
+      s[20] = pf.sun[0]; s[21] = pf.sun[1]; s[22] = pf.sun[2]; s[23] = pf.fogDensity;
+      s[24] = pf.ambSky[0]; s[25] = pf.ambSky[1]; s[26] = pf.ambSky[2]; s[27] = 0;
+      s[28] = pf.ambGround[0]; s[29] = pf.ambGround[1]; s[30] = pf.ambGround[2]; s[31] = 0;
+      s[32] = pf.fogColor[0]; s[33] = pf.fogColor[1]; s[34] = pf.fogColor[2]; s[35] = 0;
+      device.queue.writeBuffer(particleUBO[i], 0, s, 0, 36);
       _setPipe(litPass, additive && pParticleAdd ? pParticleAdd : pParticle);
       if (_particleBG[i]) _setBG0(litPass, _particleBG[i]);
       _setVB0(litPass, particleVBO[i]);
@@ -5489,7 +5560,8 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, rect: _mirRect, flip: _mirFlip }),
+        renders: _mirRenders, composites: _mirComposites, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
+      drawMirrorGlass,
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 

@@ -24,6 +24,9 @@ import assert from "node:assert/strict";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
+// The ROUNDED car, as the game builds it by default (CarShade on): its anchors
+// carry the coke-bottle cover and the downwash ramp (bodyAnchors(.., true)).
+const S = loadParts({ shade: true });
 const ACCENT = [0.123, 0.456, 0.789];   // sentinel livery accent, as in the spec
 const DRL = [2.4, 2.4, 2.7];            // drlC in js/car/car3d.js — nose running lights
 
@@ -49,15 +52,21 @@ const ENGINES = [
     coke: 0.72, tailWidth: 1.30, coverHeight: 1.28 },
 ];
 
-test("sidepod and nose graphics stay attached across extreme engine recipes", () => {
+// `round`: which anchors to score against. The flat car against its own; the
+// rounded car against ITS own (true) and against the FLAT ones (false) — the
+// latter is exactly what tests/specs/parts-physics.spec.js does in a browser
+// (Car3D.bodyAnchors(parts) beside a default, rounded, build), and it holds only
+// because the downwash ramp starts at z -0.38, aft of every graphic it scores.
+const VARIANTS = [["flat car", M, false], ["rounded car", S, true], ["rounded car vs flat anchors (the browser spec)", S, false]];
+for (const [label, X, round] of VARIANTS) test(`sidepod and nose graphics stay attached across extreme engine recipes — ${label}`, () => {
   for (const engine of ENGINES) {
     const parts = { engine: 1, ers: 2, _visual: {
       engine, ers: { id: "probe", tier: 2, led: [0.31, 1.71, 2.31], pack: 1.2 },
     } };
-    const mesh = M.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
+    const mesh = X.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1],
       { noWheels: true, livery: { accent: ACCENT }, parts });
-    const anchors = M.Car3D.bodyAnchors(parts);
-    const decals = M.CarMesh.carDecalData(2, parts);
+    const anchors = X.Car3D.bodyAnchors(parts, undefined, undefined, round);
+    const decals = X.CarMesh.carDecalData(2, parts);
 
     const podDecals = [], noseDecals = [];
     for (let i = 0; i < decals.pos.length; i += 3) {

@@ -594,7 +594,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×2 |
+| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
 | `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×2, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
 | `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
@@ -673,7 +673,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | apex.js, game.js×11, weather-arc.js, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×8, weather-arc.js×5, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
@@ -702,7 +702,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | real-race-tab.js, post-common.js |
 | `whites` | WHITES | -1.8 … 3 | 0 | — | ✓ | post-common.js |
 | `toe` | TOE | -1 … 1 | 0 | — | ✓ | car3d.js, post-common.js |
-| `shoulder` | SHOULDER | -1 … 1 | 0 | — | ✓ | car-mesh.js, car3d.js×2, post-common.js |
+| `shoulder` | SHOULDER | -1 … 1 | 0 | — | ✓ | car-mesh.js, car-wheels.js, car3d.js, post-common.js |
 | `liftG` | LIFT · GREEN | -0.3 … 0.3 | 0 | — | ✓ | post-common.js |
 | `liftB` | LIFT · BLUE | -0.3 … 0.3 | 0 | — | ✓ | post-common.js |
 | `gammaR` | GAMMA · RED | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
@@ -712,7 +712,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | — |
-| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js |
+| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js×6, graph.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |

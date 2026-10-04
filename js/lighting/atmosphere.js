@@ -12,14 +12,66 @@ const Atmosphere = (function () {
 
 function create(G) {
 Log.info("game", "Atmosphere.create");
-// Stable helpers from the game.js closure.
-const { clamp, satAdjust, isRaining, isWetRoad, isFloodActiveSession,
+// Stable helpers from the game.js closure. Wet/rain atmosphere branches stay on
+// the discrete raceWeather enum so a mid-arc stage flip updates sky/fog with
+// the chip; road look / FX / grip use G.isWetRoad (wetness) elsewhere.
+const { clamp, satAdjust, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
+const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain";
+const wxRain = () => G.raceWeather === "rain";
 const { LT, buildTrackLights } = LightTune;
 
 const CLEAR_FOG_SCALE = 0.45;
 
-function applyRaceSettings() {
+// ── Blended weather ──────────────────────────────────────────────────────────
+// applyRaceSettings(blendS) cross-fades the session lighting from what the
+// frame showed to what it computes, over blendS seconds, instead of cutting.
+// The dynamic weather arc (js/race/weather-arc.js tick) asks for WX_BLEND_S so
+// a front arrives as a darkening sky and a softening sun, the way the wetness
+// ramp already brings the rain in; a chip, a slider or __apex.weather() passes
+// nothing and keeps the instant switch (tests and the tuner read the frame
+// right after). tick(dt), from js/game.js's update next to wxArc.tick, walks
+// the fade and keeps the lightning's saved base (_ltBase) on the blended
+// values so a strike restores to the look in flight, not the target.
+// Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
+// strength, ambient and fog stepped (the second graphics-detail survey, item 11).
+const WX_BLEND_S = 25;
+const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure"];
+const WX_SKY = ["sunColor", "cloud", "zenith", "horizon"];
+let _wx = null;   // { from, to, t, dur } while a fade is in flight
+const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
+const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY) });
+const _mixv = (a, b, s) => {
+  if (b == null) return a; if (a == null) return b;
+  if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
+  return a + (b - a) * s;
+};
+function _writeWx(s) {
+  const { from, to } = _wx;
+  for (const k of WX_FRAME) { const v = _mixv(from.frame[k], to.frame[k], s); if (v != null) G.frame[k] = v; }
+  for (const k of WX_SKY) { const v = _mixv(from.sky[k], to.sky[k], s); if (v != null) G.frameSky[k] = v; }
+  G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+  if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),
+                               exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
+}
+function tick(dt) {
+  if (!_wx) return;
+  _wx.t += dt > 0 ? dt : 0;
+  const f = Math.min(1, _wx.t / _wx.dur);
+  _writeWx(f * f * (3 - 2 * f));
+  if (f >= 1) _wx = null;
+}
+function wxBlend() { return _wx ? { t: _wx.t, dur: _wx.dur } : null; }
+
+function applyRaceSettings(blendS) {
+  if (blendS === true) blendS = WX_BLEND_S;
+  const from = (blendS > 0 && G.frame && G.frame.sunColor && G.frameSky) ? _snapWx() : null;
+  _applyRaceBody();
+  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS } : null;
+  if (_wx) _writeWx(0);   // start the fade on the look the frame had
+}
+
+function _applyRaceBody() {
   Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
   if (typeof applyLightTune === "function") applyLightTune(true);
   const isNightSession = G.raceTimeOfDay === "night" ||
@@ -283,13 +335,13 @@ function applyRaceSettings() {
   // below and are authored to be murky; they keep exactly what they were given.
   // The FOG DENSITY tuner still multiplies on top, so the full wash is one
   // slider away.
-  if (!isWetRoad() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
+  if (!wxWet() && G.raceWeather !== "overcast" && G.raceWeather !== "fog") {
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * CLEAR_FOG_SCALE;
   }
   const _wsm = LT.weatherSunMute != null ? LT.weatherSunMute : 1;
   const _mute = (f) => Math.max(0, 1 - (1 - f) * _wsm);
-  if (isWetRoad()) {
-    const _storm = isRaining();
+  if (wxWet()) {
+    const _storm = wxRain();
     // Heavier cloud cover in the rain; cap at 0.96 to let the shader still vary
     G._cloudBase = Math.min(0.96, G._cloudBase + (_storm ? 0.52 : 0.32));
     G.frameSky.cloud = G._cloudBase;
@@ -354,7 +406,7 @@ function applyRaceSettings() {
     if (G.raceTimeOfDay === "dawn") gm = 0.40;
     else if (G.raceTimeOfDay === "dusk") gm = 0.22;
     else if (isNightSession) gm = 0.16;
-    if (isWetRoad()) gm = Math.max(gm, isRaining() ? 0.18 : 0.12);
+    if (wxWet()) gm = Math.max(gm, wxRain() ? 0.18 : 0.12);
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (G.raceWeather === "fog") gm = Math.max(gm, 0.58);
     const _mb = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;   // +overcast/humid, -arid
@@ -497,7 +549,7 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-return { applyRaceSettings, prebakeLamps };
+return { applyRaceSettings, prebakeLamps, tick, wxBlend, WX_BLEND_S };
 }
 
 return { create };

@@ -172,6 +172,39 @@ test("WATCH: the field becomes puppets on the countdown frame, the camera on the
   } finally { g.close(); }
 });
 
+test("WATCH official finishers and disqualifications survive the full game's result settlement", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g, RR = vm.runInContext("RealRace", g.ctx), regs = vm.runInContext("SportingRegs", g.ctx);
+    const { script } = scriptIn(g);
+    const officialDsq = script.drivers.find((d) => d.code === "LEC");
+    officialDsq.dsq = true; officialDsq.dnf = true; officialDsq.pos = null;
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 30), 16: line(-22, 48, 1, -5, 30) } };
+    const previousCars = G.cars;
+    RR.launch(script, { seat: "RUS", watch: true, camera: "side", traces });
+    await g.settle(() => G.cars !== previousCars && G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2); g.apex.go();
+    const winner = G.cars.find((c) => c.code === "RUS"), dsq = G.cars.find((c) => c.code === "LEC");
+    assert.equal(G.pits.twoCompoundApplies(), true, "this dry full-distance race exercises the simulator's compound rule");
+    assert.equal(regs.compoundShort(winner.tyreLog), true, "position puppets have only the simulated grid tyre, not their real stops");
+    winner.penalty = 10;
+    RR.replay().seek(30); g.step(60 * 8);
+    assert.equal(G.state, "results");
+    assert.equal(winner.finished, true); assert.equal(winner.retired, false);
+    assert.equal(!!winner.dsq, false, "a real winner cannot be disqualified by the replay's simulated tyre log");
+    assert.equal(winner.dnf, null); assert.equal(winner.finPos, 1);
+    assert.equal(winner.penalty, 0, "simulator penalties cannot change the published finish clock");
+    const publishedWinner = script.drivers.find((d) => d.pos === 1), lastLap = publishedWinner.lapsDone - 1;
+    assert.equal(winner.finishT, publishedWinner.lapStart[lastLap] + publishedWinner.laps[lastLap]);
+    assert.equal(!!dsq.dsq, true, "the published disqualification must survive simulator settlement");
+    assert.equal(dsq.retired, false); assert.equal(dsq.finished, false);
+    const rows = G.els.resultsTable.children.filter((n) => String(n.className).split(" ").includes("res-row"));
+    const text = (row) => row.children.map((n) => n.textContent).join(" ");
+    assert.match(text(rows.find((row) => /LEC/.test(text(row)))), /DSQ/);
+    assert.doesNotMatch(text(rows.find((row) => /RUS/.test(text(row)))), /DSQ|DNF/);
+  } finally { g.close(); }
+});
+
 test("JUMP IN with the positions loaded drops each car exactly where its trace says", async () => {
   const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
   try {
@@ -442,22 +475,23 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
   } finally { g.close(); }
 });
 
-function transportReplay() {
+function transportReplay(extra = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "side" }, { id: "heli" }] },
-    Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+    Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } }, ...extra });
   for (const file of ["js/race/broadcast.js", "js/race/real-replay.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   const cars = [{ code: "AAA" }, { code: "BBB" }], snaps = [];
   const drivers = [{ code: "AAA", num: 1, pos: 1, name: "Driver A", lapStart: [0, 10] }, { code: "BBB", num: 2, pos: 2, name: "Driver B", lapStart: [0] }];
-  const G = { cars, track: { total: 1000 }, state: "race", camMode: 0,
+  const G = { cars, track: { total: 1000 }, state: "race", camMode: 0, raceT: 0,
     followCar: (c) => { G.player = c; }, snapGameCam: () => snaps.push(G.player.prog),
     setCamMode: (m) => { G.camMode = m; } };
   const replay = vm.runInContext("RealReplay", ctx).create(G);
-  replay.start({ script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
+  const options = { script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
     traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
-    seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" });
-  return { replay, G, cars, snaps };
+    seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
+  replay.start(options);
+  return { replay, G, cars, snaps, drivers, options };
 }
 
 test("WATCH transport pause holds the replay clock, and seek reposes ended and rewound drivers before snapping", () => {
@@ -496,6 +530,104 @@ test("WATCH follow lock survives director holds and event navigation, AUTO relea
   replay.stop();
   assert.equal(G.camMode, 0, "exit restores the player's driving camera");
   assert.equal(replay.status(), null);
+});
+
+test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
+  const element = () => ({ children: [], dataset: {}, style: {}, textContent: "", classList: { add() {}, remove() {}, toggle() {} },
+    appendChild(n) { this.children.push(n); return n; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, querySelector() { return null; } });
+  const tower = element(), document = { body: element(), createElement: element, getElementById: (id) => id === "bc-tower" ? tower : null };
+  const { replay, G, drivers } = transportReplay({ document });
+  drivers[0].laps = [10, 10];
+  replay.tick(0.1);
+  assert.match(tower.children[0].textContent, /^LAP 1\/2/);
+  replay.setPaused(true);
+  const cuts = replay.status().broadcast.cuts;
+  replay.seek(15);
+  assert.match(tower.children[0].textContent, /^LAP 2\/2/);
+  assert.equal(G.raceT, 15);
+  assert.equal(replay.status().broadcast.cuts, cuts);
+  assert.equal(replay.status().paused, true);
+  replay.stop();
+});
+
+test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
+  const { replay, G, cars, drivers, options } = transportReplay();
+  drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;
+  drivers[1].dnf = true; drivers[1].laps = [8]; drivers[1].lapsDone = 1;
+  G.endRace = (order) => { G.order = order; };
+  replay.seek(30); replay.tick(7);
+  assert.equal(cars[0].finished, true);
+  assert.equal(cars[0].retired, false);
+  assert.equal(cars[0].dnf, null);
+  assert.equal(cars[0].finishT, 20);
+  assert.equal(cars[0].lap, 3);
+  assert.equal(cars[1].finished, false);
+  assert.equal(cars[1].retired, true);
+  assert.equal(cars[1].dnf, "dnf");
+  assert.equal(cars[1].lap, 2);
+  assert.equal(G.order[0], cars[0]);
+  // Incomplete timing without a classification is never awarded a finish.
+  drivers[1].dnf = false; drivers[1].pos = null;
+  replay.start(options); replay.tick(37);
+  assert.equal(cars[1].finished, false);
+  assert.equal(cars[1].retired, false);
+  assert.equal(cars[1].dnf, null);
+  replay.stop();
+});
+
+test("WATCH with a missing, empty or truncated winner trace completes on usable positions and preserves official order", () => {
+  for (const winner of [undefined, { t: [], prog: [], x: [] }, line(0, 50, 0, 0, 5)]) {
+    const { replay, G, cars, drivers, options } = transportReplay();
+    drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;
+    drivers[1].laps = [12, 12]; drivers[1].lapStart = [0, 12]; drivers[1].lapsDone = 2;
+    const traces = { frame: "track", cars: { 2: line(0, 45, 0, 0, 30) } };
+    if (winner) traces.cars[1] = winner;
+    G.endRace = (order) => { G.order = order; };
+    assert.equal(replay.start({ ...options, traces, follow: drivers[0].code }), true);
+    assert.equal(replay.status().follow, winner && winner.t.length ? drivers[0].code : drivers[1].code,
+      "a failed selected-driver download falls back to a car with usable positions");
+    replay.tick(15);
+    assert.equal(replay.status().finished, false, "another driver's usable positions outlive the winner download");
+    replay.tick(22);
+    assert.equal(replay.status().finished, true);
+    assert.equal(G.order[0], cars[0], "the winner's failed download never changes the published winner");
+    assert.equal(cars[0].finished, true); assert.equal(cars[0].retired, false);
+    assert.equal(cars[1].finished, true); assert.equal(cars[1].dnf, null);
+    replay.stop();
+    assert.equal(replay.start({ ...options, traces: { frame: "track", cars: {} } }), false, "an empty field cannot begin an endless replay");
+  }
+});
+
+test("WATCH terminal classification preserves DNS and DSQ without inventing accidents", () => {
+  for (const kind of ["dns", "dsq"]) {
+    const { replay, G, cars, drivers } = transportReplay();
+    drivers[1].dnf = true; drivers[1][kind] = true;
+    G.endRace = () => {};
+    replay.tick(37);
+    assert.equal(cars[1].finished, false);
+    assert.equal(cars[1].retired, kind === "dns");
+    assert.equal(cars[1].dnf, kind === "dns" ? "dns" : null);
+    assert.equal(!!cars[1].dsq, kind === "dsq");
+    replay.stop();
+  }
+});
+
+test("WATCH terminal results use published driver identities while retaining roster seat preferences", () => {
+  const { replay, G, cars, drivers } = transportReplay();
+  const team = { id: "current-team" };
+  Object.assign(cars[0], { code: "OLD", name: "Current Roster Driver", driverId: "current-team:1", team });
+  Object.assign(drivers[0], { code: "HIS", name: "Historical Driver" });
+  Object.assign(cars[1], { code: "KEP", name: "Kept Roster Driver" });
+  Object.assign(drivers[1], { code: " ", name: null });
+  G.teamIdx = 3; G.driverIdx = 1;
+  G.endRace = (order) => { G.order = order; };
+  replay.tick(37);
+  assert.equal(G.order[0], cars[0]);
+  assert.equal(cars[0].code, "HIS"); assert.equal(cars[0].name, "Historical Driver");
+  assert.equal(cars[0].driverId, "current-team:1"); assert.equal(cars[0].team, team);
+  assert.equal(G.teamIdx, 3); assert.equal(G.driverIdx, 1);
+  assert.equal(cars[1].code, "KEP"); assert.equal(cars[1].name, "Kept Roster Driver", "missing feed names preserve the readable roster fallback");
+  replay.stop();
 });
 
 test("WATCH toolbar exposes working pointer controls, honest event labels and photo ownership, then tears down", () => {

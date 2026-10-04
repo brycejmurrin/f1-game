@@ -12,13 +12,18 @@
  *   - the camera looks BACK along the car, and a rival ahead of the eye is not drawn;
  *   - in a REAL RACE WATCH (body.bc-on) the mirror stands down and the same target
  *     is the broadcast PICTURE-IN-PICTURE: the subject on its TV shot, UNFLIPPED,
- *     into #bc-pip, its neighbours drawn wherever it is (js/race/broadcast.js).
+ *     into #bc-pip, its neighbours drawn wherever it is (js/race/broadcast.js);
+ *   - a mirror or PiP draw on a warmed field BUILDS NOTHING: the real CarDraw
+ *     (tests/helpers/car-draw-vm.mjs) draws each rival from the main pass's
+ *     body-only mesh and field wheels, never a whole-car teamMesh (140-250 ms of
+ *     Car3D.build per rival, mid-race, in the default cockpit cam).
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -29,7 +34,11 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   let mirrorPressed = false;
   const classes = new Set(bc ? ["bc-on"] : []), props = {};
   const on = (o) => Object.assign(o, { handlers: {}, addEventListener(t, f) { this.handlers[t] = f; } });
-  const frameEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
+  const styles = new Map(), timers = new Map();
+  let timerId = 0;
+  const style = { getPropertyValue: k => styles.get(k)?.value || "", getPropertyPriority: k => styles.get(k)?.priority || "",
+    setProperty: (k, value, priority = "") => styles.set(k, { value, priority }), removeProperty: k => styles.delete(k) };
+  const frameEl = on({ hidden: true, style, getBoundingClientRect: () => ({ left: 440, top: 70, width: 400, height: 114, right: 840, bottom: 184 }) });
   const chipEl = on({ hidden: true });
   const pipEl = on({ hidden: true, getBoundingClientRect: () => ({ left: 900, top: 60, width: 360, height: 202, right: 1260, bottom: 262 }) });
   // The TV rig: a POOLED answer, as js/camera/vantage.js returns — the pass must copy it.
@@ -37,6 +46,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
     Math, Float32Array, Array, Object, Number, Infinity, innerWidth: 1280,
+    setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: {
       getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl
         : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
@@ -48,7 +58,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     performance: { now: () => 0 },
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
-    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }] },
+    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
     // A straight road along +Z; the track's +x-right is world −X (AGENTS.md).
     Tracks: {
       sample: (_t, s, out) => { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
@@ -74,13 +84,13 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const player = { isPlayer: true, s: 100, team: "p" };
   const behind = { s: 80, team: "b" }, ahead = { s: 130, team: "a" }, far = { s: -100, team: "f" };   // far: 200 m back
   const G = {
-    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit"].indexOf(cam),
+    gfx, state, player, cars: [player, behind, ahead, far], track: { total: 5000 }, camMode: ["chase", "far", "drift", "cockpit", "helmet"].indexOf(cam),
     dbgCam: null, hideMeshes: {}, frozen: false,
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
     drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
-    teamMesh: (team) => "mesh:" + team,
+    drawCar: (c, m) => gfx.draw("mesh:" + c.team, m),   // CarDraw.drawMirrorCar in the game (the real one: the test below)
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
     yawVisInterp: () => 0,
@@ -95,7 +105,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render,
+  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
 
@@ -105,6 +115,9 @@ test("AUTO shows the mirror in an onboard view on a hardware renderer, and not i
   assert.equal(onboard.mp.state().shown, true);
   assert.equal(onboard.frameEl.hidden, false);
   assert.ok(onboard.classes.has("hud-mirror-on"), "the radio card / flag step-down class");
+  const helmet = boot({ cam: "helmet" });
+  helmet.render();
+  assert.equal(helmet.mp.state().shown, true, "HELMET is an onboard view with no road behind it, like COCKPIT");
   const chase = boot({ cam: "chase" });
   chase.render();
   assert.equal(chase.mp.state().shown, false);
@@ -399,4 +412,200 @@ test("standDown (the GARAGE preview frame) hides the mirror and clears the compo
   b.render();
   assert.equal(b.mp.state().shown, true, "the next race frame shows it again");
   assert.equal(b.frameEl.hidden, false);
+});
+
+test("race preparation lets the main warm run first, then draws the actual hidden rear view at its real size", async () => {
+  const h = boot({ state: "count" });
+  const originalBox = h.frameEl.getBoundingClientRect;
+  h.frameEl.style.setProperty("visibility", "collapse", "important");
+  h.frameEl.getBoundingClientRect = () => {
+    assert.equal(h.frameEl.hidden, false, "layout is measurable");
+    assert.equal(h.frameEl.style.getPropertyValue("visibility"), "hidden", "never visible even without a cover");
+    return originalBox();
+  };
+  let warming = false;
+  h.gfx.warming = () => warming;
+  const ready = h.mp.prepareRace();
+  assert.equal(h.mp.prepareRace(), ready, "duplicate entry shares its pending preparation");
+  assert.equal(h.mp.preparing(), true);
+  h.render();
+  assert.equal(h.calls.some(c => c[0] === "begin"), false, "first slot allows the main present to start its queued warm");
+  warming = true; h.render();
+  assert.equal(h.calls.some(c => c[0] === "begin"), false, "never draws across renderer compile ownership");
+  warming = false; h.render();
+  assert.equal(await ready, true);
+  assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
+  assert.equal(h.frameEl.hidden, true);
+  assert.equal(h.frameEl.style.getPropertyValue("visibility"), "collapse");
+  assert.equal(h.frameEl.style.getPropertyPriority("visibility"), "important");
+  assert.equal(h.mp.state().shown, false); assert.equal(h.classes.has("hud-mirror-on"), false);
+  assert.ok(h.calls.filter(c => c[0] === "rect").every(c => c[1] === null), "no composite during preparation");
+  const begin = h.calls.find(c => c[0] === "begin");
+  assert.deepEqual(begin.slice(1, 3), [800, 228]);
+  assert.notEqual(begin[3], h.mainVP, "the real reverse camera is used");
+  assert.deepEqual(h.calls.filter(c => c[0] === "draw").map(c => c[1]), ["mesh:b", "mesh:f"], "actual rear rivals, never player/ahead");
+  assert.equal(h.frame.viewProj, h.mainVP); assert.equal(h.frameSky.invViewProj, h.mainInv);
+  assert.equal(h.G.state, "count", "does not impersonate race state");
+  h.frameEl.getBoundingClientRect = originalBox;
+  h.G.state = "race"; h.render();
+  assert.equal(h.calls.filter(c => c[0] === "begin").length, 2, "first visible frame still draws fresh");
+  assert.deepEqual(h.calls.filter(c => c[0] === "begin")[1].slice(1, 3), [800, 228], "same-sized real target can be reused");
+});
+
+test("preparation follows real eligibility, quality and current layout", async () => {
+  for (const options of [{mode:"off"}, {cam:"chase"}, {soft:true}, {bc:true}, {state:"race"}]) {
+    const h = boot({state:"count", ...options});
+    assert.equal(await h.mp.prepareRace(), false);
+    assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
+  }
+  const h = boot({state:"count", mode:"on", cam:"chase", soft:true, tier:4});
+  const ready = h.mp.prepareRace(); h.render();
+  h.frameEl.getBoundingClientRect = () => ({width:500,height:140});
+  h.render(); assert.equal(await ready, true);
+  assert.deepEqual(h.calls.find(c => c[0] === "begin").slice(1,3), [400,112], "latest layout and min quality, not a guessed fixed target");
+  h.G.state="race"; h.render();
+  assert.equal(h.calls.filter(c => c[0] === "begin").length, 2, "even cadence-limited quality draws the first live frame");
+});
+
+test("preparation retries a temporarily unavailable target and has a bounded deadline", async () => {
+  const h = boot({state:"count"});
+  const begin = h.gfx.mirrorBegin;
+  let available = false;
+  h.gfx.mirrorBegin = (...args) => available ? begin(...args) : false;
+  const ready = h.mp.prepareRace(); h.render(); h.render();
+  assert.equal(h.mp.preparing(), true); assert.equal(h.calls.some(c=>c[0]==="end"), false);
+  assert.equal(h.frame.viewProj, h.mainVP);
+  available = true; h.render(); assert.equal(await ready, true);
+  const timeout = h.mp.prepareRace();
+  const timer = [...h.timers.values()][0]; assert.equal(timer.ms, 30000);
+  timer.fn(); assert.equal(await timeout, false); assert.equal(h.mp.preparing(), false);
+  assert.equal(h.timers.size, 0);
+});
+
+test("cancel, standDown, stale subjects and in-place backend replacement settle without drawing", async () => {
+  for (const change of [h=>h.mp.cancelPreparation(), h=>h.mp.standDown(), h=>{h.G.state="menu";},
+    h=>{h.G.player={};}, h=>{h.G.track={};}, h=>{h.G.gfx={};}, h=>{h.gfx.mirrorBegin=()=>true;}, h=>{h.gfx.mirrorEnd=()=>{};}, h=>h.mp.setMode("off")]) {
+    const h=boot({state:"count"}); const ready=h.mp.prepareRace(); h.render(); change(h); h.render();
+    assert.equal(await ready,false); assert.equal(h.mp.preparing(),false);
+    assert.equal(h.calls.some(c=>c[0]==="begin"),false); assert.equal(h.timers.size,0);
+  }
+  const h=boot({state:"count"}); const old=h.mp.prepareRace(), staleTimer=[...h.timers.values()][0].fn;
+  h.mp.cancelPreparation(); assert.equal(await old,false);
+  const latest=h.mp.prepareRace(); staleTimer(); assert.equal(h.mp.preparing(),true,"expired owner cannot cancel newer preparation");
+  h.render();h.render();assert.equal(await latest,true);
+});
+
+test("preparation failure restores both hidden layout and swapped frame fields", async () => {
+  for (const where of ["measure","world","end"]) {
+    const h=boot({state:"count",throwInWorld:where==="world"});
+    if(where==="measure") h.frameEl.getBoundingClientRect=()=>{throw new Error("measure failed");};
+    if(where==="end") h.gfx.mirrorEnd=()=>{throw new Error("end failed");};
+    const ready=h.mp.prepareRace(); h.render(); assert.doesNotThrow(()=>h.render());
+    assert.equal(await ready,false);assert.equal(h.mp.preparing(),false);assert.equal(h.timers.size,0);
+    assert.equal(h.frameEl.hidden,true);assert.equal(h.frameEl.style.getPropertyValue("visibility"),"");
+    assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+    assert.deepEqual(h.frame.eye,[0,5,90]);assert.equal(h.frame.proj,"P");assert.equal(h.frame.invProj,"IP");
+  }
+});
+
+test("a visible mirrorEnd failure still restores the main frame before propagating", () => {
+  const h=boot({mode:"on"});h.gfx.mirrorEnd=()=>{throw new Error("end failed");};
+  assert.throws(()=>h.render(),/end failed/);
+  assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+  assert.deepEqual(h.frame.eye,[0,5,90]);assert.equal(h.frame.proj,"P");assert.equal(h.frame.invProj,"IP");
+});
+
+test("a restart hides the old mirror and a skipped entry clears old preparation success", async () => {
+  const h=boot({mode:"on"});h.render();
+  assert.equal(h.frameEl.hidden,false);assert.equal(h.mp.state().shown,true);
+  h.G.state="count";const ready=h.mp.prepareRace();
+  assert.equal(h.frameEl.hidden,true);assert.equal(h.mp.state().shown,false);
+  assert.equal(h.classes.has("hud-mirror-on"),false);
+  assert.equal(h.calls.at(-1)[1],null,"old composite cleared before any preparation frame");
+  h.render();h.render();assert.equal(await ready,true);assert.equal(h.mp.state().prepared,true);
+  h.mp.setMode("off");assert.equal(await h.mp.prepareRace(),false);assert.equal(h.mp.state().prepared,false);
+});
+
+test("caught backend failures and stale ready targets do not claim preparation success", async () => {
+  for(const state of [{dead:true,ready:false},{dead:false,ready:false},{dead:false,ready:true,renders:3}]) {
+    const h=boot({state:"count"});
+    // Initial target is valid enough to attempt preparation; mirrorEnd can
+    // catch an error and report dead/not-ready, or retain a stale ready target.
+    let ended=false;
+    h.gfx.mirrorState=()=>ended?state:{dead:false,ready:true,renders:3};
+    h.gfx.mirrorEnd=()=>{ended=true;};
+    const ready=h.mp.prepareRace();h.render();h.render();
+    assert.equal(await ready,false);assert.equal(h.mp.state().prepared,false);
+    assert.equal(h.frame.viewProj,h.mainVP);assert.equal(h.frameSky.invViewProj,h.mainInv);
+  }
+  const h=boot({state:"count"});h.gfx.mirrorState=()=>{throw new Error("dead backend");};
+  assert.equal(await h.mp.prepareRace(),false,"optional preparation remains non-throwing");
+});
+
+// THE MIRROR SHARES THE MAIN PASS'S MESHES. It drew teamMesh(team, car), the
+// WHOLE car, a cache nothing else fills: up to 6 Car3D.build calls inside
+// mirrorPrepare and one frame spike per rival new to the 6 nearest, mid-race.
+// Here the REAL CarDraw warms a full field (warmCarAssets, as race entry does)
+// and the REAL MirrorPass draws through its drawMirrorCar: no build, ever.
+test("a mirror draw on a warmed field builds nothing: body-only mesh + the field wheels, never a whole car", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 0; v.G.driverIdx = 0;
+  // The player at the front; the 21 rivals strung out behind it, 9 m apart.
+  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
+  v.carDraw.warmCarAssets();
+  assert.ok(v.rec.builds.length > 0 && v.rec.builds.every(b => b.kind === "body"), "race entry warms bodies (no whole car)");
+  const warmBuilds = v.rec.builds.length, warmWheels = v.rec.wheels;
+  const mp = v.mirror();
+  v.rec.draws.length = 0;
+  v.draw(mp);
+  assert.equal(mp.state().shown, true);
+  assert.equal(mp.state().cars, 6, "FieldLod: the nearest 6 behind");
+  assert.equal(v.rec.builds.length, warmBuilds, "a mirror draw builds no Car3D mesh");
+  assert.equal(v.rec.wheels, warmWheels, "nor a wheel pair");
+  const kinds = v.rec.draws.map(m => m.kind);
+  assert.deepEqual(kinds.filter(k => k !== "wheel"), ["body", "body", "body", "body", "body", "body"], "one body-only mesh per rival");
+  assert.equal(kinds.filter(k => k === "wheel").length, 24, "BARE wheels: the 4 rotating ones, no fixed layers / stripes / discs / rings");
+  assert.ok(v.rec.draws.every(m => (m.kind === "wheel" ? m._field : true)), "the FIELD pair (getFieldWheelMeshes), the main pass's own");
+  // Mid-race: the field reshuffles, so 6 DIFFERENT rivals are now the nearest.
+  v.G.cars.forEach((c, i) => { if (!c.isPlayer) c.s = 1000 - 9 * (v.G.cars.length - i); });
+  v.draw(mp);
+  assert.equal(mp.state().cars, 6);
+  assert.equal(v.rec.builds.length, warmBuilds, "a rival new to the mirror is a cache hit");
+  // Night: the wheels take the main pass's night emissive, still nothing built.
+  v.draw(mp, true);
+  assert.equal(v.rec.builds.length, warmBuilds);
+  assert.equal(v.rec.freed, 0, "nothing evicted from a bounded cache");
+});
+
+test("the broadcast PiP draws through the same meshes: its subject, its neighbours, the player's own body", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 2; v.G.driverIdx = 1;
+  v.field((c, i) => 2000 - 9 * i);
+  v.carDraw.warmCarAssets();
+  const warm = v.rec.builds.length;
+  const mp = v.mirror();
+  v.classes.add("bc-on");
+  for (const sub of [v.G.cars[7], v.G.cars[15], v.G.player]) {
+    mp.setSubject(sub, "tcam");
+    v.rec.draws.length = 0;
+    v.draw(mp);
+    assert.equal(mp.state().pip.shown, true);
+    assert.ok(mp.state().cars >= 1);
+    assert.equal(v.rec.builds.length, warm, "a PiP cut builds nothing (subject " + sub.code + ")");
+    assert.ok(!v.rec.draws.some(m => m.kind === "whole"), "never a whole-car mesh");
+  }
+});
+
+test("the shipped-before path, for contrast: teamMesh per mirror rival builds a whole car each", () => {
+  // The counter above is only evidence if it can see the regression: the
+  // previous drawCars body (teamMesh(c.team, c)) on the same warmed field.
+  const v = carDrawVm();
+  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
+  v.carDraw.warmCarAssets();
+  const warm = v.rec.builds.length;
+  const mp = v.mirror({ drawCar: (c, m, paint) => v.G.gfx.draw(v.carDraw.teamMesh(c.team, c), m, paint) });
+  v.draw(mp);
+  const whole = v.rec.builds.slice(warm);
+  assert.equal(whole.length, 6, "6 Car3D builds on the first mirror frame");
+  assert.ok(whole.every(b => b.kind === "whole"));
 });

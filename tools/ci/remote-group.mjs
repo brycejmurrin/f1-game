@@ -25,14 +25,15 @@
 // NOT A GATE: nothing requires this workflow; the PR's own ci.yml run decides
 // merge. Exit: 0 green, 1 red, 2 cancelled, 3 API/usage error, 124 --timeout.
 //
-// Auth: GH_TOKEN or GITHUB_TOKEN via curl's stdin config (never in argv), as
-// ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
+// Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token`, via curl's stdin config
+// (never in argv), as ci-watch.mjs does. The dispatch is the one write; the rest are GETs.
 // API: https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
 //      (200 with workflow_run_id on current API versions; a 204 falls back to finding the run)
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -75,7 +76,7 @@ export function pickRun(runs, { branch, group, sinceMs }) {
     .filter((r) => r.event === "workflow_dispatch" && r.head_branch === branch
       && Date.parse(r.created_at) >= sinceMs - 60_000
       && String(r.display_title || r.name || "").includes(`browser group ${group} `))
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] || null;
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)[0] || null;   // a same-second tie: the higher id is the newer run
 }
 
 /** The failing test lines of a shard's log (live-reporter's `x FAIL` lines and
@@ -103,8 +104,8 @@ export function groupVerdict(run, jobs) {
 }
 
 function api(method, pathQs, body, { raw = false } = {}) {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) return { error: "no GH_TOKEN / GITHUB_TOKEN" };
+  const token = githubToken();
+  if (!token) return { error: NO_TOKEN_HINT };
   const args = ["-sS", "-L", "--max-time", "60", "-K", "-", "-w", "\n%{http_code}", "-X", method,
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28"];
   // The token rides curl's stdin config, so a JSON body goes through a temp file.
@@ -162,7 +163,17 @@ async function watch(runId, { interval, deadline }) {
   }
 }
 
+/** Printed for `--help` / a missing group — never `not a group name: undefined`. */
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--timeout <min>]
+       node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env (workflow step)
+       node tools/ci/remote-group.mjs --watch <run-id>
+       node tools/ci/remote-group.mjs --help`;
+
 async function main() {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(USAGE);
+    return 0;
+  }
   if (argv.includes("--plan")) {   // the workflow's plan step: validate, print the matrix
     const p = planMatrix(process.env.GROUP, process.env.SHARDS, scripts());
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
@@ -177,6 +188,11 @@ async function main() {
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
   const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
+  // Bare invoke used to fall through to planMatrix(undefined) → "not a group name: undefined".
+  if (!group) {
+    console.error(USAGE);
+    return 3;
+  }
   const p = planMatrix(group, opt("--shards", "4"), scripts());
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");

@@ -23,10 +23,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8").replace(/^const\b/gm, "var");
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+  fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 // A REAL device rate. The sub-octave layer derives its frequency from
 // ctx.sampleRate, so the 8 kHz stand-in this harness used to fake put it under
 // the 25 Hz floor at every rev — the layer read as a fixed drone that no actual
@@ -1301,9 +1303,9 @@ test("the hiss bed outlasts the figure, however short the card", () => {
   // A short card is shorter than four notes. Scheduling the squelch tail off
   // the card's life alone closed the mic while the cue was still playing —
   // the tail is the END of a transmission the figure has only just opened.
-  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
-  const fn = src.match(/function radioSting\([\s\S]*?\n  \}/);
-  assert.ok(fn, "could not find radioSting in js/audio/engine.js");
+  const src = fs.readFileSync(path.join(ROOT, "js/audio/radio-fx.js"), "utf8");
+  const fn = src.match(/function radioSting\([\s\S]*?\n    \}/);
+  assert.ok(fn, "could not find radioSting in js/audio/radio-fx.js");
   assert.match(fn[0], /const hold = Math\.max\(0\.25, tuneS \+ [\d.]+,/,
     "hold must be floored by the figure's own length, not just the card's");
   // ...and the figure has to be measured, not assumed: radioTune returns it.
@@ -1554,4 +1556,89 @@ test("cutting a transmission short cuts its courtesy figure and squelch tail too
   GameAudio.radioStingStop();
   const late = mine.filter((n) => !n.loop && n.startAt != null && n.startAt > 1.0 && !(n.stopAt <= 1.0 + 1e-9));
   assert.deepEqual(late.map((n) => [n.kind, n.startAt]), [], "scheduled after the cut, still due to play");
+});
+
+test("audio-test.cjs --help exits 0 and does not treat --help as a baseURL", () => {
+  // Pre-fix: argv[2] defaulted to localhost:8099 and `--help` was passed to
+  // page.goto as a URL ("Cannot navigate to invalid URL").
+  const r = spawnSync(process.execPath, ["tools/check/audio-test.cjs", "--help"], {
+    cwd: ROOT, encoding: "utf8", timeout: 10000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /audio-test/);
+  assert.match(r.stdout, /static server|baseURL/i);
+});
+
+
+// Run the real CLI control flow without browser/audio delays; replace only its
+// dynamic harness dependency, and provide Playwright's page boundary via require.
+async function runAudioProbe(pageErrorBrowser = 0) {
+  const events = [], messages = [], exits = [];
+  let launches = 0;
+  const chromium = { async launch() {
+    const id = ++launches;
+    let pageError;
+    return {
+      async close() { events.push("browser-close-" + id); },
+      async newPage() { return {
+        on(name, fn) { if (name === "pageerror") pageError = fn; },
+        async goto() { if (id === pageErrorBrowser) pageError(new Error("fixture page failure")); },
+        async waitForFunction() {}, async waitForTimeout() {}, async click() {},
+        async evaluate(fn, values) {
+          if (!Array.isArray(values)) return;
+          if (typeof values[0] === "string") {
+            return Object.fromEntries(values.map((voice) => {
+              const trim = voice === "Ferrari" ? 1.03 : voice === "Audi" ? 0.98 : 1;
+              return [voice, { rates: [0.2, 0.5, 0.8].map((rev) => (1 + rev) * trim), cen: 300, dbg: voice }];
+            }));
+          }
+          const rate = {}, cen = {};
+          for (let gear = 1; gear <= 8; gear++) {
+            const trim = gear <= 3 ? 0.5 + gear * 0.1 : 1;
+            rate[gear] = values.map((rev) => (1 + rev) * trim);
+            cen[gear] = values.map((rev) => 200 + rev * 100);
+          }
+          return { rate, cen, boostOff: 1, boostOn: 1.04,
+            coast: { rate: 1, cen: 200 }, pull: { rate: 1, cen: 300 } };
+        },
+      }; },
+    };
+  } };
+  const cliProcess = { argv: ["node", "audio-test.cjs"], exit: (code) => exits.push(code) };
+  const harness = {
+    async startStaticServer() { events.push("server-open"); return { url: "http://fixture.invalid/" }; },
+    pickChromium: () => null,
+    async shutdown() { events.push("server-close"); },
+  };
+  const source = fs.readFileSync(path.join(ROOT, "tools/check/audio-test.cjs"), "utf8");
+  const dependency = 'await import("../lib/harness.mjs")';
+  assert.equal(source.split(dependency).length, 2, "replace exactly the harness dependency");
+  await vm.runInNewContext(source.replace(dependency, "await __harness"), {
+    __dirname: path.join(ROOT, "tools/check"), __harness: harness, process: cliProcess,
+    console: { log: (...args) => messages.push(args.join(" ")) },
+    require(name) {
+      if (name === "playwright") return { chromium };
+      if (name === "node:path") return path;
+      throw new Error("Unexpected CLI dependency: " + name);
+    },
+  }, { filename: "tools/check/audio-test.cjs" });
+  return { status: exits.at(-1) ?? cliProcess.exitCode ?? 0, events, messages, launches };
+}
+
+test("audio probe exits with failure on page errors in either browser after closing owned resources", async () => {
+  for (const browser of [1, 2]) {
+    const result = await runAudioProbe(browser);
+    assert.equal(result.status, 1, "page errors from browser " + browser + " must fail the CLI");
+    assert.ok(result.messages.some((line) => line.includes("pageerrors") && line.includes("fixture page failure")));
+    assert.equal(result.launches, browser, "the failing phase stops the probe");
+    assert.deepEqual(result.events, ["server-open", ...Array.from({ length: browser }, (_, i) => "browser-close-" + (i + 1)), "server-close"]);
+  }
+});
+
+test("a healthy audio probe completes both metric sweeps and exits successfully after cleanup", async () => {
+  const result = await runAudioProbe();
+  assert.equal(result.status, 0);
+  assert.equal(result.launches, 2);
+  assert.ok(result.messages.some((line) => line.startsWith("PASS: all voices monotonic")));
+  assert.deepEqual(result.events, ["server-open", "browser-close-1", "browser-close-2", "server-close"]);
 });

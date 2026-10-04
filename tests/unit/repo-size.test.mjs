@@ -32,6 +32,12 @@ test("summarize counts an object once and ranks blobs, directories and extension
   assert.deepEqual(s.top.map((b) => [b.sha, b.path]), [["b1", "assets/music/song.mp3"], ["b2", "js/game.js"]]);
   assert.deepEqual(s.byDir.map(([d]) => d), ["assets", "js", "(root)"]);
   assert.deepEqual(s.byExt.map(([e]) => e), ["mp3", "js", "md"]);
+  const h = summarize([`blob aa1 100 ${3 * MB} tests/ui-screenshots/lap-audit/a.png`, `blob aa2 100 ${1 * MB} js/game.js`].join("\n"),
+    { current: new Set(["aa2"]) });
+  assert.deepEqual([h.history.disk, h.history.blobs, h.history.byPath[0][0]], [3 * MB, 1, "tests/ui-screenshots/lap-audit"],
+    "a blob absent from today's tree is history-only, grouped three levels deep");
+  assert.match(render(h), /History only: 3\.0 MB \(75\.0%\)/);
+  assert.equal(summarize("blob aa1 1 1 x").history, null, "no current tree, no split");
   const md = render(s, { refs: 3 });
   assert.match(md, /\| `assets` \| 8\.0 MB \|/);
   assert.match(md, /\| 8\.0 MB \| 10\.0 MB \| `assets\/music\/song\.mp3` \| `b1` \|/);
@@ -69,6 +75,7 @@ test("against real git: a full clone is measured, a shallow clone is refused", (
   const md = out.join("");
   assert.match(md, /\| `assets` \|/, "all three versions of the big file are history, and history is measured");
   assert.match(md, /`assets\/big\.bin`/);
+  assert.match(md, /History only: /, "the two older versions of big.bin are history-only");
   assert.match(err.join(""), /SHALLOW/);
 });
 

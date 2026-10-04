@@ -897,6 +897,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // on every fragment painted kerbs, grass shoulders, and skirts as asphalt.
   let vMatId = select(D.mat2.z, classified, isRoadDraw || classified > 0.5);
   let fwTrk = select(fwTrkAttr, fwWorld, useWorldTrk);
+  // The puddle shape's lateral direction (wet block below): the world xz
+  // direction of increasing track x, from derivatives — taken HERE, before the
+  // first branch, because WGSL derivatives must sit in uniform control flow.
+  let trkRightXZ = dpdx(in.wpos.xz) * dpdx(vTrk.y) + dpdy(in.wpos.xz) * dpdy(vTrk.y);
   let vDist = length(in.wpos - F.eye.xyz);
   // ONE dynamic-layer sample, not a 30-sample hoist (13 albedo + 13 normal +
   // 2 road layers sampled, 28 discarded per fragment). WGSL only
@@ -967,10 +971,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 32;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 33;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
+  // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): satin rubber wall, band and
+  // lettering vs the matte tread — mirrors js/render/glx/shaders/glsl-lit.js.
+  let sidewallSurface = surfaceId == 33;
   let metalSurface = surfaceId == 23;
   let glassSurface = surfaceId == 24;
   let emissiveSurface = surfaceId == 25;
@@ -988,11 +995,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
   // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
   // here, ahead of the roughness ripple below and the albedo twill further on.
+  // wvT = the twill's ANALYTIC slope (same fade): tilts N below, no derivative.
   var weave = 0.5;
+  var wvT = vec2<f32>(0.0);
   if (carbonFinish || carbonSurface) {
     let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
     let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+    wvT = vec2<f32>(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
@@ -1009,6 +1019,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface || visorSurface);
       if (matteSurface) { clearcoat = 0.0; }
+      // Carbon: a thin lacquer (min 0.30) — glsl-lit.js. No env mirror (carPaint 0).
+      if (carbonSurface || carbonFinish) { clearcoat = min(D.mat1.z, 0.30); }
     }
   }
   let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
@@ -1046,6 +1058,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (carPaint > 0.001) {
     N = paintPeelN(N, in.objPos, vDist, carPaint);
   }
+  // CARBON WEAVE NORMAL (glsl-lit.js): tilt N along the twill's analytic slope in
+  // the peel's N-built tangent frame. No derivative: legal after the branches.
+  if (carbonFinish || carbonSurface) {
+    let wT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
+    let wB = cross(N, wT);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.18);
+  }
   // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
   applyMaterialNormal(i32(vMatId + 0.5), &N, vDist, in.wpos, fwWpos, litNrm, packOn);
@@ -1076,6 +1095,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (iriSurface) { metalness = max(D.mat0.w, 0.25); }
     if (matteSurface) { metalness = 0.0; }
     if (rubberSurface) { specular = 0.18; }
+    if (sidewallSurface) { specular = 0.35; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
     if (carbonSurface || carbonFinish) { specular = 0.48; }
     if (panelSurface) { specular = 0.35; }
@@ -1085,6 +1105,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
     if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
+    if (sidewallSurface) { rough = clamp(rough, 0.55, 0.65); }   // satin wall vs the matte tread
     if (metalSurface) { rough = min(rough, 0.16); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
@@ -1170,11 +1191,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // [Block 5] WET-ROAD material response (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js). Rain
   // darkens + polishes up-facing ground; a value-noise mask pools puddles that go
   // near-mirror. Lowers effective roughness and lifts f0 toward a water film so the
-  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Full
-  // SSR + puddle reflection is Phase-4 wgx-side; here just the material response.
+  // sun/lamp GGX speculars (which read rough/a/f0) elongate into wet streaks. Scene
+  // SSR is the half-res post pass (wgsl-post.js SSR → composite); rain ripples
+  // tilt N below when puddle*rain > 0. Analytic envBlend is the gloss fallback
+  // when SSR sheds (tier / LITE) or a march misses.
   var wet = 0.0;
   var wetSheen = 0.0;
-  if (wetness > 0.001) {
+  // NOT on a car: this block is world-keyed (noise puddles, ripple cells, the
+  // tarmac absorb) and slid across the moving body in rain — glsl-lit.js.
+  if (wetness > 0.001 && !classifiedCar) {
     let upFace = smoothstep(0.50, 0.90, N.y);   // flat ground only
     // Porous ground (grass/foliage/rock/sand/snow) drinks the water: it
     // darkens but never polishes. Reflection-side terms key off wetSheen.
@@ -1182,7 +1207,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
     let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
-    let puddle = smoothstep(0.48, 0.88, pn) * wet * (1.0 - porous);
+    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+    // drains to the gutters (0.7 → 1.2), the low side of a banked turn holds
+    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+    var pool = 1.0;
+    if (vTrk.z > 0.5) {
+      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
+      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
+    let puddle = smoothstep(0.48, 0.88, pn * pool) * wet * (1.0 - porous);
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.
@@ -1222,12 +1257,29 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
     a = rough * rough;
   }
+  // CAR WET LOOK (glsl-lit.js, constant for constant): uniform, nothing world-
+  // keyed; the dull surfaces darken a little and gain a little gloss and a
+  // water-film f0. No puddles, no ripples, wetSheen stays 0.
+  if (wetness > 0.001 && classifiedCar) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+      albedo = albedo * (1.0 - 0.20 * wetness);
+      rough = rough * (1.0 - 0.25 * wetness);
+      a = rough * rough;
+      f0 = mix(f0, max(f0, vec3<f32>(0.04)), vec3<f32>(0.6 * wetness));
+    }
+  }
 
   // Hemisphere ambient + Lambert sun (== GLX base diffuse when metalness==0).
   // Ground fill is NOT scaled by anything — matches GLX js/render/glx/shaders/glsl-lit.js
   // amb = mix(uAmbGround, uAmbSky, N.y*0.5+0.5). BOUNCE (params3.x) is the
   // per-lamp bounce-fill strength (== GLX uBounceK), consumed in the lamp loop below.
-  let amb = mix(F.ambGround.xyz, F.ambSky.xyz, N.y * 0.5 + 0.5);
+  // GROUND-PROXIMITY AO (glsl-lit.js): ambient only, car BODY draws (the draw's
+  // carPaint D.mat1.w > 0.5; wheels draw with 0) minus the tyre ids. Object-space
+  // height above the road (the car origin sits on it); weighted to the ground
+  // half of the hemisphere (x0.5 at the road) and a touch of the sky (x0.94).
+  let gpao = select(0.0, 1.0 - smoothstep(0.02, 0.40, in.objPos.y),
+                    D.mat1.w > 0.5 && !rubberSurface && !sidewallSurface);
+  let amb = mix(F.ambGround.xyz * (1.0 - 0.50 * gpao), F.ambSky.xyz * (1.0 - 0.06 * gpao), N.y * 0.5 + 0.5);
   // Sun shadow (Phase 3): project the world pos into the sun's light-space clip,
   // then 3×3-PCF compare against the depth map (WebGPU NDC z is already [0,1], so
   // no -1..1 remap). shadowSamp is a comparison sampler — Level variant is legal
@@ -1399,6 +1451,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // SSR). envProbeStr scales probeLive (baseRefl 0.14→0.72); probe 0 still gets
   // a gentle analytic sheen. Energy-conserving: darken base under envW, then add.
   let envProbeStr = max(F.params5.x, 0.0);
+  // ccTrans: the share the lacquer lets through to the base (glsl-lit.js); the
+  // metal env term further down reflects only that share.
+  var ccTrans = 1.0;
   if (envSurface) {
     let Rg = reflect(-V, Ngeo);
     let NoVc = max(dot(Ngeo, V), 1e-4);
@@ -1434,7 +1489,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
     envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
           * F.params7.y * shadow * keyMul;
-    color = color * (1.0 - envW * 0.94);
+    ccTrans = 1.0 - envW * 0.94;
+    color = color * ccTrans;
     let addCC = envCC * envW;
     color = color + addCC / (1.0 + addCC * 0.35);
   }
@@ -1534,10 +1590,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js, reduced
-  // to the material response — full SSR is Phase-4 wgx-side). On wet up-facing ground
-  // a boosted grazing Fresnel tints the surface with the sky gradient reflected in the
-  // view ray, so the tarmac mirrors a faint sky band at the far grazing edge.
+  // [Block 5b] WET-ROAD grazing SHEEN (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
+  // On wet up-facing ground a boosted grazing Fresnel tints the surface with the sky
+  // gradient reflected in the view ray — the plain-gloss fallback beside the post SSR
+  // pass (and the only wet mirror when SSR is shed).
   var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
   envBlend = max(envBlend, wetSheen * 0.55);
   if (envBlend > 0.001) {
@@ -1569,6 +1625,22 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color + envAdd / (1.0 + envM);
   }
 
+  // METAL ENV REFLECTION (glsl-lit.js, constant for constant): the metal share
+  // the block above drops with (1 - metalness) — env x Schlick(NoV, F0 = albedo)
+  // x metalness; sky/ground split + live probe exactly as the lacquer's envCC
+  // (same -y probe read), x ccTrans under a lacquer. No sun disc: GGX owns it.
+  if (metalSurface || satinMetalSurface || mirrorSurface) {
+    let Rm = reflect(-V, N);
+    let skyM = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rm.y, 0.0)));
+    var envMet = mix(F.ambGround.xyz * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
+    if (envProbeStr > 0.001) {
+      envMet = mix(envMet, textureSampleLevel(envCube, envCubeSamp, vec3<f32>(Rm.x, -Rm.y, Rm.z), rough * 2.5).rgb,
+                   vec3<f32>(clamp(envProbeStr, 0.0, 1.0)));
+    }
+    let metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    color = color + metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
+  }
+
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).
   {
@@ -1585,21 +1657,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color * mix(1.0 - 0.12 * F.params9.x, 1.0, ao);
   }
 
-  // [Block 8] SSR consumption — NOT in LIT (see the closing note). On up-facing WET ground
-  // blend in the screen-space-reflection result (computed by the Phase-4 post pass,
-  // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
-  // Screen uv comes from the fragment framebuffer position / SSR texture size
-  // (textureDimensions), so it stays aligned without a resolution uniform. Reuses
-  // envSamp (clamped). Per the SSR pass's CONSUMER CONTRACT (wgsl-post.js) .a is
-  // the mix amount — 0 wherever the pass masked out or missed — and the blend is
-  // the darker-mirror substitution c*0.10 + rgb*0.92; honouring .a is what keeps
-  // masked-out texels (transparent black, incl. the 1×1 placeholder and the
-  // cleared texture) from darkening wet road toward black. ssrStrength=0 also
-  // makes this a no-op.
-  // SSR is consumed SAME-FRAME in COMPOSITE (wgsl-post.js), matching GLX
-  // COMPOSITE_FS; sampling last present()'s ssrTex here in LIT would lag wet
-  // road / lacquer by a frame. The texture stays bound so a 1×1 placeholder
-  // cannot poison unused bindings; the mix lives in post.
+  // [Block 8] SSR consumption — NOT in LIT (see the closing note). Wet-road /
+  // car-paint SSR is the half-res post pass in wgsl-post.js, consumed SAME-FRAME
+  // in COMPOSITE (matching GLX COMPOSITE_FS). Sampling last present()'s ssrTex
+  // here in LIT would lag wet road / lacquer by a frame. The texture stays bound
+  // so a 1×1 placeholder cannot poison unused bindings; the mix lives in post.
 
   // Emissive: lerp to unlit albedo + HDR glow lift for bright/warm surfaces so
   // lit windows / neon / lamp lenses bloom (GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
@@ -2003,13 +2065,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
     let coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);   // overcast <= 1 keeps the first factor >= 0.08
     let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
-    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
-    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
+    c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * (1.0 - covRay * 0.6) * coronaAureole;   // SUN AUREOLE knob; behind the deck (GLX sunClear)
+    c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp * (1.0 - covRay);   // SUN CORONA RING knob
     let dd = dir - sunDir * sd;
     // SUN HORIZON SQUASH knob: scales the golden-hour vertical squash of the disc.
     let perp = length(vec2<f32>(length(dd.xz), dd.y * mix(1.0, mix(1.0, 1.6, golden), sunSquash)));
     // SUN DISC SIZE knob: scale both smoothstep edges to grow/shrink the disc.
-    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp;
+    let disc = smoothstep(mix(0.018, 0.028, golden) * sunDiscSize, 0.006 * sunDiscSize, perp) * coronaDamp * (1.0 - covRay);
     let discCore = mix(vec3<f32>(2.3, 2.2, 1.9), sunWarm * 2.8, golden);
     c = c + discCore * disc;
   }

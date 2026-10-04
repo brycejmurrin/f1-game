@@ -6,6 +6,7 @@
  *
  * Run: node --test tests/unit/metrics.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -390,7 +391,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {
-  const css = readFileSync(join(ROOT, "css/overlays.css"), "utf8");
+  const css = readCssSource("css/overlays.css");
   assert.match(css, /body\.hud-hidden #hud/);
   assert.match(css, /body\.hud-hidden #lights/);
   assert.match(css, /body\.hud-hidden #announce/);
@@ -442,10 +443,13 @@ test("a resident __apex is never re-fetched, and a booted-ON panel still asks", 
 });
 
 test("game.js hands the overlay the memoised loader, not a widened boot gate", () => {
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const bundles = readFileSync(join(ROOT, "js/core/lazy-bundles.js"), "utf8");
+  const game = bundles + readFileSync(join(ROOT, "js/game.js"), "utf8");
   // The gate stays exactly as narrow as it was: no metrics key in it.
-  const gate = game.slice(game.indexOf("function wantAgentSurface()"),
-                          game.indexOf("function preloadThreeVendor"));
+  const from = bundles.indexOf("function wantAgentSurface()");
+  const to = bundles.indexOf("// The INJECT", from);
+  assert.ok(from >= 0 && to > from, "agent gate is present in its bundle owner");
+  const gate = bundles.slice(from, to);
   assert.equal(/metrics/i.test(gate), false,
     "METRICS must not put the agent surface on the player boot wall — it is fetched on demand");
   // The inject is split out and memoised, and the overlay gets it.

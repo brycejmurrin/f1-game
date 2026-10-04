@@ -339,7 +339,13 @@ async function precacheAssetLists() {
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
+    "js/data/tab-utils.js",
+    "js/data/api-transport.js",
     "js/data/api.js",
+    "js/data/telemetry-model.js",
+    "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js",
+    "js/data/telemetry-view.js",
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
@@ -370,9 +376,11 @@ async function precacheAssetLists() {
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
+    "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/profile.js",
     "js/editor/designer.js",
     // /@gen-shell:sw-optional
   ]);
@@ -481,7 +489,7 @@ self.addEventListener("install", (event) => {
     // onerror resolved with the global absent, and an opted-in TLX/WGX player
     // silently fell back to GLX. Stamp the same build here. Safe against
     // staleness because the cache NAME already carries the build and `activate`
-    // deletes every other generation, so a key inside this cache can only ever
+    // deletes older generations, so a key inside this cache can only ever
     // be this build's. Everything else in the list stays bare — the vendored
     // three.js reaches the network through the importmap with no query at all.
     // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
@@ -525,7 +533,8 @@ self.addEventListener("activate", (event) => {
     // Test-asserted (service-worker.test.mjs "activation preserves prior…").
     if (!(await cache.match(INSTALL_SETTLED_URL))) return;
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== name).map((k) => caches.delete(k)));
+    const build = cacheBuild(name);
+    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && cacheBuild(k) < build).map((k) => caches.delete(k)));
     invalidateCacheOrder();
     await self.clients.claim();
     swLog("info", "activated " + name);

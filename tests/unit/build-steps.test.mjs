@@ -156,3 +156,48 @@ test("return during terrain closes the child once and frees only completed uploa
   assert.ok(completed.terrainGeo && completed.meshes.terrain, "the next build still completes");
   assert.equal(closed, 1, "normal completion does not call child return");
 });
+
+// A build that THROWS (an OOM RangeError, a scenery closure fault) must free the
+// uploads it had already made: the caller never receives the partial track, so
+// every "PREPARATION FAILED — retry" otherwise stacked another orphaned world.
+function ledger(opts) {
+  const made = [], freed = [];
+  const make = (kind) => { const h = { kind }; made.push(h); return h; };
+  const gfx = {
+    createMesh: () => make("mesh"),
+    createChunkedMesh: () => make("chunked"),
+    createInstancedBatch: () => make("inst"),
+    freeMesh: (h) => { if (h) freed.push(h); },
+    freeChunkedMesh: (h) => { if (h) freed.push(h); },
+    freeInstancedBatch: (h) => { if (h) freed.push(h); },
+  };
+  Object.assign(gfx, opts);
+  return { made, freed, gfx };
+}
+const liveAfter = (L) => L.made.filter((h) => !L.freed.includes(h)).map((h) => h.kind);
+
+test("a synchronous build that throws frees every upload it made before the throw", () => {
+  const def = Tracks.LIST.find((d) => d.id === "monza");
+  const L = ledger();
+  let n = 0;
+  L.gfx.createChunkedMesh = () => { if (++n === 1) { L.made.push({ kind: "chunked" }); return L.made[L.made.length - 1]; } throw new RangeError("Array buffer allocation failed"); };
+  assert.throws(() => Tracks.build(def, { gfx: L.gfx }), /allocation/);
+  assert.ok(L.made.length >= 3, `floor, road and the first chunked upload landed (${L.made.length})`);
+  assert.deepEqual(liveAfter(L), [], "nothing the failed build uploaded is still live");
+  const again = Tracks.build(def, { gfx: ledger().gfx });
+  assert.ok(again && again.meshes && again.total > 0, "the module builds again after the failure");
+});
+
+test("prop batches are owned as each lands, so a batch that throws part-way frees the earlier ones", () => {
+  const def = Tracks.LIST.find((d) => d.id === "vegas");   // the roster's largest instanced set
+  const probe = Tracks.build(def, { gfx: ledger().gfx });
+  const nBatches = probe.meshes.propBatches ? probe.meshes.propBatches.length : 0;
+  assert.ok(nBatches >= 2, `vegas uploads at least two instanced batches (${nBatches})`);
+  const L = ledger();
+  let k = 0;
+  const inst = L.gfx.createInstancedBatch;
+  L.gfx.createInstancedBatch = () => { if (++k === nBatches) throw new Error("device lost"); return inst(); };
+  assert.throws(() => Tracks.build(def, { gfx: L.gfx }), /device lost/);
+  assert.equal(L.made.filter((h) => h.kind === "inst").length, nBatches - 1);
+  assert.deepEqual(liveAfter(L), [], "the batches that did land were freed with the rest");
+});

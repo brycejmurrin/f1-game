@@ -200,7 +200,7 @@ test("a mark's COLOUR is never substituted; its LEGIBILITY is always asserted", 
             bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
           // Team data (a brand mark on the team's own default) must still read —
           // on the surfaces the SHIPPED car has: a fin badge on a car with no
-          // fin (every 2026 car) is texels nothing samples, and a player who
+          // fin (seven of the eleven 2026 cars) is texels nothing samples; a player who
           // turns the fin on gets the sheet's advisory for their own picks.
           const shippedFin = (liv.finShape || "standard") !== "none";
           if (!liv.logo && !P.brandPair && (where !== "badge" || shippedFin)) for (const f of under) {
@@ -263,6 +263,23 @@ test("the roster no longer reaches for a logo PNG", () => {
     const f = path.join(ROOT, "assets/logos", t.id + ".png");
     assert.ok(!fs.existsSync(f), `${t.id}.png is back on disk and would override the vector crest`);
   }
+});
+
+test("every roster mark is the generated ORIGINAL emblem, not a traced logo", async () => {
+  // Apex 26 is an unofficial fan game, and the crests used to be silhouettes
+  // TRACED from the real team logos (a since-retired tracer rebuilt them from
+  // the old logo bitmaps). js/car/crest-paths.js is now
+  // built from geometric primitives by tools/car/emblems.mjs, so a hand edit
+  // — or a traced mark pasted back in — drifts from the generator and fails
+  // here, and so does the tracer coming back.
+  const { build, fileText } = await import("../../tools/car/emblems.mjs");
+  const onDisk = fs.readFileSync(path.join(ROOT, "js/car/crest-paths.js"), "utf8");
+  assert.ok(onDisk === fileText(build()),
+    "js/car/crest-paths.js has drifted from tools/car/emblems.mjs — edit the generator and run --write");
+  assert.ok(!fs.existsSync(path.join(ROOT, "tools", "car", "trace-logo.mjs")), "the logo tracer is back");
+  // Every roster team draws from that data — no painter of its own.
+  const own = Teams.LIST.filter((t) => t.id !== "custom" && LT.CRESTS[t.id] !== LT.CRESTS.ferrari);
+  assert.equal(own.length, 0, "teams drawn by a painter of their own: " + own.map((t) => t.id).join(", "));
 });
 
 test("an authored TEAM LOGO colour is painted exactly as selected", () => {
@@ -732,7 +749,7 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/data/legends.js", "js/car/liveries.js",
-                   "js/car/crest-paths.js", "js/car/liverytex.js"])
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const L = vm.runInContext("LiveryTex", sb), Lg = vm.runInContext("Legends", sb), T = vm.runInContext("Teams", sb);
   const R = L.REGIONS.crest;

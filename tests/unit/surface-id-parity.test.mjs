@@ -141,6 +141,85 @@ test("the baked normal map's tangent frame is the tile's world axes on every bac
   }
 });
 
+test("puddles follow the road shape on every backend — crown drains, the low side of a camber pools", () => {
+  // The puddle mask was value noise on a flat threshold until 2026-10-01: water
+  // pooled equally on the crown and in the gutter and a banked turn held it on
+  // the high side (the second graphics-detail survey, item 13). On the road
+  // ribbon the noise is weighted 0.7 (centre) → 1.2 (edge) and by the lateral
+  // downhill read from the screen derivatives of trk.y against the geometric
+  // normal — the same constants in every language.
+  const wet = (file, start, end) => { const src = read(file); const i = src.indexOf(start); assert.ok(i >= 0, start); return src.slice(i, src.indexOf(end, i)); };
+  const glx = wet("js/render/glx/shaders/glsl-lit.js", "float pn = vnoise(vWorldPos.xz", "RAIN RIPPLES");
+  assert.match(glx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/glx/shaders/glsl-lit.js"), /vec2 trkRightXZ = dFdx\(vWorldPos\.xz\) \* dFdx\(vTrk\.y\) \+ dFdy\(vWorldPos\.xz\) \* dFdy\(vTrk\.y\)/);
+  assert.match(glx, /dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(glx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+  const tlx = wet("js/render/three/tsl-lit.js", "const pn = vnoise(wp.xz", "RAIN RIPPLES");
+  assert.match(tlx, /mix\(float\(0\.7\), float\(1\.2\), abs\(lat\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
+  assert.match(read("js/render/three/tsl-lit.js"), /const trkRightXZ = trkA \? dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)/);
+  assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
+  assert.match(tlx, /smoothstep\(0\.48, 0\.88, pn\.mul\(pool\)\)\.mul\(wet\)/);
+  const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");
+  assert.match(wgx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(read("js/render/webgpu/wgsl-chunks.js"), /let trkRightXZ = dpdx\(in\.wpos\.xz\) \* dpdx\(vTrk\.y\) \+ dpdy\(in\.wpos\.xz\) \* dpdy\(vTrk\.y\)/, "WGX takes the derivatives before the first branch (uniform control flow)");
+  assert.match(wgx, /-dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
+  assert.match(wgx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+});
+
+test("particles are lit by the frame hemisphere and fogged by the lit pass's fog on every backend", () => {
+  // Every particle was unlit and unfogged until 2026-10-01 (the second
+  // graphics-detail survey, item 9): the alpha group must read the hemisphere
+  // ambient on the quad's up plus a wrap of the key with a floodlit floor, and
+  // both groups must apply the lit pass's exp² fog on the eye distance.
+  const g = read("js/render/glx/shaders/glsl-fx.js");
+  const glx = g.slice(g.indexOf("const PARTICLE_FS"), g.indexOf("const LINE_VS"));
+  assert.match(glx, /mix\(uAmbGround, uAmbSky, vUV\.y \* 0\.5 \+ 0\.5\) \+ uSunColor \* 0\.45/);
+  assert.match(glx, /max\(lit, vec3\(0\.18\)\)/);
+  assert.match(glx, /float fog = 1\.0 - exp\(-fd \* fd\);/);
+  const t = read("js/render/three/tsl-fx.js");
+  const tlx = t.slice(t.indexOf("function particleMaterial"), t.indexOf("const decalCache"));
+  assert.match(tlx, /mix\(vec3\(U\.ambGround\), vec3\(U\.ambSky\), up\)\.add\(vec3\(U\.sunColor\)\.mul\(0\.45\)\)/);
+  assert.match(tlx, /max\(lit, vec3\(0\.18\)\)/);
+  assert.match(tlx, /exp\(fd\.mul\(fd\)\.negate\(\)\)/);
+  assert.match(t, /U\.fogDensity\.value = \(frame\.fogDensity != null \? frame\.fogDensity : 0\) \* k\("fogDensityMul", 1\)/, "TLX refreshes the fog uniform per frame");
+  const w = read("js/render/webgpu/wgsl-fx.js");
+  const wgx = w.slice(w.indexOf("const PARTICLE ="), w.indexOf("// 2c. LINE"));
+  assert.match(wgx, /mix\(U\.ambGnd\.xyz, U\.ambSky\.xyz, in\.uv\.y \* 0\.5 \+ 0\.5\) \+ U\.sunFog\.xyz \* 0\.45/);
+  assert.match(wgx, /max\(lit, vec3<f32>\(0\.18\)\)/);
+  assert.match(wgx, /let fog = 1\.0 - exp\(-fd \* fd\);/);
+  assert.match(wgx, /size 144/);
+  assert.match(w, /PARTICLE_UNIFORM_BYTES:\s+144/);
+  assert.match(read("js/render/webgpu/wgx.js"), /writeBuffer\(particleUBO\[i\], 0, s, 0, 36\)/, "WGX uploads all 36 floats of ParticleU");
+});
+
+test("the sun disc sits behind the cloud deck on every backend", () => {
+  // The cloud pass hoists the coverage along the ray (GLX cityCov, TLX cityCov,
+  // WGX covRay) and the stars and the moon already fade by it; until 2026-10-01
+  // the sun corona and disc were ADDED after the clouds with only the global
+  // overcast damp, so a cumulus passing over the sun never hid the disc (the
+  // second graphics-detail survey, item 12). The disc and the tight ring must
+  // carry the full (1 − coverage); the aureole most of it.
+  const block = (file, start) => {
+    const src = read(file);
+    const i = src.indexOf(start);
+    assert.ok(i >= 0, `${file}: ${start} not found`);
+    return src.slice(i, i + 3200);
+  };
+  const b = {
+    GLX: block("js/render/glx/shaders/glsl-sky.js", "float coronaDamp = "),
+    TLX: block("js/render/three/tsl-sky.js", "const coronaDamp = "),
+    WGX: block("js/render/webgpu/wgsl-chunks.js", "let coronaDamp = "),
+  };
+  const discLine = (s, re) => { const m = re.exec(s); assert.ok(m, "no disc line"); return m[0]; };
+  assert.match(discLine(b.GLX, /float disc = [^\n]*/), /\* sunClear;/, "GLX: the disc must be scaled by the ray's cloud coverage");
+  assert.match(b.GLX, /float sunClear = 1\.0 - cityCov;/);
+  assert.match(discLine(b.GLX, /uSunCorona[^\n]*/), /\* sunClear/, "GLX: the tight ring too");
+  assert.match(discLine(b.TLX, /const disc = [\s\S]*?toVar\(\);/), /cityCov\.oneMinus\(\)/, "TLX: the disc must be scaled by cityCov");
+  assert.match(discLine(b.TLX, /U\.sunCorona[^\n]*/), /cityCov\.oneMinus\(\)/, "TLX: the tight ring too");
+  assert.match(discLine(b.WGX, /let disc = [^\n]*/), /\(1\.0 - covRay\)/, "WGX: the disc must be scaled by covRay");
+  assert.match(discLine(b.WGX, /sunCorona \* coronaDamp[^\n]*/), /\(1\.0 - covRay\)/, "WGX: the tight ring too");
+});
+
 test("the moon disc hangs on the night key light, not a constant, on every backend", () => {
   // Three sky shaders drew the moon at a literal (0.42, 0.72, 0.55) until
   // 2026-10-01 while the lit pass, the wet-road glint and the shadow map used
@@ -164,4 +243,50 @@ test("the moon disc hangs on the night key light, not a constant, on every backe
     assert.ok(/moonDir\s*=\s*normalize\((uSunDir|U\.sunDir|sunDir)\)/.test(s),
       `${name}: the moon disc must be placed on the sun/moon key direction uniform`);
   }
+});
+
+test("car materials: wet look, ground AO, metal env, sidewall and carbon agree on every backend", () => {
+  // The car-material batch of 2026-10-03, pinned constant for constant. Each
+  // backend spells the same maths in its own language, and a drift here is a
+  // car that looks different on one renderer and nowhere else.
+  const src = {
+    GLX: read("js/render/glx/shaders/glsl-lit.js"),
+    TLX: read("js/render/three/tsl-lit.js"),
+    WGX: read("js/render/webgpu/wgsl-chunks.js"),
+  };
+  const pins = {
+    // The road's world-keyed wet block (noise puddles, ripple cells) must not
+    // reach a car: in rain they slid across the moving body.
+    roadWetSkipsCars: { GLX: /if \(uWetness > 0\.001 && !classifiedCar\)/,
+                        TLX: /If\(U\.wetness\.greaterThan\(0\.001\)\.and\(classifiedCar\.not\(\)\)/,
+                        WGX: /if \(wetness > 0\.001 && !classifiedCar\)/ },
+    carWetDarken: { GLX: /albedo \*= 1\.0 - 0\.20 \* uWetness;/,
+                    TLX: /albedo\.mulAssign\(U\.wetness\.mul\(0\.20\)\.oneMinus\(\)\)/,
+                    WGX: /albedo = albedo \* \(1\.0 - 0\.20 \* wetness\);/ },
+    carWetGloss: { GLX: /rough \*= 1\.0 - 0\.25 \* uWetness;/,
+                   TLX: /rough\.mulAssign\(U\.wetness\.mul\(0\.25\)\.oneMinus\(\)\)/,
+                   WGX: /rough = rough \* \(1\.0 - 0\.25 \* wetness\);/ },
+    groundAO: { GLX: /1\.0 - smoothstep\(0\.02, 0\.40, vObjPos\.y\)[\s\S]{0,40}vec3 amb = mix\(uAmbGround \* \(1\.0 - 0\.50 \* gpao\), uAmbSky \* \(1\.0 - 0\.06 \* gpao\)/,
+                TLX: /smoothstep\(0\.02, 0\.40, objP\.y\)\.oneMinus\(\)[\s\S]{0,80}mul\(gpao\.mul\(0\.50\)\.oneMinus\(\)\)[\s\S]{0,40}mul\(gpao\.mul\(0\.06\)\.oneMinus\(\)\)/,
+                WGX: /1\.0 - smoothstep\(0\.02, 0\.40, in\.objPos\.y\)[\s\S]{0,120}F\.ambGround\.xyz \* \(1\.0 - 0\.50 \* gpao\), F\.ambSky\.xyz \* \(1\.0 - 0\.06 \* gpao\)/ },
+    metalEnv: { GLX: /F_Schlick\(NoV, albedo, 1\.0 - rough \* 0\.5\) \* \(metalness \* \(1\.0 - rough \* 0\.7\) \* ccTrans\)/,
+                TLX: /F_Schlick\(NoV, albedo, rough\.mul\(0\.5\)\.oneMinus\(\)\)\)\s*\.mul\(metalness\.mul\(rough\.mul\(0\.7\)\.oneMinus\(\)\)\.mul\(ccTrans\)\)/,
+                WGX: /F_Schlick\(NoV, albedo, 1\.0 - rough \* 0\.5\) \* \(metalness \* \(1\.0 - rough \* 0\.7\) \* ccTrans\)/ },
+    sidewallRough: { GLX: /if \(sidewallSurface\) rough = clamp\(rough, 0\.55, 0\.65\);/,
+                     TLX: /If\(sidewallSurface, \(\) => \{ rough\.assign\(clamp\(rough, 0\.55, 0\.65\)\); \}\)/,
+                     WGX: /if \(sidewallSurface\) \{ rough = clamp\(rough, 0\.55, 0\.65\); \}/ },
+    carbonLacquer: { GLX: /\(carbonSurface \|\| carbonFinish\) \? min\(uClearcoat, 0\.30\)/,
+                     TLX: /select\(carbonSurface\.or\(carbonFinish\), min\(matU\.clearcoat, 0\.30\)/,
+                     WGX: /if \(carbonSurface \|\| carbonFinish\) \{ clearcoat = min\(D\.mat1\.z, 0\.30\); \}/ },
+    weaveNormal: { GLX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/,
+                   TLX: /N\.assign\(normalize\(N\.add\(wT\.mul\(wvT\.x\)\.add\(wB\.mul\(wvT\.y\)\)\.mul\(0\.18\)\)\)\)/,
+                   WGX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/ },
+  };
+  for (const [what, by] of Object.entries(pins))
+    for (const [name, re] of Object.entries(by))
+      assert.match(src[name], re, `${name}: ${what} drifted from the other two backends`);
+  // The ground AO is an AMBIENT term: it may never multiply the final colour.
+  for (const [name, s] of Object.entries(src))
+    assert.ok(!/color\s*(\*=|\.mulAssign\()[^;\n]*gpao/.test(s) && !/color = color \*[^;\n]*gpao/.test(s),
+      `${name}: the ground AO darkens the whole colour — it must stay on the ambient term`);
 });

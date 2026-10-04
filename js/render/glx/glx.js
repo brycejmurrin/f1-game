@@ -196,7 +196,8 @@ const GLXBackend = (function () {
   let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
   const _decalSunScr = [0, 0, 0];
   const _windScr = [0.819, 0.574, 1.0];   // uWind upload scratch (begin())
-  let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal lighting
+  let frameAmbSky = [0.3, 0.32, 0.36], frameAmbGround = [0.2, 0.19, 0.18];   // for decal + particle lighting
+  const _particleFog = { color: [0.5, 0.6, 0.7], density: 0 };   // the lit pass's fog, kept for drawParticles
   let decalProg = null, decalU = null;   // textured car-decal (logo/sponsor) pass
   let frameTime = 0, frameCloud = 0, frameCloudSpeed = 1;
 
@@ -968,7 +969,7 @@ const GLXBackend = (function () {
       gl.bindVertexArray(null);
     }
     if (particleProg) {
-      particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive"]);
+      particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive", "uSunColor", "uAmbSky", "uAmbGround", "uFogColor", "uFogDensity"]);
       // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b,
       // size, alpha] ×6 verts/particle (filled by js/fx/particles.js).
       particleVAO = gl.createVertexArray();
@@ -1790,6 +1791,8 @@ const GLXBackend = (function () {
     // and both other backends — an omitted field is documented-valid and must not
     // upload `undefined * mul = NaN`, which blacks out the whole scene.
     uf1(litU.uFogDensity, _litUf, "fogDensity", (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1));
+    _particleFog.density = (frame.fogDensity != null ? frame.fogDensity : 0) * (T && T.fogDensityMul != null ? T.fogDensityMul : 1);
+    if (frame.fogColor) _particleFog.color = frame.fogColor;
     // uBlockerMap's UNIT IS ASSIGNED UNCONDITIONALLY, the bind is not. It is the
     // only `sampler2D` in LIT_FS and uShadowMap on unit 0 is a `sampler2DShadow`,
     // so leaving it at its default unit 0 puts two DIFFERENT sampler types on one
@@ -2583,6 +2586,12 @@ const GLXBackend = (function () {
     gl.uniformMatrix4fv(particleU.uViewProj, false, frameViewProj);
     gl.uniform3fv(particleU.uEye, frameEye);
     gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
+    // Lit + fogged (PARTICLE_FS): the decals' frame light and the lit pass's fog.
+    gl.uniform3fv(particleU.uSunColor, frameSunColor || [1, 0.98, 0.9]);
+    gl.uniform3fv(particleU.uAmbSky, frameAmbSky);
+    gl.uniform3fv(particleU.uAmbGround, frameAmbGround);
+    gl.uniform3fv(particleU.uFogColor, _particleFog.color);
+    gl.uniform1f(particleU.uFogDensity, _particleFog.density);
     bindVAO(particleVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
     if (floatCount > particleCap) {
@@ -2717,6 +2726,7 @@ const GLXBackend = (function () {
     mirrorEnd,
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
+    drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.

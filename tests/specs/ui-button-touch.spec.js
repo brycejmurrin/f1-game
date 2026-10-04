@@ -1,8 +1,11 @@
 // @ts-check
 // Tests for button/touch steer mode: auto-throttle, disabled calibrate button,
 // stable settings-menu layout, and race-settings layout (portrait + landscape).
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+// fixtures' test (not @playwright/test) so apex26.gfxBackend=webgl2 is pinned —
+// shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
+// Without that pin this file cold-booted TLX after a long selected shard and
+// waitReady died at BOOT_MS with the title screen still up (CI run 36967469812).
+import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 
 const PORTRAIT  = { width: 390, height: 844 };
@@ -31,10 +34,23 @@ async function waitReady(page) {
 async function openPauseMenu(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.park(0.1));
-  await page.waitForTimeout(1000);
-  await page.locator("#pausebtn").click();
-  await page.locator("#pausemenu").waitFor({ state: "visible" });
+  // `go()` IS LOAD-BEARING for the lighting-tuner walk (and every other
+  // ADVANCED VISUALS door): syncSettingsAvailability disables #pm-lighting
+  // unless state === "race", and race() starts in COUNTDOWN. park() freezes
+  // the sim, so a park mid-count freezes the gantry too — lighting stays
+  // disabled, .click() fires no handler, and openLightingPhotoMode never
+  // reaches photo-mode. lighting-tuner-grade / ui-redesign already call go()
+  // first; this file was relying on the countdown finishing before park.
+  await page.evaluate(() => { window.__apex.go(); window.__apex.park(0.1); });
+  await page.waitForFunction(() => {
+    const b = document.getElementById("pausebtn");
+    return !!b && !b.hidden;
+  }, null, { polling: 100, timeout: BOOT_MS });
+  // Race is rendering (park keeps the loop for the parked view) — Playwright's
+  // actionability poll shares that main thread (see clickLive / lighting-tuner-grade).
+  await clickLive(page, "pausebtn");
+  await page.waitForFunction(() => !document.getElementById("pausemenu").hidden,
+    null, { polling: 100, timeout: BOOT_MS });
 }
 
 // Steering / lighting / gears controls now live on the SETTINGS sub-menu.
@@ -69,12 +85,23 @@ async function cycleToPauseSteerMode(page, targetText) {
 
 async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
+  // Menu clicks stay as locator.click: the pause menu parks the render loop, so
+  // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
   await page.locator("#pm-open-display").click();
   await page.locator("#pm-visual-tuners > summary").click();
+  // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
+  await page.waitForFunction(() => {
+    const b = document.getElementById("pm-lighting");
+    return !!b && !b.disabled;
+  }, null, { polling: 100, timeout: BOOT_MS });
   await page.locator("#pm-lighting").click();
-  await page.locator("#pc-toggle").click();
-  await expect(page.locator("body")).toHaveClass(/lt-open/);
-  await expect(page.locator("body")).toHaveClass(/photo-mode/);
+  await page.waitForFunction(() => document.body.classList.contains("lt-open"),
+    null, { polling: 100, timeout: BOOT_MS });
+  // Opening the tuner starts the live-preview render path — #pc-toggle must
+  // use clickLive or the actionability poll pays for SwiftShader frames.
+  await clickLive(page, "pc-toggle");
+  await page.waitForFunction(() => document.body.classList.contains("photo-mode"),
+    null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function expectNormalRaceControls(page) {
@@ -543,8 +570,29 @@ test.describe("Selection screen — iOS tablet portrait layout", () => {
     expect(before.overflowY).toBe("hidden");
     expect(before.scrollWidth).toBeGreaterThan(before.clientWidth);
 
-    await page.locator("#sel-tracks").evaluate((list) => { list.scrollLeft = 120; });
-    await expect.poll(() => page.locator("#sel-tracks").evaluate((list) => list.scrollLeft)).toBeGreaterThan(0);
+    // #sel-tracks uses scroll-snap-type:x proximity + scroll-snap-align:center
+    // on each .track-row. A magic scrollLeft (120) lands inside the first
+    // tile's snap basin and snaps straight back to 0 on CI (tablet 768×1024) —
+    // that is the af2cd8c5d red (Expected >0, Received 0). Aim at the
+    // *centre-aligned* scrollLeft of a mid/late row so proximity locks onto
+    // that snap instead of the first tile.
+    const aimed = await page.locator("#sel-tracks").evaluate((list) => {
+      const rows = [...list.querySelectorAll(".track-row")];
+      if (!rows.length) return { ok: false, reason: "no-rows" };
+      const row = rows[Math.min(8, rows.length - 1)];
+      // centre align: scrollLeft that puts row's midpoint at the list midpoint
+      const target = Math.max(0,
+        row.offsetLeft + row.offsetWidth / 2 - list.clientWidth / 2);
+      if (!(target > 0)) return { ok: false, reason: "target-not-positive", target };
+      list.scrollLeft = target;
+      return { ok: true, target, scrollLeft: list.scrollLeft, row: row.textContent?.trim() };
+    });
+    expect(aimed.ok, aimed.reason || "aim").toBe(true);
+    expect(aimed.target).toBeGreaterThan(0);
+    await expect.poll(
+      () => page.locator("#sel-tracks").evaluate((list) => list.scrollLeft),
+      { polling: 100 }
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -592,6 +640,109 @@ test.describe("Race settings — landscape layout", () => {
     });
     expect(scrollable).toBe(false);
     await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-landscape.png") });
+  });
+});
+
+// Per-scheme touch-dock REPOSITION (js/ui/dock-layout.js). Fail-before: a
+// moved right dock is forgotten on reload, or switching STEERING INPUT
+// clobbers the other scheme's offsets. Scheme switches are driven through
+// DockLayout.apply (same path store.subscribe uses) — opening pause after a
+// mid-race dock translate timed out on CI (pausebtn under the moved column).
+test.describe("Touch dock — REPOSITION per scheme", () => {
+  // Landscape: portrait arms #rotate-device over the pause button (see
+  // hud-layout.spec.js). Dock offsets are pad-fraction so orientation is
+  // irrelevant to the persistence / per-scheme assertions here.
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  const SEED = {
+    tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+    buttons: { L: { x: 0, y: 0 }, R: { x: 0.22, y: 0.08 } },
+    touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
+  };
+
+  test("buttons offset persists across reload; tilt stays identity", async ({ page }) => {
+    await page.addInitScript((bag) => {
+      localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
+      localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
+    }, SEED);
+
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseControls(page);
+    await expect(page.locator("#pm-dock-reposition")).toBeVisible();
+    await expect(page.locator("#pm-dock-reposition")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#pm-dock-reset")).toBeVisible();
+
+    // Leave menus before racing so #pausebtn stays reachable.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.park(0.1));
+
+    // Boot already loaded SEED; create() painted buttons. Assert live transform.
+    await page.waitForFunction(() => {
+      const tx = document.getElementById("dock-right").style.transform || "";
+      return /^translate\(/.test(tx);
+    }, null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform)).toMatch(/^translate\(/);
+
+    // Per-scheme isolation via the same apply() store.subscribe calls.
+    await page.evaluate((bag) => {
+      // Lexical global from the classic script tag (same as GameStore in other specs).
+      DockLayout.apply("tilt", bag, {
+        L: document.getElementById("dock-left"),
+        R: document.getElementById("dock-right"),
+      });
+    }, SEED);
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform || "")).toBe("");
+
+    await page.evaluate((bag) => {
+      DockLayout.apply("buttons", bag, {
+        L: document.getElementById("dock-left"),
+        R: document.getElementById("dock-right"),
+      });
+    }, SEED);
+    expect(await page.locator("#dock-right").evaluate((el) => el.style.transform)).toMatch(/^translate\(/);
+
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.dockLayout")).buttons.R);
+    expect(stored.x).toBeCloseTo(SEED.buttons.R.x, 5);
+    expect(stored.y).toBeCloseTo(SEED.buttons.R.y, 5);
+
+    // Reload keeps the init-script seed; boot paint must restore buttons translate.
+    await page.reload();
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.park(0.1));
+    await page.waitForFunction(() => {
+      const tx = document.getElementById("dock-right").style.transform || "";
+      return /^translate\(/.test(tx);
+    }, null, { polling: 100, timeout: BOOT_MS });
+  });
+
+  test("RESET DOCK LAYOUT clears only the current scheme", async ({ page }) => {
+    await page.addInitScript((bag) => {
+      localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
+      localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
+    }, SEED);
+
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseControls(page);
+    await cycleToPauseSteerMode(page, "buttons");
+    await page.locator("#pm-dock-reset").click({ force: true });
+    await page.waitForFunction(() => {
+      const bag = JSON.parse(localStorage.getItem("apex26.dockLayout") || "{}");
+      return bag.buttons && bag.buttons.R && bag.buttons.R.x === 0 && bag.buttons.R.y === 0;
+    }, null, { polling: 100, timeout: 5000 });
+    const afterReset = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.dockLayout")));
+    expect(afterReset.buttons.R.x).toBe(0);
+    expect(afterReset.buttons.R.y).toBe(0);
+    // tilt was already identity in SEED; RESET must not invent offsets there.
+    expect(afterReset.tilt.R.x).toBe(0);
   });
 });
 

@@ -133,16 +133,24 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
   // The cost model's blind spot, measured on CI run 31233088772: the selector
   // billed every test at ~80 s while 8 of its 10 picks declared their own
   // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
-  // the "14-minute" selection failed the job. imola-foundation (420 s) is the
-  // worst standing example; if its budget ever drops below the selected-gate
-  // timeout this pin should move to whichever spec then holds the title.
-  const own = maxDeclaredTimeout("tests/specs/imola-foundation.spec.js");
+  // the "14-minute" selection failed the job. bahrain-foundation (300 s) is the
+  // standing over-budget example after imola-foundation moved to ADAPTED
+  // (fit() files ADAPTED specs as coveredByVmTwin before budgeting — same as
+  // projection.spec.js). If bahrain's budget ever drops below the selected-gate
+  // timeout this pin should move to whichever non-twinned spec then holds it.
+  const pin = "tests/specs/bahrain-foundation.spec.js";
+  const own = maxDeclaredTimeout(pin);
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
-    `imola-foundation now declares ${own} ms — find a new worst example for this pin`);
-  const r = fit(["tests/specs/imola-foundation.spec.js", "tests/specs/boot-guard.spec.js"], 15);
-  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), ["tests/specs/imola-foundation.spec.js"]);
+    `bahrain-foundation now declares ${own} ms — find a new worst example for this pin`);
+  const r = fit([pin, "tests/specs/boot-guard.spec.js"], 15);
+  assert.deepEqual(r.overBudgetSpecs.map((s) => s.file), [pin]);
   assert.deepEqual(r.selected.map((s) => s.file), ["tests/specs/boot-guard.spec.js"],
     "the spec that fits the selected-gate budget must still be selected");
+  // imola keeps its high declaration but is ADAPTED — never overBudgetSpecs.
+  const imola = fit(["tests/specs/imola-foundation.spec.js"], 15);
+  assert.deepEqual(imola.overBudgetSpecs, []);
+  assert.ok(imola.coveredByVmTwin.some((s) => s.file === "tests/specs/imola-foundation.spec.js"),
+    "ADAPTED imola-foundation must route through coveredByVmTwin, not overBudget");
 });
 
 test("fixed blocking specs can never run under the selected gate's timeout", () => {
@@ -314,12 +322,20 @@ test("each missed case is attributed to the bucket that actually excluded it", (
   const unreachable = rows.filter((r) => /^unreachable/.test(r.why || "")).map((r) => r.catches);
   assert.deepEqual(unreachable, [],
     `spec(s) declare more tests than the gate's whole capacity: ${unreachable.join(", ")}`);
-  // The three that ARE the `>=` policy, so a future change that makes them
-  // unreachable (or selectable) has to say so here.
-  for (const f of ["tests/specs/terrain-over-road.spec.js", "tests/specs/props-over-road.spec.js",
+  // The two that ARE the `>=` policy (still declare >= 180 s), so a future
+  // change that makes them unreachable (or selectable) has to say so here.
+  // props-over-road left this set on 2026-09-30 (one test per circuit at 120 s).
+  for (const f of ["tests/specs/terrain-over-road.spec.js",
                    "tests/specs/audio-smoke.spec.js"]) {
     assert.match(by[f].why, /^over budget/, `${f} should be the >= per-test policy`);
   }
+  // The push-blind hole this workstream closed: props-over-road must stay under
+  // the selected gate's per-test cap so a js/track edit can select it again.
+  const propsOwn = maxDeclaredTimeout("tests/specs/props-over-road.spec.js");
+  assert.ok(propsOwn > 0 && propsOwn < SELECTED_GATE.perTestTimeoutSec * 1000,
+    `props-over-road declares ${propsOwn / 1000}s — must be under the ${SELECTED_GATE.perTestTimeoutSec}s gate`);
+  assert.ok(declaredTests("tests/specs/props-over-road.spec.js") >= 40,
+    "props-over-road must still cover the roster (one test per circuit), not a silent shrink");
 });
 
 test("the selected-gate settings match select-budget's recommendation", () => {
@@ -662,17 +678,19 @@ test("an over-budget spec the diff EDITS still runs; one merely routed still doe
 });
 
 test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
-  // PR #604 / CI 36817164457: props-over-road and terrain-over-road declare
-  // 1500 s. As oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers,
-  // spill to skipped, then overflow billed them at the 7.5 s fallback and
-  // packed them next to title-menu-rotation / qatar-foundation. The sweep
-  // then ran 5–10 min under llvmpipe and the next page.goto hung at 180 s
-  // (ERR_ABORTED / Navigate timeout); siblings on a fresh worker passed in ~8 s.
-  const mega = "tests/specs/props-over-road.spec.js";
+  // PR #604 / CI 36817164457: all-circuits mega-sweeps declare 1500 s. As
+  // oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers, spill to
+  // skipped, then overflow billed them at the 7.5 s fallback and packed them
+  // next to title-menu-rotation / qatar-foundation. The sweep then ran 5–10
+  // min under llvmpipe and the next page.goto hung at 180 s (ERR_ABORTED /
+  // Navigate timeout); siblings on a fresh worker passed in ~8 s.
+  // props-over-road left the mega set on 2026-09-30 (one test per circuit at
+  // 120 s, PR #576); terrain-over-road is the remaining fixture.
+  const mega = "tests/specs/terrain-over-road.spec.js";
   const other = "tests/specs/career.spec.js";
   const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
   assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
-    `props-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
+    `terrain-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
 
   // Many over-budget peers at rank 1 so mega loses the oversize lottery.
   const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
@@ -693,31 +711,33 @@ test("mega-sweep over-budget specs never overflow into a shared selected job", (
   const plan = shards(alone, EMPTY);
   assert.equal(plan.length, 1);
   assert.equal(plan[0].specs, mega);
-  assert.match(plan[0].name, /^oversize-props-over-road/);
+  assert.match(plan[0].name, /^oversize-terrain-over-road/);
 });
 
-test("partitionMegaSweepArgs peels props/terrain-over-road out of a packed circuits argv", () => {
+test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits argv", () => {
   // browser-group.yml shards the whole circuits group with Playwright --shard;
   // without this peel the mega-sweep shares a Chromium with qatar-foundation
   // (run 36911235525). Helpers live next to SOLO_OWN_TIMEOUT_SEC so both gates
-  // use the same threshold.
-  const mega = "tests/specs/props-over-road.spec.js";
+  // use the same threshold. props-over-road left the mega set on 2026-09-30
+  // (PR #576: one test per circuit at 120 s) — it must NOT peel.
+  const props = "tests/specs/props-over-road.spec.js";
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const qatar = "tests/specs/qatar-foundation.spec.js";
-  assert.equal(isMegaSweepSpec(mega), true);
+  assert.equal(isMegaSweepSpec(props), false,
+    "props-over-road is under the selected gate; peel must not isolate it");
   assert.equal(isMegaSweepSpec(terrain), true);
   assert.equal(isMegaSweepSpec(qatar), false);
   assert.equal(isMegaSweepSpec("tests/specs/*-foundation.spec.js"), false);
 
-  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", mega, qatar, terrain];
+  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar, terrain];
   const { mega: peeled, rest, peeled: did } = partitionMegaSweepArgs(packed);
   assert.equal(did, true);
-  assert.deepEqual(peeled.sort(), [mega, terrain].sort());
-  assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", qatar]);
+  assert.deepEqual(peeled, [terrain]);
+  assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar]);
   assert.deepEqual(playwrightShard(packed), { index: 2, total: 4 });
   assert.equal(shouldRunMegaOnThisShard(packed), false, "shard 2 must not re-run megas");
-  assert.equal(shouldRunMegaOnThisShard(["--shard=1/4", mega, qatar]), true);
-  assert.equal(shouldRunMegaOnThisShard([mega, qatar]), true, "unsharded runs megas once");
+  assert.equal(shouldRunMegaOnThisShard(["--shard=1/4", terrain, qatar]), true);
+  assert.equal(shouldRunMegaOnThisShard([terrain, qatar]), true, "unsharded runs megas once");
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 

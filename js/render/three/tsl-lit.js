@@ -1282,6 +1282,9 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
+        // Puddle shape (wet block): derivatives taken here, in uniform control flow
+        // (the WebGPU path compiles this graph to WGSL, which requires it).
+        const trkRightXZ = trkA ? dFdx(wp.xz).mul(dFdx(trkA.y)).add(dFdy(wp.xz).mul(dFdy(trkA.y))).toVar() : null;
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
@@ -1315,12 +1318,15 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/glx/shaders/glsl-lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // car surface ids 20-27 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // car surface ids 20-33 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(32.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(33.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
+        // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): satin rubber wall,
+        // band and lettering vs the matte tread — mirrors glsl-lit.js.
+        const sidewallSurface = surfaceId.equal(33.0).toVar();
         const metalSurface = surfaceId.equal(23.0).toVar();
         const glassSurface = surfaceId.equal(24.0).toVar();
         const emissiveSurface = surfaceId.equal(25.0).toVar();
@@ -1338,11 +1344,14 @@
         // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its
         // mean over 8-16 m so the 3.3 cm cross-hatch cannot moire at range.
         // Computed here, ahead of the roughness ripple and the albedo twill.
+        // wvT = the twill's ANALYTIC slope (same fade) — tilts N below, no derivative.
         const weave = float(0.5).toVar();
+        const wvT = vec2(0.0).toVar();
         If(carbonFinish.or(carbonSurface), () => {
           const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
-          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0);
+          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0).toVar();
           weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+          wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
         });
         // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
         // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
@@ -1356,7 +1365,9 @@
               select(iriSurface, max(matU.clearcoat, 0.70),
                 select(satinMetalSurface, min(matU.clearcoat, 0.25),
                   select(matteSurface, float(0.0),
-                    select(glassSurface.or(visorSurface), matU.clearcoat.mul(0.45), float(0.0))))))),
+                    // carbon: a thin lacquer (min 0.30) — glsl-lit.js
+                    select(carbonSurface.or(carbonFinish), min(matU.clearcoat, 0.30),
+                      select(glassSurface.or(visorSurface), matU.clearcoat.mul(0.45), float(0.0)))))))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
@@ -1380,11 +1391,12 @@
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
+            select(sidewallSurface, float(0.35),
             select(metalSurface.or(mirrorSurface), float(1.0),
               select(satinMetalSurface, float(0.82),
                 select(matteSurface, float(0.16),
                   select(carbonSurface.or(carbonFinish), float(0.48),
-                    select(panelSurface, float(0.35), matU.specular)))))),
+                    select(panelSurface, float(0.35), matU.specular))))))),
           matU.specular).toVar();
         const emissive = select(classifiedCar,
           select(emissiveSurface, max(matU.emissive, 1.0),
@@ -1414,6 +1426,14 @@
 
         // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
         const Nsaa = vec3(N).toVar();
+
+        // CARBON WEAVE NORMAL (glsl-lit.js): tilt N along the twill's analytic
+        // slope in the peel's N-built tangent frame; after the Nsaa snapshot.
+        If(carbonFinish.or(carbonSurface), () => {
+          const wT = normalize(cross(N, vec3(0.0, 1.0, 0.001)).add(vec3(1e-4)));
+          const wB = cross(N, wT);
+          N.assign(normalize(N.add(wT.mul(wvT.x).add(wB.mul(wvT.y)).mul(0.18))));
+        });
 
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
@@ -1457,6 +1477,7 @@
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
         If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56).add(weave.sub(0.5).mul(0.10))); });   // the twill's roughness ripple
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
+        If(sidewallSurface, () => { rough.assign(clamp(rough, 0.55, 0.65)); });   // satin wall vs the matte tread
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
         If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
         If(emissiveSurface, () => { rough.assign(max(rough, 0.32)); });
@@ -1527,7 +1548,9 @@
         const wet = float(0.0).toVar();
         const puddle = float(0.0).toVar();
         const wetSheen = float(0.0).toVar();
-        If(U.wetness.greaterThan(0.001), () => {
+        // NOT on a car: the block is world-keyed (noise puddles, ripple cells,
+        // the tarmac absorb) and slid across the moving body — glsl-lit.js.
+        If(U.wetness.greaterThan(0.001).and(classifiedCar.not()), () => {
           const upFace = smoothstep(0.50, 0.90, N.y);
           const wmid = surfaceId;
           const porous = select(
@@ -1536,7 +1559,21 @@
             float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
-          puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
+          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+          // crown drains to the gutters (0.7 centre → 1.2 edge) and the low side
+          // of a banked turn holds the water (lateral downhill from the screen
+          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+          // chunked (city prop) variant, which has no road.
+          const pool = float(1.0).toVar();
+          if (trkA) {
+            If(trkA.z.greaterThan(0.5), () => {
+              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+              pool.assign(mix(float(0.7), float(1.2), abs(lat)).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+            });
+          }
+          puddle.assign(smoothstep(0.48, 0.88, pn.mul(pool)).mul(wet).mul(porous.oneMinus()));
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
@@ -1570,8 +1607,24 @@
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
         });
+        // CAR WET LOOK (glsl-lit.js, constant for constant): uniform, nothing
+        // world-keyed; the dull surfaces darken a little and gain a little gloss
+        // and a water-film f0. No puddles, no ripples, wetSheen stays 0.
+        If(U.wetness.greaterThan(0.001).and(classifiedCar), () => {
+          If(carbonSurface.or(carbonFinish).or(rubberSurface).or(sidewallSurface).or(matteSurface).or(panelSurface), () => {
+            albedo.mulAssign(U.wetness.mul(0.20).oneMinus());
+            rough.mulAssign(U.wetness.mul(0.25).oneMinus());
+            a.assign(rough.mul(rough));
+            f0.assign(mix(f0, max(f0, vec3(0.04)), U.wetness.mul(0.6)));
+          });
+        });
 
-        const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5)).toVar();
+        // GROUND-PROXIMITY AO, ambient only, car BODY draws (matU.carPaint > 0.5;
+        // the wheels draw with carPaint 0) minus the tyre ids — glsl-lit.js.
+        const gpao = select(matU.carPaint.greaterThan(0.5).and(rubberSurface.not()).and(sidewallSurface.not()),
+          smoothstep(0.02, 0.40, objP.y).oneMinus(), float(0.0)).toVar();
+        const amb = mix(vec3(U.ambGround).mul(gpao.mul(0.50).oneMinus()),
+          vec3(U.ambSky).mul(gpao.mul(0.06).oneMinus()), N.y.mul(0.5).add(0.5)).toVar();
 
         // shadow: hard sun/car map (M4) × soft drifting cloud shadows
         //    (js/render/glx/shaders/glsl-lit.js). Nvary = the RAW varying normal, matching the GLSL
@@ -1829,6 +1882,9 @@
         //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
         // (textureLod(uEnvCube, Rg, rough*2.5) × uEnvStr — glx.js parity).
+        // ccTrans: the share the lacquer lets through to the base (glsl-lit.js);
+        // the metal env term below reflects only that share.
+        const ccTrans = float(1.0).toVar();
         If(envSurface, () => {
           const Rg = reflect(V.negate(), Ngeo).toVar();
           const NoVc = max(dot(Ngeo, V), 1e-4);
@@ -1865,7 +1921,8 @@
           envCC.addAssign(vec3(U.sunColor)
             .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
             .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
-          color.mulAssign(envW.mul(0.94).oneMinus());          // absorb under the mirror
+          ccTrans.assign(envW.mul(0.94).oneMinus());
+          color.mulAssign(ccTrans);                             // absorb under the mirror
           const addCC = envCC.mul(envW);
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });
@@ -1923,6 +1980,23 @@
           const envAdd = envWet.mul(envFresnel).mul(envBlend).mul(roughDamp).mul(metalness.oneMinus()).toVar();
           const envM = max(max(envAdd.r, envAdd.g), envAdd.b);
           color.addAssign(envAdd.div(envM.add(1.0)));           // Reinhard shoulder
+        });
+
+        // METAL ENV REFLECTION (glsl-lit.js, constant for constant): the metal
+        // share the block above drops with (1 - metalness) — env x Schlick(NoV,
+        // F0 = albedo) x metalness, sky/ground split + live probe as envCC, x ccTrans.
+        If(metalSurface.or(satinMetalSurface).or(mirrorSurface), () => {
+          const Rm = reflect(V.negate(), N).toVar();
+          const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
+          const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
+          if (envCubeNode) {
+            If(U.envStr.greaterThan(0.001), () => {
+              envMet.assign(mix(envMet, cubeTexture(envCubeNode, Rm, rough.mul(2.5)).rgb, clamp(U.envStr, 0.0, 1.0)));
+            });
+          }
+          const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))
+            .mul(metalness.mul(rough.mul(0.7).oneMinus()).mul(ccTrans)).toVar();
+          color.addAssign(metAdd.div(max(max(metAdd.r, metAdd.g), metAdd.b).add(1.0)));
         });
 
         // sky rim fresnel (js/render/glx/shaders/glsl-lit.js)

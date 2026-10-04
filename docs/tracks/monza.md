@@ -1,6 +1,12 @@
 # Monza — Autodromo Nazionale Monza (Italy)
 
-**Game setting:** DAY · green theme (royal park). Render: procedural colored BOXES, no textures. Objects placed by arc-fraction `s` (0.0 at start/finish, increasing in racing direction, wrapping to 1.0), Left/Right side, lateral distance band, tinted `[r,g,b]` 0–1.
+**Game setting:** DAY · green theme (royal park). This is a scenery research and
+modelling brief. The current game combines procedural meshes with baked models
+and PBR material textures; the box descriptions below describe landmark massing,
+not a texture-free renderer contract. Objects use lap fraction `s` (0.0 at
+start/finish, increasing in racing direction), Left/Right side, lateral distance
+and tinted `[r,g,b]` 0–1. Consume fraction positions through the scenery API so
+track shifting and reversal remain correct.
 
 ## 1. Setting
 The "Temple of Speed," opened 1922, set inside the **Royal Villa park of Monza** — Europe's largest walled park (~688 ha) just north of Milan. Track threads through dense woodland of **umbrella pines** and tall deciduous trees, past the neoclassical **Villa Reale**, ornamental lakes, and the crumbling old banked oval (Sopraelevata).

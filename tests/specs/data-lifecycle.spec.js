@@ -1,4 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { createRequire } from "node:module";
+
+const { LAZY_DATA } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 const OPENF1 = "https://api.openf1.org/v1";
 
@@ -12,39 +15,16 @@ async function dataReady(page) {
   await page.evaluate(() => {
     window.Teams = { LIST: [] };
   });
-  // hub.js calls every tab module's create() at IIFE-eval time (see
-  // HARD_EDGES in tools/manifest.cjs), so ALL data modules must load first.
-  // mat4.js comes before them, and it is not optional: js/data/telemetry.js
-  // aliases `const clamp = M4.clamp` at EVAL time, so without M4 telemetry.js
-  // throws, DataTelemetry is stranded in its temporal dead zone, and hub.js's
-  // top-level DataTelemetry.create(...) throws in turn — leaving DataHub dead
-  // too. The symptom is a bare `ReferenceError: DataHub is not defined` from
-  // the waitForFunction below, three links away from the cause. index.html has
-  // always loaded mat4.js before js/data/*, so the app was never affected.
-  // The ordering is now asserted: HARD_EDGES carries mat4.js -> telemetry.js.
-  // dom.js is the same trap, one module along: hub.js aliases `const el =
-  // Dom.el` at EVAL time (js/data/hub.js), so without it hub.js throws and DataHub
-  // is stranded — the identical bare `ReferenceError: DataHub is not defined`.
-  // telemetry-compare's harness has loaded dom.js since that alias landed;
-  // this one was missed, so every test here that calls dataReady() was red.
-  // log.js too, same trap as telemetry-compare's harness: hub.js's open() and
-  // api.js's warnFetchFail log through the Log global (index.html loads it
-  // before everything); this standalone harness threw "Log is not defined"
-  // the moment either ran — red since the logging landed, whenever the suite
-  // actually ran.
+  // Mirror the application's data roster, including extracted helpers before
+  // each tab and hub.js last (it calls Data*.create at evaluation time).
+  // Core dependencies are already resident in the app: standalone fixtures
+  // must provide M4 for the telemetry model, Dom for the hub, and Log for
+  // requests/open. Modal preserves the real dialog's open/close behavior.
   await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/ui/modal.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   await page.addScriptTag({ url: "/js/ui/dom.js" });
-  await page.addScriptTag({ url: "/js/data/api.js" });
-  await page.addScriptTag({ url: "/js/data/telemetry.js" });
-  await page.addScriptTag({ url: "/js/data/export.js" });
-  await page.addScriptTag({ url: "/js/data/schedule.js" });
-  await page.addScriptTag({ url: "/js/data/standings.js" });
-  await page.addScriptTag({ url: "/js/data/results.js" });
-  await page.addScriptTag({ url: "/js/data/live.js" });
-  await page.addScriptTag({ url: "/js/data/real-race-tab.js" });   // hub.js calls DataRealRace.create() at eval (manifest LAZY_DATA order)
-  await page.addScriptTag({ url: "/js/data/hub.js" });
+  for (const file of LAZY_DATA) await page.addScriptTag({ url: "/" + file });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }
 
@@ -178,6 +158,7 @@ test("meeting session lists refresh recent meetings but retain historic lists", 
   await page.goto("/version.json");
   await page.setContent("<div></div>");
   await page.addScriptTag({ url: "/js/core/log.js" });   // warnFetchFail logs through Log
+  await page.addScriptTag({ url: "/js/data/api-transport.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined");
   await page.evaluate(async () => {

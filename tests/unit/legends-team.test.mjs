@@ -132,14 +132,13 @@ test("the tile's driver line stays one line's worth for a legend", () => {
 
 test("a legend wears a real marque crest or none — never a borrowed one", () => {
   // EVERY team the game ships has a mark, and this list is read from the game
-  // rather than remembered. An earlier version hard-coded the eight in
-  // js/car/crest-paths.js and called them "hand-drawn ... and no others" —
-  // wrong twice: those eight are TRACED, and mercedes/haas/audi carry geometric
-  // constructions in js/car/liverytex.js MARK_PARTS instead. That mistake cost
-  // Fangio his Silver Arrow badge, so the set is derived now and the test would
-  // have caught the omission.
+  // rather than remembered. An earlier version hard-coded the eight then in
+  // js/car/crest-paths.js and missed the three drawn elsewhere, which cost
+  // Fangio his Silver Arrow badge, so the set is derived now. (All eleven are
+  // path data today — the game's own ORIGINAL emblems, tools/car/emblems.mjs,
+  // not the real marque logos.)
   const HAVE = new Set(Teams.LIST.map((t) => t.id));
-  assert.ok(HAVE.has("mercedes"), "mercedes must be markable — its star and ring are drawn, not traced");
+  assert.ok(HAVE.has("mercedes"), "mercedes must be markable — the game draws an emblem for it");
   assert.ok(HAVE.size >= 11, `only ${HAVE.size} teams — the roster shrank under this test`);
   let withCrest = 0;
   for (const l of Legends.LIST) {
@@ -152,7 +151,7 @@ test("a legend wears a real marque crest or none — never a borrowed one", () =
     assert.ok(car.includes(brand), `${l.id}: crest "${l.marque}" against car "${l.car}"`);
   }
   assert.ok(withCrest >= 8, `only ${withCrest} legends carry a crest — the mapping has regressed`);
-  assert.equal(Legends.team("fangio").crest, "mercedes", "the W196 is a Mercedes and the game draws that star");
+  assert.equal(Legends.team("fangio").crest, "mercedes", "the W196 is a Mercedes and wears the Mercedes emblem");
   assert.equal(Legends.team("senna").crest, "mclaren");
   // The four with no mark are a SOURCE limit, not a to-do: Lotus, Tyrrell and
   // Vanwall are typographic and this repo's tracer says memory is the wrong

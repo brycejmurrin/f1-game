@@ -52,9 +52,10 @@ test("CAM_MODES appends rival, pitwall, drone after trackside (save-format contr
   const src = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
   const ids = [...src.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
   // TRACKSIDE (#702) landed on ship first at index 14; our three append after it.
-  assert.deepEqual(ids.slice(-5), ["visor", "trackside", "rival", "pitwall", "drone"],
-    "new cams must append — apex26.camMode is an index");
-  assert.equal(ids.length, 18);
+  // TV (the live director) then HELMET append after drone; never reorder earlier ids.
+  assert.deepEqual(ids.slice(-7), ["visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet"],
+    "new cams must append — apex26.camMode is an index (TV at 18, HELMET at 19)");
+  assert.equal(ids.length, 20);
 });
 
 test("ExtraRigs.pickRival uses Broadcast.battles when present", () => {
@@ -116,9 +117,28 @@ test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () =
   assert.equal(mode, 0);
 });
 
+test("ExtraRigs.tickPitAuto leaves the camera alone by default (opt-in only)", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  let mode = 0;
+  const G = {
+    player: { pitState: "none" },
+    get camMode() { return mode; },
+    set camMode(v) { mode = v; },
+    setCamMode(i) { mode = i; return "x"; },
+    // A store that has never seen the key: get() hands back its default.
+    store: { get: (k, d) => d, set() {} },
+  };
+  G.player.pitState = "lane";
+  assert.equal(ExtraRigs.tickPitAuto(G), null, "no cut on pit entry unless pitCamAuto is set");
+  assert.equal(mode, 0, "the player's camera stays put in the pit lane");
+  G.player.pitState = "none";
+  assert.equal(ExtraRigs.tickPitAuto(G), null);
+  assert.equal(mode, 0);
+});
+
 test("ExtraRigs.pitCamAuto persists through GameStore", () => {
   const { ExtraRigs, disk } = loadExtraRigs();
-  assert.equal(ExtraRigs.pitCamAuto(null), true);
+  assert.equal(ExtraRigs.pitCamAuto(null), false, "off until the player opts in");
   assert.equal(ExtraRigs.pitCamAuto(null, false), false);
   assert.equal(disk.get("pitCamAuto"), false);
   assert.equal(ExtraRigs.pitCamAuto(null), false);

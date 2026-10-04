@@ -190,7 +190,7 @@ const DrivingCoach = (function () {
         slipFront: c.slipFront || 0, slipRear: c.slipRear || 0, frontUtil: c.frontUtil || 0, rearUtil: c.rearUtil || 0,
         forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
         longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
-        wetness: G.roadWetness(), practice, enabled,
+        wetness: (G.trackWetness ? G.trackWetness() : 0), practice, enabled,
         ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
     }
     function status() {
@@ -620,7 +620,11 @@ const DrivingCoach = (function () {
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
           launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle.",
-          start: "Set this on the grid before the lights. The run ends at the first corner and scores the places you gained off the line." };
+          start: "Set this on the grid before the lights. The run ends at the first corner and scores the places you gained off the line.",
+          slipstream: "Save behind the car ahead, then close the gap in its wake without contact or leaving the track.",
+          overtake: "Save behind a similarly paced car, then pass it and hold clear without contact or leaving the track.",
+          defend: "Save with a rival close behind, then hold your place under pressure without contact or leaving the track.",
+          backmarkers: "Save before slower traffic, then clear three slower cars without contact or leaving the track." };
         // `start` is stored NEGATED so mastery's Math.min ranks more places
         // higher (js/race/race-insights.js). The sign is undone here, once, at
         // the only place a human reads the number.
@@ -698,8 +702,12 @@ const DrivingCoach = (function () {
     bind("pm-practice-rewind", rewind); bind("pm-practice-arm", armPractice);
     SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
       read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
+    function setPracticeGoal(mode) {
+      if (!Object.hasOwn(RaceInsights.DRILLS, mode)) return false;
+      drillMode = mode; paint(); return true;
+    }
     SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
-      read: () => drillMode, write: v => { if (Object.hasOwn(RaceInsights.DRILLS, v)) drillMode = v; paint(); } });
+      read: () => drillMode, write: setPracticeGoal });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
       write: v => { G.pits.selectNext(G.player, v); paint(); } });
     const menu = $("pmsettings"), panel = $("pm-panel-driving");
@@ -716,6 +724,7 @@ const DrivingCoach = (function () {
     // and netplay laps are already mirrored to peers.
     function armPractice() {
       if (G.timeTrial || G.daily.isActive() || G.netPlay.active()) return false;
+      if (G.flow === "season" || G.flow === "career") return false;
       if (!onTrack() || !G.player) return false;
       if (G.practice) return true;
       G.practice = true; G.records.invalidate();
@@ -727,6 +736,7 @@ const DrivingCoach = (function () {
     // P1 took full points and prize money. Practice those in a one-off race.
     function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && onTrack() && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
     return { update, status, feedback, advice, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
+      practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice,
       trace: () => trace.map(row => ({ ...row })), insights };

@@ -83,21 +83,23 @@ const UiExperience = (function () {
     wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
-    wire("pm-appearance", () => deps.openSettingsPage("appearance"));
     const intro = $("practice-brief");
     function showPractice() {
       if (!intro) return;
       intro.hidden = !wantedPractice;
-      if (wantedPractice) $("practice-goal").focus({ preventScroll: true });
+      if (wantedPractice) {
+        if (RaceInsights.needsRivals(deps.coach.practiceGoal())) deps.coach.setPracticeGoal("free");
+        $("practice-goal").value = deps.coach.practiceGoal(); $("practice-goal").focus({ preventScroll: true });
+      }
     }
     const goal = $("practice-goal");
     if (goal) {
       for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
+        if (RaceInsights.needsRivals(id)) continue;
         const o = node("option", String(label)); o.value = id; goal.appendChild(o);
       }
       goal.onchange = () => {
-        const existing = $("pm-drill-sel");
-        if (existing) { existing.value = goal.value; existing.dispatchEvent(new Event("change", { bubbles: true })); }
+        deps.coach.setPracticeGoal(goal.value);
       };
     }
     // Normal Time Trial/Race doors always retire the optional practice brief.
@@ -157,10 +159,29 @@ const UiExperience = (function () {
     window.addEventListener("apex26:photo-background", stamp);
     stamp();
     function stopHome() {
+      // Clear FX/post `_last` ONLY when tearing down a live Home present.
+      // renderHome() calls stopHome() every race frame once the overlay is
+      // hidden; clearing then zeroes bloom/fxaa between presents and races any
+      // probe that waitForFunction's then re-evaluates postState (Pages
+      // 36966538881: M8 day wait saw fxaa, evaluate saw bloom false, diag later
+      // saw bloom true). Track/pitlane Home uses world.active(), not `home`.
+      const leaving = home || !!(world.active && world.active());
       if (home) deps.setupCam.endHome();
       world.end();
       home = false; signature = ""; elapsed = 0; painted = false;
       overlay.removeAttribute("data-home-ready");
+      // Home garage presents drawGlow with no blob shadows / car decals. While
+      // TLX is still warming, render() can bail and leave that present's FX
+      // counters in __tlx.fxState() — M6 on Metal then waited on glow alone and
+      // passed on the stale garage frame (run 36951948980 / 36954047730). Clear
+      // so a race probe cannot see Home leftovers — once, on leave, not every
+      // idle stopHome during a race.
+      if (leaving) {
+        try {
+          const t = G.gfx && G.gfx.__tlx;
+          if (t && typeof t.clearFxState === "function") t.clearFxState();
+        } catch (_) { /* probe hygiene — never block leaving Home */ }
+      }
     }
     function renderHome(dt) {
       if (previewBusy) return false;

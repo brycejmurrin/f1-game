@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { browserGroups, planMatrix, parseWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW } from "../../tools/ci/remote-group.mjs";
+import { spawnSync } from "node:child_process";
+import { browserGroups, planMatrix, parseWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -28,6 +29,20 @@ test("plan: a real group and a listed shard count give the matrix; anything else
   for (const bad of ["ui; rm -rf /", "$(id)", "UI", "", null, "../ui", "tooling-fast", "nope"])
     assert.ok(planMatrix(bad, 4, SCRIPTS).error, JSON.stringify(bad));
   for (const bad of [0, 3, 5, 16, "x"]) assert.ok(planMatrix("ui", bad, SCRIPTS).error, `shards ${bad}`);
+});
+
+test("CLI: bare invoke / --help print usage — never 'not a group name: undefined'", () => {
+  assert.match(USAGE, /^usage: node tools\/ci\/remote-group\.mjs <group>/);
+  const run = (...args) => spawnSync(process.execPath, ["tools/ci/remote-group.mjs", ...args], {
+    cwd: ROOT, encoding: "utf8",
+  });
+  const bare = run();
+  assert.equal(bare.status, 3);
+  assert.match(bare.stderr, /usage: node tools\/ci\/remote-group\.mjs <group>/);
+  assert.doesNotMatch(bare.stderr + bare.stdout, /not a group name: undefined/);
+  const help = run("--help");
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /usage: node tools\/ci\/remote-group\.mjs <group>/);
 });
 
 test("the workflow offers exactly the shard counts the planner accepts, and never interpolates an input into a shell line", () => {
@@ -71,6 +86,8 @@ test("pickRun: the newest dispatch of THIS group on THIS branch since the dispat
   assert.equal(pickRun(runs, { branch: "b", group: "ui", sinceMs: t0 }).id, 6);
   assert.equal(pickRun(runs, { branch: "b", group: "u", sinceMs: t0 }), null, "a prefix of a group is not that group");
   assert.equal(pickRun([], { branch: "b", group: "ui", sinceMs: t0 }), null);
+  assert.equal(pickRun([run(7), run(8)], { branch: "b", group: "ui", sinceMs: t0 }).id, 8, "a same-second tie: the higher id");
+  assert.equal(pickRun([run(8), run(7)], { branch: "b", group: "ui", sinceMs: t0 }).id, 8, "…in either listing order");
 });
 
 test("failLines: the reporter's failures from a shard log, Actions timestamps stripped", () => {

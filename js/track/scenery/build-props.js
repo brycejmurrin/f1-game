@@ -1177,6 +1177,33 @@ const TrackBuildProps = (function () {
                     ax: b[0], az: b[2], r: Math.hypot(w / 2, d / 2) });
       if (massGrid) massGridInsert(i);
     };
+    // Reserve only the newly emitted geometry, including overhangs and tilted
+    // dish/mast axes. Accumulators expose storage through _data, not [index].
+    // Use a horizontal orthonormal frame so the mass rectangle and geometric
+    // solid segment agree without changing the per-node driving limits.
+    const reserveEmittedSolid = (buf, start, basis) => {
+      const end = buf.pos.length, pos = buf.pos._data || buf.pos;
+      const rl = Math.hypot(basis[0][0], basis[0][2]);
+      if (end <= start || rl < 1e-8) return false;
+      const r = [basis[0][0] / rl, 0, basis[0][2] / rl];
+      const sign = r[0] * basis[2][2] - r[2] * basis[2][0] < 0 ? -1 : 1;
+      const t = [-r[2] * sign, 0, r[0] * sign];
+      let r0 = Infinity, r1 = -Infinity, t0 = Infinity, t1 = -Infinity;
+      for (let i = start; i < end; i += 3) {
+        const x = pos[i], z = pos[i + 2];
+        const a = x * r[0] + z * r[2], b = x * t[0] + z * t[2];
+        r0 = Math.min(r0, a); r1 = Math.max(r1, a);
+        t0 = Math.min(t0, b); t1 = Math.max(t1, b);
+      }
+      if (![r0, r1, t0, t1].every(Number.isFinite) || r1 <= r0 || t1 <= t0) return false;
+      const rc = (r0 + r1) / 2, tc = (t0 + t1) / 2;
+      const c = [r[0] * rc + t[0] * tc, 0, r[2] * rc + t[2] * tc];
+      massAdd(c, r1 - r0, t1 - t0, [r, [0, 1, 0], t]);
+      const halfD = (t1 - t0) / 2;
+      pushSeg(c[0] - t[0] * halfD, c[2] - t[2] * halfD,
+              c[0] + t[0] * halfD, c[2] + t[2] * halfD, (r1 - r0) / 2);
+      return true;
+    };
     // Every existing guard in this engine is horizontal-vs-ROAD (onTrack,
     // rejBox, blockAt) or vertical (the support/grounding tests). None is
     // horizontal-vs-BARRIER — which is why tree crowns still grow through
@@ -1452,7 +1479,7 @@ const TrackBuildProps = (function () {
       graph, instance,
       // guard / grounding / boundary core
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
-      indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, bankOffsetAt,
+      indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, reserveEmittedSolid, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
       frameAt, overheadSpan, models,
       // placement primitives + math helpers
@@ -1890,11 +1917,51 @@ const TrackBuildProps = (function () {
       const wsz = [(bb.w * __M.abs(cs) + bb.d * __M.abs(sn)) * sc, bb.h * sc,
                    (bb.w * __M.abs(sn) + bb.d * __M.abs(cs)) * sc];
       if (rejBox(wc, wsz)) { _culled++; return false; }
-      return TrackGeom.addMesh(out, mesh, {
-        x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
-        rotY: yaw, scale: o.scale != null ? o.scale : 1,
-        tint: o.tint || null, mat: o.mat,
-      });
+      // RECORD the placement (track.modelInstances, written either way); with
+      // instancing on, copy-vs-batch is decided once every call is in
+      // (flushModels). The guard above already ran, so a rejected stamp still
+      // degrades to nothing, never to a raw copy.
+      const key = o.mat != null ? id + "|m" + o.mat : id;
+      let rec = _pendingModels.get(key);
+      if (!rec) _pendingModels.set(key, (rec = { id, mesh, mat: o.mat != null ? o.mat : null, xf: [], tint: [], anyTint: false }));
+      const y = a.c[1] + (o.lift || 0), tn = o.tint || null;
+      rec.xf.push(a.c[0], y, a.c[2], yaw, sc);
+      rec.tint.push(tn ? tn[0] : 1, tn ? tn[1] : 1, tn ? tn[2] : 1);
+      if (tn) rec.anyTint = true;
+      if (INST_MODELS) return true;
+      return TrackGeom.addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
+    }
+    // A pack model placed N times is N copies of its triangles in the soup;
+    // when the backend draws instanced batches (G.createInstancedBatch — the
+    // graph's primitive models already go that way) the placements become one
+    // compacted geometry + N transforms instead. Off in the VM harnesses (no
+    // batch API), so every sweep still measures the copies; `apex26.modelInst=0`
+    // is the escape hatch. A key is batched only when it SAVES vertices: two
+    // placements of a 28-triangle barrier are cheaper copied than as a batch
+    // with its own draw, shadow caster and (TLX) ~64 KB padded instance block.
+    const MODEL_INST_MIN_SAVED = 1024;
+    const INST_MODELS = (() => {
+      if (!(G && G.createInstancedBatch)) return false;
+      try { if (localStorage.getItem("apex26.modelInst") === "0") return false; } catch (_) { /* no storage */ }
+      return true;
+    })();
+    const _pendingModels = new Map();
+    function flushModels() {
+      const rec = {};
+      for (const [key, m] of _pendingModels) {
+        const n = m.xf.length / 5;
+        const g = graph.meshModel(key, m.mesh, m.mat);
+        const inst = INST_MODELS && n >= 2 && (n - 1) * g.verts >= MODEL_INST_MIN_SAVED;
+        for (let i = 0; INST_MODELS && i < n; i++) {   // off: the copies were emitted at call time
+          const b = i * 5, t = m.anyTint ? [m.tint[i * 3], m.tint[i * 3 + 1], m.tint[i * 3 + 2]] : null;
+          if (inst) graph.meshPlace(key, m.xf[b], m.xf[b + 1], m.xf[b + 2], m.xf[b + 3], m.xf[b + 4], t);
+          else TrackGeom.addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
+        }
+        rec[key] = { id: m.id, mat: m.mat, verts: g.verts, tris: g.tris, n, inst,
+                     xf: Float32Array.from(m.xf), tint: m.anyTint ? Float32Array.from(m.tint) : null };
+      }
+      track.modelInstances = rec;
+      _pendingModels.clear();
     }
 
     // Three lamp registries, one record shape (js/lighting/track-lights.js
@@ -2048,6 +2115,8 @@ const TrackBuildProps = (function () {
       sceneryFn(sceneryApi);
     }
 
+    SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
+
     // Foliage runs LAST, once every barrier on the circuit is registered, so the
     // world-XZ guard in clearTreeDist() sees the finished set: the per-track
     // treelines queued by forestEdge() during scenery, then the generic roadside
@@ -2178,6 +2247,7 @@ const TrackBuildProps = (function () {
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     }
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
+    flushModels();       // the recorded pack-model placements: batches, or copies into the soup
     flushAsm();          // the last anonymous run has no successor to close it
     // Swap every named record's guessed envelope for what it actually emitted.
     for (const rec of propList) {

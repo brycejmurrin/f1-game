@@ -483,6 +483,7 @@
 
     function free(mesh) {
       if (!mesh) return;
+      _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];

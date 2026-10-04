@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
-function fixture() {
+function fixture({ realInsights = false } = {}) {
   const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state'].map(id => [id, { textContent: '' }]));
   // The coach SHIPS ON (js/data/settings-defaults.js; the real store answers from
   // it). This fake store only knows the call-site fallback, so seed the player's
@@ -15,7 +15,7 @@ function fixture() {
   // sits just before the line so the wrap is exercised.
   const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
     state: 'race', raceT: 0, paused: false, announceBusy: false,
-    vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
+    vTop: () => 100, trackWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
     // practice, not timeTrial, is what gates checkpoints and rewind now — a
@@ -27,7 +27,7 @@ function fixture() {
     // announce() returns the banner's VERDICT: false when the line never
     // reaches the screen (a cinematic camera drops "coach"). G.heard is the
     // knob a test turns to stand in for that camera.
-    pits: { ownedTyres: () => [], choices: () => [] }, heard: true,
+    pits: { ownedTyres: () => [], choices: () => [], estimate: () => null }, heard: true,
     announce: (...args) => { announcements.push(args); return G.heard; } };
   const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,
     startDrill: () => true, attempts: () => [], mastery: () => null };
@@ -42,6 +42,7 @@ function fixture() {
     IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
     PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
   });
+  if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
   vm.runInContext(readFileSync(new URL('../../js/race/driving-coach.js', import.meta.url), 'utf8'), ctx);
   const coach = vm.runInContext('DrivingCoach', ctx).create(G);
   const tick = (seconds, fields = {}) => {
@@ -49,10 +50,47 @@ function fixture() {
     for (let t = 0; t < seconds - 1e-9; t += .05) { G.raceT += .05; coach.update(.05); }
   };
   const enable = () => coach.toggle();
-  return { coach, G, c, ins, nodes, saved, announcements, tick, enable };
+  return { coach, G, c, ins: coach.insights, nodes, saved, announcements, tick, enable, drills: vm.runInContext('RaceInsights.DRILLS', ctx) };
 }
 const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
+
+test('every real practice drill has readable help and canonical goal state survives a session reset', () => {
+  const { coach, nodes, drills } = fixture({ realInsights: true });
+  assert.equal(coach.practiceGoal(), 'free');
+  for (const id of Object.keys(drills)) {
+    assert.equal(coach.setPracticeGoal(id), true, id);
+    assert.equal(coach.practiceGoal(), id);
+    const help = nodes.get('pm-drill-status').textContent;
+    assert.ok(help.length > 20, id + ': missing instructions');
+    assert.doesNotMatch(help, /undefined|null/, id);
+  }
+  const selected = coach.practiceGoal(), help = nodes.get('pm-drill-status').textContent;
+  assert.equal(coach.setPracticeGoal('missing'), false);
+  assert.equal(coach.practiceGoal(), selected);
+  assert.equal(nodes.get('pm-drill-status').textContent, help);
+  coach.reset();
+  assert.equal(coach.practiceGoal(), selected);
+});
+
+test('the practice arming method refuses career and season scoring even when called directly', () => {
+  const { coach, G, announcements } = fixture();
+  G.timeTrial = false; G.practice = false;
+  let invalidated = 0; G.records.invalidate = () => invalidated++;
+  for (const flow of ['career', 'season']) {
+    G.flow = flow;
+    assert.equal(coach.canArm(), false);
+    assert.equal(coach.armPractice(), false);
+    assert.equal(G.practice, false);
+  }
+  assert.equal(invalidated, 0);
+  assert.equal(announcements.length, 0);
+  G.flow = 'gp';
+  assert.equal(coach.canArm(), true);
+  assert.equal(coach.armPractice(), true);
+  assert.equal(G.practice, true);
+  assert.equal(invalidated, 1);
+});
 
 test('a coach switched off paints as off, saves the toggle, and paints understandable empty feedback', () => {
   const { coach, saved, nodes, tick } = fixture();

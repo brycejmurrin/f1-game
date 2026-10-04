@@ -266,3 +266,117 @@ test("clearance: a return straight inside the pit opening is not a green save", 
   const j = V.judge(tr, d, d);
   assert.ok(j.issues.some((i) => i.level === "red" && i.code === "clearance"));
 });
+
+// ── SPIRAL: clothoid entry / exit on the curved stamps (TrackStamps.spiralSweep) ──
+// https://en.wikipedia.org/wiki/Euler_spiral — curvature linear in arc length.
+const CURVED = { corner: { R: 60, deg: 90 }, hairpin: { R: 18 }, chicane: { R: 40, deg: 35 }, sbend: { R: 60, deg: 45 } };
+/** The pieces each kind turns, in order (radians, signed for dir +1). */
+const PIECES = { corner: (p) => [p.deg], hairpin: () => [180], chicane: (p) => [p.deg, -2 * p.deg, p.deg], sbend: (p) => [p.deg, -p.deg] };
+/** A spiral of length Ls into radius Rc, integrated here by Simpson (not the
+ *  module's midpoint walk): the classic shift p and tangent offset k. */
+function shiftOf(Rc, Ls) {
+  const N = 2000, f = (s) => s * s / (2 * Rc * Ls);
+  let x = 0, y = 0;
+  for (let i = 0; i <= N; i++) { const s = Ls * i / N, w = i === 0 || i === N ? 1 : i % 2 ? 4 : 2; x += w * Math.cos(f(s)); y += w * Math.sin(f(s)); }
+  x *= Ls / N / 3; y *= Ls / N / 3;
+  const th = Ls / (2 * Rc);
+  return { p: y - Rc * (1 - Math.cos(th)), k: x - Rc * Math.sin(th) };
+}
+
+test("SPIRAL: every curved stamp turns exactly its angle for Ls 0–80; its exit line moves by the Euler spiral's own shift (a chicane's not at all)", () => {
+  const { ST } = bootEditor();
+  const DEG = Math.PI / 180, pose = { x: 12.5, z: -40.25, th: 0.7 };
+  for (const [kind, base] of Object.entries(CURVED)) for (const R of kind === "hairpin" ? [15, 18, 25] : [base.R, 30, 120, 300].filter((r) => r <= ST.KINDS[kind].max.R)) for (const Ls of [0, 20, 40, 80]) for (const dir of [1, -1]) {
+    const P = Object.assign({}, base, { R, dir, Ls }), what = `${kind} R ${R} Ls ${Ls} dir ${dir}`;
+    const st = ST.sample(kind, P, pose), plain = ST.sample(kind, Object.assign({}, P, { Ls: 0 }), pose);
+    const pieces = PIECES[kind](P).map((d) => d * DEG);
+    const net = pieces.reduce((a, b) => a + b, 0) * dir;
+    assert.ok(Math.abs(st.end.th - pose.th - net) < 1e-9, `${what}: heading change ${(st.end.th - pose.th) / DEG}° = ${net / DEG}°`);
+    let shift = 0;
+    for (const A of pieces) {
+      const sp = ST.spiralSweep(R, Ls, Math.abs(A));
+      assert.ok(Math.abs(2 * sp.sweep + sp.arc - Math.abs(A)) < 1e-12, `${what}: two spirals + the arc turn the piece's ${Math.abs(A) / DEG}°`);
+      assert.ok(sp.Ls === 0 || (sp.Ls >= 17 && sp.Ls <= 2 * ST.LS_MAX), `${what}: Ls' ${sp.Ls}`);
+      if (sp.Ls > 0) { const { p, k } = shiftOf(sp.Rc, sp.Ls), a = Math.abs(A); shift += p * (1 - Math.cos(a)) + k * Math.sin(a); }
+    }
+    // A chicane's pieces cancel (+A, −2A, +A); a hairpin's 180° is 2p; a corner's p(1 − cos A) + k sin A; an S-bend twice that.
+    if (kind === "chicane") shift = 0;
+    const off = (st.end.x - plain.end.x) * Math.cos(plain.end.th) - (st.end.z - plain.end.z) * Math.sin(plain.end.th);
+    assert.ok(Math.abs(Math.abs(off) - shift) < 0.5, `${what}: the end sits ${off.toFixed(3)} m off the Ls = 0 stamp's exit line, the spiral shift is ${shift.toFixed(3)} m`);
+    if (Ls === 0) assert.deepEqual(st.pts, plain.pts);
+  }
+});
+
+test("SPIRAL: Ls 0 (or omitted) is the pre-spiral stamp byte for byte; a spiralled stamp keeps 8 m spacing and splices", () => {
+  const { ST, S, TR } = bootEditor();
+  // fnv1a over every pre-spiral sample (shape.js + stamps.js at f244cee83), pinned.
+  const digest = (extra) => {
+    let h = 0x811c9dc5;
+    const feed = (s) => { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } };
+    for (const kind of ["corner", "hairpin", "chicane", "sbend"]) for (const R of [15, 18, 25, 30, 45, 60, 100, 300, 600]) for (const deg of [10, 35, 60, 90, 120, 180, 270]) for (const dir of [1, -1]) {
+      const st = ST.sample(kind, Object.assign({ R, deg, dir }, extra), { x: 12.5, z: -40.25, th: 0.7 });
+      feed(JSON.stringify([st.pts, st.end]));
+    }
+    return (h >>> 0).toString(16);
+  };
+  assert.equal(digest({}), "e86efca4", "Ls omitted: the pre-spiral output");
+  assert.equal(digest({ Ls: 0 }), "e86efca4", "Ls 0: the same");
+  assert.notEqual(digest({ Ls: 40 }), "e86efca4");
+  assert.equal(ST.clampParams("corner", { Ls: 999 }).Ls, 80); assert.equal(ST.clampParams("hairpin", { Ls: -5 }).Ls, 0);
+  assert.equal("Ls" in ST.clampParams("straight", {}), false, "a straight has no spiral");
+  for (const kind of Object.keys(CURVED)) for (let R = 15; R <= 300; R += 7) for (const deg of [10, 45, 90, 180, 270]) for (const Ls of [5, 10, 25, 50, 80]) {
+    // Where the plain stamp already clears the spacing rule (a 10° arc at R 15 is 2.6 m long: it does not).
+    const minChord = (st) => { let prev = [0, 0], m = Infinity; for (const p of st.pts) { m = Math.min(m, Math.hypot(p[0] - prev[0], p[1] - prev[1])); prev = p; } return m; };
+    if (minChord(ST.sample(kind, { R, deg, dir: 1 }, { x: 0, z: 0, th: 0 })) < ST.SPACING) continue;
+    assert.ok(minChord(ST.sample(kind, { R, deg, Ls, dir: 1 }, { x: 0, z: 0, th: 0 })) >= ST.SPACING, `${kind} R ${R} ${deg}° Ls ${Ls}: spacing`);
+  }
+  const rnd = S.rng(5), kinds = Object.keys(CURVED);
+  let ok = 0;
+  for (let t = 0; t < 120; t++) {
+    const base = TR.generate(t).pts, N = base.length, i0 = Math.floor(rnd() * N), i1 = (i0 + Math.floor(rnd() * 5)) % N;
+    const r = ST.splice(base, i0, i1, kinds[t % 4], { R: 15 + rnd() * 200, deg: 10 + rnd() * 200, dir: rnd() < 0.5 ? 1 : -1, Ls: 20 + rnd() * 60 });
+    if (!r.ok) continue;
+    ok++;
+    assert.ok(r.pts.length <= 200);
+    for (let i = 0; i < r.pts.length; i++) { const a = r.pts[i], b = r.pts[(i + 1) % r.pts.length]; assert.ok(Math.hypot(b[0] - a[0], b[1] - a[1]) >= ST.SPACING - 1e-9, `t ${t}: spacing at ${i}`); }
+  }
+  assert.ok(ok >= 100, ok + "/120 spiralled splices");
+});
+
+test("SPIRAL: a spiralled CORNER builds at its radius (±5 %, R 30–300) and the curvature steps at its ends drop ≥ 30 %", () => {
+  const { ST, C, ctx } = bootEditor();
+  // Three identical 120° corners and three straights: a loop that closes by
+  // symmetry, so no Dubins rejoin sits beside the corner under test.
+  const loop = (R, Ls) => {
+    let cur = { x: 0, z: 0, th: 0 };
+    const pts = [[0, 0]], marks = [];
+    for (let q = 0; q < 3; q++) {
+      const st = ST.sample("straight", { L: R > 200 ? 500 : 700 }, cur); pts.push(...st.pts); cur = st.end;
+      const c = ST.sample("corner", { R, deg: 120, dir: -1, Ls }, cur); marks.push([pts.length - 1, pts.length - 1 + c.pts.length]); pts.push(...c.pts); cur = c.end;
+    }
+    pts.pop();                                            // the last corner ends on point 0
+    return { pts, marks };
+  };
+  const measure = (R, Ls) => {
+    const { pts, marks } = loop(R, Ls), tr = rawBuild(ctx, C, pts);
+    const near = (p) => { let best = Infinity, k0 = 0; for (let k = 0; k < tr.n; k++) { const d = Math.hypot(tr.px[k] - p[0], tr.pz[k] - p[1]); if (d < best) { best = d; k0 = k; } } return k0; };
+    let err = 0, dk = 0;
+    for (const [i0, i1] of marks) {
+      const a = near(pts[i0]), span = ((near(pts[i1 % pts.length]) - a) % tr.n + tr.n) % tr.n;
+      let peak = 0;
+      for (let s = 0; s <= span; s++) peak = Math.max(peak, Math.abs(tr.curv[(a + s) % tr.n]));
+      err = Math.max(err, Math.abs(1 / peak / R - 1));
+      // node-to-node curvature steps over the corner and 60 m either side of it
+      for (let s = -15; s <= span + 15; s++) { const k = (a + s + tr.n) % tr.n; dk = Math.max(dk, Math.abs(tr.curv[(k + 1) % tr.n] - tr.curv[k])); }
+    }
+    return { err, dk };
+  };
+  const rows = [];
+  for (const R of [30, 60, 120, 300]) {
+    const flat = measure(R, 0), sp = measure(R, 80), cut = 1 - sp.dk / flat.dk;
+    rows.push(`R ${R}: apex ${(sp.err * 100).toFixed(1)} % off (Ls 0: ${(flat.err * 100).toFixed(1)} %), max |Δk| ${flat.dk.toExponential(2)} → ${sp.dk.toExponential(2)} (−${(cut * 100).toFixed(0)} %)`);
+    assert.ok(sp.err < 0.05, rows[rows.length - 1]);
+    assert.ok(cut >= 0.3, rows[rows.length - 1]);
+  }
+  console.log("SPIRAL 80 m on a 120° corner:\n  " + rows.join("\n  "));
+});

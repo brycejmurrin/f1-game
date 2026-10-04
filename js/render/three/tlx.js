@@ -1043,7 +1043,15 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
               softDest: function () { return softOutRT(); },
-              wantSpatialUpscale, getPresentSize });
+              wantSpatialUpscale, getPresentSize,
+              // SCENE MSAA (2026-10-01): 4 samples on the scene target on the
+              // desktop WebGL2 backend only — GLX's HIGH/ULTRA recipe. The
+              // WebGL backend resolves colour AND the depth texture by
+              // blitFramebuffer (resolveDepthBuffer), so SSAO/SSR/godray read a
+              // resolved depth. Phones keep the GLX mobile recipe (FXAA alone);
+              // the native-WebGPU TLX path stays single-sample: core WebGPU
+              // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
+              sceneSamples: (forceWebGL && !isMobile) ? 4 : 0 });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -1072,6 +1080,7 @@ const TLX = (function () {
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
       // attribute.array.constructor on that first compile — the env probe's
@@ -2017,6 +2026,16 @@ const TLX = (function () {
       // compile it once per vertex layout already in the pool: the pipeline also
       // keys on the layout, and tlx-chunked's pack makes layouts differ by mesh.
       const _LATE_LIT = [{ roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 0.5 }];
+      // THE LAUNCH'S FX VARIANTS (FieldLod warm, js/car/field-lod.js): the
+      // throttle-lift exhaust flame (car-draw.js _flameOpts, alpha < 1) and the
+      // ERS strip's two phases (_ersLightOpts, alpha 1 / 0.6) are first drawn when
+      // the field lifts after the lights. Their meshes are one flat quad
+      // (car-mesh.js _flatQuadData), so they compile on THAT layout only — a
+      // probe geometry built the same way — in both winding signs, not on every
+      // layout in the pool like the ring above. apex26.fieldLod=0 skips them.
+      const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
+        { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
+      const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
         for (const n of Object.keys(g.attributes).sort()) {
@@ -2033,6 +2052,7 @@ const TLX = (function () {
       function mintLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
         for (const o of _LATE_LIT) materialFor(o, false, false);
+        if (_lateFxOn()) for (const o of _LATE_FX) materialFor(o, false, false);
       }
       async function warmLateLit() {
         if (!_warmFx || !lit || _drawMatMode || vizMat) return;
@@ -2063,6 +2083,19 @@ const TLX = (function () {
             await renderer.compileAsync(m, camera, scene);
           }
         }
+        if (!_lateFxOn()) return;
+        const quad = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] });   // HDR colour: packAttr keeps it float, as on the real flame
+        for (const o of _LATE_FX) {
+          const mat = materialFor(o, false, false);
+          for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(quad, mat);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+        _warmStages.lateFx = _LATE_FX.length;
       }
       // AUTO (unset) = ON for three's WebGL2 backend only. There compileAsync
       // links with KHR_parallel_shader_compile and polls COMPLETION_STATUS, but
@@ -2153,13 +2186,34 @@ const TLX = (function () {
               await renderer.compileAsync(scene, camera);
               // The composite, like all post quads, draws under the main MRT.
               renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              // So does the cockpit's live glass (drawMirrorGlass), in the scene
+              // pass: compiled here on createTexMesh's layout, both winding signs
+              // (the pipeline keys on the matrix's determinant), or its first
+              // mirror frame would build it mid-race.
+              if (fx && fx.mirrorGlassMaterial) {
+                renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+                if (!_glassProbeGeo) {
+                  _glassProbeGeo = new THREE.BufferGeometry();
+                  _glassProbeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
+                  _glassProbeGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]), 3));
+                  _glassProbeGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
+                  _glassProbeGeo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2, 0, 2, 3]), 1));
+                }
+                const gm = fx.mirrorGlassMaterial(mirRT.texture);
+                for (const sx of [1, -1]) {
+                  const m = new THREE.Mesh(_glassProbeGeo, gm);
+                  m.frustumCulled = false;
+                  m.scale.x = sx; m.updateMatrixWorld(true);
+                  await renderer.compileAsync(m, camera, scene);
+                }
+              }
               if (post.warmMirror) await post.warmMirror(mirRT.texture);
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
           } catch (e) {
             _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
-            try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
+            try { Log.warn("gfx", "TLX program warm failed", String(e), (e && e.stack) || ""); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.total = Math.round(performance.now() - _warmAt);
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
@@ -2225,7 +2279,6 @@ const TLX = (function () {
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
           if (now - (m.__tlxSeen || 0) < PRUNE_IDLE_MS) { meshPool[w++] = m; continue; }
-          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
           const byMat = meshByGeo.get(m.geometry);
           if (byMat) {
             // Drop the wrapper from its occurrence list; an emptied list and an
@@ -2240,10 +2293,44 @@ const TLX = (function () {
           }
           // NEVER dispose the geometry or the material here — both are owned by
           // the caller (tracks.js, the chunk system, matCache) and are still
-          // live. Only the wrapper is ours to drop.
-          m.geometry = null; m.material = null;
+          // live. Only the wrapper is ours to drop (dropWrapper: and its
+          // render object with it, or three keeps the geometry anyway).
+          dropWrapper(m);
         }
         meshPool.length = w;
+      }
+
+      // A WRAPPER WE DROP MUST SAY SO TO THREE. three's render-object cache
+      // (Renderer._objects._renderObjects) keys one RenderObject per [object,
+      // material, renderContext, lightsNode] and keeps it — with the geometry
+      // and its vertex buffers — until the OBJECT or the MATERIAL dispatches
+      // "dispose"; a geometry's own dispose() only nulls the attribute mirror.
+      // Mesh has no dispose(), so a wrapper dropped from the pool kept every
+      // chunk of every freed track resident: measured 2026-10-02 on the picker
+      // (monza→monaco→spa, three cycles), the JS heap after GC climbed ~17 MB
+      // per pick with the track object itself already collected, and the heap
+      // diff was +676 RenderObjects / +863 GPUBuffers / +53 MB array data per
+      // cycle, all reached through _renderObjects. The event is the contract
+      // three's RenderObject listens for (object.addEventListener("dispose")).
+      // NOT WHILE A WARM IS IN FLIGHT: compileAsync collects (object, material)
+      // pairs synchronously, then awaits one pipeline at a time, and between
+      // those awaits present() runs — a wrapper dropped there is re-fetched by
+      // the warm with its render object gone and its geometry null ("Cannot
+      // read properties of null (reading 'addEventListener')", measured on a
+      // race→race switch). Queue the drop; flushDropped() finishes it on the
+      // first present after the warm settles, when no compile holds the mesh.
+      const _dropQueue = [];
+      function dropWrapper(m) {
+        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        m.visible = false;
+        if (_warmPending) { _dropQueue.push(m); return; }
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        m.geometry = null; m.material = null;
+      }
+      function flushDropped() {
+        if (_warmPending || !_dropQueue.length) return;
+        for (const m of _dropQueue) dropWrapper(m);
+        _dropQueue.length = 0;
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
@@ -2256,11 +2343,11 @@ const TLX = (function () {
         for (let i = 0; i < meshPool.length; i++) {
           const m = meshPool[i];
           if (m.geometry !== geo) { meshPool[w++] = m; continue; }
-          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
-          m.geometry = null; m.material = null;
+          dropWrapper(m);
         }
         meshPool.length = w;
         meshByGeo.delete(geo);
+        if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
       }
 
       function disposeGeometry(geo) {
@@ -3397,7 +3484,20 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+        },
+        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
+        // rendered in mirrorEnd before this pass records, on the glass mesh as
+        // one opaque draw record (tsl-fx.js mirrorGlassMaterial). Refused — the
+        // caller lays its fallback — with no image yet, a dead target, the PiP
+        // (flip false), or a mirror pass still recording (it would sample the
+        // target it is about to render into).
+        drawMirrorGlass(mesh, model, opts) {
+          if (_mirActive || _mirDead || !mirRT || _mirRenders <= 0 || !_mirFlip || !fx || !fx.mirrorGlassMaterial
+              || !mesh || !mesh.geo || !model) return false;
+          pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
+          _mirGlass++;
+          return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
@@ -3863,6 +3963,7 @@ const TLX = (function () {
           _poolBatch++;
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
+          flushDropped();
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -4291,6 +4392,18 @@ const TLX = (function () {
               particles: _fxLast.particles, decals: _fxLast.decals,
             };
           },
+          // Zero last-presented FX counters so a Home-garage present (glow
+          // without blob shadows / car decals) cannot satisfy a race probe
+          // while Metal is still warming and Singapore has not presented.
+          // stopHome / startRace call this; the next race present() rewrites
+          // _fxLast from a real frame.
+          clearFxState() {
+            _fxLast.shadows = 0; _fxLast.marks = 0; _fxLast.skidVerts = 0;
+            _fxLast.glow = 0; _fxLast.particles = 0; _fxLast.decals = 0;
+            _fxFrame.shadows = 0; _fxFrame.marks = 0; _fxFrame.skidVerts = 0;
+            _fxFrame.glow = 0; _fxFrame.particles = 0; _fxFrame.decals = 0;
+            if (post && typeof post.clearLast === "function") post.clearLast();
+          },
           skyState() {
             return {
               on: !!(sky && skyMesh && skyMesh.visible),
@@ -4508,6 +4621,13 @@ const TLX = (function () {
                   // SHARED_UNIFORMS — valid on a software adapter too.
                   o.rUbo = inf.memory.uniformBuffers;
                   o.rUboKB = inf.memory.uniformBuffersSize != null ? +(inf.memory.uniformBuffersSize / 1024).toFixed(1) : null;
+                  // Live RenderObjects (three's _objects cache). The per-object
+                  // arm's buffer count is only comparable PER render object:
+                  // prunePool drops a wrapper's render object after 20 s idle
+                  // (dropWrapper), so the raw count follows how long a sample
+                  // took, not the layout.
+                  const ro = renderer._objects && renderer._objects._renderObjects;
+                  o.rObj = ro && typeof ro.size === "number" ? ro.size : null;
                 }
                 if (inf.render) { o.calls = inf.render.calls; }
               }
