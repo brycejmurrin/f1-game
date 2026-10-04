@@ -225,6 +225,8 @@ const GameAudio = (function () {
   let shiftFired = 0, shiftPeak = 0;   // gear-shift cracks emitted, and the last one's level (test hook)
   let boostFired = 0, boostPeak = 0;   // deploy whooshes emitted, and the last one's level (test hook)
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
+  let rateFresh = false;               // true until the first setEngine after a sample-voice start
+  let lastGearSeen = NaN;              // gear handed to the previous setEngine (skip-shift snap)
   let cueT = 0, cueFired = 0, cueU = 0; // braking-cue: next blip due, blips emitted, live urgency
 
   let engBuf = null, samplesReady = false;
@@ -526,6 +528,18 @@ const GameAudio = (function () {
     return !!ctx && isEnabled && sfxEnabled;
   }
 
+  const LOW_GEAR_RATE = [0.6, 0.72, 0.84];
+  // Absolute playbackRate jump that is a gear discontinuity, not a rev climb.
+  // A 1→3 skip at ~16 m/s moves ~0.13 → ~0.54; the 0.035 s setTargetAtTime
+  // tau held the idle rate across the shift frame and took 0.10–0.15 s to
+  // catch up. Below this, smooth; at or above, snap.
+  const RATE_SNAP_JUMP = 0.08;
+  function snapParam(p, target, t) {
+    p.cancelScheduledValues(t);
+    p.setValueAtTime(target, t);
+    p._apexAimTgt = target;
+  }
+
   function now() { return ctx ? ctx.currentTime : 0; }
 
   function startEngineBody() {
@@ -616,6 +630,7 @@ const GameAudio = (function () {
     engA = engB = engC = null;
     engSrcIdle = engGainIdle = null;
     idleGainRamped = false;   // new gain node, so the fade-in must happen again
+    rateFresh = false;
     if (usingSamples) {
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       // Voice detune is a base offset in cents; the offroad LFO adds on top.
@@ -624,10 +639,27 @@ const GameAudio = (function () {
       // these sources do not exist yet, so a start that read voice.detune alone
       // would run on the bare manufacturer value until the next slider move.
       engSrcIdle.detune.value = voice.detune + (tune.detune - 1) * 30;
+      // BufferSource.playbackRate defaults to 1.0. Starting the loop at that
+      // and then aiming toward the real rate (~0.25–0.70) with setTargetAtTime
+      // is an audible pitch spike the moment engGainIdle opens — measured at
+      // lights-out as rate 0.937 before settling near 0.61. Seed the rate from
+      // the last known ask (sample→sample restart / mid-race upgrade) or from
+      // the stock idle end so the first audible frame is already in-family.
+      const seedRate = lastRate > 0.02
+        ? lastRate
+        : 0.25 * tune.idle * voice.rateTrim * tune.pitch * LOW_GEAR_RATE[0];
+      engSrcIdle.playbackRate.value = seedRate;
+      engSrcIdle.playbackRate._apexAimTgt = seedRate;
       const li = findStableLoop(engBuf);
       engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
-      engGainIdle = ctx.createGain(); engGainIdle.gain.value = 0;
+      // Mid-race upgrade (synth→samples, or a stop/start while lastRate is
+      // live): keep the voice open. A cold start still fades in from 0 so the
+      // note does not slam in with the lights.
+      engGainIdle = ctx.createGain();
+      if (lastRate > 0.02) { engGainIdle.gain.value = 0.9; idleGainRamped = true; }
+      else engGainIdle.gain.value = 0;
       engSrcIdle.connect(engGainIdle).connect(engFilter);
+      rateFresh = true;   // first setEngine snaps to the live rate (no ramp from seed)
     } else {
       // synth fallback: two detuned saws + a square
       engA = ctx.createOscillator();
@@ -1011,10 +1043,11 @@ const GameAudio = (function () {
     convolver = revSend = revReturn = null;
     rivalVoices = [];
     idleGainRamped = false;
+    rateFresh = false;
+    lastGearSeen = NaN;
     engineOn = false;
   }
 
-  const LOW_GEAR_RATE = [0.6, 0.72, 0.84];
   function setEngine(rev01, boost01, offroad, speed01, gear, physics) {
     if (!engineOn || !sfxOk()) return;
     // UPGRADE TO THE SAMPLES WHEN THEY LAND. `usingSamples` is decided once,
@@ -1067,34 +1100,60 @@ const GameAudio = (function () {
     // trim, which is the monotonicity the checks pin.
     const revC = Math.pow(rev, tune.curve);
     let f0 = 0;   // the core's live fundamental, Hz — the sub-octave and the gravel rate hang off it
-    if (usingSamples) {
+    // Sample-core playbackRate and a parallel lastRate for the synth path
+    // (so a mid-race sample upgrade can seed the new BufferSource instead of
+    // starting at the Web Audio default of 1.0).
+    {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
       const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
-      // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
-      // in rev and the gear ordering is unchanged (same trim on both sides).
-      // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
-      // sum — the decoupling TUNE_DEF explains.
       const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
-      lastRate = rate;
-      aimParam(engSrcIdle.playbackRate, rate, t, 0.035, 1e-4);
-      f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
-      // NOT a crossfade to the second recording: measured 2026-09-03 with
-      // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load reads
-      // DARKER (centroid 1489 -> 1389 Hz at the same rev) — its brightness
-      // FALLS as revs rise. Single coherent voice: run only the steady idle
-      // loop, pitched; brightness/"load" comes from the lowpass opening with
-      // revs and from loadLift below, which the check pins.
-      // engGainIdle.gain -> 0.9 is a constant, so only the FIRST call does
-      // anything (this runs EVERY FRAME) — but it must still be a ramp, not a
-      // direct .value, or the voice snaps in instead of fading over the 0.05 s tau.
-      if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
-    } else {
-      // synth fallback: detuned saws + sub follow the per-gear frequency
-      const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
-      aimParam(engA.frequency, base * 0.994, t, 0.025, 1e-4);
-      aimParam(engB.frequency, base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025, 1e-4);
-      aimParam(engC.frequency, base * 0.5, t, 0.025, 1e-4);
-      f0 = base;
+      const gearChanged = typeof gear === "number" && isFinite(gear) && isFinite(lastGearSeen) && g !== lastGearSeen;
+      if (usingSamples) {
+        // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
+        // in rev and the gear ordering is unchanged (same trim on both sides).
+        // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
+        // sum — the decoupling TUNE_DEF explains.
+        lastRate = rate;
+        const cur = engSrcIdle.playbackRate.value;
+        // Snap across discontinuities (first frame after start/upgrade, any
+        // gear change including a 1→3 skip, or a jump the 0.035 s tau cannot
+        // cover without leaving the idle rate on the shift frame). Steady rev
+        // climbs still use aimParam so the note does not staircase.
+        if (rateFresh || gearChanged || Math.abs(rate - cur) >= RATE_SNAP_JUMP) {
+          snapParam(engSrcIdle.playbackRate, rate, t);
+        } else {
+          aimParam(engSrcIdle.playbackRate, rate, t, 0.035, 1e-4);
+        }
+        rateFresh = false;
+        f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
+        // NOT a crossfade to the second recording: measured 2026-09-03 with
+        // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load reads
+        // DARKER (centroid 1489 -> 1389 Hz at the same rev) — its brightness
+        // FALLS as revs rise. Single coherent voice: run only the steady idle
+        // loop, pitched; brightness/"load" comes from the lowpass opening with
+        // revs and from loadLift below, which the check pins.
+        // engGainIdle.gain -> 0.9 is a constant, so only the FIRST call does
+        // anything (this runs EVERY FRAME) — but it must still be a ramp, not a
+        // direct .value, or the voice snaps in instead of fading over the 0.05 s tau.
+        if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
+      } else {
+        // synth fallback: detuned saws + sub follow the per-gear frequency.
+        // Mirror lastRate so a later sample upgrade seeds the BufferSource at
+        // the note the synth was already singing, not at 1.0.
+        lastRate = rate;
+        const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
+        if (gearChanged) {
+          snapParam(engA.frequency, base * 0.994, t);
+          snapParam(engB.frequency, base * (1 + (voice.synthSpread - 1) * tune.detune), t);
+          snapParam(engC.frequency, base * 0.5, t);
+        } else {
+          aimParam(engA.frequency, base * 0.994, t, 0.025, 1e-4);
+          aimParam(engB.frequency, base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025, 1e-4);
+          aimParam(engC.frequency, base * 0.5, t, 0.025, 1e-4);
+        }
+        f0 = base;
+      }
+      if (typeof gear === "number" && isFinite(gear)) lastGearSeen = g;
     }
 
     // Engine load from traction loss: when wheels are sliding the engine works

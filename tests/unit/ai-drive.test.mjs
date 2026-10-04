@@ -1348,7 +1348,7 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
       const r = rnd();
       const prog = r < 0.02 ? NaN
         : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;   // 0-2 laps up
-      return { prog, finished: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
+      return { prog, _snapProg: prog, finished: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
     });
     for (const c of cars) {
       const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP);
@@ -1405,7 +1405,7 @@ test("letPassCase: a lapping car closing on the gearbox is waved through; a same
   assert.equal(on({ racing: false }), false, "only in the race");
   assert.equal(on({ chaser: null }), false);
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\.prog - c\.prog > track\.total \* 0\.5\)/,
+  assert.match(game, /AiDrive\.letPassCase\([\s\S]{0,200}chaser\._snapProg - c\.prog > track\.total \* 0\.5\)/,
     "game.js asks the rule with LAPPING = a lap or more ahead in progress");
 });
 

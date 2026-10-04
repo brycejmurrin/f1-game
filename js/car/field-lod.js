@@ -17,7 +17,7 @@
 const FieldLod = (function () {
   const T = Object.freeze({
     WHEEL_EXTRAS_M: 50,   // beyond: the 4 rotating wheels only (no fixed layers, spin discs, compound stripes)
-    FLAPS_M: 80,          // active-aero flaps within (was 150)
+    FLAPS_M: 80,          // MOVING active-aero flaps within (was 150); beyond, one static set (never none)
     FLAME_M: 60,          // throttle-lift exhaust flame within (was ungated)
     NO_DECAL_M: 120,      // beyond: no livery decal (body + the 4 rotating wheels). Not a whole-car
                           // mesh: pre-building one per rival cost ~5 s of CPU at track build (game-vm)
@@ -74,7 +74,8 @@ const FieldLod = (function () {
       tier: t, body: true, decal: t < 2, wheels: true,
       fixedWheels: !lite, spinDisc: !lite && (isPlayer || dist2 < sq(120)),
       compound: !lite && (isPlayer || dist2 < sq(60)),
-      flaps: isPlayer || dist2 < sq(flapsM()), flame: isPlayer || flame(dist2),
+      flaps: isPlayer || dist2 < sq(flapsM()), flapSet: true,   // flaps: can MOVE; the set: always drawn
+      flame: isPlayer || flame(dist2),
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
