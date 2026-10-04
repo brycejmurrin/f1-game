@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { selectionReceipt, validateSelectionArgs } from "../../tools/ci/pick-tests.mjs";
-import { cachedPlan } from "../../tools/ci/sync-pr.mjs";
+import { cachedPlan, returnTo } from "../../tools/ci/sync-pr.mjs";
 import { sessionId, main as whoMain } from "../../tools/ci/who-is-on-it.mjs";
 import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
 import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
@@ -65,6 +65,36 @@ test("sync plan only reads cached refs, and does not invent conflict evidence", 
   assert.equal(plan.source, "cached-remote-refs");
   assert.equal(plan.conflictsChecked, false);
   assert.equal(plan.conflicts, null);
+});
+
+test("sync-pr's failure path aborts a merge in progress, checks the checkout, and says where the tree is", () => {
+  // It logged "tree left on <sync branch>" and then ran an unchecked
+  // `git checkout <startedOn>` — wrong when that worked, silent when it failed.
+  const fake = (state) => {
+    const calls = [];
+    const g = (args) => {
+      calls.push(args.join(" "));
+      if (args[0] === "rev-parse" && args.includes("MERGE_HEAD")) return { code: state.merging ? 0 : 1, out: "", err: "" };
+      if (args[0] === "merge" && args[1] === "--abort") { state.merging = false; return { code: 0, out: "", err: "" }; }
+      if (args[0] === "checkout") {
+        if (state.merging || state.refuse) return { code: 1, out: "", err: "error: you need to resolve your current index first" };
+        state.on = args[1]; return { code: 0, out: "", err: "" };
+      }
+      if (args[0] === "branch") return { code: 0, out: state.on, err: "" };
+      return { code: 0, out: "", err: "" };
+    };
+    return { g, calls };
+  };
+  const mid = { on: "sync-pr-x", merging: true };
+  const a = fake(mid);
+  const r1 = returnTo("claude/x", "sync-pr-x", a.g);
+  assert.ok(a.calls.includes("merge --abort"), "a merge in progress is aborted before the checkout");
+  assert.equal(r1.ok, true);
+  assert.match(r1.line, /back on claude\/x; the attempt is kept on branch sync-pr-x/);
+  const stuck = { on: "sync-pr-x", refuse: true };
+  const r2 = returnTo("claude/x", "sync-pr-x", fake(stuck).g);
+  assert.equal(r2.ok, false);
+  assert.match(r2.line, /could NOT return to claude\/x .*the working tree is on sync-pr-x/);
 });
 
 test("sync --plan CLI never fetches or changes branches", (t) => {

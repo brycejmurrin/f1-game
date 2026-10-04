@@ -37,6 +37,51 @@ const GameAudioSoundtrack = (function () {
     // one context for life, and iOS lets an element that a gesture has played
     // play its next src without another gesture (a fresh element per track would not).
     let musicEl = null, musicElNode = null, musicElUrl = null, musicStreaming = false;
+    // UPLOADS STREAM ON EVERY PLATFORM. music-lib.js caps an upload at 25 MB of
+    // BYTES, which is not a bound on PCM: 25 MB of 64 kbps Opus is ~55 min, or
+    // ~1.26 GB of Float32 at a 48 kHz stereo context, all allocated by one
+    // decodeAudioData call on the main heap. A `user:` entry therefore always
+    // takes streamTrack (a blob: URL, so the element reads it from memory), and
+    // the A/B switch above only chooses for the shipped tracks. If streaming is
+    // unavailable, an upload is decoded only when its duration — read from the
+    // file's own metadata, or estimated from its size when that fails — keeps
+    // the PCM to about what one shipped track costs.
+    const USER_DECODE_MAX_S = 600;            // 10 min: ~230 MB of 48 kHz stereo f32
+    const USER_EST_BPS = 128000 / 8;          // bytes/s for the size estimate (128 kbps)
+    function probeDuration(url) {
+      return new Promise((res) => {
+        if (typeof Audio !== "function") { res(NaN); return; }
+        let el = null, done = false, timer = 0;
+        const fin = (d) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          if (el) {
+            el.onloadedmetadata = el.onerror = null;
+            try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded: nothing to drop */ }
+          }
+          res(d);
+        };
+        timer = setTimeout(() => fin(NaN), 5000);
+        try {
+          el = new Audio(); el.preload = "metadata";
+          el.onloadedmetadata = () => fin(+el.duration);
+          el.onerror = () => fin(NaN);
+          el.src = url;
+        } catch (e) { fin(NaN); }
+      });
+    }
+    // Resolves the ArrayBuffer when an upload may be decoded, rejects (and so
+    // skips the track, musicLoadFailed) when it would decode to too much PCM.
+    function userDecodeGate(url, ab) {
+      return probeDuration(url).then((d) => {
+        const secs = Number.isFinite(d) && d > 0 ? d : ab.byteLength / USER_EST_BPS;
+        if (secs > USER_DECODE_MAX_S) {
+          throw new Error("upload too long to decode without streaming (" + Math.round(secs / 60) + " min > " + (USER_DECODE_MAX_S / 60) + " min)");
+        }
+        return ab;
+      });
+    }
     const MENU_TRACK = "assets/music/menu.mp3";
     const PLAYLIST = [
       { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
@@ -107,8 +152,13 @@ const GameAudioSoundtrack = (function () {
           return false;
         }
       }
-      for (const k in musicBuffers) delete musicBuffers[k];   // a decoded track left by an A/B switch is dead weight
-      _bufKeys.length = 0;
+      // A decoded track left by an A/B switch is dead weight. An upload streamed
+      // on the decode path (desktop) is not a switch: the shipped tracks keep
+      // their bounded cache for when the playlist comes back to them.
+      if (streamMusic()) {
+        for (const k in musicBuffers) delete musicBuffers[k];
+        _bufKeys.length = 0;
+      }
       const el = musicEl;
       const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
       musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
@@ -226,7 +276,8 @@ const GameAudioSoundtrack = (function () {
       const token = ++musicToken;
       // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
       if (host.context().state !== "running" && !document.hidden) { const p = host.context().resume(); if (p && p.catch) p.catch(host.resumeRejected("music")); }
-      if (streamMusic() && typeof Audio === "function" && host.context().createMediaElementSource && streamTrack(url, token)) return;
+      const isUser = !PLAYLIST[musicIndex].builtin;
+      if ((isUser || streamMusic()) && typeof Audio === "function" && host.context().createMediaElementSource && streamTrack(url, token)) return;
       if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
       // SONG-CHANGE SPIKE (perf-memory M-4a). The eviction below runs only once
       // the NEW decode resolves, and musicResumeBuf pins the old track too, so a
@@ -247,6 +298,7 @@ const GameAudioSoundtrack = (function () {
       if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
       const _load = fetch(url)
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
+        .then((ab) => (isUser ? userDecodeGate(url, ab) : ab))
         .then((ab) => new Promise((res, rej) => { host.context().decodeAudioData(ab, res, rej); }))
         .then((buf) => {
           // Every track, builtin or uploaded, is cached under the same bound
@@ -279,7 +331,15 @@ const GameAudioSoundtrack = (function () {
 
     function setMusicVolume(v) {
       musicVol = host.clamp01(typeof v === "number" ? v : 0.5);
-      if (musicGain) { musicGain.gain.value = musicVol * MUSIC_FULL; musicGain._apexDuckTgt = null; }   // a direct write invalidates the duck cache
+      // A glide, not a `.value =` step (a click on every slider move): the same
+      // tau-0.02 s setTargetAtTime engine.js glideLevel uses. Re-aiming here
+      // still invalidates the duck cache, so the next setEngine re-ducks.
+      if (musicGain && host.context()) {
+        const t = host.now();
+        musicGain.gain.cancelScheduledValues(t);
+        musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t, 0.02);
+        musicGain._apexDuckTgt = null;
+      }
       if (backend) { try { backend.setVolume(musicVol); } catch (e) { /* a broken backend must not take the audio down */ } }
       return musicVol;
     }

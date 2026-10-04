@@ -523,6 +523,73 @@ test("an oversized numeric literal on disk is refused, not returned as Infinity"
   assert.equal(store.get("career.money", 0), 42, "a finite number still loads");
 });
 
+// review-race-career-data #4 (2026-10-04): one corrupt key set `broken`, the
+// flag a quota or blocked storage sets, so the SESSION ONLY banner came up on
+// every boot while every write still succeeded — and the bytes stayed on disk.
+test("a corrupt key is removed and logged; storage is not flagged broken", () => {
+  const { store, disk, warns } = bootLogged();
+  disk.set("apex26.bad", "{oops");
+  disk.set("apex26.good", JSON.stringify({ ok: 1 }));
+  assert.equal(store.get("bad", "dflt"), "dflt", "the default is served");
+  assert.equal(store.broken, null, "a corrupt value is not broken storage");
+  assert.equal(store.writeFailed(), null);
+  assert.equal(disk.has("apex26.bad"), false, "the corrupt key is removed from disk");
+  assert.ok(warns.some((m) => /apex26\.bad was unreadable \(SyntaxError/.test(m) && /removed/.test(m)), "and Log says so");
+  assert.deepEqual(store.get("good", null), { ok: 1 }, "other keys are untouched");
+  assert.equal(disk.has("apex26.good"), true);
+});
+
+test("write(k, undefined) removes the key instead of storing the string \"undefined\"", () => {
+  const { store, disk } = load();
+  store.write("u", { a: 1 });
+  assert.equal(disk.has("apex26.u"), true);
+  const r = store.write("u", undefined);
+  assert.equal(r.ok, true);
+  assert.equal(r.durable, true);
+  assert.equal(disk.has("apex26.u"), false, "no literal \"undefined\" on disk");
+  assert.equal(store.get("u", "D"), "D", "this session reads the default");
+  store.set("v", undefined);
+  assert.equal(disk.has("apex26.v"), false);
+  // The next boot reads the default with nothing flagged.
+  const again = load();
+  for (const [k, val] of disk) again.disk.set(k, val);
+  assert.equal(again.store.get("u", "D"), "D");
+  assert.equal(again.store.broken, null);
+});
+
+/** store.js over a disk whose setItem throws `fail.name` while it is set, with
+ *  Log.warn captured. */
+function bootLogged(fail = { name: null }) {
+  const disk = new Map();
+  const warns = [];
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console,
+    localStorage: {
+      getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+      setItem: (k, v) => { if (fail.name) { const e = new Error("full"); e.name = fail.name; throw e; } disk.set(k, String(v)); },
+      removeItem: (k) => { disk.delete(k); },
+      key: (i) => [...disk.keys()][i], get length() { return disk.size; },
+    },
+    Log: { warn(ns, ...m) { warns.push(m.join(" ")); }, info() {} }, Teams: { LIST: [] },
+  });
+  ctx.window = ctx; ctx.addEventListener = () => {};
+  seedSaveMigrate(ctx);
+  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
+  return { store: vm.runInContext("GameStore", ctx).store, disk, warns };
+}
+
+test("writeFailed() names a failed write until that key is written durably again", () => {
+  const fail = { name: "QuotaExceededError" };
+  const { store } = bootLogged(fail);
+  assert.equal(store.writeFailed(), null, "nothing failed yet");
+  assert.equal(store.write("career.driver.0", { money: 1 }).durable, false);
+  assert.equal(store.writeFailed(), "QuotaExceededError");
+  fail.name = null;
+  store.write("other", 1);
+  assert.equal(store.writeFailed(), "QuotaExceededError", "a different key's success does not clear it");
+  store.write("career.driver.0", { money: 2 });
+  assert.equal(store.writeFailed(), null, "the same key written durably clears it");
+});
 
 // Exercise the domain owners too: migrations alter a save's bytes before the
 // first write, and failed localStorage writes give Career no storage event.
