@@ -254,9 +254,7 @@
           addCyl(stage, vadd(BASE, b[1], TOWER_H + 1.3), 0.35, 4.2, STEEL, 5, b);
           addBox(stage, vadd(BASE, b[1], TOWER_H + 5.4), [1.8, 0.7, 1.8], BEACON_WARM, b);
           stage._mat = 0;
-          // Seat the plaza on local terrain — BASE is the road-height
-          // Frenet origin 40 m infield, and the SRTM/dune mesh sits ~0.1 m
-          // above it (ground-audit buried the 18 m pad when the tower returned).
+          // Plaza on terrainYAt: BASE is road height, infield is ~0.1 m up.
           const plaza = terrainYAt(BASE[0], BASE[2]);
           const plazaLift = (plaza != null ? plaza - BASE[1] : 0) + 0.15;
           addBox(stage, vadd(BASE, b[1], plazaLift), [18.0, 0.30, 18.0], POOL, b);
