@@ -384,6 +384,8 @@ function makeGpuHarness(opts = {}) {
     fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
+    // This VM's Log ring (seedLog): what a phone's COPY DIAG would carry.
+    logs: (filter) => context.Log.records(filter),
   };
 }
 
@@ -1525,6 +1527,60 @@ test("device.lost climbs the ladder: full -> lite (level 1 persisted, reload)", 
   assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "first desktop loss lands on the lite rung");
   assert.equal(storage.get("apex26.gfxWgxLite"), "1", "legacy flag kept in step");
   assert.equal(reloads, 1, "the rung retry is a reload, not a GLX surrender");
+});
+
+// SETTINGS ▸ DISPLAY ▸ SCREENSHOTS NATIVE ("0") / 2D BLIT ("1") set _outProbeOff,
+// which mutes the black-output probe and its escalation. It must not mute a
+// dead device: the visible device.lost branch escalates through _wgxEscalate
+// alone, and the flag's early return there left a frozen canvas with no rung,
+// no reload and no WebGL2 fallback. A saved-only "1" on hardware is "ignored"
+// for presentation but still set the flag, so it froze the same way.
+for (const [label, lane, val] of [
+  ["NATIVE (local 0)", "local", "0"],
+  ["saved 2D BLIT on hardware (local 1)", "local", "1"],
+  ["2D BLIT this tab (session 1)", "session", "1"],
+]) {
+  test(`device.lost escalates in SCREENSHOTS capture mode: ${label}`, async () => {
+    const storage = new Map(lane === "local" ? [["apex26.wgxCapture", val]] : []);
+    const session = new Map(lane === "session" ? [["apex26.wgxCapture", val]] : []);
+    let reloads = 0;
+    const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+    const gfx = await h.create();
+    gfx.resize();
+    gfx.begin({});
+    gfx.present({});
+    h.loseDevice({ reason: "unknown" });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "a visible loss climbs to the lite rung in capture mode too");
+    assert.match(storage.get("apex26.gfxWgxFail") || "", /device lost \(unknown/, "reason recorded for COPY DIAG");
+    assert.equal(reloads, 1, "the rung retry reloads — a lost device cannot be revived in place");
+    assert.equal(gfx.backendState().lost, true, "every entry point must see the dead device");
+    assert.equal(h.logs({ ns: "gfx" }).filter((r) => /suppressed escalate/.test(r.msg)).length, 0,
+      "device.lost is not the output probe: nothing about it is suppressed");
+  });
+}
+
+test("capture mode still mutes the GPU-error flood ladder, and says so ONCE", async () => {
+  // What _outProbeOff IS for: a capture session on a software/odd adapter must
+  // not climb the ladder on its own validation noise. But the old early return
+  // left _lost false, so every error after the cap re-entered _wgxEscalate and
+  // logged a warn per error — the per-draw flood GPU_ERR_LOG_CAP exists to stop.
+  const storage = new Map([["apex26.wgxCapture", "0"]]);
+  const session = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  gfx.resize();
+  for (let f = 0; f < 6; f++) {
+    for (let i = 0; i < 10; i++) h.device.onuncapturederror({ error: { message: "flood " + f + "." + i } });
+    gfx.begin({}); gfx.present({});
+  }
+  assert.equal(storage.get("apex26.gfxWgxLevel"), undefined, "capture mode: no rung for a GPU-error flood");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined);
+  assert.equal(reloads, 0);
+  assert.equal(gfx.backendState().lost, false, "the device is not lost; capture keeps presenting");
+  assert.equal(h.logs({ ns: "gfx" }).filter((r) => /suppressed escalate/.test(r.msg)).length, 1,
+    "the suppression is announced once, not once per GPU error");
 });
 
 test("device.lost on the lite rung climbs to minimal (level 2), not GLX", async () => {

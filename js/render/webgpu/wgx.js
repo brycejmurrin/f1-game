@@ -735,9 +735,14 @@ const WGX = (function () {
       settleFrames: 30,
       ignore: () => _cssApplying,
     });
-    function _wgxEscalate(why) {
-      if (_outProbeOff) {
-        try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
+    // `force` = a real device.lost. _outProbeOff mutes the output-probe and
+    // GPU-error ladders in capture mode, never a dead device: that early
+    // return froze the canvas (no _lost, rung, reload or GLX). Muted calls
+    // repeat once per GPU error after the cap, so the warning prints once.
+    let _capMuteWarned = false;
+    function _wgxEscalate(why, force) {
+      if (_outProbeOff && !force) {
+        if (!_capMuteWarned) { _capMuteWarned = true; try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ } }
         return;
       }
       if (_lost) return;
@@ -904,7 +909,9 @@ const WGX = (function () {
         // Persist WHY, not just that: WebKit's info.message names the loss
         // ("GPU hang", the imgui-class setPipeline loss) where Dawn says
         // "unknown", and COPY DIAG is the only channel a phone has.
-        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + _lostDetail(info) + ")");
+        // force: SCREENSHOTS NATIVE / 2D BLIT (_outProbeOff) must not mute a
+        // dead device — forced, the call always latches _lost and climbs.
+        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + _lostDetail(info) + ")", true);
         return;
       }
       // HIDDEN-TAB LOSS IS NOT A CRASH. iOS purges the GPU resources of a
