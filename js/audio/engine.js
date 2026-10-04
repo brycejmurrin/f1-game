@@ -230,6 +230,9 @@ const GameAudio = (function () {
   let cueT = 0, cueFired = 0, cueU = 0; // braking-cue: next blip due, blips emitted, live urgency
 
   let engBuf = null, samplesReady = false;
+  // engBuf is ONLY the loop window (loopWindow below); engLoop is its loop in
+  // engBuf's own seconds, engWin where that window sat in the recording (debug).
+  let engLoop = null, engWin = null;
   let lastRate = 0;               // the ratio setEngine last asked for (see rate())
   // The source recording's dominant period, measured once at decode. It was the
   // grain stride of a granular (PSOLA) pitching core that has since been
@@ -364,10 +367,10 @@ const GameAudio = (function () {
     // to the oscillator fallback.
     grab(SFX_ENGINE)
       .then((e) => {
-        engBuf = e; samplesReady = true;
-        enginePeriod = detectPeriod(e);
-        findStableLoop(e);   // prime the memoized scan before a pending race-frame upgrade
-        Log.debug("audio", "engine sample decoded, period=" + enginePeriod);
+        enginePeriod = detectPeriod(e);   // on the full recording, as before
+        const w = loopWindow(e);          // the scan runs here, never on a race frame
+        engBuf = w.buf; engLoop = w.loop; engWin = w.win; samplesReady = true;
+        Log.debug("audio", "engine sample decoded, period=" + enginePeriod + ", kept " + engLoop.end.toFixed(2) + " of " + e.duration.toFixed(2) + " s");
       })
       .catch((err) => {
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
@@ -375,6 +378,23 @@ const GameAudio = (function () {
 
   }
 
+
+  // ONLY THE LOOP WINDOW IS EVER PLAYED (perf-memory M-5a): every engine source
+  // (idle voice, rivals) starts inside findStableLoop's ~2 s window and loops
+  // over it, so the other ~28 s of the ~30 s decode (11.6 MB of PCM at 48 kHz
+  // stereo) was dead weight. Detect on the full buffer, keep a copy of just the
+  // window (~0.8 MB): loopStart 0, loopEnd its duration, same samples.
+  function loopWindow(full) {
+    const li = findStableLoop(full), sr = full.sampleRate;
+    const a = Math.max(0, Math.round(li.start * sr)), b = Math.min(full.length, Math.round(li.end * sr));
+    if (!(b - a > 1) || !ctx || !ctx.createBuffer) return { buf: full, loop: li, win: li };
+    const out = ctx.createBuffer(full.numberOfChannels, b - a, sr);
+    for (let c = 0; c < full.numberOfChannels; c++) {
+      const seg = full.getChannelData(c).subarray(a, b);
+      if (out.copyToChannel) out.copyToChannel(seg, c); else out.getChannelData(c).set(seg);
+    }
+    return { buf: out, loop: { start: 0, end: (b - a) / sr }, win: { start: a / sr, end: b / sr } };
+  }
 
   function init() {
     // init is only ever called from a user gesture
@@ -460,7 +480,7 @@ const GameAudio = (function () {
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     soundtrack.resetContext();
-    engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
+    engBuf = engLoop = engWin = null; samplesReady = false; // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
     radio.resetContext();
     signal.resetContext();
@@ -650,8 +670,7 @@ const GameAudio = (function () {
         : 0.25 * tune.idle * voice.rateTrim * tune.pitch * LOW_GEAR_RATE[0];
       engSrcIdle.playbackRate.value = seedRate;
       engSrcIdle.playbackRate._apexAimTgt = seedRate;
-      const li = findStableLoop(engBuf);
-      engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
+      engSrcIdle.loopStart = engLoop.start; engSrcIdle.loopEnd = engLoop.end;
       // Mid-race upgrade (synth→samples, or a stop/start while lastRate is
       // live): keep the voice open. A cold start still fades in from 0 so the
       // note does not slam in with the lights.
@@ -745,7 +764,7 @@ const GameAudio = (function () {
         if (usingSamples) {
           const src = ctx.createBufferSource();
           src.buffer = engBuf; src.loop = true;
-          const li = findStableLoop(engBuf);
+          const li = engLoop;
           src.loopStart = li.start; src.loopEnd = li.end;
           src.playbackRate.value = 0.4;
           src.connect(filt);
@@ -2219,6 +2238,6 @@ const GameAudio = (function () {
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
     debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName,
-      limSwing: limGain ? limGain._apexLimTgt ?? 0 : null, surfSched, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+      limSwing: limGain ? limGain._apexLimTgt ?? 0 : null, surfSched, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2), win: engWin && [+engWin.start.toFixed(2), +engWin.end.toFixed(2)] } : null }; },
   };
 })();

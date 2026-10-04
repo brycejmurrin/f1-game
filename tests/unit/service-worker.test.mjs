@@ -934,3 +934,23 @@ test("sw log channel: cache-write failures are reported once per worker, not per
   assert.equal(posted.length, 1, JSON.stringify(posted));
   assert.match(posted[0].msg, /^cache write failed: QuotaExceededError/);
 });
+
+test("a Range request for streamed music bypasses the worker; a whole-file music fetch stays cache-first", async () => {
+  // perf-memory M-4b: a phone streams assets/music/ through an <audio> element,
+  // which asks for byte ranges, and Safari needs a 206 — never the cached 200.
+  const fetched = [];
+  const harness = createHarness({
+    navigator: { onLine: true },
+    fetchImpl: async (request) => { fetched.push(typeof request === "string" ? request : request.url); return new Response("mp3", { status: 200 }); },
+  });
+  const ranged = harness.fetchEvent({
+    method: "GET", mode: "no-cors", url: `${ORIGIN}/assets/music/song2.mp3`,
+    headers: new Headers({ Range: "bytes=0-" }),
+  });
+  assert.equal(ranged.responsePromise, undefined, "no respondWith: the browser answers the range natively");
+  assert.equal(fetched.length, 0, "and the worker fetched nothing for it");
+  const whole = harness.fetchEvent({ method: "GET", mode: "same-origin", url: `${ORIGIN}/assets/music/song2.mp3`, headers: new Headers() });
+  assert.equal((await whole.responsePromise).status, 200, "a plain fetch (the desktop decode path) is still answered");
+  const other = harness.fetchEvent({ method: "GET", mode: "same-origin", url: `${ORIGIN}/assets/sfx/f1_engine.mp3`, headers: new Headers({ Range: "bytes=0-" }) });
+  assert.ok(other.responsePromise, "only assets/music/ is exempt");
+});
