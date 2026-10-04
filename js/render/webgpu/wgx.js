@@ -1025,7 +1025,7 @@ const WGX = (function () {
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
     // Culling frame state.
-    let frameViewProj = null, frameEye = null, frameCullDist = 0;
+    let frameViewProj = null, frameEye = null, frameCullDist = 0, frameCullFog = null;
     // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
@@ -1258,6 +1258,7 @@ const WGX = (function () {
         get frameViewProj() { return frameViewProj; },
         get frameEye() { return frameEye; },
         get frameCullDist() { return frameCullDist; },
+        get frameCullFog() { return frameCullFog; },
         get framePerChunk() { return framePerChunk; },
         get frameAllLights() { return frameAllLights; },
         get frameRoadChunkLamps() { return frameRoadChunkLamps; },
@@ -3342,6 +3343,7 @@ const WGX = (function () {
       frameViewProj = f.viewProj || null;
       frameEye = f.eye || null;
       frameCullDist = f.cullDist || 0;
+      frameCullFog = f.cullFog || null;
       framePerChunk = +f.perChunkLights || 0;
       frameRoadChunkLamps = +f.roadChunkLamps || 0;
       frameAllLightsGen = +f.allLightsGen || 0;

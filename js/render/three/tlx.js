@@ -1079,7 +1079,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
@@ -1862,6 +1862,7 @@ const TLX = (function () {
       let frameEye = null;          // frame.eye — the glow near-field fade origin
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
+      let frameCullFog = null;      // frame.cullFog — the fog-wall pair (Frustum.radialCulled)
       // PER-CHUNK LAMPS, latched the way frameEye/frameCullDist are: the frame
       // object is read in begin(), the chunk draw happens in present().
       let frameAllLights = null;    // frame.allLights — the full baked track set
@@ -3304,7 +3305,7 @@ const TLX = (function () {
               // (measured 2026-08-17: six full Monza presents into the cube
               // after M5 had already left the GPU process at 387%).
               if (softContent("chunked") || !chunkedSys) continue;
-              const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull);
+              const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull, frameCullFog);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               continue;
@@ -3437,7 +3438,7 @@ const TLX = (function () {
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
           lit.updateFrame(frame);
           if (fx) fx.updateFrame(frame);
-          _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0;
+          _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instAlive.clear();
@@ -3455,7 +3456,7 @@ const TLX = (function () {
               if (rec.instanced) { _showInstanced(rec, i); continue; }
               if (rec.chunked) {
                 if (!chunkedSys) continue;
-                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull);
+                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull, _mirFog);
                 const vis = chunkedSys.visList;
                 for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
                 continue;
@@ -3787,6 +3788,7 @@ const TLX = (function () {
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
+          frameCullFog = (frame && frame.cullFog) || null;
           // frame-lights.js fills allLights only while the knob is on, so a null
           // here is the feature being OFF rather than data going missing.
           frameAllLights = (frame && frame.allLights) || null;
@@ -4068,7 +4070,7 @@ const TLX = (function () {
               // what made the feature inert: the grid is a SINGLE shared
               // uniform set, so each chunked record overwrote the previous
               // one's grid and only the last survived.
-              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
+              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist, frameCullFog);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               _chunkFrame.total += rec.chunked.chunks.length;

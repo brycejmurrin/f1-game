@@ -52,14 +52,12 @@ layout(location=9) in vec3 aInstCol;
 uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance columns
 uniform mat4 uModel;
 uniform mat4 uViewProj;
-uniform vec3 uEye;
 uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave + foliage sway
 uniform vec3 uWind;    // xy = unit wind direction in world xz, z = speed scale (knobs windDir / windSpeed)
 out vec3 vNrm;
 out vec3 vCol;
 out vec3 vWorldPos;
 out vec3 vObjPos;
-out float vDist;
 flat out float vMat;
 out vec3 vTrk;        // smooth (NOT flat): the marking SDF needs x/s to vary across the quad
 void main() {
@@ -118,7 +116,6 @@ void main() {
   vCol = aCol * aInstCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key
   vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
-  vDist = length(wp.xyz - uEye);
   gl_Position = uViewProj * wp;
 }`;
 
@@ -134,7 +131,6 @@ in vec3 vNrm;
 in vec3 vCol;
 in vec3 vWorldPos;
 in vec3 vObjPos;
-in float vDist;
 flat in float vMat;   // procedural material id (0 = FLAT); textured in applyMaterial()
 in vec3 vTrk;         // road: (s, lateral x, half-width) — drives roadMarkings()
 uniform vec3 uEye;
@@ -906,6 +902,12 @@ float sampleShadow(vec3 wpos) {
 }
 
 void main() {
+  // Eye distance PER FRAGMENT, as TLX (tsl-lit.js vd) and WGX (wgsl-chunks.js
+  // vDist) take it. It was a vertex varying, and the interpolated length is
+  // the average of the corners' — the 4-vertex ground floor (mesh.js
+  // buildFloor, corners >= 1400 m out) read >= 1400 m under the car, so fog
+  // and ground mist painted it >= 44 % fog colour 150 m away on a clear day.
+  float vDist = length(vWorldPos - uEye);
   vec3 N = normalize(vNrm);
   // Puddle shape (wet block): the world xz direction of increasing track x, from
   // derivatives taken here in uniform control flow (WGX parity; see wgsl-chunks).
