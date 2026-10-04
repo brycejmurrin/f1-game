@@ -36,8 +36,17 @@ test("dig-out that fails escalates to rescue — no forever-crawl on monaco", as
     const A = g.apex;
     await g.race("monaco");
     A.headless(true);
-    const pIdx = A.cars().findIndex((c) => c.p);
-    A.carRole(pIdx, { human: false });
+    // THE STRESS, MADE DETERMINISTIC (2026-10-04). This scenario used to hand
+    // the player's car to the AI and rely on the standing start jamming by
+    // itself — which it did only because of the old elevation profile (a car
+    // or two sat boxed at the line 8-12 s in). With Monaco's elevation put on
+    // its real corners the start runs clean (0 dig-out car-s and no rescue in
+    // 120 s), so the anti-vacuity assert below fired. The player's car now
+    // stays HUMAN with no input: a car stalled on pole, which the whole field
+    // must get past on a street — boxed cars, dig-out, and dig-out failing
+    // against the barriers, every run (measured: ~74 dig-out car-s, rescues
+    // armed, worst crawl 3.9 s). Pre-fix (dig-out vetoing rescue) the cars
+    // queued behind it would crawl forever, so the cap below still bites.
     A.go();
 
     // Per-car longest consecutive crawl while dig-out is armed (speed < 5 after
@@ -82,7 +91,7 @@ test("dig-out that fails escalates to rescue — no forever-crawl on monaco", as
     assert.ok(worstCrawl <= budgetPlusDelay,
       `an AI crawled for ${worstCrawl.toFixed(1)} s while dig-out was armed ` +
       `(cap ${budgetPlusDelay} s — dig-out must escalate to rescue)`);
-    // Anti-vacuity: monaco at a standing start DOES produce dig-out episodes.
+    // Anti-vacuity: a car stalled on pole DOES produce dig-out episodes.
     // If this ever goes to zero the scenario stopped stressing the gate.
     assert.ok(digOutStarveS > 0.5 || sawRescue,
       "scenario never stressed dig-out/rescue — setup drifted");
