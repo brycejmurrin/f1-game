@@ -15,6 +15,9 @@ const GameStore = (function () {
     return v;
   }
 
+  // full key -> error name of its last failed write (store.writeFailed()).
+  const _writeFails = new Map();
+
   const store = {
     _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
     _keyRev: new Map(),  // full-key -> writes observed in this document (local or foreign)
@@ -34,18 +37,30 @@ const GameStore = (function () {
       const key = "apex26." + k;
       let v = this._cache.get(key);
       if (v === undefined && !this._cache.has(key)) {
+        let raw;
         try {
-          const raw = localStorage.getItem(key);
-          v = raw === null ? undefined : parseStored(raw, k);
+          raw = localStorage.getItem(key);
         } catch (e) {
-          // A read that throws is either storage being unavailable (same conditions
-          // as set()) or a corrupt value. Either way the default is the right answer
-          // — but say so once, because "your settings reset themselves" is otherwise
-          // reported as a game bug with nothing in the console to go on.
+          // A read that THROWS is storage being unavailable (same conditions as
+          // set()): the default is the right answer, but say so once, because
+          // "your settings reset themselves" is otherwise reported as a game bug
+          // with nothing in the console to go on.
           noteBroken(e, "read " + k);
           // Remember the miss: with storage BLOCKED every read throws, and a key
           // read per frame (spotter) re-threw and re-logged 60 times a second,
           // flooding the log buffer __apex.diag reads. Served from memory now.
+          this._cache.set(key, undefined);
+          return this._def(k, d);
+        }
+        try {
+          v = raw === null ? undefined : parseStored(raw, k);
+        } catch (e) {
+          // A CORRUPT VALUE IS ONE KEY, NOT BROKEN STORAGE. Flagging `broken`
+          // here raised the SESSION ONLY banner on every boot while every write
+          // still succeeded, and the bad bytes stayed on disk to do it again.
+          // Drop that one key (a mirrored career/season key then comes back
+          // from IndexedDB at boot) and serve the default.
+          dropCorrupt(key, k, raw, e);
           this._cache.set(key, undefined);
           return this._def(k, d);
         }
@@ -73,11 +88,19 @@ const GameStore = (function () {
     // describes whether it will survive a reload. The cache write below makes
     // ok:true even when durable:false, by design. Automatic load-time repairs
     // pass {migration:true}; only those yield to an outstanding mirror restore.
+    //
+    // `undefined` REMOVES THE KEY. JSON.stringify(undefined) is undefined and
+    // setItem coerced it to the string "undefined" — unparseable at the next
+    // boot. Removal is what a get() of that key then answered anyway (the
+    // default), and it is what the mirror below already did with it.
     write(k, v, options) {
       const key = "apex26." + k;
       let durable = true;
-      try { setRoomy(key, JSON.stringify(v)); }
-      catch (e) { durable = false; noteBroken(e, "write " + k); }
+      try {
+        if (v === undefined) localStorage.removeItem(key);
+        else setRoomy(key, JSON.stringify(v));
+        _writeFails.delete(key);
+      } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, (e && e.name) || "Error"); }
       this._cache.set(key, v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       this.rev++;
@@ -87,6 +110,13 @@ const GameStore = (function () {
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
+    },
+    // The name of a failed WRITE whose key has not since been written durably,
+    // or null. A corrupt read or a blocked read sets `broken` but is not this:
+    // the save banner asks "will what I just saved survive a reload?".
+    writeFailed() {
+      for (const reason of _writeFails.values()) return reason;
+      return null;
     },
     keyRevision(k) {
       return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
@@ -115,13 +145,13 @@ const GameStore = (function () {
     rawSet(k, v) {
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
-      try { setRoomy(key, v); return true; }
-      catch (e) { noteBroken(e, "write " + k); return false; }
+      try { setRoomy(key, v); _writeFails.delete(key); return true; }
+      catch (e) { noteBroken(e, "write " + k); _writeFails.set(key, (e && e.name) || "Error"); return false; }
     },
     rawDel(k) {
       const key = fullKey(k);
       this._cache.delete(key);
-      try { localStorage.removeItem(key); return true; }
+      try { localStorage.removeItem(key); _writeFails.delete(key); return true; }
       catch (e) { noteBroken(e, "remove " + k); return false; }
     },
     subscribe(fn) {
@@ -435,6 +465,13 @@ const GameStore = (function () {
   // reliable signal on mobile (unload never fires on iOS).
   if (typeof window !== "undefined" && window.addEventListener) {
     window.addEventListener("pagehide", () => { mirrorFlush(); });
+  }
+
+  function dropCorrupt(key, k, raw, e) {
+    let removed = true;
+    try { localStorage.removeItem(key); } catch (err) { removed = false; noteBroken(err, "remove " + k); }
+    Log.warn("game", `${key} was unreadable (${(e && e.name) || "Error"}: ${(e && e.message) || e}; ${String(raw).length} chars)` +
+      (removed ? " — removed, using the default" : " — using the default"));
   }
 
   function noteBroken(e, what) {

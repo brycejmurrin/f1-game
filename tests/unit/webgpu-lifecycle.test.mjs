@@ -1877,8 +1877,9 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 test("MAT array upload is byte-exact like GLX texSubImage3D, not sRGB-converted", () => {
   // copyExternalImageToTexture into rgba8unorm linearises sRGB. The pack is
   // mean-normalised to 128 so albedo*tex*2 is a no-op — a linearised 128
-  // (~0.22) crushes tarmac vs WebGL2. writeTexture of 2D-canvas bytes matches
-  // GLX's raw RGBA8 upload.
+  // (~0.22) crushes tarmac vs WebGL2. writeTexture of the straight bytes from
+  // Assets.readLayerBytes (scratch WebGL2, never a premultiplied 2D canvas)
+  // matches GLX's raw RGBA8 upload.
   assert.match(WGX_SOURCE, /function _matLayerBytes\(/);
   assert.match(WGX_SOURCE, /device\.queue\.writeTexture\(\{ texture: tex, origin: \[0, 0, i\] \}/);
   assert.match(WGX_SOURCE, /placePx\[i \* bpr\] = placePx\[i \* bpr \+ 1\] = placePx\[i \* bpr \+ 2\] = 128/);

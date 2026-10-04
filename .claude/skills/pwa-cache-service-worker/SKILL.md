@@ -15,8 +15,8 @@ cache-first for immutable `?v=<sha256>` assets.
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
 **DEFERRED** backends, `vendor/three-0.186.0`, other vendors, self-hosted fonts.
 The GLX files in it are promoted to REQUIRED at install (the fallback renderer:
-offline without it is "graphics unavailable"); TLX and its vendor dependency are the critical optional pool before skipWaiting;
-WGX/scenery/fonts form a background optional pool. Required failures abort
+offline without it is "graphics unavailable"); TLX and its vendor dependency are the critical optional pool,
+WGX/scenery/fonts the background pool after it, then SETTLED, then skipWaiting (the flag is read only once install settles). Required failures abort
 install; optional failures are recorded without making install incomplete.
 
 **Shell version guard.** Inline script at the top of `index.html` ("SHELL VERSION GUARD"):
@@ -63,6 +63,7 @@ refuses it. `load-order.test.mjs` pins its shape.
 | Tagged `?v=` js/css | Essential (404 = fail) | Cache-first |
 | `version.json` | Essential | Network-first (no-store) |
 | `?v=<sha256>` assets | Essential if tagged | Cache-first |
+| `assets/pack/` (unversioned) | Runtime only | Network-first (3 s race to cache) |
 | DEFERRED TLX/WGX / vendor / fonts | Optional (fail OK) | Cache-first on first use |
 | DEFERRED GLX (`js/render/glx/`) | Required at install | Cache-first |
 

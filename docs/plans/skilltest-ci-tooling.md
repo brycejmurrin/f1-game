@@ -52,7 +52,7 @@ draft until CI is green on the exact head.
 | `ci-coverage.mjs` | works | Prints deploy gate coverage summary | — | — |
 | `ci-pr-base.sh` | works | `bash -n` OK; header docs | Used by CI; not invoked with fake event | — |
 | `ci-resolve-before.sh` | works | `bash -n` OK | — | — |
-| `ci-select-specs-step.sh` | works | `bash -n` OK; wired from `.github/actions/select-specs` | — | — |
+| `ci-select-specs-step.sh` | works | `bash -n` OK; run by ci.yml's `select` job (the composite action that also wrapped it was unused and was deleted 2026-10-04) | — | — |
 | `ci-verdict.mjs` | works with caveats | No `NEEDS` → `PASS (0 success…)` | Empty env looks green locally; CI always sets `NEEDS` | Proposal R3 |
 | `ci-watch.mjs` | broken → fixed | Without env token: `= ci unknown — API: no GH_TOKEN`; with `gh auth token` fallback: works `--once` | Cloud agents have `gh` but often no `GH_TOKEN` | **#677** |
 | `coverage-merge.mjs` | not testable | Needs coverage artifacts | — | — |
@@ -102,7 +102,6 @@ draft until CI is green on the exact head.
 | `docs-guards.yml` / `gpu-census.yml` / others | works | YAML parse only | Dispatch skipped | — |
 | `.github/actions/mesa-xvfb` | works | action.yml valid | — | — |
 | `.github/actions/playwright-chromium` | works | action.yml valid | — | — |
-| `.github/actions/select-specs` | works | Runs `ci-select-specs-step.sh` | — | — |
 | `.github/actions/setup-apex` | works | `npm ci` composite | — | — |
 
 ## tools/desktop/, tools/moves/, manifest

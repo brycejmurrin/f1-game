@@ -1218,8 +1218,9 @@ and re-laid at another rate are noise however they are placed.
 alone will pass a defect it was written to catch.
 
 ### The two trims that depend on the core
-`detune` is cents on the sample core's own `detune` param; under the oscillator
-fallback it is the spread between the two saws. `sub` weights `engC` in that
+`detune` is cents on the sample core's own `detune` param — 0..1 is no offset
+(the shipped 0 is "chorus off", not 30 cents flat), each step past 1 adds
++30 cents; under the oscillator fallback it is the spread between the two saws. `sub` weights `engC` in that
 fallback and a dedicated sub-octave oscillator on the sample core. (The
 `granular` core and its `audio().granular` report were removed on 2026-09-04 —
 see above for why.)

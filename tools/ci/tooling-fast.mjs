@@ -726,6 +726,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
+  // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
+  // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
+  // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
