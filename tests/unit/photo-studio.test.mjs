@@ -24,12 +24,13 @@ function boot(options = {}) {
     if (tag === "a") el.click = () => downloads.push(el.download);
     return el;
   };
-  let closed = 0, restored = null, current = options.priorCamera || { open: false };
+  let closed = 0, restored = null, overlays = true, current = options.priorCamera || { open: false };
   const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza" }, photoMode: !!options.priorPhoto,
     photoCam: { pos: [1, 2, 3], yaw: 1, pitch: 0.3, fov: 60 },
     gfx: { capturePixels: () => { order.push("read"); return options.readback || Promise.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4).fill(123) }); } } };
   const freeCam = {
     state: () => current,
+    setOverlaysVisible: (on) => { overlays = on; },
     enterFrom: () => { order.push("enter"); G.photoMode = true; return true; },
     panel: () => dom.byId("freecam-inner"),
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
@@ -41,9 +42,11 @@ function boot(options = {}) {
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
     Log: { warn: () => {} }, setTimeout: () => 0, Blob, Uint8ClampedArray,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
+  ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw") });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored };
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const turn = () => new Promise((resolve) => setImmediate(resolve));
@@ -134,4 +137,23 @@ test("missing IndexedDB uses a visit-only library and localStorage quota failure
 test("failed PNG encoding reports a recoverable error instead of creating a bogus download", async () => {
   const b = boot({ nullBlob: true }); b.api.open(); await b.api.capture(); await b.api.exportPhoto();
   assert.equal(b.downloads.length, 0); assert.match(b.dom.byId("ps-message").textContent, /could not be encoded/);
+});
+
+test("Studio uses canonical sheet regions and enumerated controls with a persistent capture/done footer", () => {
+  const b = boot(); b.api.open();
+  const panel = b.dom.byId("ps-panel"), body = b.dom.byId("ps-body");
+  assert.deepEqual(panel.children.map((el) => el.className), ["sheet-head", "sheet-body pane", "sheet-foot"]);
+  assert.equal(b.dom.byId("ps-close").parentElement, panel.children[2]);
+  assert.equal(b.dom.byId("ps-capture").parentElement, panel.children[2]);
+  assert.equal(b.dom.byId("ps-capture").classList.contains("bigbtn"), true);
+  assert.equal(body.contains(b.dom.byId("ps-export")), true);
+  const frame = b.dom.byId("ps-aspect"); frame.value = "portrait"; b.dom.dispatch(frame, { type: "change" });
+  assert.equal(b.api.state().aspect, "portrait");
+  b.dom.byId("ps-aspect-row-next").click(); assert.equal(b.api.state().aspect, "scene");
+  const caption = b.dom.byId("ps-postcard"); caption.value = "on"; b.dom.dispatch(caption, { type: "change" });
+  assert.equal(b.api.state().postcard, true);
+});
+test("Studio suspends a borrowed FreeCam's guides and restores them on returning to its owner", () => {
+  const b = boot({ priorCamera: { open: true } }); b.api.open();
+  assert.equal(b.overlays(), false); b.api.close(true); assert.equal(b.overlays(), true);
 });

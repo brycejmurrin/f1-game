@@ -525,6 +525,18 @@ test("a garage colour edit re-skins the plate — the id has not changed", () =>
   assert.equal(accentOf(dom)["--accent"], "rgb(230,51,26)", "the repaint never reached the plate");
 });
 
+test("Team menu accent follows team changes while an independent HUD accent stays selected", () => {
+  const { player, dom, sb, tick } = boot({ teams: REAL });
+  sb.AppearanceOpts = { hudUsesTeam: () => false, menuAccent: () => "team", speed: Math.round,
+    applyMenuAccent: () => dom.documentElement.style.setProperty("--red", dom.documentElement.dataset.team === "ferrari" ? "#dc0000" : "#ff8000"),
+    applyHudAccent: () => dom.documentElement.style.setProperty("--accent", "#00a3e0") };
+  player.team = { id: "ferrari", color: [.86, 0, 0] }; tick();
+  assert.equal(accentOf(dom)["--red"], "#dc0000");
+  player.team = { id: "mclaren", color: [1, .5, 0] }; tick();
+  assert.equal(accentOf(dom)["--red"], "#ff8000");
+  assert.equal(accentOf(dom)["--accent"], "#00a3e0");
+});
+
 test("lap clocks carry the minute: never 1:60.00 or 1:010.00 (round first, then split)", async () => {
   const fs = await import("node:fs"), vm = await import("node:vm"), { seedDom } = await import("../helpers/seed-dom.mjs");
   const game = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
