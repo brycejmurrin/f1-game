@@ -1,0 +1,10 @@
+[
+  {"query":"Create a reusable workflow for researching and improving realism across our tracks, including scenery and models.","expect":"track-realism"},
+  {"query":"Use parallel agents to upgrade Spa, Monza and Silverstone against dated real-world references while keeping shared engine edits coordinated.","expect":"track-realism"},
+  {"query":"Run a multi-circuit realism campaign with evidence packets, before/after captures and measured geometry budgets.","expect":"track-realism"},
+  {"query":"I want a repeatable track research skill we can apply to other circuits, with web photos, accurate terrain, detailed trees and buildings.","expect":"track-realism"},
+  {"query":"How can we author several track accuracy improvements in parallel and serialize integration and browser verification? Set up that campaign.","expect":"track-realism"},
+  {"query":"Compare Suzuka to real-world imagery and fix its layout and scenery accuracy end to end.","expect":"survey-track"},
+  {"query":"Add more trees and a grandstand along Spa's back straight in its scenery callback.","expect":"scenery-dress"},
+  {"query":"Move Bahrain's hairpin and add a flyover with a new elevation crest in its circuit definition.","expect":"new-track"}
+]
