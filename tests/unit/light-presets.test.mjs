@@ -106,10 +106,14 @@ test("shipped presets never pin wetness (look=drive)", () => {
 const TOD = ["dawn", "day", "dusk", "night"];
 const WX = ["dry", "wet", "rain", "fog", "overcast"];
 
-test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins", () => {
-  // B1a fuji/okayama + B1b korea/jerez — each had zero track| keys before bake.
+test("every circuit ships a full tod×weather grid with no wetness pins", () => {
+  // B1a fuji/okayama + B1b korea/jerez (2026-09-30), then the last eight (2026-10-04,
+  // each copied from its nearest green-theme sibling) — each had zero track| keys
+  // and resolved to "*" alone. Every js/circuits/<id>.js now ships its own grid.
   const P = presets();
-  for (const track of ["fuji", "okayama", "korea", "jerez"]) {
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files found — the scan broke`);
+  for (const track of circuits) {
     const keys = TOD.flatMap((tod) => WX.map((wx) => `${track}|${tod}|${wx}`));
     const missing = keys.filter((k) => !P[k] || typeof P[k] !== "object");
     assert.deepEqual(missing, [], `${track} must ship all 20 tod×weather keys (not "*" fallthrough)`);
@@ -117,4 +121,50 @@ test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins
     assert.deepEqual(wetPins, [],
       `${track} must not pin LT.wetness (look=drive — road wetness follows physics)`);
   }
+});
+
+test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul ≥ 0.1 outside night", () => {
+  // AMBIENT FILL 0 makes every shadow pure black (knobs.js help), and a 0 key
+  // turns the sun off. A COPY-ALL fan-out stamped ambientMul 0 / keyMul 0.115
+  // onto 42 "<track>|dusk|wet" profiles and keyMul 0 + ambientMul 0 onto
+  // nurburgring|dusk|dry; the owner judged the stamp "crushing" for Suzuka and
+  // Silverstone (508b052e, 68df8a68) and it was replaced fleet-wide with the
+  // same short delta (review-wgx-lighting item 4).
+  // dawn|dry is the one exception, and it is a pending decision, not a pass:
+  // all 44 dawn|dry profiles ship ambientMul 0 inside a deliberate-looking
+  // twilight set (keyMul 0.29, mist, god-rays, lamps) that needs a rendered
+  // A/B before it changes. Remove the exemption when that A/B lands.
+  const P = presets();
+  const bad = [];
+  for (const [key, o] of Object.entries(P)) {
+    const [, tod, wx] = key.split("|");
+    if (!wx || tod === "night" || (tod === "dawn" && wx === "dry")) continue;
+    const a = o.ambientMul ?? 1, k = o.keyMul ?? 1;
+    if (a < 0.15 || k < 0.1) bad.push(`${key} ambientMul ${a} keyMul ${k}`);
+  }
+  assert.deepEqual(bad, [], "a non-night preset crushes ambient or switches the sun off");
+});
+
+test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {
+  // Two knobs are read only under one condition, so a value anywhere else is
+  // dead weight that a reader takes for a live setting:
+  //  - lightning: js/game.js's strike loop runs only while isRaining()
+  //    (trackWetness() >= 0.72). Wetness is 0 for overcast/fog/dry and at most
+  //    0.5 for "wet", and an arc flips a stage at wetness <= 0.67 (weather-arc.js
+  //    arcSeq), so only "rain" profiles are ever read.
+  //  - nightAmbLift: read only by _nightAmbientBand() (js/game.js), which
+  //    atmosphere.js calls for night sessions alone.
+  // 12 overcast lightning and 44 dawn|wet nightAmbLift entries were deleted
+  // 2026-10-04 (review-wgx-lighting item 16).
+  const src = read("js/game.js");
+  assert.match(src, /if \(raining && _ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
+  assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
+  const P = presets(), dead = [];
+  for (const [key, o] of Object.entries(P)) {
+    const [, tod, wx] = key.split("|");
+    if (!wx) continue;
+    if ("lightning" in o && wx !== "rain") dead.push(`${key}.lightning`);
+    if ("nightAmbLift" in o && tod !== "night") dead.push(`${key}.nightAmbLift`);
+  }
+  assert.deepEqual(dead, [], "a preset sets a knob its condition never reads");
 });

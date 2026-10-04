@@ -598,13 +598,13 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
 | `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×5, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
-| `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
+| `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — |   | atmosphere.js×2 |
 | `mistDensity` | GROUND MIST | 0 … 3.75 | 1 | `uGroundMist` | ✓ | game.js×3, glx.js×2 |
 | `mistHeight` | MIST HEIGHT BAND | 0.05 … 0.675 | 0.3 | `uMistHeight` | ✓ | glx.js×2 |
 | `lampFogBase` | FOG GLOW BASE | 0 … 0.9 | 0.45 | — | ✓ | game.js |
 | `lampFogHaze` | FOG GLOW HAZE | 0 … 1.5 | 0.6 | — | ✓ | game.js |
 | `mistShare` | MIST GLOW SHARE | 0 … 3.75 | 1.5 | `uMistShare` |   | glx.js×2 |
-| `hazeWetShare` | WET HAZE SHARE | 0 … 0.55 | 0.22 | — | ✓ | game.js×2 |
+| `hazeWetShare` | WET HAZE SHARE | 0 … 0.55 | 0.22 | — |   | game.js×2 |
 | `hazeCloudShare` | CLOUD HAZE SHARE | 0 … 0.3 | 0.12 | — |   | game.js×2 |
 | `fogClip` | FOG GLOW CLIP | 0 … 1.75 | 0.7 | `uLampFogClip` | ✓ | glx.js×2 |
 | `fogSunCore` | FOG SUN CORE | 0 … 1.5 | 0.6 | `uFogSunCore` |   | glx.js×2 |
@@ -654,12 +654,12 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `cloudCover` | CLOUD COVER | -1 … 1 | 0 | — | ✓ | atmosphere.js×2 |
+| `cloudCover` | CLOUD COVER | -1 … 1 | 0 | — | ✓ | atmosphere.js×3 |
 | `cloudShadowDim` | CLOUD SHADOW DEPTH | 0 … 1 | 0.8 | `uCloudShadowDim` |   | glx.js×2 |
 | `cloudSpeed` | CLOUD SPEED | 0 … 2.5 | 1 | `uCloudSpeed` |   | game.js×4, glx.js×6, post.js |
 | `starBright` | STAR BRIGHTNESS | 0 … 2.5 | 1 | `uStarBright` | ✓ | game.js×2, glx.js×2 |
 | `starDensity` | STAR DENSITY | 0.2 … 2.2 | 1 | `uStarDensity` | ✓ | game.js×2, glx.js×2 |
-| `skyGrad` | SKY GRADIENT | 0.03 … 0.829 | 0.35 | `uSkyGrad` | ✓ | game.js×2, glx.js×2 |
+| `skyGrad` | SKY GRADIENT | 0.03 … 0.829 | 0.35 | `uSkyGrad` |   | game.js×2, glx.js×2 |
 | `daySkyBlue` | DAY SKY BLUE | 0 … 2 | 1 | `uDaySkyBlue` | ✓ | game.js×2, glx.js×2 |
 | `mieScatter` | SKY SUN GLOW | 0 … 2.5 | 1 | `uMieScatter` | ✓ | game.js×2, glx.js×2 |
 | `cloudSilver` | CLOUD SILVER LINING | 0 … 2.5 | 1 | `uCloudSilver` | ✓ | game.js×2, glx.js×2 |
@@ -712,19 +712,19 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainR` | GAIN · RED | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
-| `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | — |
+| `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` |   | — |
 | `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js×6, graph.js |
-| `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
+| `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — |   | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
-| `vignetteSoft` | VIGNETTE REACH | 0.1 … 0.69 | 0.35 | `uVigSoft` | ✓ | — |
+| `vignetteSoft` | VIGNETTE REACH | 0.1 … 0.69 | 0.35 | `uVigSoft` |   | — |
 | `blackLift` | BLACK FLOOR | 0 … 0.2 | 0.005 | `uBlackLift` | ✓ | — |
-| `whitePoint` | ACES WHITE SCALE | 0.08 … 2.38 | 1 | `uWhitePoint` | ✓ | — |
-| `acesA` | TONE CURVE SHOULDER | 1.6 … 4 | 2.51 | `uAcesA` | ✓ | — |
-| `acesB` | TONE CURVE TOE LIFT | 0 … 0.08 | 0.03 | `uAcesB` | ✓ | — |
-| `acesC` | TONE CURVE CONTRAST | 1.6 … 4 | 2.43 | `uAcesC` | ✓ | — |
-| `acesD` | TONE CURVE MIDS | 0.2 … 1.2 | 0.59 | `uAcesD` | ✓ | — |
-| `acesE` | TONE CURVE BLACK | 0.02 … 0.45 | 0.14 | `uAcesE` | ✓ | — |
+| `whitePoint` | ACES WHITE SCALE | 0.08 … 2.38 | 1 | `uWhitePoint` |   | — |
+| `acesA` | TONE CURVE SHOULDER | 1.6 … 4 | 2.51 | `uAcesA` |   | — |
+| `acesB` | TONE CURVE TOE LIFT | 0 … 0.08 | 0.03 | `uAcesB` |   | — |
+| `acesC` | TONE CURVE CONTRAST | 1.6 … 4 | 2.43 | `uAcesC` |   | — |
+| `acesD` | TONE CURVE MIDS | 0.2 … 1.2 | 0.59 | `uAcesD` |   | — |
+| `acesE` | TONE CURVE BLACK | 0.02 … 0.45 | 0.14 | `uAcesE` |   | — |
 | `chromAb` | CHROMATIC AB. | 0 … 15 | 0 | `uChromAb` |   | — |
 | `grain` | FILM GRAIN | 0 … 0.3 | 0 | `uGrain` |   | — |
 | `lensDirt` | LENS DIRT | 0 … 1 | 0.15 | `uLensDirt` | ✓ | — |

@@ -624,7 +624,9 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-44 of the 52 circuits have a full `tod × weather` grid (880 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins — look-survey sheets still deferred. Remaining on `"*"` alone: anderstorp, brands_hatch, buddh, dijon, donington, mont_tremblant, mosport, zolder.
+All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"` and the four ULTRA-only `"*|<tod>"` keys; `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa. Look-survey sheets are deferred for all twelve.
+
+The `<track>|dusk|wet` profiles are short deltas (2026-10-04): `<track>|dusk|rain` minus its falling-rain knobs plus the wet-surface knobs of `<track>|day|wet`, replacing a COPY-ALL stamp with `ambientMul` 0 / `keyMul` 0.115. The 44 `dawn|dry` profiles still ship `ambientMul` 0 and await a rendered A/B; `light-presets.test.mjs` exempts them by name.
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
@@ -689,6 +691,14 @@ Cross-cutting from the frames:
 | Okayama | `okayama` | green | day | ✅ (B1a donor kyalami; look-survey deferred) |
 | Korea | `korea` | modern | day | ✅ (B1b donor madrid; look-survey deferred) |
 | Jerez | `jerez` | desert | day | ✅ (B1b donor bahrain; look-survey deferred) |
+| Anderstorp | `anderstorp` | green | day | ✅ (donor nurburgring; look-survey deferred) |
+| Brands Hatch | `brands_hatch` | green | day | ✅ (donor silverstone; look-survey deferred) |
+| Buddh | `buddh` | green | day | ✅ (donor sepang; look-survey deferred) |
+| Dijon-Prenois | `dijon` | green | day | ✅ (donor magny_cours; look-survey deferred) |
+| Donington Park | `donington` | green | day | ✅ (donor silverstone; look-survey deferred) |
+| Mont-Tremblant | `mont_tremblant` | green | day | ✅ (donor montreal; look-survey deferred) |
+| Mosport | `mosport` | green | day | ✅ (donor watkins_glen; look-survey deferred) |
+| Zolder | `zolder` | green | day | ✅ (donor spa; look-survey deferred) |
 
 ---
 

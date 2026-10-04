@@ -349,6 +349,20 @@ function _applyRaceBody() {
     G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(_storm ? 0.65 : 0.80));
     G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
+    // The distance fades to the SKY the sky shader paints, not the clear one.
+    // Every lit backend greys its horizon under cloud (wgsl-chunks.js SKY:
+    // horizonO = mix(horizon, greyH, smoothstep(0.5, 1, cloud) * 0.60), greyH a
+    // daylight grey or, at night, the night lid); until 2026-10-04 this branch
+    // left fogColor at the TOD's clear value, so wet/rain terrain faded to a
+    // blue (or dusk-orange) haze that met a grey horizon in a seam. Same grey,
+    // same weight, same cloud value the sky uploads.
+    if (G.frame.fogColor) {
+      const _ov = _smooth(0.5, 1.0, clamp(G.frameSky.cloud + (LT.cloudCover || 0), 0, 1)) * 0.60;   // + the CLOUD COVER offset applied below
+      const _gH = isNightSession && G.frameSky.zenith && G.frameSky.horizon
+        ? G.frameSky.zenith.map((v, i) => (v + G.frameSky.horizon[i]) * 1.25)
+        : [0.58, 0.58, 0.60];
+      G.frame.fogColor = G.frame.fogColor.map((v, i) => v + (_gH[i] - v) * _ov);
+    }
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
@@ -364,7 +378,14 @@ function _applyRaceBody() {
     G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.06));
     G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
-    if (G.raceTimeOfDay === "default") { G.frameSky.horizon = [0.74, 0.73, 0.74]; G.frame.skyHorizon = G.frameSky.horizon; }
+    // Flatten the palette horizon to the grey deck — but a NIGHT overcast keeps
+    // a night horizon (the fog branch's guard, below): the seven night-default
+    // circuits run "default" too, and the 0.74 daylight grey under the sky's
+    // night lid painted a ~0.85 grey band round a night race.
+    if (G.raceTimeOfDay === "default") {
+      G.frameSky.horizon = isNightSession ? [0.05, 0.05, 0.07] : [0.74, 0.73, 0.74];
+      G.frame.skyHorizon = G.frameSky.horizon;
+    }
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
     // greying out the night and killing lamp-pool contrast.
@@ -384,7 +405,16 @@ function _applyRaceBody() {
     // fog and catches the lamp glow, nowhere near daylight. Density is untouched:
     // a night fog is every bit as THICK, it just is not bright. The default-mode
     // horizon flatten below reads the same `fc`, so it follows automatically.
-    const fc = isNightSession ? [0.09, 0.10, 0.13] : [0.74, 0.76, 0.78];
+    //
+    // Dusk and dawn are the same mistake in colour: the midday grey at x3
+    // density laid a pale daylight wall against an orange or pink horizon. A
+    // twilight fog is the horizon's own light, desaturated: its luminance with
+    // the slight cool lift of the day grey, keeping 35 % of the horizon's hue.
+    const _twl = G.raceTimeOfDay === "dusk" || G.raceTimeOfDay === "dawn";
+    const _hz = G.frameSky.horizon;
+    const fc = isNightSession ? [0.09, 0.10, 0.13]
+      : _twl && _hz ? _twilightFog(_hz)
+      : [0.74, 0.76, 0.78];
     G.frame.fogColor = fc;
     if (G.raceTimeOfDay === "default") { G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.6));
@@ -394,7 +424,9 @@ function _applyRaceBody() {
     // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
     // 1.08 over the 0.86-0.90 night base (+25%) grey-washed the dark and killed
     // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
-    const _fogFloor = isNightSession ? 0.95 : 1.08;
+    // Twilight keeps its own exposure (dusk 1.03, dawn 1.08): the 1.08 day floor
+    // lifted a dusk fog brighter than a clear dusk.
+    const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
   } else {
     G.frameSky.cloud = G._cloudBase;
@@ -475,6 +507,19 @@ function _applyRaceBody() {
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+}
+
+// The sky shader's smoothstep, for the overcast horizon weight above.
+function _smooth(a, b, x) {
+  const t = Math.min(1, Math.max(0, ((x != null ? x : 0) - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+// Twilight fog colour from the horizon: luminance with the day grey's cool
+// lift ([0.74,0.76,0.78] is 1 : 1.03 : 1.05), mixed 35 % back toward the hue.
+function _twilightFog(h) {
+  const y = 0.2126 * h[0] + 0.7152 * h[1] + 0.0722 * h[2];
+  const g = [y, y * 1.02, y * 1.05];
+  return g.map((v, i) => v + (h[i] - v) * 0.35);
 }
 
 // Per-track sun AZIMUTH bias
