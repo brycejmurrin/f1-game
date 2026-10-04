@@ -10,7 +10,8 @@
         tree, bush, ridge, building, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge } = api;
+        addBox, addCyl, addFrustum, forestEdge,
+        acacia, mountain, circuitKit, addPyramid, groundUnder, terrainYAt } = api;
 
       const THORN = [0.24, 0.36, 0.20], THORN_D = [0.19, 0.30, 0.17];
       const GUM = [0.20, 0.34, 0.22];
@@ -32,30 +33,22 @@
       // 1. HIGHVELD VELD — flat-topped acacia thorn trees scattered over open
       //    golden grass, plus the ranks of imported blue-gum along the
       //    boundary. Sparse and low: the veld reads as open, never wooded.
-      //    Crown / fork AABBs must overlap the trunk (ground-audit BFS) — a
-      //    0.15 m Y gap on a slope leaves the umbrella unsupported.
+      //    api.acacia (nature.js) builds the flat-topped thorn as ONE connected
+      //    trunk -> fork -> layered-slab stack; it replaced a hand-rolled
+      //    single-box umbrella here (same sites, same hash, same sizes).
       const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.36 && s <= 0.48);
       every(30, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
         if (h < 0.42) return;
-        const a = anchor(k, h < 0.5 ? -1 : 1, 16 + h * 14);
+        const side = h < 0.5 ? -1 : 1, dist = 16 + h * 14;
+        const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 8)) return;
-        const b = [a.r, a.u, a.t];
-        const ht = 5 + h * 3, spread = 7 + h * 3;
-        out._mat = MAT.WOOD;
-        seat.cyl(out, a.c, 0.28, ht * 0.72, [0.34, 0.26, 0.18], 5, b);
-        for (const dr of [-1, 1])                    // the low fork — overlaps trunk
-          addBox(out, vadd(vadd(a.c, a.u, ht * 0.55), a.r, dr * spread * 0.22),
-            [spread * 0.44, 1.1, 0.28], [0.34, 0.26, 0.18], b);
-        out._mat = MAT.FOLIAGE;
-        // One broad, shallow umbrella: the crown must read horizontally,
-        // never as the stacked round canopy of a European parkland tree.
-        // Centre sits on the trunk top so AABBs touch through the BFS.
-        addBox(out, vadd(a.c, a.u, ht * 0.70), [spread, 0.9, spread * 0.48],
-          h < 0.6 ? THORN : THORN_D, b);
-        out._mat = 0;
+        // +0.13 m: slab tops clear the generic acacia scatter's (furniture.tree)
+        // by > MIN_SEP — at 5.0 one crown sat 16 mm under a scatter crown.
+        acacia(k, side, dist, 5.13 + h * 3, h < 0.6 ? THORN : THORN_D,
+          { spread: 7 + h * 3, layers: h < 0.75 ? 2 : 1 });
       });
       every(24, (k) => {
         const h = hash(k * 97 + 23);
@@ -211,8 +204,11 @@
       // place the main spectator bank on the pit-straight (exact bay count and
       // seat total not surveyed — length kept modest ~80 m).
       // Emit body lives in a local fn so BATCH-01's 2200-char required window fits.
+      // Side +1: the engine pit lane + garages (track.pit, s 4150 -> 200 m) run
+      // on -1, so the -1 site sat on the pit lane, its onTrack guard tripped,
+      // and this REQUIRED stand was never emitted (measured 2026-10-04).
       {
-        const side = -1, dist = 14;
+        const side = 1, dist = 14;
         const a = anchor(K(0.950), side, dist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t], inw = IN(side);
@@ -237,9 +233,9 @@
               }
               stage._mat = MAT.CONCRETE;
             }
-            for (const dt of [-len / 2 - 0.4, len / 2 + 0.4])
-              seat.box(stage, vadd(vadd(a.c, a.t, dt), a.r, -inw * 0.4),
-                [12, backH + 1.2, 0.7], SAND_D, b);
+            for (const dt of [-len / 2 - 0.4, len / 2 + 0.4])   // footed 0.08 m under the slab
+              seat.box(stage, vadd(vadd(vadd(a.c, a.t, dt), a.r, -inw * 0.4), a.u, -0.08),
+                [12, backH + 1.28, 0.7], SAND_D, b);
             stage._mat = MAT.METAL;
             for (let i = 0; i <= bays; i++) {
               const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
@@ -447,4 +443,128 @@
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 40, { density: 0.22, hMin: 6, hMax: 10, pineFrac: 0.08, col: GUM, col2: THORN });
       }
+
+      // ── 2026-10 deep pass ─────────────────────────────────────────────────
+      // Everything below is APPENDED so the hash phases, spectatorHill slots
+      // and tree relocations of the dressing above stay byte-identical.
+      // Side +1 is the lap's OUTSIDE on this build (measured: a +1 anchor
+      // 60-220 m out never meets tarmac except across the 0.20-0.25 loop);
+      // its terrain skirt falls from grade to the -15 m floor by ~120 m.
+
+      // 2a. Outer veld thorn: Acacia karroo / Vachellia clumps on the open
+      //     outside slope, a main tree plus a smaller companion 12 m along.
+      const VELD_T = [0.30, 0.38, 0.21];
+      every(36, (k) => {
+        const s = k / n;
+        if (openArea(s) || (s >= 0.19 && s <= 0.26)) return;
+        const h = hash(k * 53 + 11);
+        if (h < 0.38) return;
+        const dist = 66 + h * 24;
+        acacia(k, 1, dist, 4.5 + h * 3, h < 0.7 ? VELD_T : THORN_D,
+          { spread: 6 + h * 3.5, layers: h < 0.6 ? 2 : 1 });
+        if (h > 0.62) acacia(k + 3, 1, dist + 7, 3.6 + h * 1.5, THORN, { spread: 4.5, layers: 1 });
+      });
+
+      // 2b. Blue-gum woodlots: Highveld farms planted Eucalyptus in tight
+      //     rectangular blocks (windbreak, pole and fuel timber), so they read
+      //     as dark blue-grey squares on the horizon, taller than everything
+      //     but the mine headgear. Outside skirt, 95-125 m out.
+      const GUM_B = [0.27, 0.36, 0.33];
+      for (const [s, rows, cols] of [[0.300, 3, 5], [0.505, 3, 4], [0.665, 4, 5], [0.790, 3, 6]]) {
+        const k0 = K(s);
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          const h = hash(k0 * 13 + r * 7 + c * 3);
+          tree(k0 + c * 2, 1, 98 + r * 8 + (c % 2) * 2, 24 + h * 8, h < 0.5 ? GUM : GUM_B,
+            { crown: "columnar", spread: 1.25, deadChance: 0 });
+        }
+      }
+
+      // 2c. Spectator grass banks on the corner outsides (turn index ->
+      //     racing frac from def.turns; side = away from the turn direction,
+      //     measured with anchor tangents). Names follow the 2016 layout
+      //     order T1 Crowthorne, T2 Jukskei Sweep, T3 Barbecue, T4 Sunset,
+      //     T5 Clubhouse — from the published circuit map, not re-verified
+      //     against a survey this pass.
+      const BANK = { rows: 3, rise: 0.95, depth: 1.6, density: 0.26, step: 12 };
+      // Ends at 0.101, before the apex: run to 0.114 its treads folded over
+      // each other round the tight corner (clip-audit 1.23 m severe at 0.113).
+      spectatorHill(0.088, 0.101, -1, 24, BANK);                       // T1 Crowthorne (0.1055)
+      spectatorHill(0.152, 0.178, 1, 20, { ...BANK, rows: 2 });        // T2 Jukskei Sweep (0.165)
+      spectatorHill(0.380, 0.400, -1, 22, BANK);                       // T4 Sunset (0.391)
+      spectatorHill(0.405, 0.425, -1, 22, { ...BANK, density: 0.22 }); // T5 Clubhouse (0.4115)
+
+      // 2d. Modern paddock (2015-16 Porsche SA rebuild): glazed hospitality
+      //     units in the paddock BEHIND the engine-built garages (side -1,
+      //     track.pit's working lane ends 14 m out). Non-required kit.
+      if (circuitKit) {
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-a", frac: 0.012, side: -1, gap: 44,
+          size: [16, 9, 44], modules: 5 });
+        circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: -1, gap: 44,
+          size: [16, 9, 40], modules: 4 });
+      }
+      // Kyalami International Convention Centre: a long, low exhibition hall
+      // on the estate beside the paddock, on the flat floor beyond the skirt.
+      building(K(0.045), 1, 150, 64, 15, 120,
+        { kind: "hall", wall: [0.82, 0.80, 0.76], window: [0.30, 0.36, 0.42], floor: 5 });
+
+      // 2e. Midrand suburbia: Kyalami's walled residential estates — single-
+      //     storey plastered houses under hipped clay-tile or charcoal concrete
+      //     roofs, on the flat floor beyond the outside skirt (gap >= 150 m).
+      //     Seated on groundUnder(), not anchor(): out here anchor() reads a
+      //     node-side height up to 0.8 m under the floor (house() buried /
+      //     unsupported 18 prims, ground-audit 2026-10-04), and a lot is only
+      //     used where every corner is OFF the terrain ribbon (flat floor).
+      const WALLS = [[0.88, 0.84, 0.74], [0.82, 0.76, 0.64], [0.90, 0.88, 0.82], [0.74, 0.68, 0.58]];
+      const ROOFS = [[0.56, 0.30, 0.22], [0.30, 0.30, 0.32], [0.62, 0.36, 0.26]];
+      const estateHouse = (k, gap, w, d, wall, roof) => {
+        const a = anchor(k, 1, gap + w / 2), b = [a.r, a.u, a.t];
+        for (const [sx, sz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6], [0, 0]]) {
+          const x = a.c[0] + a.r[0] * sx * w + a.t[0] * sz * d, z = a.c[2] + a.r[2] * sx * w + a.t[2] * sz * d;
+          if (terrainYAt(x, z) != null) return;
+        }
+        if (onTrack(a.c[0], a.c[2], w + 6)) return;
+        const g = groundUnder(a.c[0], a.c[2]);
+        if (!Number.isFinite(g)) return;
+        const foot = [a.c[0], g - 0.12, a.c[2]];
+        out._mat = MAT.CONCRETE;
+        seat.box(out, foot, [w, 3.32, d], wall, b);
+        out._mat = MAT.ROOF;
+        addPyramid(out, vadd(foot, a.u, 3.32), [w * 1.12, 2.0, d * 1.12], roof, b);
+        out._mat = 0;
+      };
+      for (const [s0, s1] of [[0.29, 0.35], [0.69, 0.86]]) {
+        every(30, (k) => {
+          const s = k / n;
+          if (s < s0 || s > s1) return;
+          for (const [row, gap] of [[0, 152], [1, 180]]) {
+            const h = hash(k * 17 + row * 41 + 5);
+            if (h < 0.3) continue;
+            estateHouse(k, gap + h * 6, 11 + h * 5, 9 + h * 3,
+              WALLS[Math.floor(h * 97) % WALLS.length], ROOFS[Math.floor(h * 53) % ROOFS.length]);
+          }
+        });
+      }
+      // Midrand office park on the N1 side: low glazed blocks, not towers.
+      for (let i = 0; i < 5; i++) {
+        building(K(0.735 + i * 0.012), 1, 250 + (i % 2) * 26, 30, 12 + (i % 3) * 4, 26,
+          { kind: i % 2 ? "clad" : "slab", wall: [0.74, 0.74, 0.72], window: [0.34, 0.42, 0.48], floor: 4 });
+      }
+
+      // 2f. Koppies: low rounded granite / quartzite outcrop hills with
+      //     scrubby bush, dotted across the far Highveld horizon on the
+      //     bearings the mine dumps and office skyline leave open.
+      for (const [ang, w, h, seed] of [
+        [2.35, 220, 34, 3], [3.05, 180, 26, 7], [3.85, 250, 40, 11], [4.70, 200, 30, 17], [5.45, 230, 36, 23],
+      ]) {
+        const rr = rad + 380 + hash(seed) * 60;
+        mountain(cx + Math.cos(ang) * rr, cz + Math.sin(ang) * rr, pyMin, w, h,
+          { rough: 0.55, seed, seg: 9, snowline: 2, rock: [0.50, 0.44, 0.36], forest: [0.34, 0.36, 0.21] });
+      }
+
+      // 2g. Winter firebreaks: burnt black strips mown and burned along the
+      //     property boundary every May-August — the Highveld's dry-season mark.
+      for (const [id, s, d, l] of [
+        ["kyalami-firebreak-south", 0.32, 84, 150], ["kyalami-firebreak-west", 0.76, 82, 170],
+        ["kyalami-firebreak-north", 0.87, 70, 90],
+      ]) groundPatch(K(s), 1, d, [9, 0.12, l], [0.15, 0.13, 0.11], { id, samples: 8 });
     };

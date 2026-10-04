@@ -222,23 +222,33 @@
         // the garages there, so the file's own kit pit building (always a no-op
         // under the complex) is dropped. Race control and the paddock stand
         // BEHIND the garages on the pit side, opposite the main grandstand.
-        circuitKit.raceControl({ style: "tapered",
+        // Was style "tapered" [9, 30, 9]: a 9 m frustum shaft under a 7.7 m cap
+        // slab, 12 m behind the garages with nothing round it once the
+        // pit-paddock group below is superseded by the pit complex — from the
+        // main straight it read as an orphaned grey T-column (parent TLX
+        // capture, frac ~0.99). Now a stacked control BUILDING (4 levels,
+        // 35 % setback) whose ground floor fronts the anchor plane, so it
+        // reads as the paddock-side race-control block, not a lone pillar.
+        circuitKit.raceControl({
           id: "kit:suzuka:race-control", frac: 0.995, side: -1, gap: RC_GAP,
-          size: [9, 30, 9], required: true,
+          size: [14, 22, 26], levels: 4, required: true,
         });
       }
       {
         const rk = Math.round(n * 0.995) % n;
         const rc = anchor(rk, -1, RC_GAP), rb = [rc.r, rc.u, rc.t];
-        const faceC = vadd(rc.c, rc.u, 24);
+        // Top level (i = 3 of 4): 16.5–22 m, scale 1 - 3/4·0.35 → its
+        // track-facing wall is set back 14·(1-0.7375)/2 = 1.84 m from the
+        // ground-floor face at the anchor plane. Clock hangs on that wall.
+        const faceC = vadd(vadd(rc.c, rc.u, 19.2), rc.r, -1.84);
         modelGroup("kit:suzuka:race-control-clock", {
-          center: faceC, size: [1.2, 6.6, 6.6], basis: rb,
+          center: faceC, size: [1.2, 5.4, 5.4], basis: rb,
         }, (stage) => {
-          addBox(stage, vadd(faceC, rc.r, 0.05), [0.3, 6.2, 6.2], navy, rb);            // housing surround
-          addCyl(stage, vadd(faceC, rc.r, 0.22), 2.9, 0.22, [0.96, 0.96, 0.94], 16, [rc.u, rc.r, rc.t]);  // white face
-          addCyl(stage, vadd(faceC, rc.r, 0.45), 3.05, 0.14, navy, 16, [rc.u, rc.r, rc.t]);               // rim
-          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 0.32, 1.9], navy, rb);          // hour hand
-          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 2.3, 0.14], navy, rb);          // minute hand
+          addBox(stage, vadd(faceC, rc.r, 0.05), [0.3, 5.0, 5.0], navy, rb);            // housing surround
+          addCyl(stage, vadd(faceC, rc.r, 0.22), 2.3, 0.22, [0.96, 0.96, 0.94], 16, [rc.u, rc.r, rc.t]);  // white face
+          addCyl(stage, vadd(faceC, rc.r, 0.45), 2.45, 0.14, navy, 16, [rc.u, rc.r, rc.t]);               // rim
+          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 0.32, 1.5], navy, rb);          // hour hand
+          addBox(stage, vadd(faceC, rc.r, 0.32), [0.14, 1.85, 0.14], navy, rb);         // minute hand
         }, { required: true });
       }
       broadcastCompound(Math.round(n * 0.992) % n, -1, BC_GAP, { vans: 3, dishes: 2, mastH: 9 });
