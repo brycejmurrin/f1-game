@@ -263,7 +263,7 @@ const survey = (() => {
         out.startGantry.push(`${def.id}: nearest of ${gantries.length} gantr${gantries.length > 1 ? "ies" : "y"} ` +
                              `stands ${Math.round(nearest)} m from the start line`);
       }
-      const lamps = StartLights().create({}, { Particles: { glow() {} } }).lampsFor(track);
+      const lamps = StartLights().create({}, { Particles: { flare() {} } }).lampsFor(track);
       if (!lamps || lamps.length !== 5) out.startLamps.push(`${def.id}: no start lamps`);
       else {
         const c = lamps[2], away = Math.hypot(c[0] - track.px[0], c[2] - track.pz[0]), up = c[1] - track.py[0];
