@@ -443,6 +443,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `drive-broadcast.js` | `DriveBroadcast` | tag | lens only for the broadcast cameras. |
 | `drive-onboard.js` | `DriveOnboard` | tag | lens only for cameras bolted to the car. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
+| `cam-groups.js` | `CamGroups` | tag | CamGroups: the ONE table of which player cameras count as "onboard" and which take the cockpit HUD layout, by CamModes id. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |

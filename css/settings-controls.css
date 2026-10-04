@@ -141,6 +141,10 @@
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
+/* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
+   greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
+#pm-hudlayout .tune-row:has(input:disabled),
+#pm-hudlayout .opt-btn:disabled { opacity: 0.45; cursor: default; }
 /* Inside Settings the broad `.pm-group button` rules (full width, --tap tall,
    left-aligned, viewport type) and the wide-sheet `.pm-groups > [role=region]
    button` retune both outrank the generic row parts above, so the chevrons

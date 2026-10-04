@@ -346,7 +346,8 @@ const FULL = [
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
-  "js/ui/hud-layout.js",     // per-element HUD move/size (cockpit + other layouts); builds DISPLAY › HUD › MOVE & SIZE
+  "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
+  "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -563,6 +564,8 @@ const HARD_EDGES = [
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
+  ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
+  ["js/camera/cam-groups.js", "js/ui/hud.js"],      // ONBOARD_IDS = CamGroups.ONBOARD at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.

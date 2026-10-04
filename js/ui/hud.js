@@ -84,7 +84,7 @@ const _rx = _doc ? { delta: _doc.getElementById("hud-delta"), deltaN: _doc.getEl
   bb: _doc.getElementById("hud-bb") } : {};
 let _ePrev = NaN, _blue = false, _blueSaid = null;
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
-const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
+const ONBOARD_IDS = typeof CamGroups !== "undefined" ? CamGroups.ONBOARD : {};   // js/camera/cam-groups.js
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
 // AUTO is always the full set: fitHud() scales / stacks / drops the gap strip
