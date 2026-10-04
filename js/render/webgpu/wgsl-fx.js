@@ -8,6 +8,9 @@
 "use strict";
 
 const WGSLFx = (function () {
+  // The lit pass's frame block, for DECAL's group 1 (wgsl-chunks.js loads
+  // first: tools/manifest.cjs HARD_EDGES).
+  const FRAME_U = (typeof window !== "undefined" && window.WGSLChunks && window.WGSLChunks.FRAME_U) || "";
 
   // 1. BLOB_SHADOW — soft dark elliptical ground decal under a car.
   //
@@ -231,8 +234,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //               one atlas texture: uv = uvRect.xy + meshUV * uvRect.zw.
   //    LOOK     : sun Lambert + hemisphere ambient (so the decal sits INTO the
   //               paint shading, not flat), alpha-TESTED (discard a < 0.02) then
-  //               alpha-blended, plus a glow lift (tint.w) so white sponsors read
-  //               at night. tint.rgb multiplies the sampled colour.
+  //               blended PREMULTIPLIED (the atlas is uploaded premultiplied:
+  //               wgx.js createTexture), plus a glow lift (tint.w) so white
+  //               sponsors read at night. tint.rgb multiplies the sampled colour.
+  //               The sun term takes a 4-tap box PCF on the static sun map and
+  //               the baked floodlight pools add their light (glsl-fx.js
+  //               DECAL_FS decalShadow / decalPool) — both read group 1, the lit
+  //               pass's own frame bind group (FrameU + bindings 2/3/5/17/18).
   //
   //    VERTEX INPUT  (mesh buffer, stride 32 B):
   //        @location(0) aPos : vec3<f32>   off  0
@@ -242,7 +250,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //        @group(0) @binding(0) var<uniform> U : DecalU
   //        @group(0) @binding(1) var atlasTex  : texture_2d<f32>
   //        @group(0) @binding(2) var atlasSamp : sampler        (linear, clamp)
-  //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha), ALPHA-TESTED
+  //        @group(1) = the lit frame group (fs_main only; fs_glass never reads it)
+  //    BLEND         : premultiplied (one, oneMinusSrcAlpha), ALPHA-TESTED
   //    DEPTH         : test ENABLED, write DISABLED (sits proud of the body).
   //    CULL          : none (single quad, both faces)
   //
@@ -253,7 +262,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //               caller's uvRect (0, 1, 1, -1) reads (u, 1 - v): the target's
   //               row 0 is its TOP, the mesh's v = 0 the image bottom. tint.rgb
   //               scales the sample. No branch ahead of textureSample (uniformity).
-  const DECAL = `
+  const DECAL = FRAME_U + `
 struct DecalU {
   model     : mat4x4<f32>,  // off   0
   viewProj  : mat4x4<f32>,  // off  64
@@ -267,11 +276,18 @@ struct DecalU {
 @group(0) @binding(0) var<uniform> U : DecalU;
 @group(0) @binding(1) var atlasTex  : texture_2d<f32>;
 @group(0) @binding(2) var atlasSamp : sampler;
+@group(1) @binding(0) var<uniform> F : FrameU;
+@group(1) @binding(2) var shadowTex  : texture_depth_2d;
+@group(1) @binding(3) var shadowSamp : sampler_comparison;
+@group(1) @binding(5) var envSamp : sampler;
+@group(1) @binding(17) var lampBakeTex : texture_2d<f32>;
+@group(1) @binding(18) var lampBakeIdx : texture_2d<f32>;
 
 struct VSOut {
   @builtin(position) clip : vec4<f32>,
   @location(0)       uv   : vec2<f32>,
   @location(1)       nrm  : vec3<f32>,
+  @location(2)       wpos : vec3<f32>,
 };
 
 @vertex
@@ -284,8 +300,51 @@ fn vs_main(
   o.uv  = U.uvRect.xy + aUV * U.uvRect.zw;
   let nm = mat3x3<f32>(U.model[0].xyz, U.model[1].xyz, U.model[2].xyz);
   o.nrm = nm * aNrm;
-  o.clip = U.viewProj * (U.model * vec4<f32>(aPos, 1.0));
+  let wp = U.model * vec4<f32>(aPos, 1.0);
+  o.wpos = wp.xyz;
+  o.clip = U.viewProj * wp;
   return o;
+}
+
+// Sun map (lit.wgsl parity: Z01 light VP, v flipped, the fade / slope bias /
+// box compensation) with a 4-tap box PCF. Compare-LEVEL taps: legal in any
+// control flow.
+fn decalShadow(wp : vec3<f32>, N : vec3<f32>) -> f32 {
+  if (F.params2.x < 0.5 || F.params2.y <= 0.0) { return 1.0; }
+  let sc = F.lightVP * vec4<f32>(wp, 1.0);
+  let ndc = sc.xyz / sc.w;
+  let suv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  let shRange = max(F.shadowCtr.w, 1.0);
+  let fadeCtr = vec3<f32>(F.eye.x, F.shadowCtr.y, F.eye.z);
+  var edgeFade = 1.0 - smoothstep(shRange * 0.62, shRange * 0.84, distance(wp, fadeCtr));
+  let ef = smoothstep(vec2<f32>(0.0), vec2<f32>(0.03), suv)
+         * (1.0 - smoothstep(vec2<f32>(0.97), vec2<f32>(1.0), suv));
+  edgeFade = edgeFade * ef.x * ef.y;
+  if (edgeFade <= 0.0 || ndc.z > 1.0) { return 1.0; }
+  let cosT = clamp(dot(N, F.sunDir.xyz), 0.05, 1.0);
+  let biasTerm = clamp(F.params2.z * 1.5 * (sqrt(1.0 - cosT * cosT) / cosT), 0.0005, 0.004)
+               + max(F.params2.w, 0.0) * 0.5;
+  let refD = ndc.z - biasTerm * (shRange / 80.0);
+  let o = F.params2.z * 1.5 * min(1.0, 80.0 / shRange);
+  let sh = 0.25 * ( textureSampleCompareLevel(shadowTex, shadowSamp, suv + vec2<f32>(-o, -o), refD)
+                  + textureSampleCompareLevel(shadowTex, shadowSamp, suv + vec2<f32>( o, -o), refD)
+                  + textureSampleCompareLevel(shadowTex, shadowSamp, suv + vec2<f32>(-o,  o), refD)
+                  + textureSampleCompareLevel(shadowTex, shadowSamp, suv + vec2<f32>( o,  o), refD));
+  return max(0.0, mix(1.0, sh, F.params2.y * edgeFade));
+}
+
+// Baked floodlight pools at the decal's ground position (lit.wgsl parity);
+// alpha = the baked height, so a car's marks share the road's pool.
+fn decalPool(wp : vec3<f32>, N : vec3<f32>) -> vec3<f32> {
+  let bUv = (wp.xz - F.bakeA.xy) / max(F.bakeA.zw, vec2<f32>(1e-3));
+  let bG = bUv * F.bakeD.xy;
+  let bTile = clamp(floor(bG), vec2<f32>(0.0), max(F.bakeD.xy - 1.0, vec2<f32>(0.0)));
+  let bSlot = textureLoad(lampBakeIdx, vec2<i32>(bTile), 0).xy;
+  let bUvD = (bSlot + (bG - bTile) * F.bakeC.w + 1.0) / max(F.bakeD.zw, vec2<f32>(1.0));
+  let bT = textureSampleLevel(lampBakeTex, envSamp, bUvD, 0.0);
+  let bIn = all(bUv > vec2<f32>(0.0)) && all(bUv < vec2<f32>(1.0)) && bSlot.x >= 0.0;
+  let hW = 1.0 - smoothstep(1.5, 3.0, abs(wp.y - bT.a));
+  return select(vec3<f32>(0.0), bT.rgb * F.bakeB.xyz * hW * (0.5 + 0.5 * N.y), F.bakeB.w > 0.5 && bIn);
 }
 
 @fragment
@@ -295,8 +354,9 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let N = normalize(in.nrm);
   let ndl = max(dot(N, U.sunDir.xyz), 0.0);
   let amb = mix(U.ambGround.xyz, U.ambSky.xyz, N.y * 0.5 + 0.5);
+  let sh = decalShadow(in.wpos, N);
   let base = t.rgb * U.tint.xyz;
-  let lit = base * (amb + U.sunColor.xyz * ndl) + base * U.tint.w;
+  let lit = base * (amb + U.sunColor.xyz * (ndl * sh) + decalPool(in.wpos, N)) + base * U.tint.w;
   return vec4<f32>(lit, t.a);
 }
 

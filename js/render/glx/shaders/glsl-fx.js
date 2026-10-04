@@ -52,29 +52,97 @@ uniform mat4 uModel;
 uniform mat4 uViewProj;
 out vec2 vUV;
 out vec3 vNrm;
+out vec3 vWorldPos;
 void main() {
   vUV = aUV;
   vNrm = mat3(uModel) * aNrm;
-  gl_Position = uViewProj * uModel * vec4(aPos, 1.0);
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  vWorldPos = wp.xyz;
+  gl_Position = uViewProj * wp;
 }`;
+  // DECAL_FS — sponsor / number marks sit INTO the car's light, not over it.
+  // The atlas is uploaded PREMULTIPLIED (glx.js createTexture) and blended
+  // ONE / ONE_MINUS_SRC_ALPHA, so t.rgb is already colour x coverage: the mip
+  // chain averages premultiplied texels and the transparent surround no longer
+  // bleeds black fringes into the logo edges. lit = t.rgb x light keeps it
+  // premultiplied.
+  // SUN SHADOW: a 4-tap box PCF on the static sun map. Unit 0 holds it for the
+  // whole frame (or the 1x1 depth dummy when shadows are off, with uShadowP.x
+  // 0), so a logo under a bridge / gantry / tree no longer stays sun-lit. The
+  // fade, slope bias and box compensation are glsl-lit.js sampleShadow's; the
+  // Poisson/PCSS machinery is not worth it on a few hundred decal texels.
+  // FLOODLIGHT POOLS: the baked lamp light map (units 12 + 13, LampBake) read
+  // at the decal's ground position, weighted toward up-facing marks — the
+  // marks now brighten and dim with the pools the car drives through.
   const DECAL_FS = `#version 300 es
-precision mediump float;
+precision highp float;
+precision highp sampler2DShadow;
 in vec2 vUV;
 in vec3 vNrm;
+in vec3 vWorldPos;
 uniform sampler2D uTex;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uAmbSky;
 uniform vec3 uAmbGround;
 uniform float uGlow;
+uniform sampler2DShadow uShadowMap;  // unit 0 (the lit pass's sun map)
+uniform mat4 uLightVP;
+uniform vec4 uShadowP;               // (strength incl. key fade, texel, bias knob, range m)
+uniform vec3 uShadowCtr;             // fade anchor y
+uniform vec3 uEye;
+uniform sampler2D uLampBake;         // unit 12
+uniform sampler2D uLampBakeIdx;      // unit 13
+uniform float uBakeOn;
+uniform vec4 uBakeA;                 // (origin x, origin z, size x m, size z m)
+uniform vec3 uBakeScale;
+uniform vec3 uBakeGrid;              // (tilesX, tilesY, T)
+uniform vec2 uBakeAtlas;
 out vec4 outColor;
+float decalShadow(vec3 wp, vec3 N) {
+  if (uShadowP.x <= 0.0) return 1.0;
+  vec4 lc = uLightVP * vec4(wp, 1.0);
+  vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+  if (sc.z >= 1.0) return 1.0;
+  float range = uShadowP.w;
+  float edgeFade = 1.0 - smoothstep(range * 0.62, range * 0.84,
+    distance(wp, vec3(uEye.x, uShadowCtr.y, uEye.z)));
+  vec2 ef = smoothstep(0.0, 0.03, sc.xy) * (1.0 - smoothstep(0.97, 1.0, sc.xy));
+  edgeFade *= ef.x * ef.y;
+  if (edgeFade <= 0.0) return 1.0;
+  float t = uShadowP.y;
+  float c = clamp(dot(N, uSunDir), 0.05, 1.0);
+  float biasTerm = clamp(t * 1.5 * (sqrt(1.0 - c * c) / c), 0.0005, 0.004) + uShadowP.z * 0.5;
+  float z = sc.z - biasTerm * (range / 80.0);
+  float o = t * 1.5 * min(1.0, 80.0 / range);
+  float sh = 0.25 * (texture(uShadowMap, vec3(sc.xy + vec2(-o, -o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2( o, -o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2(-o,  o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2( o,  o), z)));
+  return max(0.0, mix(1.0, sh, uShadowP.x * edgeFade));
+}
+vec3 decalPool(vec3 wp, vec3 N) {
+  if (uBakeOn < 0.5) return vec3(0.0);
+  vec2 bUv = (wp.xz - uBakeA.xy) / uBakeA.zw;
+  if (any(lessThanEqual(bUv, vec2(0.0))) || any(greaterThanEqual(bUv, vec2(1.0)))) return vec3(0.0);
+  vec2 bG = bUv * uBakeGrid.xy;
+  vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
+  vec2 bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+  if (bSlot.x < 0.0) return vec3(0.0);
+  vec4 bT = textureLod(uLampBake, (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0)), 0.0);
+  // alpha = the height the pool was baked at: a car's marks (0-1.5 m up)
+  // share the road's pool; a deck far above or below it does not.
+  float hW = 1.0 - smoothstep(1.5, 3.0, abs(wp.y - bT.a));
+  return bT.rgb * uBakeScale * hW * (0.5 + 0.5 * N.y);
+}
 void main() {
   vec4 t = texture(uTex, vUV);
   if (t.a < 0.02) discard;
   vec3 N = normalize(vNrm);
   float ndl = max(dot(N, uSunDir), 0.0);
   vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
-  vec3 lit = t.rgb * (amb + uSunColor * ndl) + t.rgb * uGlow;
+  float sh = ndl > 0.0 ? decalShadow(vWorldPos, N) : 1.0;
+  vec3 lit = t.rgb * (amb + uSunColor * (ndl * sh) + decalPool(vWorldPos, N)) + t.rgb * uGlow;
   outColor = vec4(lit, t.a);
 }`;
 

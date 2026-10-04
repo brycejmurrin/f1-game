@@ -1356,7 +1356,7 @@ const WGX = (function () {
           { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "float" } },                          // SSR result
           { binding: 7, visibility: GPUShaderStage.FRAGMENT,
-            texture: { sampleType: "float" } },                          // blocker map (PCSS-lite)
+            texture: { sampleType: "unfilterable-float" } },             // blocker map (PCSS-lite, r32float, textureLoad)
           { binding: 8, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "depth" } },                          // per-frame car shadow map
           { binding: 9, visibility: GPUShaderStage.FRAGMENT,
@@ -1571,6 +1571,12 @@ const WGX = (function () {
       color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
       alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
     };
+    // Car decals: the atlas is uploaded premultiplied (createTexture), so the
+    // colour is already coverage-weighted (GLX ONE / ONE_MINUS_SRC_ALPHA).
+    const PREMUL_BLEND = {
+      color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+      alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+    };
     const ADD_BLEND = {
       color: { srcFactor: "one", dstFactor: "one", operation: "add" },
       alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
@@ -1706,8 +1712,10 @@ const WGX = (function () {
           ],
         });
         const decalMod = device.createShaderModule({ code: _Fx.DECAL });
+        // Group 1 = the lit pass's frame group (g0Layout): the decal's sun-map
+        // shadow and lamp-pool terms read the same FrameU and textures.
         pDecal = device.createRenderPipeline({
-          layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout] }),
+          layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout, g0Layout] }),
           vertex: { module: decalMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.DECAL_VERTEX_BYTES,
             attributes: [
               { shaderLocation: 0, offset: 0,  format: "float32x3" },
@@ -1715,7 +1723,7 @@ const WGX = (function () {
               { shaderLocation: 2, offset: 24, format: "float32x2" },
             ] }] },
           fragment: { module: decalMod, entryPoint: "fs_main", targets: [{
-            format: SCENE_FORMAT, blend: ALPHA_BLEND,
+            format: SCENE_FORMAT, blend: PREMUL_BLEND,
             writeMask: GPUColorWrite.RED | GPUColorWrite.GREEN | GPUColorWrite.BLUE,
           }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
@@ -3060,10 +3068,20 @@ const WGX = (function () {
           size: [w, h], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
+        // PREMULTIPLIED (every createTexture handle is a drawDecal atlas, blended
+        // PREMUL_BLEND): mips then average coverage-weighted colour, so the
+        // transparent surround no longer bleeds dark fringes into logo edges.
         if (src instanceof Uint8Array || src instanceof Uint8ClampedArray) {
-          device.queue.writeTexture({ texture: tex }, src, { bytesPerRow: w * 4, rowsPerImage: h }, [w, h]);
+          const pm = new Uint8Array(src.length);
+          for (let i = 0; i < src.length; i += 4) {
+            const a = src[i + 3];
+            pm[i] = (src[i] * a + 127) / 255; pm[i + 1] = (src[i + 1] * a + 127) / 255;
+            pm[i + 2] = (src[i + 2] * a + 127) / 255; pm[i + 3] = a;
+          }
+          device.queue.writeTexture({ texture: tex }, pm, { bytesPerRow: w * 4, rowsPerImage: h }, [w, h]);
         } else {
-          device.queue.copyExternalImageToTexture({ source: src, flipY: true }, { texture: tex }, [w, h]);
+          device.queue.copyExternalImageToTexture({ source: src, flipY: true },
+            { texture: tex, premultipliedAlpha: true }, [w, h]);
         }
         _generateMips(tex, 1);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
@@ -3760,9 +3778,11 @@ const WGX = (function () {
 
     // BlitU = params (exposure, flip, mip, _) + tone (aces a,b,c,d | e, whitePoint)
     // from T: _TONE_STANDIN, or a frame's tune (the mirror; null = knob defaults).
+    const _ONE3W = [1, 1, 1];
     function _blitParams(dst, exposure, T) {
-      dst[0] = exposure; dst[1] = 0; dst[2] = 0; dst[3] = 0;
+      dst[0] = exposure; dst[1] = 0; dst[2] = 0; dst[3] = 0;   // w 0: no grade (the plain tonemap blit)
       for (let i = 0; i < 6; i++) dst[4 + i] = PostCommon.knob(T, _TONE_IDS[i]);
+      for (let i = 10; i < dst.length; i++) dst[i] = 0;
       return dst;
     }
 
@@ -4001,7 +4021,9 @@ const WGX = (function () {
     // queue-written by the fallback blit in this same submit. T = the frame's
     // tune when the composite ran — its white point + ACES knobs, as GLX
     // MIRROR_FS / TLX mirror — or _TONE_STANDIN when the frame took the blit.
-    function _mirrorComposite(exposure, T) {
+    // `o` (the present opts) only when the post chain graded the frame: the
+    // inset then takes the same colour grade + dither (BLIT params.w).
+    function _mirrorComposite(exposure, T, o) {
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
       const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
       const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
@@ -4015,6 +4037,14 @@ const WGX = (function () {
       const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
       _blitParams(_mirData, exposure, T);
       _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
+      if (o) {
+        const g = o.grade || null, gsh = g && g.shadow ? g.shadow : _ONE3W, ghi = g && g.hi ? g.hi : _ONE3W;
+        _mirData[3] = 1; _mirData[10] = frameTime;
+        _mirData[12] = PostCommon.knob(T, "contrast"); _mirData[13] = PostCommon.knob(T, "vibrance");
+        _mirData[14] = PostCommon.knob(T, "saturation"); _mirData[15] = PostCommon.knob(T, "tint");
+        _mirData[16] = gsh[0]; _mirData[17] = gsh[1]; _mirData[18] = gsh[2]; _mirData[19] = g && g.str != null ? g.str : 0;
+        _mirData[20] = ghi[0]; _mirData[21] = ghi[1]; _mirData[22] = ghi[2]; _mirData[23] = PostCommon.knob(T, "blackLift");
+      }
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
       const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
@@ -4478,6 +4508,7 @@ const WGX = (function () {
           const src = i === 0 ? { w: tw, h: th } : bloomLv[i - 1];
           const s = postScratch;
           s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = i === 0 ? 2 : i === 1 ? 1 : 0;
+          s[4] = o.exposure != null ? o.exposure : 1.0; s[5] = s[6] = s[7] = 0;
           device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -4638,7 +4669,7 @@ const WGX = (function () {
           timerRead = _gpuReadBuf;
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
-      _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN);   // !_postReady: the catch took the blit
+      _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN, _postReady ? o : null);   // !_postReady: the catch took the blit
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -5181,9 +5212,13 @@ const WGX = (function () {
         ] });
         tex._wgxDecalBG = bg;
       }
+      if (!_activeFrameBG) return;
       _setPipe(litPass, pDecal);
       _fxDecalDynOff[0] = slot * FX_STRIDE;
       _setBG0(litPass, bg, _fxDecalDynOff);
+      // The lit frame group as group 1 (shadow + pools). Not cached: every lit
+      // draw re-sets group 1 to its own dynamic draw group.
+      litPass.setBindGroup(1, _activeFrameBG);
       _setVB0(litPass, mesh.vbuf);
       // Through the helper, not raw: a bare setIndexBuffer beside the cache
       // desyncs it and the next _drawGeom would skip a bind it still needs.

@@ -24,7 +24,7 @@
       "lines": 1894
     },
     "js/render/glx/glx.js": {
-      "lines": 2788
+      "lines": 2820
     },
     "js/track/tracks.js": {
       "lines": 702
@@ -35,7 +35,7 @@
   },
   "tree": {
     "bareCatches": {
-      "ceiling": 30,
+      "ceiling": 29,
       "slack": 15
     },
     "cssClasses": {

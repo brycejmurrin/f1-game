@@ -5,6 +5,7 @@ const WGSLPost = (function () {
   const CH = (typeof window !== "undefined" && window.WGSLChunks) || {};
   const fullscreenTri = CH.fullscreenTri || "";
   const tonemap = CH.tonemap || "";
+  const colourGradeLeaf = CH.colourGradeLeaf || "";
 
   // Emits texture-space uv (y-down). Depends on fsTriNDC from `fullscreenTri`.
   const POST_VS = `
@@ -31,15 +32,19 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   //      @binding(0) srcTex  : texture_2d<f32>   scene HDR (level 0) OR previous level
   //      @binding(1) srcSamp : sampler           linear clamp
   //      @binding(2) U       : uniform  BloomDownU
-  //    UNIFORM BloomDownU (16 B):
+  //    UNIFORM BloomDownU (32 B):
   //      texel     : vec2<f32>  off 0   (1/srcWidth, 1/srcHeight)
-  //      threshold : f32        off 8   (bright-pass threshold, level 0 only)
+  //      threshold : f32        off 8   (bright-pass threshold in EXPOSED units, level 0 only)
   //      mode      : f32        off 12  (2 = bright pass, 1 = Karis 13-tap, 0 = plain 13-tap)
+  //      exposure  : f32        off 16  (the composite's exposure; level 0 only)
   const BLOOM_DOWN = `
 struct BloomDownU {
   texel     : vec2<f32>,
   threshold : f32,
   mode      : f32,
+  exposure  : f32,
+  _pad0     : f32,
+  _pad1     : vec2<f32>,
 };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
@@ -51,9 +56,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let uv = in.uv;
   if (U.mode > 1.5) {
     // LEVEL 0 — GLX BRIGHT_FS / TLX bright: quadratic soft knee (half-width =
-    // threshold/2), so a lamp crossing the threshold fades in, not pops.
+    // threshold/2), so a lamp crossing the threshold fades in, not pops. The
+    // test runs on EXPOSED luminance; the output stays scene-referred.
     let c = textureSampleLevel(srcTex, srcSamp, uv, 0.0).rgb;
-    let lum = max(max(c.r, c.g), c.b);
+    let lum = max(max(c.r, c.g), c.b) * U.exposure;
     let knee = U.threshold * 0.5 + 1e-4;
     var soft = clamp(lum - U.threshold + knee, 0.0, 2.0 * knee);
     soft = soft * soft / (4.0 * knee);
@@ -603,37 +609,11 @@ fn applyHdrGrade(c_in : vec3<f32>) -> vec3<f32> {
   return max(c, vec3<f32>(0.0));
 }
 
-// Lift-gamma-gain colour grade (GLX colourGrade, js/render/glx/shaders/glsl-post.js COMPOSITE_FS), reduced.
-fn colourGrade(c_in : vec3<f32>) -> vec3<f32> {
-  var c = c_in;
-  let contrast   = U.grade.x;
-  let vibrance   = U.grade.y;
-  let saturation = U.grade.z;
-  let tint       = U.grade.w;
-  let gradeStr   = U.gradeShadow.w;
-  let blackLift  = U.sunUV.w;
-  let LUMA = vec3<f32>(0.299, 0.587, 0.114);
-
-  c = c * vec3<f32>(1.015, 1.008, 0.992);                 // gain
-  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);            // soft S-curve
-  c = pow(max(c, vec3<f32>(1e-6)), vec3<f32>(contrast));   // midtone contrast; pow(0, n) NaNs on mobile GPUs, black stays black
-  // Vibrance: pull dull pixels toward colour more than vivid ones.
-  let luma = dot(c, LUMA);
-  let mx = max(max(c.r, c.g), c.b);
-  let mn = min(min(c.r, c.g), c.b);
-  let sat = mx - mn;
-  c = mix(vec3<f32>(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * vibrance);
-  // Global saturation.
-  c = mix(vec3<f32>(dot(c, LUMA)), c, saturation);
-  // White-balance tint (warm/cool).
-  c = c * vec3<f32>(1.0 + 0.07 * tint, 1.0, 1.0 - 0.07 * tint);
-  // Cinematic split-tone (shadows vs highlights); gradeStr 0 = neutral.
-  let gl2 = dot(c, LUMA);
-  let toneTint = mix(U.gradeShadow.xyz, U.gradeHi.xyz, smoothstep(0.0, 0.85, gl2));
-  c = mix(c, c * toneTint, gradeStr);
-  // Raised (slightly warm) black floor.
-  c = max(c, vec3<f32>(blackLift, blackLift * 0.8, blackLift * 0.6));
-  return c;
+// Lift-gamma-gain colour grade (GLX colourGrade, js/render/glx/shaders/glsl-post.js
+// COLOUR_GRADE): the shared WGSLChunks leaf, fed this pass's uniforms.
+${colourGradeLeaf}
+fn colourGrade(c : vec3<f32>) -> vec3<f32> {
+  return colourGradeP(c, U.grade, U.gradeShadow, vec4<f32>(U.gradeHi.xyz, U.sunUV.w));
 }
 
 @fragment
@@ -907,10 +887,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // Interleaved-gradient hashes on pixel coords, stepped per frame by the
   // golden-ratio IGN offset (GLX COMPOSITE parity) — animated noise, not a
   // frozen speckle welded to the panel.
-  let dhc = in.pos.xy + 5.588238 * (floor(U.fx.z * 60.0) % 64.0);
-  let dh0 = fract(52.9829189 * fract(dot(dhc, vec2<f32>(0.06711056, 0.00583715))));
-  let dh1 = fract(52.9829189 * fract(dot(dhc + 17.31, vec2<f32>(0.00583715, 0.06711056))));
-  c = c + vec3<f32>((dh0 + dh1 - 1.0) / 255.0);
+  c = ditherLSB(c, in.pos.xy, U.fx.z);
 
   // Film grain: luma-weighted (mids grain most). 0 = off. Animated per frame via
   // U.fx.z (time) so it isn't a frozen speckle welded to the panel (parity with
@@ -1466,7 +1443,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     // shared vertex stage (exported for reference/reuse)
     POST_VS,
     // uniform byte sizes (JS-side writers in wgx.js MUST agree)
-    BLOOM_DOWN_UNIFORM_BYTES: 16,   // BloomDownU
+    BLOOM_DOWN_UNIFORM_BYTES: 32,   // BloomDownU
     BLOOM_UP_UNIFORM_BYTES: 16,     // BloomUpU
     SSAO_UNIFORM_BYTES: 176,        // SsaoU  (2×mat4 128 + 3×vec4 48)
     BLUR_UNIFORM_BYTES: 16,         // BlurU  (dir.xy + pad)

@@ -7969,7 +7969,7 @@ function render(dt) {
   // 0 skips the ~9-pass bright+mip chain — the biggest post-chain saving left
   // after env/SSR/shadows. Look post stays live for the lighting tuner.
   po.exposure = frame.exposure * LT.exposureMul; po.bloom = PerfGov.autoTier() >= 4 ? 0 : _bloom * LT.bloomMul;
-  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2); po.grade = _grade;
+  po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
   // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops SSR;
