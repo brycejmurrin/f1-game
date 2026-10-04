@@ -441,7 +441,10 @@ const DrivingCoach = (function () {
     // ONLY the player: an AI car is part of the world being rewound, and there
     // is no lesson to protect there — so a rival's penalty rewinds with
     // everything else, which is what "the race is back where it was" means.
-    const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev"];
+    // Nor do the player's ROLE flags: a sample taken during the flying-start
+    // hand-over (js/race/flying-start.js, human=false for ~3 s) would otherwise
+    // hand the wheel to the AI for the rest of the session after it ended.
+    const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev", "human", "local", "isPlayer"];
     function applyCar(c, snap, keepForward) {
       const keep = {};
       if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
