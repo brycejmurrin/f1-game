@@ -226,3 +226,76 @@ test("the census grid's plans pass the same audit at Austria, 10 and 5 laps", as
     assert.equal(stopping.length, 0, "a 5-lap race is one set: " + stopping.map((c) => c.code + ":" + c.pitPlan.seq + "@" + c.pitPlan.lapsAt).join(" "));
   } finally { g2.close(); }
 });
+
+// ── 2026-10-04 race-strategy fixes, each against the live think() ─────────
+
+test("an early safety car does not pull a stop onto a set that cannot reach the flag", async () => {
+  // Bahrain, 12 laps, SC on lap 2 for 60 s (scratch/audit2/sc-early.mjs):
+  // the caution rule took every one-stop plan's lap-7 stop on lap 1-2, onto a
+  // soft that could not run 10 laps — 19 cars two-stopped, 2 three-stopped.
+  await g.race("bahrain", "day", "dry", { laps: 12 });
+  const { G } = g;
+  const T = vm.runInContext("TyreModel", g.ctx);
+  const A = vm.runInContext("AiDrive", g.ctx);
+  const life = (cls, p) => G.tyres.planLaps(T.AI_CLASS[cls].life, 12) / (p.loadK || 1);
+  const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops === 1
+    && o.pitPlan.lapsAt[0] - 2 <= A.STRAT.CAUTION_REACH && 12 - 2 > life(o.pitPlan.seq[1], o.pitPlan) * 1.1);
+  assert.ok(c, "a one-stop AI whose second set cannot run from lap 2 to the flag");
+  const reset = (lap) => {
+    c.lap = lap; c.pitStops = 0; c.pitArmed = false; c.pitState = "none"; c.pitNext = null; c.pitWhy = "";
+    c.tyreWear = 0.1; c.tyreWearF = 0.1; c.tyreWearR = 0.1;
+  };
+  G.holdCaution(3, "SAFETY CAR");
+  try {
+    for (let i = 0; i < 600 && G.cautionLevel() !== 3; i++) g.step(1);   // the hold lands on the next race-control tick
+    assert.equal(G.cautionLevel(), 3, "the SC is out");
+    reset(2);
+    assert.equal(G.pits.think(c), "", `a stop on lap 2 onto a ${c.pitPlan.seq[1]} (${life(c.pitPlan.seq[1], c.pitPlan).toFixed(1)} laps) for 10 laps is not free`);
+    // …but the free stop still stands where the set can carry the rest: on the
+    // plan's own lap the caution outranks the plan, so it is the reason given.
+    reset(c.pitPlan.lapsAt[0]);
+    assert.equal(G.pits.think(c), "caution", "on the plan's stop lap, the SC stop is taken");
+  } finally { G.holdCaution(0); reset(1); }
+});
+
+test("on the right wet tyre the stop comes from the wet's life, not the dry plan's lap", async () => {
+  // plan.lapsAt is cut for slicks; in a wet race every stop refits the wet, so
+  // the dry lap stopped a wet that could reach the flag (and a 2-stop dry plan
+  // stopped it twice). The wet stint is re-cut on the wet class's life.
+  await g.race("bahrain", "day", "rain", { laps: 10 });
+  const { G } = g;
+  const c = G.cars.find((o) => !o.human && o.pitPlan && o.pitPlan.stops >= 1 && o.tyre && o.tyre.tread > 0);
+  assert.ok(c, "a planned AI on a wet set");
+  const reset = (lap, w) => {
+    c.lap = lap; c.tyreLap0 = 0; c.pitStops = 0; c.pitArmed = false; c.pitState = "none"; c.pitNext = null; c.pitWhy = "";
+    c.tyreWear = w; c.tyreWearF = w; c.tyreWearR = w; c._rivalStop = true;   // (no rival call muddies the reason)
+  };
+  try {
+    const at = c.pitPlan.lapsAt[0];
+    reset(at, 0.04 * at);   // wearing at a 25-lap rate: this set reaches the flag
+    assert.equal(G.pits.think(c), "", `lap ${at} (the dry plan's stop) on a ${c.tyre.code} that reaches the flag`);
+    reset(5, 0.6);          // an 8-lap rate: it cannot, and lap 5 is the middle of the wet race
+    assert.equal(G.pits.think(c), "plan", "a wet that cannot reach the flag stops once, mid-race");
+    assert.equal(c.pitNext && c.pitNext.tread, c.tyre.tread, "…onto the same wet tread");
+    reset(6, 1.3);
+    assert.equal(G.pits.think(c), "worn", "a wet set past its life still comes off");
+  } finally { reset(1, 0); c._rivalStop = false; }
+});
+
+test("with wear on an AI runs on the tread it is fitted; with no plan it keeps the competent-field sentinel", async () => {
+  await g.race("bahrain", "day", "rain", { laps: 10 });
+  const { G } = g;
+  const c = G.cars.find((o) => !o.human && o.pitPlan && o.tyre && o.tyre.tread > 0);
+  assert.ok(c, "a planned AI");
+  assert.equal(c.tread, c.tyre.tread, `${c.code} on ${c.tyre.code} carries its tread`);
+  const wetGrip = G.gripMult(c);
+  G.tyres.fit(c, G.tyres.classRecord("soft"));   // slicks in the rain
+  try {
+    assert.equal(c.tread, 0, "a slick fitted is a slick");
+    assert.ok(G.gripMult(c) < wetGrip - 0.1, `slicks in the rain lose grip like the player's: ${G.gripMult(c)} vs ${wetGrip}`);
+  } finally { G.tyres.fit(c, G.tyres.classRecord("wet")); }
+  // Wear off: no plan, so no stop to fix a wrong tyre — the sentinel stands.
+  const fixed = { human: false, pitPlan: null, tread: null };
+  G.tyres.fit(fixed, G.tyres.classRecord("soft"));
+  assert.equal(fixed.tread, null, "an AI with no strategy keeps tread == null (the full-wet column)");
+});

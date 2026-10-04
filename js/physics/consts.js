@@ -106,9 +106,11 @@ window.PhysicsConsts = {
 
   // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
   // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by
-  // gripMult(c) in game.js: a car with tread == null (every AI car except the
-  // MY TEAM teammate) takes the FULL-WET column — "the field fitted the right
-  // tyre" — and gripMult() with no car is the slick column. Dry, overcast and
+  // gripMult(c) in game.js: a car with tread == null — every AI car except the
+  // MY TEAM teammate, WHEN TYRE WEAR IS OFF (no pit plan, so no way to change
+  // tyres) — takes the FULL-WET column, "the field fitted the right tyre".
+  // With wear on an AI carries its fitted set's tread (TyreModel.applyCompound)
+  // and pits for the weather. gripMult() with no car is the slick column. Dry, overcast and
   // fog have no row,
   // so the lookup misses and grip stays 1 as it always did.
   //

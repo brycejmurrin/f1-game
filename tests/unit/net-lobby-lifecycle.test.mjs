@@ -378,8 +378,19 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
   // sealRoom/cancel/teardown, generation captured OUTSIDE the callback.
   assert.match(SOURCE, /codeReopenTimer = setTimeout\(/);
   assert.match(SOURCE, /const gen = operationGeneration;\s*\n\s*clearTimeout\(codeReopenTimer\);/);
-  assert.ok(SOURCE.split("clearTimeout(codeReopenTimer)").length >= 4,
-    "sealRoom, cancel and teardown must all clear the reopen timer");
+  assert.ok(SOURCE.split("clearTimeout(codeReopenTimer)").length >= 5,
+    "sealRoom, cancel, teardown and the connect-fail path must all clear the reopen timer");
+  // teardown() and the ICE/timeout fail path must null codeReopen itself —
+  // clearing only the timer left the string set, so the next unrelated
+  // onConnected quietly reopened a dead room code (W4-AUDIT / live tip).
+  const teardownAt = SOURCE.indexOf("function teardown()");
+  assert.ok(teardownAt > 0, "teardown() present");
+  const teardownBody = SOURCE.slice(teardownAt, SOURCE.indexOf("function failureMsg", teardownAt));
+  assert.match(teardownBody, /codeReopen = null/,
+    "teardown() must clear codeReopen, not only codeReopenTimer");
+  assert.match(SOURCE,
+    /connect fail[\s\S]{0,800}?codeReopen = null[\s\S]{0,120}?dropPending\(\)/,
+    "a failed ICE/timeout must clear codeReopen before dropPending/teardown");
   // waitForOpen: the deadline applies even while the transport is still being
   // built — the old early return skipped the timeout check and the poll spun
   // at 4 Hz forever with no message.
@@ -788,6 +799,23 @@ test("the host leaving the ROOM says so, drops the room flag and shows the pick 
     assert.doesNotMatch(h.status.textContent, /rivals are now AI/i, "there is no race to keep racing");
     assert.equal(flags[flags.length - 1], false, "the room is over: the flag is dropped");
     assert.equal(h.elements.get("vs-pick").hidden, false, "back to HOST / JOIN");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the host leaving the ROOM forgets every guest it relayed, not just the host", async () => {
+  // onClose deleted only this transport's id; the relayed "g2" profile lived
+  // on until open()/cancel(), so the next room's roster and seat clashes saw a
+  // guest from a room that no longer exists.
+  const { h, made, closers } = closableHarness();
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
+    closers[0]("transport");
+    assert.equal(h.lobby.roomState().peers.length, 0, "the room is over: no profile survives it");
   } finally { h.lobby.cancel(); }
 });
 

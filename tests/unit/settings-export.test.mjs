@@ -202,7 +202,7 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   const n = Object.values(all.settings).reduce((a, g) => a + Object.keys(g).length, 0);
   assert.equal(n, SettingsExport.SPEC.length, "every allowlisted key appears once");
   assert.equal(all.settings.steering.pace, 11);
-  assert.equal(all.settings.display.gfxPreset, "high", "the desktop default");
+  assert.equal(all.settings.display.gfxPreset, null, "unset per-device default: the loading device keeps its own");
   assert.equal(all.settings.audio.sndTune.gain, 1, "an object default is spelled out");
   assert.deepEqual(all.changed, []);
 });
@@ -283,9 +283,21 @@ test("the steering schema version is context, never a change", () => {
 });
 
 test("the device decides the graphics default", () => {
-  assert.equal(boot({ mobile: true }).collect("all").settings.display.gfxPreset, "medium");
+  assert.equal(boot({ mobile: true }).collect("all").settings.display.gfxPreset, null, "unset: not this phone's default pinned");
   const f = boot({ mobile: true, disk: { "apex26.gfxPreset": JSON.stringify("medium") } }).collect("changes");
   assert.deepEqual(f.changed, [], "a phone on MEDIUM is at its default");
+  assert.equal(boot({ mobile: true, disk: { "apex26.gfxPreset": JSON.stringify("medium") } }).collect("all").settings.display.gfxPreset, "medium", "a stored choice still exports");
+});
+
+test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
+  const file = boot({ mobile: false }).collect("all");
+  for (const k of ["resMode", "gfxPreset", "carWeight"]) {
+    const g = Object.values(file.settings).find((grp) => Object.prototype.hasOwnProperty.call(grp, k));
+    assert.equal(g[k], null, k + " exports unset");
+  }
+  const phone = boot({ mobile: true });
+  phone.SettingsExport.applySettings(file, phone.G);
+  assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
 });
 
 test("unset gfxBackend exports as null on touch and desktop alike", () => {

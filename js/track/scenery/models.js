@@ -382,6 +382,14 @@ const TrackModels = (function () {
       appendBuffer(out, stage, id);
       diagnostics.emitted.push(Object.assign({ id, required: !!spec.required, vertices: stage.pos.length / 3, overhead: true, clearance, frac: spec.frac },
         soffit ? { soffit: true } : null));
+      // A start/finish span (`startLights`) is the gantry js/race/start-lights.js
+      // hangs the countdown lamps on: registered as one, naming its lamp row —
+      // the deck's centre, on the face that looks back down the grid — and
+      // preferred over a plain gantry() at the same node.
+      if (spec.startLights && ctx.note) {
+        ctx.note("gantry", at(lift), [span, thickness, depth],
+                 { k: frame.k, side: 0, lamp: at(lift), face: depth / 2 + 0.05, startLights: true });
+      }
       return true;
     }
 

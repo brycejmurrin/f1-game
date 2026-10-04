@@ -154,22 +154,32 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // Sixteen pinned wrappers, including readiness and read-only session checks.
+  // Twenty-six pinned wrappers: readiness, session checks, the track session, jobs, UI, audits and the race-HUD survey pair.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
+    "apex_car_audit",
     "apex_ci_status",
     "apex_doctor",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_hud_shot",
+    "apex_hud_survey",
+    "apex_job_cancel",
+    "apex_job_start",
+    "apex_job_status",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
     "apex_session_status",
     "apex_shot",
     "apex_status",
+    "apex_track",
+    "apex_track_audit",
+    "apex_ui_fit",
+    "apex_ui_shot",
     "apex_verify_change_fast",
     "apex_who_is_on_it",
   ]);
@@ -607,6 +617,20 @@ test("week-2 dryRun refuses lock_held by a live PID (no Chromium)", () => {
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "lock_held");
     assert.ok(body.fix);
+  } finally {
+    try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
+  }
+});
+
+test("the HUD survey wraps are browser tools: a held lock refuses both", () => {
+  fs.mkdirSync(path.dirname(LOCK), { recursive: true });
+  fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
+  try {
+    for (const name of ["apex_hud_shot", "apex_hud_survey"]) {
+      const r = callCli(name, { dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+      assert.equal(r.status, 1, r.stderr);
+      assert.equal(JSON.parse(r.stdout).error, "lock_held", name);
+    }
   } finally {
     try { fs.unlinkSync(LOCK); } catch { /* ignore */ }
   }
@@ -1101,4 +1125,78 @@ test("rotateReport lifts rotate-markings --check rows into out", async () => {
   assert.deepEqual(r.circuits[0], { id: "abudhabi", shiftPct: 10.15, turns: 16, sectorsLeftAlone: true });
   assert.equal(r.circuits[1].sectorsLeftAlone, false);
   assert.deepEqual(rotateReport(""), { wouldChange: 0, circuits: [] });
+});
+
+test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and refuse bad input", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const ok = (name, args, re) => {
+    const r = callCli(name, { dryRun: true, ...args });
+    assert.equal(r.status, 0, `${name} ${JSON.stringify(args)}: ${r.stdout}${r.stderr}`);
+    const b = body(r);
+    if (re) assert.match(JSON.stringify(b.argv ?? b.command), re, name);
+    return b;
+  };
+  const bad = (name, args, code = "bad_args") => {
+    const b = body(callCli(name, args));
+    assert.equal(b.ok, false, `${name} ${JSON.stringify(args)} should refuse`);
+    assert.equal(b.error, code, `${name} ${JSON.stringify(args)}: ${b.message}`);
+  };
+  ok("apex_track", { op: "open", track: "spa" }, /track-session\.mjs","--serve","--track","spa","--out",".*artifacts\/track-session\/spa/);
+  bad("apex_track", { op: "open", track: "atlantis" });
+  bad("apex_track", { op: "open", track: "spa", out: "/tmp/x" }, "path_escaped");
+  bad("apex_track", { op: "shot", cam: "drone" });
+  bad("apex_track", { op: "shot", frac: 2 });
+  bad("apex_track", { op: "shot" }, "track_not_open");
+  ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
+  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
+  ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
+  bad("apex_job_start", { kind: "rm_rf" });
+  bad("apex_job_start", { kind: "ui_gallery", screens: "--write" });
+  bad("apex_job_start", { kind: "survey_track", track: "nope" });
+  bad("apex_job_status", { jobId: "missing" }, "unknown_job");
+  bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  bad("apex_ui_fit", { screen: "--all" });
+  bad("apex_ui_fit", { screen: "settings", scale: 500 });
+  ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
+  ok("apex_car_audit", { check: "ladder" }, /parts-ladder\.mjs","--json/);
+  ok("apex_car_audit", { check: "crest", teams: ["haas", "audi"] }, /crest-sweep\.mjs","haas","audi","--json/);
+  bad("apex_car_audit", { check: "sweep" });
+  bad("apex_car_audit", { check: "crest", teams: ["--x"] });
+  const audit = ok("apex_track_audit", { track: "monza" });
+  assert.match(JSON.stringify(audit.argv), /verify-track\.cjs","monza","--quiet".*float-audit\.cjs","monza","--json/);
+  bad("apex_track_audit", { track: "x" });
+  const src = fs.readFileSync(MCP, "utf8");
+  for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
+  for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel", "apex_car_audit", "apex_track_audit"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
+});
+
+test("resources/list and resources/read serve the agent references", () => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "resources/list", params: {} },
+    { jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "file:///docs/DEBUG-HOOKS.md" } },
+    { jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri: "file:///etc/passwd" } },
+  ]);
+  const byId = (i) => out.find((m) => m.id === i);
+  assert.ok(byId(1).result.capabilities.resources);
+  assert.deepEqual(byId(2).result.resources.map((r) => r.name), ["DEBUG-HOOKS.md", "AGENT-SURFACE.md", "APEX-TOOLS-MCP.md"]);
+  assert.match(byId(3).result.contents[0].text, /__apex/);
+  assert.equal(byId(4).error.code, -32002, "only the listed docs are readable");
+});
+
+test("thumbBlock returns an MCP image block a client can render", async () => {
+  const { thumbBlock } = await import("../../tools/mcp/apex-extras.mjs");
+  const sharp = (await import("sharp")).default;
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "thumb-test-"));
+  try {
+    const png = path.join(dir, "x.png");
+    await sharp({ create: { width: 1280, height: 720, channels: 3, background: "#336699" } }).png().toFile(png);
+    const b = await thumbBlock(png);
+    assert.equal(b.type, "image");
+    assert.equal(b.mimeType, "image/jpeg");
+    const meta = await sharp(Buffer.from(b.data, "base64")).metadata();
+    assert.equal(meta.width, 640);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

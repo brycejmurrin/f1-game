@@ -38,16 +38,21 @@ const SR = 44100;
 // A recording AudioParam: setTargetAtTime lands in .value so rate() and the
 // layer-gain reads below see what the audio thread would have received. `sets`
 // counts scheduling calls — that is how the aimGain guard is observable.
+// `snaps` / `cancels` / `lastMethod` distinguish a discontinuous setValueAtTime
+// (skip-shift / first-frame rate snap) from a setTargetAtTime aim.
 function param(v) {
   const p = {
-    value: v, sets: 0,
-    setTargetAtTime(x) { p.sets++; p.value = x; },
-    setValueAtTime(x) { p.sets++; p.value = x; },
-    linearRampToValueAtTime(x) { p.sets++; p.value = x; },
-    exponentialRampToValueAtTime(x) { p.sets++; p.value = x; },
-    cancelScheduledValues() {},
+    value: v, sets: 0, snaps: 0, cancels: 0, lastMethod: null,
+    setTargetAtTime(x) { p.sets++; p.lastMethod = "target"; p.value = x; },
+    setValueAtTime(x) { p.sets++; p.snaps++; p.lastMethod = "value"; p.value = x; },
+    linearRampToValueAtTime(x) { p.sets++; p.lastMethod = "linear"; p.value = x; },
+    exponentialRampToValueAtTime(x) { p.sets++; p.lastMethod = "exp"; p.value = x; },
+    cancelScheduledValues() { p.cancels++; },
   };
   return p;
+}
+function idleSampleSrc() {
+  return [...live].find((n) => n.kind === "src" && n.loop && n.buffer && n.buffer.duration >= 3);
 }
 // `live` makes a LEAK observable: a node enters on creation and leaves only on
 // disconnect(), which is the Web Audio contract that matters — a stopped source
@@ -1641,4 +1646,71 @@ test("a healthy audio probe completes both metric sweeps and exits successfully 
   assert.equal(result.launches, 2);
   assert.ok(result.messages.some((line) => line.startsWith("PASS: all voices monotonic")));
   assert.deepEqual(result.events, ["server-open", "browser-close-1", "browser-close-2", "server-close"]);
+});
+
+// --- Skip-shift / lights-out rate discontinuities (Suzuka lap audit 2026-10) ---
+
+test("sample BufferSource is seeded below 1.0 and the first setEngine snaps", async () => {
+  const { GameAudio: A, release } = boot();
+  A.init(); await release();
+  A.setVoice("Mercedes");
+  A.startEngine();
+  const src = idleSampleSrc();
+  assert.ok(src, "sample idle source exists");
+  assert.ok(src.playbackRate.value < 0.5, "seeded below the Web Audio default of 1.0, got " + src.playbackRate.value);
+  assert.ok(src.playbackRate.value > 0.05, "seeded at a usable idle rate");
+  // Lights-out shape from the audit: gear 5, ~12500 rpm → high revFrac.
+  A.setEngine(0.8, 0, false, 0.7, 5, {});
+  assert.equal(src.playbackRate.lastMethod, "value", "first frame must snap, not setTargetAtTime from 1.0");
+  assert.ok(src.playbackRate.cancels >= 1, "snap cancels any prior ramp");
+  const r = A.rate();
+  assert.ok(r < 0.95, "must not briefly report a near-1.0 spike, got " + r);
+  assert.ok(r > 0.3, "live rate after lights-out shape, got " + r);
+});
+
+test("a 1→3 skip-shift snaps playbackRate on the shift frame", async () => {
+  const A = await sampleEngine();
+  A.setVoice("Mercedes");
+  // Near-idle in 1st — matches the measured 0.1275 stock idle end in gear 1.
+  A.setEngine(0.0, 0, false, 0.16, 1, {});
+  const idleRate = A.rate();
+  assert.ok(idleRate > 0.10 && idleRate < 0.20, "precondition idle gear-1 rate, got " + idleRate);
+  const src = idleSampleSrc();
+  const snapsBefore = src.playbackRate.snaps;
+  // Skip 1→3 at high rev (~13400 rpm / ~16 m/s in the audit).
+  A.setEngine(0.87, 0, false, 0.35, 3, {});
+  assert.ok(src.playbackRate.snaps > snapsBefore, "skip-shift must use setValueAtTime");
+  assert.equal(src.playbackRate.lastMethod, "value");
+  const r = A.rate();
+  assert.ok(r > 0.40 && r < 0.70, "skip-shift target on the shift frame, got " + r);
+  assert.ok(Math.abs(r - idleRate) >= 0.08, "discontinuity large enough that smoothing would lag");
+});
+
+test("a steady same-gear rev climb still aims playbackRate", async () => {
+  const A = await sampleEngine();
+  A.setEngine(0.40, 0, false, 0.50, 4, {});
+  const src = idleSampleSrc();
+  const snapsBefore = src.playbackRate.snaps;
+  A.setEngine(0.42, 0, false, 0.51, 4, {});
+  assert.equal(src.playbackRate.snaps, snapsBefore, "smooth climb must not snap");
+  assert.equal(src.playbackRate.lastMethod, "target");
+});
+
+test("synth→sample upgrade seeds playbackRate from lastRate, not 1.0", async () => {
+  const { GameAudio: A, release } = boot();
+  A.init();
+  A.setVoice("Mercedes");
+  A.startEngine();
+  assert.equal(A.debug().usingSamples, false);
+  A.setEngine(0.75, 0, false, 0.65, 5, {});
+  assert.equal(A.debug().usingSamples, false);
+  await release();
+  assert.equal(A.debug().samplesReady, true);
+  A.setEngine(0.75, 0, false, 0.65, 5, {});
+  assert.equal(A.debug().usingSamples, true, "upgrade restarts onto the sample voice");
+  const src = idleSampleSrc();
+  assert.ok(src);
+  assert.ok(src.playbackRate.value < 0.95, "upgraded source must not start at the 1.0 default, got " + src.playbackRate.value);
+  assert.ok(A.rate() > 0.3 && A.rate() < 0.95, "live rate after upgrade, got " + A.rate());
+  assert.ok(A.engineLevel() > 0, "mid-race upgrade keeps the voice open instead of fading from silence");
 });

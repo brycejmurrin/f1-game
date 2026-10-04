@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.8.0"
+    "version": "1.10.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -38,6 +38,16 @@
     "apex_frame_report",
     "apex_session_status",
     "apex_who_is_on_it",
-    "apex_ci_status"
+    "apex_ci_status",
+    "apex_hud_shot",
+    "apex_hud_survey",
+    "apex_track",
+    "apex_job_start",
+    "apex_job_status",
+    "apex_job_cancel",
+    "apex_ui_fit",
+    "apex_ui_shot",
+    "apex_car_audit",
+    "apex_track_audit"
   ]
 }

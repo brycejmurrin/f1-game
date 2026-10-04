@@ -274,7 +274,7 @@ test("env-probe radial cull is 300 m without a toggle", () => {
   const tlx = shader("js/render/three/tlx.js");
   assert.match(tlx, /\bENV_CULL_M\s*=\s*300\b/);
   assert.match(tlx, /cullDist\s*=\s*_envSvCull\s*>\s*0\s*\?\s*Math\.min\(\s*_envSvCull\s*,\s*ENV_CULL_M\s*\)\s*:\s*ENV_CULL_M/);
-  assert.match(tlx, /chunkedSys\.cull\(\s*rec\.chunked\s*,\s*faceVP\s*,\s*faceEye\s*,\s*faceCull\s*\)/, "the probe face culls chunks against ITS frustum and cap");
+  assert.match(tlx, /chunkedSys\.cull\(\s*rec\.chunked\s*,\s*faceVP\s*,\s*faceEye\s*,\s*faceCull\s*,\s*frameCullFog\s*\)/, "the probe face culls chunks against ITS frustum and cap (and the fog wall)");
   assert.match(tlx, /function\s+_restoreEnvFrame\s*\(/);
   assert.doesNotMatch(tlx, /typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
 });
@@ -444,6 +444,26 @@ test("fog stack skips pow/exp when density and mist are off", () => {
   const tsl = shader("js/render/three/tsl-lit.js");
   assert.match(tsl, /If\(\s*U\.fogDensity\.greaterThan\(\s*0\.0\s*\)\.or\(\s*U\.groundMist\.greaterThan\(\s*0\.001\s*\)\s*\)/);
   assert.match(tsl, /If\(\s*U\.fogDensity\.greaterThan\(\s*0\.0\s*\)\s*,/);
+});
+
+test("the fog's eye distance is measured per FRAGMENT on all three backends", () => {
+  // GLX carried it as a VERTEX varying, and an interpolated length is a
+  // weighted average of the corners' lengths: the 4-vertex ground floor
+  // (mesh.js buildFloor, corners >= 1400 m out) read >= 1400 m everywhere, so
+  // fog and ground mist painted it >= 44 % fog colour 150 m from the car on a
+  // clear day and 100 % at night or in the wet. TLX and WGX measure per
+  // fragment; every other GLX distance fade now does too, as theirs do.
+  const lit = shader("js/render/glx/shaders/glsl-lit.js");
+  const vs = lit.slice(0, lit.indexOf("const LIT_FS")), fs = lit.slice(lit.indexOf("const LIT_FS"));
+  assert.ok(vs.length > 1000 && fs.length > 1000, "LIT_VS / LIT_FS split moved");
+  assert.doesNotMatch(vs, /\bvDist\b/, "LIT_VS must not hand the eye distance down as a varying");
+  assert.doesNotMatch(fs, /\bin\s+float\s+vDist\b/, "LIT_FS must not read an interpolated eye distance");
+  assert.match(fs, /void main\(\)\s*\{\s*float vDist = length\(vWorldPos - uEye\);/, "LIT_FS measures it per fragment, first thing in main()");
+  assert.match(fs, /float fd = vDist \* uFogDensity \* heightAtten;/, "the height fog reads it");
+  assert.match(fs, /float dRamp = clamp\(\(vDist - 8\.0\) \/ 45\.0, 0\.0, 1\.0\);/, "…and the ground mist");
+  assert.match(shader("js/render/three/tsl-lit.js"), /const vd = length\(wp\.sub\(cameraPosition\)\)\.toVar\(\);/, "TLX: per fragment");
+  assert.match(shader("js/render/three/tsl-lit.js"), /const wp = vec3\(positionWorld\)\.toVar\(\);/, "TLX: from the interpolated world position");
+  assert.match(shader("js/render/webgpu/wgsl-chunks.js"), /let vDist = length\(in\.wpos - F\.eye\.xyz\);/, "WGX: per fragment");
 });
 
 test("window sun flash skips pow(_,22) when wet or the knobs are off", () => {

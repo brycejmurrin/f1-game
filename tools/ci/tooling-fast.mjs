@@ -211,8 +211,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
+  "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
+  // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
+  "tests/unit/data-hub-picker.test.mjs",
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
@@ -308,6 +311,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-panel.test.mjs",
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
@@ -372,9 +376,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
+  "tests/unit/hud-relative.test.mjs",
+  "tests/unit/hud-strategy.test.mjs",
+  "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
@@ -385,6 +393,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
+  // The night lamp-shadow map holds one flood while the car sits between two:
+  // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
+  "tests/unit/lamp-shadow-pick.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -469,6 +480,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Faenza Street fit on McLaren silently photographed as medium.
   "tests/unit/parts-locked-equivalent.test.mjs",
   "tests/unit/pause-hud-layout.test.mjs",
+  "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
@@ -512,6 +524,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // lines wait for the straight and die when stale, commentary only while
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
+  "tests/unit/race-session-fixes.test.mjs",
+  // Field-step pose snapshots: traffic scans read last tick's prog/x/speed so
+  // a car updated earlier in the same tick cannot look like a pass. Source
+  // pin of game.js's snap loop + red-flag first-gear restart + coast estimate.
+  // ~instant.
+  "tests/unit/race-step-snap.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
@@ -772,6 +790,31 @@ export function scheduleLongestFirst(files, timings = {}) {
     .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
 }
 
+/** Pull the diagnosable TAP failure lines from a child's stdout+stderr.
+ *  Node's TAP puts deepEqual diffs under `error: |-` and array members under
+ *  `actual:` / `expected:` as `0: …` rows — keeping only the bare keys left
+ *  Structural guards red on 2026-10-04 with empty Expected/Received
+ *  (run 37171017859, ratchets.test.mjs). */
+export function tapFailureDetail(text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  let inError = false;
+  for (const L of lines) {
+    if (/^\s+(error:|name: 'AssertionError'|expected:|actual:|operator:)/.test(L)) {
+      out.push(L);
+      inError = /^\s+error:/.test(L);
+      continue;
+    }
+    // Indexed actual/expected members: `    0: 'js/net/lobby.js lines: …'`
+    if (/^\s+\d+:/.test(L)) { out.push(L); inError = false; continue; }
+    // YAML block-scalar body under `error: |-` (the deepEqual +/- dump).
+    if (inError && /^\s{4,}\S/.test(L)) { out.push(L); continue; }
+    if (inError && /^\s*$/.test(L)) { out.push(L); continue; }
+    inError = false;
+  }
+  return out;
+}
+
 /* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
  * handle, a never-settled await) runs until the CI job's timeout-minutes, and
  * the job reports `cancelled` with every START line but no verdict — the shape
@@ -896,10 +939,9 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
         for (const L of notoks) emit(`  | ${L}`);
       }
       // Assertion bodies sit under each `not ok` TAP block. Keep them short
-      // (name/error/expected/actual) so a FAIL is diagnosable without dumping
-      // the whole TAP stream into the sequential log.
-      const detail = text.split("\n").filter((L) =>
-        /^\s+(error:|name: 'AssertionError'|expected:|actual:|operator:)/.test(L));
+      // (name/error/expected/actual + deepEqual body) so a FAIL is diagnosable
+      // without dumping the whole TAP stream into the sequential log.
+      const detail = tapFailureDetail(text);
       for (const L of detail.slice(0, 40)) emit(`  | ${L.trimEnd()}`);
       if (detail.length > 40) emit(`  | … ${detail.length - 40} more assertion lines`);
       if (!notoks.length && !detail.length) {

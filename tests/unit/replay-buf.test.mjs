@@ -272,3 +272,26 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
   api.endScrub();
 });
+
+test("a car crossing the start/finish line interpolates through the seam, not round the lap", () => {
+  // s is stored wrapped to [0, L): L-1.3 -> 1.37 across the line. A plain lerp
+  // of field 0 swept the car (and the replay camera on it) back through the
+  // whole lap in one 1/30 s sample — s 3293.7 -> 2503 -> 1644 -> 824 -> 1.4.
+  const R = boot(), L = 3295, field = cars(1);
+  const api = R.create({ cars: field, track: { total: L }, netPlay: { active: () => false } });
+  api.reset(field);
+  Object.assign(field[0], { s: L - 1.3, pz: 0 });
+  api.sample(10, field);
+  Object.assign(field[0], { s: 1.37, pz: 2.67 });
+  api.sample(10 + 1 / R.HZ, field);
+  for (const u of [0.25, 0.5, 0.75]) {
+    const s = api.at(10 + u / R.HZ).cars[0].s;
+    const want = (L - 1.3 + 2.67 * u) % L;
+    assert.ok(s >= 0 && s < L, `s stays in [0, L): ${s}`);
+    const err = Math.abs(((s - want + L / 2) % L + L) % L - L / 2);
+    assert.ok(err < 1e-2, `u=${u}: s=${s.toFixed(3)} should be ${want.toFixed(3)} (through the line)`);
+  }
+  // …and the pure helper without a lap length behaves as before.
+  const out = R.lerpCar(new Float32Array(9), Float32Array.of(10, 0, 0, 0, 0, 0, 0, 0, 0), Float32Array.of(20, 0, 0, 0, 0, 0, 0, 0, 0), 0.5);
+  assert.equal(out[0], 15);
+});

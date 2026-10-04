@@ -104,10 +104,14 @@ const F1API = (function () {
     // data never changes, so cache it for a week. This does not depend on
     // latestSession() having run first (a latestSessionKey guard leaves every
     // session on the 10 min TTL while that key is null).
+    // The TTL is capped at the time since the freeze instant: freshness is
+    // judged against it (age < ttl), so an entry written BEFORE the freeze
+    // (an empty mid-race classification) reads stale and is refetched once,
+    // instead of being served for a week.
     const ds = sessionDates[sessionKey];
     if (ds) {
-      const age = Date.now() - Date.parse(ds);
-      if (isFinite(age) && age > SESSION_FROZEN_MS) return TTL_HISTORIC;
+      const sinceFrozen = Date.now() - (Date.parse(ds) + SESSION_FROZEN_MS);
+      if (isFinite(sinceFrozen) && sinceFrozen > 0) return Math.max(TTL_LATEST, Math.min(TTL_HISTORIC, sinceFrozen));
     }
     // Unknown recency: stay conservative so genuinely-live data still refreshes.
     return TTL_LATEST;

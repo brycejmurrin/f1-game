@@ -762,3 +762,204 @@ test("HUD conditional widgets skip stable attribute writes and repair external D
   writes = 0; tick(); assert.equal(writes, 3);
   assert.deepEqual([els.tyre.hidden, els.pitCue.hidden, els.workBtn.hidden], [true, true, true]);
 });
+
+/* fitHud BUDGETS THE UN-MOVED LAYOUT (MOVE & SIZE, js/ui/hud-layout.js).
+ *
+ * MOVE & SIZE paints `translate` / `scale` over an element (data-hl, --hl-x/-y
+ * in screen %, --hl-s, origin --hl-o) and getBoundingClientRect includes both,
+ * so a moved map, a SIZE-200 sector box or gearbox shrank whole bands, the
+ * safe-area insets and the pedals. The fixture lays out a tight touch HUD
+ * (800x400 @150 %, every cap biting), then paints offsets with an independent
+ * FORWARD model of the CSS — O + t + s*(U - O), O the --hl-o point of the box
+ * before the element's own transform (the tower's translateX(-50%)) — and
+ * requires every cap and published edge to be unchanged. The same painted
+ * rects WITHOUT data-hl (what the old code saw) must move them, which proves
+ * the fixture can tell. */
+const FIT_VARS = ["--hud-z-top", "--hud-z-bot", "--hud-z-dock", "--hud-left-h", "--hud-left-px", "--hud-sec-h", "--hud-top-h"];
+function fitHarness(opts = {}) {
+  const b = boot({ tokens: true, innerWidth: 800 });
+  b.sb.innerHeight = 400;
+  const { dom } = b, root = dom.documentElement;
+  root.style.setProperty("--hud-scale", "1.5");
+  const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
+  const top = mk("hud-top"), bottom = mk("hud-bottom"), bar = dom.document.createElement("div");
+  bar.id = "hud-dock"; dom.body.appendChild(bar);
+  const dockL = dom.byId("dock-left"), dockR = dom.byId("dock-right");
+  for (const d of [dockL, dockR]) { dom.body.removeChild(d); bar.appendChild(d); }
+  const gear = mk("g", bottom), energy = mk("e", bottom), gL = mk("gl", dockL), gR = mk("gr", dockR);
+  const R = (left, top_, w, h) => ({ left, top: top_, right: left + w, bottom: top_ + h, width: w, height: h });
+  // U: the un-moved layout. The tower is centred by left:50% + translateX(-50%).
+  const U = new Map([
+    [top, R(250, 8, 300, 54)], [b.els.minimap, R(10, 8, 140, 140)], [b.els.hudSectors, R(650, 8, 140, 72)],
+    [gear, R(100, 330, 300, 60)], [energy, R(400, 330, 300, 60)],
+    [bar, R(0, 200, 800, 200)], [dockL, R(0, 200, 150, 200)], [dockR, R(650, 200, 150, 200)],
+    [gL, R(0, 200, 150, 200)], [gR, R(650, 200, 150, 200)],
+  ]);
+  if (opts.emptyTower) U.set(top, R(400, 8, 0, 0));
+  for (const [el, r] of U) el._rect = r;
+  const own = new Map([[top, -150]]);   // translateX(-50%) in the tower's own px
+  Object.defineProperty(top, "offsetWidth", { get: () => U.get(top).width, configurable: true });
+  b.sb.getComputedStyle = (el) => ({
+    getPropertyValue: (k) => ALL_TOKENS[k] || "", columnGap: "0px", rowGap: "0px",
+    transform: own.has(el) ? `matrix(1, 0, 0, 1, ${own.get(el)}, 0)` : "none",
+  });
+  const O = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
+  /** Paint MOVE & SIZE over `el` (forward model); `mark` false = the rect only. */
+  const paint = (el, hl, mark = true) => {
+    const u = U.get(el), s = hl.s || 1, [fy, fx] = hl.o.split(" ").map((k) => O[k]);
+    const dx = own.has(el) ? -u.width / 2 : 0;           // the own transform's shift in screen px
+    const ox = u.left - dx + fx * u.width, oy = u.top + fy * u.height;   // origin, on the box BEFORE the own transform
+    const left = ox + (hl.x || 0) * 8 + s * (u.left - ox), top_ = oy + (hl.y || 0) * 4 + s * (u.top - oy);
+    el._rect = R(left, top_, u.width * s, u.height * s);
+    if (!mark) return;
+    el.setAttribute("data-hl", "");
+    for (const k of ["x", "y", "s"]) el.style.setProperty("--hl-" + k, String(hl[k] == null ? (k === "s" ? 1 : 0) : hl[k]));
+    el.style.setProperty("--hl-o", hl.o);
+  };
+  const snap = () => Object.fromEntries(FIT_VARS.map((k) => [k, root.style.getPropertyValue(k)]));
+  const refit = () => { b.sb.GameHud.invalidateFit(); b.tick(); return snap(); };
+  for (let i = 0; i < 3; i++) b.tick();
+  return { ...b, top, gear, U, paint, snap, refit, root };
+}
+const MOVES = (h) => [
+  [h.top, { s: 1.5, o: "top left", y: 10 }], [h.els.minimap, { x: 20, y: 30, s: 1.5, o: "top left" }],
+  [h.els.hudSectors, { s: 2, o: "top right", y: 20 }], [h.gear, { x: -10, s: 2, o: "bottom center" }],
+];
+
+test("a moved / resized tower, map, sector box or gearbox leaves every fit cap where it was", () => {
+  const h = fitHarness(), base = h.snap();
+  for (const k of ["--hud-z-top", "--hud-z-bot", "--hud-z-dock"]) assert.ok(+base[k] > 0 && +base[k] < 1.5, `${k} bites in the fixture (${base[k]})`);
+  for (const [el, hl] of MOVES(h)) {
+    h.paint(el, hl);
+    assert.deepEqual(h.refit(), base, `moving ${el.className || el.id} ${JSON.stringify(hl)} changed the fit`);
+  }
+  // Control: the SAME painted rects with no data-hl are what the old fit read.
+  const c = fitHarness(), cBase = c.snap();
+  for (const [el, hl] of MOVES(c)) c.paint(el, hl, false);
+  assert.notDeepEqual(c.refit(), cBase, "un-marked painted rects move the caps — the fixture can see the defect");
+});
+
+test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
+  const full = fitHarness().snap();
+  const h = fitHarness({ emptyTower: true }), got = h.snap();
+  assert.ok(+got["--hud-z-dock"] > 0, "the dock cap is written with POS/LAP/TIME/BEST all off");
+  assert.equal(got["--hud-z-dock"], full["--hud-z-dock"], "and it is the same cap the full HUD gets");
+  assert.equal(got["--hud-z-bot"], full["--hud-z-bot"]);
+  // Nothing laid out at all (the menu layer) still writes nothing.
+  const none = fitHarness({ emptyTower: true });
+  for (const el of none.U.keys()) el._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  none.root.style.removeProperty("--hud-z-dock");
+  assert.equal(none.refit()["--hud-z-dock"], "", "an empty layout is a retry, not a fit");
+});
+
+test("GameHud.invalidateFit forces the next tick to re-fit; HudElements.apply calls it", () => {
+  const h = fitHarness(), base = h.snap();
+  const u = h.U.get(h.gear);
+  h.gear._rect = { ...u, left: u.left - 200, width: u.width + 200 };
+  h.tick();
+  assert.deepEqual(h.snap(), base, "an attribute-only change waits out the same-key backoff");
+  const after = h.refit();
+  assert.notEqual(after["--hud-z-bot"], base["--hud-z-bot"], "invalidateFit re-measures on the very next tick");
+  assert.match(read("js/ui/hud-elements.js"), /typeof GameHud !== "undefined" && GameHud\.invalidateFit\) GameHud\.invalidateFit\(\)/);
+});
+
+test("the radio card's top-row slot is published at 1/SIZE when MOVE & SIZE scales the card", () => {
+  const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
+  assert.ok(h.dom.body.classList.contains("hud-radio-top"), "the fixture's tower row has a slot");
+  const full = w();
+  h.els.announce = h.dom.byId("announce");
+  h.els.announce.setAttribute("data-hl", ""); h.els.announce.style.setProperty("--hl-s", "2");
+  h.refit();
+  assert.equal(w(), +(full / 2).toFixed(1), "a SIZE-200 card paints exactly the slot, not twice it");
+});
+
+/* HUD SURVEY FIXES (tools/shot/hud-survey.mjs, 2026-10-04). */
+test("survey leads: SECTORS x-20, MAP y+40, SPEED & GEAR x40 / s200 leave every fit cap where it was", () => {
+  for (const pick of [
+    (h) => [h.els.hudSectors, { x: -20, o: "top right" }], (h) => [h.els.minimap, { y: 40, o: "top left" }],
+    (h) => [h.gear, { x: 40, o: "bottom center" }], (h) => [h.gear, { s: 2, o: "bottom center" }],
+  ]) {
+    const h = fitHarness(), base = h.snap(), [el, hl] = pick(h);
+    h.paint(el, hl);
+    assert.deepEqual(h.refit(), base, `${el.className || el.id} ${JSON.stringify(hl)} changed the fit`);
+  }
+});
+
+test("the radio card's top-row slot ends at a touch dock group in the tower's rows", () => {
+  const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
+  const on = () => h.dom.body.classList.contains("hud-radio-top");
+  // Tower R(250,8,300,54): the slot starts at 558 and runs to innerWidth - 10.
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558);
+  const boost = h.dom.document.createElement("div"); boost.className = "boost";
+  h.dom.byId("dock-right").appendChild(boost);
+  boost._rect = { left: 700, top: 30, right: 788, bottom: 118, width: 88, height: 88 };   // BOOST, up in the tower's rows
+  h.refit();
+  assert.ok(on(), "a 134px strip is still a slot"); assert.equal(w(), 700 - 8 - 558, "the strip ends at BOOST's left edge");
+  boost._rect = { left: 540, top: 30, right: 628, bottom: 118, width: 88, height: 88 };   // over the slot's start
+  h.refit();
+  assert.ok(!on(), "a dock group over the slot's start leaves no top-row slot");
+  boost._rect = { left: 600, top: 120, right: 688, bottom: 208, width: 88, height: 88 };  // below the tower's rows
+  h.refit();
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under the tower's rows does not bound it");
+});
+
+test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {
+  const h = fitHarness(), x = () => h.root.style.getPropertyValue("--radio-top-x");
+  assert.equal(x(), "558.0px", "the shipped tower ends at 550");
+  h.paint(h.top, { s: 1.1, o: "top left" });          // BIG-style growth: the painted tower now ends further right
+  const painted = h.top.getBoundingClientRect().right;
+  h.sb.GameHud.invalidateFit();                        // HudLayout.apply's call — no HUD tick follows
+  assert.equal(x(), (painted + 8).toFixed(1) + "px", "the card follows the tower on screen");
+});
+
+test("the mirror's PAINTED bottom is published for the centre column (MOVE & SIZE can grow or lower it)", () => {
+  const h = fitHarness(), b = () => h.root.style.getPropertyValue("--mir-paint-b");
+  const mir = h.dom.byId("hud-mirror");
+  mir._rect = { left: 330, top: 70, right: 470, bottom: 140, width: 140, height: 70 };
+  h.refit();
+  assert.equal(b(), "0.0px", "no hud-mirror-on: nothing to clear");
+  h.dom.body.classList.add("hud-mirror-on");
+  h.refit();
+  assert.equal(b(), "140.0px", "the frame as painted, screen px");
+  mir._rect = { left: 660, top: 70, right: 790, bottom: 140, width: 130, height: 70 };
+  h.refit();
+  assert.equal(b(), "0.0px", "moved clear of the centre column: the flag keeps its own slot");
+  mir._rect = { left: 330, top: 70, right: 470, bottom: 140, width: 140, height: 70 }; mir.hidden = true;
+  h.refit();
+  assert.equal(b(), "0.0px", "a hidden frame clears nothing");
+  const rules = cssRules(read("css/hud.css"));
+  assert.match(decl(rules, "body.hud-mirror-on :is(#announce, #hud-flag)", "--mir-bot") || "",
+    /^max\([\s\S]*var\(--mir-paint-b, 0px\) \/ var\(--hud-z\)/, "--mir-bot folds the painted frame in with a max()");
+});
+
+test("a moved (data-hl) piece that unhides after the fit re-runs it, so HudLayout.fit can clamp it", () => {
+  const h = fitHarness();
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  const tyre = h.dom.byId("hud-tyre");
+  tyre.hidden = true; tyre.setAttribute("data-hl", ""); tyre.style.setProperty("--hl-x", "-34");
+  h.refit();                         // HudLayout.apply's invalidateFit: the list of moved pieces is re-read
+  fits = 0;
+  h.tick(); h.tick();
+  assert.equal(fits, 0, "nothing changed: the same-key backoff holds");
+  tyre.hidden = false; h.tick();
+  assert.equal(fits, 1, "TYRES unhiding re-fits on the next tick");
+  h.tick();
+  assert.equal(fits, 1, "and only once");
+});
+
+test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
+  assert.equal(caution.length, 2, "base and compact caution rules");
+  for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
+  const tok = read("css/tokens.css");
+  for (const size of ["large", "larger"]) {
+    const fs = +new RegExp(`:root\\[data-text-size="${size}"\\] \\{[^}]*--fs-micro: (\\d+)px`).exec(tok)[1];
+    const sel = ':root:is([data-text-size="large"], [data-text-size="larger"])';
+    const mh = /^calc\(var\(--fs-micro\) \* ([\d.]+) \+ (\d+)px\)$/.exec(decl(rules, sel + " #hud-energy", "min-height"));
+    const lh = +decl(rules, sel + " .hud-energy-label", "line-height");
+    assert.ok(mh && lh, "both rules present");
+    assert.ok(fs * +mh[1] + +mh[2] - 2 >= fs * lh, `${size}: the bar's inner height holds one ${fs}px label line`);
+  }
+});

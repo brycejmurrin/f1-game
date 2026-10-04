@@ -1127,6 +1127,56 @@ const TrackMesh = (function () {
   // mesh all three backends already draw means GLX, WGX and TLX get it with no
   // per-backend work.
   const PIT_LIFT = 0.05;          // along the road normal, matching buildStartLine
+  // PAINT ON THE LANE — the entry/exit lines, the chevrons, the boxes — rides
+  // the ribbon's OWN surface this much higher. All of it shares the ribbon's
+  // mesh and depth bias, so geometry is the only thing between them, and it
+  // used to be none: flat planes at PIT_LIFT off one spline sample, which sat
+  // BELOW the lane on 140 of Monza's 240 box vertices (-6.5..+8.4 mm), 144 of
+  // Bahrain's and +-29 mm on Spa, the chevrons to -16 mm. pitPaint() lays each
+  // vertex on the ribbon (laneAt) and cuts the quad at every node it crosses,
+  // so no chord sags through a crease (tests/unit/pit-complex.test.mjs: >= 10 mm).
+  const PIT_PAINT = 0.015;
+  // The ribbon's vertex at node k, lateral `lat` (world-right, from the
+  // centreline): buildPitLane's rule, so laneAt() and the ribbon cannot differ.
+  function laneVert(track, k, lat, lift) {
+    const u = upOf(track, k), by = bankOffsetAt(track, k, lat) + PIT_LIFT + lift;
+    return [track.px[k] + track.rx[k] * lat + u[0] * by,
+            track.py[k] + track.ry[k] * lat + u[1] * by,
+            track.pz[k] + track.rz[k] * lat + u[2] * by];
+  }
+  // …and between nodes, lerped along the arc: the surface the ribbon's quads draw.
+  function laneAt(track, s, lat, lift) {
+    const n = track.n, L = track.total, fi = ((s % L + L) % L) / L * n;
+    const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
+    const A = laneVert(track, i, lat, lift), B = laneVert(track, (i + 1) % n, lat, lift);
+    return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f];
+  }
+  // One flat paint quad ON the lane, PIT_PAINT above it: rows at arc s + lon0
+  // and s + lon1, laterals [a0, a1] on the first and [b0, b1] on the second
+  // (b0 === b1 closes a triangle), cut at every node between. Rows ascend in
+  // arc and laterals in world-right, so every triangle faces UP like the road
+  // and the grid boxes — four of the five box quads were wound DOWN, and the
+  // decal mesh is drawn single-sided, so they were culled on every backend.
+  function pitPaint(track, out, s, lon0, lon1, a0, a1, b0, b1, col, nrm) {
+    if (lon1 < lon0) { [lon0, lon1, a0, a1, b0, b1] = [lon1, lon0, b0, b1, a0, a1]; }
+    const ds = track.total / track.n, rows = [lon0];
+    for (let c = (Math.floor((s + lon0) / ds) + 1) * ds - s; c < lon1 - 1e-4; c += ds) if (c > lon0 + 1e-4) rows.push(c);
+    rows.push(lon1);
+    let prev = null;
+    for (const lon of rows) {
+      const t = lon1 > lon0 ? (lon - lon0) / (lon1 - lon0) : 0;
+      const l0 = a0 + (b0 - a0) * t, l1 = a1 + (b1 - a1) * t;
+      const row = [laneAt(track, s + lon, Math.min(l0, l1), PIT_PAINT), laneAt(track, s + lon, Math.max(l0, l1), PIT_PAINT)];
+      if (prev) {
+        const base = out.pos.length / 3;
+        for (const P of [prev[0], prev[1], row[0], row[1]]) {
+          out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]);
+        }
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      }
+      prev = row;
+    }
+  }
   const PIT_LINE_W = 0.10;        // FIM §4.11.10: 10 cm lines
   const PIT_EDGE_W = 0.15;        // the lane's wall-side edge, a little bolder
   // The lane is laid in the CIRCUIT's asphalt (track.asphaltCol, buildRoad) and
@@ -1136,7 +1186,7 @@ const TrackMesh = (function () {
   function buildPitLane(track, out) {
     const p = track.pit;
     if (!p) return out;
-    const { px, py, pz, hw, n, total: L } = track;
+    const { hw, n, total: L } = track;
     const white = track.def.palette.line || [0.95, 0.95, 0.98];
     const sd = p.side, o = p.off, ds = L / n;
     // The circuit's own asphalt (buildRoad), so the lane and the road it peels
@@ -1181,13 +1231,7 @@ const TrackMesh = (function () {
         [apron, null],
       ];
     };
-    const at = (k, lat) => {
-      const u = upOf(track, k);
-      const by = bankOffsetAt(track, k, lat) + PIT_LIFT;
-      return [px[k] + track.rx[k] * lat + u[0] * by,
-              py[k] + track.ry[k] * lat + u[1] * by,
-              pz[k] + track.rz[k] * lat + u[2] * by];
-    };
+    const at = (k, lat) => laneVert(track, k, lat, 0);
     // World-right ordered laterals so the winding matches the road on either side.
     const lat = (k, off) => sd * (hw[k] + off);
     for (let k = 0; k < n; k++) {
@@ -1214,6 +1258,17 @@ const TrackMesh = (function () {
         out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
       }
     }
+    return buildPitMarks(track, out);
+  }
+
+  // THE LANE'S PAINT, appended after the ribbon it lies on (buildPitLane calls
+  // it last; exported so tests/unit/pit-complex.test.mjs can measure it against
+  // the ribbon alone). Every quad goes through pitPaint(), PIT_PAINT above it.
+  function buildPitMarks(track, out) {
+    const p = track.pit;
+    if (!p) return out;
+    const { n, total: L } = track, sd = p.side, o = p.off;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
     // THE ENTRY LINE AND THE EXIT LINE: a continuous 10 cm line across the
     // whole lane where the limiter comes on and where it goes off (FIM §4.11.10.1/.2).
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
@@ -1221,17 +1276,9 @@ const TrackMesh = (function () {
       const k = ((Math.round((s / L) * n) % n) + n) % n;
       if (!(p.w[k] > 0.5)) continue;
       TrackSpline.sample(track, s, smp);
-      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
       const x0 = sd * (smp.hw + o.fastIn * p.v[k] + 0.05), x1 = sd * (smp.hw + o.workOut * p.w[k] - 0.05);
-      const P = (lon, x) => [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * PIT_LIFT,
-                             smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * PIT_LIFT,
-                             smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * PIT_LIFT];
-      const base = out.pos.length / 3;
-      const lo = Math.min(x0, x1), hi = Math.max(x0, x1);
-      for (const Q of [P(-0.05, lo), P(-0.05, hi), P(0.05, lo), P(0.05, hi)]) {
-        out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]);
-      }
-      out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      pitPaint(track, out, s, -0.05, 0.05, x0, x1, x0, x1, white, uu);
     }
     // ARROWS down the entry road: a white chevron every 12 m on the peel's
     // own centre, pointing into the lane — the paint a driver reads before
@@ -1240,18 +1287,10 @@ const TrackMesh = (function () {
       const s = ((p.sA + d) % L + L) % L, k = ((Math.round((s / L) * n) % n) + n) % n;
       if (!(p.w[k] > 0.25)) continue;
       TrackSpline.sample(track, s, smp);
-      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
       const xc = sd * (smp.hw + (o.fastIn * p.v[k] + o.workOut * p.w[k]) * 0.5);
-      const P = (lon, x) => [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * PIT_LIFT,
-                             smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * PIT_LIFT,
-                             smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * PIT_LIFT];
-      const quad = (A, B, C, D) => {
-        const base = out.pos.length / 3;
-        for (const Q of [A, B, C, D]) { out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]); }
-        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-      };
-      quad(P(-1.2, xc - 0.16), P(-1.2, xc + 0.16), P(0.5, xc - 0.16), P(0.5, xc + 0.16));   // the shaft
-      quad(P(0.3, xc - 0.7), P(0.3, xc + 0.7), P(1.4, xc), P(1.4, xc));                     // the head (a triangle)
+      pitPaint(track, out, s, -1.2, 0.5, xc - 0.16, xc + 0.16, xc - 0.16, xc + 0.16, white, uu);   // the shaft
+      pitPaint(track, out, s, 0.3, 1.4, xc - 0.7, xc + 0.7, xc, xc, white, uu);                     // the head (a triangle)
     }
     return out;
   }
@@ -1279,12 +1318,14 @@ const TrackMesh = (function () {
 
   /** THE HATCH, into the ROAD buffer: the FIA no-go fill on the road side of
    *  the peel line, a 45° white stripe every 2 m over the entry road's first
-   *  stretch (pitHatch above). In the road's own buffer, not the decal's,
-   *  because the road draws with a strong depth bias toward the camera and
-   *  the decal mesh with a weak one (js/game.js _wmRoadDryD / _startBias):
-   *  a stripe at PIT_LIFT over the road was invisible under SwiftShader and
-   *  visible only 15 cm up. Here it rides the road's bias like its edge lines
-   *  and sits a centimetre above the surface. `trk` carries hw = 0 so the
+   *  stretch (pitHatch above). In the road's own buffer, not the decal's: a
+   *  stripe at PIT_LIFT in the decal mesh was invisible under SwiftShader and
+   *  visible only 15 cm up. The road draws with NO depth bias (js/game.js
+   *  _wmRoadDryD — a road pulled toward the camera hid the cars standing on
+   *  it), so only geometry keeps this above the asphalt: 2 cm over the road's
+   *  +0.02. At 1 cm a spline sample's tangent left it 5.1 mm (Spa) to 9.1 mm
+   *  (Monza) over the node-built road — 15+ mm now, measured in
+   *  tests/unit/pit-complex.test.mjs. `trk` carries hw = 0 so the
    *  fragment-side marking SDF (roadMarkings) leaves it alone, as it does
    *  the kerbs. Paint, not prims: nothing for the clip audit, nothing to hit. */
   function buildPitHatch(track, out) {
@@ -1298,7 +1339,7 @@ const TrackMesh = (function () {
       TrackSpline.sample(track, h.s, smp);
       const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
       const P = (lon, x) => {
-        const by = bankOffsetAt(track, k, x) + 0.03;   // the road is at +0.02 (buildRoad)
+        const by = bankOffsetAt(track, k, x) + 0.04;   // the road is at +0.02 (buildRoad)
         return [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * by,
                 smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * by,
                 smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * by, x];
@@ -1336,30 +1377,20 @@ const TrackMesh = (function () {
       const k = ((Math.round((s / L) * n) % n) + n) % n;
       if (!(p.w[k] > 0.98)) continue;
       TrackSpline.sample(track, s, smp);
-      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t);
-      const uu = TrackGeom.norm(cross(rr, tt));
-      const at = (lon, lat) => [
-        smp.p[0] + rr[0] * lat + tt[0] * lon + uu[0] * PIT_LIFT,
-        smp.p[1] + rr[1] * lat + tt[1] * lon + uu[1] * PIT_LIFT,
-        smp.p[2] + rr[2] * lat + tt[2] * lon + uu[2] * PIT_LIFT,
-      ];
-      const quad = (A, B, C, D, col) => {
-        const base = out.pos.length / 3;
-        const push = (P) => { out.pos.push(P[0], P[1], P[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(col[0], col[1], col[2]); };
-        push(A); push(B); push(C); push(D);
-        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-      };
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
+      // Each strip [lon0, lon1] x [lat0, lat1] in the box's own frame, laid on
+      // the lane by pitPaint (on it, above it, facing up).
+      const strip = (lon0, lon1, lat0, lat1, col) => pitPaint(track, out, s, lon0, lon1, lat0, lat1, lat0, lat1, col, uu);
       const wi = sd * (smp.hw + o.corrOut + 0.3), wo = sd * (smp.hw + o.workOut - 0.3);
       const x0 = Math.min(wi, wo), x1 = Math.max(wi, wo);
       const boxLen = p.row.boxLen, paint = 0.16;
       const outer = sd > 0 ? x1 : x0;
       const outerIn = sd > 0 ? x1 - 0.28 : x0 + 0.28;
-      quad(at(boxLen / 2, x0), at(boxLen / 2, x1), at(boxLen / 2 - paint, x0), at(boxLen / 2 - paint, x1), white);
-      quad(at(-boxLen / 2, x0), at(boxLen / 2, x0), at(-boxLen / 2, x0 + paint), at(boxLen / 2, x0 + paint), white);
-      quad(at(-boxLen / 2, x1 - paint), at(boxLen / 2, x1 - paint), at(-boxLen / 2, x1), at(boxLen / 2, x1), white);
-      quad(at(boxLen / 2 + 0.25, x0), at(boxLen / 2 + 0.25, x1), at(boxLen / 2 + 0.55, x0), at(boxLen / 2 + 0.55, x1), box.col);
-      quad(at(-boxLen / 2, Math.min(outer, outerIn)), at(boxLen / 2, Math.min(outer, outerIn)),
-           at(-boxLen / 2, Math.max(outer, outerIn)), at(boxLen / 2, Math.max(outer, outerIn)), box.col);
+      strip(boxLen / 2 - paint, boxLen / 2, x0, x1, white);                     // front line
+      strip(-boxLen / 2, boxLen / 2, x0, x0 + paint, white);                    // side lines
+      strip(-boxLen / 2, boxLen / 2, x1 - paint, x1, white);
+      strip(boxLen / 2 + 0.25, boxLen / 2 + 0.55, x0, x1, box.col);             // the team's bar ahead
+      strip(-boxLen / 2, boxLen / 2, Math.min(outer, outerIn), Math.max(outer, outerIn), box.col);   // …and along the garage edge
       painted.push(s);
     }
     p.row.painted = painted;
@@ -1375,6 +1406,6 @@ const TrackMesh = (function () {
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
+           buildPitLane, buildPitMarks, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

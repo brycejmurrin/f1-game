@@ -8,7 +8,10 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
+// hud-layout reads CamGroups at eval (tools/manifest.cjs HARD_EDGES), so every
+// harness evaluates the two together, in load order.
+const SRC = CAMG + "\n" + fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 
 test("HUD browser helper atomically holds producers, selects camera and refreshes the controlled HUD", async () => {
@@ -125,7 +128,7 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   const { H, written, els } = load();
   const e = H.set("map", { x: 5, s: 150 }, "other");
   assert.deepEqual({ ...e }, { x: 5, y: 0, s: 150 });
-  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 2, cockpit: {}, other: { map: { x: 5, y: 0, s: 150 } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 3, standard: { cockpit: {}, other: { map: { x: 5, y: 0, s: 150 } } } });
   const m = els["#minimap"];
   assert.equal(m.attrs["data-hl"], "");
   assert.equal(m.props["--hl-x"], "5");
@@ -146,7 +149,8 @@ test("values clamp; back to shipped clears the element and the store", () => {
 test("cockpit and other cameras keep separate layouts; setCam swaps them", () => {
   const { H, els } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } });
   assert.equal(H.camSet("cockpit"), "cockpit");
-  assert.equal(H.camSet("visor"), "cockpit");
+  assert.equal(H.camSet("helmet"), "cockpit");
+  assert.equal(H.camSet("visor"), "other", "VISOR draws no wheel (js/camera/cam-groups.js)");
   assert.equal(H.camSet("chase"), "other");
   assert.equal("data-hl" in els["#hud-tyre"].attrs, false, "chase layout shows by default");
   H.setCam("cockpit");
@@ -177,7 +181,7 @@ const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
 test("cockpit ships a default strip beside the wheel; other ships zero", () => {
   const { H, written, els } = load();
   assert.equal(H.isShipped(), true);
-  assert.deepEqual(Object.keys(H.SHIPPED.other), []);
+  assert.deepEqual(Object.keys(H.SHIPPED.standard.other), []);
   for (const id of ["ot", "aero", "energy", "tyre"]) {
     const e = H.get(id, "cockpit");
     assert.ok(Math.abs(e.x) >= 25, id + " clears the wheel's middle 40%");
@@ -187,7 +191,7 @@ test("cockpit ships a default strip beside the wheel; other ships zero", () => {
   assert.deepEqual(plain(H.get("gearbox", "cockpit")), { x: 0, y: 0, s: 100 });
   assert.equal("data-hl" in els["#hud-ot"].attrs, false, "chase: nothing painted");
   H.setCam("cockpit");
-  assert.equal(els["#hud-ot"].props["--hl-x"], String(H.SHIPPED.cockpit.ot.x));
+  assert.equal(els["#hud-ot"].props["--hl-x"], String(H.SHIPPED.standard.cockpit.ot.x));
   assert.equal("data-hl" in els["#hud-gearbox"].attrs, false);
   assert.equal(written.hudLayout, undefined, "the default is not written to the store");
 });
@@ -195,27 +199,28 @@ test("cockpit ships a default strip beside the wheel; other ships zero", () => {
 test("stored offsets override the cockpit default; reset returns to the default, not zero", () => {
   const { H, written } = load();
   H.set("ot", { y: 0 }, "cockpit");
-  assert.deepEqual(plain(H.get("ot", "cockpit")), { x: H.SHIPPED.cockpit.ot.x, y: 0, s: 100 });
+  assert.deepEqual(plain(H.get("ot", "cockpit")), { x: H.SHIPPED.standard.cockpit.ot.x, y: 0, s: 100 });
   assert.equal(H.isShipped("cockpit"), false);
   H.set("aero", { x: 0, y: 0 }, "cockpit");   // back to zero is a real choice in the cockpit
-  assert.deepEqual(plain(written.hudLayout.cockpit.aero), { x: 0, y: 0, s: 100 });
+  assert.deepEqual(plain(written.hudLayout.standard.cockpit.aero), { x: 0, y: 0, s: 100 });
   H.resetEl("ot", "cockpit");
-  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.cockpit.ot));
+  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.standard.cockpit.ot));
   H.resetSet("cockpit");
   assert.equal(written.hudLayout, null);
-  assert.deepEqual(plain(H.get("aero", "cockpit")), plain(H.SHIPPED.cockpit.aero));
-  H.set("tyre", plain(H.SHIPPED.cockpit.tyre), "cockpit");
+  assert.deepEqual(plain(H.get("aero", "cockpit")), plain(H.SHIPPED.standard.cockpit.aero));
+  H.set("tyre", plain(H.SHIPPED.standard.cockpit.tyre), "cockpit");
   assert.equal(written.hudLayout, null, "writing the default stores nothing");
 });
 
-test("v1 store migrates: its values kept, missing cockpit elements take the default, saves as v2", () => {
+test("v1 store migrates: its values kept as STANDARD's, missing cockpit elements take the default, saves as v3", () => {
   const { H, written } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -10, y: 0, s: 120 } }, other: { map: { x: 2, y: 0, s: 100 } } } });
   assert.deepEqual(plain(H.get("tyre", "cockpit")), { x: -10, y: 0, s: 120 });
-  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.cockpit.ot));
+  assert.deepEqual(plain(H.get("ot", "cockpit")), plain(H.SHIPPED.standard.cockpit.ot));
   assert.deepEqual(plain(H.get("map", "other")), { x: 2, y: 0, s: 100 });
   H.set("map", { s: 110 }, "other");
-  assert.equal(written.hudLayout.v, 2);
-  assert.deepEqual(plain(written.hudLayout.cockpit), { tyre: { x: -10, y: 0, s: 120 } });
+  assert.equal(written.hudLayout.v, 3);
+  assert.deepEqual(plain(written.hudLayout.standard.cockpit), { tyre: { x: -10, y: 0, s: 120 } });
+  assert.equal(written.hudLayout.broadcast, undefined, "the other styles start shipped");
 });
 
 test("presets are pure data laid over the set's shipped layout", () => {
@@ -226,10 +231,57 @@ test("presets are pure data laid over the set's shipped layout", () => {
   const c = H.presetLayout("clean", "cockpit");
   assert.equal(c.tower.s, 85);
   assert.equal(c.ot.s, 90);
-  assert.equal(c.ot.x, H.SHIPPED.cockpit.ot.x, "CLEAN keeps the cockpit strip beside the wheel");
+  assert.equal(c.ot.x, H.SHIPPED.standard.cockpit.ot.x, "CLEAN keeps the cockpit strip beside the wheel");
   assert.equal(H.presetLayout("clean", "other").ot.x, 0);
   assert.equal(H.presetLayout("big", "other").gearbox.s, 125);
   assert.equal(H.presetLayout("nope", "other"), null);
+});
+
+// The desktop chase layout the presets are laid over, measured by the
+// hud-survey at 1280x720 (bottom and top zoom as shipped): [left, top, w, h]
+// in screen px. At 1920x1080 the centred pieces sit +320 / +360 (the bottom
+// band is bottom-anchored, the map and gap strip are left-anchored, the tower
+// is centred). Each preset must leave every piece it moves clear of every
+// piece it keeps, on screen, at both widths — hud-survey Y2 / Y3.
+const DESK = {
+  tower: [459, 8, 362, 51], map: [10, 8, 160, 160], gaps: [178, 8, 78, 18],
+  gearbox: [225, 582, 262, 65], speed: [507, 592, 87, 47], energy: [614, 606, 190, 18],
+  tyre: [291, 648, 130, 42], ot: [824, 595, 89, 41], aero: [933, 595, 121, 41], bb: [520, 662, 62, 27],
+};
+const ANCHOR = { tower: "centre", map: "left", gaps: "left" };
+function deskRect(id, e, W, H, orig) {
+  let [x, y, w, h] = DESK[id];
+  const a = ANCHOR[id] || "centre";
+  if (a === "centre") x += (W - 1280) / 2;
+  if (!ANCHOR[id]) y += H - 720;
+  const s = e.s / 100, o = orig[id];
+  // Scale origin: HudLayout.ELEMENTS (the centred tower grows about the centre line).
+  if (id === "tower") { x -= w * (s - 1) / 2; }
+  else if (/bottom center/.test(o)) { x -= w * (s - 1) / 2; y -= h * (s - 1); }
+  w *= s; h *= s;
+  return [x + e.x * W / 100, y + e.y * H / 100, w, h];
+}
+const hit = (a, b) => Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]) > 0.5 && Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]) > 0.5;
+
+test("BIG and CORNERS clear the desktop row at 1280 and 1920 (hud-survey Y2 / Y3)", () => {
+  const { H } = load();
+  const orig = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[3]]));
+  for (const pid of ["big", "corners"]) {
+    const lay = H.presetLayout(pid, "other");
+    const moved = Object.keys(H.PRESETS.find((p) => p[0] === pid)[2]);
+    for (const [W, Ht] of [[1280, 720], [1920, 1080]]) {
+      const box = {};
+      for (const id of Object.keys(DESK)) box[id] = deskRect(id, lay[id] || { x: 0, y: 0, s: 100 }, W, Ht, orig);   // SPEED is not a MOVE & SIZE element
+      for (const id of moved) {
+        const r = box[id];
+        assert.ok(r[0] >= 4 && r[1] >= 4 && r[0] + r[2] <= W - 4 && r[1] + r[3] <= Ht - 4, `${pid} ${id} on screen at ${W}: ${r.map(Math.round)}`);
+        for (const other of Object.keys(DESK)) {
+          if (other === id) continue;
+          assert.ok(!hit(r, box[other]), `${pid} at ${W}: ${id} ${r.map(Math.round)} on ${other} ${box[other].map(Math.round)}`);
+        }
+      }
+    }
+  }
 });
 
 test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
@@ -239,14 +291,14 @@ test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   assert.equal(H.applyPreset("big", "other"), true);
   assert.equal(H.presetOf("other"), "big");
   assert.equal(H.presetOf("cockpit"), "shipped", "only the edited set changes");
-  assert.deepEqual(plain(written.hudLayout.cockpit), {});
+  assert.deepEqual(plain(written.hudLayout.standard.cockpit), {});
   assert.equal(H.get("tower", "other").s, 125);
   H.set("tower", { s: 130 }, "other");
   assert.equal(H.presetOf("other"), "custom");
   H.applyPreset("corners", "cockpit");
   assert.equal(H.presetOf("cockpit"), "corners");
   assert.equal(H.get("energy", "cockpit").x, -34);
-  assert.equal(H.get("ot", "cockpit").x, H.SHIPPED.cockpit.ot.x);
+  assert.equal(H.get("ot", "cockpit").x, H.SHIPPED.standard.cockpit.ot.x);
   H.applyPreset("shipped", "cockpit");
   H.applyPreset("shipped", "other");
   assert.equal(written.hudLayout, null);
@@ -258,6 +310,17 @@ test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERG
   assert.match(hide[1], /#hud-gearbox/);
   assert.match(hide[1], /#hud-speed/);
   for (const id of ["hud-ot", "hud-aero", "hud-energy", "hud-tyre"]) assert.doesNotMatch(hide[1], new RegExp("#" + id + "\\b"));
+});
+
+test("touch cockpit: TYRES joins the strip's hide in the CSS and in hiddenReason (hud-survey Y1)", () => {
+  const touch = TD.match(/body\.cockpit-cam:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
+  assert.ok(touch, "the touch-cockpit hide rule exists");
+  const hidden = touch[1].split(",").map((x) => x.trim()).sort();
+  assert.deepEqual(hidden, ["#hud-aero", "#hud-bb", "#hud-energy", "#hud-ot", "#hud-tyre"]);
+  // Every piece the shipped cockpit strip moves is in that hide.
+  const { H } = load();
+  const sel = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[2]]));
+  for (const id of Object.keys(H.SHIPPED.standard.cockpit)) assert.ok(hidden.includes(sel[id]), id);
 });
 
 test("module has no Tracks / curvature reads", () => {
@@ -286,4 +349,180 @@ test("fit pulls a moved piece back on screen without touching the stored offset"
   const r = el.getBoundingClientRect();
   assert.ok(r.right <= 1000 - 4 + 1e-6, "right edge inside the screen: " + r.right);
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
+});
+
+test("fit clamps pieces that share an offset as ONE block, so neighbours keep their spacing", () => {
+  // OT and AERO both ship +30vw in the cockpit; at 1000 wide only AERO overruns
+  // the right edge. Clamped one by one, AERO landed on top of OT.
+  const mk = (left, w) => {
+    const props = {}, attrs = { "data-hl": "" };
+    return {
+      props,
+      style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() { const x = left + (parseFloat(props["--hl-x"] || 0) - 30) * 10; return { left: x, right: x + w, top: 500, bottom: 530, width: w, height: 30 }; },
+    };
+  };
+  const ot = mk(880, 70), aero = mk(960, 100);   // at +30vw: OT 880-950, AERO 960-1060 (past 1000)
+  const written = { hudLayout: { v: 2, cockpit: { ot: { x: 30, y: -14, s: 100 }, aero: { x: 30, y: -14, s: 100 } }, other: {} } };
+  const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+  const ctx = {
+    console, window: { innerWidth: 1000, innerHeight: 600 },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+      querySelector: (sel) => (sel === "#hud-ot" ? ot : sel === "#hud-aero" ? aero : blank) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.setCam("cockpit");
+  ctx.HudLayout.fit();
+  const o = ot.getBoundingClientRect(), r = aero.getBoundingClientRect();
+  assert.ok(r.right <= 1000 - 4 + 1e-6, "the block ends on screen: " + r.right);
+  assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
+  assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
+});
+
+// ---- per-style layouts, camera groups, hidden reasons, live origin ----------
+// A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
+// :root attributes and an optional GameHud.
+function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, gameHud = null } = {}) {
+  const written = Object.assign({}, stored);
+  const els = {};
+  const cls = new Set(classes);
+  const hud = { hidden: !live };
+  const body = { classList: { contains: (c) => cls.has(c) }, getAttribute: (k) => (k === "data-hud-hide" ? hide : null) };
+  const root = { hasAttribute: (k) => k in rootAttrs };
+  const doc = {
+    readyState: "complete", body, documentElement: root,
+    getElementById: (id) => (id === "hud" ? hud : null),
+    querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())),
+    addEventListener() {},
+  };
+  const ctx = { console, document: doc,
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } } };
+  if (gameHud) ctx.GameHud = gameHud;
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
+  return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs };
+}
+
+test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
+  const { H } = load3();
+  const m = plain(H.migrate({ v: 2, cockpit: { ot: { x: 10, y: 0, s: 100 } }, other: { tower: { x: -30, y: 0, s: 100 } } }));
+  assert.deepEqual(m.standard, { cockpit: { ot: { x: 10, y: 0, s: 100 } }, other: { tower: { x: -30, y: 0, s: 100 } } });
+  assert.deepEqual(m.minimal, { cockpit: {}, other: {} });
+  assert.deepEqual(m.broadcast, { cockpit: {}, other: {} });
+  // v3 reads per style, and a value equal to that style's shipped one is dropped.
+  const v3 = plain(H.migrate({ v: 3, broadcast: { other: { map: { x: 1 } } }, minimal: { cockpit: { tyre: H.SHIPPED.minimal.cockpit.tyre } } }));
+  assert.deepEqual(v3.broadcast.other, { map: { x: 1, y: 0, s: 100 } });
+  assert.deepEqual(v3.minimal.cockpit, {});
+  assert.deepEqual(plain(H.migrate(null)), { standard: { cockpit: {}, other: {} }, minimal: { cockpit: {}, other: {} }, broadcast: { cockpit: {}, other: {} } });
+  for (const p of H.PROFILES) for (const id of ["energy", "tyre", "ot", "aero"]) assert.ok(Math.abs(H.SHIPPED[p].cockpit[id].x) >= 25, p + " " + id);
+});
+
+test("layouts are keyed by style: a STANDARD tower move does not paint in BROADCAST", () => {
+  const { H, written, els, cls } = load3({ stored: { hudLayout: { v: 2, cockpit: {}, other: { tower: { x: -30, y: 0, s: 100 } } } } });
+  assert.equal(H.profile(), "standard");
+  assert.equal(els[".hud-top"].props["--hl-x"], "-30");
+  cls.add("hud-prof-broadcast");
+  H.setCam("chase");                       // js/ui/hud.js calls it on a style change too
+  assert.equal(H.profile(), "broadcast");
+  assert.equal("data-hl" in els[".hud-top"].attrs, false, "broadcast shows its own (shipped) tower");
+  H.set("tower", { y: 5 }, "other");
+  assert.deepEqual(plain(written.hudLayout), { v: 3,
+    standard: { cockpit: {}, other: { tower: { x: -30, y: 0, s: 100 } } },
+    broadcast: { cockpit: {}, other: { tower: { x: 0, y: 5, s: 100 } } } });
+  assert.equal(H.get("tower", "other", "standard").x, -30);
+  assert.equal(H.get("tower", "other", "minimal").x, 0);
+  assert.equal(H.isShipped(undefined, "minimal"), true);
+  assert.equal(H.isShipped(undefined, "all"), false);
+  H.resetSet("other", "broadcast");
+  H.resetSet("other", "standard");
+  assert.equal(written.hudLayout, null);
+});
+
+test("profile: the live body class while racing, else the stored HUD STYLE", () => {
+  const a = load3({ classes: ["hud-prof-minimal"], live: true, stored: { hudProfile: "broadcast" } });
+  assert.equal(a.H.profile(), "minimal", "racing: what is drawn");
+  const b = load3({ classes: ["hud-prof-minimal"], live: false, stored: { hudProfile: "broadcast" } });
+  assert.equal(b.H.profile(), "broadcast", "menus: the setting (the classes are last race's)");
+  const c = load3({ classes: [], live: false, stored: { hudProfile: "junk" } });
+  assert.equal(c.H.profile(), "standard");
+});
+
+test("CamGroups: one onboard table, a wheel-only cockpit-layout table; hud.js and hud-layout read it", () => {
+  const { CG, H } = load3();
+  assert.deepEqual(Object.keys(CG.ONBOARD).sort(), ["cockpit", "helmet", "hood", "tcam", "visor"]);
+  assert.deepEqual(Object.keys(CG.COCKPIT_LAYOUT).sort(), ["cockpit", "helmet"]);
+  for (const id in CG.COCKPIT_LAYOUT) assert.ok(CG.ONBOARD[id], id + ": a wheel camera is onboard");
+  for (const id of ["chase", "far", "heli", "tv", "rear"]) assert.equal(CG.isOnboard(id), false, id);
+  assert.ok(Object.isFrozen(CG.ONBOARD) && Object.isFrozen(CG.COCKPIT_LAYOUT));
+  assert.equal(H.COCKPIT_CAMS, CG.COCKPIT_LAYOUT);
+  const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const ids = [...ms.matchAll(/\{ id: "(\w+)"/g)].map((m) => m[1]);
+  for (const id in CG.ONBOARD) assert.ok(ids.includes(id), id + " is a CAM_MODES id");
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  assert.match(hud, /const ONBOARD_IDS = typeof CamGroups !== "undefined" \? CamGroups\.ONBOARD/);
+  assert.doesNotMatch(SRC.slice(CAMG.length), /visor: 1/, "hud-layout keeps no camera table of its own");
+  const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
+  assert.ok(man.indexOf('"js/camera/cam-groups.js"') < man.indexOf('"js/ui/hud-layout.js"'), "loads before hud-layout");
+});
+
+test("hiddenReason: classes name the reason; the live element has the last word", () => {
+  const h = (o) => load3(o).H;
+  assert.equal(h({ classes: ["hud-prof-minimal"], live: false }).hiddenReason("ot").reason, "MINIMAL style");
+  assert.equal(h({ classes: ["hud-prof-minimal"], live: false }).hiddenReason("ot").soft, false);
+  assert.equal(h({ classes: ["hud-met-compact"], live: false }).hiddenReason("tyre").reason, "LAYOUT is COMPACT");
+  assert.equal(h({ classes: ["hud-met-driver"], live: false }).hiddenReason("sectors").reason, "LAYOUT is DRIVER");
+  assert.equal(h({ classes: ["hud-bcam"], live: false }).hiddenReason("gearbox").reason, "TV camera");
+  assert.equal(h({ classes: ["hud-bcam", "hud-prof-broadcast"], live: false }).hiddenReason("sectors"), null, "broadcast style keeps sectors on TV cams");
+  assert.match(h({ classes: ["hud-bcam", "hud-prof-broadcast"], live: false }).hiddenReason("tyre").reason, /BROADCAST/);
+  assert.match(h({ classes: ["hud-hide-map"], live: false }).hiddenReason("map").reason, /MAP is off/);
+  assert.match(h({ classes: ["hud-hide-gaps"], live: false }).hiddenReason("gaps").reason, /GAPS is off/);
+  assert.match(h({ hide: "pos energy", live: false, classes: ["desktop"] }).hiddenReason("energy").reason, /HUD element list/);
+  assert.match(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("gearbox").reason, /wheel/);
+  const touch = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("ot");
+  assert.equal(touch.soft, true, "a touch cockpit chip shows once placed: sliders stay");
+  const tyT = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("tyre");
+  assert.equal(tyT.soft, true, "TYRES too: hidden on a touch cockpit until placed");
+  assert.match(tyT.reason, /touch cockpit/);
+  assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("tyre"), null, "a desktop cockpit shows TYRES beside the wheel");
+  assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
+  assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
+  assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
+  // Live: a drawn element is never marked, whatever the classes say.
+  const L = load3({ classes: ["hud-prof-minimal"], live: true });
+  const ot = L.els["#hud-ot"] || (L.els["#hud-ot"] = fakeEl());
+  ot.getBoundingClientRect = () => ({ width: 80, height: 20 });
+  assert.equal(L.H.hiddenReason("ot"), null);
+  ot.getBoundingClientRect = () => ({ width: 0, height: 0 });
+  assert.equal(L.H.hiddenReason("ot").reason, "MINIMAL style");
+  // TYRE WEAR off = the HUD set #hud-tyre[hidden], only trusted while racing.
+  const T = load3({ classes: ["desktop"], live: true });
+  const ty = T.els["#hud-tyre"] || (T.els["#hud-tyre"] = fakeEl());
+  ty.hidden = true;
+  assert.match(T.H.hiddenReason("tyre").reason, /TYRE WEAR/);
+  const top = T.els[".hud-top"] || (T.els[".hud-top"] = fakeEl());
+  top.hidden = true;
+  assert.deepEqual(plain(T.H.hiddenReason("tower")), { reason: "hidden right now", soft: true });
+});
+
+test("TRACK LIMITS origin follows its live anchor (:root[data-limits-left])", () => {
+  const L = load3({ stored: { hudLayout: { v: 3, standard: { other: { limits: { x: 0, y: 0, s: 150 } } } } } });
+  assert.equal(L.els["#hud-limits"].props["--hl-o"], "top right");
+  assert.equal(L.H.originOf("limits"), "top right");
+  L.rootAttrs["data-limits-left"] = "1";
+  assert.equal(L.H.originOf("limits"), "top left");
+  L.H.apply();
+  assert.equal(L.els["#hud-limits"].props["--hl-o"], "top left");
+  assert.equal(L.H.originOf("sectors"), "top right", "only the chip that crosses changes");
+});
+
+test("apply() asks GameHud to re-fit at once (typeof-guarded)", () => {
+  let n = 0;
+  const L = load3({ gameHud: { invalidateFit: () => { n++; } } });
+  const before = n;
+  L.H.set("map", { x: 3 }, "other");
+  assert.ok(n > before, "a move invalidates the fit");
+  assert.doesNotThrow(() => load3({ gameHud: {} }).H.set("map", { x: 3 }, "other"));
 });

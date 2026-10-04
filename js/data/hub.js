@@ -433,6 +433,8 @@ const DataHub = (function () {
     if (have && sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
+      // A pick that landed while this was in flight is the newer, explicit choice.
+      if (sel.pinned) return sel.meta;
       if (ses && ses.sessionKey != null) {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;
@@ -504,6 +506,11 @@ const DataHub = (function () {
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
+    // A pick made here and answered after the player left this tab does nothing:
+    // its onPick → invalidateOther would bump the generation of the tab now
+    // loading and leave it spinning forever. The first fill (userChanged false)
+    // still runs on a box its tab has not attached yet.
+    function detached(userChanged) { return userChanged && box.isConnected === false; }
 
     gpSel.addEventListener("change", function () {
       cancelRealRace();
@@ -544,7 +551,7 @@ const DataHub = (function () {
       const myGen = ++pickerGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
       F1API.meetings(sel.year).then(function (ms) {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || detached(userChanged)) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
         // The LATEST MEETING THAT HAS STARTED, not the year's last entry: the
         // current season lists every future round, and defaulting to December's
@@ -565,7 +572,7 @@ const DataHub = (function () {
       const myGen = ++pickerGen;
       ph(sesSel, "loading…");
       F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || detached(userChanged)) return;
         sesIndex = {};
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
         if (!ss.length) { ph(sesSel, "no data"); return; }
@@ -610,7 +617,7 @@ const DataHub = (function () {
   // Prix's timing as a script, and every real driver's seat as a JUMP IN.
   const { loadRealRace, cancel: cancelRealRace } = DataRealRace.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-    teamChip, fmtDateTime, findTeam, close, isOpen
+    invalidateOther, teamChip, fmtDateTime, findTeam, close, isOpen
   });
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el, clear, isOpen });

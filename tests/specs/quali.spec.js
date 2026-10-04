@@ -263,29 +263,33 @@ test.describe("Qualifying — the lap itself", () => {
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("quali");
   });
 
-  test("the car starts from REST on the line, like the real thing", async ({ page }) => {
-    // It used to launch at racing speed, because the simulated field is
-    // modelled on a flying lap and timing a standing lap against a flying one
-    // loses you the launch by construction. That is paid on the other side now
-    // — quali.js charges every modelled lap the same standing start — so the
-    // session can begin the way its name says it does.
+  test("a FLYING lap: the car rolls in at speed before the line, AI-driven, then hands over", async ({ page }) => {
+    // js/race/flying-start.js, the Data Hub JUMP IN's rolling start: no gantry,
+    // the car dropped in on the road before the line at the speed the AI would
+    // carry, driven for HANDOVER_S, then the wheel. js/race/quali-model.js
+    // models every simulated lap as a flying lap to match.
     await driveQuali(page);
     const out = await page.evaluate(() => {
-      // Pump the countdown deterministically rather than waiting on real time:
-      // under software GL the wall clock is not a reliable way to reach
-      // lights-out inside a test budget.
-      for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
-      const c = window.__apex.carAt(0);
-      return { state: window.__apex.info().state, speed: c.speed, x: c.x };
+      const a = window.__apex;
+      for (let i = 0; i < 900 && a.info().state !== "race"; i++) a.step(1 / 60, 1);
+      const c0 = a.carAt(0);
+      const first = { state: a.info().state, speed: c0.speed, lap: c0.lap, prog: c0.prog, ai: c0.stuckT !== null };
+      a.step(1 / 60, 60 * 4);   // past the 3 s hand-over
+      const c1 = a.carAt(0);
+      return { first, after: { lap: c1.lap, human: c1.stuckT === null, speed: c1.speed } };
     });
-    expect(out.state).toBe("race");
-    expect(out.speed).toBeLessThan(5);    // from rest, not launched
-    expect(Math.abs(out.x)).toBeLessThan(1.5);   // on the line, not in a grid slot
+    expect(out.first.state).toBe("race");
+    expect(out.first.speed).toBeGreaterThan(20);   // at racing speed, not from rest
+    expect(out.first.lap).toBe(0);                 // before the line: the run-up is never timed
+    expect(out.first.prog).toBeLessThan(-100);
+    expect(out.first.ai).toBe(true);               // the AI holds the wheel for the run-up
+    expect(out.after.human).toBe(true);            // …then hands it over
+    expect(out.after.speed).toBeGreaterThan(10);
   });
 
   test("a Grand Prix still starts from a standstill", async ({ page }) => {
-    // The launch is qualifying-only. A race that began at 300 km/h would be a
-    // different game.
+    // The flying start is qualifying and time trial only. A race that began at
+    // 300 km/h would be a different game.
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();

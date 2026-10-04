@@ -9,9 +9,18 @@ import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, di
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
-  assert.deepEqual(v.over.map((r) => `${r.file} ${r.metric}: ${r.value} > ${r.ceiling} (+${r.over})`), [],
-    "a file grew past its ceiling — extract something, or raise the number in tests/data/ratchets.json deliberately and say why in the commit");
-  assert.deepEqual(v.rows.filter((r) => r.missing).map((r) => r.file), [], "a ratcheted file is gone — drop its entry or fix the path");
+  // Put the over list in the assertion message (and on the not-ok line via
+  // assert.equal) so tooling-fast's TAP filter cannot strip the metric name —
+  // deepEqual's `actual: / 0: …` rows were dropped from CI logs until
+  // tapFailureDetail kept them (Structural guards, 2026-10-04).
+  const overs = v.over.map((r) => `${r.file} ${r.metric}: ${r.value} > ${r.ceiling} (+${r.over})`);
+  assert.equal(overs.length, 0,
+    overs.length
+      ? `a file grew past its ceiling — ${overs.join("; ")} — extract something, or raise the number in tests/data/ratchets.json deliberately and say why in the commit`
+      : "a file grew past its ceiling — extract something, or raise the number in tests/data/ratchets.json deliberately and say why in the commit");
+  const missing = v.rows.filter((r) => r.missing).map((r) => r.file);
+  assert.equal(missing.length, 0,
+    missing.length ? `a ratcheted file is gone — ${missing.join("; ")}` : "a ratcheted file is gone — drop its entry or fix the path");
 });
 
 test("no ceiling is left far above the value it guards (one slack rule)", async () => {

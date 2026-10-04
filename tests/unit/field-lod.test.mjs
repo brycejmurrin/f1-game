@@ -1,9 +1,13 @@
 /* field-lod — the rival-car distance LOD (js/car/field-lod.js) and the three
  * consumers that take its cuts on every backend:
  *   - the TABLE: which parts a rival draws at a camera distance (rotating wheels
- *     only past 50 m, flaps within 80 m, exhaust flame within 60 m, the whole-car
- *     mesh as one draw past 120 m), the player never reduced, and
+ *     only past 50 m, MOVING flaps within 80 m, exhaust flame within 60 m, the
+ *     whole-car mesh as one draw past 120 m), the player never reduced, and
  *     apex26.fieldLod = 0 returning every legacy gate;
+ *   - the FLAP SET: past 80 m (and at rest anywhere) the REAL game.js
+ *     drawAeroFlaps draws the whole moveable set as ONE static CarMesh mesh at
+ *     the nearer rest pose — the same surfaces the per-element path draws —
+ *     instead of nothing (a far rival's rear wing was its main plane only);
  *   - the SHADOW gate (js/render/shared/shadow-pass.js, driven for real): a
  *     rival pushed with cast=false keeps its blob but is never a sun-map
  *     caster; an omitted flag (the fieldLod=0 path) still casts; and game.js
@@ -21,6 +25,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -46,7 +52,8 @@ test("the table: a rival's parts by camera distance; the player is never reduced
   const p70 = L.parts(at(70), false);
   assert.deepEqual([p70.flaps, p70.flame], [true, false], "70 m: flaps yes, flame no");
   const p100 = L.parts(at(100), false);
-  assert.deepEqual([p100.tier, p100.body, p100.flaps], [1, true, false], "100 m: body + decal + wheels, no flaps");
+  assert.deepEqual([p100.tier, p100.body, p100.flaps, p100.flapSet], [1, true, false, true],
+    "100 m: body + decal + wheels, the flap set STATIC (never none)");
   const far = L.parts(at(130), false);
   assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels], [2, true, false, true, false],
     "130 m: the body and its 4 rotating wheels, no decal");
@@ -135,7 +142,11 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   assert.ok(legacy > 0 && cull > legacy && lod > cull, "legacy push before the frustum test, the LOD push after it");
   assert.match(g, /const body = carDraw\.modelBuf \? null/, "every procedural rival keeps its body mesh (no whole-car swap)");
   assert.match(g, /if \(_lod < 2\) queueCarDecals\(c\.team, tmpMat/, "and no decal for a rival past 120 m");
-  assert.match(g, /< FieldLod\.flapsM\(\) \*\* 2/, "flaps gate from the table");
+  // Past FieldLod.flapsM() the flaps go STILL (the static set), they are never skipped.
+  assert.match(g, /drawAeroFlaps\(c\.team, aSt\.val, c\.aeroX \|\| 0, tmpMat, paint, aSt\.aero, null,\s*!c\.isPlayer && fdx \* fdx \+ fdy \* fdy \+ fdz \* fdz >= FieldLod\.flapsM\(\) \*\* 2\);/,
+    "flaps gate from the table: past it `still`, the player never");
+  assert.doesNotMatch(g, /\bdrawFlaps\b/, "no flag that skips the flap draw");
+  assert.equal(g.split("drawAeroFlaps(c.team, aSt.val").length - 1, 1, "one race call site");
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
@@ -143,6 +154,103 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   // lite: the rotating wheel draw, then only the far brake flare (a Particles
   // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
   assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
+});
+
+// ── the flap set ────────────────────────────────────────────────────────────
+// game.js's REAL drawAeroFlaps over the REAL Car3D solve and CarMesh caches, on
+// a recording gfx. The car sits yawed and lifted, so a pose error cannot hide.
+let _flapM = null;   // one loadParts (the hinge solve is memoised inside it)
+function flapRig() {
+  const M = _flapM || (_flapM = loadParts());
+  const made = [], draws = [], freed = [];
+  const gfx = {
+    createMesh: (d) => { const m = { id: made.length, d }; made.push(m); return m; },
+    freeMesh: (m) => freed.push(m),
+    draw: (mesh, mat, opts) => draws.push({ mesh, mat: Array.from(mat), opts }),
+  };
+  M.CarMesh.init(gfx);
+  const st = { col: [0.8, 0.1, 0.1], finish: null };
+  const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld",
+    fnSource(read("js/game.js"), "function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
+    () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish }),
+    M.Car3D, M.CarMesh, gfx, new Float32Array(16));
+  return { M, made, draws, freed, draw, st };
+}
+const FLAP_TEAM = { id: "t" }, FLAP_PAINT = { paint: 1 }, FLAP_LVL = 2;
+const yaw = 0.7, FLAP_MAT = new Float32Array([Math.cos(yaw), 0, -Math.sin(yaw), 0, 0, 1, 0, 0,
+  Math.sin(yaw), 0, Math.cos(yaw), 0, 10, 2, -5, 1]);
+// Every drawn vertex (and normal) in WORLD space, in draw order.
+function world(draws) {
+  const P = [], N = [];
+  for (const { mesh, mat: m } of draws) {
+    const p = mesh.d.pos, n = mesh.d.nrm;
+    for (let i = 0; i < p.length; i += 3) {
+      P.push(m[0] * p[i] + m[4] * p[i + 1] + m[8] * p[i + 2] + m[12],
+             m[1] * p[i] + m[5] * p[i + 1] + m[9] * p[i + 2] + m[13],
+             m[2] * p[i] + m[6] * p[i + 1] + m[10] * p[i + 2] + m[14]);
+      N.push(m[0] * n[i] + m[4] * n[i + 1] + m[8] * n[i + 2],
+             m[1] * n[i] + m[5] * n[i + 1] + m[9] * n[i + 2],
+             m[2] * n[i] + m[6] * n[i + 1] + m[10] * n[i + 2]);
+    }
+  }
+  return { P, N };
+}
+const maxDiff = (a, b) => { assert.equal(a.length, b.length, "vertex count"); let d = 0; for (let i = 0; i < a.length; i++) d = Math.max(d, Math.abs(a[i] - b[i])); return d; };
+
+test("drawAeroFlaps: moving = one draw per element; `still` or at rest = ONE draw of the whole set", () => {
+  const r = flapRig(), els = r.M.Car3D.aeroFlaps(FLAP_LVL, null);
+  assert.deepEqual(["front", "rear"].map((w) => els.filter((e) => e.wing === w).length >= 2), [true, true],
+    "level 2 moves two elements on each wing (the case worth merging)");
+  r.draw(FLAP_TEAM, FLAP_LVL, 0.4, FLAP_MAT, FLAP_PAINT, null);
+  assert.equal(r.draws.length, els.length, "moving, inside the gate: the animated per-element path");
+  for (const [blend, still, why] of [[0.4, true, "a rival past FieldLod.flapsM() / the mirror / the PiP"],
+    [0, false, "closed, at rest"], [1, false, "open, at rest"], [0.7, true, "still, mid-travel"]]) {
+    r.draws.length = 0;
+    r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, null, still);
+    assert.equal(r.draws.length, 1, why + ": ONE draw");
+    assert.equal(r.draws[0].opts, FLAP_PAINT, why + ": the flaps' own draw options (one material on every backend)");
+    assert.deepEqual(r.draws[0].mat, Array.from(FLAP_MAT), why + ": on the car's own matrix");
+    const verts = els.reduce((n, e) => n + r.M.Car3D.buildFlapGeom(e, r.st.col, null).pos.length, 0);
+    assert.equal(r.draws[0].mesh.d.pos.length, verts, why + ": every element of both wings");
+  }
+});
+
+test("the static set is the per-element draw, baked: same vertices and normals at each rest pose", () => {
+  const r = flapRig();
+  for (const [blend, near, pose] of [[0.2, 1e-9, "closed (Z-mode)"], [0.5, 1 - 1e-9, "open (X-mode)"]]) {
+    r.draws.length = 0;
+    r.draw(FLAP_TEAM, FLAP_LVL, near, FLAP_MAT, FLAP_PAINT, null);   // the animated path, a hair off the pose
+    const moving = world(r.draws);
+    r.draws.length = 0;
+    r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, null, true);   // the nearer rest pose
+    const still = world(r.draws);
+    assert.ok(maxDiff(moving.P, still.P) < 1e-5, pose + ": positions");
+    assert.ok(maxDiff(moving.N, still.N) < 1e-5, pose + ": normals");
+    assert.deepEqual(r.draws[0].mesh.d.mat, r.M.Car3D.aeroFlaps(FLAP_LVL, null)
+      .flatMap((e) => r.M.Car3D.buildFlapGeom(e, r.st.col, null).mat), pose + ": surfaces");
+  }
+  // `only` (the cockpit's front wing) bakes that wing alone.
+  r.draws.length = 0;
+  r.draw(FLAP_TEAM, FLAP_LVL, 0, FLAP_MAT, FLAP_PAINT, null, "front");
+  const front = r.M.Car3D.aeroFlaps(FLAP_LVL, null).filter((e) => e.wing === "front");
+  assert.equal(r.draws[0].mesh.d.pos.length, front.reduce((n, e) => n + r.M.Car3D.buildFlapGeom(e, r.st.col, null).pos.length, 0));
+});
+
+test("the static set is cached per (solve, colour, finish, pose, wing) and FIFO-freed", () => {
+  const r = flapRig();
+  const set = (blend, only) => { r.draws.length = 0; r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, only, true); return r.draws[0].mesh; };
+  r.st.col = [0.31, 0.32, 0.33];
+  const closed = set(0.1), n = r.made.length;
+  assert.equal(set(0.4), closed, "a hit: no build");
+  assert.equal(r.made.length, n);
+  assert.notEqual(set(0.6), closed, "the open pose is its own mesh");
+  assert.notEqual(set(0.1, "front"), closed, "so is one wing");
+  r.st.finish = "satin";
+  assert.notEqual(set(0.1), closed, "and a finish (the flap material)");
+  r.st.finish = null;
+  const before = r.freed.length;
+  for (let i = 0; i < 70; i++) { r.st.col = [i / 100, 0.5, 0.5]; set(0); }
+  assert.ok(r.freed.length > before, "a colour per edit evicts — and frees — the oldest sets");
 });
 
 // ── mirror cap ──────────────────────────────────────────────────────────────

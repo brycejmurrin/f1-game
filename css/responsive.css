@@ -245,6 +245,29 @@ body.desktop #pm-calib { display: none !important; }
    inactive so focus is not sent behind the dialog. Closing help restores the
    blocker/focus if the phone is still portrait. */
 body.rotate-help-open #rotate-device { display: none !important; }
+/* Pause and the rotate gate never share paint. #pausemenu is a top-layer
+   <dialog>, but gate labels (RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE)
+   ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
+   Match both the hidden seam and the native `open` flag showModal sets.
+   Also beat the portrait media rule's `display: flex` with !important. */
+body:has(#pausemenu:not([hidden])) #rotate-device,
+body:has(#pausemenu[open]) #rotate-device,
+html:has(#pausemenu:not([hidden])) #rotate-device,
+html:has(#pausemenu[open]) #rotate-device {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* The iOS install tip sits above the race and used to paint through the
+   pause card's translucent foot on phone portrait. */
+body:has(#pausemenu:not([hidden])) #ios-install,
+body:has(#pausemenu[open]) #ios-install,
+html:has(#pausemenu:not([hidden])) #ios-install,
+html:has(#pausemenu[open]) #ios-install {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 
 /* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing
    more than height > width, so this opaque z-9000 sheet also fired on a rotated

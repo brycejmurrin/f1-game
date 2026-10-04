@@ -388,7 +388,12 @@ back to `NEUTRAL_MODS` — and, with one exception, no compound to read: the
 MY TEAM teammate (`mate` in `makeCars`) shares the player's saved build, so it
 carries the build's `wetTread`, `aeroLoad` and ERS axes. Every other AI car
 has `tread: null`, which resolves to the top column: **the field is assumed to
-have fitted the right tyre for the conditions.**
+have fitted the right tyre for the conditions.** That holds with TYRE WEAR
+OFF, where an AI has no pit plan and so no way to change tyres. With wear on
+an AI is fitted real sets (the weather's tread at the lights, a weather stop
+when it turns), and `TyreModel.applyCompound` gives it that set's `tread` like
+the player's: before 2026-10-04 an AI still on slicks as rain came in cornered
+on the full-wet column until it pitted.
 
 This is a design decision, not an oversight, and it is what keeps rain a race.
 The alternative was a player-only advantage, which would have made a correct
@@ -694,7 +699,13 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   plan already wants forward: **cover** when the car directly behind (≤ 2 s)
   boxes, **undercut** after a lap stuck within 1 s of a car that has not.
   Neither fires when the next set cannot reach its own stop, nor under a red
-  flag (it is not a pit window). `tools/check/ai-strategy-census.mjs` runs
+  flag (it is not a pit window) — and neither does the caution stop: pulled up
+  to `CAUTION_REACH` laps forward onto a set that could not reach the flag, an
+  early safety car turned the field's one-stop into two or three. On the right
+  WET tyre the dry plan's stop laps are ignored (they were cut for slicks): the
+  wet stint is re-cut on the wet class's life (`PitLane` `wetLapsToStop`) — no
+  stop when the set reaches the flag, otherwise one midway between the first
+  lap a fresh wet would reach it and the lap this one is gone. `tools/check/ai-strategy-census.mjs` runs
   full races and reports stops, reasons, re-cuts and strategies.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −

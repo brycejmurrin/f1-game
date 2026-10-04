@@ -182,3 +182,42 @@ test("inflate: an oversized stream is cut off under MAX_BYTES; no DecompressionS
     assert.deepEqual([u.ok, u.reason], [false, "unsupported"]);
   } finally { ctx.DecompressionStream = keep; }
 });
+
+test("scenery options (FLAG.look): one byte only when off default, round-trips, moves the id; a bad byte or an unknown flag is refused", async () => {
+  const { CD, C } = bootEditor();
+  const base = design({ theme: "parkland", seed: 99 });
+  const plainBytes = CD.encodeBytes(C.sanitize(base), false);
+  // All defaults: byte-identical to a design with no look at all (older codes and ids hold).
+  const dflt = CD.encodeBytes(C.sanitize(Object.assign({}, base, { look: { time: "auto", trees: "normal", crowd: "normal" } })), false);
+  assert.deepEqual([...dflt], [...plainBytes]);
+  assert.equal(C.sanitize(Object.assign({}, base, { look: { time: "auto" } })).id, C.sanitize(base).id, "default look → the same id");
+  const look = { time: "dusk", trees: "many", crowd: "few" };
+  const it = C.sanitize(Object.assign({}, base, { look }));
+  assert.notEqual(it.id, C.sanitize(base).id, "a look is a different circuit (rebuild)");
+  const bytes = CD.encodeBytes(it, false);
+  assert.equal(bytes.length, plainBytes.length + 1, "one byte");
+  assert.equal(bytes[1] & CD.FLAG.look, CD.FLAG.look);
+  const back = await CD.decode(await CD.encode(Object.assign({}, base, { look })));
+  assert.equal(back.ok, true, back.reason);
+  assert.deepEqual(plain(back.design.look), look);
+  assert.equal(back.id, it.id);
+  // Every combination round-trips.
+  const L = { time: ["auto", "day", "dusk", "night"], trees: ["normal", "few", "many"], crowd: ["normal", "few", "packed"] };
+  for (const time of L.time) for (const trees of L.trees) for (const crowd of L.crowd) {
+    const r = CD.decodeBytes(CD.encodeBytes(C.sanitize(Object.assign({}, base, { look: { time, trees, crowd } })), false));
+    assert.equal(r.ok, true);
+    const want = time === "auto" && trees === "normal" && crowd === "normal" ? undefined : { time, trees, crowd };
+    assert.deepEqual(r.design.look ? plain(r.design.look) : undefined, want);
+  }
+  const reCheck = (b) => { const f = new Uint8Array(b); const c = CD.fnv16(f, f.length - 2); f[f.length - 2] = c & 0xff; f[f.length - 1] = c >> 8; return f; };
+  // The look byte is the last before the check: trees index 3 does not exist.
+  const bad = new Uint8Array(bytes); bad[bad.length - 3] = 3 << 2;
+  assert.equal(CD.decodeBytes(reCheck(bad)).reason, "bounds");
+  const high = new Uint8Array(bytes); high[high.length - 3] = 0x40;
+  assert.equal(CD.decodeBytes(reCheck(high)).reason, "bounds");
+  const flag = new Uint8Array(plainBytes); flag[1] |= 0x40;
+  assert.equal(CD.decodeBytes(reCheck(flag)).reason, "corrupt", "an unknown flag bit is still refused");
+  // Sanitize drops unknown names to the default.
+  assert.equal(C.sanitize(Object.assign({}, base, { look: { time: "noon", trees: 7 } })).look, undefined);
+  assert.deepEqual(plain(C.sanitize(Object.assign({}, base, { look: { crowd: "packed", time: "x" } })).look), { time: "auto", trees: "normal", crowd: "packed" });
+});
