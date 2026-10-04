@@ -29,19 +29,20 @@ function sceneryResident(id) {
 // would each inject their own copy (28-58 KB, up to four times). Cleared on
 // settle so a dropped fetch retries.
 const _sceneryLoads = new Map();
+// Also wait for THIS circuit's baked models (Assets.modelsReady, capped at
+// 4 s): prop placement is synchronous, so a build that ran before the models
+// landed kept the box fallback for the whole session. The set is the model
+// ids the scenery closure's source names, so it is known only once the
+// closure is resident; a circuit that names none (35 of 40) waits on nothing.
+// Boot used to prefetch all 77 models (~2 MB) for the 29 five circuits use.
+function sceneryModels(def) {
+  if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
+  const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
+  return Assets.modelsReady(0, fn ? String(fn) : "");
+}
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
-  // Also wait for THIS circuit's baked models (Assets.modelsReady, capped at
-  // 4 s): prop placement is synchronous, so a build that ran before the models
-  // landed kept the box fallback for the whole session. The set is the model
-  // ids the scenery closure's source names, so it is known only once the
-  // closure is resident; a circuit that names none (35 of 40) waits on nothing.
-  // Boot used to prefetch all 77 models (~2 MB) for the 29 five circuits use.
-  const models = () => {
-    if (typeof Assets === "undefined" || !Assets.modelsReady) return Promise.resolve();
-    const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
-    return Assets.modelsReady(0, fn ? String(fn) : "");
-  };
+  const models = () => sceneryModels(def);
   if (!def || def.scenery || sceneryResident(def.id)) return models().then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
   let p = _sceneryLoads.get(def.id);
   if (!p) {
