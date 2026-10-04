@@ -118,3 +118,25 @@ test("B1 fallthrough circuits ship a full tod×weather grid with no wetness pins
       `${track} must not pin LT.wetness (look=drive — road wetness follows physics)`);
   }
 });
+
+test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul ≥ 0.1 outside night", () => {
+  // AMBIENT FILL 0 makes every shadow pure black (knobs.js help), and a 0 key
+  // turns the sun off. A COPY-ALL fan-out stamped ambientMul 0 / keyMul 0.115
+  // onto 42 "<track>|dusk|wet" profiles and keyMul 0 + ambientMul 0 onto
+  // nurburgring|dusk|dry; the owner judged the stamp "crushing" for Suzuka and
+  // Silverstone (508b052e, 68df8a68) and it was replaced fleet-wide with the
+  // same short delta (review-wgx-lighting item 4).
+  // dawn|dry is the one exception, and it is a pending decision, not a pass:
+  // all 44 dawn|dry profiles ship ambientMul 0 inside a deliberate-looking
+  // twilight set (keyMul 0.29, mist, god-rays, lamps) that needs a rendered
+  // A/B before it changes. Remove the exemption when that A/B lands.
+  const P = presets();
+  const bad = [];
+  for (const [key, o] of Object.entries(P)) {
+    const [, tod, wx] = key.split("|");
+    if (!wx || tod === "night" || (tod === "dawn" && wx === "dry")) continue;
+    const a = o.ambientMul ?? 1, k = o.keyMul ?? 1;
+    if (a < 0.15 || k < 0.1) bad.push(`${key} ambientMul ${a} keyMul ${k}`);
+  }
+  assert.deepEqual(bad, [], "a non-night preset crushes ambient or switches the sun off");
+});
