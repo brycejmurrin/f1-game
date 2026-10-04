@@ -28,6 +28,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -369,8 +370,8 @@ test("bump bounciness is taken from a pre-step speed, the impulse from the live 
   // relative velocity because that is momentum — it has to see the state it is
   // actually correcting.
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
-  assert.match(src, /for \(const c of ranked\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed;/,
-    "every car needs the snapshot, and a net car's reference is its predicted speed");
+  assert.match(src, /for \(const c of ranked\) if \(!ownsPose\(c\)\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed;/,
+    "local contact bodies need the snapshot, and a net car's reference is its predicted speed");
   assert.match(src, /const e = AiDrive\.bumpRestitution\(relV0 > 0 \? relV0 : relV\);/,
     "the coefficient must read the pre-step closing speed");
   assert.match(src, /const jImp = \(1 \+ e\) \* relV \/ iSum;/,
@@ -385,4 +386,155 @@ test("the ramp is why the reference matters", () => {
   assert.ok(Math.abs(rest(1.2) - 0.01) < 1e-9, `e at 1.2 m/s is ${rest(1.2)}`);
   assert.ok(rest(2.4) > 3 * rest(1.2), "a 1.2 m/s shift in the reference more than triples e");
   assert.equal(rest(0.9), 0, "and below the resting threshold it vanishes entirely");
+});
+
+// Actual contact and replay modules with a straight track; no renderer or
+// physics integration can mask a solver overwrite of a recorded trace.
+function replayContactFixture(count = 2) {
+  let incidents = 0, debris = 0, effects = 0, writebacks = 0;
+  const ctx = vm.createContext({
+    Log: { info() {}, warn() {}, debug() {}, enabled: () => false },
+    IncidentSim: { owns: () => false, notifyCar: () => { incidents++; } },
+    DebrisWorld: { active: () => true, carImpact: () => { debris++; } },
+    Tracks: {
+      wallAt: () => 2,
+      sample: (_track, s, out) => { out.p = [0, 0, s]; out.t = [0, 0, 1]; out.r = [1, 0, 0]; out.hw = 3; return out; },
+    },
+  });
+  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
+    vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: file });
+  }
+  const cars = Array.from({ length: count }, (_, i) => ({ code: "C" + i, human: false }));
+  const G = {
+    track: { total: 1000 }, cars, player: cars[0], raceT: 0, state: "race", PACE: 1,
+    netPlay: { owns: () => false }, wrapS: (s) => ((s % 1000) + 1000) % 1000,
+    worldFromTrack: (s, x) => { writebacks++; return { x, z: s }; },
+  };
+  const drivers = cars.map((c, i) => ({ num: i + 1, code: c.code }));
+  const traces = { frame: "track", cars: {} };
+  for (let i = 0; i < count; i++) {
+    const p = i < 2 ? 100 + 3 * i : 200 + 20 * i, speed = i === 0 ? 40 : 20;
+    traces.cars[i + 1] = { t: [0, 1, 2], prog: [p, p + speed, p + 2 * speed], x: [4, 4, 4] };
+  }
+  const replay = vm.runInContext("RealReplay", ctx).create(G);
+  assert.equal(replay.start({ script: { drivers }, traces, seats: new Map(cars.map((c, i) => [c, drivers[i]])), follow: "C0" }), true);
+  replay.seek(0.1);
+  const create = (owner) => vm.runInContext("Collide", ctx).create(G, () => { effects++; }, owner);
+  return { G, replay, create, counters: () => ({ incidents, debris, effects, writebacks }) };
+}
+
+test("replay-owned overlapping and pit-lane poses survive both collision solver paths unchanged", () => {
+  for (const count of [2, 14]) {
+    const f = replayContactFixture(count), solver = f.create((c) => f.replay.owns(c));
+    // Also exercise the human/player writeback and oriented-contact route.
+    f.G.player.human = true; f.G.player.yawVis = Math.PI / 2;
+    const before = JSON.stringify(f.G.cars);
+    for (let step = 0; step < 3; step++) { f.G.raceT += DT; solver.resolveCollisions(f.G.cars, DT); }
+    assert.equal(JSON.stringify(f.G.cars), before, `the ${count}-car solver changed a recorded pose or contact state`);
+    assert.deepEqual(f.counters(), { incidents: 0, debris: 0, effects: 0, writebacks: 0 });
+    assert.equal(solver.pairContact(f.G.cars[0], f.G.cars[1]), null, "a recorded puppet is not a local contact body");
+    f.replay.stop();
+  }
+});
+
+test("a car acquired by replay ownership cannot be rewound by the prior driving sweep", () => {
+  const f = replayContactFixture(); f.replay.stop();
+  const owned = new Set(), solver = f.create((c) => owned.has(c));
+  const [a, b] = f.G.cars;
+  Object.assign(a, { prog: 100, s: 100, x: 0, speed: 240 });
+  Object.assign(b, { prog: 106, s: 106, x: 0, speed: 240 });
+  solver.resolveCollisions(f.G.cars, DT);   // remember disjoint driving poses
+  owned.add(a); owned.add(b);
+  Object.assign(a, { prog: 106, s: 106 }); Object.assign(b, { prog: 100, s: 100 });
+  const before = JSON.stringify(f.G.cars);
+  f.G.raceT += DT; solver.resolveCollisions(f.G.cars, DT);
+  assert.equal(JSON.stringify(f.G.cars), before, "the sweep must not roll traced cars back to its time of impact");
+  assert.deepEqual(f.counters(), { incidents: 0, debris: 0, effects: 0, writebacks: 0 });
+});
+
+test("ordinary cars still exchange speed, separate and respect barriers with no ownership callback", () => {
+  const f = replayContactFixture(); f.replay.stop();
+  const solver = f.create(), [a, b] = f.G.cars;
+  const aSpeed = a.speed, bSpeed = b.speed, gap = b.prog - a.prog;
+  solver.resolveCollisions(f.G.cars, DT);
+  assert.ok(a.speed < aSpeed && b.speed > bSpeed, "ordinary rear-end momentum exchange still runs");
+  assert.ok(b.prog - a.prog > gap, "ordinary overlapping cars still separate");
+  assert.equal(a.x, 2); assert.equal(b.x, 2);
+  assert.ok(f.counters().writebacks > 0, "ordinary corrected poses still reach world coordinates");
+});
+
+test("paused WATCH keeps overlapping traces and ignores manual recover in the real game update", async () => {
+  await g.race("monza");
+  g.apex.headless(true);
+  const advanceLoop = () => {
+    const start = g.sandbox.performance.now();
+    for (let i = 1; i <= 240; i++) g.pumpFrame(start + i * 1000 / 60);
+  };
+  advanceLoop();
+  const pause = () => g.G.els.pausebtn.onclick();
+  const instantReplayButton = () => g.sandbox.document.getElementById("pm-replay");
+  pause();
+  assert.equal(instantReplayButton().hidden, false, "the actual solo loop offers instant replay after three seconds");
+  g.sandbox.document.getElementById("pm-resume").onclick();
+  vm.runInContext(readFileSync(join(ROOT_C, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+  const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+  const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+  const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
+  const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+  const line = (p, speed, x) => ({ t: [0, 2, 8], prog: [p, p + 2 * speed, p + 8 * speed], x: [x, x, x] });
+  Real.launch(script, { seat: "STR", watch: true, traces: { frame: "track", cars: {
+    63: line(100, 40, 0), 16: line(103, 20, 0), 18: line(400, 30, 12),
+  } } });
+  await g.settle(() => g.G.track?.def?.id === "baku" && ["count", "race"].includes(g.G.state), 8000);
+  g.step(2); g.apex.go();
+  const replay = Real.replay();
+  try {
+    advanceLoop();
+    assert.ok(replay.status().T > 3, "WATCH has run long enough to expose a competing instant-replay ring");
+    pause();
+    assert.equal(instantReplayButton().hidden, true, "WATCH reserves pose ownership and hides the competing replay door");
+    g.sandbox.document.getElementById("pm-resume").onclick();
+    replay.seek(0.1); replay.setPaused(true);
+    const watched = ["RUS", "LEC", "STR"].map((code) => g.G.cars.find((c) => c.code === code));
+    assert.ok(watched.every((c) => replay.owns(c)), "the actual game director owns all three traced cars");
+    assert.equal(g.G.player.code, "STR");
+    const liveDirector = vm.runInContext("Director.live()", g.ctx);
+    g.G.setCamMode(0, { persist: false });
+    for (const flag of ["retired", "finished"]) {
+      watched[2][flag] = true;
+      g.pumpFrame(g.sandbox.performance.now() + 1000 / 60);
+      assert.equal(g.G.camMode, 0, "a finished/retired WATCH seat retains the viewer's camera");
+      assert.equal(g.G.dbgCam, null, "live TV cannot override the recorded broadcast picture");
+      assert.equal(liveDirector.status().cuts, 0);
+      watched[2][flag] = false;
+    }
+    assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
+    const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
+      lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
+    const before = poses();
+    assert.equal(g.G.raceT, 0.1, "the replay seek synchronizes the game's HUD clock");
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);   // the same action as keyboard R / gamepad RECOVER
+    g.step(3);
+    assert.equal(replay.status().T, 0.1, "the replay remains paused");
+    assert.equal(g.G.raceT, 0.1, "ordinary simulation steps cannot advance the paused replay's HUD clock");
+    assert.deepEqual(poses(), before, "neither the collider nor manual recovery may rewrite paused replay puppets");
+
+    replay.follow("LEC");
+    const p = g.G.player, penalty = p.penalty;
+    const field = watched.filter((c) => !c.retired);
+    const Sporting = vm.runInContext("SportingRegs", g.ctx), control = Sporting.createPassWatch();
+    g.G.holdCaution(3, "WATCH REGRESSION");
+    g.step(1);   // held flags are published by the ordinary race-control update
+    assert.equal(g.G.cautionLevel(), 3);
+    control.tick(p, field, 3, DT); g.step(1);   // establish STR ahead under the safety car
+    p.prog = 500;   // a recorded overtake/seek discontinuity must never become a driving offence
+    let charged = 0;
+    for (let i = 0; i < 360; i++) {
+      const ev = control.tick(p, field, 3, DT);
+      if (ev?.type === "penalty") charged += ev.sec;
+      g.step(1);
+    }
+    assert.equal(charged, 10, "the real sporting watcher charges this same overtake to an ordinary driver");
+    assert.equal(p.penalty, penalty, "WATCH must never accrue a simulated safety-car overtake penalty");
+  } finally { g.G.quitToMenu(); }
 });

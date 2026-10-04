@@ -302,3 +302,10 @@ already have their first frame in `--out`; `--reset` clears it.
 - Placement-only questions → `spine-station.mjs` first.
 - Isolated car geometry with no garage shell → `render-car.mjs`.
 - Live poking / console → mcp-probe skill, not this batch tool.
+
+## Offline preflight
+
+`--plan --reset` validates and reports the capture plan before output reset or
+creation. It must preserve existing artifacts. Design field names, enums and
+part ids are validated in Node; availability is reported per team. Invalid
+designs fail before Chromium boot. Review that plan before a parent-owned run.

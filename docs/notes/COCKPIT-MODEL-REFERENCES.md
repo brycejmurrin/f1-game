@@ -29,9 +29,11 @@ The shape is inspired by shared hardware features, rather than an exact replica
 of a particular team's wheel. Existing wheel/seat/interior/halo IDs, saved
 preferences, the original cyan-speed/orange-gear/green-battery LCD layout,
 physics and steering rotation remain the model's integration
-contract. Only the modern wheel carries the game's live display; the other
-wheels keep their HUD readouts. Physical controls use display-range colours;
-only functioning indicator lights use HDR. Classic gauge needles are decorative.
+contract. The modern variants carry the original live display. The 2000s wheel uses a
+compact monochrome LCD with live speed/gear, battery, shift lights, pedal bars,
+active aero and overtake lamps; CLASSIC and NONE keep their HUD readouts. Physical controls use display-range colours;
+only functioning indicator lights use HDR. Classic gauge needles follow live RPM,
+speed on a fixed KPH scale, and ERS charge.
 
 Browser screenshot API reference: <https://playwright.dev/docs/screenshots>.
 
@@ -58,3 +60,63 @@ narrow toward the nose; STEPPED shoulders build a raised middle shelf while
 keeping the rear opening below the low-seat eye. SUEDE adds contrasting seam
 lines; RIBBED adds transverse raised padding. These are selectable design
 interpretations, rather than replicas of a named team's car.
+
+
+## Cockpit refinements and coordinated presets
+
+All five bodies use six longitudinal shoulder stations with a rounded inner lip,
+a snug opening and distinct flare/waist/crown profiles. The closed floor, rear
+bulkhead and shoulders extend behind every seat. Flat harness webbing replaces
+thick beams; the pale crossbar beneath the wheel is removed. Mirror housings
+are tapered on slender supports and use the renderer's reflective material.
+
+Modern wheels share the original cyan-speed/orange-gear/green-battery cells,
+but have separate fascia outlines and rotary/control layouts. Grips interpolate
+between smooth stations; gloves use narrower palms, curled fingers and tapered
+cuffs. SPD/G/ERS, speed units, control legends and numbered rotary marks use
+cached geometry. Pedal bars follow actual throttle/brake demand. Instrument
+meshes have physical material IDs rather than the generic world texture.
+
+Carbon uses the renderer's weave material; Team limits color to padding accents
+and seams; Suede adds fabric panels/stitches; Ribbed uses molded cushion ribs.
+Classic gauges sit clear of the dashboard, with numbered faces and a thinner
+screen frame. Their labeled needles follow live RPM (0–16000), KPH (0–400),
+and ERS (0–100%). The physical KPH dial keeps that scale when HUD units change.
+
+## Proportions, materials and inspection
+
+The painted shoulder shelf is narrower around the driver, with a rounded crest
+closer to the opening. The forward surround rises slightly while staying below
+the LOW eye. Tube halo side crowns flatten toward the center stem without
+changing the rear mounts or cockpit topology.
+
+The tub and hard scuttle use carbon; removable liners and cushions use matte
+padding, gauge bezels use metal, and instrument faces retain their physical
+surface. Neutral glove seams remain distinct from the car's accent paint.
+
+SETTINGS → DISPLAY → COCKPIT includes PREVIEW COCKPIT, with FRONT, SIDE, REAR,
+WHEEL and ABOVE inspection views. The isolated stationary viewer uses the
+production geometry and the selected player's paint and parts, without
+changing the race, input or driving camera. Its procedural materials provide
+consistent studio lighting; the in-race day/night view remains the evidence
+for baked material maps. Bahrain's warm night floodlight profile can still tint
+carbon and padding strongly; the studio preview does not establish night color
+accuracy. Closing the viewer releases its graphics context.
+The public viewer is generated from the CARVIEW roster and shipped with
+content-hashed asset tags.
+
+The physical mirror glass reflects the environment, without following cars.
+The [rear-view mirror rendering contract](COCKPIT-REAR-MIRROR-DESIGN.md) defines
+the depth-tested extension needed to reuse the rear camera across GLX, TLX and
+WGX. A HUD rectangle pasted over the housing would cover occluders when the
+driver looks sideways, so it is not used as a physical reflection.
+
+MODERN F1 applies sculpted/carbon/F1/standard seat/faired halo. HISTORIC applies
+tapered/classic/round/standard seat/halo off. Presets require an explicit settings
+selection; custom combinations and saved IDs remain supported. Individual rows
+refresh after any preset or choice change. Slim/Standard/Thick halos use a
+flattened carbon section and connected central junction; Faired keeps its broad
+swept crown. All mounting feet remain behind the eye.
+
+Additional reference: <https://www.mercedesamgf1.com/news/how-does-an-f1-steering-wheel-work>.
+Screenshot API: <https://playwright.dev/docs/api/class-page#page-screenshot>.

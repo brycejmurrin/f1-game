@@ -99,7 +99,8 @@ test("step writes axle/force/yaw fields without NaN (wear off)", () => {
   const L = 3.2, FRONT_WEIGHT = PhysicsConsts.FRONT_WEIGHT;
   const ar = FRONT_WEIGHT * L, af = L - ar;
   api.step(c, {
-    dt: DT, delta: 0.05, onThrottle: false, throttleLvl: 0, gearMult: 1,
+    dt: DT, driverDelta: 0.05, assistDelta: 0, lineDelta: 0,
+    onThrottle: false, throttleLvl: 0, gearMult: 1,
     deploy: 0, braking: false, surfaceMu: 1, kerbGrip: 1, bankMu: 1,
     modsCornering: 1, loadF: FRONT_WEIGHT, loadR: 1 - FRONT_WEIGHT,
     vertLoad: 0, af, ar, sp: 1, steer: 0.2,

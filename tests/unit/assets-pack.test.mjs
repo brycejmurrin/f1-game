@@ -475,6 +475,12 @@ test("the shader's layer count matches the MAT table size", () => {
   assert.match(glx, /MAT_TEX_LAYERS = 17/, "glx.js MAT_TEX_LAYERS must be 17");
   const assets = fs.readFileSync(path.join(ROOT, "js", "render", "shared", "assets.js"), "utf8");
   assert.match(assets, /MAT_LAYERS = 17/, "assets.js MAT_LAYERS must be 17");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  assert.match(tlx, /U\.matTexScale = uniformArray\(Array\(17\)\.fill\(0\)\)/, "TLX material uniforms must cover all MAT ids");
+  assert.match(tlx, /for \(let i = 0; i < 17; i\+\+\)/, "TLX must upload all material scales");
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  assert.match(wgx, /MAT_TEX_LAYERS = 17/, "WGX material resources must cover all MAT ids");
+  assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
 });
 
 test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
@@ -1061,10 +1067,10 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
 });
 
 test("ensureScenery awaits Assets.modelsReady before any build", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const i = game.indexOf("function ensureScenery(");
-  assert.ok(i >= 0);
-  const fn = game.slice(i, game.indexOf("\n}\n", i));
+  const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
+  const i = src.indexOf("function ensureScenery(");
+  assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
+  const fn = src.slice(i, src.indexOf("\n}\n", i));
   assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
   assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
   assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");

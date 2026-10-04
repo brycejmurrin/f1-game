@@ -42,7 +42,7 @@ const VERSION = path.join(ROOT, "version.json");
 // generation meta of its own. Optional: a staged copy that lacks one is a
 // pages.yml `cp` omission tests/unit/ci-coverage.test.mjs reports, not this
 // tool's failure.
-const EXTRA_PAGES = ["controller.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
+const EXTRA_PAGES = ["controller.html", "cockpit-view.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;

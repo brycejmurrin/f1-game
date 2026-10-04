@@ -86,6 +86,8 @@ const GROWABLE_GLOBALS = {
 // Known reads of names NO manifest file assigns — each with its story. A new
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
+  "js/camera/cockpit-preview.js": ["CockpitPreviewFrame"], // Runtime export in the isolated same-origin cockpit-view.html iframe; parent reads only after its load event, not a second eval-time module global.
+  "js/ui/layers.js": ["HTMLDialogElement"], // Browser native dialog prototype; typeof-guarded opening-order tracking, absent in VM mocks.
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
   "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle
   "js/audio/spotify.js": [
@@ -103,7 +105,9 @@ const KNOWN_EXTERNAL_READS = {
   "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
-  "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
+  "js/game.js": ["__APEX_BUILD", "__apexReportError"], // shell build id (ghost meta) + error-report callback
+  "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
+  "js/core/lazy-bundles.js": ["__TEST_MODE"], // Playwright init-script flag enabling the agent surface
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts

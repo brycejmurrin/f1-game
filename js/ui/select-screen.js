@@ -113,7 +113,9 @@ const vt = (fn) => {
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
     const t = document.startViewTransition(run);
-    if (t && t.updateCallbackDone) t.updateCallbackDone.catch(() => {});
+    // Skipped or timed-out snapshots reject ready/finished independently.
+    // Animation failure must not raise the app's full-screen crash overlay.
+    if (t) for (const p of [t.ready, t.finished, t.updateCallbackDone]) if (p) p.catch(() => {});
   } catch (_) { run(); return; }
   setTimeout(run, 60);
 };

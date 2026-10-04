@@ -342,12 +342,18 @@ const api = {
              teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
                return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
   },
+  cameraState() { return G.cameraDampingState(); },
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     const i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
     if (i < 0 || i >= CAM_MODES.length) return false;
     G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
+    // Same as jump(): SwiftShader can starve rAF / the 10 Hz HUD tick for many
+    // seconds after a camera cut (heli + field LOD). hud-bcam and --hud-top-h
+    // must publish before the caller returns, or a 5 s layout wait times out
+    // while the next frame is still drawing (hud-layout.spec broadcast+heli).
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { mode: CAM_MODES[G.camMode].id, index: G.camMode };
   },
   snapCam(paint) {
@@ -639,7 +645,7 @@ const api = {
   // light when `lamp: "none"` started being honoured and the masts went away.
   nodeAt(frac, opts) {
     if (!G.track) return null;
-    const raw = Math.round(frac * G.track.n) % G.track.n;
+    const raw = ((Math.round(frac * G.track.n) % G.track.n) + G.track.n) % G.track.n;
     const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
       ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
       : raw;
@@ -872,6 +878,13 @@ const api = {
   },
   setPhysics(o) {
     o = o || {};
+    // Reject a poisoned patch atomically; existing finite floors remain compatible.
+    for (const key of ["drift", "pace", "speedRef", "wheelbase", "expo", "maxSlip", "roadFollow", "playerGrip", "frontGrip", "yawDamp", "yawInertia", "maxTilt", "deadzone", "tiltCutoff"]) {
+      if (o[key] != null && !Number.isFinite(o[key])) throw new TypeError("setPhysics: " + key + " must be finite");
+    }
+    for (const key of ["drift", "maxSlip", "roadFollow", "playerGrip", "frontGrip", "yawDamp"]) {
+      if (o[key] != null && o[key] < 0) throw new RangeError("setPhysics: " + key + " must be nonnegative");
+    }
     if (G.records && Object.keys(o).length) G.records.invalidate();
     // Floors: pace<0 drove the cap negative, expo≤0 made pow(0,expo) NaN — and
     // a NaN reaches every field of the car with nothing to heal it.
@@ -1256,6 +1269,7 @@ const api = {
     return { head: G.player.head };
   },
   go() {
+    if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
@@ -1437,10 +1451,10 @@ const api = {
   },
   careerSlotDelete(flavour, i) {
     const result = Career.deleteSlot(flavour, i);
-    if (!result.ok) return null;
+    if (!result.ok) return result;
     Career.load();               // land on whatever is left, anywhere
     G.refreshCareerButton();
-    return Career.slots();
+    return Object.assign({}, result, { slots: Career.slots() });
   },
   // Settle `n` whole rounds WITHOUT driving them. The qualifying model supplies
   // the pace order, a ratings-weighted draw turns it into a race result, and the
@@ -2770,7 +2784,7 @@ const api = {
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
-    IncidentSim.reset();   // else a live takeover re-imposes its crash pose over the teleport below, every tick
+    G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
     if (seed !== undefined) G.seed = seed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
     // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:

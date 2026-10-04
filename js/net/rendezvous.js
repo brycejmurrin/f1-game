@@ -323,6 +323,7 @@ const NetRendezvous = (function () {
     for (;;) {
       if (token && token.cancelled) return ERR("cancelled", "");
       const res = await httpGet(code, slot);
+      if (token && token.cancelled) return ERR("cancelled", "");
       if (res.ok && res.body && res.body.payload) return { ok: true, payload: res.body.payload };
       if (!res.ok && res.error !== "not_found") {
         if (!TRANSIENT.has(res.error) || ++transient >= WAIT_TRANSIENT_MAX) return res;

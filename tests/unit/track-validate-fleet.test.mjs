@@ -5,7 +5,11 @@
 // tools/track/verify-track.cjs knows fold (bahrain, buddh, fuji, korea). The
 // start-straight rule is REPORTED, not asserted: pit.js names the circuits
 // whose real start sits in a corner. Proves the validator measures the
-// engine, not itself. ~52 centreline builds, a few seconds.
+// engine, not itself. The insight ambers (js/editor/insight.js, fia-*: the FIA
+// Grade 1 layout advice plus crests and dips) are calibrated here: never RED,
+// ≤ 60 circuit-codes on the whole fleet, no code on more than 15 circuits, a
+// dip on at most 3 — advice that fires on every real circuit would be noise.
+// ~52 centreline builds, a few seconds.
 //
 // Run: node --test tests/unit/track-validate-fleet.test.mjs
 import test from "node:test";
@@ -16,12 +20,13 @@ const KNOWN_FOLDS = ["bahrain", "buddh", "fuji", "korea"];   // verify-track.cjs
 
 test("the shipped fleet passes the designer's road rules; the fold rule agrees with verify-track", () => {
   const { Tracks, V } = bootEditor();
-  const reds = [], folds = [], startShort = [], ambers = {};
+  const reds = [], folds = [], startShort = [], ambers = {}, fia = {}, fiaRed = [];
   for (const def of Tracks.LIST) {
     if (def.custom) continue;
     const tr = Tracks.buildCenterline(def);
     const j = V.judge(tr, def);
     for (const i of j.issues) {
+      if (/^fia-/.test(i.code)) { (fia[i.code] = fia[i.code] || new Set()).add(def.id); if (i.level !== "amber") fiaRed.push(def.id + ": " + i.code + ":" + i.level); }
       if (i.level === "amber") ambers[i.code] = (ambers[i.code] || 0) + 1;
       if (i.level !== "red") continue;
       if (i.code === "fold") { folds.push(def.id); continue; }
@@ -38,6 +43,18 @@ test("the shipped fleet passes the designer's road rules; the fold rule agrees w
   console.log("fleet oracle: start-straight shortfalls (reported, not asserted): " + (startShort.join(", ") || "none"));
   console.log("fleet oracle: amber counts " + JSON.stringify(ambers));
   assert.deepEqual(reds, [], "a shipped circuit reads RED on a rule that is meant to measure the engine");
+  const perCode = Object.fromEntries(Object.entries(fia).map(([c, ids]) => [c, ids.size]));
+  const fiaTotal = Object.values(perCode).reduce((a, b) => a + b, 0);
+  console.log("fleet oracle: FIA Grade 1 ambers per code " + JSON.stringify(perCode) + ", " + fiaTotal + " in all — " + Object.entries(fia).map(([c, ids]) => c + ": " + [...ids].join(" ")).join("; "));
+  assert.deepEqual(fiaRed, [], "an FIA rule is advice: never anything but AMBER");
+  assert.ok(fiaTotal <= 60, "≤ 60 insight ambers (circuit × code) over the 52 circuits, got " + fiaTotal);
+  for (const [c, n] of Object.entries(perCode)) assert.ok(n <= 15, c + " fires on " + n + " circuits (cap 15)");
+  // Crests (v²·κv lifting the car 0.5 g over a 40 m window) are real on the
+  // hilly circuits — Spa, Imola, Suzuka, Monaco — and on few others; a dip
+  // compressing 2.5 g is rarer still.
+  console.log("fleet oracle: crests on " + (perCode["fia-crest"] || 0) + " circuits, dips on " + (perCode["fia-sag"] || 0));
+  assert.ok((perCode["fia-crest"] || 0) <= 15, "crest on ≤ 15 circuits");
+  assert.ok((perCode["fia-sag"] || 0) <= 3, "sag on ≤ 3 circuits");
   assert.deepEqual(folds.sort(), KNOWN_FOLDS.slice().sort(), "the fold rule names exactly verify-track's known folds");
 });
 

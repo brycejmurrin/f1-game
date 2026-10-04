@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control).
+description: "Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model
@@ -66,25 +66,26 @@ lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
 
 ## Stuck / unstuck (AI wedged, never recovers)
 
-Two timers, both in `updateCar` (`game.js`, grep `stuckT` / `rescueT`): `stuckT` grows while
-`speed < 7 && AiDrive.isBoxed` (no room both sides, or a blocker < 6 m); past
-`AiDrive.stuckThreshold(awareness)` (0.45-1.15 s) `unstuckActive` cancels braking and adds
-`unstuckPull` sideways (+ `unstuckLatFloor` steering floor, `queueFloor` crawl). If dig-out
-fails past `AiDrive.digOutBudget` (2–3.5 s permanent, 60 % of that on streets),
-`digOutEscalated` lets rescue arm EVEN WHILE dig-out is still on — dig-out used to
-permanently veto rescue (`!unstuckActive`), leaving monaco wall-piles at 0 m/s with
-`stuckT` at 7.6 s and `rescueT` at 0. Escalated rescue uses the short delay
-(`aiRescueDelay(_, true)` ≈ 1.25–2 s). Otherwise `rescueT` (`aiStuck`: offroad > 0.5 s,
-or `speed < 5` past `raceT > 2`) passes `AiDrive.aiRescueDelay` (4 s, 7 s in contact) and
-TELEPORTS the car to `x` inside `hw - 1.5` at `14·PACE` speed. Exempt: `pitState === "box"`,
-queued in the lane (unless dig-out escalated — laneX overwrite makes dig-out useless there),
-red-held. A pit-lane car is rescued onto `pits.laneX`. Unit pins: `ai-drive.test.mjs`
-(isBoxed/stuckThreshold/digOutBudget); VM: `ai-stuck-vm.test.mjs` (stopped-player weld),
-`ai-pack-stuck-vm.test.mjs` (monaco dig-out→rescue + pack freeze).
-No CLI counts stuck/rescue: `ai-field.mjs` reports dwell/contact only (`--seconds` floor 60;
-`--track baku --seconds 60` ~1 min VM, dwellMax is the nearest proxy); for a per-car
-`stuckS` use `__apex.field()` live (agent-view, browser).
-Record: track, seed, car, `stuckT`/`rescueT` at freeze, pitState, inLane, roomL/R.
+Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
+`stuckT` grows while speed is below 7 and `AiDrive.isBoxed` finds no room both
+sides or a close blocker. `AiDrive.stuckThreshold(aiT)` reads a traits object
+(for example `{awareness:0.75}`), not a scalar. Past it, `unstuckActive`
+cancels braking and adds sideways pull, steering floor and crawl. If dig-out
+outlasts `AiDrive.digOutBudget`, `digOutEscalated` lets slow-speed rescue arm
+while dig-out remains active and uses the shorter rescue delay. This prevents
+permanent wall-piles where dig-out used to veto rescue.
+`beachedAt(c)` tests offroad plus a pace-scaled slow-speed threshold; it has no
+half-second `offT` gate. Pit-box and red-held states remain exempt. A queued
+pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`.
+Road rescue preserves existing speed with a pace-scaled floor; pit-lane rescue
+uses its own lane/floor rule.
+Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
+`stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
+timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:
+`node --test tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs`.
+`ai-field.mjs` reports dwell/contact only (`--seconds` floor 60); it does not
+count rescues. Browser collision/appearance evidence remains separate.
+
 
 ```sh
 node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s

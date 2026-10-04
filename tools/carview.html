@@ -85,12 +85,17 @@
 <script src="../js/data/teams.js"></script>
 <script src="../js/car/parts.js"></script>
 <script src="../js/car/helmets.js"></script>
+<script src="../js/car/car-geometry.js"></script>
+<script src="../js/car/car-wheels.js"></script>
 <script src="../js/car/car-shade.js"></script>
 <script src="../js/car/car3d.js"></script>
 <script src="../js/car/liveries.js"></script>
 <script src="../js/car/crest-paths.js"></script>
+<script src="../js/car/livery-graphics.js"></script>
 <script src="../js/car/liverytex.js"></script>
+<script src="../js/physics/consts.js"></script>
 <script src="../js/car/car-mesh.js"></script>
+<script src="../js/camera/cockpit-preview.js"></script>
 <!-- /@gen-shell:carview -->
 <script>
 "use strict";
@@ -281,23 +286,17 @@
       if (S.livery && typeof S.livery === "string" && !list.some(x => x.id === S.livery))
         Log.warn("carview", `livery "${S.livery}" is not one of ${team.id}'s — rendering ${l.id || "the default"}`);
     }
-    return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
-             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             fin: l.fin || null, finArt: l.finArt || null,
-             logo: l.logo || null, logo2: l.logo2 || null, logo3: l.logo3 || null,
-             noseStripe: l.noseStripe || null,
-             // The tail DESIGN picks (js/car/liveries.js): geometry AND paint,
-             // so the studio shows the same fin the game builds.
-             finShape: l.finShape || null, finStyle: l.finStyle || null,
-             finBadge: l.finBadge || null, spineLogo: l.spineLogo || null,
-             tcam: l.tcam || null, coverVents: l.coverVents || null,
-             spineHeight: l.spineHeight || null, spineSide: l.spineSide || null,
-             cover: l.cover || null, rearWing: l.rearWing || null,
-             wingCarbon: l.wingCarbon || null,
-             spineTint: l.spineTint || null, sideTint: l.sideTint || null,
-             // ?finish= overrides the livery's own, so a finish can be inspected
-             // without authoring a livery for it (Car3D.FINISH_SURFACE).
-             finish: S.finish || l.finish || null };
+    // EVERY livery field the game resolves (Liveries.FIELDS — the list
+    // CustomLiveries.pickLivery copies for the race car), not a hand copy: the
+    // old hand list had drifted ten fields short (bodySplit, lower, sponsors,
+    // numFont, finHandoff, the tints...), so studio shots of Cadillac's L/R body
+    // or a two-tone `lower` showed a car the game never builds.
+    const o = { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2 };
+    for (const f of Liveries.FIELDS) o[f] = l[f] != null ? l[f] : null;
+    // ?finish= overrides the livery's own, so a finish can be inspected
+    // without authoring a livery for it (Car3D.FINISH_SURFACE).
+    o.finish = S.finish || l.finish || null;
+    return o;
   }
   function resolveLivOver(team) {
     const liv = resolveLiv(team);

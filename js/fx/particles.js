@@ -1,5 +1,7 @@
-/* Apex 26 — shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft
- * billboards drawn in two batches a frame through gfx.drawParticles(), plus the
+/* Apex 26 — shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. A fixed CPU pool of camera-facing soft
+ * billboards drawn in two batches a frame through gfx.drawParticles(), plus
+ * one-frame FLARES (flare: a far car's brake glow) appended to the additive
+ * batch outside the pool, plus the
  * RAIN STREAK FIELD (rain*): falling drops in a box around the camera, each one a
  * pre-expanded world-space quad appended to the alpha batch — the same shader on
  * every backend draws it as a soft streak (see rainFill). */
@@ -19,6 +21,14 @@ const Particles = (function () {
   let _drg, _grv;             // drag rate (1/s) + downward gravity (m/s²)
   let _add;                   // Uint8: 1 = additive (spark) group
   let _n = 0;                 // live count
+  let _mobile = false;        // gfx.mobileTier at init — the spray plume shrinks with the pool
+
+  // ONE-FRAME FLARES: additive discs drawn in THIS frame's additive batch and
+  // dropped after it. Not pool particles — a pooled glow() outlives its frame
+  // (life > dt or it dies in update() before it is drawn), so one re-spawned
+  // every frame on a MOVING car stacks a trail of copies behind it.
+  let FLARE_MAX = 0, _flN = 0;
+  let _fl = null;             // [x, y, z, size, r, g, b, alpha] per flare
 
   const FLOATS_PER = 6 * 10;
   let _vertA = null;          // alpha-blended group (smoke / dust / spray)
@@ -29,7 +39,11 @@ const Particles = (function () {
     Log.info("game", "Particles.init");
     _gfx = gfx;
     // Tight pool on the mobile memory tier: fewer live quads, same behaviour.
-    MAX = gfx && gfx.mobileTier ? 96 : 256;
+    _mobile = !!(gfx && gfx.mobileTier);
+    MAX = _mobile ? 96 : 256;
+    FLARE_MAX = _mobile ? 24 : 48;
+    _fl = new Float32Array(FLARE_MAX * 8);
+    _flN = 0;
     _px = new Float32Array(MAX); _py = new Float32Array(MAX); _pz = new Float32Array(MAX);
     _vx = new Float32Array(MAX); _vy = new Float32Array(MAX); _vz = new Float32Array(MAX);
     _age = new Float32Array(MAX); _life = new Float32Array(MAX);
@@ -40,12 +54,13 @@ const Particles = (function () {
     _add = new Uint8Array(MAX);
     // The alpha batch also carries the rain shower (rainFill): size for both.
     _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
-    _vertB = new Float32Array(MAX * FLOATS_PER);
+    _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
   }
 
-  function clear() { _n = 0; }
+  function clear() { _n = 0; _flN = 0; }
   function count() { return _n; }
+  function capacity() { return MAX; }
 
   function mul() {
     if (typeof LightTune !== "undefined" && LightTune.LT && LightTune.LT.particleMul !== undefined)
@@ -108,6 +123,27 @@ const Particles = (function () {
     }
   }
 
+  // PLANK SPARKS: titanium skid-block embers torn off where the floor bottoms
+  // out (js/fx/car-fx.js reads body-attitude's c.baScrape). (vx, vz) is the
+  // CAR's ground velocity: an ember keeps 45-80 % of it, so from a car-following
+  // camera the shower streams out behind the floor rather than fanning sideways
+  // like a collision's. Hotter and whiter than collision embers, tinier, short
+  // lived. They give way to everything else: none spawn past 60 % of the pool,
+  // so a field of bottoming cars never starves the collision sparks and smoke.
+  function scrape(x, y, z, vx, vz, count) {
+    const m = mul(); if (m <= 0) return;
+    if (_n >= MAX * 0.6) return;
+    for (let n = nOf(count * Math.min(m, 2)); n > 0; n--) {
+      const k = 0.45 + Math.random() * 0.35;
+      spawn(x + rnd(0.3), y + rnd(0.02), z + rnd(0.3),
+        vx * k + rnd(1.8), 0.5 + Math.random() * 2.4, vz * k + rnd(1.8),
+        0.16 + Math.random() * 0.22,
+        0.05 + Math.random() * 0.06, 0.06,           // tiny, barely grows
+        2.9, 1.7, 0.55,                              // white-hot yellow → blooms
+        0.95, 0.6, 9.8, 1);
+    }
+  }
+
   function kickup(x, y, z, bvx, bvz, r, g, b, count) {
     const m = mul(); if (m <= 0) return;
     for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
@@ -140,16 +176,40 @@ const Particles = (function () {
     spawn(x, y, z, 0, 0, 0, life > 0 ? life : 0.1, size, 0, r, g, b, alpha, 0, 0, true);
   }
 
+  // One-frame additive disc (see FLARE_MAX): returns false when the frame's
+  // flare budget is spent. A lamp, not an effect — like glow(), it ignores
+  // particleMul.
+  function flare(x, y, z, size, r, g, b, alpha) {
+    if (_flN >= FLARE_MAX || !(alpha > 0.004)) return false;
+    const o = _flN++ * 8;
+    _fl[o] = x; _fl[o + 1] = y; _fl[o + 2] = z; _fl[o + 3] = size;
+    _fl[o + 4] = r; _fl[o + 5] = g; _fl[o + 6] = b; _fl[o + 7] = alpha;
+    return true;
+  }
+  function flareCount() { return _flN; }
+
+  // RAIN SPRAY: a lingering plume, not a puff. Each drop-cloud lives 1.1-1.9 s
+  // (was 0.50-0.85), starts bigger, keeps rising (buoyant, lighter drag), so
+  // the wall of mist behind a car stretches tens of metres and partly hides
+  // it from the car following — the wet-race look. The caller's emission rate
+  // came DOWN to match (game.js), so the live count per car stays near what
+  // the puffs cost. Pool discipline: spray never takes the pool's last quarter
+  // (sparks and smoke keep room), sheds with the governor like the rain
+  // streaks, and on the mobile tier the plume is shorter-lived and smaller —
+  // it is the one alpha effect big enough to cost real overdraw.
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
-    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
-      spawn(x + rnd(0.35), y + rnd(0.10), z + rnd(0.35),
-        bvx + rnd(1.2), 0.9 + Math.random() * 1.5, bvz + rnd(1.2),
-        0.50 + Math.random() * 0.35,
-        0.35 + Math.random() * 0.15, 3.4,            // starts small, balloons fast
+    if (_n >= MAX * 0.75) return;
+    const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
+    const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1;
+    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / (1 + shed)); n > 0; n--) {
+      spawn(x + rnd(0.4), y + rnd(0.12), z + rnd(0.4),
+        bvx + rnd(1.4), 1.2 + Math.random() * 1.8, bvz + rnd(1.4),
+        (1.1 + Math.random() * 0.8) * lifeK,
+        (0.5 + Math.random() * 0.25) * sizeK, 1.9 * sizeK,   // ~3.5 m half-size by the end
         0.74, 0.77, 0.82,
-        0.12 + 0.24 * strength,
-        2.1, -0.6, 0);
+        0.10 + 0.22 * strength,
+        1.5, -0.9, 0);
     }
   }
 
@@ -181,8 +241,8 @@ const Particles = (function () {
   }
 
   function draw() {
-    if (!_gfx || !_gfx.drawParticles) return;
-    if (!_n && !(_rainN && _rainOn)) return;
+    if (!_gfx || !_gfx.drawParticles) { _flN = 0; return; }
+    if (!_n && !_flN && !(_rainN && _rainOn)) return;
     let pa = 0, pb = 0;
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];
@@ -202,6 +262,18 @@ const Particles = (function () {
       }
       if (_add[i]) pb = p; else pa = p;
     }
+    for (let f = 0; f < _flN; f++) {
+      const o = f * 8;
+      const x = _fl[o], y = _fl[o + 1], z = _fl[o + 2], size = _fl[o + 3];
+      const r = _fl[o + 4], g = _fl[o + 5], b = _fl[o + 6], alpha = _fl[o + 7];
+      for (let v = 0; v < 12; v += 2) {
+        _vertB[pb++] = _CORNERS[v]; _vertB[pb++] = _CORNERS[v + 1];
+        _vertB[pb++] = x; _vertB[pb++] = y; _vertB[pb++] = z;
+        _vertB[pb++] = r; _vertB[pb++] = g; _vertB[pb++] = b;
+        _vertB[pb++] = size; _vertB[pb++] = alpha;
+      }
+    }
+    _flN = 0;                    // one frame: drawn once, then gone
     // The shower rides in the SAME alpha call: TLX keeps one vertex stream per
     // blend group and a second drawParticles() in a frame overwrites the first.
     pa = rainFill(_vertA, pa);
@@ -391,7 +463,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, update, draw, tyreSmoke, sparks, kickup, spray, glow,
-           rainShow, rainSeed, rainUpdate, rainActive };
+  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, glow,
+           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive };
 })();
 Object.freeze(Particles);

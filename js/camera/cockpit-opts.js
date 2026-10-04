@@ -32,7 +32,7 @@ const CHOICES = {
               labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
 };
 const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
-const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true };
+const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true, retro: true };
 // STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
 const EYE_F = -0.20, EYE_U = 0.82;
 const SEATS = { std: [0, 0], low: [0, -0.06], high: [0, 0.08], fwd: [0.12, -0.02] };
@@ -175,6 +175,21 @@ function setTurnChase(on) {
   return setTurnChaseLead(on ? LEAD_DEFAULT : 0);
 }
 
+// Presets apply only when explicitly selected; custom combinations remain saved.
+const PRESETS = {
+  modern: { body:"sculpted",interior:"carbon",wheel:"f1",seat:"std",halo:"fairing" },
+  historic: { body:"tapered",interior:"classic",wheel:"round",seat:"std",halo:"0" },
+};
+function preset() {
+  for(const [id,p] of Object.entries(PRESETS)) if(Object.entries(p).every(([k,v])=>k==='halo'?haloSetting()===v:choice(k)===v))return id;
+  return "custom";
+}
+function setPreset(id) {
+  const p=PRESETS[id];if(!p)return preset();
+  for(const [k,v] of Object.entries(p))if(k==='halo')setHalo(v);else setChoice(k,v);
+  return preset();
+}
+
 function paintLead(inp, out) {
   const pct = Math.round(turnChaseLead() * 100);
   if (inp) inp.value = String(pct);
@@ -232,11 +247,14 @@ function initUI() {
       catch (_) { /* audio is optional here */ }
     } });
     place(r.row);
+    onWheel(() => SettingRow.paint(r.row, read()));
     help(title);   // the visible help line under the row (a phone never shows a title)
   }
+  row("pm-ckpreset", "PRESET", ["custom","modern","historic"], {custom:"CUSTOM",modern:"MODERN F1",historic:"HISTORIC"},
+    "Apply a coordinated cockpit, or mix individual options below. HISTORIC uses leather, gauges, a round wheel and no halo.", preset, setPreset);
   const C = CHOICES;
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
-    "The steering wheel. CLASSIC, 2000s and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
+    "The steering wheel. CLASSIC and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
   row("pm-ckbody", "BODY", C.body.values, C.body.labels,
     "Cockpit body shape: standard, sculpted, wide, tapered or stepped shoulders.", body, setBody);
   row("pm-ckseat", "SEAT", C.seat.values, C.seat.labels,
@@ -271,6 +289,7 @@ function initUI() {
   place(lab);
   help(lab.title);
   paintLead(inp, out);
+  if (typeof CockpitPreview !== "undefined") CockpitPreview.mount(content);
 }
 
 if (typeof document !== "undefined") {
@@ -280,7 +299,7 @@ if (typeof document !== "undefined") {
 
 return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, WHEELS, CHOICES, HALO_VALUES,
-  halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
+  PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();
 Object.freeze(CockpitOpts);

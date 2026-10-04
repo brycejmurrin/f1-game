@@ -223,30 +223,45 @@ export function encodePNG(w, h, rgba) {
 // and re-encode. Only what canvas emits: 8-bit RGB/RGBA, non-interlaced.
 
 export function decodePNG(buf) {
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
-  let off = 8, w = 0, h = 0, depth = 0, colour = 0;
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(signature)) throw new Error("not a PNG (bad signature)");
+  let off = 8, w = 0, h = 0, depth = 0, colour = 0, ended = false, header = false;
   const idat = [];
   while (off < buf.length) {
+    if (off + 12 > buf.length) throw new Error("truncated PNG chunk");
     const len = buf.readUInt32BE(off);
+    if (len > buf.length - off - 12) throw new Error("truncated PNG chunk data");
     const type = buf.toString("ascii", off + 4, off + 8);
     const data = buf.subarray(off + 8, off + 8 + len);
+    if (crc32(buf.subarray(off + 4, off + 8 + len)) !== buf.readUInt32BE(off + 8 + len)) throw new Error(`PNG ${type} CRC mismatch`);
+    if (!header && type !== "IHDR") throw new Error("PNG must start with IHDR");
     if (type === "IHDR") {
+      if (header || len !== 13) throw new Error("invalid PNG IHDR");
+      header = true;
       w = data.readUInt32BE(0); h = data.readUInt32BE(4);
+      if (!w || !h || w * h > 32 * 1024 * 1024) throw new Error("invalid or oversized PNG dimensions");
       depth = data[8]; colour = data[9];
       if (depth !== 8) throw new Error(`unsupported bit depth ${depth}`);
       if (colour !== 2 && colour !== 6) throw new Error(`unsupported colour type ${colour}`);
-      if (data[12] !== 0) throw new Error("interlaced PNG unsupported");
+      if (data[10] || data[11] || data[12]) throw new Error("unsupported PNG compression/filter/interlace method");
     } else if (type === "IDAT") idat.push(data);
-    else if (type === "IEND") break;
+    else if (type === "IEND") {
+      if (len !== 0 || !idat.length || off + 12 !== buf.length) throw new Error("invalid PNG IEND or missing image data");
+      ended = true; break;
+    }
     off += 12 + len;
   }
+  if (!ended) throw new Error("PNG missing IEND");
   const ch = colour === 6 ? 4 : 3;
-  const raw = zlib.inflateSync(Buffer.concat(idat));
   const stride = w * ch;
+  const expected = h * (stride + 1);
+  const raw = zlib.inflateSync(Buffer.concat(idat), { maxOutputLength: expected });
+  if (raw.length !== expected) throw new Error("PNG scanline length mismatch");
   const out = Buffer.alloc(w * h * 4);
   let prev = Buffer.alloc(stride);
   for (let y = 0; y < h; y++) {
     const f = raw[y * (stride + 1)];
+    if (f > 4) throw new Error(`Invalid PNG scanline filter ${f}`);
     const line = Buffer.from(raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride));
     // Undo the per-scanline filter. a = left, b = up, c = up-left.
     for (let i = 0; i < stride; i++) {
@@ -1507,20 +1522,46 @@ function verify() {
 
   const mats = m.materials;
   if (mats) {
-    for (const f of [mats.albedo, mats.normal, mats.low && mats.low.albedo, mats.low && mats.low.normal]) {
-      if (!f) continue;
-      const p = path.join(PACK, f);
-      if (!fs.existsSync(p)) { problems.push(`materials: missing file ${f}`); continue; }
-      bytes += fs.statSync(p).size;
+    const tiers = [["materials", mats], ...(mats.low ? [["materials.low", mats.low]] : [])];
+    const counted = new Set();
+    for (const [name, tier] of tiers) {
+      if (!Number.isSafeInteger(tier.size) || tier.size <= 0) problems.push(`${name}: size must be a positive integer`);
+      for (const which of ["albedo", "normal"]) {
+        const f = tier[which];
+        if (typeof f !== "string" || !f) { problems.push(`${name}: missing ${which} file`); continue; }
+        const p = path.resolve(PACK, f);
+        if (!p.startsWith(PACK + path.sep)) { problems.push(`${name}: file outside pack ${f}`); continue; }
+        if (!fs.existsSync(p)) { problems.push(`${name}: missing file ${f}`); continue; }
+        const buf = fs.readFileSync(p);
+        if (!counted.has(p)) { bytes += buf.length; counted.add(p); }
+        try {
+          const png = decodePNG(buf);
+          if (png.w !== tier.size || png.h !== tier.size * MAT_LAYERS)
+            problems.push(`${name}: ${f} shape ${png.w}x${png.h} != ${tier.size}x${tier.size * MAT_LAYERS}`);
+          const hash = tier[`${which}Md5`];
+          if (hash && crypto.createHash("md5").update(buf).digest("hex") !== hash) problems.push(`${name}: ${f} md5 mismatch`);
+        } catch (e) { problems.push(`${name}: ${f}: ${e.message}`); }
+      }
+      const seen = new Set(), ids = new Set();
+      if (!Array.isArray(tier.layers)) problems.push(`${name}: layers must be an array`);
+      for (const L of Array.isArray(tier.layers) ? tier.layers : []) {
+        if (!L || typeof L !== "object") { problems.push(`${name}: invalid layer`); continue; }
+        checkEntry(`${name} material ${L.id}`, L);
+        if (!Number.isSafeInteger(L.mat) || L.mat < 1 || L.mat >= MAT_LAYERS)
+          problems.push(`${name} material ${L.id}: mat id ${L.mat} outside 1..${MAT_LAYERS - 1}`);
+        if (seen.has(L.mat)) problems.push(`${name} material ${L.id}: duplicate mat id ${L.mat}`);
+        seen.add(L.mat);
+        if (typeof L.id !== "string" || !L.id || ids.has(L.id)) problems.push(`${name}: missing or duplicate layer id ${L.id}`);
+        ids.add(L.id);
+        if (!Number.isFinite(L.scale) || L.scale <= 0) problems.push(`${name} material ${L.id}: scale must be finite and > 0`);
+      }
     }
-    const seen = new Set();
-    for (const L of mats.layers || []) {
-      checkEntry(`material ${L.id}`, L);
-      if (!(L.mat >= 1 && L.mat < MAT_LAYERS))
-        problems.push(`material ${L.id}: mat id ${L.mat} outside 1..${MAT_LAYERS - 1}`);
-      if (seen.has(L.mat)) problems.push(`material ${L.id}: duplicate mat id ${L.mat}`);
-      seen.add(L.mat);
-      if (!(L.scale > 0)) problems.push(`material ${L.id}: scale must be > 0`);
+    if (mats.low) {
+      if (!(mats.low.size <= mats.size)) problems.push("materials.low: size must not exceed high tier");
+      const layerKeys = (tier) => (Array.isArray(tier.layers) ? tier.layers : []).map((L) => L &&
+        JSON.stringify([L.mat, L.id, L.scale, L.source, L.licence])).sort();
+      if (JSON.stringify(layerKeys(mats)) !== JSON.stringify(layerKeys(mats.low)))
+        problems.push("materials.low: layer identity, scale, source and licence must match high tier");
     }
   }
 
@@ -1743,8 +1784,8 @@ async function main() {
   }
 }
 
-// Only when RUN, not when imported. tools/car/trace-logo.mjs reuses decodePNG and
-// tools/car/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
-// each to the tree (there is already a second decoder in import-models.mjs).
+// Only when RUN, not when imported: other tools may import decodePNG /
+// encodePNG rather than adding a third copy of each to the tree (there is
+// already a second decoder in import-models.mjs).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main().catch((e) => fail(e && e.stack ? e.stack : String(e)));

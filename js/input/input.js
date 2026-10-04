@@ -91,16 +91,6 @@ const Input = (function () {
   let padDeadzone = 0.05;      // inner: centre slop, ignored then re-scaled
   let padSaturation = 0;       // outer: deflection treated as full lock
   let padRestOffset = 0;       // captured resting position (drift compensation)
-  const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
-
-  let padNavDir = null;           // held direction while a menu is open, or null
-  let padNavNextT = 0;            // nowMs() of the next synthesized repeat
-  let padNavSeeded = false;       // one ArrowDown seed per open-menu session
-  let padNavSeedLayer = null;     // UiLayers.top() we last seeded for (layer change re-arms)
-  const PAD_NAV_DELAY_MS = 450;   // delay before the first repeat
-  const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
-  const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
-
   const touches = new Map();
   let touchSeq = 0;
   let touchSteer = 0;      // the winning touch's drag, -1..1
@@ -336,16 +326,11 @@ const Input = (function () {
     // padActivate / padEscape — synthetic keys at the focused control, one
     // mover, never a second focus model. A direction with nothing focused
     // yet seeds focus, exactly as the pad's first press does.
-    navUp: () => remoteNav("up"), navDown: () => remoteNav("down"),
-    navLeft: () => remoteNav("left"), navRight: () => remoteNav("right"),
-    navSelect: () => { padActivate(); },
-    navBack: () => { padEscape(); },
+    navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
+    navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
+    navSelect: () => { padMenu.activate(); },
+    navBack: () => { padMenu.escape(); },
   };
-  function remoteNav(dir) {
-    if (!(window.MenuNav && window.MenuNav.activeLayer())) return;   // no menu on top: nothing to move
-    if (!padFocusableInLayer()) { padSeedFocus(); return; }
-    padNavKey(dir);
-  }
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
@@ -481,227 +466,17 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
-  // ---- key bindings ------------------------------------------------------
-  // Every driving key is a BINDING, not a literal: KEY_ACTIONS is the list the
-  // CONTROLS page (js/ui/key-binds.js) renders and HOW TO PLAY reads, keyMap is
-  // the live table (two physical-key slots per action, e.code values so WASD
-  // sits under the same fingers on an AZERTY board), and codeToAction is the
-  // reverse index onKey() consults. Defaults are what the game always had.
-  const KEY_ACTIONS = [
-    { id: "left",      label: "STEER LEFT",  def: ["ArrowLeft", "KeyA"] },
-    { id: "right",     label: "STEER RIGHT", def: ["ArrowRight", "KeyD"] },
-    { id: "throttle",  label: "GAS",         def: ["ArrowUp", "KeyW"] },
-    { id: "brake",     label: "BRAKE",       def: ["ArrowDown", "KeyS"] },
-    { id: "boost",     label: "BOOST",       def: ["Space", null] },
-    { id: "overtake",  label: "OVERTAKE",    def: ["KeyX", null] },
-    { id: "aero",      label: "ACTIVE AERO", def: ["KeyZ", null] },
-    { id: "shiftUp",   label: "SHIFT UP",    def: ["KeyE", null] },
-    { id: "shiftDown", label: "SHIFT DOWN",  def: ["KeyQ", "ShiftLeft"] },
-    { id: "camera",    label: "CAMERA",      def: ["KeyC", null] },
-    // LOOK BACK is a HELD control (the mirror is only useful while you hold
-    // it); RECOVER is an edge. Both are standard racing binds we simply did
-    // not have: Forza Horizon puts look-back on the arrow cluster, F1 on End,
-    // iRacing on Z/X, and R is the near-universal recover/reset key across
-    // Forza, PolyTrack and Slow Roads alike. In a game about defending a
-    // position, not being able to look back is functional, not cosmetic.
-    { id: "lookBack",  label: "LOOK BACK",   def: ["KeyB", null] },
-    { id: "recover",   label: "RECOVER",     def: ["KeyR", null] },
-    // RADIO CHECK: the driver keys the mic and the engineer answers with the
-    // position and both gaps — Crew Chief's "how's my gap", on one key. T for
-    // TALK; free in every default layout above.
-    { id: "radio",     label: "RADIO CHECK", def: ["KeyT", null] },
-    // REAR-VIEW MIRROR: the HUD mirror on and off mid-race, the same switch as
-    // HUD > MIRROR in the settings. M is free in every default layout above.
-    { id: "mirror",    label: "MIRROR",      def: ["KeyM", null] },
-    /* PAUSE IS A BINDING NOW, not a literal. XAG 107 asks that a player be
-       able to remap ALL of a game's controls "including the Esc key on PC
-       games", and P being permanently off-limits meant a player who wanted
-       pause under a different finger had no path at all — which bites hardest
-       in fullscreen on Firefox and Safari, where Escape is spent exiting
-       fullscreen before it can ever reach us (see lockEscape). Escape itself
-       stays hardwired as BACK: it is the platform's gesture, not ours to
-       hand out. */
-    { id: "pause",     label: "PAUSE",       def: ["KeyP", null] },
-  ];
-  // Keys the game already answers to elsewhere: back, the menu walker's
-  // confirm, the perf overlay, the OS. Refused by setKeyBinding.
-  // Ctrl and Alt too: Alt is the key-release-all chord (Alt+Tab), and with Ctrl
-  // bound a Ctrl+W on the default GAS closes the tab — browsers never hand those
-  // chords to a page (https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock).
-  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1,
-    AltLeft: 1, AltRight: 1, ControlLeft: 1, ControlRight: 1 };
-  const keyMap = {};
-  let codeToAction = {};
-  // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
-  // "Q or either Shift" and a rebind should not have to choose a side.
-  const normCode = (c) => c === "ShiftRight" ? "ShiftLeft" : c === "ControlRight" ? "ControlLeft" : c === "AltRight" ? "AltLeft" : c;
-  function rebuildKeyIndex() {
-    codeToAction = {};
-    for (const a of KEY_ACTIONS) for (const c of keyMap[a.id]) if (c && !codeToAction[c]) codeToAction[c] = a.id;
-    keyLeft = keyRight = keyThrottle = keyBrake = false;   // never latch a key that just changed meaning
-  }
-  function resetKeys() { for (const a of KEY_ACTIONS) keyMap[a.id] = a.def.slice(); rebuildKeyIndex(); }
-  resetKeys();
-  // Adopt a saved map ({action: [code, code]}); anything malformed, reserved or
-  // duplicated falls back to the default for that action.
-  function setKeyMap(saved) {
-    resetKeys();
-    if (saved && typeof saved === "object") {
-      const seen = {};
-      for (const a of KEY_ACTIONS) {
-        const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
-        if (!v) continue;
-        const slots = [0, 1].map((i) => {
-          const c = v[i] == null ? null : normCode(String(v[i]));
-          if (!c || !/^[A-Za-z0-9]{1,24}$/.test(c) || KEY_RESERVED[c] || seen[c]) return null;
-          seen[c] = 1;
-          return c;
-        });
-        keyMap[a.id] = slots;
-      }
-      // An action the save predates (new since it was written) keeps its
-      // default — unless the player already put that key on something else.
-      for (const a of KEY_ACTIONS) if (!Array.isArray(saved[a.id])) keyMap[a.id] = keyMap[a.id].map((c) => (c && seen[c] ? null : c));
-      rebuildKeyIndex();
-    }
-    return getKeyMap();
-  }
-  function getKeyMap() { const o = {}; for (const a of KEY_ACTIONS) o[a.id] = keyMap[a.id].slice(); return o; }
-  function keyBindings() { return KEY_ACTIONS.map((a) => ({ id: a.id, label: a.label, codes: keyMap[a.id].slice(), def: a.def.slice() })); }
-  function keysAreDefault() { return KEY_ACTIONS.every((a) => a.def[0] === keyMap[a.id][0] && a.def[1] === keyMap[a.id][1]); }
-  // Bind `code` into slot 0/1 of an action. A key another action held is taken
-  // from it (the caller shows the move); a reserved key is refused.
-  function setKeyBinding(id, slot, code) {
-    if (!keyMap[id] || !(slot === 0 || slot === 1) || !code) return { ok: false, reason: "invalid" };
-    code = normCode(String(code));
-    if (KEY_RESERVED[code]) return { ok: false, reason: "reserved" };
-    let conflict = null;
-    for (const a of KEY_ACTIONS) for (let i = 0; i < 2; i++) {
-      if (keyMap[a.id][i] === code && !(a.id === id && i === slot)) { keyMap[a.id][i] = null; if (a.id !== id) conflict = a.id; }
-    }
-    keyMap[id][slot] = code;
-    rebuildKeyIndex();
-    return { ok: true, conflict };
-  }
-  function clearKeyBinding(id, slot) {
-    if (!keyMap[id] || !(slot === 0 || slot === 1)) return false;
-    keyMap[id][slot] = null; rebuildKeyIndex(); return true;
-  }
-  const KEY_NAMES = { ArrowUp: "\u2191", ArrowDown: "\u2193", ArrowLeft: "\u2190", ArrowRight: "\u2192", Space: "SPACE",
-    ShiftLeft: "SHIFT", ControlLeft: "CTRL", AltLeft: "ALT", Comma: ",", Period: ".", Slash: "/", Semicolon: ";",
-    Quote: "'", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backspace: "BKSP",
-    CapsLock: "CAPS", Insert: "INS", Delete: "DEL", Home: "HOME", End: "END", PageUp: "PGUP", PageDown: "PGDN", IntlBackslash: "\\" };
-  /* WHAT IS PRINTED ON THE PLAYER'S KEY, not what the code is called.
-     Binding on e.code is right and stays — it is what keeps WASD under the
-     same three fingers on AZERTY, and MDN recommends exactly that for games.
-     But it made the LABEL a lie: "KeyW" is the physical slot a French keyboard
-     prints Z on, and the rebinding screen confidently showed "W". A player
-     rebinding was reading a key that is not on their keyboard.
-     navigator.keyboard.getLayoutMap() is the API for the other direction.
-     Chromium-only and experimental, so it is a progressive enhancement:
-     resolved once at init, consulted only for the alphanumeric codes whose
-     label actually moves between layouts; everywhere else the label is the
-     e.code name. */
-  let kbLayout = null;
-  function loadLayoutMap() {
-    const kb = typeof navigator !== "undefined" && navigator.keyboard;
-    if (!kb || typeof kb.getLayoutMap !== "function") return;
-    try {
-      Promise.resolve(kb.getLayoutMap()).then((m) => {
-        kbLayout = m || null;
-        if (kbLayout) { try { Log.info("input", "keyboard layout map available"); } catch (_) { /* Log absent */ } }
-      }).catch(() => { /* SecurityError under Permissions Policy, or unsupported */ });
-    } catch (_) { /* older Chromium shapes */ }
-  }
-  function layoutLabel(code) {
-    if (!kbLayout || typeof kbLayout.get !== "function") return null;
-    let v;
-    try { v = kbLayout.get(code); } catch (_) { return null; }
-    if (typeof v !== "string" || !v) return null;
-    return v.toUpperCase();
-  }
-  // The name on a key chip: "X", "3", "SHIFT", an arrow — in the player's own
-  // layout where the platform will tell us what that is.
-  function keyLabel(code) {
-    if (!code) return "";
-    code = normCode(String(code));
-    let m;
-    if (/^(Key[A-Z]|Digit\d|Bracket|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|IntlBackslash)/.test(code)) {
-      const l = layoutLabel(code);
-      if (l) return l;
-    }
-    if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
-    if ((m = /^Digit(\d)$/.exec(code))) return m[1];
-    if ((m = /^Numpad(.+)$/.exec(code))) return "NUM " + ({ Add: "+", Subtract: "-", Multiply: "*", Divide: "/", Decimal: "." }[m[1]] || m[1].toUpperCase());
-    return KEY_NAMES[code] || code.toUpperCase();
-  }
-
-  // ---- controller bindings -----------------------------------------------
-  // The same shape for the pad: PAD_ACTIONS is the list the CONTROLS page
-  // renders, padMap the live table (two button-index slots per action, W3C
-  // "standard" mapping), the defaults the layout the game always had. Steering
-  // (left stick, d-pad left/right) and pause (Menu/Start) are not bindings:
-  // the stick is an axis and the d-pad/Start pair is what the menus answer to.
-  const PAD_ACTIONS = [
-    { id: "throttle",  label: "GAS",         def: [7, 0] },
-    { id: "brake",     label: "BRAKE",       def: [6, 1] },
-    { id: "boost",     label: "BOOST",       def: [2, null] },
-    { id: "overtake",  label: "OVERTAKE",    def: [3, null] },
-    { id: "aero",      label: "ACTIVE AERO", def: [12, null] },
-    { id: "shiftUp",   label: "SHIFT UP",    def: [5, null] },
-    { id: "shiftDown", label: "SHIFT DOWN",  def: [4, null] },
-    { id: "camera",    label: "CAMERA",      def: [8, null] },
-    { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
-    { id: "recover",   label: "RECOVER",     def: [10, null] },
-    { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
-    { id: "mirror",    label: "MIRROR",      def: [null, null] },   // every standard button is taken; bind one on CONTROLS
-    { id: "pause",     label: "PAUSE",       def: [9, null] },
-  ];
-  // The d-pad's left/right are the digital STEER axis, not bindings — the same
-  // reason the stick is not one. Pause left this set when it became a binding.
-  const PAD_RESERVED = { 14: 1, 15: 1 };
-  const padMap = {};
+  const bindings = InputBindings.create({
+    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = false; },
+    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
+    activePad,
+  });
+  const {
+    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, loadLayoutMap,
+    padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel,
+    setPadLabelMode, padLabelMode: padLabelModeOf,
+  } = bindings;
   let padCaptureCb = null;   // set while a CONTROLS slot waits for a button
-  const padIndexOk = (v) => Number.isInteger(v) && v >= 0 && v < 32;
-  function resetPad() { for (const a of PAD_ACTIONS) padMap[a.id] = a.def.slice(); }
-  resetPad();
-  function setPadMap(saved) {
-    resetPad();
-    if (saved && typeof saved === "object") {
-      const seen = {};
-      for (const a of PAD_ACTIONS) {
-        const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
-        if (!v) continue;
-        padMap[a.id] = [0, 1].map((i) => {
-          const b = v[i] == null ? null : Number(v[i]);
-          if (b == null || !padIndexOk(b) || PAD_RESERVED[b] || seen[b]) return null;
-          seen[b] = 1;
-          return b;
-        });
-      }
-      for (const a of PAD_ACTIONS) if (!Array.isArray(saved[a.id])) padMap[a.id] = padMap[a.id].map((b) => (b != null && seen[b] ? null : b));
-    }
-    return getPadMap();
-  }
-  function getPadMap() { const o = {}; for (const a of PAD_ACTIONS) o[a.id] = padMap[a.id].slice(); return o; }
-  function padBindings() { return PAD_ACTIONS.map((a) => ({ id: a.id, label: a.label, codes: padMap[a.id].slice(), def: a.def.slice() })); }
-  function padsAreDefault() { return PAD_ACTIONS.every((a) => a.def[0] === padMap[a.id][0] && a.def[1] === padMap[a.id][1]); }
-  function setPadBinding(id, slot, index) {
-    index = index == null ? NaN : Number(index);
-    if (!padMap[id] || !(slot === 0 || slot === 1) || !padIndexOk(index)) return { ok: false, reason: "invalid" };
-    if (PAD_RESERVED[index]) return { ok: false, reason: "reserved" };
-    let conflict = null;
-    for (const a of PAD_ACTIONS) for (let i = 0; i < 2; i++) {
-      if (padMap[a.id][i] === index && !(a.id === id && i === slot)) { padMap[a.id][i] = null; if (a.id !== id) conflict = a.id; }
-    }
-    padMap[id][slot] = index;
-    padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0;   // a held pedal whose button changed meaning
-    return { ok: true, conflict };
-  }
-  function clearPadBinding(id, slot) {
-    if (!padMap[id] || !(slot === 0 || slot === 1)) return false;
-    padMap[id][slot] = null; return true;
-  }
   // While a callback is armed the next rising edge on ANY button goes to it
   // and nothing else that frame — no menu walk, no pause, no driving — so the
   // press that binds B cannot also back out of the sheet. `null` disarms.
@@ -727,42 +502,6 @@ const Input = (function () {
     if (!defaultInputSource) defaultInputSource = touchControlsNeeded() ? "touch" : "keyboard";
     return defaultInputSource;
   }
-  const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
-  const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
-  // Nintendo's physical A/B and X/Y sit OPPOSITE the Xbox positions, so index 0
-  // — the button the standard mapping calls "bottom of the right cluster" — is
-  // physically labelled B on a Switch Pro. Sniffing cannot always tell, which
-  // is why the override below exists.
-  const PAD_NAMES_NIN = ["B", "A", "Y", "X", "L", "R", "ZL", "ZR", "MINUS", "PLUS", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
-  const PAD_NAME_SETS = { xbox: PAD_NAMES_XBOX, ps: PAD_NAMES_PS, nintendo: PAD_NAMES_NIN };
-  /* SNIFFING THE id STRING IS THE STATE OF THE ART, AND IT IS NOT GOOD ENOUGH
-     ALONE. The Gamepad spec says outright that the id format is "left
-     unspecified"; Chrome writes "Name (STANDARD GAMEPAD Vendor: 054c Product:
-     05c4)" but an XInput pad becomes "Xbox 360 Controller (XInput STANDARD
-     GAMEPAD)" with no vendor at all, Firefox writes "054c-05c4-Name", and
-     Safari rewrites the name at the OS layer. Standardising vendorId/productId
-     is still an open W3C issue. So: sniff by default, and let the player say
-     when we get it wrong. */
-  let padLabelMode = "auto";     // "auto" | "xbox" | "ps" | "nintendo"
-  function setPadLabelMode(m) {
-    padLabelMode = PAD_NAME_SETS[m] ? m : "auto";
-  }
-  function padLabelModeOf() { return padLabelMode; }
-  function padBrandAuto() {
-    const pad = activePad();
-    const id = String((pad && pad.id) || "");
-    if (/playstation|dualshock|dualsense|\b054c\b|sony/i.test(id)) return "ps";
-    if (/nintendo|switch\s*pro|joy-?con|\b057e\b/i.test(id)) return "nintendo";
-    return "xbox";
-  }
-  // The name on a chip: the player's override, else what the pad id suggests.
-  function padLabel(index) {
-    if (index == null) return "";
-    const brand = padLabelMode === "auto" ? padBrandAuto() : padLabelMode;
-    const names = PAD_NAME_SETS[brand] || PAD_NAMES_XBOX;
-    return names[index] || `BTN ${index}`;
-  }
-
   /* THE WHEEL WIZARD'S ONE PRIMITIVE. Arm it, ask the player to move the
      control we want, and the first axis that travels far enough from where it
      was resting when we armed is the answer. Comparing against a REST snapshot
@@ -892,11 +631,11 @@ const Input = (function () {
   // a face button reads 0/1) and any rising edge across them.
   function padActVal(pad, id) {
     let v = 0;
-    for (const b of padMap[id]) if (b != null) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
+    for (const b of bindings.padButtons(id)) if (b != null) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
     return v;
   }
   function padActEdge(pad, id) {
-    for (const b of padMap[id]) if (b != null && btnEdge(pad, b)) return true;
+    for (const b of bindings.padButtons(id)) if (b != null && btnEdge(pad, b)) return true;
     return false;
   }
 
@@ -951,19 +690,19 @@ const Input = (function () {
       keyLeft = keyRight = keyThrottle = keyBrake = false;
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
-       driving gate — but still below a TEXT-FIELD check, because P in a field
-       is a letter. BUTTON / SELECT / A focus must NOT block them: after
-       SETTINGS → BACK → RESUME (or Escape through that stack), focus often
-       stays on a door inside the now-hidden dialog, and the wider `typing`
-       flag then refused Escape so the race could not be paused again
-       (menu-traversal "DISPLAY page under" pause, 2026-10-01). Driving still
-       uses `typing` below so a focused button does not steer. Inside the
-       switch below these would be swallowed by the gate's screen list
-       (js/ui/layers.js) in the LIGHTING TUNER and free camera — the one place
-       their documented all-the-way-out behaviour matters most. */
-    const act = codeToAction[normCode(e.code)] || null;
-    const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable);
-    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
+        driving gate — but still below a TEXT-FIELD check, because P in a field
+        is a letter. BUTTON / SELECT / A focus must NOT block them: after
+        SETTINGS → BACK → RESUME (or Escape through that stack), focus often
+        stays on a door inside the now-hidden dialog, and the wider `typing`
+        flag then refused Escape so the race could not be paused again
+        (menu-traversal "DISPLAY page under" pause, 2026-10-01). Driving still
+        uses `typing` below so a focused button does not steer. Inside the
+        switch below these would be swallowed by the gate's screen list
+        (js/ui/layers.js) in the LIGHTING TUNER and free camera — the one place
+        their documented all-the-way-out behaviour matters most. */
+      const act = bindings.keyAction(e.code);
+      const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable);
+      if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
         if (onPauseCb) onPauseCb();
         return;
@@ -1185,33 +924,6 @@ const Input = (function () {
     return btnSteerVal;
   }
 
-  // Every wireHold button registers here so its private pressed-pointer set can
-  // be cleared from OUTSIDE the closure. Nets that hang off this list:
-  //   1. window-level capture-phase pointerup/pointercancel (init) release that
-  //      pointerId from EVERY hold button — a pointer that lifted anywhere is by
-  //      definition no longer holding anything, even when the button itself never
-  //      received the event (retargeted lift, missed lostpointercapture).
-  //   2. lostpointercapture, but ONLY via lostCaptureShouldRelease — a
-  //      capture steal from a second hold button is not a lift (GAS + a
-  //      turn arrow). A button that was already hidden at pointerdown is
-  //      not a teardown either.
-  //   3. reset() (blur / tab-hidden) clears every set outright, covering OS
-  //      interruptions where NO pointer event is delivered at all.
-  // Without these, an interruption mid-hold left a ghost pointerId in the set:
-  // reset() zeroed btnThrottle but couldn't reach the closure, so after the next
-  // press+release the set never emptied again ("held until every pointer
-  // releases" counted a pointer that no longer existed) and the throttle could
-  // be switched ON but never OFF — intermittent because an OS that happens to
-  // REUSE the same pointerId self-heals. The stuck throttle then endlessly
-  // re-trips the off-track auto-rescue ("throttle held but not moving").
-  const holdBtns = [];
-  function holdReleasePointer(pointerId) {
-    for (const h of holdBtns) {
-      h.anchors && h.anchors.delete(pointerId);
-      h.live && h.live.delete(pointerId);
-      if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
-    }
-  }
   // The pedal's pressed look is `#btn-throttle:active`, which follows the THUMB.
   // A latch outlives the thumb, so the class carries it instead; aria-pressed
   // exists only in latch mode, where the pedal really is a toggle button.
@@ -1222,133 +934,11 @@ const Input = (function () {
     if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
     else el.removeAttribute("aria-pressed");
   }
-  function holdReleaseAll(keepLatch) {
-    // A LATCH DROPS HERE on the everything-off paths (window blur, page hidden,
-    // Input.reset): a latched throttle surviving a blur means the car
-    // accelerates while the player is not looking at it. NOT on the last finger
-    // lifting (keepLatch): TouchEvent.touches is empty on every ordinary lift, so
-    // dropping it there switched LATCH off the moment the thumb left GAS.
-    if (!keepLatch) throttleLatched = false;
-    paintLatch();
-    for (const h of holdBtns) {
-      h.ids.clear();
-      h.anchors && h.anchors.clear();
-      h.live && h.live.clear();
-      h.apply(false);
-      h.level && h.level(0);
-    }
-  }
-
-  // lostpointercapture is a TEARDOWN signal, not a lift. It fires when the
-  // capture target is hidden/removed (the stuck-GAS case) AND when a second
-  // hold button calls setPointerCapture — WebKit keeps one capture slot, so
-  // tapping LEFT while GAS is down steals capture from GAS — treated as a lift,
-  // that drops the throttle with the thumb still on it.
-  //
-  // Honour the event only when the button DISAPPEARED mid-hold (visible at
-  // pointerdown, gone now). Buttons start `[hidden]` in the shell and tests
-  // often press them that way; treating "currently hidden" as a teardown
-  // would drop every capture-steal in the harness AND a real two-thumb
-  // press if a parent group flickered hidden. Target === document is
-  // PE3 §9.5 (capture target disconnected) — always a teardown.
-  function holdTargetGone(el) {
-    if (!el || el === document) return true;
-    if (!el.isConnected) return true;
-    if (el.hidden) return true;
-    const parent = el.parentElement;
-    if (parent && parent.hidden) return true;
-    try {
-      const s = getComputedStyle(el);
-      if (s.display === "none" || s.visibility === "hidden") return true;
-    } catch (_) { /* getComputedStyle can throw on a detached node */ }
-    return false;
-  }
-  function lostCaptureShouldRelease(el, pointerId) {
-    if (!el || el === document || !el.isConnected) return true;
-    const h = holdBtns.find((x) => x.el === el);
-    const wasVisible = !!(h && h.live.get(pointerId));
-    if (!wasVisible) return false;
-    return holdTargetGone(el);
-  }
-
-  // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
-  // physics rewards MODULATION and that thresholding a trigger to a boolean
-  // throws all of it away — and then the on-screen pedals did exactly that, so
-  // the one platform with no triggers at all was also the one that could only
-  // stamp or lift. Trail-braking, the mechanic the friction ellipse exists to
-  // reward, was unreachable on an iPad.
-  //
-  // The gesture is STAMP THEN EASE: touching the pedal is full travel, which is
-  // precisely what it did before, so nothing is taken away from a player who
-  // taps and never discovers this. Sliding the thumb UP the screen, away from
-  // the pedal, lifts it — the direction a foot comes off a real one. Pointer
-  // capture (below) is what makes it work past the edge of a 72 px button.
-  const PEDAL_TRAVEL_PX = 90;   // finger travel from full press to the light end
-  const PEDAL_DEAD_PX = 12;     // slop first, so a thumb tremor is not a lift
-  const PEDAL_MIN = 0.12;       // never quite zero: sliding off is not releasing
-
-  // Hold semantics, multi-pointer safe: the button stays "held" until
-  // every pointer that pressed it has been released/cancelled/left.
-  // `level`, when given, additionally reports 0..1 pedal travel.
-  // `opts.axis` "x" + `opts.dir` (±1) is the steer-button analog-trigger path:
-  // tap is full travel (same compatibility promise as the pedals); sliding
-  // opposite the steer direction eases off. The default (no opts) is the
-  // original vertical pedal gesture and must stay bit-identical.
-  function wireHold(id, apply, level, opts) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const axis = (opts && opts.axis) === "x" ? "x" : "y";
-    const dir = (opts && opts.dir) || 1;
-    const ids = new Set();
-    const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
-    const live = new Map();                     // pointerId -> visible at pointerdown
-    holdBtns.push({ ids, apply, level, anchors, el, live });
-    el.addEventListener("pointerdown", e => {
-      try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
-      e.preventDefault();
-      ids.add(e.pointerId);
-      live.set(e.pointerId, !holdTargetGone(el));
-      apply(true);
-      if (level) { anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY); level(1); }
-    });
-    if (level) el.addEventListener("pointermove", e => {
-      const a = anchors.get(e.pointerId);
-      if (a == null) return;
-      if (axis === "x") {
-        const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
-        level(clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
-        return;
-      }
-      const up = Math.max(0, a - e.clientY - PEDAL_DEAD_PX);
-      level(clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
-    });
-    function release(e) {
-      anchors && anchors.delete(e.pointerId);
-      live.delete(e.pointerId);
-      if (!ids.delete(e.pointerId)) return;
-      if (ids.size === 0) { apply(false); if (level) level(0); }
-    }
-    el.addEventListener("pointerup", release);
-    el.addEventListener("pointercancel", release);
-    // NOT pointerleave. setPointerCapture fires a boundary pointerleave as it
-    // retargets (holdSetupCtl in js/game.js documents the same trap). A second
-    // finger on a turn arrow does the same to a held GAS. Window-level
-    // pointerup already covers a lift that lands off the button; capture is
-    // what keeps a slide-off from dropping the pedal.
-    // lostpointercapture is only a release when the button was taken away —
-    // see holdTargetGone. A capture steal from another hold button must not
-    // drop a thumb that is still down.
-    el.addEventListener("lostpointercapture", function (e) {
-      if (!lostCaptureShouldRelease(el, e.pointerId)) return;
-      release(e);
-    });
-  }
-
-  function wireTap(id, fire) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("pointerdown", function () { fire(); });
-  }
+  const holdButtons = InputHoldButtons.create({
+    clamp,
+    beforeReleaseAll(keepLatch) { if (!keepLatch) throttleLatched = false; paintLatch(); },
+  });
+  const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
   // First connected pad, or null. (getGamepads() can return holes / stale slots.)
   function activePad() {
@@ -1409,7 +999,7 @@ const Input = (function () {
   // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.navOpen()
   // false — note the TITLE overlay counts as a nav layer, so a freshly loaded
   // page routes pad buttons to menu-nav, not these latches). The buttons are
-  // the DEFAULTS of PAD_ACTIONS above — SETTINGS › CONTROLS › CONTROLLER
+  // the DEFAULTS in InputBindings — SETTINGS › CONTROLS › CONTROLLER
   // rebinds them; the stick, d-pad steer and Start are fixed:
   //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
@@ -1422,7 +1012,7 @@ const Input = (function () {
   // gamepad/keyboard-parity mapping settled in
   // docs/research/PLATFORM-INPUT-NOTES.md §8, now shipped:
   //   d-pad (12-15) AND left stick   arrow keys (with OS-style hold-repeat,
-  //                                  see padNavDir below — the pad has none)
+  //                                  see InputPadMenu — the pad has none)
   //   btn 0 A                        Enter/Space: click the focused control
   //   btn 1 B                        Escape: back/close the top layer
   //   btn 6 LT / btn 7 RT            PageUp / PageDown
@@ -1455,9 +1045,7 @@ const Input = (function () {
       lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
-      padNavDir = null;
-      padNavSeeded = false;
-      padNavSeedLayer = null;
+      padMenu.reset();
       if (inputSource === "controller") inputSource = null;
       return;
     }
@@ -1510,7 +1098,7 @@ const Input = (function () {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
-      padSteerAnalog = false; padLookBack = false; padNavDir = null;
+      padSteerAnalog = false; padLookBack = false; padMenu.releaseDirection();
       pollAxisCapture(pad);
     } else if (padCaptureCb) {
       // A CONTROLS slot is waiting for a button: the first rising edge is its
@@ -1518,7 +1106,7 @@ const Input = (function () {
       // menu, pause, or drive. Pedals and steer were latched above; unlatch.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
       padSteerAnalog = false; padLookBack = false;
-      padNavDir = null;
+      padMenu.releaseDirection();
       const nb = pad.buttons ? pad.buttons.length : 0;
       for (let i = 0; i < nb; i++) if (btnEdge(pad, i)) { padCaptureCb(i); break; }
     } else {
@@ -1543,11 +1131,9 @@ const Input = (function () {
         // …and the STEERING: a friend race keeps simulating under the pause menu, and the stick or d-pad
         // that moves through it was also steering the car at up to full lock.
         padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
-        padNavPoll(pad);
+        padMenu.poll(pad);
       } else {
-        padNavDir = null;   // fresh hold-timer the next time a menu opens
-        padNavSeeded = false;
-        padNavSeedLayer = null;
+        padMenu.reset();   // fresh hold-timer the next time a menu opens
         // edge-triggered actions reuse the same latches the keyboard sets.
         if (padActEdge(pad, "boost")) boostTogglePressed = true;
         if (padActEdge(pad, "overtake")) overtakePressed = true;
@@ -1566,198 +1152,7 @@ const Input = (function () {
     for (let i = 0; i < n; i++) padPrevButtons[i] = btnDown(pad, i);
   }
 
-  // Dispatch a synthetic keydown at `document` (not `window`) — measured: an
-  // event dispatched at `window` only reaches WINDOW's own listeners, never
-  // document's, because window has no descendants of its own in the event
-  // path. MenuNav listens on `window` (capture); TopModal's Escape handler
-  // listens on `document` (capture). Dispatching at `document` reaches both,
-  // in the same order a real keypress would (window-capture, document-capture,
-  // …, document-bubble, window-bubble).
-  function padDispatchKey(key) {
-    // TARGET THE FOCUSED ELEMENT, the way a real key press does. An element's
-    // OWN onkeydown is not in the path of an event dispatched at `document` —
-    // the event's target IS document, so it never descends to the control —
-    // and both tab rails are written that way (the garage's category rail,
-    // js/garage/setup-sheet.js csTabKey, and the circuit filter chips). Those
-    // rails own their axis, so MenuNav steps aside for them by design; with
-    // the key dispatched at document their handlers never run, and a pad
-    // cannot move along either rail (measured 2026-09-08: the D-pad sat on the
-    // garage's TEAM tab while a real ArrowDown walked all fifteen). Bubbling from the control still reaches document
-    // (TopModal's Escape) and window (MenuNav's capture listener), which is
-    // what the dispatch-at-document note below the fallback was protecting.
-    const el = document.activeElement;
-    const target = el && el !== document.body && el.dispatchEvent ? el : document;
-    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-  }
-
-  // A D-PAD DIRECTION ON A VALUE CONTROL. A synthetic ArrowRight does nothing
-  // to a focused <select> or range slider — there is no UA default action for
-  // an untrusted key — and MenuNav steps aside for the keys those controls
-  // own, so a pad that landed on ACTIVE AERO's select or the UI SIZE slider
-  // was stuck: Left/Right changed nothing, A did nothing (measured
-  // 2026-09-08). Along the control's axis the pad steps the VALUE itself and
-  // fires input/change the way a real key would; Up/Down go to MenuNav as
-  // the ordinary row move they are for the keyboard too.
-  function padNavKey(dir) {
-    const el = document.activeElement;
-    const key = PAD_NAV_KEYS[dir];
-    const horizontal = dir === "left" || dir === "right";
-    if (el && !el.disabled) {
-      const t = el.tagName;
-      const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
-      if (t === "SELECT" && horizontal) {
-        const opts = el.options || [];
-        const n = opts.length;
-        const d = dir === "right" ? 1 : -1;
-        let j = el.selectedIndex;
-        // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
-        // which describe a slider-made state but are deliberately unpickable.
-        // Assigning selectedIndex directly does not honour `option.disabled`.
-        for (let seen = 0; seen < n; seen++) {
-          j = ((j + d) % n + n) % n;
-          if (!opts[j].disabled) break;
-        }
-        if (n && j !== el.selectedIndex && !opts[j].disabled) {
-          el.selectedIndex = j;
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-        return;
-      }
-      if (t === "INPUT" && (ty === "range" || ty === "number") && horizontal) {
-        const step = parseFloat(el.step) || 1;
-        const min = el.min === "" ? -Infinity : parseFloat(el.min), max = el.max === "" ? Infinity : parseFloat(el.max);
-        const v = Math.max(min, Math.min(max, (parseFloat(el.value) || 0) + (dir === "right" ? step : -step)));
-        if (String(v) !== String(el.value)) {
-          el.value = String(v);
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-        return;
-      }
-    }
-    padDispatchKey(key);
-  }
-
-  function padNavDirOf(pad) {
-    if (btnDown(pad, 12)) return "up";
-    if (btnDown(pad, 13)) return "down";
-    if (btnDown(pad, 14)) return "left";
-    if (btnDown(pad, 15)) return "right";
-    // A wheel's pedals rest at -1: read as a stick they held a direction and
-    // scrolled the menu on their own. The mapped pedal axes are not sticks.
-    const ped = (i) => i === padAxisMap.throttle || i === padAxisMap.brake;
-    const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
-    const stick = (x, y) => {
-      const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
-      const my = Math.abs(y) >= PAD_NAV_DEADZONE ? Math.abs(y) : 0;
-      if (!mx && !my) return null;
-      return my >= mx ? (y < 0 ? "up" : "down") : (x < 0 ? "left" : "right");
-    };
-    return stick(ax[0] || 0, ax[1] || 0) || stick(ax[2] || 0, ax[3] || 0);
-  }
-
-  function padFocusableInLayer() {
-    const layer = window.MenuNav && window.MenuNav.activeLayer();
-    if (!layer) return null;
-    const active = document.activeElement;
-    const sel = window.MenuNav.FOCUSABLE;
-    if (active && sel && layer.contains(active) && active.matches && active.matches(sel)) {
-      return active;
-    }
-    return null;
-  }
-
-  // One ArrowDown into MenuNav — the empty path padActivate takes.
-  // MenuNav has no seed helper of its own (it exports activeLayer / FOCUSABLE
-  // only), so this is the one mover; never .focus() a node from here.
-  function padSeedFocus() {
-    if (!window.MenuNav || !window.MenuNav.activeLayer()) return;
-    if (padFocusableInLayer()) return;
-    padDispatchKey("ArrowDown");
-  }
-
-  // A → activate. Synthetic events do NOT get a browser's native "Enter/Space
-  // clicks the focused button" behaviour (isTrusted:false skips that default
-  // action, same as the Escape case below) — so .click() the focused control
-  // ourselves, mirroring MenuNav's own idea of "focusable" (MenuNav.FOCUSABLE).
-  // If nothing is focused inside the active layer yet (pad used before any
-  // direction press), there is nothing to click — seed focus instead, the same
-  // way MenuNav's own first arrow press would, so the NEXT press has a target.
-  // "One focus visual should always be visible" (research note §8) applies to
-  // A as much as to a direction — and to the menu-open seed in padNavPoll.
-  function padActivate() {
-    const focused = padFocusableInLayer();
-    if (focused) {
-      // A click on a focused range/number jumps the thumb to the click
-      // coordinate — not "confirm this control". Left/Right already own it.
-      const ty = (focused.type || "").toLowerCase();
-      if (focused.tagName === "INPUT" && (ty === "range" || ty === "number")) return;
-      focused.click();
-      return;
-    }
-    padSeedFocus();
-  }
-
-  // B → Escape/Back. Gated on UiLayers.top() (not MenuNav.activeLayer(), which
-  // deliberately excludes the photo-mode free camera) because a real Escape
-  // key reaches the free camera too — it steps out of the fly-cam before
-  // closing the tuner panel behind it.
-  //
-  // A real <dialog>'s "Escape closes it" is UA DEFAULT-ACTION behaviour tied to
-  // a TRUSTED key event — Chromium's CloseWatcher takes the key's release, and
-  // WebKit's older path takes the keydown's default action (see
-  // docs/research/PLATFORM-INPUT-NOTES.md §1) — and neither fires for a
-  // synthetic, untrusted KeyboardEvent (verified empirically: a dispatched
-  // Escape keydown left an open <dialog> open). TopModal already wires a real
-  // `cancel` listener on every dialog.screen that does exactly what a real
-  // Escape does (presses the screen's own data-esc-close button) — so for a
-  // <dialog> layer, meet THAT seam directly. The handful of screens that never
-  // became <dialog>s (TopModal's own comment names them) go through
-  // TopModal.onEscape, an ordinary document keydown listener with no such
-  // trust requirement, so a synthetic keydown reaches it exactly like a real
-  // Escape would.
-  function padEscape() {
-    const layer = window.UiLayers && window.UiLayers.top();
-    if (!layer) return;
-    if (layer.tagName === "DIALOG") {
-      layer.dispatchEvent(new Event("cancel", { cancelable: true }));
-    } else {
-      padDispatchKey("Escape");
-    }
-  }
-
-  function padNavPoll(pad) {
-    const top = window.UiLayers && window.UiLayers.top();
-    if (top !== padNavSeedLayer) {
-      padNavSeedLayer = top || null;
-      padNavSeeded = false;
-    }
-    const dir = padNavDirOf(pad);
-    if (!padNavSeeded) {
-      padNavSeeded = true;
-      if (!dir && !btnEdge(pad, 0)) padSeedFocus();
-    }
-    if (dir) {
-      const now = nowMs();
-      if (dir !== padNavDir) {
-        padNavDir = dir;
-        padNavKey(dir);
-        padNavNextT = now + PAD_NAV_DELAY_MS;
-      } else if (now >= padNavNextT) {
-        padNavKey(dir);
-        padNavNextT = now + PAD_NAV_REPEAT_MS;
-      }
-    } else {
-      padNavDir = null;   // released the instant input returns to neutral
-    }
-    if (btnEdge(pad, 6)) padDispatchKey("PageUp");
-    if (btnEdge(pad, 7)) padDispatchKey("PageDown");
-    if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
-    if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
-    if (btnEdge(pad, 0)) padActivate();
-    if (btnEdge(pad, 1)) padEscape();
-  }
+  const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap });
 
   // A connected pad only "wins" steering when its stick is actually deflected,
   // so an idle controller never overrides tilt / touch / on-screen buttons.
@@ -1771,128 +1166,12 @@ const Input = (function () {
      with no way to turn any of them down. Both channels route through here so
      the slider cannot drift out of sync with one of them.
      0 is a true off: callers do not have to check. */
-  let hapticScale = 1;
-  function setHaptics(v) {
-    if (typeof v === "number" && isFinite(v)) hapticScale = clamp(v, 0, 1);
-  }
-  // TRIGGER HAPTICS (L2/R2 motors via "trigger-rumble"): a separate on/off from
-  // the strength slider. Off forces every channel back to dual-rumble grips.
-  // Adaptive-trigger RESISTANCE is NOT this — Gamepad API cannot set it (needs
-  // WebHID, Chromium only); that path is out of scope. See PLATFORM-INPUT-NOTES.
-  let triggerHapticsOn = true;
-  function setTriggerHaptics(on) { triggerHapticsOn = !!on; }
-  function triggerHapticsEnabled() { return triggerHapticsOn; }
-  function actuatorHas(a, effect) {
-    return !!(a && a.effects && typeof a.effects.includes === "function" && a.effects.includes(effect));
-  }
-  // Device vibration, scaled. The try/catch is not optional: Chrome throws if
-  // the page has never been interacted with, and iOS Safari has no vibrate at
-  // all (WebKit has never shipped it and formally opposes it), so every caller
-  // must already survive this doing nothing.
-  // Can this device produce ANY haptic? navigator.vibrate is absent from every
-  // WebKit (so every iOS browser), and Gamepad.vibrationActuator is false there
-  // too — an iPhone can do neither from a web page. The HAPTICS slider says so
-  // in its help text, but a control that cannot do anything is better hidden
-  // than explained, so steer-tuning.js gates the row on this. Re-read on
-  // gamepadconnected: a pad arriving later can make it true.
-  function hapticsSupported() {
-    const nav = typeof navigator !== "undefined" ? navigator : null;
-    // navigator.vibrate exists in desktop Chrome too, where nothing buzzes: it
-    // only counts on a touch device (a phone or tablet has the motor).
-    if (nav && typeof nav.vibrate === "function" && (nav.maxTouchPoints || 0) > 0) return true;
-    const pad = activePad();
-    return !!(pad && (pad.vibrationActuator || (pad.hapticActuators && pad.hapticActuators.length)));   // the Firefox fallback rumble() uses too
-  }
-  // L2/R2 trigger motors: Chrome/Edge 126+, Opera, Samsung Internet on Win/macOS
-  // and Bluetooth Linux/ChromeOS. Not USB-on-Linux, not Android-native, not
-  // Safari, not Firefox. Gate the TRIGGER HAPTICS row on this.
-  function triggerRumbleSupported() {
-    const pad = activePad();
-    return !!(pad && pad.vibrationActuator && actuatorHas(pad.vibrationActuator, "trigger-rumble"));
-  }
-
-  // PRIME the vibrator from a real click. Chromium requires user activation for
-  // navigator.vibrate and no longer counts `touchstart` as one — so the first
-  // in-race buzz of a session is dropped with a console intervention and every
-  // later one works, which reads as "haptics are flaky" rather than "haptics
-  // were never armed". One zero-length call from the GO/START click arms it for
-  // the frame's lifetime. Safe everywhere: a no-op where vibrate is absent.
-  let hapticPrimed = false;
-  function primeHaptics() {
-    if (hapticPrimed) return;
-    hapticPrimed = true;
-    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
-    try { navigator.vibrate(1); } catch (_) { /* advisory only */ }
-  }
-
-  function vibrate(ms) {
-    if (hapticScale <= 0) return;
-    const d = Math.round(ms * hapticScale);
-    if (d <= 0) return;
-    // The phone that is steering feels the kerb, not the desk the laptop sits on.
-    if (remoteHaptics && remoteActive()) { try { remoteHaptics(d); } catch (_) { /* the link's problem */ } }
-    if (typeof navigator === "undefined" || !navigator.vibrate) return;
-    try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
-  }
-  // Best-effort rumble on the active pad. channel:
-  //   "brake"    → left trigger (lock-up) when trigger-rumble is available
-  //   "throttle" → right trigger (wheelspin / rear slide)
-  //   "handles" / omitted → dual-rumble grip motors (kerbs, contact, wall)
-  // Unsupported trigger-rumble, or TRIGGER HAPTICS off, falls back to dual-rumble.
-  // Silently no-ops where unsupported — note this is EVERY iOS browser:
-  // Gamepad.vibrationActuator is false on Safari iOS, so a paired DualSense
-  // cannot rumble from a web page and never will. Callers fire vibrate()
-  // alongside, so haptics degrade to nothing rather than to an error.
-  function rumble(intensity, ms, channel) {
-    if (hapticScale <= 0) return;
-    if (!padConnected) return;
-    const pad = activePad();
-    if (!pad) return;
-    const a = pad.vibrationActuator;
-    const mag = clamp(intensity, 0, 1) * hapticScale;
-    const dur = Math.max(0, ms | 0);
-    const wantTrig = triggerHapticsOn && (channel === "brake" || channel === "throttle");
-    if (a && typeof a.playEffect === "function") {
-      // playEffect() returns a Promise, so this catch only ever saw a
-      // SYNCHRONOUS throw — and every failure the Gamepad spec defines is a
-      // rejection instead (w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect):
-      // TypeError for bad params, NotSupportedError for an effect type the
-      // actuator cannot play, and — the one that fires in ordinary play —
-      // InvalidStateError whenever the document is not fully active or
-      // `visibilityState === "hidden"`. rumble() fires on every collision,
-      // kerb and gear shift, so a player who alt-tabs or whose phone locks
-      // mid-race lands a rejection in the split second a rumble is in flight,
-      // and index.html's unhandledrejection handler paints a full-screen
-      // overlay over the race on it. Preemption does NOT reject (the spec
-      // RESOLVES the older promise with "preempted"), so the arm below only
-      // ever swallows a real failure.
-      try {
-        let p;
-        if (wantTrig && actuatorHas(a, "trigger-rumble")) {
-          p = a.playEffect("trigger-rumble", {
-            duration: dur,
-            leftTrigger: channel === "brake" ? mag : 0,
-            rightTrigger: channel === "throttle" ? mag : 0,
-          });
-        } else {
-          p = a.playEffect("dual-rumble", {
-            duration: dur,
-            strongMagnitude: mag,
-            weakMagnitude: mag * 0.7,
-          });
-        }
-        if (p && p.catch) p.catch(() => {});
-      } catch (e) { /* actuator busy or unsupported effect type */ }
-      return;
-    }
-    // Firefox never shipped playEffect and exposes the older, non-standard
-    // hapticActuators[].pulse() instead — so without this branch every Firefox
-    // player had silent controllers while the code looked like it supported them.
-    const legacy = pad.hapticActuators && pad.hapticActuators[0];
-    if (legacy && typeof legacy.pulse === "function") {
-      try { legacy.pulse(mag, dur); } catch (e) { /* same */ }
-    }
-  }
+  const haptics = InputHaptics.create({
+    clamp, activePad, padConnected: () => padConnected, remoteActive,
+    remoteHaptics: () => remoteHaptics,
+  });
+  const { setHaptics, setTriggerHaptics, triggerHapticsEnabled, hapticsSupported,
+    triggerRumbleSupported, primeHaptics, vibrate, rumble } = haptics;
 
   /* ONE CURVE FOR EVERY DEVICE WAS THE DEFECT, and it is worth being exact
      about what was wrong, because the curve itself was not.
@@ -2302,7 +1581,7 @@ const Input = (function () {
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
     });
-    // Safety net for the hold buttons (see holdBtns): any pointer that lifts or
+    // Safety net for the hold buttons (see InputHoldButtons): any pointer that lifts or
     // cancels ANYWHERE on the page stops holding every button, even when the
     // button element itself never receives the event. Capture phase, so an
     // overlay or stopPropagation between here and the button can't swallow it.
@@ -2419,9 +1698,7 @@ const Input = (function () {
       padSteerAnalog = false; padLookBack = false;
       padDpadVal = 0; padDpadT = 0;
       padPrevButtons.length = 0;
-      padNavDir = null;
-      padNavSeeded = false;
-      padNavSeedLayer = null;
+      padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing
@@ -2442,7 +1719,7 @@ const Input = (function () {
     touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
-    // just the exported booleans — see holdBtns for why both must happen.
+    // just the exported booleans — see InputHoldButtons for why both must happen.
     holdReleaseAll();
     btnThrottle = btnBrake = false;
     btnThrottleVal = btnBrakeVal = 0;
@@ -2482,9 +1759,7 @@ const Input = (function () {
     // every button merely held across the blur a rising edge on the next poll
     // (boost toggled, a gear grabbed, the camera cycled). The next poll
     // re-seeds it from the pad as it always has.
-    padNavDir = null;
-    padNavSeeded = false;
-    padNavSeedLayer = null;
+    padMenu.reset();
   }
 
   /* THE EDGE LATCHES NEED EMPTYING WHILE NOBODY IS READING THEM.
@@ -2510,8 +1785,14 @@ const Input = (function () {
   }
 
   function debugState() {
+    const active = document.activeElement;
+    const tag = active && active.tagName || "";
+    const interactive = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(tag) || !!(active && active.isContentEditable);
+    const hudControl = !!(active && active.matches && active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore, .touchbtn"));
     return {
       steerMode,
+      gate: { anyOpen: !!menuOverlayOpen(), typing: interactive && !hudControl, hudControl,
+              focus: { id: active && active.id || null, tag, editable: !!(active && active.isContentEditable) } },
       key: { left: keyLeft, right: keyRight, throttle: keyThrottle, brake: keyBrake },
       btn: { throttle: btnThrottle, brake: btnBrake, left: btnSteerLeft, right: btnSteerRight,
              throttleVal: btnThrottleVal, brakeVal: btnBrakeVal, steerVal: btnSteerVal,
@@ -2535,12 +1816,12 @@ const Input = (function () {
       padRestOffset,
       padSteerAnalog,
       padAxisMap: getPadAxisMap(),
-      hapticScale,
+      hapticScale: haptics.scale(),
       lookingBack: lookingBack(),
       remote: { active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, thr: remThr, brk: remBrk, held: remHeld,
                 ageMs: remoteMs ? Math.round(nowMs() - remoteMs) : null },
       canvasTouches: touches.size,
-      holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
+      holdPointers: holdButtons.pointerCounts(),   // pressed-pointer count per hold button
       throttle: throttle(),
       braking: braking(),
       throttleLevel: throttleLevel(),

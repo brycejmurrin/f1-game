@@ -160,7 +160,13 @@
   ],
     SCENERY_DIR: "js/circuits/scenery",
     LAZY_DATA: [
+    "js/data/tab-utils.js",
+    "js/data/api-transport.js",
     "js/data/api.js",
+    "js/data/telemetry-model.js",
+    "js/data/telemetry-render.js",
+    "js/data/telemetry-player.js",
+    "js/data/telemetry-view.js",
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
@@ -172,7 +178,31 @@
   ],
     LAZY_DATA_EDGES: [
     [
+      "js/data/tab-utils.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/api-transport.js",
+      "js/data/hub.js"
+    ],
+    [
       "js/data/api.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/telemetry-view.js",
       "js/data/hub.js"
     ],
     [
@@ -202,6 +232,62 @@
     [
       "js/data/real-race-tab.js",
       "js/data/hub.js"
+    ],
+    [
+      "js/data/api-transport.js",
+      "js/data/api.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/telemetry-model.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/tab-utils.js",
+      "js/data/live.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-render.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-player.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry-player.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/telemetry-view.js"
+    ],
+    [
+      "js/data/telemetry-model.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-render.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-player.js",
+      "js/data/telemetry.js"
+    ],
+    [
+      "js/data/telemetry-view.js",
+      "js/data/telemetry.js"
     ]
   ],
     LAZY_NET: [
@@ -270,9 +356,11 @@
     "js/editor/stamps.js",
     "js/editor/randomise.js",
     "js/editor/validate.js",
+    "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/profile.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -290,11 +378,19 @@
     ],
     [
       "js/editor/shape.js",
+      "js/editor/insight.js"
+    ],
+    [
+      "js/editor/shape.js",
       "js/editor/fixes.js"
     ],
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/profile.js"
     ],
     [
       "js/editor/shape.js",
@@ -313,6 +409,10 @@
       "js/editor/designer.js"
     ],
     [
+      "js/editor/insight.js",
+      "js/editor/designer.js"
+    ],
+    [
       "js/editor/fixes.js",
       "js/editor/designer.js"
     ],
@@ -322,6 +422,10 @@
     ],
     [
       "js/editor/canvas.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/profile.js",
       "js/editor/designer.js"
     ]
   ],
@@ -348,6 +452,7 @@
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",

@@ -17,11 +17,12 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/car/car3d.js"), "utf8");
+const GEOMETRY_SRC = readFileSync(join(ROOT, "js/car/car-geometry.js"), "utf8");
 
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car3d.js"]) {
+  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car3d.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);
@@ -32,10 +33,10 @@ const C1 = [0.7, 0.05, 0.05], C2 = [0.95, 0.8, 0.1];
 const tris = (m) => m.idx.length / 3;
 
 test("foil samples a knife trailing edge and splits the outboard span", () => {
-  assert.match(SRC, /const FOIL_T = \[0, 0\.08, 0\.28, 0\.60, 0\.84, 1\]/);
-  assert.match(SRC, /mid = half \* 0\.67/);
-  assert.match(SRC, /\[-half, -mid\], \[-mid, -inner\], \[-inner, inner\], \[inner, mid\], \[mid, half\]/);
-  assert.match(SRC, /function addBeveledSpan\(/);
+  assert.match(GEOMETRY_SRC, /const FOIL_T = \[0, 0\.08, 0\.28, 0\.60, 0\.84, 1\]/);
+  assert.match(GEOMETRY_SRC, /mid = half \* 0\.67/);
+  assert.match(GEOMETRY_SRC, /\[-half, -mid\], \[-mid, -inner\], \[-inner, inner\], \[inner, mid\], \[mid, half\]/);
+  assert.match(GEOMETRY_SRC, /function addBeveledSpan\(/);
   assert.match(SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: 2\.66/);
   assert.match(SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: _ep\.front\.z/);
 });
@@ -284,11 +285,17 @@ test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo"
   // arch — round in plan, never peaking or dipping toward the centre: pin the
   // primitive, the path builder (crownY + HALO_RISE arch), and the
   // collar/apex datums at the call site.
-  assert.match(SRC, /function addTube\(/);
+  assert.match(GEOMETRY_SRC, /function addTube\(/);
   assert.match(SRC, /function haloHoopPath\(/);
   assert.match(SRC, /crownY \+ HALO_RISE \* Math\.sin\(a\)/);
   assert.match(SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
-  assert.match(SRC, /addTube\(out, hoop, hr, 6/);
+  // The tube is drawn along `hoopT`: the same 15-point hoop, or with CarShade
+  // rounding on (js/car/car-shade.js) a Catmull-Rom spline through those points
+  // at 12 sides, because 6 sides on 15 points kinked every ~30 degrees. This
+  // file loads car3d WITHOUT CarShade, so everything it builds is the 6-sided
+  // tube on the hoop itself; tests/unit/car-shade.test.mjs covers the spline.
+  assert.match(SRC, /hoopT = hoop && _round \? CarShade\.fine\(hoop, 3\) : hoop/);
+  assert.match(SRC, /addTube\(out, hoopT, hr, _round \? 12 : 6/);
   assert.match(SRC, /inlet\.width \* 0\.48/);
 });
 

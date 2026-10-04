@@ -116,6 +116,55 @@ test("MY TEAM standings include the hired second driver", () => {
   assert.equal(custom.find((row) => row.id === "custom:1").pts, 18);
 });
 
+test("MY TEAM sponsor settlement records one payout even when settlement is retried", () => {
+  const Career = load(24);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data(), sp = Career.sponsorAt(0);
+  assert.ok(sp && sp.pay > 0);
+  for (let r = sp.start; r <= sp.end; r++) career.results.push({ r, pts: 1000, double: true, clean: true, dnf: false });
+  career.season.round = sp.end + 1;
+  assert.equal(Career.sponsorAt(sp.end).met, true, "the actual generated contract is fulfilled");
+  const cash = career.money;
+  assert.equal(Career.settleSponsor(), sp.pay);
+  assert.equal(career.money, cash + sp.pay);
+  assert.deepEqual(Array.from(career.paidSponsors), [sp.idx]);
+  assert.equal(Career.settleSponsor(), 0);
+  assert.equal(career.money, cash + sp.pay, "retry does not mint cash twice");
+  // Results and the paid ledger are separate owners; rebuilding results must
+  // not make a formerly-paid window payable again.
+  career.results = career.results.map((r) => ({ ...r }));
+  assert.equal(Career.settleSponsor(), 0);
+  assert.equal(career.money, cash + sp.pay);
+  assert.deepEqual(Array.from(career.paidSponsors), [sp.idx]);
+});
+
+test("MY TEAM completing a sponsor window through settleRound cannot pay twice", () => {
+  const Career = load(24);
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data(), sp = Career.sponsorAt(0);
+  for (let r = sp.start; r < sp.end; r++) career.results.push({ r, pts: 1000, double: true, clean: true, dnf: false });
+  career.season.round = sp.end + 1;
+  const player = { team: { id: "custom" }, retired: false, cuts: 0, penalty: 0, gridPos: 1 };
+  const mate = { ...player };
+  const order = [player, mate, { team: { id: "haas" }, retired: false }];
+  const first = Career.settleRound(order, player);
+  assert.equal(first.sponsorPay, sp.pay, "settleRound reaches the real sponsor ledger");
+  const cash = career.money, ledger = JSON.stringify(career.paidSponsors), results = career.results.length;
+  assert.equal(Career.settleRound(order, player), null);
+  assert.equal(career.money, cash, "round retry preserves the entire MY TEAM balance");
+  assert.equal(JSON.stringify(career.paidSponsors), ledger);
+  assert.equal(career.results.length, results);
+  assert.equal(Career.settleSponsor(), 0, "direct sponsor retry is protected by the same ledger");
+  assert.equal(career.money, cash);
+  career.results = career.results.filter((row) => row.r !== sp.end);
+  const rebuilt = Career.settleRound(order, player);
+  assert.equal(rebuilt.sponsorPay, 0, "paidSponsors independently guards a rebuilt results row");
+  assert.equal(career.money, cash + rebuilt.prize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS : 0) - rebuilt.wages);
+  assert.equal(JSON.stringify(career.paidSponsors), ledger);
+});
+
 test("the retired flag is the ONLY discriminator between the two rounds", () => {
   // The base code failed exactly this: both rounds classify the mate P5, and a
   // position-only read (`Teams.POINTS[order.indexOf(mate)]`) returns 10 points
@@ -658,6 +707,22 @@ test("the pick locks once the weekend is under way", () => {
   delete career.season.stage;
   career.season.qualiOrder = ["haas:1"];  // or quali has
   assert.equal(Career.chooseObjective(2), false);
+});
+
+test("a SIMULATED quali or a started race locks the pick too, for that round only", () => {
+  // Neither leaves a stage, a qualiOrder or a sprintOrder in a career save (a
+  // simulated quali is never persisted), so the briefs used to unlock again with
+  // the grid already known. markWeekendStarted() stamps the round instead.
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(1);
+  Career.markWeekendStarted();             // q-sim, or startRaceBody
+  assert.equal(Career.objectiveLocked(), true);
+  assert.equal(Career.chooseObjective(2), false, "no re-pick after seeing the grid");
+  assert.equal(Career.objectivePick(0), 1);
+  career.season.round = 1;                  // the next round
+  assert.equal(Career.objectiveLocked(), false, "keyed on the round: the next weekend starts unlocked");
+  assert.equal(Career.chooseObjective(2), true);
 });
 
 test("the choices are drawn from the seed, so reloading cannot reroll them", () => {

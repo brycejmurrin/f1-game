@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -27,6 +27,7 @@
     "apex_pick_tests",
     "apex_bump_cache_check",
     "apex_status",
+    "apex_doctor",
     "apex_eval",
     "apex_shot",
     "apex_agent",

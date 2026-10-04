@@ -60,6 +60,10 @@ test("stampStaged rewrites ?v=dev tags to content hashes", () => {
     const after = fs.readFileSync(path.join(dest, "index.html"), "utf8");
     assert.doesNotMatch(after, /\?v=dev/);
     assert.match(after, /\?v=[a-f0-9]{12}/);
+    const preview = fs.readFileSync(path.join(dest, "cockpit-view.html"), "utf8");
+    assert.doesNotMatch(preview, /\?v=dev/);
+    assert.match(preview, /src="js\/camera\/cockpit-preview\.js\?v=[a-f0-9]{12}"/,
+      "the public iframe must ship with the same content-hash policy as the game");
   } finally {
     fs.rmSync(dest, { recursive: true, force: true });
   }

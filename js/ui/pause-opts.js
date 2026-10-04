@@ -188,7 +188,12 @@ const PauseOpts = (function () {
   function wireRows() {
     if (typeof SettingRow === "undefined" || !SettingRow.build) return;
     const body = hasDoc ? document.getElementById("pm-pausemenu-body") : null;
-    if (!body || body.dataset.pauseRowsMounted) return;
+    if (!body) return;
+    if (body.dataset.pauseRowsMounted) {
+      for (const [id, read] of [["pm-pauselayout", layoutMode], ["pm-pauseside", sideMode],
+        ["pm-pausedim", dimMode], ["pm-pauseconfirm", confirmMode]]) paintRow(id, read());
+      return;
+    }
     body.dataset.pauseRowsMounted = "1";
     // One fold help (not four per-row lines): same copy the shell used to carry
     // as #pm-pausemenu-help before the rows moved out of index.html.

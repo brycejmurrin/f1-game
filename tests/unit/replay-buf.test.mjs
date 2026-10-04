@@ -12,11 +12,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot() {
+function boot(document) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array,
     isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+    document,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -40,6 +41,24 @@ test("budget stays under 0.7 MB for 22 cars / 20 s", () => {
   assert.ok(R.budgetOk(22, R.capacityFor(22)), "capacityFor must fit");
   assert.ok(R.frameBytes(22) * R.capacityFor(22) <= R.MAX_BYTES);
   assert.ok(R.capacityFor(22) >= R.HZ * 10, "at least 10 s at 22 cars");
+});
+
+test("recorded heading and mesh yaw cross the ±π boundary without facing backwards", () => {
+  const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
+  for (const direction of [-1, 1]) {
+    api.reset(field);
+    Object.assign(field[0], { head: direction * (Math.PI - 0.02), yawVis: -direction * (Math.PI - 0.04), px: 10, steer: -0.5 });
+    api.sample(0, field);
+    Object.assign(field[0], { head: -direction * (Math.PI - 0.02), yawVis: direction * (Math.PI - 0.04), px: 20, steer: 0.5 });
+    api.sample(1, field);
+    for (const t of [0.25, 0.5, 0.75]) {
+      const pose = api.at(t).cars[0];
+      assert.ok(Math.cos(pose.head) < -0.999, "heading continues through the branch cut");
+      assert.ok(Math.cos(pose.yawVis) < -0.999, "mesh yaw continues through the opposite branch cut");
+      assert.ok(Math.abs(pose.px - (10 + 10 * t)) < 1e-6, "positions still interpolate linearly");
+      assert.ok(Math.abs(pose.steer - (t - 0.5)) < 1e-6, "non-angular controls still interpolate linearly");
+    }
+  }
 });
 
 test("sample wraps and at() interpolates; restore is bit-exact on captured fields", () => {
@@ -91,6 +110,128 @@ test("beginScrub is a no-op when netPlay is active", () => {
   for (let i = 0; i < R.HZ * 4; i++) api.sample(i / R.HZ, field);
   assert.equal(api.sample(1, field), false, "sampling off under netplay");
   assert.equal(api.beginScrub(), false);
+});
+
+test("injected pose ownership denies sampling, pause-card offering and scrub entry even with a populated ring", () => {
+  const button = { hidden: true }, R = boot({ getElementById: id => id === "pm-replay" ? button : null });
+  let eligible = true;
+  const field = cars(2), G = { cars: field, netPlay: { active: () => false } };
+  const api = R.create(G, () => eligible);
+  for (let i = 0; i < R.HZ * 4; i++) api.sample(i / R.HZ, field);
+  api.refreshButton(); assert.equal(button.hidden, false, "ordinary solo replay is offered");
+  const frames = api.window().frames, before = field.map(c => ({ ...c }));
+  eligible = false;
+  api.onTick(6, field, "race"); assert.equal(api.sample(7, field), false);
+  assert.equal(api.window().frames, frames, "WATCH cannot add recorded puppets to the ring");
+  api.onPause(true); assert.equal(button.hidden, true, "WATCH cannot offer a competing replay door");
+  assert.equal(api.beginScrub(), false); assert.equal(api.isScrubbing(), false);
+  assert.deepEqual(field, before, "denied entry leaves the recorded owner's poses untouched");
+});
+
+test("a clock rewind discards the wrapped future ring and tags before rebuilding a fresh replay window", () => {
+  const button = { hidden: true }, R = boot({ getElementById: id => id === "pm-replay" ? button : null });
+  const field = cars(1), G = { cars: field, netPlay: { active: () => false }, raceT: 101 }, api = R.create(G);
+  for (let i = 0; i < R.MAX_FRAMES + 20; i++) {
+    field[0].px = i; api.sample(80 + i / R.HZ, field);
+  }
+  api.pushTag("retirement", 99, 0); api.refreshButton(); assert.equal(button.hidden, false);
+  field[0].px = 42; G.raceT = 10;
+  assert.equal(api.sample(10, field), true);
+  const w = api.window(); assert.equal(w.frames, 1); assert.equal(w.t0, 10); assert.equal(w.t1, 10);
+  assert.equal(api.lastTag(), null); assert.equal(api.status().tags, 0);
+  assert.equal(api.at(10).cars[0].px, 42, "the replay contains the restored checkpoint, never the discarded future");
+  api.refreshButton(); assert.equal(button.hidden, true); assert.equal(api.beginScrub(), false);
+  for (let i = 1; i <= R.HZ * 3; i++) { G.raceT = 10 + i / R.HZ; api.sample(G.raceT, field); }
+  api.refreshButton(); assert.equal(button.hidden, false, "the new timeline earns its own replay threshold");
+  assert.ok(api.window().t0 <= api.window().t1);
+});
+
+test("a backwards timestamp within the same 30 Hz slot is recorded on its new timeline", () => {
+  const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.sample(10.04, field); field[0].px = 123;
+  assert.equal(api.sample(10.035, field), true, "discard the future before applying the cadence gate");
+  assert.equal(api.window().frames, 1); assert.equal(api.window().t0, 10.035);
+  assert.equal(api.at(10.035).cars[0].px, 123);
+});
+
+test("a paused checkpoint rewind cannot enter a stale ring before the next simulation sample", () => {
+  for (const refresh of [false, true]) {
+    const button = { hidden: true }, R = boot({ getElementById: id => id === "pm-replay" ? button : null });
+    const field = cars(1), G = { cars: field, netPlay: { active: () => false }, raceT: 20 }, api = R.create(G);
+    for (let i = 0; i < R.HZ * 4; i++) api.sample(16 + i / R.HZ, field);
+    api.refreshButton(); assert.equal(button.hidden, false);
+    G.raceT = 2; field[0].px = 123;
+    if (refresh) { api.refreshButton(); assert.equal(button.hidden, true); }
+    assert.equal(api.beginScrub(), false, "an already-visible stale REPLAY door is harmless");
+    assert.equal(api.window().frames, 0); assert.equal(field[0].px, 123);
+  }
+});
+
+test("reopening Pause during scrub restores the live pose before checkpoint or other pause actions", () => {
+  const button = { hidden: true }, dock = { hidden: true };
+  const R = boot({ getElementById: id => id === "pm-replay" ? button : id === "pm-replay-dock" ? dock : null });
+  const field = cars(1), G = { cars: field, netPlay: { active: () => false }, raceT: 4 }, api = R.create(G);
+  for (let i = 0; i < R.HZ * 4; i++) { field[0].px = i; api.sample(i / R.HZ, field); }
+  const before = field.map(c => ({ ...c }));
+  assert.equal(api.beginScrub(), true); assert.notEqual(field[0].px, before[0].px);
+  api.onPause(true);
+  assert.equal(api.isScrubbing(), false); assert.deepEqual(field, before); assert.equal(button.hidden, false);
+  assert.equal(dock.hidden, true, "reopening Pause hides the now-ended replay dock");
+  field[0].px = 567; api.tickScrub(0.05); api.endScrub();
+  assert.equal(field[0].px, 567, "ended scrub cannot overwrite a subsequent checkpoint restore");
+});
+
+test("a forward JUMP IN beyond the replay window cannot blend countdown poses into the mid-race timeline", () => {
+  for (const pausedDoor of [false, true]) {
+    const button = { hidden: true }, R = boot({ getElementById: id => id === "pm-replay" ? button : null });
+    const field = cars(1), G = { cars: field, netPlay: { active: () => false }, raceT: 4 }, api = R.create(G);
+    for (let i = 0; i < R.HZ * 4; i++) { field[0].px = i; api.sample(i / R.HZ, field); }
+    api.pushTag("pass", 3, 0); api.refreshButton(); assert.equal(button.hidden, false);
+    G.raceT = 100; field[0].px = 1234;
+    if (pausedDoor) {
+      assert.equal(api.beginScrub(), false, "a paused JUMP IN cannot enter the previously offered stale ring");
+      assert.equal(api.window().frames, 0);
+    }
+    assert.equal(api.sample(G.raceT, field), true);
+    assert.equal(api.window().frames, 1); assert.equal(api.window().t0, 100); assert.equal(api.window().t1, 100);
+    assert.equal(api.at(95).cars[0].px, 1234, "an earlier request clamps to the first mid-race pose");
+    assert.equal(api.lastTag(), null);
+    api.refreshButton(); assert.equal(button.hidden, true, "the jumped timeline must earn fresh replay history");
+    for (let i = 1; i <= R.HZ * 3; i++) { G.raceT = 100 + i / R.HZ; api.sample(G.raceT, field); }
+    api.refreshButton(); assert.equal(button.hidden, false);
+  }
+});
+
+test("scrubbed poses render wholly at recorded positions and yaw for every renderAlpha, then restore exact live history", () => {
+  const R = boot(), field = cars(2), G = { cars: field, netPlay: { active: () => false } }, api = R.create(G);
+  Object.assign(field[0], { s: 10, px: 10, pz: 20, head: 0.5, yawVis: -0.4 }); api.sample(0, field);
+  Object.assign(field[0], { s: 20, px: 20, pz: 30, head: 0.6, yawVis: -0.2 }); api.sample(1, field);
+  Object.assign(field[0], { s: 1000, px: 1000, pz: 2000, head: 2, yawVis: 0.8,
+    rPrevS: 999, rPrevX: undefined, rPrevPx: 999, rPrevPz: 1999, rPrevHead: 1.9, rPrevYawVis: 0.7 });
+  const before = field.map(c => ({ ...c }));
+  // Use the game's actual render helpers: a camera-only assertion would miss
+  // the body mixing the historical pose with its live interpolation endpoints.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), render = vm.createContext({ _rp: {}, renderAlpha: 0, Math });
+  for (const name of ["renderPosOf", "yawVisInterp", "headInterp"]) {
+    const start = game.indexOf("function " + name + "("); assert.ok(start >= 0);
+    vm.runInContext(game.slice(start, game.indexOf("\n}", start) + 2), render);
+  }
+  assert.equal(api.beginScrub(), true);
+  for (const time of [0, 0.5, 1]) {
+    api.apply(time); const recorded = api.at(time).cars[0];
+    for (const alpha of [0, 0.5, 1]) {
+      render.renderAlpha = alpha;
+      const position = render.renderPosOf(field[0]);
+      assert.equal(position.x, recorded.px); assert.equal(position.z, recorded.pz);
+      assert.equal(render.headInterp(field[0]), recorded.head);
+      assert.equal(render.yawVisInterp(field[0]), recorded.yawVis);
+      assert.equal(field[0].rPrevS, recorded.s); assert.equal(field[0].rPrevX, recorded.x);
+    }
+  }
+  api.endScrub(); assert.deepEqual(field, before, "restore values and originally absent history/yaw fields exactly");
+  assert.ok(Object.hasOwn(field[0], "rPrevX"), "an own undefined history value is preserved");
+  assert.equal(Object.hasOwn(field[1], "rPrevPx"), false, "scrub-created history is removed");
+  assert.equal(Object.hasOwn(field[1], "yawVis"), false, "scrub-created presentation yaw is removed");
 });
 
 test("module never writes Ghost storage and stays under the RAM budget constant", () => {

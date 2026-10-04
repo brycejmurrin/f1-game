@@ -48,6 +48,7 @@
  *
  * Run: node --test tests/unit/phone-touch-surface.test.mjs   (npm run test:tooling-fast)
  */
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -60,7 +61,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 const cssCache = new Map();
-const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(read(name))); return cssCache.get(name); };
+const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
 const CSS_FILES = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => "css/" + f);
 const px = (v, what) => { const m = /^(-?\d+(?:\.\d+)?)px$/.exec(String(v).trim()); assert.ok(m, `${what}: expected a px literal, got ${v}`); return +m[1]; };
 /** First argument of `max(<n>px, …)` — the literal rung a ladder token stands on. */
@@ -85,7 +86,7 @@ test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG fl
 });
 
 test("the dock's tap rungs clear 44px at both width tiers", () => {
-  const docks = rulesFor(css("css/overlays.css"), "body:not(.desktop) .dock").filter((r) => r.decls.has("--tap"));
+  const docks = rulesFor(css("css/touch-controls.css"), "body:not(.desktop) .dock").filter((r) => r.decls.has("--tap"));
   assert.equal(docks.length, 2, "one base landscape dock rule and one <=700px tier");
   for (const r of docks) {
     const tap = rung(r.decls.get("--tap"), "dock --tap"), hold = rung(r.decls.get("--hold"), "dock --hold");
@@ -96,10 +97,12 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
     // (2026-09-04) because it and the readouts compete for the same edges, and
     // the floor has to divide by the axis the dock actually zooms by or it
     // stops being a floor the moment the two part.
-    assert.match(r.decls.get("--tap"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
-    assert.match(r.decls.get("--hold"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
+    // Divided by the FLOORED axis since the dock zoom floors at 1 too: below
+    // 100 % the zoom stays 1, so the literals must not grow to compensate.
+    assert.match(r.decls.get("--tap"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
+    assert.match(r.decls.get("--hold"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
   }
-  const ov = css("css/overlays.css");
+  const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, "body:not(.desktop) .dock .touchbtn", "width"), "var(--tap)");
   assert.equal(decl(ov, /^body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
   // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
@@ -115,7 +118,7 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
-  const ov = css("css/overlays.css");
+  const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "width"), "var(--hold)");
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "height"), "var(--hold)");
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps", "padding-bottom"), "calc(var(--gap) * 7 / 6)");
@@ -124,7 +127,7 @@ test("buttons-mode modifier taps ride the hold rung like pedals and steer", () =
 /* ── the dock at 390px tall ──────────────────────────────────────────────── */
 
 test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, and fitHud's cap is wired as the net", () => {
-  const ov = css("css/overlays.css");
+  const ov = css("css/touch-controls.css");
   const tk = css("css/tokens.css");
   const dock = rulesFor(ov, "body:not(.desktop) .dock").find((r) => r.decls.has("--tap") && !r.context.some((c) => /max-width/.test(c)));
   const tap = rung(dock.decls.get("--tap"), "--tap"), hold = rung(dock.decls.get("--hold"), "--hold");
@@ -160,11 +163,14 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, var(--hud-btn-scale))", "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback");
+  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(1, var(--hud-btn-scale)))",
+    "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at 1 so a setting never shrinks a tap target");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
   // player set the two apart.
-  assert.match(hud, /set\("--hud-z-dock", capDock, btnScale\)/, "the dock cap is judged against BUTTON SIZE");
+  // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
+  // floor in css/touch-controls.css), or a cap between BUTTON SIZE and 1 is dropped.
+  assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(1, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE");
   // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
   // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
   // custom property is never reduced, so the token reads back as a literal
@@ -193,7 +199,7 @@ test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z"
   assert.ok(tokens.includes(".hud-bottom") && tokens.includes("#minimap"), "the zoom list names the bottom cluster and the map");
   const last = (sel) => sel.trim().split(/\s*[>+~]\s*|\s+/).pop();
   const offenders = [];
-  for (const file of ["css/hud.css", "css/overlays.css", "css/responsive.css"]) {
+  for (const file of ["css/hud.css", "css/touch-controls.css", "css/responsive.css"]) {
     for (const r of css(file)) {
       const hits = r.selector.split(",").map(last).filter((c) => tokens.some((t) => c === t || c.startsWith(t + ":") || c.startsWith(t + "[")));
       if (!hits.length) continue;
@@ -259,7 +265,7 @@ test("double-tap zoom is refused while menu pinch remains native and driving own
   assert.equal(decl(tk, "html, body", "touch-action"), "manipulation");
   assert.equal(decl(tk, "html, body", "overscroll-behavior"), "none", "no root rubber-band");
   assert.equal(decl(tk, "#game", "touch-action"), "none", "the canvas owns every gesture while driving");
-  assert.equal(decl(css("css/overlays.css"), ".touchbtn", "touch-action"), "none");
+  assert.equal(decl(css("css/touch-controls.css"), ".touchbtn", "touch-action"), "none");
   assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "pan-y", "menus keep native pan");
 });
 
@@ -314,7 +320,7 @@ test("Safari GestureEvents keep menu pinch zoom and are cancelled on the game an
 });
 
 test("in-race chrome and the blocker are anchored inside the safe area", () => {
-  const ov = css("css/overlays.css");
+  const ov = css("css/touch-controls.css");
   const bar = ruleFor(ov, "#hud-dock", "left", { context: /orientation: landscape/ });
   assert.ok(bar, "#hud-dock is positioned in landscape");
   assert.match(bar.decls.get("left"), /var\(--sal\)/); assert.match(bar.decls.get("right"), /var\(--sar\)/); assert.match(bar.decls.get("bottom"), /var\(--sab\)/);
@@ -359,7 +365,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console }) {
   if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   Input.init({ addEventListener() {} }, {});
   const count = (type) => (listeners.get(type) || []).length;

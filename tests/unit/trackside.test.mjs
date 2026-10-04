@@ -58,6 +58,17 @@ test("pick advances as the car passes each cam, with hysteresis", () => {
   assert.equal(TS.pick(cams, 400 + TS.HYST_M + 1, 1000, 0), 1);
 });
 
+test("pose tightens the lens when the car is far and opens it when the car is close", () => {
+  const TS = load();
+  const track = { total: 1000, id: "test" };
+  const near = TS.pose(track, 100, 0, { carPos: [0, 100] });
+  track._tsIdx = 0;
+  const far = TS.pose(track, 280, 0, { carPos: [0, 280] });
+  assert.ok(near.fov > far.fov, `close shot should be wider (${near.fov} vs ${far.fov})`);
+  assert.ok(far.fov <= 22, `a distant car should be on the long lens, got ${far.fov}`);
+  assert.ok(near.fov <= 50 && far.fov >= 18, "fov stays inside the clamp");
+});
+
 test("pose aims at the subject car when carPos is supplied", () => {
   const TS = load();
   const track = { total: 1000, id: "test" };
@@ -71,8 +82,14 @@ test("pose aims at the subject car when carPos is supplied", () => {
 test("CAM_MODES appends trackside after visor (save-index contract)", () => {
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...ms.matchAll(/\{ id: "([^"]+)"/g)].map((m) => m[1]);
-  // TRACKSIDE owns index 14 on ship; later PRs may append after it (rival/pitwall/drone).
+  // TRACKSIDE owns index 14 on ship; later PRs may append after it (rival/pitwall/drone/tv).
   assert.ok(ids.includes("trackside"), "trackside is in CAM_MODES");
   assert.ok(ids.includes("visor"), "visor stays before the append");
   assert.ok(ids.indexOf("visor") < ids.indexOf("trackside"));
+  // Live TV director may append after trackside; never reorder earlier ids.
+  if (ids.includes("tv")) {
+    assert.ok(ids.indexOf("trackside") < ids.indexOf("tv"), "tv appends after trackside");
+  } else {
+    assert.equal(ids[ids.length - 1], "trackside");
+  }
 });

@@ -81,6 +81,7 @@ export const RULES = [
   [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
   [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
   [/^js\/render\/shared\//, ["hooks", "gfx"], "the baked-pack loader, glTF and the lamp chunks every backend shares"],
+  [/^js\/render\/renderer-boot\.js$/, ["tiny", "hooks"], "backend selection, canary and fallback orchestration"],
 
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["circuits", "sweeps"], "prop placement and the full-fleet clip audits"],
@@ -152,6 +153,8 @@ export const RULES = [
   [/^js\/game\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the loop: physics, AI, race logic"],
   [/^js\/physics\/consts\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^js\/physics\/grip-steer\.js/, ["input", "steering-unit"], "own-state grip-steer cap + the steering sheet that hosts it"],
+  [/^js\/audio\/driving-cues\.js/, ["steering-unit", "audio-unit"], "assist-gated braking tone + L/R corner calls"],
   [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
   // `sweeps` because debris-world's hazard query projects bodies back onto the
   // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
@@ -222,6 +225,7 @@ export const RULES = [
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
   [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
+  [/^js\/ui\/hud-readouts\.js/, ["state-unit", "ui"], "hud-readouts.test.mjs"],
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
@@ -269,14 +273,14 @@ export const RULES = [
   // mention the art would have put boot-guard and logging — the two
   // slowest-per-test specs in the tree — back into every source edit.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
-  [/^index\.html/, ["tiny", "ui"], "script tags + DOM shell"],
+  [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
   [/^assets\//, ["hooks"], "the baked pack loader"],
   [/^tests\//, ["audit"], "every test file must belong to a topical group"],
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
-  [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
+  [/^(AGENTS|CLAUDE|README)\.md$|^docs\/|^\.claude\/(skills|agents|rules)\/|^\.agents\/skills\//, ["tooling-fast"], "docs integrity is a real test"],
 ];
 
 /** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:
@@ -311,6 +315,34 @@ export function pick(files) {
     }
   }
   return groups;
+}
+
+// Validate the selector before consulting git or starting any verification.
+export function validateSelectionArgs(argv, flags = ["--staged", "--bg", "--json", "--help", "-h"]) {
+  const allowed = new Set(flags);
+  let sawSince = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--since") {
+      if (sawSince) throw new Error("--since may be supplied only once");
+      sawSince = true;
+      if (!argv[i + 1] || argv[i + 1].startsWith("-")) throw new Error("--since requires a ref");
+      i++;
+    } else if (a.startsWith("-") && !allowed.has(a)) throw new Error(`Unknown option: ${a}`);
+  }
+  if (argv.includes("--staged") && argv.includes("--since")) throw new Error("Choose --staged or --since");
+}
+
+export function selectionReceipt(files, scripts) {
+  const receipts = files.map((file) => {
+    const selected = pick([file]);
+    const groups = [...selected.keys()].filter((g) => scripts[`test:${g}`]).sort();
+    return { file, claimed: groups.length > 0, groups,
+      because: [...new Set(groups.flatMap((g) => [...selected.get(g)]))] };
+  });
+  const unclaimed = receipts.filter((r) => !r.claimed).map((r) => r.file);
+  return { reason: !files.length ? "none" : unclaimed.length ? (unclaimed.length === files.length ? "unmatched" : "partial") : "matched",
+    receipts, unclaimed };
 }
 
 function changedFiles(argv) {
@@ -353,6 +385,8 @@ function changedFiles(argv) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
 
+  try { validateSelectionArgs(argv); } catch (e) { console.error(e.message); process.exit(1); }
+
   // --help must answer without consulting git. On a clean deploy tip,
   // changedFiles() is empty and the default prose is "no changed files" —
   // which does not contain `group`/`test:`, so the MCP smoke in
@@ -387,7 +421,7 @@ Each matched path maps to one or more test:<group> scripts (see RULES).`);
       // "none" — nothing changed, run nothing. "unmatched" — files changed but
       // no rule claimed them, so the selection is NOT trustworthy and the
       // caller must fall back to a full run. "matched" — groups is the answer.
-      reason: !files.length ? "none" : (named.length ? "matched" : "unmatched"),
+      ...selectionReceipt(files, pkgJ.scripts),
       files,
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
     }));
@@ -410,6 +444,8 @@ Each matched path maps to one or more test:<group> scripts (see RULES).`);
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const names = [...groups.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort();
 
+  const receipt = selectionReceipt(files, pkg.scripts);
+  if (receipt.unclaimed.length) console.error(`Unclaimed paths: ${receipt.unclaimed.join(", ")} — selection is ${receipt.reason}; additional verification required.`);
   console.log(`\n${names.length} group(s) to run:`);
   for (const g of names) console.log(`    test:${g.padEnd(14)} ${[...groups.get(g)][0]}`);
 

@@ -6,9 +6,55 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { waitXrFrames } from "../helpers/iwer-install.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+
+// Virtual page clock: progress comes from the XR producer, not the waiter.
+function xrWaitPage(countAt) {
+  let now = 0, evaluations = 0;
+  const context = vm.createContext({
+    performance: { now: () => now },
+    XrSession: { frameCount: () => countAt(now) },
+    setTimeout: (callback, delay) => { queueMicrotask(() => { now += delay; callback(); }); },
+  });
+  return {
+    page: { evaluate: (fn, arg) => {
+      evaluations++;
+      context.arg = arg;
+      return vm.runInContext(`(${fn.toString()})(arg)`, context);
+    } },
+    evaluations: () => evaluations,
+  };
+}
+
+test("XR waiter uses one evaluation and requires progress beyond a nonzero baseline", async () => {
+  const h = xrWaitPage((now) => now < 2200 ? 9 : 12);
+  assert.equal(await waitXrFrames(h.page, 2), 9);
+  assert.equal(h.evaluations(), 1);
+});
+
+test("XR waiter rejects frozen and exactly-delta frames within the original budget", async () => {
+  for (const countAt of [() => 0, (now) => now > 0 ? 2 : 0]) {
+    const h = xrWaitPage(countAt);
+    await assert.rejects(waitXrFrames(h.page, 2, { timeout: 2400 }), /timed out after 2400ms/);
+    assert.equal(h.evaluations(), 1);
+  }
+});
+
+test("XR waiter cannot accept progress first observed at the deadline", async () => {
+  const h = xrWaitPage((now) => now >= 2000 ? 3 : 0);
+  await assert.rejects(waitXrFrames(h.page, 2, { timeout: 2000 }), /base=0, fc=3/);
+  assert.equal(h.evaluations(), 1);
+});
+
+test("XR waiter's Node watchdog rejects a blocked evaluation without page timers", async () => {
+  let evaluations = 0;
+  const page = { evaluate: () => { evaluations++; return new Promise(() => {}); } };
+  await assert.rejects(waitXrFrames(page, 2, { timeout: 20 }), /after 20ms.*evaluation or timers stalled/);
+  assert.equal(evaluations, 1);
+});
 
 function bootXr() {
   const ctx = vm.createContext({
@@ -275,7 +321,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
     camCutT: 0,
     store: { set(k, v) { writes.push([k, v]); } },
   };
-  const ctx = vm.createContext({ console, Math, document: { body: { classList: { toggle() {} } }, getElementById: () => null } });
+  const ctx = vm.createContext({ console, Math, document: { body: { classList: { toggle() {} }, toggleAttribute() {} }, getElementById: () => null } });
   seedLog(ctx);
   ctx.window = ctx;
   ctx.CamTunerPanel = { refresh() {} };

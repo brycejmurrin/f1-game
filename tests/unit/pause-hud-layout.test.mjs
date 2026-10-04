@@ -1,3 +1,4 @@
+import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -51,7 +52,7 @@ test("garage camera stack hides under a dim overlay, not under garage itself", (
 });
 
 test("compact pause stack tightens without changing type tokens", () => {
-  const css = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
+  const css = readCssSource("css/components.css");
   assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack/);
   // max(36px, --tap-min), not a bare 36px: the 36 floor is the compact tighten
   // this test guards; the --tap-min arm only wins below 100% UI SIZE, where a
@@ -86,11 +87,11 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
 });
 
 test("losing focus while visible pauses a solo race; an iOS audio interruption does too; neither in a friend race", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
   const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
-  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
-  assert.match(blur, /if \(state === "race" \|\| state === "count"\) setPaused\(true, "blur"\);/);
-  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(state === "race" \|\| state === "count"\) && !netPlay\.active\(\)\) setPaused\(true, "audio-interrupted"\);/);
+  assert.match(blur, /document\.hidden \|\| document\.hasFocus\(\) \|\| navigator\.webdriver \|\| G\.netPlay\.active\(\)/, "settled, visible-only, never under automation or in MP");
+  assert.match(blur, /if \(G.state === "race" \|\| G.state === "count"\) setPaused\(true, "blur"\);/);
+  assert.match(game, /GameAudio\.onInterrupted\(\(\) => \{\s*if \(\(G.state === "race" \|\| G.state === "count"\) && !G\.netPlay\.active\(\)\) setPaused\(true, "audio-interrupted"\);/);
   const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
   assert.match(eng, /ctx\.state === "interrupted" && _onInterrupted/);
 });

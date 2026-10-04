@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -89,6 +89,9 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
 | `native.js` | `Native` | tag | native-shell detect (Electron preload + Capacitor). |
 | `native-download.js` | `NativeDownload` | tag | blob:<a download> → Capacitor Filesystem + Share (no bundler). |
+| `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
+| `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
+| `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
 **`js/`**
@@ -121,6 +124,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `gfx.js` | `Gfx` | tag | Gfx: the renderer backend seam. |
+| `renderer-boot.js` | `RendererBoot` | tag | RendererBoot: extracted runtime orchestration. |
 
 **`js/data/`**
 
@@ -131,8 +135,14 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
-| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
-| `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
+| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
+| `api-transport.js` | `F1Transport` | LAZY_DATA | serialized API transport: cache, rate limits, timeouts, retries and cancellation. |
+| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
+| `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
+| `telemetry-render.js` | `DataTelemetryRender` | LAZY_DATA | telemetry canvas layers, frame compositing, delta chart and track map. |
+| `telemetry-player.js` | `DataTelemetryPlayer` | LAZY_DATA | telemetry transport, scrub interaction, playback, gauges and accessible summary. |
+| `telemetry-view.js` | `DataTelemetryView` | LAZY_DATA | telemetry DOM layout, lane legends, stint tables and responsive canvas sizing. |
+| `telemetry.js` | `DataTelemetry` | LAZY_DATA | telemetry tab controller: selection, async lap loading and popup lifecycle. |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
@@ -184,7 +194,9 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
-| `hud-tyres.js` | `HudTyres` | tag | HUD tyre corner paint helpers. |
+| `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
+| `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
+| `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
@@ -197,8 +209,10 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
+| `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
+| `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
 
 **`js/track/core/`**
 
@@ -229,6 +243,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
+| `venue.js` | `SceneryVenue` | tag | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/circuits/`**
@@ -259,6 +274,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
+| `flying-start.js` | `FlyingStart` | tag | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `start-lights.js` | `StartLights` | tag | the start gantry's lights. |
 | `marshal-panels.js` | `MarshalPanels` | tag | marshal light panels. |
@@ -285,9 +301,11 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
 | `randomise.js` | `TrackRandom` | LAZY_EDITOR | TrackRandom: the RANDOMISE button. |
 | `validate.js` | `TrackValidate` | LAZY_EDITOR | TrackValidate: WYSIWYG validation for the track designer. |
+| `insight.js` | `TrackInsight` | LAZY_EDITOR | TrackInsight: what the track designer can say ABOUT a circuit rather than against it. |
 | `fixes.js` | `TrackFixes` | LAZY_EDITOR | TrackFixes: one-click remedies for the track designer's CHECKS (TrackValidate). |
 | `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
+| `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip, under the main canvas. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**
@@ -295,17 +313,21 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `helmets.js` | `Helmets` | tag | Helmets: one painted helmet design per driver. |
+| `car-geometry.js` | `CarGeometry` | tag | shared car mesh primitives and foil surfaces; create receives the owner’s surface and palette identities. |
+| `car-wheels.js` | `CarWheels` | tag | wheel geometry and rotating/fixed layers; create receives shared primitive builders and palette references. |
 | `car-shade.js` | `CarShade` | tag | CAR SHADE: rounded body sections and smooth shading for the procedural car (js/car/car3d.js). |
 | `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
 | `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
 | `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
+| `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
 | `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
+| `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
 
 **`js/input/`**
@@ -313,6 +335,10 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `tilt-roll.js` | `TiltRoll` | tag | TiltRoll — the one roll-from-orientation function, in degrees, shared by input.js and controller.html. deviceorientation reports beta (front-back) and gamma… |
+| `bindings.js` | `InputBindings` | tag | InputBindings: keyboard and controller maps, conflict resolution and device-aware labels. |
+| `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
+| `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
+| `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
@@ -321,6 +347,10 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `signal.js` | `GameAudioSignal` | tag | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
+| `soundtrack.js` | `GameAudioSoundtrack` | tag | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
+| `radio-fx.js` | `GameAudioRadioFx` | tag | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
+| `tone-model.js` | `GameAudioToneModel` | tag | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
 | `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
@@ -331,6 +361,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
+| `driving-cues.js` | `DrivingCues` | tag | assist-gated audio driving cues (braking tone + L/R corner calls). |
 
 **`js/physics/`**
 
@@ -339,6 +370,7 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `consts.js` | `PhysicsConsts` | tag | PhysicsConsts — the driving model's immutable numbers, moved out of js/game.js with the rationale that tunes them. |
 | `body-attitude.js` | `BodyAttitude` | tag | C2 visual suspension: cosmetic body attitude (pitch / roll / heave). |
 | `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
+| `grip-steer.js` | `GripSteer` | tag | GripSteer: own-state steering cap at the front's peak slip. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
@@ -384,8 +416,9 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
+| `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 
 **`js/camera/`**
 
@@ -397,12 +430,18 @@ _280 rows over 30 directories, in load order. `tag` = a `<script>` in index.html
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
+| `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.7 MB / 22 cars). |
+| `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
+| `drive-chase.js` | `DriveChase` | tag | lens only for the chase family. vantage.js owns the pose: distance, corner lead, the brake tuck, the drift swing. |
+| `drive-broadcast.js` | `DriveBroadcast` | tag | lens only for the broadcast cameras. |
+| `drive-onboard.js` | `DriveOnboard` | tag | lens only for cameras bolted to the car. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
@@ -1012,12 +1051,18 @@ wing on endplates, 4 wheel boxes (dark `[0.05,0.05,0.05]`, slightly rounded
 via chamfer prisms ok). color = livery body, color2 = wings/accents. Flat
 shading (duplicated verts, face normals).
 
+`CarGeometry.create(context)` owns mesh emission primitives, foil sections and
+tubes; `CarWheels.create(context)` owns rotating/fixed wheel layers. `Car3D`
+retains model assembly, caches and the public build API. Contexts pass shared
+palette/geometry values explicitly, preserving reference identity.
+
 ## js/car/ — the rest of the car domain
 
 | File | Global | Owns |
 |---|---|---|
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
+| `livery-graphics.js` | `LiveryGraphics` | cover/fin graphic recipes; shared stripe, twin and ridge painters; atlas/cache ownership stays in `LiveryTex` |
 | `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
@@ -1030,6 +1075,11 @@ translucent replay and delta slots and is labelled `RIVAL GHOST`; otherwise
 those paths continue to read `Ghost` (`YOUR PB`).
 
 ## js/input/input.js — `Input`
+
+`Input` owns device state, channel priority and the public API. It creates
+`InputBindings`, `InputPadMenu`, `InputHaptics` and `InputHoldButtons` with live
+callbacks to the state each helper needs. Factories add no event listeners at
+evaluation; initialization and control wiring retain their original order.
 
 Steering priority: keyboard > tilt > touch.
 
@@ -1053,6 +1103,13 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 `{passive:false}` + preventDefault on the canvas only.
 
 ## js/audio/engine.js — `GameAudio`
+
+`GameAudio` retains unlock/rebuild/visibility orchestration and the continuous
+engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
+`GameAudioSignal` owns loop analysis and noise/envelope primitives.
+`GameAudioSoundtrack` owns playlist/cache/playback state and
+`GameAudioRadioFx` owns radio decode/effect nodes. Factories receive live
+context/bus/service callbacks; context-bound state resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
@@ -1098,6 +1155,10 @@ GameAudio.startMusic(trackIdx) / stopMusic()   // menu uses startMusic(-1)
 ```
 
 ## js/data/api.js — `F1API`
+
+`F1Transport.create(openF1Base)` owns the serialized request queue, bounded
+cache, retry/timeout/cancellation state. `F1API` retains endpoint-specific
+mapping and its public methods. Both are part of the lazy data roster.
 
 Jolpica `https://api.jolpi.ca/ergast/f1/` + OpenF1 `https://api.openf1.org/v1`.
 All methods return Promises of SIMPLIFIED plain objects (not raw API shapes).
@@ -1147,6 +1208,14 @@ chips use `Teams.LIST` colors matched by name substring.
 DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bool
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
+
+`DataTelemetry` is the tab/request controller. `DataTelemetryModel` owns trace
+math, channel definitions and lane identity; `DataTelemetryRender` paints the
+charts; `DataTelemetryPlayer` owns playback/scrubbing; `DataTelemetryView`
+owns cards, popup lifecycle and teardown. `DataTabUtils` shares driver colors
+and duplicate-lane counts across telemetry and live timing. The lazy roster's
+dependency edges order these helpers before their consumers and the hub;
+successful partial loads remain resident when another helper fails and retries.
 
 ## Where the old `tables.js` rows live
 
@@ -1260,6 +1329,12 @@ not a per-file list).
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
+
+The remaining coordinator composes `ScriptLoader`, `LazyBundles`, `RendererBoot`,
+`RaceWakeLock`, `PlatformSession` and `TitleFlow`. Startup helpers use explicit
+callbacks because renderer boot precedes construction of `G`; menu/platform
+factories use the existing live façade. Physics and frame integration stay in
+the coordinator.
 
 **States** are `menu | count | race | results` — those are the only four values
 ever assigned to `state`. (This previously listed `select` and `seasonEnd` as

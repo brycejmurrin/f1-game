@@ -178,3 +178,39 @@ test("a rival's quali time that lands during the scenery load survives to the sh
     assert.equal(doc.getElementById("loading").hidden, true, "the card comes down for the sheet");
   } finally { np.rivalDriverIds = wasRivals; h.restore(); g.G.quitToMenu(); }
 });
+
+
+test("restarting results releases its montage before the next qualifying field is built", async () => {
+  g.G.quitToMenu(); select("monza"); g.G.session = "race";
+  await g.G.startRace();
+  g.apex.headless(true);
+  g.apex.go();
+  g.apex.setInput({ throttle: true });
+  const start = g.sandbox.performance.now();
+  for (let i = 0; i < 360; i++) g.pumpFrame(start + i * 1000 / 60);
+  g.apex.setInput({ throttle: false });
+  // The VM auto-creates unknown IDs; model this dynamic DOM control accurately.
+  const doc = g.sandbox.document, get = doc.getElementById;
+  let highlights = null;
+  const menu = get("res-menu"), parent = doc.createElement("div");
+  parent.appendChild(menu);
+  parent.insertBefore = (button) => { highlights = button; return parent.appendChild(button); };
+  doc.getElementById = (id) => id === "res-highlights" ? highlights : get(id);
+  try {
+  g.G.endRace();
+  const button = doc.getElementById("res-highlights");
+  assert.ok(button && button.onclick, "results exposes its actual highlights control");
+  const finishPx = g.G.player.px;
+  button.onclick();
+  assert.notEqual(g.G.player.px, finishPx, "the actual control starts a historical montage pose");
+  const oldCars = g.G.cars;
+  g.G.session = "quali";
+  await g.G.startRace();
+  assert.notStrictEqual(g.G.cars, oldCars);
+  assert.equal(button.hidden, true, "new qualifying session hides and releases the old montage");
+  assert.equal(g.G.dbgCam, null, "a restart releases the results camera");
+  g.G.endRace();
+  button.onclick();
+  assert.equal(g.G.dbgCam, null, "old control cannot acquire qualifying results");
+  } finally { doc.getElementById = get; }
+});

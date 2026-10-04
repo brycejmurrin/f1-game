@@ -3,6 +3,9 @@
 // Drives the real telemetry UI with a stubbed F1API (the live endpoints are
 // network-blocked), a small circular GPS lap per driver so the map + dots draw.
 import { test, expect } from "@playwright/test";
+import { createRequire } from "node:module";
+
+const { LAZY_DATA } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 async function dataReady(page) {
   const scriptErrors = [];
@@ -11,27 +14,16 @@ async function dataReady(page) {
   await page.goto("/version.json");
   await page.setContent('<div id="datahub" hidden></div>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
-  // mat4.js FIRST, and it is not optional: js/data/telemetry.js aliases
-  // `const clamp = M4.clamp` at EVAL time (telemetry.js), so without M4 that
-  // file throws, DataTelemetry is stranded in its temporal dead zone, and
-  // hub.js's top-level `DataTelemetry.create(...)` throws in turn — leaving
-  // DataHub dead too. The symptom is a bare `ReferenceError: DataHub is not
-  // defined` from the waitForFunction below, three links from the cause.
-  // index.html has always loaded mat4.js before js/data/*, so the app was
-  // never affected; only this standalone harness was. The ordering is now
-  // asserted too: HARD_EDGES carries mat4.js -> js/data/telemetry.js.
-  // log.js too: hub.js's open() logs through the Log global (index.html loads
-  // it before everything); without it this standalone harness threw
-  // "Log is not defined" the moment a test called DataHub.open — red since
-  // the logging landed, whenever the suite actually ran.
+  // Standalone fixtures supply the app's core dependencies first: Log for
+  // requests/open, M4 for telemetry-model's eval-time clamp binding, and Dom
+  // for hub.js's eval-time element binding.
   await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   // hub.js binds Dom.el at evaluation time, just as the app does.
   await page.addScriptTag({ url: "/js/ui/dom.js" });
   // The manifest's LAZY_DATA in order — every tab module, then the hub, which
   // calls each Data*.create() at evaluation time (tools/manifest.cjs LAZY_DATA_EDGES).
-  for (const u of ["api", "telemetry", "export", "schedule", "standings", "results", "live", "real-race-tab", "hub"])
-    await page.addScriptTag({ url: "/js/data/" + u + ".js" });
+  for (const file of LAZY_DATA) await page.addScriptTag({ url: "/" + file });
   page.off("pageerror", onPageError);
   expect(scriptErrors, "standalone data scripts initialize without errors").toEqual([]);
   expect(await page.evaluate(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined")).toBe(true);

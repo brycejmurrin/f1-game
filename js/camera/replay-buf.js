@@ -9,11 +9,13 @@ const ReplayBuf = (function () {
   const HZ = 30;
   const WINDOW_S = 20;
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
-  const FLOATS = 8;                           // s, x, yaw, speed, px, py, pz, steer
+  const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
   const MAX_CARS = 22;
   const MAX_BYTES = 720 * 1024;               // 0.7 MB hard cap
   const TAG_CAP = 64;
   const RATES = [0.25, 0.5, 1];
+  const POSE_FIELDS = ["s", "x", "head", "speed", "px", "py", "pz", "steer", "yawVis",
+    "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis"];
 
   function frameBytes(nCars) {
     return nCars * FLOATS * 4 + nCars;        // floats + Uint8 status lane
@@ -32,11 +34,20 @@ const ReplayBuf = (function () {
   // Pure: interpolate one car's floats between two frames (Ghost.at shape).
   function lerpCar(out, a, b, u) {
     for (let i = 0; i < FLOATS; i++) out[i] = a[i] + (b[i] - a[i]) * u;
+    // Heading (2) and mesh yaw (8), without allocating per sampled car.
+    for (let i = 2; i <= 8; i += 6) {
+      let delta = b[i] - a[i];
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      out[i] = a[i] + delta * u;
+    }
     return out;
   }
 
-  function create(G) {
+  // The caller can reserve pose ownership (for example, a recorded WATCH).
+  function create(G, eligible) {
     Log.info("game", "ReplayBuf.create");
+    const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
     let times = null, data = null, status = null;
     let tags = [];
@@ -63,6 +74,11 @@ const ReplayBuf = (function () {
       alloc((cars && cars.length) || (G.cars && G.cars.length) || 1);
       clear();
     }
+    function discardTimeline(time) {
+      if (!count || !Number.isFinite(time)) return;
+      const newest = times[(head + count - 1) % cap];
+      if (time < newest || time - newest > WINDOW_S) clear();
+    }
     function writeCar(frame, i, c) {
       const o = (frame * nCars + i) * FLOATS;
       data[o] = c.s || 0;
@@ -73,6 +89,7 @@ const ReplayBuf = (function () {
       data[o + 5] = c.py || 0;
       data[o + 6] = c.pz || 0;
       data[o + 7] = c.steer || 0;
+      data[o + 8] = c.yawVis || 0;
       status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
     }
     function readCar(out, frame, i) {
@@ -81,10 +98,10 @@ const ReplayBuf = (function () {
       return out;
     }
     function sample(raceT, cars) {
-      if (scrubbing) return false;
-      if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;
+      if (scrubbing || !allowed()) return false;
       if (!cars || !cars.length) return false;
       if (!data || cars.length !== nCars) reset(cars);
+      discardTimeline(raceT);   // Practice rewind or a mid-race JUMP IN starts a new timeline.
       // Slot gate (not wall-delta): FP-safe at exact 1/HZ spacing.
       const slot = Math.floor((+raceT || 0) * HZ);
       if (slot === lastSlot) return false;
@@ -147,18 +164,26 @@ const ReplayBuf = (function () {
         lerpCar(_o, _a, _b, u);
         cars.push({
           s: _o[0], x: _o[1], head: _o[2], speed: _o[3],
-          px: _o[4], py: _o[5], pz: _o[6], steer: _o[7],
+          px: _o[4], py: _o[5], pz: _o[6], steer: _o[7], yawVis: _o[8],
           status: status[i0 * nCars + c],
         });
       }
       return { t: tt, cars };
     }
     function snapLive(cars) {
-      return (cars || []).map((c) => ({
-        s: c.s, x: c.x, head: c.head, speed: c.speed,
-        px: c.px, py: c.py, pz: c.pz, steer: c.steer,
-        retired: !!c.retired, finished: !!c.finished,
-      }));
+      return (cars || []).map((c) => {
+        const p = {};
+        for (const k of POSE_FIELDS) if (Object.prototype.hasOwnProperty.call(c, k)) p[k] = c[k];
+        return p;
+      });
+    }
+    function restoreLive(cars, poses) {
+      for (let i = 0; i < Math.min(cars.length, poses.length); i++) {
+        for (const k of POSE_FIELDS) {
+          if (Object.prototype.hasOwnProperty.call(poses[i], k)) cars[i][k] = poses[i][k];
+          else delete cars[i][k];
+        }
+      }
     }
     function applyPose(cars, poses) {
       const n = Math.min(cars.length, poses.length);
@@ -166,10 +191,16 @@ const ReplayBuf = (function () {
         const c = cars[i], p = poses[i];
         c.s = p.s; c.x = p.x; c.head = p.head; c.speed = p.speed;
         c.px = p.px; c.py = p.py; c.pz = p.pz; c.steer = p.steer;
+        // Paused frames retain renderAlpha: both interpolation endpoints must
+        // belong to this recorded pose, never the live frame we paused from.
+        c.yawVis = p.yawVis;
+        c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
+        c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
       }
     }
-    function beginScrub() {
-      if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;
+    function beginScrub(showControls = true) {
+      if (!allowed()) return false;
+      if (!scrubbing) discardTimeline(G.raceT);   // a paused clock jump can precede the next sample
       if (scrubbing || count < 2) return false;
       liveSnap = snapLive(G.cars);
       scrubbing = true;
@@ -179,8 +210,7 @@ const ReplayBuf = (function () {
       const last = lastTag();
       scrubT = (last && last.t >= w.t0 && last.t <= w.t1) ? last.t : Math.max(w.t0, w.t1 - 5);
       apply(scrubT);
-      showDock();
-      paintDock();
+      if (showControls) { showDock(); paintDock(); }
       return true;
     }
     function apply(t) {
@@ -193,7 +223,7 @@ const ReplayBuf = (function () {
     }
     function endScrub() {
       if (!scrubbing) return false;
-      if (liveSnap && G.cars) applyPose(G.cars, liveSnap);
+      if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
       scrubbing = false; liveSnap = null; scrubPlaying = true;
       hideDock();
       return true;
@@ -201,6 +231,9 @@ const ReplayBuf = (function () {
     function isScrubbing() { return scrubbing; }
     function lastTag() {
       return tags.length ? tags[tags.length - 1] : null;
+    }
+    function tagsOf() {
+      return tags.map((g) => ({ kind: g.kind, t: g.t, car: g.car }));
     }
     function jumpLastTag() {
       const tag = lastTag();
@@ -241,7 +274,10 @@ const ReplayBuf = (function () {
         if (menu) menu.hidden = true;
         Log.info("game", "ReplayBuf.scrub t=" + scrubT.toFixed(2));
       };
-      resume.parentNode.insertBefore(b, resume.nextSibling);
+      // First tile of the pause card's RACE TOOLS tray when it exists.
+      const tray = document.getElementById("pm-quick-doors");
+      if (tray) tray.insertBefore(b, tray.firstChild);
+      else resume.parentNode.insertBefore(b, resume.nextSibling);
     }
     function ensureDock() {
       if (typeof document === "undefined") return null;
@@ -309,12 +345,12 @@ const ReplayBuf = (function () {
       if (label) label.textContent = scrubT.toFixed(1) + "s";
     }
     function refreshButton() {
+      if (!scrubbing) discardTimeline(G.raceT);
       ensureButton();
       const b = typeof document !== "undefined" ? document.getElementById("pm-replay") : null;
       if (!b) return;
-      const net = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
       const w = windowInfo();
-      b.hidden = net || w.frames < HZ * 3;   // need ~3 s before offering
+      b.hidden = !allowed() || w.frames < HZ * 3;   // need ~3 s before offering
     }
     /** game.js call-site helpers — keep the entry thin. */
     function onRaceStart(cars) { reset(cars); }
@@ -323,13 +359,13 @@ const ReplayBuf = (function () {
       sample(raceT, cars);
     }
     function onPause(p) {
-      if (p) refreshButton();
+      if (p) { endScrub(); refreshButton(); }
       else endScrub();
     }
 
     return {
       sample, clear, reset, pushTag, window: windowInfo, at,
-      beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag,
+      beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
       tickScrub, status: statusOf,
       refreshButton, ensureButton,
       onRaceStart, onTick, onPause,
