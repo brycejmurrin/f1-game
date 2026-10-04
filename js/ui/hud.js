@@ -354,7 +354,8 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " +" + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
-let _fitKey = "", _fitWait = 0, _fitRetry = 0;   // _fitRetry: ticks spent re-measuring while nothing is laid out
+let _fitKey = "", _fitWait = 0, _fitRetry = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
+function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) k += _hlEls[i].hidden ? "h" : "v"; return k; }
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
@@ -439,15 +440,24 @@ function layoutRect(el) {
 // under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
 // below it). Never in BROADCAST, whose tower is top-left and whose mirror
 // owns the top-centre.
+// THE TOUCH DOCKS BOUND IT TOO. A dock column reaches the tower's rows on a
+// landscape phone (the cockpit's right dock put BOOST at y 72 on 844x390), and
+// the card was published straight across it (survey 2026-10-04: #announce
+// [500,66 223x65] over #btn-boost [603,72]). Every dock group that shares the
+// card's rows and reaches past the slot's start ends the strip at its left
+// edge; one that already covers the start leaves no slot at all. Run after the
+// dock cap is written, so the groups are measured at the zoom they paint at.
 const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
   let right = window.innerWidth - 10;
-  for (const el of [els.btnCam, els.pausebtn]) {
-    const r = t && el && !el.hidden ? el.getBoundingClientRect() : null;
-    if (r && r.width && r.left > t.right && r.top < t.bottom && r.bottom > t.top) right = Math.min(right, r.left);
-  }
   const x = t ? t.right + RADIO_TOP_GAP : 0;
+  const bound = (r, needPast) => {
+    if (!r || !r.width || !r.height || !(r.top < t.bottom && r.bottom > t.top)) return;
+    if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
+  };
+  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true);
+  if (t) for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false);
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
   if (!fits) return;
@@ -458,6 +468,25 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
   hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
+}
+// THE MIRROR AS PAINTED, for the centre column under it. The flag and the
+// radio card clear the mirror through --mir-bot (css/hud.css), which is built
+// from the mirror's SHIPPED box — so a mirror MOVE & SIZE grew (s150) or moved
+// down (y+10) sat over the caution flag (survey 2026-10-04, 1280x720: #hud-flag
+// under #hud-mirror by 185x25 / 185x36). Published in SCREEN px, and only while
+// the painted frame actually crosses the centre column the two hang in (a
+// mirror moved aside frees it); css/hud.css folds it into --mir-bot with a
+// max(), so it can only ever push them further down. Nothing the mirror's own
+// box depends on reads it, so it cannot feed back. Run inside the fit: a move
+// re-fits through HudLayout.apply, and hud-mirror-on is in the fit key.
+const MIR_COL = 230;   // half-width of the centre column, px: the widest card at 440 plus its air
+let _mirEl;
+function mirrorClear(root) {
+  if (_mirEl === undefined) _mirEl = document.getElementById("hud-mirror");
+  const on = _mirEl && !_mirEl.hidden && document.body.classList.contains("hud-mirror-on");
+  const r = on ? _mirEl.getBoundingClientRect() : null, cx = window.innerWidth / 2;
+  const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
+  hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -515,8 +544,17 @@ function fitHud() {
   // DELTA unhides inside the centred tower mid-race (first valid best lap, or a
   // ghost in TT): it widens the tower, so it is part of the key, not left to the
   // 3 s same-key re-measure with the tower painted over the gap strip.
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|" + document.body.className;
-  if (key === _fitKey && --_fitWait > 0) return;
+  // A MOVED piece that unhides is the same case for HudLayout.fit's on-screen
+  // clamp, which skips whatever has no box: with CORNERS (energy/tyre x-34) at
+  // 1280x720 TYRES unhid after the fit and ended at x -92 for good (survey
+  // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
+  // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
+  // per tick, no layout.
+  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  const tail = "|" + document.body.className;
+  if (head + hlKey() + tail === _fitKey && --_fitWait > 0) return;
+  _hlEls = document.querySelectorAll ? document.querySelectorAll("[data-hl]") : [];
+  const key = head + hlKey() + tail;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
@@ -666,7 +704,6 @@ function fitHud() {
   // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
   // and a var that is only sometimes present is a var that is sometimes 0.
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
-  radioTopSlot(root, bcast);
   // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
   // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
   // where the BOOST pedal is on a touch phone, so a track-limits warning painted
@@ -840,6 +877,8 @@ function fitHud() {
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
   set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  radioTopSlot(root, bcast);   // after the dock cap: it stands off the docks as painted
+  mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
 }
