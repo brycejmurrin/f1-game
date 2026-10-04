@@ -1403,3 +1403,38 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.equal(b.data.customTrackReturn, undefined, "memory only — nothing stored");
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
+
+test("3 LOOK: a chip per theme (sixteen), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const T = b.ctx.TrackThemes;
+  assert.equal(T.ORDER.length, 16);
+  const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
+  assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
+  const blurb = walk(b.root).find((e) => e.classList && e.classList.contains("td-hint") && e.textContent === T.get(b.D.state().design.theme).blurb);
+  assert.ok(blurb, "the active theme's blurb is shown");
+  assert.equal(b.D.setTheme("winter"), true);
+  assert.equal(blurb.textContent, T.PRESETS.winter.blurb, "…and follows the theme");
+  const look = (key, v) => walk(b.root).find((e) => e.dataset && e.dataset.look === key + ":" + v);
+  for (const key of ["time", "trees", "crowd"]) for (const v of T.LOOK[key]) assert.ok(look(key, v), key + ":" + v + " chip");
+  assert.equal(b.D.state().design.look, undefined, "a new design stores no look");
+  assert.equal(look("time", "auto").getAttribute("aria-pressed"), "true");
+  const u0 = b.D.state().undo;
+  look("time", "night").click();
+  assert.deepEqual(plain(b.D.state().design.look), { time: "night", trees: "normal", crowd: "normal" });
+  assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
+  assert.equal(look("time", "night").getAttribute("aria-pressed"), "true");
+  assert.equal(look("time", "auto").getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.setLook("time", "night"), false, "no-op on the same value");
+  assert.equal(b.D.setLook("time", "midnight"), false, "unknown values are refused");
+  assert.equal(b.D.setLook("trees", "many"), true);
+  assert.equal(b.D.setLook("crowd", "packed"), true);
+  assert.deepEqual(plain(b.D.state().design.look), { time: "night", trees: "many", crowd: "packed" });
+  // The options are part of the circuit: the id moves, and back to all-default stores none.
+  const idLook = b.C.sanitize(b.D.state().design).id;
+  for (const [k, v] of [["time", "auto"], ["trees", "normal"], ["crowd", "normal"]]) b.D.setLook(k, v);
+  assert.equal(b.D.state().design.look, undefined, "all defaults → no look stored");
+  assert.notEqual(b.C.sanitize(b.D.state().design).id, idLook);
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.look), { time: "auto", trees: "normal", crowd: "packed" }, "UNDO restores the previous look");
+});

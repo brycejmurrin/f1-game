@@ -14,7 +14,10 @@ const TrackCodec = (function () {
   "use strict";
   const MAGIC = "APXT1", VERSION = 1;
   const MAX_CODE = 4096, MAX_BYTES = 16384, MAX_N = 200, MIN_N = 8, UNIT = 4 /* per metre */, COORD_MAX = 10000 * UNIT;
-  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16 };
+  // look (32): the scenery options (TrackThemes.LOOK) as one byte, written only
+  // when one is off its default — so every code made before it is unchanged.
+  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32 };
+  const FLAG_ALL = 0x3f;
   // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
   // dropped what storage keeps (a dropped bridge turned into a RED crossing on
   // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
@@ -94,6 +97,8 @@ const TrackCodec = (function () {
     for (const k of Object.keys(ZONE_CAPS)) if (zones[k].length) flags |= FLAG[k];
     const name = withName && it.name ? new TextEncoder().encode(String(it.name).slice(0, 48)) : null;
     if (name && name.length) flags |= FLAG.name;
+    const look = TrackThemes.sanitizeLook(it.look);
+    if (look) flags |= FLAG.look;
     w.u8(VERSION).u8(flags).u8(themeIdx).u8(Math.round(it.baseHW * 10)).varint(it.seed >>> 0).varint(it.pts.length);
     const q = (v) => Math.round(v * UNIT);
     let px = q(it.pts[0][0]), pz = q(it.pts[0][1]);
@@ -109,6 +114,7 @@ const TrackCodec = (function () {
     if (flags & FLAG.bankZones) { w.varint(zones.bankZones.length); for (const z of zones.bankZones) w.u16(u16frac(z.frac)).zz(Math.round(z.angleDeg * 4)).u16(Math.round(z.widthM)); }
     for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { w.varint(zones[k].length); for (const z of zones[k]) w.u16(u16frac(z.s)).u16(Math.round(z.halfM)).zz(Math.round(z.rise * 4)); }
     if (flags & FLAG.name) { w.u8(name.length).bytes(name); }
+    if (flags & FLAG.look) { const L = TrackThemes.LOOK; w.u8(L.time.indexOf(look.time) | (L.trees.indexOf(look.trees) << 2) | (L.crowd.indexOf(look.crowd) << 4)); }
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
     all.set(body); const c = fnv16(body, body.length); all[body.length] = c & 0xff; all[body.length + 1] = c >> 8;
@@ -122,7 +128,7 @@ const TrackCodec = (function () {
       if (fnv16(bytes, bodyLen) !== (bytes[bodyLen] | (bytes[bodyLen + 1] << 8))) return { ok: false, reason: "check" };
       const r = reader(bytes.subarray(0, bodyLen));
       const ver = r.u8(); if (ver !== VERSION) return { ok: false, reason: "version" };
-      const flags = r.u8(); if (flags & ~0x1f) return { ok: false, reason: "corrupt" };
+      const flags = r.u8(); if (flags & ~FLAG_ALL) return { ok: false, reason: "corrupt" };
       const themeIdx = r.u8(); if (themeIdx >= TrackThemes.ORDER.length) return { ok: false, reason: "theme" };
       const baseHW = r.u8() / 10; if (baseHW < 5 || baseHW > 8) return { ok: false, reason: "bounds" };
       const seed = r.varint(); if (seed > 0xffffffff) return { ok: false, reason: "bounds" };
@@ -144,6 +150,11 @@ const TrackCodec = (function () {
       if (flags & FLAG.bankZones) { const n = r.varint(); if (n > ZONE_CAPS.bankZones) return { ok: false, reason: "bounds" }; design.bankZones = []; for (let i = 0; i < n; i++) design.bankZones.push({ frac: fracU16(r.u16()), angleDeg: r.zz() / 4, widthM: r.u16() }); }
       for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { const n = r.varint(); if (n > ZONE_CAPS[k]) return { ok: false, reason: "bounds" }; design[k] = []; for (let i = 0; i < n; i++) design[k].push({ s: fracU16(r.u16()), halfM: r.u16(), rise: r.zz() / 4 }); }
       if (flags & FLAG.name) { const n = r.u8(); if (n > 48) return { ok: false, reason: "bounds" }; design.name = new TextDecoder().decode(r.bytes(n)); }
+      if (flags & FLAG.look) {
+        const b = r.u8(), L = TrackThemes.LOOK, t = b & 3, tr = (b >> 2) & 3, c = (b >> 4) & 3;
+        if (b >> 6 || t >= L.time.length || tr >= L.trees.length || c >= L.crowd.length) return { ok: false, reason: "bounds" };
+        design.look = { time: L.time[t], trees: L.trees[tr], crowd: L.crowd[c] };
+      }
       if (r.left !== 0) return { ok: false, reason: "corrupt" };
       return { ok: true, design };
     } catch (e) {

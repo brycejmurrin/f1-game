@@ -1689,9 +1689,11 @@ void main() {
   // object-space cell gets a random flake tilt; a flake flashes only when its
   // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
   // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
-  // it never aliases at range. Additive white glint — leaves the pigment alone.
+  // it never aliases at range, AND inside 4 m: a 4.5 mm cell is several pixels
+  // there, so the cockpit's own sidepods read as white confetti, not metallic.
+  // Additive white glint — leaves the pigment alone.
   if (carPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
-    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * uSparkle;
+    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * smoothstep(1.5, 4.0, vDist) * uSparkle;
     // Flakes live in the COLOUR coat: near-black albedo (tyres, carbon floor,
     // wings, trim) has no metallic pigment, so gate the glitter out there — the
     // dense white speckle on the dark parts read as dust, not sparkle.

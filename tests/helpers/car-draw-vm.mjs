@@ -10,9 +10,13 @@
  *   const mp = vm.mirror();     mp.render(...);   vm.rec.builds -> []
  *
  * rec.builds: one { kind: "whole" | "body" | "sh", team, num } per Car3D.build;
- * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go.
+ * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
+ * rec.flaps: one { team, blend, m, only, still } per deps.drawAeroFlaps call.
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
- * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick. */
+ * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick.
+ * `career`: null (no career) or { teamId: fitted setup } — Career.aiSetup's
+ * R&D shelves; v.careerOn(map) engages one later. Every team's factory build is
+ * WORKS (each category "w:<id>"), and resolveSetup lays a setup over it. */
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "./seed-log.mjs";
@@ -24,8 +28,10 @@ const run = (ctx, rel) => vm.runInContext(read(rel).replace(/^const\b/gm, "var")
 const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "brakes", "tyres", "wheels", "cooling", "fuel", "livery"]
   .map((id) => ({ id }));
 
-export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" } } = {}) {
-  const rec = { builds: [], wheels: 0, freed: 0, draws: [] };
+export const WORKS = Object.freeze(Object.fromEntries(CATALOG.map((c) => [c.id, "w:" + c.id])));
+
+export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null } = {}) {
+  const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
   const rect = (l, t, w, h) => () => ({ left: l, top: t, width: w, height: h, right: l + w, bottom: t + h });
@@ -83,10 +89,12 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       CATALOG,
       legalityKey: () => "2026",
       factoryKey: (team) => "F-" + team.id,
-      getFactorySetup: (team) => ({ factory: team.id }),
+      getFactorySetup: () => Object.assign({}, WORKS),
+      resolveSetup: (setup) => ({ ids: Object.assign({}, WORKS, setup) }),
       getVisualTiers: () => ({ tyres: 1, brakes: 1, _ids: { tyres: "medium", brakes: "standard", wheels: "standard" }, _visual: {} }),
     },
-    Career: { gridDrivers: (t) => t.drivers, driverOverride: () => null },
+    Career: { gridDrivers: (t) => t.drivers, driverOverride: () => null,
+      inCareer: () => !!career, aiSetup: (team) => (career && career[team.id]) || null },
   });
   seedLog(ctx);
   run(ctx, "js/core/mat4.js");
@@ -110,12 +118,16 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
   };
   const carDraw = ctx.CarDraw.create(G, {
     resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
-    drawAeroFlaps() {}, damp: (a) => a, isTimeTrial: () => false, isQuali: () => false,
+    // game.js's drawAeroFlaps, recorded (field-lod.test.mjs drives the real one):
+    // `still` = the static flap set, drawn whatever the car's distance.
+    drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still) =>
+      rec.flaps.push({ team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still }),
+    damp: (a) => a, isTimeTrial: () => false, isQuali: () => false,
   });
 
   // makeCars' field for the menu's pick (G.teamIdx / G.driverIdx): every real
-  // seat, the picked team's too, the player stamped with its OWN build exactly as
-  // makeCars stamps it (visualSetup = getTeamParts, visSh = stamp + ":sh").
+  // seat, the picked team's too, each car stamped by makeCars' own call —
+  // CarDraw.carVisual(team, num, isP || mate, getTeamParts), the real helper.
   // `s(i)`: each car's arc position.
   function field(s) {
     const cars = [];
@@ -124,12 +136,8 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       (team.legends ? [team.drivers[G.driverIdx]] : team.drivers).forEach((d, di) => {
         const isP = ti === G.teamIdx && (team.legends || di === G.driverIdx);
         const c = { team, num: d.num, code: d.code, isPlayer: isP, human: isP, speed: 60, steerVis: 0, kCur: 0, x: 0 };
-        if (isP) {
-          const setup = G.getTeamParts(team.id);
-          const stamp = CATALOG.map((cat) => setup[cat.id] || "").join(",");
-          Object.assign(c, { visualSetup: setup, visStamp: stamp, visPaint: stamp + ":" + d.num, visSh: stamp + ":sh" });
-        }
-        cars.push(c);
+        const mate = !isP && ti === G.teamIdx && !!team.custom;   // MY TEAM's hire
+        cars.push(Object.assign(c, ctx.CarDraw.carVisual(team, d.num, isP || mate, G.getTeamParts)));
       });
     });
     cars.forEach((c, i) => { c.s = s(c, i); });
@@ -151,5 +159,6 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
   }
   const frame = { viewProj: new Float32Array(16), proj: null, invProj: null, invViewProj: new Float32Array(16), eye: [0, 5, 0], cullDist: 0, tune: {} };
   const draw = (mp, night) => mp.render(frame, { invViewProj: frame.invViewProj }, !!night, false, 0);
-  return { ctx, G, carDraw, rec, field, mirror, draw, classes, teams };
+  const careerOn = (map) => { career = map; };
+  return { ctx, G, carDraw, rec, field, mirror, draw, classes, teams, careerOn };
 }
