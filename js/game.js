@@ -2537,10 +2537,15 @@ async function startRaceBody() {
     // return) and quitToMenu() lower it, so this arm left the menu behind a
     // z-36 pointer-events:auto scrim with an inert skip handler — reload only.
     loadingScreen.stop();
+    // A conflict can surface on RESTART or the next round, with the race HUD,
+    // in-race class and engine still up: tear all of it down to the title.
+    if (careerSaveConflict || seasonSaveConflict) {
+      quitToMenu();
+      announce("SAVE CONFLICT — reload " + (careerSaveConflict ? "career" : "season"), 3, "info");
+      return false;
+    }
     setState("menu", "save-conflict"); $("race-settings").hidden = true;
-    if (careerSaveConflict) announce("SAVE CONFLICT — reload career", 3, "info");
-    else if (seasonSaveConflict) announce("SAVE CONFLICT — reload season", 3, "info");
-    else { buildSelect(); els.select.hidden = false; }
+    buildSelect(); els.select.hidden = false;
     return false;
   }
   resultsCam.reset();   // restore a montage before replacing the previous field
@@ -8656,7 +8661,11 @@ els.resNext.onclick = () => {
   // Career never jumps straight into the next round: the weekend is one step of a
   // longer loop, and the hub is where you spend what you just earned.
   if (isCareer()) {
-    els.results.hidden = true;
+    // The full return-to-menu teardown first, then the hub on top of it (the
+    // title's own CAREER path). Hiding the sheet alone left state "results":
+    // the hub's GARAGE drew the frozen race frame, and a race started later
+    // from MAIN MENU sat on PREPARING… forever (every intro gates on "menu").
+    quitToMenu();
     trackIdx = Career.trackIndex();
     openCareer();
     return;

@@ -415,14 +415,26 @@ const RealReplay = (function () {
       for (const [c, f] of run.cars) if (f.num === num) return c;
       return null;
     }
+    // A real clip is an HTMLAudioElement, outside the WebAudio master, so SOUND
+    // OFF and VOICE VOLUME never reached it: honour both here (iOS ignores
+    // .volume, so a zero volume skips the clip rather than trusting it).
     function playRadio(h) {
       if (!h.url || typeof Audio === "undefined") return;
+      const vol = G.radio && G.radio.volume ? G.radio.volume() : 0.9;
+      if (!G.soundOn || !(vol > 0)) { if (G.announce) G.announce(h.text, CAPTION_S, "info"); return; }
       try {
         if (run.audio) run.audio.pause();
-        const a = new Audio(h.url); a.volume = 0.9; run.audio = a;
+        const a = new Audio(h.url); a.volume = Math.min(1, vol); run.audio = a;
         const p = a.play(); if (p && p.catch) p.catch(() => { /* autoplay refused: the caption still says who called */ });
         if (G.announce) G.announce(h.text, CAPTION_S, "info");
       } catch (e) { /* no audio: silent replay */ }
+    }
+    // tick() stops with the page, so a clip mid-sentence played on over a call
+    // or a backgrounded tab until it ran out: cut it with the page.
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden && run && run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
+      });
     }
     function finish() {
       if (!run || run.finished) return;

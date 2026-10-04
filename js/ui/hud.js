@@ -84,7 +84,7 @@ const _rx = _doc ? { delta: _doc.getElementById("hud-delta"), deltaN: _doc.getEl
   bb: _doc.getElementById("hud-bb") } : {};
 let _ePrev = NaN, _blue = false, _blueSaid = null;
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
-const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
+const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1, visor: 1, helmet: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
 // AUTO is always the full set: fitHud() scales / stacks / drops the gap strip
@@ -112,7 +112,7 @@ let _hudVisKey = "";
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const prof = G.hudProfile || "standard";
-  // MAP AUTO: hide onboard (cockpit/hood/tcam) or MINIMAL so the view stays clear.
+  // MAP AUTO: hide onboard (cockpit/hood/tcam/visor/helmet) or MINIMAL so the view stays clear.
   const hideMap = resolveHudVis(G.hudMapVis, onboard || prof === "minimal");
   // GAPS do not AUTO-hide onboard — from a cockpit you cannot see the car
   // behind you. GAPS: OFF still hides it. MINIMAL still auto-hides chrome.
@@ -470,7 +470,10 @@ function fitHud() {
   // which has no getComputedStyle — the same guard metrics-overlay.js carries.
   const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
+  // DELTA unhides inside the centred tower mid-race (first valid best lap, or a
+  // ghost in TT): it widens the tower, so it is part of the key, not left to the
+  // 3 s same-key re-measure with the tower painted over the gap strip.
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
