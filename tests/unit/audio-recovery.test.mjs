@@ -46,6 +46,55 @@ function boot(opts = {}) {
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
+test("switching external music backends stops the outgoing player before starting the replacement", async () => {
+  const { A } = boot();
+  A.init(); await flush();
+  const calls = [];
+  const backend = (id) => ({ setVolume() {}, start() { calls.push(id + ":start"); }, stop() { calls.push(id + ":stop"); } });
+  const first = backend("spotify"), second = backend("other");
+  A.setMusicBackend(first);
+  A.setMusicBackend(first);
+  assert.deepEqual(calls, ["spotify:start"], "reselecting a source does not interrupt it");
+  A.setMusicBackend(second);
+  assert.deepEqual(calls, ["spotify:start", "spotify:stop", "other:start"]);
+  A.setMusicBackend(null); await flush();
+  assert.equal(calls.at(-1), "other:stop");
+  assert.equal(A.currentTrackId(), "builtin:menu", "the local soundtrack resumes");
+  A.stopMusic();
+  assert.equal(calls.filter((c) => c.endsWith(":stop")).length, 2, "no outgoing player is orphaned");
+});
+
+test("a rejected outgoing backend stop does not prevent switching music sources", async () => {
+  const { A } = boot();
+  A.init(); await flush();
+  A.setMusicBackend({ setVolume() {}, start() {}, stop() { return Promise.reject(new Error("device unavailable")); } });
+  A.setMusicBackend(null); await flush();
+  assert.equal(A.currentTrackId(), "builtin:menu");
+});
+
+test("empty MY TRACKS stays silent across resume, music toggles, and backend removal", async () => {
+  const { A, fetched } = boot();
+  A.init(); await flush();
+  A.addTracks([{ id: "user:last", name: "last", url: "blob:last" }]);
+  A.setMusicSource("user"); A.startMusic(); await flush();
+  assert.equal(A.currentTrackId(), "user:last");
+  A.removeTrack("user:last");
+  const before = fetched.length;
+  for (const resume of [
+    () => A.startMusic(),
+    () => { A.setMusicEnabled(false); A.setMusicEnabled(true); },
+    () => { A.setMusicBackend({ setVolume() {}, start() {}, stop() {} }); A.setMusicBackend(null); },
+  ]) {
+    resume(); await flush();
+    assert.equal(A.musicSource(), "user");
+    assert.equal(A.currentTrackId(), null);
+    assert.equal(fetched.length, before, "no builtin track is fetched as a fallback");
+  }
+  A.addTracks([{ id: "user:new", name: "new", url: "blob:new" }]);
+  A.startMusic(); await flush();
+  assert.equal(A.currentTrackId(), "user:new", "a new eligible upload restores playback");
+});
+
 test("a context rebuild replaces cached noise and keeps the delayed sample fallback", async () => {
   let now = 10000;
   class ClockDate extends Date { static now() { return now; } }

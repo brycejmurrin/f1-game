@@ -119,8 +119,12 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // k (same as along). Spa's every(64) backdrop pass no longer double-shifts,
   // so six calls land where onTrack already clears them and the guard never
   // sees them. Guard margin unchanged — placement frame only.
-  assert.equal(c.backdrop, 47,
-    `spa backdrop drops = ${c.backdrop}, expected 47 — if you changed the ` +
+  // 47 → 24 (2026-10-04, spa elevation fix): scenery/spa.js now skips a
+  // backdrop whose spot lies on another leg's hillside above its top (it
+  // would be wholly buried; ground-audit buried 30 → 12), and 23 of those
+  // calls were ones the guard dropped anyway. Guard margin unchanged.
+  assert.equal(c.backdrop, 24,
+    `spa backdrop drops = ${c.backdrop}, expected 24 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).

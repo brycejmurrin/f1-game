@@ -150,6 +150,47 @@ test("stored input is player input: hostile shapes are dropped or repaired, neve
   Tracks.buildCenterline(d);   // and it still builds
 });
 
+test("fractional hill lengths keep the saved id through registration and reload", () => {
+  const { C, Tracks, data } = boot();
+  const raw = design({ elevations: [{ s: 0.5, halfM: 22.2, rise: 60 }],
+    bridges: [{ s: 0.8, halfM: 22.2, rise: -60 }] });
+  const once = C.sanitize(raw);
+  assert.equal(once.elevations[0].halfM, 22);
+  assert.equal(once.elevations[0].rise, 1);
+  assert.equal(once.bridges[0].rise, -1);
+  assert.deepEqual(plain(C.sanitize(once)), plain(once), "canonical geometry is idempotent");
+  const saved = C.upsert(raw);
+  assert.equal(saved.ok, true);
+  assert.equal(saved.id, once.id);
+  assert.equal(C.get(saved.id).id, saved.id, "upsert returns the registered id");
+  assert.equal(Tracks.LIST[C.select(saved.id)].id, saved.id, "the returned id is raceable");
+  const reloaded = boot(plain(data));
+  assert.equal(reloaded.C.get(saved.id).id, saved.id, "stored geometry preserves its identity");
+  assert.equal(reloaded.C.upsert(raw).id, saved.id);
+  assert.equal(reloaded.C.list().length, 1, "re-saving the input never duplicates the circuit");
+});
+
+test("hill canonicalization preserves stable legacy geometry and sampled identities", () => {
+  const { C } = boot();
+  const legacy = design({ elevations: [{ s: 0.5, halfM: 23, rise: 1.25 }],
+    bridges: [{ s: 0.8, halfM: 23, rise: -1.25 }] });
+  const stable = C.sanitize(legacy);
+  assert.equal(stable.id, "custom-d20a0e5d", "pre-fix content id: existing TT/ghost keys still resolve");
+  assert.equal(stable.elevations[0].rise, 1.25, "preserve the old nearest-quarter cap");
+  assert.equal(stable.bridges[0].rise, -1.25);
+  assert.equal(C.sanitize(stable).id, stable.id);
+  let seed = 0x51a7;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const samples = [20, 22.2, 23, 24.5, 149.9, 1999.8].flatMap(halfM => [-60, -1.13, 1.13, 60].map(rise => [halfM, rise]));
+  for (let i = 0; i < 200; i++) samples.push([20 + random() * 1980, random() * 160 - 80]);
+  for (const [halfM, rise] of samples) {
+    const once = C.sanitize(design({ elevations: [{ s: 0.5, halfM, rise }] }));
+    const bump = once.elevations[0];
+    assert.ok(Number.isInteger(bump.rise * 4), "quarter-metre rise");
+    assert.equal(C.sanitize(once).id, once.id, `${halfM}/${rise}: repeat sanitization keeps identity`);
+  }
+});
+
 test("the id is the content: lattice, theme, width, seed and zones — not the name", () => {
   const { C } = boot();
   const a = C.sanitize(design()), b = C.sanitize(design({ name: "Other Name" }));

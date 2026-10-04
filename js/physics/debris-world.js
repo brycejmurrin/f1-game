@@ -149,6 +149,7 @@ function rng32(seed) {
 }
 
 const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // sample scratch
+const _bankScratch = { dy: 0, roll: 0 };  // marble-grip road height at the car's lateral offset
 const _mat = new Float32Array(16);   // reused draw matrix
 _mat[15] = 1;
 const _v = { x: 0, y: 0, z: 0 };     // reused vector for pose writes
@@ -240,11 +241,30 @@ function create(ctx) {
 function rapierReady() { return _loadState === 2 && !!world; }
 function worldGen() { return _worldGen; }
 
+// Share the road pose between ordinary kinematic updates and incident takeover.
+function mirrorPose(track, c) {
+  Tracks.sample(track, c.s, _smp);
+  const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
+  _v.x = _smp.p[0] + _smp.r[0] / rl * c.x;
+  _v.y = _smp.p[1] + 0.45;
+  _v.z = _smp.p[2] + _smp.r[2] / rl * c.x;
+  const yaw = (c.human && c.head != null) ? c.head : Math.atan2(_smp.t[0], _smp.t[2]);
+  _q.x = 0; _q.y = Math.sin(yaw / 2); _q.z = 0; _q.w = Math.cos(yaw / 2);
+}
+
 function promoteCarDynamic(i, lin, ang) {
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
-  const b = _mirrors[i];
-  if (!b) return false;
+  const b = _mirrors[i], c = G.cars && G.cars[i];
+  if (!b || !c || !G.track || _dynCars.has(i)) return false;
   try {
+    // Idle skips leave mirrors at an old pose (or their initial origin). Seed
+    // the CURRENT transform, not a next-kinematic target, before going dynamic.
+    mirrorPose(G.track, c);
+    if (c.human && Number.isFinite(c.px) && Number.isFinite(c.pz)) {
+      _v.x = c.px; _v.z = c.pz;
+    }
+    b.setTranslation(_v, true);
+    b.setRotation(_q, true);
     b.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     if (lin) b.setLinvel({ x: lin.x || 0, y: lin.y || 0, z: lin.z || 0 }, true);
     if (ang) b.setAngvel({ x: ang.x || 0, y: ang.y || 0, z: ang.z || 0 }, true);
@@ -808,14 +828,8 @@ function step(dt) {
     // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
     if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
-    Tracks.sample(track, c.s, _smp);
-    const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
-    _v.x = _smp.p[0] + _smp.r[0] / rl * c.x;
-    _v.y = _smp.p[1] + 0.45;
-    _v.z = _smp.p[2] + _smp.r[2] / rl * c.x;
+    mirrorPose(track, c);
     m.setNextKinematicTranslation(_v);
-    const yaw = (c.human && c.head != null) ? c.head : Math.atan2(_smp.t[0], _smp.t[2]);
-    _q.x = 0; _q.y = Math.sin(yaw / 2); _q.z = 0; _q.w = Math.cos(yaw / 2);
     m.setNextKinematicRotation(_q);
   }
 
@@ -1053,12 +1067,15 @@ function marbleGrip(c) {
   Tracks.sample(track, c.s, _smp);
   const rl = Math.hypot(_smp.r[0], _smp.r[2]) || 1;
   const cx = _smp.p[0] + _smp.r[0] / rl * (c.x || 0);
+  const bank = Tracks.banking ? Tracks.banking(track, c.s, c.x || 0, _bankScratch) : null;
+  const cy = _smp.p[1] + (bank ? bank.dy : 0);
   const cz = _smp.p[2] + _smp.r[2] / rl * (c.x || 0);
   const R2 = MARBLE_GRIP_R * MARBLE_GRIP_R;
   let n = 0;
   for (const s of _marbles) {
     if (!s.live || !s.body.isSleeping()) continue;
     const t = s.body.translation();
+    if (Math.abs(t.y - cy) > HAZARD_Y_TOL) continue;   // other deck at a crossover
     const dx = t.x - cx, dz = t.z - cz;
     if (dx * dx + dz * dz <= R2) n++;
   }

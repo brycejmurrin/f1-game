@@ -1,11 +1,12 @@
 {
-  "why": "Wave 5 — Lusail (Qatar): record pit slab, Lusail Hill GA mound, T1 VVIP, paddock media, city backdrops (no mosque / Aspire / oasis — deliberate).",
+  "why": "Wave 5 — Lusail (Qatar): record pit slab, Lusail Hill GA mound, T1 VVIP, paddock media, city backdrops (no mosque / Aspire / oasis — deliberate). Wave 7 adds Tilke’s sixteen hospitality villas (groups of four) behind the pit slab.",
   "ids": [
     "qatar-pit-slab",
     "qatar-paddock-media-centre",
     "qatar-t1-vvip-canopy",
     "qatar-lusail-hill",
     "qatar-katara-towers",
-    "qatar-lusail-stadium"
+    "qatar-lusail-stadium",
+    "qatar-hospitality-villas-1"
   ]
 }
