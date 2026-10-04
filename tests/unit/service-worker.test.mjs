@@ -334,7 +334,7 @@ test("install icons have declared PNG dimensions and are seeded for offline use"
   }
 });
 
-test("cache-first responses remain pending until their runtime cache write completes", async () => {
+test("cache-first responses return promptly while waitUntil retains the runtime write", async () => {
   const heldPut = deferred();
   const harness = createHarness({
     fetchImpl: async (request) => {
@@ -350,14 +350,33 @@ test("cache-first responses remain pending until their runtime cache write compl
 
   const event = harness.fetchEvent(request);
   const state = await Promise.race([
-    event.responsePromise.then(() => "settled"),
+    Promise.all(event.lifetimes).then(() => "settled"),
     new Promise((resolve) => setTimeout(() => resolve("pending"), 0)),
   ]);
   assert.equal(state, "pending");
-
-  heldPut.resolve();
   const response = await event.responsePromise;
   assert.equal(await response.text(), "fresh");
+  heldPut.resolve();
+  await Promise.all(event.lifetimes);
+  assert.ok(harness.stores.get("apex26-321").has(request.url));
+});
+
+test("a stalled version lookup cannot delay a downloaded asset on deployed or dev hosts", async () => {
+  for (const hostname of ["apex.test", "localhost"]) {
+    const version = deferred();
+    const harness = createHarness({ hostname, fetchImpl: async (req) =>
+      req === "version.json" ? version.promise : new Response("script") });
+    const req = new Request(`${ORIGIN}/js/data/hub.js?v=321`);
+    const event = harness.fetchEvent(req);
+    assert.equal(event.lifetimes.length, 1, "write lifetime registered during fetch dispatch");
+    const response = await Promise.race([event.responsePromise,
+      new Promise((resolve) => setTimeout(() => resolve(null), 100))]);
+    version.resolve(new Response('{"build":321}'));
+    assert.ok(response, hostname + ": response must not wait for version.json");
+    assert.equal(await response.text(), "script");
+    await Promise.all(event.lifetimes);
+    assert.ok(harness.stores.get("apex26-321").has(req.url));
+  }
 });
 
 test("successful navigation remains attached to waitUntil through its cache write", async () => {

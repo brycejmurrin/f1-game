@@ -17,7 +17,8 @@ function roomHarness() {
   return { room: new Room(state), records, calls };
 }
 
-const url = "https://relay.test/r/ABCDEF/offer?slot=offer";
+const route = "https://relay.test/v3/r/" + "a".repeat(64) + "/offer";
+const url = route + "?slot=offer";
 
 test("Worker stores a valid bounded payload", async () => {
   const h = roomHarness();
@@ -129,7 +130,7 @@ test("Worker applies the payload limit in bytes, not UTF-16 characters", async (
 test("Worker rejects non-client room-code lengths before allocating a Durable Object", async () => {
   let ids = 0;
   const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
-  const response = await worker.fetch(new Request("https://relay.test/r/ABCD/offer"), env);
+  const response = await worker.fetch(new Request("https://relay.test/v3/r/abcd/offer"), env);
   assert.equal(response.status, 404);
   assert.equal(ids, 0);
 });
@@ -144,8 +145,8 @@ test("Worker rate-limits room creation before allocating more Durable Objects", 
   };
   let last;
   for (let i = 0; i < 21; i++) {
-    const code = i.toString(36).toUpperCase().padStart(6, "0");
-    last = await worker.fetch(new Request(`https://relay.test/r/${code}/offer`, {
+    const code = i.toString(16).padStart(64, "0");
+    last = await worker.fetch(new Request(`https://relay.test/v3/r/${code}/offer`, {
       method: "POST", headers, body: JSON.stringify({ payload: "x" }),
     }), env);
   }
@@ -158,7 +159,7 @@ test("Worker rate-bucket storage is hard-capped under fresh address churn", asyn
   const stub = { fetch: async () => new Response('{"ok":true}', { status: 200 }) };
   const env = { ROOM: { idFromName(code) { return code; }, get() { return stub; } } };
   const target = "2001:db8:rate::1";
-  const post = (ip) => worker.fetch(new Request("https://relay.test/r/ABCDEF/offer", {
+  const post = (ip) => worker.fetch(new Request(route, {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": ip },
     body: JSON.stringify({ payload: "x" }),
@@ -171,11 +172,33 @@ test("Worker rate-bucket storage is hard-capped under fresh address churn", asyn
   // the old implementation retained every fresh entry and this remained 429.
   for (let i = 0; i < 4110; i++) {
     const ip = `2001:db8:churn::${i.toString(16)}`;
-    const res = await worker.fetch(new Request("https://relay.test/r/ABCDEF/offer", {
+    const res = await worker.fetch(new Request(route, {
       method: "GET", headers: { "cf-connecting-ip": ip },
     }), env);
     assert.equal(res.status, 200);
   }
   assert.equal((await post(target)).status, 200,
     "the least-recently-used bucket must have been evicted to enforce the cap");
+});
+
+
+test("Worker refuses legacy secret-bearing routes and advertises the private protocol", async () => {
+  const names = [];
+  const h = roomHarness();
+  const env = { ROOM: { idFromName(name) { names.push(name); return name; }, get() { return h.room; } } };
+  const legacy = await worker.fetch(new Request("https://relay.test/r/ABC234/offer"), env);
+  assert.equal(legacy.status, 426);
+  assert.equal(names.length, 0, "legacy requests never name a Durable Object");
+  const created = await worker.fetch(new Request(route, {
+    method: "POST", body: JSON.stringify({ payload: "v2.ciphertext", owner: "owner_capability_123456" }),
+  }), env);
+  assert.equal(created.status, 200);
+  assert.equal(names[0], "v3:" + "a".repeat(64));
+  assert.equal(created.headers.get("x-apex-rendezvous"), "3");
+  assert.match(created.headers.get("access-control-expose-headers"), /x-apex-rendezvous/);
+  const read = await worker.fetch(new Request(route), env);
+  assert.equal((await read.json()).payload, "v2.ciphertext");
+  const missing = await worker.fetch(new Request(route.replace("/offer", "/answer")), env);
+  assert.equal(missing.status, 404);
+  assert.equal(missing.headers.get("x-apex-rendezvous"), "3", "new empty room differs from an old Worker");
 });

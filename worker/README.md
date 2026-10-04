@@ -1,13 +1,17 @@
 # The rendezvous relay (optional)
 
-This is the **only server** in Apex 26, it is **optional**, and the game works
-completely without it. Its whole job is to hold two small encrypted envelopes
-for two minutes so that two browsers can find each other with a short room code
-instead of pasting an invite back and forth. The six-character room code derives
-the browser-side AES-GCM key; the Worker stores only `v2.` ciphertext envelopes
-and refuses anything else, so the operator cannot read what it carries — and
-because the client opens only a `v2.` envelope under the slot's own AAD, the
-operator cannot alter or replay it either.
+This optional Worker holds two encrypted signalling envelopes for two minutes.
+Private rooms use a **32-character token** generated in the browser with
+cryptographic randomness (>158 bits). Players copy/share that token privately;
+it never appears in a Worker request. The client derives a separate opaque room
+id and an AES-GCM encryption key using distinct HKDF info strings. The Worker
+sees `/v3/r/<64-hex-id>/<offer|answer>` and `v2.` ciphertext, so it cannot recover
+the token or decrypt/forge signalling contents from its HTTP traffic.
+
+A relay can still drop traffic or replay an existing same-slot envelope; AES-GCM
+authenticates contents, not freshness. Slot AAD prevents offer-as-answer replay.
+The ordinary public Nostr room-code path remains six characters and is a
+separate protocol with a smaller shared secret.
 
 Once WebRTC connects, every byte of gameplay goes **directly** between the two
 players. The relay never sees another packet.
@@ -16,18 +20,18 @@ players. The relay never sees another packet.
 
 The invite link and the QR code need no infrastructure and never break — they
 are the primary way in, and they stay. But they need the two players to move a
-code between them. A room code removes that:
+code between them. A private room needs only one shared token:
 
 ```
 HOST                        rendezvous                       GUEST
 POST offer  ─────────────▶  [held, 2 min]
-                            ◀──────── GET offer ──────────   types the code
+                            ◀──────── GET offer ──────────   pastes the token
                             ◀──────── POST answer ────────
 GET answer  ◀─────────────
 ...direct P2P from here...
 ```
 
-It is **not** a username system. A code is disposable: nothing is stored past
+It is **not** a username system. A token is disposable: nothing is stored past
 the TTL and no personal data is retained. There is no account to lose and
 nothing to moderate. A random, unguessable owner capability does let the same
 host safely retry or replace its offer without letting another client overwrite
@@ -44,7 +48,7 @@ Room codes already work with nothing deployed: `DEFAULT_URL` in
 `js/net/rendezvous.js` is empty **on purpose**, and the public-broker backend
 handles the rendezvous. To make your own relay the default for every player,
 paste the resulting `https://apex26-rendezvous.<you>.workers.dev` URL into
-`DEFAULT_URL` and bump the cache version.
+`DEFAULT_URL`; the deploy stamps asset versions automatically.
 
 For a staging worker without editing the file, set it per-device instead:
 
@@ -52,9 +56,32 @@ For a staging worker without editing the file, set it per-device instead:
 localStorage.setItem("apex26.rendezvous", "https://<worker>.workers.dev")
 ```
 
+## Protocol 3 rollout
+
+Deploy this Worker, reload both players to the updated game, and mint a new
+private room token. Both devices must use the same Worker URL. The game offers
+COPY/SHARE and a paste field for the longer token. Phone-controller QR links
+include the relay URL and token in their fragment so another device can pair
+without preconfiguring its local storage. CONNECT uses that relay only for the
+controller document; relay URLs must be HTTPS (loopback HTTP is allowed for
+development), with no credentials, query or fragment. Manual invite links and
+QR codes are also available without a relay.
+
+Old six-character private rooms are intentionally incompatible: `/r/...` returns
+426 before a Durable Object is allocated. Never add a compatibility route or
+send the token as a path/query/body field. The old path revealed the encryption
+secret to the operator; hashing a six-character secret alone would still enable
+offline guessing. Current clients require the CORS-exposed
+`X-Apex-Rendezvous: 3` header and explicitly ask players to update an old Worker
+or use the manual invite. They never downgrade to the old path or plaintext.
+The `v2.` envelope name describes the ciphertext layout, not the HTTP version.
+
+API references: [WebCrypto randomness](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues),
+[HKDF derivation and info](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey).
+
 ## Cost
 
-One Durable Object per code, alive for two minutes. Durable Objects have been on
+One Durable Object per opaque room id, alive for two minutes. Durable Objects have been on
 the Cloudflare **free plan** since April 2025 (100,000 requests/day, 313,000
 GB-seconds/day). A signalling handoff uses that for seconds, so a fan game will
 not leave the free tier. `wrangler.toml` uses `new_sqlite_classes` deliberately —

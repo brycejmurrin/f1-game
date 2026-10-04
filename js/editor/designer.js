@@ -932,7 +932,7 @@ const TrackDesigner = (function () {
       const it = draftItem();
       if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; }
     }
-    if (opts && opts.design) { const kept = load(opts.design, "open"); if (opts.shared) message("Shared circuit loaded — SAVE to keep it in MY CIRCUITS" + keptNote(kept)); }
+    if (opts && opts.design) { const kept = load(opts.design, "open", opts.shared ? null : opts.originId); if (opts.shared) message("Shared circuit loaded — SAVE to keep it in MY CIRCUITS" + keptNote(kept)); }
     else if (!design) {
       const it = draftItem();
       if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; message("Draft restored"); }

@@ -210,5 +210,9 @@ test("START FROM: Monza, Spa and Monaco trace into 60–120 lattice points that 
     const allowed = { suzuka: ["crossing", "clearance"], monaco: ["clearance"] }[id] || [];
     assert.ok(reds.every((c) => allowed.includes(c)), id + ": " + codes(v));
     if (id === "suzuka") assert.ok(reds.includes("crossing"), "Suzuka's figure-8 crossing reads RED until bridged");
+    // Spa's Bus Stop is a real chicane: START FROM must keep it, not RDP it
+    // into a tarmac fold (the 3D-resampled centreline did after the elevation
+    // rework — Structural guards on #878).
+    if (id === "spa") assert.equal(v.issues.some((i) => i.code === "fold"), false, id + " fold: " + codes(v));
   }
 });

@@ -584,3 +584,13 @@ test("real position retries retain successful cars, report partial failures, and
   rejectSecond = true;
   await assert.rejects(D.fetchTraces({ ...script, drivers: [script.drivers[1]] }), /positions did not load/, "a completely failed load cannot masquerade as cached positions");
 });
+
+
+test("race scripts read lane_duration after OpenF1 removes pit_duration", () => {
+  const { D, findTeam } = load();
+  const raw = rawBaku();
+  raw.pits = [{ driver_number: 63, lap_number: 31, lane_duration: 22.2, pit_duration: 99 },
+    { driver_number: 63, lap_number: 36, pit_duration: 23.4 }];
+  const script = host(D.build(raw, findTeam, TRACKS));
+  assert.deepEqual(script.drivers.find((d) => d.num === 63).pitDur, [22.2, 23.4]);
+});

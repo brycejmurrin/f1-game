@@ -71,7 +71,7 @@ test("the hand-over counts down on the plate, then GO gives the wheel back and r
 });
 
 test("time trial gets the same flying start; a race, practice and a Data Hub real race do not", () => {
-  const tt = rig({ session: "tt", timeTrial: true });
+  const tt = rig({ session: "tt", timeTrial: true, practice: true });   // game.js isPractice(): a time trial is always practice
   tt.G.state = "count"; tt.fs.update(1 / 60);
   assert.equal(tt.G.state, "race");
   assert.match(tt.said[0], /TIME TRIAL · FLYING LAP/);
