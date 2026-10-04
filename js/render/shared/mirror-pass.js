@@ -232,6 +232,16 @@ const MirrorPass = (function () {
       if (past(p)) right = Math.min(right, p.left - 12);
       if (past(s)) right = Math.min(right, s.left);
       if (past(c) && c.bottom > er.top) right = Math.min(right, c.left);
+      // THE TOUCH DOCKS TOO. On a landscape phone the right dock's tap column
+      // starts beside the mirror's row (844x390 cockpit: BOOST at y 85, the
+      // mirror 66..131), and the card was laid straight over it (HUD survey,
+      // 2026-10-04: #announce [500,66 194x46] over #btn-boost [645,85]). A dock
+      // group right of the frame that reaches the card's rows ends the strip.
+      const dock = document.getElementById("dock-right");
+      if (dock) for (const g of dock.children) {
+        const r = box(g);
+        if (past(r) && r.top < er.bottom + 56 && r.bottom > er.top) right = Math.min(right, r.left);
+      }
       const x = er.right + SIDE_GAP, w = right - SIDE_GAP - x;
       const fits = w >= SIDE_MIN;
       b.classList.toggle("hud-mirror-side", fits);

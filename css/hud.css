@@ -1705,7 +1705,10 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    Hidden in MINIMAL, on a broadcast camera and in a WATCH, like the sector
    box; nothing here animates, so REDUCE MOTION has nothing to take out (the
    trace itself swaps to still bars in JS). */
-#hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+/* #hud-damage too: its anchors divide by --hud-z, and without a band zoom of
+   its own the whole calc() was invalid at computed time — the chip sat at the
+   static 0,0, over the minimap (live shot, 2026-10-04). */
+#hud-rel, #hud-strat, #hud-damage { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 #hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* The race HUD's dark plate (--look-hud-bg: rgba(8 8 14 / .78) in every
    theme, the HIGH CONTRAST plate under HC), not the menu's --plate-opaque,

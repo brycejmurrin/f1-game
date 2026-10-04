@@ -448,8 +448,10 @@ function layoutRect(el) {
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
 const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
+let _radioFrom = NaN;   // the tower's right edge the published slot was cut from
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  _radioFrom = t ? t.right : NaN;
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   const bound = (r, needPast) => {
@@ -1002,6 +1004,16 @@ function updateHud(force, dtMs) {
   hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
+  // THE CARD FOLLOWS THE TOWER IT HANGS OFF. The tower's CONTENT widens mid-race
+  // (the clock gains a digit, a first BEST, DELTA) without changing the fit
+  // key, so the slot sat until the 3 s same-key re-measure — measured live: cut
+  // from a 309 px tower that had grown to 362 (BIG: card at 841 under a tower
+  // ending at 866). While a message shows, one rect read per tick; the slot is
+  // re-cut only when that edge has moved.
+  if (_hudTop && els.announce && !els.announce.hidden && document.body.classList.contains("hud-radio-top")
+      && Math.abs(_hudTop.getBoundingClientRect().right - _radioFrom) > 0.5) {
+    radioTopSlot(document.documentElement, document.body.classList.contains("hud-prof-broadcast"));
+  }
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
