@@ -12,6 +12,8 @@ const XrBoot = (function () {
   let _loopByXr = false;
   let _tickBody = null;
   let _windowRaf = null;       // schedule one window.rAF(tick) — deduped
+  let _windowRequest = null;
+  let _windowGeneration = 0;
   let _windowPending = false;  // true while a window tick is queued
   let _cockpitIdx = -1;
   let _savedCam = -1;
@@ -114,7 +116,10 @@ const XrBoot = (function () {
     const fn = tickFn || _windowRaf;
     if (typeof fn !== "function") return false;
     _windowPending = true;
-    requestAnimationFrame((t) => {
+    const generation = _windowGeneration;
+    _windowRequest = requestAnimationFrame((t) => {
+      if (_loopByXr || generation !== _windowGeneration) return;
+      _windowRequest = null;
       _windowPending = false;
       fn(t);
     });
@@ -148,7 +153,11 @@ const XrBoot = (function () {
       },
       onStart: () => {
         _loopByXr = true;
-        // Drop any queued window tick — XR owns the clock until end.
+        // Cancellation saves work; generation also rejects a callback already
+        // dispatched (or suspended by the browser until after XR ends).
+        _windowGeneration++;
+        if (_windowRequest !== null) cancelAnimationFrame(_windowRequest);
+        _windowRequest = null;
         _windowPending = false;
         saveAndForceCockpit();
       },
@@ -159,7 +168,7 @@ const XrBoot = (function () {
         chainWindowRaf(_windowRaf);
       },
       onFrame: (time) => {
-        if (typeof _tickBody === "function") _tickBody(time);
+        if (_loopByXr && typeof _tickBody === "function") _tickBody(time);
       },
     });
     _bound = true;

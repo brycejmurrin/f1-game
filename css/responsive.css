@@ -250,11 +250,13 @@ body.photo-studio-open #rotate-device { display: none !important; }
    <dialog>, but gate labels (RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE)
    ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
    Match both the hidden seam and the native `open` flag showModal sets.
-   Also beat the portrait media rule's `display: flex` with !important. */
-body:has(#pausemenu:not([hidden])) #rotate-device,
-body:has(#pausemenu[open]) #rotate-device,
-html:has(#pausemenu:not([hidden])) #rotate-device,
-html:has(#pausemenu[open]) #rotate-device {
+   Also beat the portrait media rule's `display: flex` with !important.
+   body.rotate-measure lifts it for one getComputedStyle: syncRotateBlocker
+   asks "does the gate want the screen?" BEFORE it decides the pause card
+   yields — reading through this rule, the card's own presence answered "no"
+   and the gate never came back after OPEN CONTROLS › CLOSE. */
+body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;

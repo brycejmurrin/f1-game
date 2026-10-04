@@ -550,6 +550,44 @@ test("WATCH paused seek repaints the timing tower and race clock without advanci
   replay.stop();
 });
 
+test("WATCH manual and automatic reel cuts release radio and reset timeline presentation before snapping", () => {
+  for (const automatic of [false, true]) for (const locked of [false, true]) {
+    const clips = [];
+    const { replay, G, cars, options } = transportReplay({ Audio: class {
+      constructor() { this.paused = true; clips.push(this); }
+      play() { this.paused = false; return Promise.resolve(); }
+      pause() { this.paused = true; }
+    } });
+    options.reel = true;
+    options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 50, by: 2, over: 1 }];
+    options.script.radio = [{ t: 11, num: 1, url: "https://example.test/radio.mp3" }];
+    options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
+    G.soundOn = true;
+    const snaps = [], pip = [], hud = [];
+    G.snapGameCam = (paint) => snaps.push({ paint, prog: G.player.prog, clock: G.raceT });
+    G.setPip = (c) => pip.push(c);
+    G.refreshHud = () => hud.push(G.raceT);
+    replay.start(options);
+    replay.setLocked(locked);
+    replay.tick(9); // Opening lead-in starts at T=2: the first radio fires at 11.
+    assert.equal(clips[0].paused, false);
+    snaps.length = pip.length = hud.length = 0;
+    if (automatic) replay.tick(5); else { replay.setPaused(true); replay.skip(); }
+    assert.equal(replay.status().T, 42);
+    assert.equal(clips[0].paused, true, "the previous segment's audio cannot cross a reel cut");
+    assert.equal(G.raceT, 42, "HUD clock changes on the same cut");
+    assert.equal(replay.status().follow, locked ? "AAA" : "BBB", "a cut respects a locked subject");
+    assert.equal(snaps.at(-1).paint, false, "the cut snaps without forcing headless playback to render");
+    assert.equal(snaps.at(-1).prog, locked ? 2100 : 1890);
+    assert.equal(snaps.at(-1).clock, 42);
+    assert.equal(hud.at(-1), 42);
+    assert.ok(pip.includes(null), "the cut drops old broadcast/PiP history");
+    for (const car of cars) assert.equal(car.rPrevPx, car.px, "interpolation starts at the new pose");
+    assert.equal(replay.status().paused, !automatic, "a paused skip remains paused");
+    replay.stop();
+  }
+});
+
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
   const { replay, G, cars, drivers, options } = transportReplay();
   drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;

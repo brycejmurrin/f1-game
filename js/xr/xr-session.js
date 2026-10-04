@@ -22,6 +22,11 @@ const XrSession = (function () {
   let _supported = false;
   let _probed = false;
   let _session = null;
+  let _startPromise = null;
+  let _generation = 0;
+  let _xrRequest = null;
+  let _centered = false;
+  let _recenterPending = false;
   let _refSpace = null;
   let _baseRefSpace = null;
   let _xrFrame = null;
@@ -135,9 +140,17 @@ const XrSession = (function () {
     };
   }
 
-  async function start() {
-    if (_session) return _session;
+  function start() {
+    if (_startPromise) return _startPromise;
+    if (_session) return Promise.resolve(_session);
+    const generation = ++_generation;
+    _startPromise = startSession(generation).finally(() => { _startPromise = null; });
+    return _startPromise;
+  }
+
+  async function startSession(generation) {
     if (!_probed) await probe();
+    if (generation !== _generation) return null;
     if (!_supported) {
       _lastError = new Error("immersive-vr not supported");
       emit("error", { error: _lastError });
@@ -163,6 +176,7 @@ const XrSession = (function () {
     try {
       session = await navigator.xr.requestSession(MODE, sessionInit(preferGpu));
     } catch (e) {
+      if (generation !== _generation) return null;
       if (preferGpu) {
         try {
           Log.info("xr", "WebGPU XR session request failed; falling back to WebGL2", e && e.message);
@@ -182,6 +196,11 @@ const XrSession = (function () {
       }
     }
 
+    if (generation !== _generation) {
+      try { await session.end(); } catch (_) { /* cancelled while requesting */ }
+      return null;
+    }
+    _lastError = null;
     _enabledFeatures = listEnabledFeatures(session);
     const gotWebgpu = preferGpu && featureGranted(session, "webgpu") && webgpuXrAvailable();
     _backend = gotWebgpu ? "webgpu" : "webgl2";
@@ -192,7 +211,9 @@ const XrSession = (function () {
     }
 
     _session = session;
-    _running = true;
+    _running = false;
+    _centered = false;
+    _recenterPending = false;
     _xrFrameCount = 0;
     _visible = session.visibilityState !== "hidden";
     _inputLatch = { primary: false, secondary: false };
@@ -201,13 +222,19 @@ const XrSession = (function () {
     session.addEventListener("visibilitychange", onVisibility);
 
     try {
-      _baseRefSpace = await session.requestReferenceSpace("local-floor");
+      const base = await session.requestReferenceSpace("local-floor");
+      if (_session !== session || generation !== _generation) return null;
+      _baseRefSpace = base;
     } catch (_) {
-      try { _baseRefSpace = await session.requestReferenceSpace("local"); }
+      if (_session !== session || generation !== _generation) return null;
+      try {
+        const base = await session.requestReferenceSpace("local");
+        if (_session !== session || generation !== _generation) return null;
+        _baseRefSpace = base;
+      }
       catch (e) {
         _lastError = e;
-        try { session.end(); } catch (_) { /* */ }
-        _session = null; _running = false;
+        await end();
         emit("error", { error: e, phase: "referenceSpace" });
         return null;
       }
@@ -219,33 +246,59 @@ const XrSession = (function () {
     if (b && typeof b.attachSession === "function") {
       try {
         await b.attachSession(session, { backend: _backend, preferWebgpu: preferGpu });
+        if (_session !== session || generation !== _generation) {
+          // An async renderer attachment can finish after the end event.
+          if (typeof b.detachSession === "function") b.detachSession();
+          return null;
+        }
       } catch (e) {
         _lastError = e;
-        try { session.end(); } catch (_) { /* */ }
-        _session = null; _running = false;
+        await end();
         emit("error", { error: e, phase: "attachSession" });
         return null;
       }
     }
+    if (_session !== session || generation !== _generation) return null;
+    _running = true;
     if (b && typeof b.onStart === "function") {
       try { b.onStart({ backend: _backend }); } catch (_) { /* */ }
     }
 
     // XR frame loop — replaces reliance on window.rAF while presenting.
     const onXRFrame = (time, frame) => {
-      if (!_session) return;
-      _session.requestAnimationFrame(onXRFrame);
+      if (_session !== session || generation !== _generation || !_running) return;
+      _xrRequest = null;
       _xrTime = time;
       _xrFrame = frame;
       _xrFrameCount++;
-      pollInput(frame);
-      if (b && typeof b.onFrame === "function") {
+      if (!_centered || _recenterPending) recenter(frame);
+      try { pollInput(frame); } catch (e) {
+        // A controller/injected-input failure must not strand the XR clock or
+        // leave its last throttle sample latched while the headset keeps moving.
+        if (typeof Input !== "undefined" && Input.remoteLost) {
+          try { Input.remoteLost(); } catch (_) { /* input teardown is best-effort */ }
+        }
+        try { Log.warn("xr", "pollInput", e && e.message); } catch (_) { /* */ }
+      }
+      if (_session === session && _running && b && typeof b.onFrame === "function") {
         try { b.onFrame(time, frame); } catch (e) {
           try { Log.warn("xr", "onFrame", e && e.message); } catch (_) { /* */ }
         }
       }
+      _xrFrame = null; // WebXR poses are valid only within this callback.
+      scheduleFrame();
     };
-    session.requestAnimationFrame(onXRFrame);
+    const scheduleFrame = () => {
+      if (_session !== session || generation !== _generation || !_running) return false;
+      try { _xrRequest = session.requestAnimationFrame(onXRFrame); return true; }
+      catch (e) {
+        _lastError = e;
+        void end();
+        emit("error", { error: e, phase: "requestAnimationFrame" });
+        return false;
+      }
+    };
+    if (!scheduleFrame()) return null;
     emit("start", { backend: _backend, features: _enabledFeatures.slice() });
     try { Log.info("xr", "immersive-vr started backend=" + _backend); } catch (_) { /* */ }
     return session;
@@ -264,14 +317,21 @@ const XrSession = (function () {
   function recenter(frameOpt) {
     if (!_session || !_baseRefSpace) return false;
     const xrFrame = frameOpt || _xrFrame;
-    if (!xrFrame) return false;
+    if (!xrFrame) {
+      // Public/UI calls happen outside XR callbacks; never query an expired
+      // frame. Accept the request and retry until the next valid tracked pose.
+      _recenterPending = true;
+      return true;
+    }
     let pose = null;
-    try { pose = xrFrame.getViewerPose(_refSpace || _baseRefSpace); } catch (_) { return false; }
+    try { pose = xrFrame.getViewerPose(_baseRefSpace); } catch (_) { return false; }
     if (!pose || !pose.transform || !pose.transform.matrix) return false;
     const off = XrRig.recenterOffsetFromPose(pose.transform.matrix);
     try {
       const t = new XRRigidTransform(off.position, off.orientation);
       _refSpace = _baseRefSpace.getOffsetReferenceSpace(t);
+      _centered = true;
+      _recenterPending = false;
       emit("recenter", off);
       return true;
     } catch (e) {
@@ -290,6 +350,7 @@ const XrSession = (function () {
   function eyeFrames(layer, frameOpt) {
     const xrFrame = frameOpt || _xrFrame;
     if (!xrFrame || !_refSpace) return null;
+    if (!_centered && !recenter(xrFrame)) return null;
     let pose = null;
     try { pose = xrFrame.getViewerPose(_refSpace); } catch (_) { return null; }
     if (!pose || !pose.views || !pose.views.length) return null;
@@ -326,14 +387,21 @@ const XrSession = (function () {
   }
 
   async function end() {
-    if (!_session) return;
+    ++_generation; // also cancels a pending requestSession/reference/attach.
     const s = _session;
+    if (!s) return;
+    onSessionEnd({ target: s });
     try { await s.end(); } catch (_) { /* already ending */ }
-    // onSessionEnd does the rest
   }
 
-  function onSessionEnd() {
+  function onSessionEnd(event) {
     const s = _session;
+    if (!s || (event && event.target && event.target !== s)) return;
+    ++_generation;
+    if (_xrRequest !== null) {
+      try { s.cancelAnimationFrame(_xrRequest); } catch (_) { /* already ended */ }
+      _xrRequest = null;
+    }
     if (s) {
       try { s.removeEventListener("end", onSessionEnd); } catch (_) { /* */ }
       try { s.removeEventListener("visibilitychange", onVisibility); } catch (_) { /* */ }
@@ -342,6 +410,8 @@ const XrSession = (function () {
     _refSpace = null;
     _baseRefSpace = null;
     _xrFrame = null;
+    _centered = false;
+    _recenterPending = false;
     _enabledFeatures = [];
     _running = false;
     if (typeof Input !== "undefined" && Input.remoteLost) {

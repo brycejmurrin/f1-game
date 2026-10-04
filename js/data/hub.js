@@ -518,11 +518,18 @@ const DataHub = (function () {
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
-    // A pick made here and answered after the player left this tab does nothing:
-    // its onPick → invalidateOther would bump the generation of the tab now
-    // loading and leave it spinning forever. The first fill (userChanged false)
-    // still runs on a box its tab has not attached yet.
-    function detached(userChanged) { return userChanged && box.isConnected === false; }
+    // A pick made here and answered after the player left this tab must not
+    // call onPick: its invalidateOther would bump the generation of the tab now
+    // loading and leave it spinning forever. But `sel` already moved, so drop
+    // the OTHER session tabs' cached nodes (this one included) — otherwise a
+    // return within MAX_AGE shows this picker stuck on "loading…" over the old
+    // session's body. The first fill (userChanged false) still runs on a box
+    // its tab has not attached yet.
+    function detached(userChanged) {
+      if (!userChanged || box.isConnected !== false) return false;
+      invalidateOther(active);
+      return true;
+    }
 
     gpSel.addEventListener("change", function () {
       cancelRealRace();

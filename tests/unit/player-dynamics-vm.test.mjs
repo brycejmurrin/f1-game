@@ -235,6 +235,75 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
   } finally { a.clearInput(); a.setPhysics(physicsBefore); }
 });
 
+// Brake held from a standstill is REVERSE (REVERSE_ACCEL), not a 30+ m/s^2
+// stop. axEstTarget charged the full brake to the friction circle, so the
+// fronts "locked" (wheelLock 0.48, skid squeal) and a flat spot saturated
+// in 12 s of backing off a wall.
+test("reversing on the brake does not lock the wheels or grow a flat spot", async () => {
+  await g.race("monza", "day", "dry");
+  const a = g.apex, P = g.G.player;
+  for (const c of g.G.cars) if (c !== P) { c.x = 80; c.speed = 0; }
+  try {
+    a.jump(0.1, 0, 0);
+    P.flatSpot = 0;
+    a.setInput({ brake: true, throttle: false, steer: 0 });
+    a.step(1 / 60, 240);
+    assert.ok(P.speed < -2, `anti-vacuity: the car is reversing (${P.speed.toFixed(2)} m/s)`);
+    assert.equal(P.wheelLock, 0, "no lock-up while reversing");
+    assert.ok(P.axFracF < 0.2, `the pedal is not charged to the front axle (${P.axFracF.toFixed(3)})`);
+    assert.ok((P.flatSpot || 0) < 0.05, `no flat spot from reversing (${(P.flatSpot || 0).toFixed(3)})`);
+  } finally { a.clearInput(); }
+});
+
+// A human already reversing keeps its sign through a contact: every response
+// floored c.speed at 0, so backing out of a side-by-side wedge lost the whole
+// -5 m/s on the first touch.
+test("a player reversing past a parked car alongside keeps its reverse speed", async () => {
+  await g.race("monza", "day", "dry");
+  const a = g.apex, P = g.G.player, others = g.G.cars.filter((c) => c !== P);
+  for (const c of others) { c.x = 60; c.speed = 0; }
+  try {
+    a.jump(0.3, 0, 0);
+    a.setInput({ brake: true, throttle: false, steer: 0 });
+    a.step(1 / 60, 90);
+    const before = P.speed;
+    assert.ok(before < -3, `anti-vacuity: reversing (${before.toFixed(2)})`);
+    const A = others[0];
+    A.s = P.s + 3.5; A.prog = P.prog + 3.5; A.x = P.x + 1.7; A.speed = 0; A._snapProg = A.prog; A._snapX = A.x;
+    let touched = false;
+    for (let i = 0; i < 6; i++) { a.step(1 / 60, 1); if ((P.contactT || 0) > 0) touched = true; }
+    assert.ok(touched, "anti-vacuity: the cars touched");
+    assert.ok(P.speed < 0.8 * before, `reverse survives the contact: ${before.toFixed(2)} -> ${P.speed.toFixed(2)}`);
+    A.x = 60;
+  } finally { a.clearInput(); }
+});
+
+// Slope gravity ran along the road tangent whatever way the car faced: a car
+// spun round on a climb (really facing DOWNhill) was slowed as if climbing.
+test("a car facing backwards on a climb is fed by gravity, not slowed by it", async () => {
+  await g.race("suzuka", "day", "dry");
+  const a = g.apex, P = g.G.player, T = g.G.track;
+  for (const c of g.G.cars) if (c !== P) { c.x = 60; c.speed = 0; }
+  const Tr = g.sandbox.Tracks, smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], n: [0, 0, 0] };
+  let best = 0, bs = 0;
+  for (let s = 0; s < T.total; s += 4) { Tr.sample(T, s, smp); if (smp.t[1] > best) { best = smp.t[1]; bs = s; } }
+  assert.ok(best > 0.05, `anti-vacuity: suzuka's steepest climb is ${(best * 100).toFixed(1)} %`);
+  const run = (flip) => {
+    a.jump(bs / T.total, 20, 0);
+    if (flip) P.head += Math.PI;
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const v0 = P.speed;
+    a.step(1 / 60, 30);
+    return P.speed - v0;
+  };
+  try {
+    const up = run(false), down = run(true);
+    // Same coast drag both ways; gravity flips sign, so facing downhill loses
+    // clearly less than facing uphill (it lost slightly MORE before the fix).
+    assert.ok(down > up + 0.5, `facing downhill dv ${down.toFixed(3)} vs uphill ${up.toFixed(3)}`);
+  } finally { a.clearInput(); }
+});
+
 // Manual gearbox bog: (speed - lo)/(hi - lo) with reverse speed drives gearMult
 // to 0, so throttle cannot leave REVERSE_MAX until rescue (~1 s). Own boot —
 // the shared g is auto gears (gearMult stays 1). Before fix: mid05 stayed at
