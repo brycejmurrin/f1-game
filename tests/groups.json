@@ -426,6 +426,7 @@
     "// Faenza Street fit on McLaren silently photographed as medium.",
     "tests/unit/parts-locked-equivalent.test.mjs",
     "tests/unit/pause-hud-layout.test.mjs",
+    "tests/unit/pause-key-tools.test.mjs",
     "tests/unit/pause-opts.test.mjs",
     "tests/unit/perf-governor.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
