@@ -20,6 +20,7 @@ const { clamp, satAdjust, isFloodActiveSession,
 const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain";
 const wxRain = () => G.raceWeather === "rain";
 const { LT, buildTrackLights } = LightTune;
+const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
 
@@ -35,12 +36,28 @@ const CLEAR_FOG_SCALE = 0.45;
 // values so a strike restores to the look in flight, not the target.
 // Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
 // strength, ambient and fog stepped (the second graphics-detail survey, item 11).
+//
+// THE KNOBS FADE TOO (2026-10-04). A stage flip changes the LightStore key
+// (track|tod|WEATHER), and LightStore.apply() used to land every LT knob of the
+// new preset in one frame: keyMul 0.115 -> 0.76, bloomMul x13, fogDensityMul x4
+// mid-race, under a sky that was fading (review-wgx-lighting item 2). Now the
+// blended re-apply snapshots LT on both sides and tick() walks every knob on the
+// same smoothstep, rounded to the knob's grid where the grid is whole numbers
+// (counts, toggles). Two exceptions keep a flip from costing a frame:
+//  - the lamp REBUILD knobs and bake inputs are HELD (LightStore.apply
+//    holdRebuild), so the flip never nulls track._lights or re-bakes the pools;
+//  - sunElev/sunAzim are keyed by track x tod (profiles.js keyFor), so the sun
+//    never moves with the weather and needs no slerp.
+// A knob someone else writes mid-fade (a tuner slider, __apex.lightTune) leaves
+// the fade at once rather than being dragged back each frame.
 const WX_BLEND_S = 25;
-const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure"];
+const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure", "groundMist"];
 const WX_SKY = ["sunColor", "cloud", "zenith", "horizon"];
-let _wx = null;   // { from, to, t, dur } while a fade is in flight
+let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
+let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
-const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY) });
+const _snapLt = () => { const r = {}; for (const d of TUNE_DEFS) if (typeof LT[d.id] === "number") r[d.id] = LT[d.id]; return r; };
+const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() });
 const _mixv = (a, b, s) => {
   if (b == null) return a; if (a == null) return b;
   if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
@@ -51,8 +68,20 @@ function _writeWx(s) {
   for (const k of WX_FRAME) { const v = _mixv(from.frame[k], to.frame[k], s); if (v != null) G.frame[k] = v; }
   for (const k of WX_SKY) { const v = _mixv(from.sky[k], to.sky[k], s); if (v != null) G.frameSky[k] = v; }
   G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+  _writeLt(s);
   if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),
                                exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
+}
+function _writeLt(s) {
+  const { from, to, last } = _wx;
+  for (const d of TUNE_DEFS) {
+    const id = d.id, a = from.lt[id], b = to.lt[id];
+    if (a === undefined || b === undefined || a === b) continue;
+    if (id in last && LT[id] !== last[id]) { delete from.lt[id]; continue; }   // written by someone else: theirs now
+    let v = s >= 1 ? b : s <= 0 ? a : a + (b - a) * s;
+    if (d.step >= 1 && s > 0 && s < 1) v = Math.min(Math.max(a, b), Math.max(Math.min(a, b), d.min + Math.round((v - d.min) / d.step) * d.step));
+    LT[id] = v; last[id] = v;
+  }
 }
 function tick(dt) {
   if (!_wx) return;
@@ -66,14 +95,15 @@ function wxBlend() { return _wx ? { t: _wx.t, dur: _wx.dur } : null; }
 function applyRaceSettings(blendS) {
   if (blendS === true) blendS = WX_BLEND_S;
   const from = (blendS > 0 && G.frame && G.frame.sunColor && G.frameSky) ? _snapWx() : null;
-  _applyRaceBody();
-  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS } : null;
+  _hold = !!from;
+  try { _applyRaceBody(); } finally { _hold = false; }
+  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS, last: {} } : null;
   if (_wx) _writeWx(0);   // start the fade on the look the frame had
 }
 
 function _applyRaceBody() {
   Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
-  if (typeof applyLightTune === "function") applyLightTune(true);
+  if (typeof applyLightTune === "function") applyLightTune(true, _hold ? { holdRebuild: true } : undefined);
   const isNightSession = G.raceTimeOfDay === "night" ||
     (G.raceTimeOfDay === "default" && G.track && G.track.def && G.track.def.night);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
