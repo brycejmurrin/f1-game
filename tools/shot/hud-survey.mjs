@@ -383,7 +383,18 @@ async function runGroup(browser, group, plan, log) {
           }
         }
         const targets = HUD_TARGETS.map((t) => ({ ...t }));
-        const records = await page.evaluate(probeHudElements, { targets, fonts: true });
+        // SETTLE before measuring: fitHud re-fits on its own tick and the HUD
+        // eases between layouts, so a probe 300 ms after applyCell caught boxes
+        // mid-move (2026-10-04 quick run: gearbox reported over OT/AERO while the
+        // shot showed it in place). Re-probe until two reads agree, 3 s cap.
+        let records = await page.evaluate(probeHudElements, { targets, fonts: true });
+        for (let k = 0, prev = JSON.stringify(round(records)); k < 20; k++) {
+          await sleep(150);
+          records = await page.evaluate(probeHudElements, { targets, fonts: true });
+          const cur = JSON.stringify(round(records));
+          if (cur === prev) break;
+          prev = cur;
+        }
         const transientRecords = await page.evaluate(probeWithTransients, { src: probeHudElements.toString(), arg: { targets } });
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);
