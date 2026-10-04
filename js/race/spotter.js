@@ -101,7 +101,8 @@ const Spotter = (() => {
       if (!pack || !on() || !G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
         st = fresh(); if (pack && pack.stop) pack.stop("spotter"); return "";
       }
-      const voice = G.radio.recordedVoice ? G.radio.recordedVoice("radio") : "george";
+      // The engineer's chosen voice, from its radio pack (where the spotter's calls are).
+      const voice = G.radio.recordedPack ? G.radio.recordedPack("radio") : G.radio.recordedVoice ? G.radio.recordedVoice("radio") : "george";
       pack.ensure(voice);
       const synth = typeof window !== "undefined" && window.speechSynthesis;
       const speak = (key) => {

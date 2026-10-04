@@ -17,6 +17,11 @@ Licence: Apache-2.0 (model weights and voices).
   https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
   https://www.npmjs.com/package/kokoro-js
 
+Every voice speaks every channel: <id>.bin is the voice's own channel above,
+<id>-<speaker>.bin (speaker = radio, announcer, control, coach) the same voice
+reading another channel's lines (js/audio/voice-pack.js packFor), rendered with
+tools/gen/voicepack.mjs --id <voice> --speaker <speaker>.
+
 The clips are synthetic speech, not a recording of any person. Regenerate
 with: node tools/gen/voicepack.mjs --kokoro <dir with kokoro-js + ffmpeg-static> --id <voice>
 (after node tools/gen/voice-corpus.mjs refreshes what the channels say).
