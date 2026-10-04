@@ -25,6 +25,16 @@ Fog: thin warm dust haze low to the ground, mild — preserves long-straight vis
 Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone into Turn 8** (~s 0.42) and a short **rise into the Turn 9–10 complex** (~s 0.50). Everything else effectively level.
 
 ## 4. Landmarks & surroundings by lap position
+**Frame:** the `s` column below is the SCENERY frame (`sceneryStartFrac: 0.2250`),
+not the racing lap. Since 2026-10-04 the start line is the real pit straight
+(`startFrac: 0`), which sits at s ≈ 0.730 in this frame (real T1 apex 0.8335).
+The pit buildings, pit wall, start gantry, main and Victory-approach grandstands,
+paddock hospitality/broadcast compound, Sakhir Tower, T1 grandstand and Schumacher
+marker are keyed off `SF`/`T1F` in `js/circuits/scenery/bahrain.js` and now dress
+that straight (pits RIGHT, main grandstand LEFT); rows below still at s 0.00–0.07
+describe where they stood before. The drag strip and paddock palm grove were not
+moved (still on the old diagonal) — follow-up.
+
 | s (0–1) | Side | Dist | Box-model description |
 |--------|------|------|------------------------|
 | 0.00 | L | close | Pit/control building: long low white box, ~12 m, glass-grey top stripe |

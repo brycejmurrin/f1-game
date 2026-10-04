@@ -49,7 +49,14 @@
 
       every(64, (k) => {
         for (const side of [-1, 1]) {
-          backdrop(k, side, 200 + hash(k * 13 + side) * 100, [110, 22, 90], [0.13, 0.30, 0.16]);
+          // ~100 m of relief: past the ribbon a backdrop settles to the lap's
+          // low baseline (build-props.js), so where it lands on ANOTHER leg's
+          // hillside that stands above its 20 m top it is wholly buried — the
+          // hill already is the backdrop there; skip it.
+          const dist = 200 + hash(k * 13 + side) * 100, a = anchor(k, side, dist);
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          if (gy != null && gy > pyMin + 18) continue;
+          backdrop(k, side, dist, [110, 22, 90], [0.13, 0.30, 0.16]);
         }
       });
 
@@ -62,7 +69,20 @@
       // 1-3 floated 8-15 m up. Skip a pine whose full crown would be clipped.
       const crownClear = (k, side, dist, h) => {
         const a = anchor(k, side, dist);
-        return !onTrack(a.c[0], a.c[2], h * 0.32);
+        if (onTrack(a.c[0], a.c[2], h * 0.32)) return false;
+        // ~100 m of relief leaves steep banks where two legs' terrain meets
+        // (right of Bruxelles, racing 0.45: 20 m within a crown's width). A
+        // pine seated there hangs its crown over the drop (ground-audit
+        // unsupported, 25-39 m gaps) — skip a footprint whose ground varies
+        // more than a steep-hillside slope across the crown.
+        const r = h * 0.3;
+        let lo = Infinity, hi = -Infinity;
+        for (const [dx, dz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+          const y = terrainYAt(a.c[0] + dx, a.c[2] + dz);
+          if (y == null) continue;
+          if (y < lo) lo = y; if (y > hi) hi = y;
+        }
+        return !(hi - lo > 2 + r * 0.6);   // a real slope (≲30 %) passes; a cliff does not
       };
       every(44, (k) => {
         for (const side of [-1, 1]) {
@@ -83,7 +103,7 @@
           if (crownClear(k, side, dist, h)) pine(k, side, dist, h, [0.10 + s * 0.04, 0.31, 0.15]);
         }
       });
-      // Hero density at Eau Rouge / Raidillon (s≈0.05–0.10): crowd the climb with pines.
+      // Hero pine density on the La Source -> Eau Rouge descent (k/n 0.045-0.12).
       every(12, (k) => {
         const s = k / n;
         if (s < 0.045 || s > 0.12) return;
@@ -202,17 +222,22 @@
         { livery: "darkSteel", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.018, 1, 8, 30, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, tiers: 2, h: 10 });
-      // Gold 3 Raidillon amphitheatre ~s 0.06–0.09: dual-bay stand row + jumbotron.
-      for (const [s, gp, len] of [[0.068, 8, 30], [0.080, 9, 32], [0.092, 9, 28]]) {
+      // Gold 3 Raidillon amphitheatre: dual-bay stand row + jumbotron on the
+      // OUTSIDE of the descent into the Eau Rouge compression (authored
+      // 0.142-0.17 = racing 0.10-0.13), facing the valley floor (racing ≈0.14)
+      // and the Raidillon climb. Was authored 0.068-0.092 = racing 0.026-0.05,
+      // the La Source exit, before the elevation fix put the valley where it is.
+      for (const [s, gp, len] of [[0.142, 8, 30], [0.154, 9, 32], [0.166, 9, 28]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
-      ardennesTerrace("spa-terrace-raidillon", K(0.105), 1, 16, 7, { rows: 7 });
+      ardennesTerrace("spa-terrace-raidillon", K(0.200), -1, 16, 7, { rows: 7 });   // Raidillon inside bank
       {
         // Gold 3 amphitheatre hero: two unmistakable screen bays in one deep
         // fascia mass, high enough to read from the Raidillon climb and Kemmel.
-        // Proven footprint K(0.085)/gap 19 — shifting along the climb rejects.
-        const a = anchor(K(0.085), 1, 19), b = [a.r, a.u, a.t];
+        // Same footprint relative to the stand row as before (gap 19, midway
+        // between the 2nd and 3rd stands), moved with it to the valley.
+        const a = anchor(K(0.159), 1, 19), b = [a.r, a.u, a.t];
         const SCREEN = [0.025, 0.035, 0.055], FASCIA = [0.88, 0.52, 0.08];
         const LEG = [0.30, 0.32, 0.34];
         if (foundation) {
@@ -257,11 +282,13 @@
       // indexes its own footprint against the treelines.
       // Ends at 0.096: past it the bank's top treads ran into a hero-block
       // pine (clip-audit 2.00 m severe @ racing 0.058).
-      spectatorHill(0.072, 0.096, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
+      spectatorHill(0.146, 0.170, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
         grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
-      grandstandEx(0.16, 1, 8, 30, null, null,
+      // La Source exit stand (authored 0.068 = racing 0.026); was 0.16, where
+      // the Gold-3 row now overlooks the Eau Rouge compression.
+      grandstandEx(0.068, 1, 8, 30, null, null,
         { livery: "orange", roof: "flat", endWalls: true });
       ardennesTerrace("spa-terrace-fagnes", K(0.60), -1, 16, 6, { rows: 6 });
       // Blanchimont (racing 0.862) outside terrace: open (no slat roof hiding
@@ -285,19 +312,22 @@
         marshalPost(K(0.55 + ds), -1, 4.2);
       }
 
-      wall(0.055, 0.075, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
-      place(K(0.060), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
-      place(K(0.068), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
+      // Eau Rouge valley floor (authored 0.172-0.192 = racing 0.13-0.15): the
+      // thickened base wall, the brook and its service bridge sit at the
+      // lowest point of the descent, where the stream really crosses.
+      wall(0.172, 0.192, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
+      place(K(0.177), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
+      place(K(0.185), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
       {
         const BROOK = [0.18, 0.28, 0.22];
-        waterSurface(K(0.059), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
-        waterSurface(K(0.067), -1, 8, [2.3, 0.14, 20], BROOK, { id: "spa-eau-rouge-brook-b" });
-        waterSurface(K(0.074), -1, 8, [2.0, 0.14, 18], BROOK, { id: "spa-eau-rouge-brook-c" });
+        waterSurface(K(0.176), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
+        waterSurface(K(0.184), -1, 8, [2.3, 0.14, 20], BROOK, { id: "spa-eau-rouge-brook-b" });
+        waterSurface(K(0.191), -1, 8, [2.0, 0.14, 18], BROOK, { id: "spa-eau-rouge-brook-c" });
 
         // A short concrete service bridge crosses the middle brook strip.
         // The raised deck, paired abutments and rails make the Eau Rouge
         // crossing explicit without inventing an overhead track span.
-        const a = anchor(K(0.067), -1, 8), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.184), -1, 8), b = [a.r, a.u, a.t];
         modelGroup("spa-eau-rouge-brook-crossing", {
           center: vadd(a.c, a.u, 0.9), size: [7.6, 2.2, 4.8], basis: b,
         }, (stage) => {
@@ -421,18 +451,15 @@
         const L = anchor(kb, -1, 3), R = anchor(kb, 1, 3);
         const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]) + 3;
         const h = 6.5, id = `spa-footbridge-${Math.round(s * 1000)}`;
-        for (const [suffix, a] of [["left", L], ["right", R]]) {
-          const b = [a.r, a.u, a.t], c = vadd(a.c, a.u, h / 2);
-          modelGroup(`${id}-${suffix}-support`, {
-            center: c, size: [3, h, 3], basis: b,
-          }, (stage) => {
-            stage._mat = MAT.METAL;
-            addBox(stage, c, [3, h, 3], [0.55, 0.56, 0.58], b);
-          }, { required: true });
-        }
+        // One set of piers: overheadSpan's ground-anchored legs. A second
+        // Frenet 6.5 m modelGroup box at the same feet shared those 3×3 faces
+        // (~15 mm, 17.6 m²) after SRTM elevation moved the legs (coplanar-
+        // audit, two spots). Dropping the span legs instead left the deck
+        // hanging (ground-audit unsupported 4 > 3). supportWidth 3 m keeps
+        // the chunky Ardennes piers without a duplicate mesh.
         overheadSpan({
           id, frac: s, clearance: h, thickness: 0.5, depth: 3.4, span,
-          supportGap: 1.5, supportWidth: 3, color: deckCol, required: true,
+          supportWidth: 3.0, supportGap: 1.5, color: deckCol, required: true,
         });
       }
 
@@ -467,7 +494,9 @@
       forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
 
-      spectatorHill(0.525, 0.560, -1, 11, { rows: 4, density: 0.55, step: 6 });
+      // Pouhon inside bank. Ends at 0.539: on the new 7-9 % descent its top
+      // treads met a roadside slab flush at authored 0.544 (ground-audit flat).
+      spectatorHill(0.525, 0.539, -1, 11, { rows: 4, density: 0.55, step: 6 });
       spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
 
       chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
@@ -527,9 +556,9 @@
         const OPEN = {
           "1": [
             [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
-            [0.060, 0.116, 0, 80],    // Gold-3 row, grass bank, jumbotron, Raidillon terrace, camp
+            [0.060, 0.116, 0, 80],    // La Source exit stand 0.068, camp
             [0.127, 0.143, 30, 76],   // camp K(0.135)
-            [0.148, 0.172, 0, 34],    // orange stand 0.16, catch fence
+            [0.136, 0.174, 0, 80],    // Gold-3 row, grass bank, jumbotron, catch fence
             [0.168, 0.214, 0, 72],    // old Eau Rouge road + its own trees
             [0.200, 0.220, 52, 92],   // chalets
             [0.294, 0.306, 50, 82],   // chalet
@@ -544,7 +573,8 @@
           "-1": [
             [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
             [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
-            [0.186, 0.218, 0, 36],    // Raidillon spectator bank
+            [0.170, 0.196, 0, 30],    // Eau Rouge brook, bridge, base wall
+            [0.186, 0.218, 0, 36],    // Raidillon terrace (inside bank)
             [0.345, 0.358, 0, 20],    // Les Combes camera tower
             [0.474, 0.488, 34, 72],   // camp
             [0.518, 0.566, 0, 34],    // Pouhon inside bank
@@ -611,8 +641,8 @@
       }
 
       fence(0.0, 0.03, 1, 6, 4.2, [0.74, 0.76, 0.80]);        // main straight stand
-      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Raidillon Gold-3 amphitheatre
-      fence(0.15, 0.18, 1, 7, 4.2, [0.74, 0.76, 0.80]);       // Les Combes
+      fence(0.06, 0.11, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // La Source exit stand
+      fence(0.14, 0.18, 1, 7, 4.6, [0.74, 0.76, 0.80]);       // Gold-3 amphitheatre (Eau Rouge)
       fence(0.90, 0.94, 1, 6, 4.2, [0.74, 0.76, 0.80]);       // Bus Stop
       guardrail(0.42, 0.58, -1, 3.4, [0.84, 0.85, 0.88]);     // Pouhon sweep
       guardrail(0.80, 0.90,  1, 3.4, [0.84, 0.85, 0.88]);     // Blanchimont
