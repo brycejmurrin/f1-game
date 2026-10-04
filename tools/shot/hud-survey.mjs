@@ -398,13 +398,26 @@ async function runGroup(browser, group, plan, log) {
         // measure-only runs force one with a 1x1 capture (awaitPresentedFrame
         // did not: its probe still read the previous cell). Then re-probe
         // until two reads agree (fitHud re-fits on its own tick), 3 s cap.
+        // ONE HUD REFRESH, FRAMED. The sim is frozen, so the HUD's own ~10 Hz tick
+        // (fitHud: band caps, the radio card's slot, --mir-paint-b) does not run
+        // between cells; and a layout change lands only when a frame is produced.
+        // So: a frame (1x1 capture) to land the cell's layout, then a forced
+        // re-fit (GameHud.invalidateFit + __apex.jump's refreshHud(true) at the
+        // same spot), then the measured frame. Without it the leads compared one
+        // cell's caps against the previous cell's (2026-10-04: --radio-top-*
+        // identical before and after the slot fix).
+        await cdpShot(page, null);
+        await page.evaluate((frac) => {
+          try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+          const a = window.__apex;
+          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+        }, plan.frac);
+        await cdpShot(page, null);
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);
           await cdpShot(page, file);
           rec.shot = path.relative(ROOT, file);
           rec.shotRel = path.relative(plan.out, file);
-        } else {
-          await cdpShot(page, null);
         }
         let records = await page.evaluate(probeHudElements, { targets, fonts: true });
         for (let k = 0, prev = JSON.stringify(round(records)); k < 20; k++) {
