@@ -92,10 +92,8 @@ const Damage = (function () {
   }
 
   /** Car-to-car contact: game.js collideFx(a, b, impact, lapLen), every pair,
-   *  before its player-only early-out. prog is CUMULATIVE, so a leader lapping
-   *  a backmarker read dl ~ +-lapLen: every such touch booked the nose on the
-   *  car a lap up and the rear on the lapped one, whoever hit whom. Wrap the
-   *  difference the short way round, as collide.js does (deltaS). */
+   *  before its player-only early-out. `prog` is race distance, so a car
+   *  lapping a backmarker is ~a lap apart: wrap to the nearest lap. */
   function contact(a, b, impact, lapLen) {
     if (!a || !b) return;
     const pa = Number.isFinite(a.prog) ? a.prog : a.s || 0;

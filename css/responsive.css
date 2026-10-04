@@ -251,17 +251,12 @@ body.photo-studio-open #rotate-device { display: none !important; }
    ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
    Match both the hidden seam and the native `open` flag showModal sets.
    Also beat the portrait media rule's `display: flex` with !important.
-   body.rotate-probe suspends this for one synchronous read: syncRotateBlocker
-   (js/game.js) asks whether the GATE wants to show, and with this rule live it
-   only ever saw the card it was about to hide, so the gate never came back. */
-body:not(.rotate-probe):has(#pausemenu:not([hidden])) #rotate-device,
-body:not(.rotate-probe):has(#pausemenu[open]) #rotate-device {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-html:has(#pausemenu:not([hidden])):not(:has(.rotate-probe)) #rotate-device,
-html:has(#pausemenu[open]):not(:has(.rotate-probe)) #rotate-device {
+   body.rotate-measure lifts it for one getComputedStyle: syncRotateBlocker
+   asks "does the gate want the screen?" BEFORE it decides the pause card
+   yields — reading through this rule, the card's own presence answered "no"
+   and the gate never came back after OPEN CONTROLS › CLOSE. */
+body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;

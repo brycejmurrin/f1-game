@@ -4111,12 +4111,14 @@ function clearMenuScreens() {
 const rotateBlockMql = window.matchMedia ? window.matchMedia("(orientation: portrait) and (pointer: coarse) and (max-width: 743px)") : { matches: false };
 function syncRotateBlocker(moveFocus) {
   const box = $("rotate-device"); if (!box) return false;
-  // Does the GATE want to show? css/responsive.css hides it under the pause card, which this function decides about: probe past that rule.
-  const probe = typeof document !== "undefined" && document.body ? document.body.classList : null;   // none in the node VM harnesses
-  if (probe) probe.add("rotate-probe");
+  // Measured WITHOUT css/responsive.css's pause-card rule (body.rotate-measure):
+  // that rule hides the gate while the card is up, and the card is what this
+  // function decides to hide — read through it, the gate could never return.
+  // Guard when there is no document (node VM harnesses / photomode-hold).
+  const body = typeof document !== "undefined" ? document.body : null;
+  if (body) body.classList.add("rotate-measure");
   const active = getComputedStyle(box).display !== "none";
-  if (probe) probe.remove("rotate-probe");
-  // From the INTENT, not this instant's paint: a nested call (setPaused re-enters with the card up) read "hidden" and left the shown gate aria-hidden.
+  if (body) body.classList.remove("rotate-measure");
   box.setAttribute("aria-hidden", active ? "false" : "true");
   // The pause CARD and an active blocker never share the screen. #pausemenu is
   // a modal <dialog> (TopModal), so left open it sits in the top layer ABOVE
