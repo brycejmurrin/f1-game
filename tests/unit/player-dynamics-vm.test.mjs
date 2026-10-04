@@ -235,6 +235,110 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
   } finally { a.clearInput(); a.setPhysics(physicsBefore); }
 });
 
+// LATERAL BASIS (2026-10-04). PlayerForces integrates +vLat as the car's
+// RIGHT (axle slip vLat ± a·r, transport −u·r, +yawRate = nose right), and the
+// road's right is t × up = (−fz, fx) for a heading (fx, fz). game.js wrote the
+// slip back along (fz, −fx) — the LEFT vector — so the world travel direction
+// carried the body-slip angle MIRRORED: β_world = −β_dyn exactly (VM, monza,
+// 40 m/s steer 0.6: +2.00° vs −2.00°), and a slide swung the car toward the
+// inside of the corner instead of carrying it wide. Every yaw/vLat/force value
+// is identical either way (the writeback is one-way); only the world path moved.
+// Low speed is the kinematic check: at 15 m/s the travel direction sits INSIDE
+// the nose (vLat > 0 in a right-hand turn), which the mirror put outside. The
+// identity is exact (measured residual < 3e-13 rad), so the bound is 1e-9.
+test("the world path carries the body slip the dynamics integrate (travel − heading == atan2(vLat, u))", () => {
+  const a = g.apex, P = g.G.player;
+  try {
+    for (const [v0, inp, label] of [[40, { throttle: true, steer: 0.6 }, "40 m/s at the limit"],
+                                    [15, { steer: 0.8 }, "15 m/s kinematic"]]) {
+      a.jump(0, v0, 0);
+      let px = P.px, pz = P.pz, n = 0, worst = 0;
+      for (let i = 0; i < 40; i++) {
+        a.setInput(inp); a.step(1 / 60, 1);
+        const dx = P.px - px, dz = P.pz - pz; px = P.px; pz = P.pz;
+        const fx = Math.sin(P.head), fz = Math.cos(P.head);
+        const bWorld = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);   // travel vs nose, + = right
+        const bDyn = Math.atan2(P.vLat || 0, Math.max(1, Math.abs(P.speed)));
+        if (Math.abs(bDyn) < 0.004) continue;   // under ~0.25°: the sign is not the question yet
+        n++; worst = Math.max(worst, Math.abs(bWorld - bDyn));
+        assert.ok(Math.sign(bWorld) === Math.sign(bDyn),
+          `${label}, tick ${i}: travel is ${(bWorld * 57.3).toFixed(2)}° off the nose, the dynamics slide ${(bDyn * 57.3).toFixed(2)}° — mirrored`);
+      }
+      assert.ok(n >= 20, `${label}: anti-vacuity — only ${n} ticks carried a slip`);
+      assert.ok(worst < 1e-9, `${label}: world slip differs from the dynamics by up to ${(worst * 57.3).toFixed(3)}°`);
+    }
+  } finally { a.clearInput(); }
+});
+
+// Brake held from a standstill is REVERSE (REVERSE_ACCEL), not a 30+ m/s^2
+// stop. axEstTarget charged the full brake to the friction circle, so the
+// fronts "locked" (wheelLock 0.48, skid squeal) and a flat spot saturated
+// in 12 s of backing off a wall.
+test("reversing on the brake does not lock the wheels or grow a flat spot", async () => {
+  await g.race("monza", "day", "dry");
+  const a = g.apex, P = g.G.player;
+  for (const c of g.G.cars) if (c !== P) { c.x = 80; c.speed = 0; }
+  try {
+    a.jump(0.1, 0, 0);
+    P.flatSpot = 0;
+    a.setInput({ brake: true, throttle: false, steer: 0 });
+    a.step(1 / 60, 240);
+    assert.ok(P.speed < -2, `anti-vacuity: the car is reversing (${P.speed.toFixed(2)} m/s)`);
+    assert.equal(P.wheelLock, 0, "no lock-up while reversing");
+    assert.ok(P.axFracF < 0.2, `the pedal is not charged to the front axle (${P.axFracF.toFixed(3)})`);
+    assert.ok((P.flatSpot || 0) < 0.05, `no flat spot from reversing (${(P.flatSpot || 0).toFixed(3)})`);
+  } finally { a.clearInput(); }
+});
+
+// A human already reversing keeps its sign through a contact: every response
+// floored c.speed at 0, so backing out of a side-by-side wedge lost the whole
+// -5 m/s on the first touch.
+test("a player reversing past a parked car alongside keeps its reverse speed", async () => {
+  await g.race("monza", "day", "dry");
+  const a = g.apex, P = g.G.player, others = g.G.cars.filter((c) => c !== P);
+  for (const c of others) { c.x = 60; c.speed = 0; }
+  try {
+    a.jump(0.3, 0, 0);
+    a.setInput({ brake: true, throttle: false, steer: 0 });
+    a.step(1 / 60, 90);
+    const before = P.speed;
+    assert.ok(before < -3, `anti-vacuity: reversing (${before.toFixed(2)})`);
+    const A = others[0];
+    A.s = P.s + 3.5; A.prog = P.prog + 3.5; A.x = P.x + 1.7; A.speed = 0; A._snapProg = A.prog; A._snapX = A.x;
+    let touched = false;
+    for (let i = 0; i < 6; i++) { a.step(1 / 60, 1); if ((P.contactT || 0) > 0) touched = true; }
+    assert.ok(touched, "anti-vacuity: the cars touched");
+    assert.ok(P.speed < 0.8 * before, `reverse survives the contact: ${before.toFixed(2)} -> ${P.speed.toFixed(2)}`);
+    A.x = 60;
+  } finally { a.clearInput(); }
+});
+
+// Slope gravity ran along the road tangent whatever way the car faced: a car
+// spun round on a climb (really facing DOWNhill) was slowed as if climbing.
+test("a car facing backwards on a climb is fed by gravity, not slowed by it", async () => {
+  await g.race("suzuka", "day", "dry");
+  const a = g.apex, P = g.G.player, T = g.G.track;
+  for (const c of g.G.cars) if (c !== P) { c.x = 60; c.speed = 0; }
+  const Tr = g.sandbox.Tracks, smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], n: [0, 0, 0] };
+  let best = 0, bs = 0;
+  for (let s = 0; s < T.total; s += 4) { Tr.sample(T, s, smp); if (smp.t[1] > best) { best = smp.t[1]; bs = s; } }
+  assert.ok(best > 0.05, `anti-vacuity: suzuka's steepest climb is ${(best * 100).toFixed(1)} %`);
+  const run = (flip) => {
+    a.jump(bs / T.total, 20, 0);
+    if (flip) P.head += Math.PI;
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const v0 = P.speed;
+    a.step(1 / 60, 30);
+    return P.speed - v0;
+  };
+  try {
+    const up = run(false), down = run(true);
+    // Same coast drag both ways; gravity flips sign, so facing downhill loses
+    // clearly less than facing uphill (it lost slightly MORE before the fix).
+    assert.ok(down > up + 0.5, `facing downhill dv ${down.toFixed(3)} vs uphill ${up.toFixed(3)}`);
+  } finally { a.clearInput(); }
+});
+
 // Manual gearbox bog: (speed - lo)/(hi - lo) with reverse speed drives gearMult
 // to 0, so throttle cannot leave REVERSE_MAX until rescue (~1 s). Own boot —
 // the shared g is auto gears (gearMult stays 1). Before fix: mid05 stayed at

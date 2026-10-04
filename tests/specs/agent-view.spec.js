@@ -1218,6 +1218,14 @@ test.describe("survey()", () => {
     expect(s.summary.clean).toBe(true);
   });
 
+  test("terrain carved under the road is not a cliff", async ({ page }) => {
+    // Zandvoort's crest at 0.583: terrain -2.4 m under a road at 6.1 m, carved and
+    // hidden. Read as ground it was an 8 m wall either side of the centreline.
+    await load(page, "zandvoort");
+    const s = await page.evaluate(() => window.__apex.survey());
+    expect(s.summary.groundCliffs, JSON.stringify(s.groundCliffs)).toBe(0);
+  });
+
   test("no circuit ships a model the guard had to reject", async ({ page }) => {
     // This caught vegas.js passing `mast: true` where tower() wants a height in
     // metres — both landmark towers lost their antenna silently.

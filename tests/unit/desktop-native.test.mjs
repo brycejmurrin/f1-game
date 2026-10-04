@@ -46,7 +46,53 @@ test("desktop main uses privileged app:// via app-protocol (Range handler)", () 
   assert.match(MAIN, /APEX_DESKTOP_NO_SANDBOX/);
   assert.match(MAIN, /setWindowOpenHandler/);
   assert.match(MAIN, /will-navigate/);
-  assert.match(MAIN, /setPermissionRequestHandler/);
+  assert.match(MAIN, /setPermissionRequestHandler\(permissions\.requestHandler\(ORIGIN\)\)/);
+  assert.match(MAIN, /setPermissionCheckHandler\(permissions\.checkHandler\(ORIGIN\)\)/);
+  assert.doesNotMatch(MAIN, /callback\(false\)/, "no blanket deny left behind the allow-list");
+});
+
+// L8-b: the game's own permissions, for app://apex/ only. Electron routes the
+// Fullscreen API, Keyboard Lock, Pointer Lock, Screen Wake Lock, getUserMedia
+// and async clipboard writes through these handlers
+// (https://www.electronjs.org/docs/latest/api/session); a blanket deny broke
+// the pause menu's FULLSCREEN, every wake lock, QR SCAN and COPY CODE.
+test("desktop permission allow-list: exactly the six the game uses, our origin only, camera not mic", () => {
+  const P = require("../../desktop/lib/permissions.cjs");
+  const O = "app://apex";
+  assert.deepEqual([...P.ALLOWED].sort(), ["clipboard-sanitized-write", "fullscreen", "keyboardLock",
+    "media", "pointerLock", "screen-wake-lock"]);
+  assert.ok(Object.isFrozen(P.ALLOWED));
+  const req = P.requestHandler(O);
+  const ask = (perm, details, wc) => { let got; req(wc || null, perm, (v) => { got = v; }, details || {}); return got; };
+  const here = { requestingUrl: O + "/index.html", isMainFrame: true };
+  for (const perm of ["fullscreen", "keyboardLock", "pointerLock", "screen-wake-lock", "clipboard-sanitized-write"]) {
+    assert.equal(ask(perm, here), true, perm + " granted to app://apex/");
+    assert.equal(ask(perm, { requestingUrl: "https://evil.example/" }), false, perm + " refused to another origin");
+    assert.equal(ask(perm, { requestingUrl: "app://apexevil/" }), false, perm + " refused to a look-alike origin");
+  }
+  assert.equal(ask("media", { ...here, mediaTypes: ["video"] }), true, "the QR camera");
+  assert.equal(ask("media", { ...here, mediaTypes: ["audio"] }), false, "never the microphone");
+  assert.equal(ask("media", { ...here, mediaTypes: ["video", "audio"] }), false);
+  assert.equal(ask("media", here), false, "an unspecified media request is refused");
+  for (const perm of ["geolocation", "notifications", "clipboard-read", "persistent-storage", "midi", "openExternal"]) {
+    assert.equal(ask(perm, here), false, perm + " stays denied");
+  }
+  assert.equal(ask("fullscreen", { ...here, embeddingOrigin: "https://ads.example" }), false, "an embedded third party is not us");
+  // No requestingUrl: the webContents URL decides.
+  assert.equal(ask("fullscreen", {}, { getURL: () => O + "/" }), true);
+  assert.equal(ask("fullscreen", {}, { getURL: () => "https://x.example/" }), false);
+
+  const check = P.checkHandler(O);
+  assert.equal(check(null, "screen-wake-lock", O + "/", {}), true, "check handler tolerates a null webContents");
+  assert.equal(check(null, "clipboard-sanitized-write", "https://x.example/", {}), false);
+  assert.equal(check(null, "media", O + "/", { mediaType: "video" }), true);
+  assert.equal(check(null, "media", O + "/", { mediaType: "audio" }), false);
+  assert.equal(check(null, "geolocation", O + "/", {}), false);
+});
+
+test("desktop permission module ships with the app (lib/** in the builder files)", () => {
+  const cfg = require("../../desktop/electron-builder.config.cjs");
+  assert.ok(cfg.files.includes("lib/**"));
 });
 
 test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)", () => {
@@ -74,6 +120,10 @@ test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch 
   assert.match(yml, /workflow_dispatch:/);
   assert.match(yml, /desktop-v\*/);
   assert.match(yml, /pull_request:/);
+  assert.match(yml, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "a draft skipped by pack-smoke must be tested when marked ready");
+  assert.match(yml, /name: Assert inspect fuse enabled for the test pack\n\s+working-directory: desktop\n\s+shell: bash/,
+    "the Bash fuse assertion also runs on Windows");
   assert.match(yml, /pack-smoke:/);
   assert.match(yml, /draft == false/);
   assert.match(yml, /pack:test/);

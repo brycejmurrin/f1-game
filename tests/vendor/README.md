@@ -22,6 +22,15 @@ boots, then call
 `forceInstall` is mandatory under headless Chromium (stub `navigator.xr`).
 Set `device.stereoEnabled = true` so the right eye is non-zero width.
 
+The install helper adapts one pinned 2.5.0 defect: `getOffsetReferenceSpace`
+passes its `XRRigidTransform` object into the internal matrix-array constructor,
+producing NaNs. The fixture forwards `transform.matrix` at that internal boundary
+so applications keep using the standard WebXR API. The actual-vendor regression
+in `tests/unit/xr-phase0.test.mjs` verifies finite transforms, centered viewer and
+stereo poses, and nested offset signs. Remove/recheck this adapter when upgrading;
+it never runs on the production page or native XR.
+WebXR contract: https://developer.mozilla.org/en-US/docs/Web/API/XRReferenceSpace/getOffsetReferenceSpace
+
 Do **not** use the Chrome Web Store “Immersive Web Emulator” extension on
 Chrome 147+ (three.js #33414); use this pinned IWER instead.
 

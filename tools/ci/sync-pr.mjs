@@ -79,6 +79,21 @@ export function cachedPlan(prBranch, readGit = git) {
     theirCommits: must(readGit(["log", "--oneline", `${head}..${tip}`]), "cached commits").split("\n").filter(Boolean) };
 }
 
+/** Put the working tree back on `startedOn` and SAY WHERE IT IS (2026-10-04).
+ *  The failure path logged "tree left on <sync branch>" and then ran an
+ *  unchecked `git checkout startedOn`: when that checkout worked the log was
+ *  wrong, and when it failed (a merge stopped mid-way by a throwing gen step)
+ *  nothing said so. A merge in progress is aborted first; the result is
+ *  checked; the returned line is the truth. `readGit` is injectable for tests. */
+export function returnTo(startedOn, keptBranch, readGit = git) {
+  if (readGit(["rev-parse", "-q", "--verify", "MERGE_HEAD"]).code === 0) readGit(["merge", "--abort"]);
+  const r = readGit(["checkout", startedOn]);
+  const where = readGit(["branch", "--show-current"]).out || readGit(["rev-parse", "--short", "HEAD"]).out;
+  if (r.code !== 0)
+    return { ok: false, line: `could NOT return to ${startedOn} (${(r.err || r.out || "checkout failed").split("\n")[0]}) — the working tree is on ${where}` };
+  return { ok: true, line: `working tree back on ${startedOn}; the attempt is kept on branch ${keptBranch} for inspection` };
+}
+
 export function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
@@ -112,16 +127,16 @@ export function main() {
     for (const id of touchedCircuits(p.tip)) run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`);
   } catch (e) {
     log(`STOPPED: ${e.message}`);
-    log(`tree left on ${localBranch} for inspection — fix, then either re-run or push it yourself.`);
-    git(["checkout", startedOn]);
+    log(returnTo(startedOn, localBranch).line + " — fix, then either re-run or push it yourself.");
     return 1;
   }
 
   if (flag("--push")) {
     must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
-    git(["checkout", startedOn]);
-    git(["branch", "-D", localBranch]);
+    const back = returnTo(startedOn, localBranch);
+    log(back.line);
+    if (back.ok) git(["branch", "-D", localBranch]);
   } else {
     log(`verified on ${localBranch} — review, then publish with: git push ${REMOTE} ${localBranch}:${branch}`);
   }

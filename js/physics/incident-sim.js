@@ -224,8 +224,11 @@ const IncidentSim = (function () {
       const spd = fin(c.speed) ? c.speed : 0;
       const vLat = fin(c.vLat) ? c.vLat : 0;
       const fx = Math.sin(head), fz = Math.cos(head);
-      const vWx = spd * fx + vLat * fz;
-      const vWz = spd * fz - vLat * fx;
+      // +vLat is RIGHT of the heading: (-fz, fx) in world (x, z) — the same
+      // basis as game.js's writeback. (fz, -fx), used here until 2026-10-04,
+      // is the LEFT vector and launched every sliding car mirrored.
+      const vWx = spd * fx - vLat * fz;
+      const vWz = spd * fz + vLat * fx;
       // Deterministic seed for the launch kick — pure game state.
       const seed = (Math.imul(i + 1, 0x9E3779B1) ^ Math.imul((c.s | 0) + 1, 0x85EBCA6B)
                   ^ Math.imul(_seq + 1, 0xC2B2AE35) ^ (_tick + 1)) | 0;
@@ -300,10 +303,10 @@ const IncidentSim = (function () {
           if (fin(wl) && tf.x < -wl) tf.x = -wl;
         }
         // INVERT the promote, do not approximate it. startIncident maps
-        // (speed, vLat) into the world with `vWx = spd*fx + vLat*fz;
-        // vWz = spd*fz - vLat*fx` — the matrix [[fx,fz],[fz,-fx]], whose
-        // determinant is -1 and which is therefore its OWN inverse. So the
-        // same two lines read back, against the body's NEW heading, return
+        // (speed, vLat) into the world with `vWx = spd*fx - vLat*fz;
+        // vWz = spd*fz + vLat*fx` — the rotation [[fx,-fz],[fz,fx]] (columns:
+        // forward, RIGHT), whose inverse is its transpose. So projecting back
+        // onto forward and RIGHT, against the body's NEW heading, returns
         // exactly what went in. hypot() is not that: it is unsigned, so a car
         // that spun came back driving FORWARD at the speed it was travelling
         // backwards, and it folded the lateral component into forward motion
@@ -311,9 +314,21 @@ const IncidentSim = (function () {
         const vWx = pose.vx || 0, vWz = pose.vz || 0;
         const fxh = Math.sin(head), fzh = Math.cos(head);
         const vFwd = vWx * fxh + vWz * fzh;     // signed: negative IS facing-backwards
-        const vSide = vWx * fzh - vWz * fxh;    // + = sliding right, the c.vLat convention
+        const vSide = vWz * fxh - vWx * fzh;    // V · RIGHT (-fz, fx): + = sliding right, the c.vLat convention
         const vHoriz = Math.hypot(vWx, vWz);    // magnitude only — the settle band below wants it
-        const speed = fin(vFwd) ? vFwd : (lg ? lg.speed : 0);
+        let speed = fin(vFwd) ? vFwd : (lg ? lg.speed : 0);
+        // AN AI CAR MOVES ALONG THE ROAD (c.s += c.speed*dt), not its nose, so
+        // its signed speed is the velocity ON THE TANGENT. Against the body's
+        // heading, a rival spun 180 deg while still sliding forwards came back
+        // at -20 m/s and reversed down the track into the pack behind. A human
+        // keeps the body-relative sign: its c.head is the real heading.
+        if (!c.human && G.track && G.smp) {
+          try {
+            Tracks.sample(G.track, tf.s, G.smp);
+            const vT = vWx * G.smp.t[0] + vWz * G.smp.t[2];
+            if (fin(vT)) speed = vT;
+          } catch (e) { /* keep the body-relative speed */ }
+        }
         let wx = px, wz = pz;
         if (G.worldFromTrack) {
           try {

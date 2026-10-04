@@ -165,7 +165,10 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
     'echo "pkill -f chrome"',
     "echo 'note: && pkill -f chrome is bad'",
     "printf '%s' 'x; /usr/bin/pkill -f chrome'",
-    "git commit -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
+    // --dry-run: this row is about the pkill rule reading a heredoc body as
+    // prose. A real commit here would run the commit guard (and, since
+    // 2026-10-04, refuse on any unstaged edit in the checkout under test).
+    "git commit --dry-run -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
   ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
@@ -226,6 +229,154 @@ test("the Bash guard blocks a bare kill of the supervisor pid test-bg records", 
   } finally {
     try { process.kill(-sup.pid, "SIGKILL"); } catch { /* already gone */ }
   }
+});
+
+// A throwaway repo for the hook tests below: js/, docs/, a generated file and
+// an index.html with a @gen-shell block, one commit deep. Its file names are
+// REAL repo paths on purpose: docs-integrity fails a source string that names
+// a file the repo does not have.
+function scratchRepo(prefix) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", prefix));
+  const g = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+  for (const [f, body] of Object.entries({
+    "js/game.js": "var a = 1;\n", "docs/PHYSICS.md": "note\n", "tools/manifest.cjs": "export {};\n",
+    "version.json": "{}\n", "tests/data/ratchets.json": "{}\n",
+    "index.html": "<head>\n<!-- @gen-shell:scripts -->\n<script src=js/game.js></script>\n<!-- @gen-shell:end -->\n<p>hand</p>\n",
+    "package.json": JSON.stringify({ name: "x", version: "1", scripts: { "test:x": "node --test" } }, null, 2) + "\n",
+  })) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
+  g("add", "-A"); g("commit", "-qm", "init");
+  return { dir, g, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("the commit guard recognises every shape of git commit, and judges what is COMMITTED", () => {
+  /* 2026-10-04 review: the commit regex matched `git( -C dir)? commit` on the
+     raw text. Ten forms walked past it, and a pathspec commit of js/ with only
+     a doc staged took the docs-only path. APEX_GUARD_PROBE=1 stops the hook
+     after it has classified the commit (and run the unstaged check), so this
+     runs the real decision without the 25 s guard suite. */
+  const repo = scratchRepo("hook-commit-");
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
+    repo.g("add", "docs/PHYSICS.md");
+    for (const cmd of [
+      "git commit -m x",
+      "git -c user.name=x commit -m x",
+      "git --no-pager commit -m x",
+      'bash -c "git commit -m x"',
+      "bash -c 'git commit -m x'",
+      "env X=1 git commit -m x",
+      "GIT_AUTHOR_NAME=x git commit -m x",
+      "/usr/bin/git commit -m x",
+      "sudo -u me git commit -m x",
+      "cd . && git commit -m 'multi\nline'",
+    ]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
+      assert.match(r.stderr, /bash-guard probe: commit docs-only/, `the guard must SEE this commit: ${cmd}`);
+    }
+    // A pathspec naming code makes it a code commit, whatever is staged.
+    const ps = run("git commit docs/PHYSICS.md js/game.js -m x");
+    assert.match(ps.stderr, /probe: commit code paths=docs\/PHYSICS\.md js\/game\.js/, ps.stderr);
+    assert.match(run("git commit -am x").stderr, /probe: commit code/, "-a stages at commit time: never docs-only");
+    // Not commits at all: no classification, no block.
+    for (const cmd of ["echo 'git commit -m x'", "git log --oneline", "git commit --dry-run -m x",
+                       "printf '%s' 'cd x; git commit'", "APEX_SKIP_GUARDS=1 git commit -m x"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, cmd);
+      assert.doesNotMatch(r.stderr, /probe: commit/, `not a guarded commit: ${cmd}`);
+    }
+    // STAGED, not the working tree: an unstaged code edit beside a staged one
+    // makes the guards measure content this commit does not carry.
+    fs.writeFileSync(path.join(repo.dir, "tools/manifest.cjs"), "export const t = 1;\n");
+    repo.g("add", "tools/manifest.cjs");
+    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "var a = 2;\n");
+    const partial = run("git commit -m x");
+    assert.equal(partial.status, 2, "a partially staged commit must be refused");
+    assert.match(partial.stderr, /differ from what this commit holds[\s\S]*js\/game\.js/);
+    assert.equal(run("git commit -am x").status, 0, "-a commits the working tree: nothing differs");
+    assert.equal(run("git commit -m x js/game.js tools/manifest.cjs").status, 0, "a pathspec commits those paths from the working tree");
+    assert.equal(run("git -c core.pager=cat commit -m x").status, 2, "the global-option form gets the same check");
+  } finally { repo.rm(); }
+});
+
+test("the edit guard sees Bash writes: sed -i, heredocs, tee, cp into js/ or a generated file", () => {
+  /* Auto mode tells agents to edit with sed and heredocs, and the edit guard
+     was wired to Write/Edit only — so a live run's js/ and every generated file
+     were open to Bash. shellparse.py names the write targets; protect-files.py
+     applies the same rules to each. */
+  const repo = scratchRepo("hook-write-");
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/protect-files.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
+  });
+  const binDir = path.join(repo.dir, "bin");
+  fs.mkdirSync(binDir);
+  fs.writeFileSync(path.join(binDir, "playwright"), "sleep 30\n");
+  let fake;
+  try {
+    // No live run: source edits through Bash are ordinary work.
+    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "echo x >> docs/PHYSICS.md",
+                       "sed -i 's/hand/hand 2/' index.html", "sed -i 's/\"version\": \"1\"/\"version\": \"2\"/' package.json",
+                       "ls js > /dev/null", "git commit -m 'cp a js/game.js'"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
+    }
+    // Generated files, any checkout, any write shape.
+    for (const cmd of ["echo '{}' > version.json", "sed -i s/a/b/ tests/data/ratchets.json", "cp /dev/null version.json",
+                       "printf x | tee tests/data/ratchets.json", "bash -c 'echo > version.json'",
+                       "sed -i 's/src=js.game/src=js.other/' index.html", "cat > index.html <<'EOF'\nx\nEOF",
+                       "sed -i 's/test:x/test:y/' package.json", "echo '{}' > package.json"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `must block: ${cmd} (${r.stderr})`);
+      assert.match(r.stderr, /via Bash/, `the refusal names the Bash write: ${cmd}`);
+    }
+    // A live Playwright run in THIS checkout: js/, css/ and index.html are frozen.
+    fake = spawn("sh", [path.join(binDir, "playwright"), "test"], { cwd: repo.dir, stdio: "ignore", detached: true });
+    const t0 = Date.now();
+    while (Date.now() - t0 < 2000 && !fs.existsSync(`/proc/${fake.pid}/cmdline`)) { /* spin until /proc shows it */ }
+    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "cp docs/PHYSICS.md js/",
+                       "cd js && sed -i s/1/2/ game.js", "tee -a css/tokens.css < docs/PHYSICS.md"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `must block during a live run: ${cmd} (${r.stderr})`);
+      assert.match(r.stderr, /Playwright run is live/);
+    }
+    assert.equal(run("echo x >> docs/PHYSICS.md").status, 0, "prose stays open during a run");
+  } finally {
+    if (fake) { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } }
+    repo.rm();
+  }
+});
+
+test("a subagent cannot reach a browser through MCP tools either", () => {
+  /* AGENTS.md §Verification 10 held for Bash only; every subagent was offered
+     playwright-official, chrome-devtools and the apex_* browser tools. Claude
+     Code runs PreToolUse hooks on MCP tool names and marks a subagent's call
+     with agent_id (https://code.claude.com/docs/en/hooks). */
+  const settings = JSON.parse(read(".claude/settings.json"));
+  const groups = settings.hooks.PreToolUse;
+  const mcp = groups.find((g) => (g.hooks || []).some((h) => h.command.includes("mcp-browser-guard.sh")));
+  assert.ok(mcp, "the MCP browser guard is registered");
+  const re = new RegExp(mcp.matcher);
+  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page",
+                   "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
+    assert.ok(re.test(n), `matcher must select ${n}`);
+  for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
+    assert.ok(!re.test(n), `matcher must leave ${n} alone`);
+  assert.ok(groups.some((g) => g.matcher === "Bash" && g.hooks.some((h) => h.command.includes("protect-files.sh"))),
+    "the edit guard runs on Bash too");
+  const run = (payload) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/mcp-browser-guard.sh")],
+    { input: JSON.stringify(payload), encoding: "utf8" });
+  assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
 });
 
 test("auto memory is on, synced, and its tracked copy stays small, typed and secret-free", () => {
