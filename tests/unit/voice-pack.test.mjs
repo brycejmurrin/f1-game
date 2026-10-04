@@ -687,3 +687,38 @@ test('recorded decoding consumes the card budget and pending clips have no known
     pack.stop(); assert.equal(ends,1,'completion fires once even after a late stop');
   }
 });
+
+test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (perf-memory M-5)", async () => {
+  // 80 clips with no size cap could pin ~160 s of announcer PCM (~30 MB). Each
+  // clip here is 4 s, so a phone's 24 s budget holds six and desktop's 90 s twenty-two.
+  const clips = {};
+  for (let i = 0; i < 40; i++) clips["w" + i] = [i * 4, 4, 4];
+  const run = async (isMobile) => {
+    const decoded = [];
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      ...(isMobile ? { GLX: { isMobile: true } } : {}),
+      GameAudio: { now: () => 0, ctxGen: () => 1,
+        decodeClip: (ab) => { decoded.push(ab.byteLength); return Promise.resolve({ duration: 4 }); },
+        radioVoice: (parts, at) => ({ end: at, stop() {} }) },
+      fetch: (u) => Promise.resolve({ ok: true, json: () => Promise.resolve({ clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
+    });
+    const P = sb.VoicePack.create({});
+    assert.equal(await P.load("george"), true);
+    for (let i = 0; i < 30; i++) { P.speak("george", "w" + i, { channel: "radio" }); await new Promise((r) => setImmediate(r)); }
+    const d = J(P.debug());
+    const n = decoded.length;
+    P.speak("george", "w29", { channel: "radio" }); await new Promise((r) => setImmediate(r));
+    const newestHit = decoded.length === n;
+    P.speak("george", "w0", { channel: "radio" }); await new Promise((r) => setImmediate(r));
+    return { d, newestHit, oldestRedecoded: decoded.length === n + 1 };
+  };
+  const phone = await run(true);
+  assert.equal(phone.d.cacheS, 24);
+  assert.ok(phone.d.cache.george.secs <= 24, `phone holds ${phone.d.cache.george.secs} s`);
+  assert.equal(phone.d.cache.george.clips, 6);
+  assert.ok(phone.newestHit, "the most recent clip is still decoded");
+  assert.ok(phone.oldestRedecoded, "the oldest was evicted and decodes again from the kept .bin");
+  const desk = await run(false);
+  assert.equal(desk.d.cacheS, 90);
+  assert.equal(desk.d.cache.george.clips, 22, "desktop: the larger budget, still under the 80-clip count bound");
+});

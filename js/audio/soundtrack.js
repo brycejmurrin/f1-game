@@ -21,7 +21,22 @@ const GameAudioSoundtrack = (function () {
     // the largest single item in a phone's heap, and on a rotating playlist it
     // is hit once per full rotation. GLX loads before this file (manifest order);
     // the typeof guard is the standalone harness.
-    const MUSIC_CACHE = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 1 : 2;
+    const IS_MOBILE = !!(typeof GLX !== "undefined" && GLX && GLX.isMobile);
+    const MUSIC_CACHE = IS_MOBILE ? 1 : 2;
+    // STREAMED MUSIC ON PHONES (perf-memory plan, M-4). A
+    // decoded track is ~75-90 MB of PCM that a JS-heap census never sees; an
+    // <audio> element routed through createMediaElementSource -> musicGain plays
+    // the same file from a few hundred KB of media buffer. ONE switch:
+    // localStorage apex26.musicStream "1"/"0" overrides the isMobile default (A/B).
+    function streamMusic() {
+      let o = null;
+      try { o = localStorage.getItem("apex26.musicStream"); } catch (e) { /* storage blocked: platform default */ }
+      return o === "1" ? true : o === "0" ? false : IS_MOBILE;
+    }
+    // ONE element per AudioContext: createMediaElementSource binds an element to
+    // one context for life, and iOS lets an element that a gesture has played
+    // play its next src without another gesture (a fresh element per track would not).
+    let musicEl = null, musicElNode = null, musicElUrl = null, musicStreaming = false;
     const MENU_TRACK = "assets/music/menu.mp3";
     const PLAYLIST = [
       { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
@@ -42,6 +57,8 @@ const GameAudioSoundtrack = (function () {
       }
     }
 
+    // musicResumeBuf is the resume KEY: the decoded AudioBuffer on the decode
+    // path, the url on the stream path (offset in musicResumeOff, At unused).
     let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
     // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
     // advanced the playlist, and a failed fetch/decode (an upload in a format
@@ -58,6 +75,62 @@ const GameAudioSoundtrack = (function () {
     // Replacement preserves the resume position; stopInternal also clears it.
     function replaceMusicSource() {
       try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
+      stopStream(false);
+    }
+    function captureStreamPos() {
+      if (musicStreaming && musicEl) { musicResumeBuf = musicElUrl; musicResumeAt = NaN; musicResumeOff = +musicEl.currentTime || 0; }
+    }
+    // `release` (an explicit stop) also drops the src so the media decoder and
+    // its buffered bytes go; a track change keeps the element for the next src.
+    function stopStream(release) {
+      if (!musicEl) return;
+      captureStreamPos();
+      const el = musicEl;
+      el.onended = el.onerror = el.onloadedmetadata = el.onplaying = null;
+      try { el.pause(); } catch (e) { /* an element mid-teardown is silent either way */ }
+      if (release) { try { el.removeAttribute("src"); el.load(); } catch (e) { /* nothing loaded */ } }
+      musicStreaming = false;
+    }
+    // Same contract as the decode path: resume offset per url, ended -> next,
+    // a failed load skips (musicLoadFailed). false = no element: decode instead.
+    function streamTrack(url, token) {
+      const ctx = host.context();
+      ensureMusicGain();
+      if (!musicEl) {
+        try {
+          musicEl = new Audio(); musicEl.preload = "auto";
+          musicElNode = ctx.createMediaElementSource(musicEl);
+          musicElNode.connect(musicGain);
+        } catch (e) {
+          Log.warn("audio", "music stream unavailable, decoding instead: " + ((e && e.message) || e));
+          musicEl = musicElNode = null;
+          return false;
+        }
+      }
+      for (const k in musicBuffers) delete musicBuffers[k];   // a decoded track left by an A/B switch is dead weight
+      _bufKeys.length = 0;
+      const el = musicEl;
+      const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
+      musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
+      el.onloadedmetadata = () => { if (token === musicToken && off > 0 && off < (el.duration || 0)) try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } };
+      el.onplaying = () => { if (token === musicToken) _musicFails = 0; };
+      el.onended = () => { if (token === musicToken && musicOn) nextTrack(1); };
+      el.onerror = () => {
+        if (token !== musicToken) return;
+        Log.warn("audio", "music stream failed for " + url + ": media error " + ((el.error && el.error.code) || "?"));
+        musicStreaming = false;
+        musicLoadFailed(token);
+      };
+      musicElUrl = url; musicStreaming = true;
+      el.src = url;
+      const p = el.play();
+      if (p && p.catch) p.catch((err) => {
+        // AbortError = superseded by a pause/src swap; a load failure arrives as onerror.
+        if (token !== musicToken || !err || err.name !== "NotAllowedError") return;
+        Log.warn("audio", "music stream play refused (" + err.name + "); the next startMusic retries");
+        musicStreaming = false;
+      });
+      return true;
     }
     function playMusicBuffer(buf, token) {
       if (!host.context() || !musicOn || token !== musicToken) return;  // superseded
@@ -153,7 +226,19 @@ const GameAudioSoundtrack = (function () {
       const token = ++musicToken;
       // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
       if (host.context().state !== "running" && !document.hidden) { const p = host.context().resume(); if (p && p.catch) p.catch(host.resumeRejected("music")); }
+      if (streamMusic() && typeof Audio === "function" && host.context().createMediaElementSource && streamTrack(url, token)) return;
       if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
+      // SONG-CHANGE SPIKE (perf-memory M-4a). The eviction below runs only once
+      // the NEW decode resolves, and musicResumeBuf pins the old track too, so a
+      // phone held old + new PCM (~150-170 MB) at every song change. A phone
+      // keeps one track anyway: drop the others and the resume pin BEFORE the
+      // fetch. (The resume offset only ever applies to the same buffer, and this
+      // url is not cached, so whatever musicResumeBuf holds is another track.)
+      if (MUSIC_CACHE === 1) {
+        for (const k of _bufKeys) delete musicBuffers[k];
+        _bufKeys.length = 0;
+        musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
+      }
       // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
       // never cancelled the fetch or the decode, and decodeAudioData allocates the
       // full PCM before it resolves — two taps on NEXT put ~150 MB of decoded
@@ -168,8 +253,12 @@ const GameAudioSoundtrack = (function () {
           // (MUSIC_CACHE), rather than holding builtins for the life of the
           // context (five decoded songs) and re-fetching and re-decoding an
           // uploaded MP3 on EVERY repeat.
-          musicBuffers[url] = buf;
-          _bufKeys.push(url);
+          // A phone caches only the track still wanted: a superseded load
+          // resolving late must not evict the one now playing.
+          if (MUSIC_CACHE > 1 || (PLAYLIST[musicIndex] && PLAYLIST[musicIndex].url === url)) {
+            musicBuffers[url] = buf;
+            if (_bufKeys.indexOf(url) < 0) _bufKeys.push(url);
+          }
           while (_bufKeys.length > MUSIC_CACHE) delete musicBuffers[_bufKeys.shift()];
           playMusicBuffer(buf, token);
           return buf;
@@ -297,7 +386,7 @@ const GameAudioSoundtrack = (function () {
       // The menu and the race share one playlist, so a state change must NOT
       // interrupt it — going to the grid must not restart the track from zero.
       // Whatever is playing keeps playing; we only start something if silent.
-      if (musicOn && musicSrc) return;
+      if (musicOn && (musicSrc || musicStreaming)) return;
       playIndex(musicIndex);
     }
 
@@ -311,6 +400,7 @@ const GameAudioSoundtrack = (function () {
       try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) { /* stop-before-start is the documented case */ }
       try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: unreachable either way, and musicSrc is nulled below. */ }
       musicSrc = null;
+      stopStream(true);
       // THE RESUME BUFFER IS A WHOLE DECODED TRACK — 71-83 MB at a 48 kHz context,
       // measured from the shipped MP3 frame headers. It was never nulled anywhere:
       // not here, not in stopMusic/setMusicEnabled, and not in rebuildCtx, which
@@ -339,11 +429,15 @@ const GameAudioSoundtrack = (function () {
 
     // Hide preserves the clock position; an explicit stop drops it.
     function suspendMusic() {
+      captureStreamPos();
       const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
       if (musicOn) stopMusic();
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;
     }
     function resetContext() {
+      stopStream(true);
+      try { if (musicElNode) musicElNode.disconnect(); } catch (e) { /* the old context is closing */ }
+      musicEl = musicElNode = musicElUrl = null;   // bound to the dead context
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
       for (const k in _musicLoads) delete _musicLoads[k];
@@ -365,7 +459,7 @@ const GameAudioSoundtrack = (function () {
     return {
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
       suspendMusic, resetContext, releaseEngineDuck, duckForEngine,
-      isPlaying: () => musicOn, lastTrack: () => lastTrackIdx, volume: () => musicVol,
+      isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }
   return { create };
