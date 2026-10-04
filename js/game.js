@@ -91,20 +91,16 @@ _backendBound = backendBoot.bound;
 // on its procedural materials. Boot must never wait on, or fail for, assets.
 if (typeof Assets !== "undefined") {
   Assets.init(gfx);
-  // Loaded unconditionally at boot. A lazy "only fetch when matTexMix > 0" path
-  // was tried and removed: with the knob ON by default nobody can turn it off
-  // BEFORE their first load, so the pack is always fetched at least once, and
-  // from then on sw.js serves it from cache. The guard could not save anyone
-  // anything — it was complexity with no beneficiary.
-  Assets.load();
-  // Models also prefetch, but for a different reason: prop placement is SYNCHRONOUS
-  // (buildProps -> the circuit's scenery() callback), so it must not depend on
-  // network timing — so ensureScenery() awaits Assets.modelsReady() (this same
-  // run, or a 4 s cap) before any build; a circuit that asks for a model that
-  // has not landed would otherwise keep the box fallback for the whole session.
-  // The manifest is a single small fetch and resolves to nothing when no models
-  // are baked.
-  Assets.loadModels();
+  // Loaded unconditionally (a lazy "only when matTexMix > 0" path was removed:
+  // the knob ships ON, so nobody could opt out before their first load), but
+  // at the first IDLE slice after boot, not in it: the arrays are ~1.6 MB of
+  // PNG that competed with the boot scripts for the wire and the decoder, and
+  // boot never awaited them. Skipped when something already loaded, unloaded
+  // (__apex.assetLoad(false)) or adopted a pack before the slice came round.
+  // Baked MODELS are not prefetched here: ensureScenery() loads each circuit's
+  // own set before its build (Assets.modelsReady, capped at 4 s).
+  const kickPack = () => { const s = Assets.state(); if (s.tier === null && !s.uploaded) Assets.load(); };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kickPack, { timeout: 3000 }); else setTimeout(kickPack, 1500);
 }
 
 // ---------- rain ----------

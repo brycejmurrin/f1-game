@@ -262,12 +262,18 @@ test("install bypasses the HTTP cache only for mutable shell/version essentials"
     path: new URL(typeof x.request === "string" ? x.request : x.request.url, `${ORIGIN}/`).pathname,
     cache: x.init.cache,
   }));
-  for (const path of ["/", "/index.html", "/version.json"]) {
+  for (const path of ["/index.html", "/version.json"]) {
     const calls = rows.filter((x) => x.path === path);
     assert.ok(calls.length, `${path} should be fetched during install`);
     assert.ok(calls.every((x) => x.cache === "no-store"),
       `${path} is mutable and must never seed a new generation from HTTP cache`);
   }
+  // One shell download seeds both shell keys ("./" is the same document).
+  assert.equal(rows.filter((x) => x.path === "/index.html").length, 1, "the shell is fetched once per install");
+  assert.equal(rows.filter((x) => x.path === "/").length, 0, "\"./\" reuses the parsed shell, no second download");
+  const cached = [...harness.stores.values()].find((m) => m.has(`${ORIGIN}/`));
+  assert.ok(cached && cached.has(`${ORIGIN}/index.html`), "both shell keys are seeded");
+  assert.equal(await cached.get(`${ORIGIN}/`).text(), await cached.get(`${ORIGIN}/index.html`).text());
   const script = rows.find((x) => x.path === "/js/game.js");
   assert.ok(script, "versioned script should be precached");
   assert.equal(script.cache, undefined,
@@ -841,9 +847,10 @@ test("activation drops the memoised order, and a cache the order never listed st
 });
 
 // No navigation preload: a preloaded navigation goes through the HTTP cache, so a
-// just-deployed shell could come back stale. The shell keeps its no-store fetch.
+// just-deployed shell could come back stale. The shell REVALIDATES instead
+// ("no-cache": always a conditional request, a 304 reuses the HTTP-cached copy).
 // https://developer.mozilla.org/en-US/docs/Web/API/NavigationPreloadManager
-test("the worker never enables navigation preload and a plain navigation keeps its no-store fetch", async () => {
+test("the worker never enables navigation preload and a plain navigation revalidates (no-cache)", async () => {
   assert.doesNotMatch(SW_SOURCE, /navigationPreload|preloadResponse/);
   const seen = [];
   const net = async (request, init) => {
@@ -859,7 +866,7 @@ test("the worker never enables navigation preload and a plain navigation keeps i
     { preloadResponse: Promise.resolve(new Response("preloaded shell", { status: 200 })) });
   assert.equal(await (await nav.responsePromise).text(), "network shell");
   await Promise.all(nav.lifetimes);
-  assert.deepEqual(seen, ["no-store"]);
+  assert.deepEqual(seen, ["no-cache"]);
 });
 
 test("the ?b= shell bust ignores the preload and keeps its own no-store fetch", async () => {
