@@ -1,6 +1,6 @@
 ---
 name: pr-push-no-run-dispatch-ci
-description: A push to a draft PR while its previous ci.yml run is still live sometimes starts no new run; dispatch ci.yml on the branch by hand and watch by sha
+description: A PR push may start no ci.yml run (dirty = no merge ref) and a pull_request run may build against a STALE base — check mergeable_state, then the checkout step's "Merge X into Y" line
 metadata:
   node_type: memory
   type: project
@@ -30,3 +30,13 @@ is `clean`/`blocked` dispatch `ci.yml` with
 `mcp__github__actions_run_trigger run_workflow ref=<branch>` (inputs `{}`), then
 arm `ci-watch --sha <head>`; the dispatched run attaches to the PR's head and
 counts for the required checks. Never an empty commit to kick CI.
+
+**The merge ref can be STALE (found 2026-10-04, #887):** a `pull_request` run
+checks out `refs/pull/N/merge` as GitHub last computed it — on #887 the job's
+checkout step read `HEAD is now at 0568b81 Merge 75c75567f into 077d1483d`,
+a base from an hour earlier that lacked the spec fix already on the tip, so the
+run failed with the OLD spec's number (−1.395) while the tip and the PR's tree
+both passed (VM replay byte-identical). Before blaming a PR for a red the tip
+passes, read that `Merge X into Y` line: Y is the base the run really used. A
+sync push (or any push) makes GitHub rebuild the ref; a re-run of the same run
+does not.
