@@ -238,8 +238,7 @@ function fakeIndexedDb(seed = []) {
   };
 }
 
-function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = null } = {}) {
-  const idb = fakeIndexedDb(seed);
+function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = null, idb = fakeIndexedDb(seed) } = {}) {
   const sandbox = {
     Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console, Promise,
     setTimeout, clearTimeout, queueMicrotask,
@@ -260,7 +259,7 @@ function loadMirrored({ seed = [], disk = new Map(), writeError = null, quota = 
   const ctx = vm.createContext(sandbox);
   seedSaveMigrate(ctx);
   vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
-  return { store: vm.runInContext("GameStore", ctx).store, disk, idb };
+  return { store: vm.runInContext("GameStore", ctx).store, disk, idb, ctx };
 }
 
 test("career and season writes are mirrored into IndexedDB; other keys are not", async () => {
@@ -384,7 +383,7 @@ test("a quota-refused save to an EXISTING slot wins at the next boot, over the s
     seed: [["apex26.career.driver.0", JSON.stringify({ money: 2 }), false]],
   });
   assert.equal(store.get("career.driver.0").money, 1, "the synchronous boot read sees the stale disk copy");
-  store.set("career.driver.0", store.get("career.driver.0"));   // Career.load() persists what it read
+  store.set("career.driver.0", store.get("career.driver.0"), { migration: true });   // Career.load() persists what it read
   await store.mirror.ready;
   assert.equal(store.get("career.driver.0").money, 2, "the refused (newer) save is restored");
   assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).money, 2, "…onto the disk, now that it fits");
@@ -590,4 +589,167 @@ test("writeFailed() names a failed write until that key is written durably again
   assert.equal(store.writeFailed(), "QuotaExceededError", "a different key's success does not clear it");
   store.write("career.driver.0", { money: 2 });
   assert.equal(store.writeFailed(), null, "the same key written durably clears it");
+});
+
+// Exercise the domain owners too: migrations alter a save's bytes before the
+// first write, and failed localStorage writes give Career no storage event.
+function loadCareerMirrored(options = {}) {
+  const h = loadMirrored(options);
+  h.ctx.Teams = {
+    LIST: [{ id: "haas", tier: 4, drivers: [
+      { name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 },
+    ] }],
+    POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+    isReal: (t) => !!t && !t.custom && !t.legends,
+  };
+  h.ctx.Tracks = { LIST: [{ id: "a" }], SEASON: [{ id: "a" }] };
+  h.ctx.Parts = { getFactorySetup: () => ({}), setLegality() {} };
+  for (const file of ["js/core/hash32.js", "js/core/mat4.js", "js/data/driver-ratings.js",
+    "js/career/career.js", "js/career/season-cal.js", "js/career/career-backup.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), h.ctx, { filename: file });
+  }
+  for (const name of ["Career", "SeasonCal", "CareerBackup"]) h[name] = vm.runInContext(name, h.ctx);
+  return h;
+}
+const careerKey = "apex26.career.driver.0";
+const savedCareer = (money) => JSON.stringify({ v: 0, money, team: "haas", flavour: "driver" });
+
+test("an explicit backup import before mirror restore survives Career.load migration re-saves", async () => {
+  const disk = new Map([[careerKey, savedCareer(100)]]);
+  const h = loadCareerMirrored({ disk, seed: [[careerKey, savedCareer(200), false]] });
+  h.Career.load();
+  const result = h.CareerBackup.apply({ format: h.CareerBackup.FORMAT,
+    slots: [{ flavour: "driver", i: 0, data: JSON.parse(savedCareer(300)) }] });
+  assert.equal(result.ok, true);
+  assert.equal(h.Career.data().money, 300);
+  await h.store.mirror.ready;
+  await h.store.mirrorFlush();
+  assert.equal(h.Career.data().money, 300);
+  assert.equal(JSON.parse(disk.get(careerKey)).money, 300);
+  assert.equal(JSON.parse(h.idb.rows.get(careerKey)).money, 300);
+});
+
+test("automatic Career.load migration still adopts the newer refused mirror save", async () => {
+  const disk = new Map([[careerKey, savedCareer(100)]]);
+  const h = loadCareerMirrored({ disk, seed: [[careerKey, savedCareer(200), false]] });
+  h.Career.load();
+  assert.equal(h.Career.data().v, 1, "boot migration changes the stored bytes");
+  await h.store.mirror.ready;
+  await h.store.mirrorFlush();
+  assert.equal(h.Career.data().money, 200);
+  assert.equal(JSON.parse(disk.get(careerKey)).money, 200);
+  assert.equal(JSON.parse(h.idb.rows.get(careerKey)).money, 200);
+});
+
+test("deleting a career before restore cannot resurrect it, even when localStorage is full", async () => {
+  for (const full of [false, true]) {
+    const disk = new Map([[careerKey, savedCareer(100)]]);
+    const h = loadCareerMirrored({ disk, quota: { on: full }, seed: [[careerKey, savedCareer(200), false]] });
+    h.Career.load();
+    assert.equal(h.Career.clear().ok, true);
+    await h.store.mirror.ready;
+    await h.store.mirrorFlush();
+    assert.equal(h.Career.data(), null);
+    assert.equal(h.store.get("career.driver.0"), null);
+    const next = loadCareerMirrored({ disk, idb: h.idb });
+    next.Career.load();
+    await next.store.mirror.ready;
+    await next.store.mirrorFlush();
+    assert.equal(next.Career.data(), null, "deletion survives a reload after storage recovers");
+    assert.equal(JSON.parse(disk.get(careerKey)), null);
+  }
+});
+
+test("a former mirror owner cannot overwrite another tab's finished career round", async () => {
+  const disk = new Map(), idb = fakeIndexedDb(), quota = { on: false };
+  const a = loadCareerMirrored({ disk, idb, quota });
+  await a.store.mirror.ready;
+  a.Career.start({ teamId: "haas", seed: 7 });
+  await a.store.mirrorFlush();
+  const b = loadCareerMirrored({ disk, idb, quota });
+  await b.store.mirror.ready;
+  b.Career.load(); await b.store.mirrorFlush();
+  a.Career.load(); await a.store.mirrorFlush();
+  for (const h of [a, b]) { h.Career.engage(true); h.SeasonCal.engage("career"); }
+  quota.on = true;
+  a.Career.markWeekendStarted(); await a.store.mirrorFlush();
+  const player = { driverId: "haas:0", team: { id: "haas" }, code: "YOU",
+    finished: true, retired: false, cuts: 0, penalty: 0, gridPos: 1 };
+  const mate = { ...player, driverId: "haas:1", code: "BBB" };
+  assert.equal(b.Career.scoreRound([player, mate], player, null).pos, 1);
+  await b.store.mirrorFlush();
+  const winner = idb.rows.get(careerKey);
+  assert.equal(JSON.parse(winner).season.round, 1);
+  assert.equal(a.Career.conflicted(), false, "quota failures generate no storage event");
+  quota.on = false;
+  a.Career.data().season.qualiOrder = [{ driverId: "haas:0", t: 90, pos: 1, human: true }];
+  a.Career.save(); await a.store.mirrorFlush();
+  assert.equal(idb.rows.get(careerKey), winner, "the peer's completed round stays durable");
+  assert.equal(idb.lsOk.get(careerKey), false, "reload must still restore that round over stale disk");
+  const next = loadCareerMirrored({ disk, idb });
+  next.Career.load(); await next.store.mirror.ready; await next.store.mirrorFlush();
+  assert.equal(next.Career.data().season.round, 1);
+});
+
+test("an aborted mirror transaction cannot grant ownership of a peer's next payload", async () => {
+  const quota = { on: true };
+  const h = loadMirrored({ quota });
+  await h.store.mirror.ready;
+  h.store.write("career.driver.0", { money: 1 }); await h.store.mirrorFlush();
+  quota.on = false;
+  h.idb.failNextWrite();
+  h.store.write("career.driver.0", { money: 2 });
+  assert.equal(await h.store.mirrorFlush(false), false);
+  h.idb.rows.set(careerKey, JSON.stringify({ money: 2 }));
+  h.idb.lsOk.set(careerKey, false);
+  h.store.write("career.driver.0", { money: 3 }); await h.store.mirrorFlush();
+  assert.equal(JSON.parse(h.idb.rows.get(careerKey)).money, 2);
+  assert.equal(h.idb.lsOk.get(careerKey), false);
+});
+
+
+test("standalone season migration yields to recovery but an explicit replacement survives it", async () => {
+  for (const explicit of [false, true]) {
+    const key = "apex26.season";
+    const disk = new Map([[key, JSON.stringify({ round: 0, pts: {} })]]);
+    const h = loadCareerMirrored({ disk, seed: [[key, JSON.stringify({ round: 1, pts: { "haas:0": 25 } }), false]] });
+    h.SeasonCal.load();
+    if (explicit) h.SeasonCal.applyConfig(h.SeasonCal.config());
+    await h.store.mirror.ready;
+    await h.store.mirrorFlush();
+    assert.equal(JSON.parse(disk.get(key)).round, explicit ? 0 : 1);
+    assert.equal(JSON.parse(h.idb.rows.get(key)).round, explicit ? 0 : 1);
+  }
+});
+
+test("a stale deletion cannot remove a peer's newer mirror-only career", async () => {
+  const quota = { on: true };
+  const h = loadMirrored({ quota });
+  await h.store.mirror.ready;
+  h.store.write("career.driver.0", { money: 1 }); await h.store.mirrorFlush();
+  h.idb.rows.set(careerKey, JSON.stringify({ money: 2 }));
+  h.idb.lsOk.set(careerKey, false);
+  quota.on = false;
+  h.store.write("career.driver.0", null); await h.store.mirrorFlush();
+  assert.equal(JSON.parse(h.idb.rows.get(careerKey)).money, 2);
+  assert.equal(h.idb.lsOk.get(careerKey), false);
+});
+
+
+test("legacy slot migration cannot displace a newer current-layout mirror save", async () => {
+  for (const legacy of ["apex26.career", "apex26.career.2"]) {
+    const disk = new Map([[legacy, savedCareer(100)]]);
+    const h = loadCareerMirrored({ disk, seed: [[careerKey, savedCareer(200), false]] });
+    h.Career.load();
+    assert.equal(h.Career.data().money, 100, "the synchronous load first migrates the legacy layout");
+    assert.equal(JSON.parse(disk.get(legacy)), null, "the old key is retired after the copy succeeds");
+    await h.store.mirror.ready;
+    await h.store.mirrorFlush();
+    assert.equal(h.Career.data().money, 200, legacy + ": recovery supersedes the automatic copy");
+    assert.equal(JSON.parse(disk.get(careerKey)).money, 200);
+    assert.equal(JSON.parse(h.idb.rows.get(careerKey)).money, 200);
+    const next = loadCareerMirrored({ disk, idb: h.idb });
+    next.Career.load(); await next.store.mirror.ready; await next.store.mirrorFlush();
+    assert.equal(next.Career.data().money, 200, "another boot keeps the recovered save");
+  }
 });

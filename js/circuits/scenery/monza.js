@@ -301,6 +301,26 @@
 
       groundPatch(K(0.099), 1, 5, [24, 0.18, 34], GRAVEL,
         { id: "monza-rettifilo-gravel", samples: 6 });
+      // FIA 2024 preview: 2.5 m gravel replaces the T2 LEFT runoff bollards;
+      // T4–T5 RIGHT gets a 2.5 m strip starting 1 m beyond the track edge.
+      // Walk short terrain-conforming patches; edge-centre chord spacing also
+      // contracts on the inside of a bend, unlike full-length tangent boxes.
+      const gravelMargin = (s0, s1, side, gap, id) => {
+        along(s0, s1, ds, (k) => {
+          const midGap = gap + 1.25;
+          const a = anchor(k, side, midGap);
+          const prev = anchor((k - 1 + n) % n, side, midGap);
+          const next = anchor((k + 1) % n, side, midGap);
+          const chord = (b) => Math.hypot(b.c[0] - a.c[0], b.c[2] - a.c[2]);
+          const len = Math.max(0.5, (chord(prev) + chord(next)) * 0.5);
+          groundPatch(k, side, gap, [2.5, 0.08, len], GRAVEL,
+            { id: `${id}-${k}`, samples: 2 });
+        });
+      };
+      // T2 longitudinal extent (20 m) and its 2.25 m clearance are authored
+      // estimates; the source specifies the side and gravel width only.
+      gravelMargin(0.1022 - 10 / (n * ds), 0.1022 + 10 / (n * ds), -1, 2.25,
+        "monza-rettifilo-2024-margin");
       tyreWall(0.089, 0.114, 1, 4, [0.88, 0.20, 0.18]);
       grandstandEx(0.109, -1, 12, 76, null, null,
         { livery: "crimson", roof: "truss", endWalls: true, pylons: true, h: 11 });
@@ -311,6 +331,9 @@
         { id: "monza-roggia-gravel-left", samples: 6 });
       groundPatch(K(0.305), 1, 5, [20, 0.18, 26], GRAVEL,
         { id: "monza-roggia-gravel-right", samples: 6 });
+      // Start at curated T4, ending before the tight inside T5 footprint:
+      // extent remains estimated; FIA specifies the width and 1 m gap.
+      gravelMargin(0.3057, 0.3102, 1, 1, "monza-roggia-2024-margin");
       tyreWall(0.29, 0.315, -1, 4, [0.20, 0.40, 0.85]);
       // Keep the stand compact and set back: crowdBank uses intentionally cheap
       // raw spectators, so its full footprint must stay clear of the chicane arc.

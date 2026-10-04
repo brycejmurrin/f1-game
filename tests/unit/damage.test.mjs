@@ -80,6 +80,17 @@ test("contact: both cars booked from their own frame, debounced until observe() 
   assert.ok(D.state(sp).rw > 0 && D.state(sp).fwL + D.state(sp).fwR === 0);
 });
 
+test("contact: a car lapping a backmarker is booked by on-road gap, not race distance", () => {
+  const { Damage: D } = load();
+  const L = 5000;
+  // a is a lap up and runs into b, 2 m ahead of its nose on the road.
+  const a = car({ prog: 5 * L + 10, x: 0 }), b = car({ prog: 4 * L + 12, x: 0 });
+  D.contact(a, b, 0.6, L);
+  const sa = D.state(a), sb = D.state(b);
+  assert.ok(sa.fwL + sa.fwR > 0 && sa.rw === 0, "the lapping car's nose took it");
+  assert.ok(sb.rw > 0 && sb.fwL + sb.fwR === 0, "the backmarker was hit from behind");
+});
+
 test("wall: the pin's rising edge books one strike on the wall side; a kiss books nothing", () => {
   const { Damage: D } = load();
   const c = car({ x: 5, speed: 60, yawVis: 0.6 });
