@@ -382,13 +382,26 @@ test("host: toggling s across the line without driving the lap earns nothing", (
   assert.notEqual(carA.finished, true);
 });
 
+test("host: laps faster than the wire's speed ceiling allows are refused", () => {
+  const { G, carA, pose } = hostWithGuest();
+  pose({ s: 4990, lap: 0 }); pose({ s: 5, lap: 1 });
+  assert.equal(carA.lap, 1);
+  // Three packets a "lap", with no race clock passing: 5 laps in 1.5 s of wire.
+  for (let i = 0; i < 6; i++) { pose({ s: 2500, lap: 2 + i }); pose({ s: 4500, lap: 2 + i }); pose({ s: 250, lap: 2 + i }); }
+  assert.equal(carA.lap, 1, "a lap needs total / SPEED_LIMIT of race clock since the last rise");
+  assert.notEqual(carA.finished, true);
+  G.raceT += 90;
+  pose({ s: 2500, lap: 2 }); pose({ s: 4990, lap: 2 }); pose({ s: 5, lap: 2 });
+  assert.equal(carA.lap, 2, "a real lap's worth of clock later, the crossing counts");
+});
+
 test("host: a lap actually driven still counts, through to the finish", () => {
   const { G, carA, pose } = hostWithGuest();
   pose({ s: 4990, lap: 0 });
   for (let lap = 1; lap <= G.lapsTarget + 1; lap++) {
     pose({ s: 5, lap });
     assert.equal(carA.lap, lap, `lap ${lap} counted`);
-    if (lap <= G.lapsTarget) { pose({ s: 2500, lap }); pose({ s: 4990, lap }); }
+    if (lap <= G.lapsTarget) { pose({ s: 2500, lap }); G.raceT += 90; pose({ s: 4990, lap }); }   // a lap takes time
   }
   assert.notEqual(carA.finished, true, "an extrapolated crossing never finishes a car");
   pose({ s: 15, lap: G.lapsTarget + 1 }, 10);
@@ -405,6 +418,44 @@ test("host: a LAP `fin` far from this race clock is refused", () => {
   sA.deliver("lap", { lap: 4, time: 88.1, code: carA.code, fin: G.raceT - 1 });
   assert.equal(carA.finished, true);
   assert.equal(carA.finishT, G.raceT - 1);
+});
+
+test("host: a guest's short-distance fin cannot raise or relay the chequered flag", () => {
+  const { G, net, sA, sB, carA, pose } = hostWithGuest();
+  carA.lap = 1;
+  sA.deliver("lap", { lap: 1, code: carA.code, fin: G.raceT, invalid: true });
+  assert.notEqual(carA.finished, true, "the opening crossing cannot finish a car");
+  assert.equal(carA._nFin, null);
+  carA.lap = 2;
+  sA.deliver("lap", { lap: 2, code: carA.code, fin: G.raceT, invalid: true });
+  pose({ s: 100, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true, "the target is three laps and no winner has finished");
+  assert.equal(G.cars.some((c) => c.finished), false);
+  assert.ok(sB.sent.filter((m) => m.t === "lap").every((m) => m.d.fin === undefined), "guests cannot receive an unapproved finish");
+  G.raceT += 6;
+  pose({ s: 200, lap: 2 }, 10);
+  assert.equal(carA._nFin, null, "an early claim expires instead of waiting for the eventual real flag");
+  G.player.finished = true; G.player.lap = 4;
+  pose({ s: 300, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true, "a later legitimate winner cannot resurrect the early claim");
+  net.stop();
+});
+
+test("host: a lapped fin preceding the winner's interpolated pose waits, then relays", () => {
+  const { G, net, sA, sB, carA, pose } = hostWithGuest();
+  carA.lap = 2;
+  sA.deliver("lap", { lap: 2, code: carA.code, fin: G.raceT - 0.1, invalid: true });
+  pose({ s: 100, lap: 2 }, 10);
+  assert.notEqual(carA.finished, true);
+  assert.equal(sB.sent.filter((m) => m.t === "lap").at(-1).d.fin, undefined);
+  G.player.finished = true; G.player.lap = 4;
+  pose({ s: 200, lap: 2 }, 10);
+  assert.equal(carA.finished, true);
+  assert.equal(carA.finishT, G.raceT - 0.1);
+  const relayed = sB.sent.filter((m) => m.t === "lap").at(-1).d;
+  assert.equal(relayed.fin, carA.finishT);
+  assert.equal(relayed.lap, 2, "the deferred finish retains the owner's finishing crossing");
+  net.stop();
 });
 
 test("host: lap times outside what can be driven never reach the car", () => {
@@ -424,6 +475,9 @@ test("host: lap times outside what can be driven never reach the car", () => {
 test("host: a guest's LAP is relayed to every OTHER guest, named by its seat", () => {
   const { G, sA, sB, carA } = hostWithGuest();
   const laps = (s) => s.sent.filter((m) => m.t === "lap");
+  // Pose still on lap 0 (interp lag): the relay must carry the OWNER's lap,
+  // not fr.car.lap — otherwise guest B finishLap()'s a stale number.
+  assert.equal(carA.lap, 0, "fixture: host pose has not caught the crossing");
   // Matched by driverId, with a bogus code: the relay names the seat, not the word.
   sA.deliver("lap", { lap: 2, time: 88.1, best: 1, driverId: carA.driverId, code: "ZZZ" });
   assert.equal(laps(sA).length, 0, "never echoed to the sender");
@@ -431,6 +485,7 @@ test("host: a guest's LAP is relayed to every OTHER guest, named by its seat", (
   const out = laps(sB)[0].d;
   assert.equal(out.code, carA.code);
   assert.equal(out.driverId, carA.driverId);
+  assert.equal(out.lap, 2, "owner's lap, not the host's posed lap");
   assert.equal(out.time, 88.1);
   assert.equal(out.best, null, "an impossible best is not relayed");
   // A LAP the host refused (not the sender's own) is not relayed either.
@@ -446,4 +501,29 @@ test("host: a guest's LAP is relayed to every OTHER guest, named by its seat", (
   sh.deliver("lap", out);
   assert.equal(other.lastLap, 88.1, "guest B now sees guest A's lap time");
   void G;
+});
+
+test("host: a finishing LAP relays the owner's lap so guest B does not finish early", () => {
+  const { G, sA, sB, carA } = hostWithGuest();
+  // Guest A flags out at lap 4; host pose is still on lap 3 (interp delay).
+  carA.lap = 3;
+  sA.deliver("lap", { lap: 4, time: 88.1, best: 87.5, code: carA.code, fin: G.raceT - 0.5 });
+  assert.notEqual(carA.finished, true, "host also waits — pose one crossing behind");
+  assert.equal(carA._nFinLap, 4);
+  const out = sB.sent.filter((m) => m.t === "lap").pop();
+  assert.ok(out, "relayed to the other guest");
+  assert.equal(out.d.lap, 4, "owner's finishing lap, not the posed 3");
+  assert.equal(out.d.fin, G.raceT - 0.5);
+
+  // Guest B with pose still on lap 3 must WAIT (finLap 4), not finish early.
+  const Gg = stubG(3), guest = NetPlay.create(Gg), sh = fakeSession();
+  assert.equal(guest.start({ role: "guest", session: sh,
+    peers: [{ id: "peer", profile: null }, { id: "x", profile: null }] }).ok, true);
+  const other = Gg.cars.find((c) => c.code === carA.code);
+  other.lap = 3;
+  sh.deliver("lap", out.d);
+  assert.notEqual(other.finished, true, "pose still one crossing behind — not finished yet");
+  assert.equal(other._nFin, G.raceT - 0.5);
+  assert.equal(other._nFinLap, 4);
+  // The stale-pose bug would have relayed lap:3 → finishLap(3)=3 → finished now.
 });
