@@ -1292,20 +1292,20 @@ const GLXBackend = (function () {
     const n = layers || MAT_TEX_LAYERS;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
-    // texStorage3D allocates the whole mip chain immutably up front — required
-    // for an array texture whose layers arrive one at a time, and it means a
-    // layer we never fill is well-defined (zero) rather than undefined memory.
-    const mips = Math.floor(Math.log2(size)) + 1;
+    // texStorage3D allocates the whole mip chain immutably up front — required for layers
+    // arriving one at a time; a layer never filled is well-defined zero, not garbage.
+    const mips = Math.floor(Math.log2(size)) + 1; drainGlErrors("pre-materialArray");   // GL errors come via getError(), not throws: isolate ours
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, mips, gl.RGBA8, size, size, n);
+    if (gl.getError()) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }   // e.g. OOM
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    let filled = 0;
+    let filled = 0, grey = null;
     for (let i = 0; i < n; i++) {
       const img = images[i];
       if (!img) continue;
-      try {
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, img);
-        filled++;
-      } catch (_) { /* one bad layer must not sink the pack */ }
+      try { gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, img); if (!gl.getError()) { filled++; continue; } } catch (_) { /* one bad layer must not sink the pack */ }
+      // Failed layer (scale still set, so zero = black): TLX's neutral 128 grey page.
+      if (!grey) { grey = new Uint8Array(size * size * 4).fill(128); for (let k = 3; k < grey.length; k += 4) grey[k] = 255; }
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, grey); gl.getError();
     }
     if (!filled) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }
     // texStorage3D allocated the whole chain for ALL n layers up front, so the
@@ -2174,7 +2174,7 @@ const GLXBackend = (function () {
     let ks = null;
     if (InstCells.enabled() || shadow) {
       ks = InstCells.scratchKeys(batch, cn);
-      cellKeyN = InstCells.collectVisible(planes, cs, ks, (p, mn, mx) => CHK.aabbInFrustum(p, mn, mx));
+      cellKeyN = InstCells.collectVisible(planes, cs, ks, CHK.aabbInFrustum);   // a plain function (Frustum.aabbInFrustum): no `this`, no per-call closure
       if (!shadow && InstCells.enabled() && InstCells.sameKey(batch, ks, cellKeyN)) {
         // NOT writing _cullPlanes here is load-bearing: it must keep describing
         // whichever frustum physically wrote the buffer (canary-pinned).

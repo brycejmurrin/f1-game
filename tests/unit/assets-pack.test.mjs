@@ -199,7 +199,7 @@ test("an albedo-only material variant never requests or decodes a normal strip",
   assert.equal(assets.state().bytes, blob.size);
 });
 
-test("an early normal fetch failure observes a later albedo rejection without decoding", async () => {
+test("a normal fetch failure is not the pack's failure: a later albedo rejection still decides", async () => {
   const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
   let decodes = 0, uploads = 0;
   const assets = assetLoader({
@@ -214,17 +214,36 @@ test("an early normal fetch failure observes a later albedo rejection without de
   const pending = assets.load();
   await new Promise(setImmediate);
   downloads["n.png"].resolve({ ok: false });
-  assert.equal(await pending, false);
-  assert.equal(assets.state().error, "fetch n.png");
-  downloads["a.png"].reject(Error("albedo offline after normal failure"));
   await new Promise(setImmediate); // node:test reports an unhandled rejection as a failure
+  downloads["a.png"].reject(Error("albedo offline after normal failure"));
+  assert.equal(await pending, false);
+  assert.equal(assets.state().error, "albedo offline after normal failure");
   assert.equal(decodes, 0);
   assert.equal(uploads, 0);
   assert.equal(assets.state().uploaded, false);
   assert.equal(assets.state().bytes, 0);
 });
 
-test("a normal decode failure frees the albedo upload and closes its bitmaps", async () => {
+test("a missing normal strip still ships the albedo pack (normal = null)", async () => {
+  const maps = [];
+  const assets = assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json"))
+        return { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) };
+      return url.endsWith("n.png") ? { ok: false } : { ok: true, blob: async () => ({ size: 16 }) };
+    },
+    async createImageBitmap() { return { close() {} }; },
+  });
+  assets.init({ createTextureArray() { return { id: "albedo" }; }, setMaterialMaps(v) { maps.push(v); } });
+  assert.equal(await assets.load(), true);
+  assert.equal(maps.length, 1);
+  assert.equal(maps[0].albedo.id, "albedo");
+  assert.equal(maps[0].normal, null);
+  assert.equal(assets.state().uploaded, true);
+  assert.equal(assets.state().error, null);
+});
+
+test("a normal decode failure keeps the albedo upload and closes its bitmaps", async () => {
   const bitmaps = [], freed = [], maps = [];
   const assets = assetLoader({
     async fetch(url) {
@@ -244,12 +263,14 @@ test("a normal decode failure frees the albedo upload and closes its bitmaps", a
     freeTexture(t) { freed.push(t.id); },
     setMaterialMaps(v) { maps.push(v); },
   });
-  assert.equal(await assets.load(), false);
-  assert.equal(assets.state().error, "normal decode failed");
+  assert.equal(await assets.load(), true);
+  assert.equal(assets.state().error, null);
   assert.equal(assets.state().bytes, 32);
-  assert.deepEqual(freed, ["albedo"]);
+  assert.deepEqual(freed, []);
   assert.deepEqual(bitmaps.map(b => b.closed), [1]);
-  assert.deepEqual(maps, []);
+  assert.equal(maps.length, 1);
+  assert.equal(maps[0].albedo.id, "albedo");
+  assert.equal(maps[0].normal, null);
 });
 
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
