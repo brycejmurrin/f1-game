@@ -346,7 +346,7 @@ function aStd(a) { return a / Math.max(PACE, 0.05); }
 // took `G.ACCEL` and so simulated a field that accelerated at pace-5 rates into
 // a pace-scaled vTop() ceiling, which is exactly the mismatch the G façade's own
 // comment promises does not exist ("off the SAME numbers the driving model
-// uses"). Floored like vTop(): standingLoss() divides by it.
+// uses"). Floored like vTop().
 function aTop()  { return ACCEL * Math.max(PACE, 0.05); }
 // Player steering inputs into the dynamic model below. WHEELBASE is the real
 // axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
@@ -629,7 +629,7 @@ function rpmFor(gear, speed) {
   return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
 const GAME_LAPS = 3;
-const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
+const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js/race/flying-start.js)
 // Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
 // TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
 function isWetRoad() { return trackWetness() >= 0.25; }
@@ -1818,6 +1818,7 @@ function redFlagRestart() {
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
+    c.gear = 1; c.rpm = IDLE_RPM;   // a standing start in 2nd+ has gearLo > 0, so manual drive is zero until a downshift
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -2481,13 +2482,10 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on the LINE, AT REST — a standing qualifying lap. This used
-// to launch at racing speed, since the simulated field is modelled on a
-// flying lap and a driven lap from a standstill would lose the launch every
-// weekend by construction. The fix charges the MODEL the same standing start
-// instead (STANDING_LOSS in js/race/quali-model.js), so both sides begin from
-// rest on one scale. Written in TRACK coordinates and pushed back out through
-// worldFromTrack, exactly as rescuePlayer() and retireCar() do.
+// Put the player on the LINE, AT REST. The FALLBACK only: qualifying is a
+// rolling start (js/race/flying-start.js), and js/race/quali-model.js models a
+// flying lap to match. This runs when that start was declined. Written in TRACK
+// coordinates and pushed back out through worldFromTrack, as rescuePlayer() does.
 function launchFlyingLap() {
   if (!player || !track) return;
   // Just BEHIND the line, not on the P1 box (~14 m back): the timed lap begins
@@ -2527,6 +2525,7 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -2576,7 +2575,7 @@ async function startRaceBody() {
   practiceMode = false;
   makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
-  // Qualifying keeps the full field for simulation, then drives one standing lap.
+  // Qualifying keeps the full field for simulation, then drives one flying lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
@@ -3025,6 +3024,7 @@ const G = {
   get track() { return track; },
   get cars() { return cars; },
   get player() { return player; },
+  get flyingStart() { return flyingStart; },   // js/race/flying-start.js — __apex.go() hands the wheel back at once
   get season() { return season; }, set season(v) { season = v; },
   // flow/session are the authority; seasonMode/timeTrial are DERIVED views kept so
   // the __apex.info() contract and every module that reads them are unchanged.
@@ -3462,6 +3462,7 @@ const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // qualifying + time trial start at speed (js/race/flying-start.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4206,6 +4207,7 @@ function update(dt) {
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
   realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
+  flyingStart.update(dt);   // qualifying and time trial: a rolling start in place of the gantry (js/race/flying-start.js)
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
      and no movement, wrong way, off-track for long enough), so a car wedged
      somewhere it considers fine — nose-in against a barrier, facing the right
@@ -4291,9 +4293,9 @@ function update(dt) {
       restartPending = false;
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
-      // ONE STANDING LAP, from the line. js/race/quali-model.js charges every
-      // modelled lap the same standing start, so the player's lap and the
-      // simulated field both begin from rest and stay on one scale.
+      // Qualifying normally never gets here: js/race/flying-start.js rolls the
+      // car in at speed on the first countdown frame. Only a start it declined
+      // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
     return;
@@ -4338,6 +4340,13 @@ function update(dt) {
   // !finished: a flagged human coasts on advancing prog — don't band toward it.
   for (const c of cars) if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c;
 
+  // Traffic scans read last step's poses. Writing prog/x/speed inside
+  // updateCar and then scanning the next car made a side-by-side look like a
+  // pass in array order.
+  for (let i = 0; i < cars.length; i++) {
+    const s = cars[i];
+    s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
+  }
   for (const c of cars) updateCar(c, dt, ranked);
 
   collide.resolveCollisions(ranked, dt);
@@ -4621,14 +4630,14 @@ function updateCar(c, dt, ranked) {
     for (let i = 0; i < ranked.length; i++) {
       const o = ranked[i];
       if (o === c || o.finished) continue;
-      let dprog = o.prog - c.prog;
+      let dprog = o._snapProg - c.prog;
       if (!Number.isFinite(dprog)) continue;
       // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
       const ad = dprog < 0 ? -dprog : dprog;
       if (ad > REJ && ad < L - REJ) continue;
       dprog = ((dprog + L / 2) % L + L) % L - L / 2;
       if (dprog < -BACK || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
-      const dx = o.x - c.x;
+      const dx = o._snapX - c.x;
       const adp = dprog < 0 ? -dprog : dprog;
       if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
@@ -4662,8 +4671,8 @@ function updateCar(c, dt, ranked) {
     // defendPull was the only answer the AI had. Speeds compare to each other,
     // never to a literal, so the window holds at every OVERALL SPEED.
     // BLUE FLAGS ONLY (AiDrive.letPassCase): the chaser must be LAPPING us — a lap or more ahead in progress.
-    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser.speed : 0,
-      c.speed, vTop() / VMAX, !!chaser && chaser.prog - c.prog > track.total * 0.5);
+    const letPassCase = AiDrive.letPassCase(state === "race", blocker, chaser, chaserGap, chaser ? chaser._snapSpeed : 0,
+      c.speed, vTop() / VMAX, !!chaser && chaser._snapProg - c.prog > track.total * 0.5);
     if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
     else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
@@ -4680,8 +4689,8 @@ function updateCar(c, dt, ranked) {
   if (!c.human && c.energy > 0.02) {
     _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
     _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
-    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar.speed : 0; _aiBoost.speed = c.speed;
-    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser.speed : 0;
+    _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar._snapSpeed : 0; _aiBoost.speed = c.speed;
+    _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
@@ -4718,7 +4727,7 @@ function updateCar(c, dt, ranked) {
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
   for (const o of ranked) {
     if (o === c || o.finished) continue;
-    const dp = o.prog - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
+    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
     const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
     if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
   }
@@ -4792,14 +4801,14 @@ function updateCar(c, dt, ranked) {
         // inside this |dx| < TOW_HALF_W window on a narrow circuit, and a
         // stationary wreck does not punch a hole in the air.
         if (o === c || o.finished || o.retired) continue;
-        let dprog = o.prog - c.prog;
+        let dprog = o._snapProg - c.prog;
         if (!Number.isFinite(dprog)) continue;
         const ad = dprog < 0 ? -dprog : dprog;
         if (ad > TOW_RANGE + 0.1 && ad < L - TOW_RANGE - 0.1) continue;
         dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-        if (dprog > 0.5 && dprog < tg && Math.abs(o.x - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
+        if (dprog > 0.5 && dprog < tg && Math.abs(o._snapX - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
       }
-      if (tc) c.wake = wakeOf(tg, tc.x - c.x);
+      if (tc) c.wake = wakeOf(tg, tc._snapX - c.x);
       if (tc && !braking && Math.abs(c.steerVis || 0) < 0.12) {
         c.towing = c.wake;
         vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
@@ -5265,7 +5274,7 @@ function updateCar(c, dt, ranked) {
     // ai-drive.js for the measured chatter that produced.
     if (c.passOf) {
       const po = c.passOf;
-      let dp = po.prog - c.prog;
+      let dp = po._snapProg - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
       if (po.finished || po.retired || cautionLevel() >= 2 || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it, or a VSC / safety car came out: no penalty
@@ -5352,7 +5361,7 @@ function updateCar(c, dt, ranked) {
     }
     else c.atkOn = c.atkWant = false;
     if (c.passOf && raceCtl.level >= 2) c.passOf = null;   // a move under way when the SC/VSC comes out is abandoned
-    if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
+    if (c.passOf) overtake = AiDrive.passTarget(c.passOf._snapX, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
     // stops the AI covering a line it has already decided to concede.
     let yieldPull = 0;
@@ -5365,7 +5374,7 @@ function updateCar(c, dt, ranked) {
     if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
-      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
+      _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x;
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       defend = AiDrive.defendPull(_aiDefend);
@@ -5633,7 +5642,7 @@ function updateCar(c, dt, ranked) {
     const axEstTarget = braking ? -surfaceBrake * brakeLvl
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
-          : -COAST_DRAG);
+          : -COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0)));
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
@@ -5831,12 +5840,15 @@ function updateCar(c, dt, ranked) {
   // The FIELD's sector bests — the timing screen's purple is the session best
   // of ANY car, so every car's forward crossing is timed (a per-car index and
   // start stamp; the player's curated split logic below stays as it is).
+  // S3 closes AT THE LINE, inside this step: take off the time past it, as
+  // RaceControl.lineTransition does for the lap (or S1+S2+S3 ran a step long).
+  const s3Past = dLine > 0 && oldS > L * 0.5 && c.s < L * 0.5 && dt > 0 ? dt * (1 - Math.min(1, Math.max(0, (L - oldS) / dLine))) : 0;
   if (state === "race" && track) {
     const ns = sectorAt(c.s);
     if (ns !== c._secIdx) {
       const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
       if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
-        const e = c.lapTime - c._secT0;
+        const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
       }
       c._secIdx = ns; c._secT0 = c.lapTime;
@@ -5858,7 +5870,7 @@ function updateCar(c, dt, ranked) {
         // entry: a backward crossing skips the record but resets sectorStartT,
         // so the next forward crossing times a fraction (measured: 0.217 s "S1").
         if (c.lap >= 1 && !c.incidentInvalidLap && sectorValid) {
-          const elapsed = c.lapTime - sectorStartT;
+          const elapsed = c.lapTime - (newSector === 0 ? s3Past : 0) - sectorStartT;
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
           sectorLast[prevSector] = elapsed;
@@ -5897,6 +5909,7 @@ function updateCar(c, dt, ranked) {
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
+      else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       // Tell the rival about our lap. Times are authored by whoever OWNS the
@@ -8468,6 +8481,7 @@ function reportModelQuali() {
 }
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
+  if (isCareer()) Career.markWeekendStarted();   // the briefs lock: the grid is known now
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's

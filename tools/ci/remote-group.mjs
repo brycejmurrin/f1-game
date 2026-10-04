@@ -76,7 +76,7 @@ export function pickRun(runs, { branch, group, sinceMs }) {
     .filter((r) => r.event === "workflow_dispatch" && r.head_branch === branch
       && Date.parse(r.created_at) >= sinceMs - 60_000
       && String(r.display_title || r.name || "").includes(`browser group ${group} `))
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] || null;
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)[0] || null;   // a same-second tie: the higher id is the newer run
 }
 
 /** The failing test lines of a shard's log (live-reporter's `x FAIL` lines and
