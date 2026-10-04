@@ -126,7 +126,22 @@ function makeGpuHarness(opts = {}) {
   const deviceRequests = [];
   let loseDevice = null;
   let failEncoder = false;
+  // Optional error scopes (opts.errorScopes): a real stack. Pops resolve clean
+  // at once (create() awaits its own boot scopes) until the test calls
+  // holdPops(): then each verdict waits for settlePops — a GPUError is
+  // reported asynchronously, never thrown, so it must be able to arrive late.
+  const scopeStack = [], pendingPops = [];
+  let holdPops = false;
   const device = {
+    ...(opts.errorScopes ? {
+      pushErrorScope(filter) { scopeStack.push(filter); },
+      popErrorScope() {
+        const filter = scopeStack.pop();
+        if (!filter) return Promise.reject(new Error("OperationError: empty error scope stack"));
+        if (!holdPops) return Promise.resolve(null);
+        return new Promise((resolve) => pendingPops.push({ filter, resolve }));
+      },
+    } : {}),
     // Three distinct states, because they fail differently: a healthy device
     // whose `lost` never settles, one the test can lose LATER via loseDevice()
     // (the escalation ladder), and one that arrives ALREADY lost — which is what
@@ -384,6 +399,16 @@ function makeGpuHarness(opts = {}) {
     fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
+    scopeDepth: () => scopeStack.length,
+    holdPops() { holdPops = true; },
+    pendingPops: () => pendingPops.map((p) => p.filter),
+    // Resolve every queued pop with errFor(filter) (null = clean), then let the
+    // promise callbacks run.
+    async settlePops(errFor = () => null) {
+      const q = pendingPops.splice(0);
+      for (const p of q) p.resolve(errFor(p.filter));
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    },
     // This VM's Log ring (seedLog): what a phone's COPY DIAG would carry.
     logs: (filter) => context.Log.records(filter),
   };
@@ -590,6 +615,120 @@ test("the same target size retries after the allocation cooldown", async () => {
   h.advanceTime(1001);
   assert.equal(gfx.begin({}), true);
   assert.ok(h.textureCount() > callsAfterFailure, "same dimensions must recover after cooldown");
+});
+
+// TARGET REALLOCATION UNDER ERROR SCOPES (2026-10-04). createTexture never
+// throws on out-of-memory — it returns an invalid texture and reports a
+// GPUOutOfMemoryError (W3C WebGPU §22) — so the catch above never saw memory
+// pressure and the invalid set was swapped in. A resize now builds inside
+// "out-of-memory" + "validation" scopes and swaps only on a clean verdict.
+async function scopedResized() {
+  const h = makeGpuHarness({ errorScopes: true });
+  const gfx = await h.create();
+  h.holdPops();
+  gfx.resize();
+  const start = h.textures.length;
+  assert.equal(gfx.begin({}), true);
+  assert.deepEqual(h.pendingPops(), [], "the FIRST build has no set to keep, so it is not deferred");
+  const old = h.textures.slice(start);   // the first target set
+  assert.ok(old.length > 0);
+  h.canvas.clientWidth = 640;
+  gfx.resize();
+  const before = h.textures.length;
+  assert.equal(gfx.begin({}), true, "the frame still renders, through the old set");
+  const fresh = h.textures.slice(before);
+  assert.ok(fresh.length > 0, "the new size was built");
+  assert.deepEqual(h.pendingPops().sort(), ["out-of-memory", "validation"], "both scopes popped, verdict pending");
+  assert.equal(h.scopeDepth(), 0, "no scope left pushed");
+  return { h, gfx, old, fresh };
+}
+
+test("a resize's targets swap in only when both error scopes pop clean", async () => {
+  const { h, gfx, old, fresh } = await scopedResized();
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.equal(h.textureCount(), n, "no rebuild while the verdict is pending");
+  assert.ok(old.every((t) => !t.destroyed) && fresh.every((t) => !t.destroyed), "nothing swapped or freed yet");
+  await h.settlePops();
+  assert.equal(gfx.begin({}), true);
+  assert.ok(fresh.every((t) => !t.destroyed), "the clean set is live");
+  assert.ok(old.every((t) => t.destroyed), "the previous target set was released");
+});
+
+test("an out-of-memory verdict keeps the old set, frees the new one and waits out the cooldown", async () => {
+  const { h, gfx, old, fresh } = await scopedResized();
+  await h.settlePops((f) => (f === "out-of-memory" ? { message: "injected GPUOutOfMemoryError" } : null));
+  assert.equal(gfx.begin({}), true, "still rendering");
+  assert.ok(fresh.every((t) => t.destroyed), "every texture of the failed set is destroyed");
+  assert.ok(old.every((t) => !t.destroyed), "the previous set survives");
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.equal(h.textureCount(), n, "same size inside the cooldown: no rebuild every frame");
+  assert.ok(h.logs().some((r) => /target realloc 640x\d+ failed \(out-of-memory\)/.test(r.msg || r.message || String(r))),
+    "the failure is logged for COPY DIAG");
+  h.advanceTime(1001);
+  assert.equal(gfx.begin({}), true);
+  assert.ok(h.textureCount() > n, "after the cooldown the size is retried");
+});
+
+test("a verdict for a size the canvas already left is discarded and the current size rebuilt", async () => {
+  const { h, gfx, fresh } = await scopedResized();
+  h.canvas.clientWidth = 800;
+  gfx.resize();
+  await h.settlePops();
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.ok(fresh.every((t) => t.destroyed), "the stale 640 set is freed, never swapped");
+  assert.ok(h.textureCount() > n, "the 800 set is built at once (a moved size skips the cooldown)");
+});
+
+test("SGSR: the gather variant commits only on a clean scope; a failed one falls to the 4-tap", async () => {
+  let h = makeGpuHarness({ errorScopes: true });
+  let gfx = await h.create();
+  h.holdPops();
+  gfx.setSpatialUpscale(true);
+  assert.equal(gfx.getSpatialUpscaleGather(), false, "not committed before its verdict");
+  assert.deepEqual(h.pendingPops(), ["validation"]);
+  await h.settlePops();
+  assert.equal(gfx.getSpatialUpscaleGather(), true, "a clean gather pipeline is the one in use");
+
+  h = makeGpuHarness({ errorScopes: true });
+  gfx = await h.create();
+  h.holdPops();
+  gfx.setSpatialUpscale(true);
+  await h.settlePops(() => ({ message: "injected WGSL error in textureGather" }));
+  assert.ok(h.logs().some((r) => /SGSR gather variant failed/.test(r.msg || r.message || String(r))));
+  assert.deepEqual(h.pendingPops(), ["validation"], "the 4-tap variant is tried next — the fallback is reachable");
+  await h.settlePops();
+  assert.equal(gfx.getSpatialUpscaleGather(), false, "the 4-tap pipeline committed");
+  assert.ok(!h.logs().some((r) => /no variant compiled/.test(r.msg || r.message || String(r))));
+});
+
+// LAMP FLICKER vs THE BAKED TRACK SET (2026-10-04). frame-lights.js bumps
+// allLightsGen every frame the shipped flicker runs (rgb only), and WGX re-sent
+// the whole tn × 64 B track-light SBO each time: 144 uploads a second at
+// 144 Hz for a ≤ 2.4 Hz shimmer. Values-only changes are now paced to 30 Hz on
+// the frame clock; a new set uploads at once; a frozen clock is never paced.
+test("flicker re-uploads the baked track set at most 30 times a second; a new set uploads at once", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const sbo = h.buffers.find((b) => b.desc.size === 1024 * 64);
+  assert.ok(sbo, "the runtime-sized track-light SBO exists");
+  const uploads = () => h.writes.filter((w) => w.buffer === sbo).length;
+  const set = (n) => { const a = new Array(n * 15).fill(0); for (let i = 0; i < n; i++) { a[i * 15 + 3] = 1; a[i * 15 + 6] = 10; } return a; };
+  let AL = set(40), gen = 0;
+  const frame = (t) => { AL[3] = 1 + 0.01 * Math.sin(t * 15); gfx.begin({ perChunkLights: 1, allLights: AL, allLightsGen: ++gen, time: t }); };
+  for (let i = 0; i < 144; i++) frame(i / 144);   // one second at 144 Hz, gen moving every frame
+  const n144 = uploads();
+  assert.ok(n144 >= 29 && n144 <= 31, `${n144} uploads in a second of 144 Hz flicker (was 144)`);
+  const before = uploads();
+  AL = set(41);                                   // a NEW set (re-bake / track change)
+  frame(144 / 144 + 1 / 144);
+  assert.equal(uploads(), before + 1, "a new set is uploaded on its first frame, never paced");
+  const held = uploads();
+  for (let i = 0; i < 10; i++) gfx.begin({ perChunkLights: 1, allLights: AL, allLightsGen: ++gen, time: 5 });
+  assert.equal(uploads(), held + 10, "a frozen clock (renderClock hold) is never paced — a slider move must land");
 });
 
 test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads", async () => {

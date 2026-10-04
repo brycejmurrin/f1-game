@@ -126,25 +126,55 @@ const WGXPost = (function () {
     function _ensureSpatial() {
       if (core._sgsrTried || core.WGX_MINIMAL || !core.Post) return !!(core.pSGSR && core.sgsrUBO);
       core._sgsrTried = true;
-      // SGSR1 best-effort: a failed module must NOT kill the post chain.
+      // SGSR1 best-effort: a failed variant must NOT kill the post chain.
       // Prefer native textureGather unless a player pins the 4-tap A/B.
       try {
         let forceTap = false;
         try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
         core.pSGSR = null; core._sgsrGather = false;
-        if (!forceTap && core.Post.SGSR_GATHER) {
-          try {
-            core.pSGSR = core.fsPipe(core.Post.SGSR_GATHER, core.presentFormat, null);
-            core._sgsrGather = true;
-          } catch (_) { core.pSGSR = null; core._sgsrGather = false; }
-        }
-        if (!core.pSGSR && core.Post.SGSR) {
-          core.pSGSR = core.fsPipe(core.Post.SGSR, core.presentFormat, null);
-          core._sgsrGather = false;
-        }
-        if (core.pSGSR) core.sgsrUBO = core.device.createBuffer({ size: core.Post.SGSR_UNIFORM_BYTES, usage: core.UCD });
+        const variants = [];
+        if (!forceTap && core.Post.SGSR_GATHER) variants.push({ code: core.Post.SGSR_GATHER, gather: true });
+        if (core.Post.SGSR) variants.push({ code: core.Post.SGSR, gather: false });
+        if (!variants.length) return false;
+        core.sgsrUBO = core.device.createBuffer({ size: core.Post.SGSR_UNIFORM_BYTES, usage: core.UCD });
+        _trySgsr(variants, 0);
       } catch (_) { core.pSGSR = null; core.sgsrUBO = null; core._sgsrGather = false; }
       return !!(core.pSGSR && core.sgsrUBO);
+    }
+
+    // Build variant i; on failure fall through to i + 1 (gather → 4-tap).
+    // createShaderModule / createRenderPipeline never THROW on a WGSL or
+    // validation error — they return an invalid object and report a GPUError
+    // (https://www.w3.org/TR/webgpu/#errors-and-debugging) — so the try/catch
+    // that used to pick the 4-tap fallback could never fire (until 2026-10-04),
+    // and a gather module WebKit refused would have been bound anyway. The
+    // build now runs inside a "validation" error scope and a variant is
+    // committed only when it pops null; until then pSGSR stays null and
+    // wantSpatialUpscale() keeps the canvas at render size (fail closed). A
+    // device without error scopes (the unit-test mock) keeps the old sync path.
+    function _trySgsr(variants, i) {
+      if (i >= variants.length) { Log.warn("gfx", "WGX SGSR: no variant compiled — spatial upscale stays off"); return; }
+      const v = variants[i], dev = core.device;
+      const commit = (pipe) => {
+        core.pSGSR = pipe; core._sgsrGather = v.gather;
+        if (core.onSpatialReady) core.onSpatialReady();
+      };
+      const scoped = typeof dev.pushErrorScope === "function" && typeof dev.popErrorScope === "function";
+      if (!scoped) {
+        let pipe = null;
+        try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
+        if (pipe) { core.pSGSR = pipe; core._sgsrGather = v.gather; } else _trySgsr(variants, i + 1);
+        return;
+      }
+      dev.pushErrorScope("validation");
+      let pipe = null;
+      try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
+      dev.popErrorScope().then((err) => {
+        if (core.device !== dev) return;   // the device was replaced while it compiled
+        if (pipe && !err) { commit(pipe); return; }
+        Log.warn("gfx", "WGX SGSR " + (v.gather ? "gather" : "4-tap") + " variant failed: " + ((err && err.message) || "threw"));
+        _trySgsr(variants, i + 1);
+      }, () => _trySgsr(variants, i + 1));
     }
 
     return {

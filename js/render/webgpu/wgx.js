@@ -1056,7 +1056,16 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1;
+    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
+    // A VALUES-only change of the baked track set (allLightsGen: lamp flicker,
+    // the warm-up ramp, a LAMPS slider) re-uploads at most this often. The
+    // shipped flicker (lampFlicker 0.011-0.10, def 0.10) moves the gen EVERY
+    // frame, so the whole tn × 64 B SBO (spa 869 lamps = 55 KB) went up every
+    // frame — 144 times a second on a 144 Hz display — for a ≤ 2.4 Hz shimmer.
+    // 30 Hz samples it at > 12× its fastest term. A new set, a re-bake or a cap
+    // change still uploads at once. The full fix moves flicker into the lit
+    // shaders of all three backends (a static SBO per bake).
+    const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
     // Which source array _tlScratch's STATIC lanes were packed from.
@@ -1841,6 +1850,9 @@ const WGX = (function () {
       get _blurSlots() { return _blurSlots; }, set _blurSlots(v) { _blurSlots = v; },
       get _sgsrTried() { return _sgsrTried; }, set _sgsrTried(v) { _sgsrTried = v; },
       get _sgsrGather() { return _sgsrGather; }, set _sgsrGather(v) { _sgsrGather = v; },
+      // An SGSR variant passed its error scope after setSpatialUpscale already
+      // sized the canvas without it: re-split render/present size now.
+      onSpatialReady() { if (!_lost && spatialUpscale) { resize(); _syncSpatialAa(); } },
     });
 
     if (!WGX_MINIMAL) {
@@ -2368,8 +2380,42 @@ const WGX = (function () {
       }
     }
 
+    // A RESIZE's target set is built inside error scopes and swapped in only
+    // when both pop clean. createTexture / createBindGroup never THROW on an
+    // out-of-memory or validation error — they return an invalid object and
+    // report a GPUError (W3C WebGPU §22 "Errors & Debugging",
+    // https://www.w3.org/TR/webgpu/#errors-and-debugging; pushErrorScope
+    // filters "validation" / "out-of-memory" / "internal", popErrorScope
+    // resolves null when the scope caught nothing:
+    // https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/pushErrorScope).
+    // So the try/catch below never saw memory pressure: the invalid set was
+    // swapped in, every pass errored, and the GPU-error ladder reloaded the tab
+    // a rung down. Now the old set keeps rendering until the verdict lands
+    // (the _texW/_texH mismatch path present() already handles), a clean set
+    // swaps in at the next frame, and a failed one is destroyed and the size
+    // waits out the same cooldown a thrown failure does. The FIRST build has no
+    // set to keep, so it is not deferred (its errors still reach the ladder).
+    let _pendingTargets = null;   // { next, w, h, state: "wait" | "ok" | "bad" }
+    function _scopedTargets(next) {
+      const p = { next, w: width, h: height, state: "wait" };
+      _pendingTargets = p;
+      const vPop = device.popErrorScope(), oPop = device.popErrorScope();   // LIFO: validation, then OOM
+      Promise.all([vPop, oPop]).then(([vErr, oErr]) => {
+        const err = vErr || oErr;
+        p.state = err ? "bad" : "ok";
+        if (err) Log.warn("gfx", "WGX target realloc " + p.w + "x" + p.h + " failed (" + (oErr ? "out-of-memory" : "validation") + "): " + (err.message || err) + " — keeping the previous set");
+      }, () => { p.state = "bad"; });
+    }
     function ensureTargets() {
       if (width < 1 || height < 1) return;
+      if (_pendingTargets) {
+        const p = _pendingTargets;
+        if (p.state === "wait") return;   // keep rendering through the current set
+        _pendingTargets = null;
+        if (p.state === "ok" && p.w === width && p.h === height) { _swapTargets(p.next); return; }
+        _destroyTargetSet(p.next);        // failed, or the size moved on while it was checked
+        if (p.state === "bad") { _targetRetryW = p.w; _targetRetryH = p.h; _targetRetryAt = Date.now() + 1000; }
+      }
       if (sceneTex && _texW === width && _texH === height) {
         _syncSpatialAa();
         return;
@@ -2382,6 +2428,9 @@ const WGX = (function () {
       const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
       const next = { bloomLv: [], bloomDownUBO: [], bloomUpUBO: [],
         bloomDownBG: [], bloomUpBG: [], postReady: false, ssrReady: false };
+      const scoped = !!sceneTex && typeof device.pushErrorScope === "function" &&
+                     typeof device.popErrorScope === "function";
+      if (scoped) { device.pushErrorScope("out-of-memory"); device.pushErrorScope("validation"); }
       try {
         next.sceneTex = device.createTexture({
           size: [width, height], format: SCENE_FORMAT,
@@ -2591,12 +2640,17 @@ const WGX = (function () {
       } catch (_) {
         // Alloc/bind of the new size failed: keep the previous target set
         // and retry after a cooldown (same-size) or immediately (new size).
+        if (scoped) { device.popErrorScope().catch(() => {}); device.popErrorScope().catch(() => {}); }
         _destroyTargetSet(next);
         _targetRetryW = width; _targetRetryH = height;
         _targetRetryAt = Date.now() + 1000;
         return;
       }
+      if (scoped) { _scopedTargets(next); return; }
+      _swapTargets(next);
+    }
 
+    function _swapTargets(next) {
       const old = { sceneTex, depthTex, ssaoTex, godrayTex, ldrTex, ssrTex,
         ssaoBlurTex, godrayBlurTex, bloomLv, bloomDownUBO, bloomUpUBO, sceneMSTex, depthMSTex };
       sceneTex = next.sceneTex; depthTex = next.depthTex;
@@ -3175,8 +3229,12 @@ const WGX = (function () {
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       d[48]=fogDensity; d[49]=fogHeight; d[50]=f.time != null ? f.time : 0; d[51]=nL;
       // The particle pass reads the same frame light and fog (drawParticles).
-      _particleFrame.sun = sc; _particleFrame.ambSky = [as[0]*ambM, as[1]*ambM, as[2]*ambM];
-      _particleFrame.ambGround = [ag[0]*ambM, ag[1]*ambM, ag[2]*ambM]; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
+      // In place: _writeFrame runs on the main pass, the mirror and an env face —
+      // two fresh arrays a call was GC churn on the hottest WGX function.
+      const _pAS = _particleFrame.ambSky, _pAG = _particleFrame.ambGround;
+      _pAS[0] = as[0]*ambM; _pAS[1] = as[1]*ambM; _pAS[2] = as[2]*ambM;
+      _pAG[0] = ag[0]*ambM; _pAG[1] = ag[1]*ambM; _pAG[2] = ag[2]*ambM;
+      _particleFrame.sun = sc; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
       d[52]=T && T.keyMul != null ? T.keyMul : 1;
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
@@ -3393,7 +3451,13 @@ const WGX = (function () {
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
       const _tlSetMoved = _tlSrc !== frameAllLights;
       const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
-      if (framePerChunk > 0 && frameAllLights &&
+      // Values-only: the same set and bake, only rgb moved — paced by TL_VALUES_DT
+      // on the frame clock (frame.time, game.js's render clock). A clock that went
+      // BACK (a new session) or stands still (__apex.renderClock hold, no
+      // frame.time) is never paced: a slider move there must still land.
+      const _tlValuesOnly = !_tlSetMoved && _tlLoGen === _lbGen;
+      const _tlPaced = _tlValuesOnly && frameTime > _tlUpT && frameTime - _tlUpT < TL_VALUES_DT;
+      if (framePerChunk > 0 && frameAllLights && !_tlPaced &&
           (_tlSetMoved || _tlGen !== frameAllLightsGen || _tlLoGen !== _lbGen)) {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
@@ -3422,7 +3486,7 @@ const WGX = (function () {
         // contiguous range and the upload itself cannot shrink. Only the CPU
         // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen;
+        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
       }
       // Allocator tracks the TABLES: reset on a set or CAP change, never on a
       // colour-only gen bump (tables key on positions, which flicker leaves
