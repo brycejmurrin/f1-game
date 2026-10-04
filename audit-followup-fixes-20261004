@@ -1,1 +1,0 @@
-1791115904	Bryce Murrin	Fix all 14 second-audit findings: career confirmation/ties/contracts; private relay v3; debris pose/height; XR origin/recenter/RAF; audio/haptics; mobile test isolation/custom-track canonicalization; save protection. Separate from PR871 sync owner.  [claude/audit-followup-fixes; session audit-followup-20261004]
