@@ -4124,7 +4124,7 @@ function syncRotateBlocker(moveFocus) {
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
-  if (paused) els.pausemenu.hidden = active;
+  if (paused) els.pausemenu.hidden = active || photoMode;
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
@@ -4540,7 +4540,7 @@ function updateCar(c, dt, ranked) {
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman) {
+  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both objects
     const applied = AiBand.applyVmax(vmax, AiBand.factor({
       leadProg: _leadHuman.prog, carProg: c.prog,
       trackTotal: track.total, raceT, launchT0, bandAuth: dd.band,
@@ -5027,6 +5027,13 @@ function updateCar(c, dt, ranked) {
       const frac = (c.speed - lo) / Math.max(hi - lo, 1);
       if (c.speed >= hi) { gearMult = 0.08; accelCeil = Math.min(accelCeil, hi + 1.5); }  // limiter: upshift to go faster
       else if (frac < 0.25) gearMult = clamp(0.7 + frac * 1.2, 0, 1);   // mild bog at low revs: downshift for best punch
+      // Brake-to-reverse sits below every forward gear band, so the bog above
+      // reads negative speed as "infinitely low revs" and clamps gearMult to 0.
+      // Throttle then cannot leave REVERSE_MAX until rescue (~1 s) jerks the
+      // car — measured: 60 frames stuck at -5 m/s with a=0 in manual 1st, while
+      // auto (gearMult=1) recovers in 0.5 s. Hold at least standstill 1st-gear
+      // bog while reversing so "throttle drives forward again" is true.
+      if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);
     }
   }
 

@@ -99,6 +99,11 @@ const ALLOWED = [
     why: "sign test — the negative half of the same coast-drag branch",
   },
   {
+    file: "js/game.js", expr: "c.speed < 0",
+    code: "if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);",
+    why: "sign test — reversing sits below every gear band; hold the 1st-gear bog floor so throttle drives forward again",
+  },
+  {
     file: "js/game.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);",
     why: "sign test — uphill slope bleed applies only while moving forwards",

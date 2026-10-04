@@ -10,6 +10,10 @@
  *   (6) a backup's empty rows never erase local slots; badges merge as a
  *       union; a further-along local standalone season is kept
  *   (7) malformed history / offers / moves / roster rows cannot crash career
+ *   (8) a MY TEAM backup carries the team identity (customTeam, customLogo,
+ *       livery.custom.custom, livery.custom) and restores it on an empty
+ *       device; a driver-only or identity-less backup never erases a local
+ *       identity; garbage identity values are dropped without throwing
  *
  * Plus one mini-dom UI pin: slot cards expose EXPORT / IMPORT buttons.
  *
@@ -94,6 +98,8 @@ function loadHarness(options = {}) {
   vm.runInContext(src("js/career/save-migrate.js"), ctx);
   vm.runInContext(src("js/core/store.js"), ctx);
   vm.runInContext(src("js/career/career-backup.js"), ctx);
+  // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
+  if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx);
   vm.runInContext(src("js/career/career.js"), ctx);
   vm.runInContext(src("js/career/season-cal.js"), ctx);
   return {
@@ -358,6 +364,139 @@ test("malformed history / offers / moves / roster rows import without crashing c
   h.Career.load();
   h.Career.engage(true);
   assert.doesNotThrow(() => h.Career.settleRound([{ team: { id: "haas" } }], { team: { id: "haas" } }));
+});
+
+/* ── MY TEAM identity (global garage keys a myteam save only points at) ── */
+
+const LOGO = "data:image/png;base64,iVBORw0KGgo=";
+const MY_TEAM = {
+  id: "custom", custom: true, name: "Murrin GP", short: "MGP",
+  color: [0.1, 0.2, 0.9], color2: [1, 1, 1],
+  drivers: [{ name: "Bryce", code: "BRY", num: 7 }, { name: "Alex", code: "ALX", num: 8 }],
+};
+const MY_LIVERIES = [{ id: "u1", name: "NIGHT", c1: [0, 0, 0], c2: [1, 0, 0] }];
+
+function deviceA() {
+  const a = loadHarness();
+  a.disk.set("apex26.career.myteam.0", JSON.stringify(save({ flavour: "myteam", team: "custom", money: 5150 })));
+  a.disk.set("apex26.customTeam", JSON.stringify(MY_TEAM));
+  a.disk.set("apex26.customLogo", JSON.stringify(LOGO));
+  a.disk.set("apex26.livery.custom.custom", JSON.stringify(MY_LIVERIES));
+  a.disk.set("apex26.livery.custom", JSON.stringify("u1"));
+  a.Career.load();
+  return a;
+}
+
+test("a MY TEAM backup carries the team identity and restores it on an empty device", () => {
+  const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
+  assert.ok(envelope.myTeam, "MY TEAM backup carries no identity");
+  assert.equal(envelope.myTeam.customTeam.name, "Murrin GP");
+  assert.equal(envelope.myTeam.customLogo, LOGO);
+  assert.deepEqual(envelope.myTeam["livery.custom.custom"], MY_LIVERIES);
+  assert.equal(envelope.myTeam["livery.custom"], "u1");
+  assert.equal(envelope.format, "apex26-career-backup-v1", "format stays v1 (additive field)");
+
+  const b = loadHarness();
+  const seen = [];
+  b.store.subscribe((c) => { if (c && c.foreign && c.restored) seen.push(c.key); });
+  const r = b.CareerBackup.apply(envelope, { focusFlavour: "myteam" });
+  assert.equal(r.ok, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.myteam.0")).money, 5150);
+  const team = JSON.parse(b.disk.get("apex26.customTeam"));
+  assert.equal(team.name, "Murrin GP");
+  assert.deepEqual(team.drivers.map((d) => d.code), ["BRY", "ALX"]);
+  assert.equal(JSON.parse(b.disk.get("apex26.customLogo")), LOGO);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.custom")), "u1");
+  assert.deepEqual([...r.identity].sort(), ["customLogo", "customTeam", "livery.custom", "livery.custom.custom"]);
+  assert.deepEqual([...seen].sort(), [...r.identity].sort(), "custom-team.js is not told to re-sync");
+
+  // includeExtras:false restores the slot but not the identity.
+  const c = loadHarness();
+  c.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "myteam", includeExtras: false });
+  assert.equal(c.disk.has("apex26.customTeam"), false);
+});
+
+test("a driver-only or identity-less backup never erases a local MY TEAM identity", () => {
+  const local = { name: "Local Racing", drivers: [{ name: "L", code: "LOC", num: 3 }] };
+  const seed = (h) => {
+    h.disk.set("apex26.customTeam", JSON.stringify(local));
+    h.disk.set("apex26.customLogo", JSON.stringify(LOGO));
+    h.disk.set("apex26.livery.custom.custom", JSON.stringify(MY_LIVERIES));
+    h.Career.load();
+  };
+  // Driver-only backup built on a device that HAS an identity: no myTeam block.
+  const a = loadHarness();
+  seed(a);
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 1 })));
+  a.Career.load();
+  const driverOnly = a.CareerBackup.build();
+  assert.equal(driverOnly.myTeam, undefined, "driver-only backup carries an identity");
+
+  // An older backup with a MY TEAM slot but no myTeam block stays valid.
+  const older = deviceA().CareerBackup.build();
+  delete older.myTeam;
+  assert.equal(deviceA().CareerBackup.validate(JSON.parse(JSON.stringify(older))).ok, true);
+
+  // A myTeam block riding a DRIVER-only import is not applied either.
+  const smuggled = JSON.parse(JSON.stringify(driverOnly));
+  smuggled.myTeam = { customTeam: MY_TEAM, customLogo: null };
+
+  for (const env of [driverOnly, older, smuggled]) {
+    const b = loadHarness();
+    seed(b);
+    const r = b.CareerBackup.apply(JSON.parse(JSON.stringify(env)), { otherFlavourConfirmed: true });
+    assert.equal(r.ok, true);
+    assert.equal(JSON.parse(b.disk.get("apex26.customTeam")).name, "Local Racing");
+    assert.equal(JSON.parse(b.disk.get("apex26.customLogo")), LOGO);
+    assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
+  }
+
+  // A partial myTeam (team only) leaves the local logo / liveries alone.
+  const partial = deviceA().CareerBackup.build();
+  partial.myTeam = { customTeam: MY_TEAM };
+  const p = loadHarness();
+  seed(p);
+  assert.equal(p.CareerBackup.apply(JSON.parse(JSON.stringify(partial)), { focusFlavour: "myteam" }).ok, true);
+  assert.equal(JSON.parse(p.disk.get("apex26.customTeam")).name, "Murrin GP");
+  assert.equal(JSON.parse(p.disk.get("apex26.customLogo")), LOGO);
+  assert.deepEqual(JSON.parse(p.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
+});
+
+test("garbage MY TEAM identity values are dropped without throwing", () => {
+  const base = deviceA().CareerBackup.build();
+  const notObj = JSON.parse(JSON.stringify(base));
+  notObj.myTeam = [1, 2];
+  assert.equal(loadHarness().CareerBackup.validate(notObj).reason, "myteam-not-object");
+  notObj.myTeam = "x";
+  assert.equal(loadHarness().CareerBackup.apply(notObj, { focusFlavour: "myteam" }).ok, false);
+
+  const garbage = JSON.parse(JSON.stringify(base));
+  garbage.myTeam = {
+    customTeam: { name: "No Drivers" },            // no roster → rejected
+    customLogo: "javascript:alert(1)",               // not a data:image → rejected
+    "livery.custom.custom": [{ id: 5 }, null, "x"],  // no sound row → [] → skipped
+    "livery.custom": { evil: true },                 // not an id string
+    "career.driver.0": { money: 1e9 },               // not an identity key → ignored
+  };
+  const b = loadHarness();
+  b.disk.set("apex26.customLogo", JSON.stringify(LOGO));
+  b.disk.set("apex26.livery.custom.custom", JSON.stringify(MY_LIVERIES));
+  b.Career.load();
+  let r;
+  assert.doesNotThrow(() => { r = b.CareerBackup.apply(garbage, { focusFlavour: "myteam" }); });
+  assert.equal(r.ok, true);
+  assert.deepEqual([...r.identity], []);
+  assert.equal(b.disk.has("apex26.customTeam"), false);
+  assert.equal(JSON.parse(b.disk.get("apex26.customLogo")), LOGO);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
+  assert.equal(b.disk.has("apex26.livery.custom"), false);
+  assert.equal(b.disk.has("apex26.career.driver.0"), false);
+
+  // Without the GARAGE gate loaded nothing is written — never an unchecked value.
+  const n = loadHarness({ settingsExport: false });
+  assert.equal(n.CareerBackup.apply(JSON.parse(JSON.stringify(base)), { focusFlavour: "myteam" }).identity.length, 0);
+  assert.equal(n.disk.has("apex26.customTeam"), false);
 });
 
 /* ── mini-dom UI: EXPORT / IMPORT on slot cards ─────────────────────────── */
