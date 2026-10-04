@@ -99,10 +99,11 @@ provably inert. Measured 2026-08-13; use these recipes rather than re-deriving.
 **`renderDistMul` — needs DAY, a real player camera, and far scenery.**
 It scales the camera far-clip plane exactly (`M4.perspectiveTo`'s `far` arg,
 wrapped and read directly): 0.5→450 m, 1→900 m, 1.5→1350 m, 2→1800 m. But on
-this box `PerfGov.tier()` is 0, so `frame.cullDist` is the `_fogCull` branch —
-and `_fogCull = ceil(3/fogDensity)` **does not contain `farPlane`**; the far
-plane only gates whether that cull switches on. In clear day fog (~0.0008–0.0013)
-the cull is 0 (uncapped) at *every* multiplier, so the far plane is the ONLY
+this box `PerfGov.tier()` is 0, so `frame.cullDist` is the sphere that contains
+the frustum (it follows `farPlane`), and the fog wall is a second, per-chunk cull
+(`frame.cullFog`, `Frustum.radialCulled`: `3/fogDensity` at eye level, wider for
+chunks standing above the eye) that **does not**. In clear day fog
+(~0.0008–0.0013) that wall is 2.3–3.8 km out at *every* multiplier, so the far plane is the ONLY
 lever, and it can only reveal scenery sitting between 900 m and 1800 m. Props in
 that band, measured with `scene({radius}).counts.inRadius`:
 
@@ -595,7 +596,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
-| `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×2, glx.js×4 |
+| `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×5, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
 | `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
 | `mistDensity` | GROUND MIST | 0 … 3.75 | 1 | `uGroundMist` | ✓ | game.js×3, glx.js×2 |
