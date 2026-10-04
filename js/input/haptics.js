@@ -26,8 +26,9 @@ const InputHaptics = (function () {
     // too — an iPhone can do neither from a web page. The HAPTICS slider says so
     // in its help text, but a control that cannot do anything is better hidden
     // than explained, so steer-tuning.js gates the row on this. Re-read on
-    // gamepadconnected: a pad arriving later can make it true.
+    // gamepadconnected and apexhapticschange: a pad or phone can arrive later.
     function hapticsSupported() {
+      if (remoteHaptics()) return true;  // the paired phone advertised a vibrator
       const nav = typeof navigator !== "undefined" ? navigator : null;
       // navigator.vibrate exists in desktop Chrome too, where nothing buzzes: it
       // only counts on a touch device (a phone or tablet has the motor).

@@ -141,6 +141,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
 // counts — raises where correctly placed stands now overlap, lowers where the
 // double-shift had been inventing contacts.
+// 2026-10-04: Spa retains the shared elevation/registration cap of 7.
+// All seven severe locations match shared default 4f71c2b; the woodland
+// pass reduces total >=0.5m spots from 13 to 12 without adding a severe spot.
+
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );

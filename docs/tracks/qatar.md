@@ -23,8 +23,10 @@ Near-flat but not billiard-table: two long, gentle swells (~3.5 m and ~5.5 m, bo
 | s (0–1) | Side | Dist | Box-model description |
 |--------|------|------|------------------------|
 | 0.00 | L | close | **Pit building**: Guinness 402 m white slab, 50 garage doors, race-control tower at pit-entry end, Paddock Club roof terrace + suite pods |
+| 0.955–0.03 | L | mid | **Team hospitality villas**: sixteen white villas in four groups of four behind the pit slab, curved fronts + first-floor LED brand panels (`qatar-hospitality-villas-*`; Tilke 2023) |
 | 0.00 | R | close | **Main Grandstand**: long covered raked stand (~40k), white roof (crescent plan is a survey ask — not independently sourced; keep long stand) |
 | 0.00 | both | mid | Floodlight ring: tall cool-white dual-arm Musco masts (~46–50 m), densified on S/F; ground washes via `groundPatch` (not engine `pool`) |
+| — | both | near | **Green→sand sandwich**: continuous artificial-grass verge, then warm sand runoff bays on the major mid-lap / T2–T3 / late-complex windows |
 | 0.05 | L | mid | **T1 VVIP**: white villa + branch/sail canopy (~60 m span) |
 | 0.06–0.09 | R | mid–far | **Lusail Hill**: elevated GA grass terraces outside T1 beyond the gravel trap (`qatar-lusail-hill`) |
 | 0.06 | R | mid | Turn 1 (North) Grandstand: angled stepped grey box, ~18 m |
@@ -44,9 +46,9 @@ Fast, flowing layout inherited from its MotoGP origins: long medium- and high-sp
 
 ## 6. Modelling notes
 - Light from above: bake bright top faces and white floodlight washes so the track reads as a lit ribbon against pure black sky.
-- Hero silhouettes: **402 m pit slab + race control + Paddock Club terrace**, covered **main grandstand**, **Lusail Hill** at T1, **T1 VVIP canopy**, white hospitality villas (not mosque/oasis/Aspire).
+- Hero silhouettes: **402 m pit slab + race control + Paddock Club terrace**, covered **main grandstand**, **Lusail Hill** at T1, **T1 VVIP canopy**, **sixteen Tilke hospitality villas** in groups of four (not mosque/oasis/Aspire).
 - Floodlight ring is the defining "Qatar night" motif — densify cool-white masts via `floodMastRing` with `pool:false` + `groundPatch` washes.
-- Frame asphalt with a continuous green artificial-grass verge, then warm `COL.desertSand` runoff aprons, then open desert.
+- Frame asphalt with a continuous green artificial-grass verge, then warm `COL.desertSand` runoff aprons on the sourced bay windows (a full-lap sand chord at 7 m out flat-coplanars on inside curves — discrete bays), then open desert.
 - Sparse palms only; faint low Lusail/Doha skyline on the far horizon.
 - Keep corners long and gently curved with continuous red-white kerb boxes to evoke the flowing, motorcycle-style layout.
 - Residual `_sceneryShift` ≈ 0.70 from `sceneryStartFrac: 0.8` — probe before touching; prefer leave (Estoril lesson).
@@ -65,6 +67,10 @@ re-introduce exactly what was deliberately removed. **Nothing added.**
 - Main stand ~40k / capacity 52k: racingcircuits.info, [PlanetF1](https://www.planetf1.com/news/first-look-revamped-lusail-international-circuit-qatar)
 - Musco lighting: [Wikipedia](https://en.wikipedia.org/wiki/Lusail_International_Circuit), [oversteer48 layout](https://oversteer48.com/lusail-international-circuit-layout/)
 - Flat ~4.2 m elevation: oversteer48 layout (matches `flatTerrain`)
+
+### Sources (wave-7 hospitality + sand sandwich)
+- Sixteen team hospitality villas in groups of four, curved fronts + LED façade screens: [Tilke](https://tilke.de/portfolio/lusail-race-track-qatar/)
+- Artificial grass then sand runoff (green→sand sandwich): [Wikipedia](https://en.wikipedia.org/wiki/Lusail_International_Circuit), [F1 destination guide](https://www.formula1.com/en/latest/article/destination-guide-what-fans-can-eat-see-and-do-when-they-visit-qatar-for.6w898BzkTVMpvoYbQ9BHqJ)
 
 ### Uncertain (not asserted as fact)
 - Crescent main-stand plan — survey ask only; modelled as a long covered stand.
