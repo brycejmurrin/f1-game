@@ -125,30 +125,19 @@ const XrRig = (function () {
   }
 
   /**
-   * Offset used for recenter: given the current viewer pose matrix in the
-   * reference space, return a rigid transform that maps that pose back to
-   * the seated origin (identity). Applied via XRReferenceSpace.getOffsetReferenceSpace.
-   * Returns a plain { position: {x,y,z}, orientation: {x,y,z,w} } for XRRigidTransform.
+   * Origin of the seated space expressed in the BASE reference space.
+   * getOffsetReferenceSpace applies this transform's inverse to viewer poses:
+   * use the head's position and yaw, not their inverse. All three position
+   * components become zero at center; later head movement and pitch/roll remain.
    */
   function recenterOffsetFromPose(poseMatrix) {
-    // Want offset O such that O * pose ≈ I at the seated origin for yaw/pos.
-    // Keep Y (floor) from the pose so standing height is preserved; zero XZ
-    // translation and yaw about Y.
     const m = poseMatrix;
-    const x = m[12], z = m[14];
-    // Yaw from the rotation's forward (−Z column of the pose = where the HMD looks in ref).
-    // pose columns: right=0.., up=4.., -fwd=8.., t=12..
-    const fx = -m[8], fz = -m[10];
-    const yaw = Math.atan2(fx, fz);
-    const hy = yaw * 0.5;
-    const sy = Math.sin(-hy), cy = Math.cos(-hy);   // inverse yaw
-    // Inverse translation in XZ after inverse yaw: R(-yaw) * (-x, 0, -z)
-    const cos = Math.cos(-yaw), sin = Math.sin(-yaw);
-    const ox = cos * (-x) + sin * (-z);
-    const oz = -sin * (-x) + cos * (-z);
+    // +Z column gives yaw relative to WebXR's identity (which looks down -Z).
+    // worldFromAnchorTo already maps that -Z gaze onto the car's forward.
+    const yaw = Math.atan2(m[8], m[10]);
     return {
-      position: { x: ox, y: 0, z: oz },
-      orientation: { x: 0, y: sy, z: 0, w: cy },
+      position: { x: m[12], y: m[13], z: m[14] },
+      orientation: { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) },
     };
   }
 

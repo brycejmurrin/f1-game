@@ -774,7 +774,7 @@ test("load() never persists a season this build could not read whole (an unknown
 
 test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season\);/);
+  assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);
 });
 
 test("mid-weekend reads the season's own config: the title menu (flow gp) still says AFTER THE SPRINT", () => {
@@ -807,28 +807,27 @@ test("title-menu STANDINGS ranks on counting points: the season's own drop rule 
 
 // review-race-career-data #9: the results sheet sorted constructors by points
 // alone (insertion order on a tie) and Career.teamStandings by points then
-// tier, so two screens could name different P5s. One rule now, SeasonCal.rankTeams.
-test("constructors rank by points, then the team's best finish by countback, then id — one rule everywhere", () => {
+// tier, so two screens could name different P5s. One comparator now,
+// SeasonCal.rankTeams: points, then the team's countback, then tier, then id.
+test("constructors rank by points, then the team's countback, then tier, then id — one rule everywhere", () => {
   const { S } = load();
   const season = {
     teamPts: { ferrari: 30, haas: 30, alpine: 30, williams: 0, audi: 0 },
     // "team:seat" ids: haas's two cars hold a win; ferrari two seconds; alpine one second.
     finishes: { "haas:1": [1], "ferrari:0": [0, 1], "ferrari:1": [0, 1], "alpine:0": [0, 1], "williams:0": [0, 0, 0, 1] },
   };
-  const order = S.rankTeams(season, ["alpine", "audi", "ferrari", "williams", "haas"]);
+  const order = ["alpine", "audi", "ferrari", "williams", "haas"].sort((a, b) => S.rankTeams(season, a, b));
   assert.equal(order.join(","), "haas,ferrari,alpine,williams,audi",
     "a win beats two seconds; two seconds beat one; any finish beats none; then the id");
-  assert.equal(S.rankTeams({ teamPts: { b: 5, a: 5 } }, ["b", "a"]).join(","), "a,b", "no finishes: the id, stably");
-  assert.equal(S.rankTeams(season, ["audi", "haas"], (id) => (id === "audi" ? 99 : 0)).join(","), "audi,haas",
-    "points come first, whoever supplies them");
+  assert.equal(S.rankTeams(season, "haas", "haas"), 0);
+  assert.equal(["b", "a"].sort((x, y) => S.rankTeams({ teamPts: { b: 5, a: 5 } }, x, y)).join(","), "a,b", "no finishes, no tiers: the id, stably");
   // Both tables that print constructors use it.
   const sheet = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
-  assert.doesNotMatch(sheet, /Object\.entries\(season\.teamPts\)/, "no points-only constructors sort left in the results sheet");
+  assert.doesNotMatch(sheet, /Object\.entries\(season\.teamPts\)/, "no private constructors sort left in the results sheet");
   assert.match(sheet, /SeasonCal\.rankTeams\(/);
   const career = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
   const ts = career.slice(career.indexOf("function teamStandings"), career.indexOf("function expectedConstructor"));
   assert.match(ts, /SeasonCal\.rankTeams\(/);
-  assert.doesNotMatch(ts, /a\.tier - b\.tier/, "tier is not a tie-break");
 });
 
 // review-race-career-data #10: outside a career the luck seed was the SESSION's

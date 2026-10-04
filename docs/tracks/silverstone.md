@@ -2,6 +2,29 @@
 
 **Setting:** DAY · Green theme (English countryside)
 
+## Architecture references and modelling limits
+
+[Populous's Silverstone project](https://populous.com/showcases/silverstone-circuit)
+describes the Wing's continuously changing angular roof and 360 m overall
+building length. Built photographs support its folded silhouette, pale soffits
+and dark edge treatment; photograph dates and exact roof heights remain unknown.
+Do not use concept renderings as evidence for as-built dimensions.
+
+The active engine pit complex supersedes the four legacy authored Wing groups
+and the separate rear wave-roof group. The latter suppression also occurs on
+the shared branch: its declared footprint intersects the garage keep-out.
+Its optional `pit.architecture.roofProfile` adds a bounded folded crown over
+the existing functional garage row. Knot positions are normalized along that
+actual row and heights are artistic estimates above its local floor. This is
+a stylized silhouette, not a 360 m reconstruction; garage doors, signs, lamps
+and working lanes retain their original positions. The Hamilton Straight main
+stand belongs opposite the Wing. Open airfield fringes use explicit tree spacing,
+while existing dense copses remain local.
+
+The landmark fractions below belong to the legacy scenery frame and must pass
+through the frame-aware API. They are not current racing-lap fractions or a
+surveyed placement plan.
+
 ## 1. Setting
 Silverstone sits on a former WWII RAF bomber airfield (RAF Silverstone, opened 1943) straddling the Northamptonshire/Buckinghamshire border, 16 km SW of Northampton. The classic triangular concrete runways still echo in the track outline. It is flat, open farmland: wide grass infield, hedgerow-divided fields, scattered tree copses (Chapel Copse, Cheese Copse), and the village of Silverstone nearby. Expansive, low-rise, agricultural — big sky, few tall structures except grandstands and The Wing.
 
@@ -19,9 +42,9 @@ Very flat — total change ~15–20 m. Subtle dips around Abbey/Farm (s≈0.55) 
 
 ## 4. Landmarks & surroundings by lap position
 S=0.0 sits at the modern Wing/pit straight (`startFrac: 0.5224`), not the
-old National pit straight 1.3 km away; racing direction into Copse. The
+old National pit straight 1.3 km away; racing direction into Abbey. The
 landmark table below is authored against the scenery's own
-`sceneryStartFrac: 0.6400` reference — see `docs/tracks/START-LINES.md` for
+`sceneryStartFrac: 0.0200` reference — see `docs/tracks/START-LINES.md` for
 how the two differ.
 
 | Landmark | s | Side | Dist | Box-modelling note |
@@ -33,7 +56,7 @@ how the two differ.
 | Stowe corner (R) | 0.30 | R | mid | Big grey `runoffApron`; grandstand bank |
 | Club corner (R) | 0.40 | R | close | Long sweeping kerb; `runoffApron`; tiered seating |
 | The Wing (pit/paddock building) | 0.45 | R | close | Long low sweeping white-grey slab, dark glass band, thin roof fin |
-| Silverstone Wing grandstands | 0.46 | R | close | Tall stepped seating boxes flanking The Wing |
+| Hamilton Straight main grandstand | 0.48004 | L | close | Pale covered stepped seating opposite The Wing |
 | BRDC clubhouse | 0.48 | R | mid | Modest pale rectangular building set back |
 | Abbey corner (fast R) | 0.55 | R | mid | Wide `runoffApron`; advertising hoarding boxes |
 | Hedgerow-divided fields | 0.60 | both | far | Long low green strips gridding flat farmland |

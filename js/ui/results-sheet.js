@@ -44,10 +44,12 @@ function ptsLabel(season, driverId) {
   return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
 }
 // [teamId, pts] in SeasonCal.rankTeams order — the one constructors' rule
-// Career.teamStandings uses too (points, countback, id).
+// Career.teamStandings uses too (points, countback, tier, id). A points-only
+// sort left ties in teamPts insertion order, so on equal points this sheet
+// could show the player's team P8 while Career settled the teamPos goal as P9.
 function teamOrder(season) {
   const tp = season.teamPts || {};
-  return SeasonCal.rankTeams(season, Object.keys(tp)).map((id) => [id, tp[id]]);
+  return Object.keys(tp).sort((a, b) => SeasonCal.rankTeams(season, a, b)).map((id) => [id, tp[id]]);
 }
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");

@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 function fixture({ realInsights = false } = {}) {
-  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state'].map(id => [id, { textContent: '' }]));
+  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state', 'pm-driving-trace'].map(id => [id, { textContent: '' }]));
   // The coach SHIPS ON (js/data/settings-defaults.js; the real store answers from
   // it). This fake store only knows the call-site fallback, so seed the player's
   // OFF explicitly — these tests start from a coach the player has not enabled.
@@ -50,10 +50,25 @@ function fixture({ realInsights = false } = {}) {
     for (let t = 0; t < seconds - 1e-9; t += .05) { G.raceT += .05; coach.update(.05); }
   };
   const enable = () => coach.toggle();
-  return { coach, G, c, ins: coach.insights, nodes, saved, announcements, tick, enable, drills: vm.runInContext('RaceInsights.DRILLS', ctx) };
+  return { coach, G, c, ctx, ins: coach.insights, nodes, saved, announcements, tick, enable, drills: vm.runInContext('RaceInsights.DRILLS', ctx) };
 }
 const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
+
+test('trace export attaches its anchor so the native document download listener sees the click', async () => {
+  const { ctx, nodes } = fixture();
+  let attached = false, clicked = false, exported;
+  const anchor = { click() { assert.equal(attached, true); clicked = true; }, remove() { attached = false; } };
+  Object.assign(ctx, {
+    Blob, URL: { createObjectURL(blob) { exported = blob; return 'blob:trace'; }, revokeObjectURL() {} },
+    setTimeout() {}, document: { body: { appendChild(a) { assert.equal(a, anchor); attached = true; } }, createElement: () => anchor },
+  });
+  nodes.get('pm-driving-trace').onclick();
+  assert.equal(clicked, true);
+  assert.equal(attached, false);
+  assert.equal(anchor.download, 'apex26-driving-trace.json');
+  assert.equal(JSON.parse(await exported.text()).physics, 'test');
+});
 
 test('every real practice drill has readable help and canonical goal state survives a session reset', () => {
   const { coach, nodes, drills } = fixture({ realInsights: true });
