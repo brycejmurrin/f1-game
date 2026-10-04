@@ -953,6 +953,10 @@ const CarDraw = (function () {
       const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
       if (!body) { G.gfx.draw(teamMesh(c.team, c), mat, paint); return; }
       G.gfx.draw(body, mat, paint);
+      // The moveable wing elements are not in the body: the static set (ONE
+      // draw, the nearer rest pose), or every wing here was its main plane only.
+      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      deps.drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, mat, paint, aSt.aero, null, true);
       _mirWheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, mat, 0, _mirWheelOpts, false, 0, 1, true);
     }

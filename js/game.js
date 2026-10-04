@@ -1371,21 +1371,23 @@ const {
   getLiveries, resolveLivery, wingColorOf,
 } = customLiv;
 
-// Draw a car's two MOVEABLE wing elements (active aero) at flap blend `blend`
+// Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
 // (0 = Z-mode, 1 = X-mode), given that car's world model matrix. Shared by the
-// in-race draw loop and the GARAGE preview turntable, so the wings a player
-// inspects in the garage are the same geometry at the same angles as the ones
-// that open on track.
+// in-race draw loop, the mirror / PiP (CarDraw.drawMirrorCar) and the GARAGE
+// turntable, so the wings a player inspects are the ones that open on track.
+// At rest (blend 0 or 1), or `still` (the nearer rest pose: a rival past
+// FieldLod.flapsM(), the mirror / PiP), ONE baked set (CarMesh.getAeroFlapSet).
 const _flapWorld = new Float32Array(16);
 // `only` limits the draw to one wing ("front"/"rear") — the COCKPIT body build
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
-function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only) {
+function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   const col = wingColorOf(team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const finish = resolveLivery(team).finish || null;
+  if (still || b === 0 || b === 1) { const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only); if (set) gfx.draw(set, modelMat, mat); return; }
   const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
   for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
     const fg = flaps[i];
@@ -7704,21 +7706,16 @@ function render(dt) {
     // on the HUD alone would be a lie about what the physics is doing.
     // Skipped in cockpit view (that branch `continue`s well above this) and for
     // a loaded GLB body, whose wings are somebody else's geometry.
-    // Distance-gated for RIVALS like the brake rings — 4 flaps x 21 AI is ~84
-    // draws a frame, each its own mesh. The cue is the car AHEAD opening its
-    // wings: FieldLod.flapsM() is 80 m (150 m with apex26.fieldLod=0, generous
-    // next to the rings' 40 m because a swinging wing stays legible). The
+    // MOVING only for RIVALS within FieldLod.flapsM() (80 m; 150 m with
+    // apex26.fieldLod=0) — the cue is the car AHEAD opening its wings. Past it
+    // the whole set is ONE static mesh at the nearer rest pose, never dropped:
+    // dropping it stripped every far rival's rear wing to its main plane. The
     // player is never gated — it is the car you are looking at.
     if (!carDraw.modelBuf) {
-      let drawFlaps = true;
-      if (!c.isPlayer) {
-        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < FieldLod.flapsM() ** 2;
-      }
-      if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
-      }
+      const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+      const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
+      drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
+        !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
     // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,

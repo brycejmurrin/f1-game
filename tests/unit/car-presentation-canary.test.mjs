@@ -264,6 +264,8 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.match(fn[0], /if \(!body\) \{ G\.gfx\.draw\(teamMesh\(c\.team, c\), mat, paint\); return; \}/, "a GLB is one piece, as in the main pass");
   assert.equal(fn[0].split("teamMesh(").length - 1, 1, "teamMesh only on the GLB branch");
   assert.match(fn[0], /drawPlayerWheels\(c, mat, 0, _mirWheelOpts, false, 0, 1, true\);/, "BARE wheels, dt 0 (the main pass spins them)");
+  assert.match(fn[0], /deps\.drawAeroFlaps\(c\.team, aSt\.val, c\.aeroX \|\| 0, mat, paint, aSt\.aero, null, true\);/,
+    "the flap set, STILL (one static mesh), on the body's matrix and paint");
   assert.match(cd, /return \{[\s\S]*?drawMirrorCar,[\s\S]*?\};/, "exported");
   // BARE: rotating wheels only and no Particles flare, at any distance.
   assert.match(cd, /function drawPlayerWheels\(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare\)/);
@@ -275,6 +277,43 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.deepEqual(lit(cd, /const _mirWheelOpts = (\{[^}]*\});/), lit(game, /const _wheelOpts = (\{[^}]*\});/));
   assert.match(fn[0], /_mirWheelOpts\.emissive = night \? 0\.12 : 0;/, "and its night term (game.js: _wheelOpts.emissive = night ? 0.12 : 0)");
   assert.match(game, /_wheelOpts\.emissive = night \? 0\.12 : 0;/);
+});
+
+// THE MIRROR AND THE PiP DRAW EVERY CAR'S FLAP SET. The moveable wing elements
+// are not in the body mesh and drawMirrorCar never drew them, so every wing in
+// the mirror and on the PiP was its main plane only. Now one `still` call per
+// car (game.js drawAeroFlaps -> ONE static CarMesh set; field-lod.test.mjs
+// proves that draw), driven here through the REAL CarDraw and MirrorPass.
+test("the mirror and the PiP draw every car's flap set, still, one call per body", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 0; v.G.driverIdx = 0;
+  v.field((c, i) => (c.isPlayer ? 1000 : 1000 - 9 * i));
+  v.G.cars.forEach((c, i) => { c.aeroX = i % 2 ? 1 : 0.25; });
+  v.carDraw.warmCarAssets();
+  const mp = v.mirror();
+  const check = (why) => {
+    const bodies = v.rec.draws.filter((m) => m.kind === "body");
+    assert.ok(bodies.length >= 1, why + ": cars drawn");
+    assert.deepEqual(v.rec.flaps.map((f) => f.team), bodies.map((b) => b.team), why + ": a flap set per body, in order");
+    assert.ok(v.rec.flaps.every((f) => f.still && f.only === null), why + ": the static set, both wings");
+    const byZ = new Map(v.G.cars.map((c) => [String(c.s), c]));
+    for (const f of v.rec.flaps) {
+      const c = byZ.get(f.m.split(",")[1]);
+      assert.ok(c && c.team.id === f.team && c.aeroX === f.blend, why + ": on that car's own matrix, at its own aeroX");
+    }
+    v.rec.draws.length = 0; v.rec.flaps.length = 0;
+  };
+  v.rec.draws.length = 0; v.rec.flaps.length = 0;
+  v.draw(mp);
+  assert.equal(mp.state().cars, 6);
+  check("mirror");
+  v.classes.add("bc-on");
+  for (const sub of [v.G.cars[7], v.G.player]) {
+    mp.setSubject(sub, "tcam");
+    v.draw(mp);
+    assert.equal(mp.state().pip.shown, true);
+    check("PiP " + sub.code);
+  }
 });
 
 // THE MENU PREP BUILDS THE CASTERS (PR #803 built them in warmCarAssets, ~32 ms

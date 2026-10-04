@@ -10,7 +10,8 @@
  *   const mp = vm.mirror();     mp.render(...);   vm.rec.builds -> []
  *
  * rec.builds: one { kind: "whole" | "body" | "sh", team, num } per Car3D.build;
- * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go.
+ * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
+ * rec.flaps: one { team, blend, m, only, still } per deps.drawAeroFlaps call.
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
  * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick. */
 import fs from "node:fs";
@@ -25,7 +26,7 @@ const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "bra
   .map((id) => ({ id }));
 
 export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" } } = {}) {
-  const rec = { builds: [], wheels: 0, freed: 0, draws: [] };
+  const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
   const rect = (l, t, w, h) => () => ({ left: l, top: t, width: w, height: h, right: l + w, bottom: t + h });
@@ -110,7 +111,11 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
   };
   const carDraw = ctx.CarDraw.create(G, {
     resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
-    drawAeroFlaps() {}, damp: (a) => a, isTimeTrial: () => false, isQuali: () => false,
+    // game.js's drawAeroFlaps, recorded (field-lod.test.mjs drives the real one):
+    // `still` = the static flap set, drawn whatever the car's distance.
+    drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still) =>
+      rec.flaps.push({ team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still }),
+    damp: (a) => a, isTimeTrial: () => false, isQuali: () => false,
   });
 
   // makeCars' field for the menu's pick (G.teamIdx / G.driverIdx): every real
