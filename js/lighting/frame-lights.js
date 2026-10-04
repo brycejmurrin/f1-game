@@ -188,8 +188,11 @@ function _hshOf(o) {
   if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
   return h;
 }
-const _flScr = [1, 1, 1];      // per-lamp rgb factor scratch (flicker × breathe × warmup tint)
-const _flSteady = [1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
+// Per-lamp rgb factor scratch: [0..2] flicker × breathe × warm-up tint (what the
+// lamp emits), [3..5] the same WITHOUT the flicker/breathe term — the lamp's
+// steady level, which frame.lampLum carries to the lamp-shadow pick (shadow-pass.js).
+const _flScr = [1, 1, 1, 1, 1, 1];
+const _flSteady = [1, 1, 1, 1, 1, 1];   // identity when flicker+warmup would leave intensity unchanged
 // Flicker/warmup factors — closed over by hoisted `_flLive` so setFrameLights
 // does not allocate a fresh closure every frame on night tracks.
 let _flFlick = 0, _flWarmK = 1, _flTNow = 0;
@@ -203,11 +206,12 @@ function _flLive(o) {
   const warmDur = (4 + hsh * 4) * warmK;
   const wu = warmDur > 0 ? Math.min(1, Math.max(0, (tNow - _lampWarmT0) / warmDur)) : 1;
   const dip = LT.lampWarmupDim != null ? LT.lampWarmupDim : 0.30;
-  f *= (1 - dip) + dip * wu;
+  const w = (1 - dip) + dip * wu;
+  f *= w;
   const cold = (1 - wu) * (LT.lampWarmupWarm != null ? LT.lampWarmupWarm : 1);
-  _flScr[0] = f * (1 + cold * 0.22);
-  _flScr[1] = f * (1 - cold * 0.10);
-  _flScr[2] = f * (1 - cold * 0.38);
+  const t0 = 1 + cold * 0.22, t1 = 1 - cold * 0.10, t2 = 1 - cold * 0.38;
+  _flScr[0] = f * t0; _flScr[1] = f * t1; _flScr[2] = f * t2;
+  _flScr[3] = w * t0; _flScr[4] = w * t1; _flScr[5] = w * t2;
   return _flScr;
 }
 // Ranked-set cache: skip the O(count·log CAP) rebuild when the eye/fwd have not
@@ -491,6 +495,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
   const _eStep = Math.min(1, Math.max(0, tNow - S.entryT) / _ENTRY_S);
   S.entryT = tNow;
   const _eFrame = ++S.entryFrame;
+  const lum = S.lum;
   let j = 0;   // index writes + one trim, as in the dense path above
   for (let i = 0; i < heap.length; i++) {
     const e = heap[i], o = e.o;
@@ -503,6 +508,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
     if (truncated && cullF > prev + _eStep) cullF = prev + _eStep;
     S.entryLvl[li] = cullF; S.entryStamp[li] = _eFrame;
     const f = fl(o);
+    lum[i] = Math.max(src[o+3] * sr * f[3] * cullF, src[o+4] * sg * f[4] * cullF, src[o+5] * sb * f[5] * cullF);
     out[j++] = src[o]; out[j++] = src[o+1]; out[j++] = src[o+2];
     out[j++] = src[o+3] * sr * f[0] * cullF; out[j++] = src[o+4] * sg * f[1] * cullF; out[j++] = src[o+5] * sb * f[2] * cullF;
     for (let k = 6; k < 14; k++) out[j++] = src[o+k];
@@ -512,9 +518,10 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
     out[j++] = src[o+14] * cullF;
   }
   out.length = j;
+  lum.length = heap.length;
 }
 function _rankState() {
-  return { heap: [], buf: [], rankSrc: null, rankCap: -1, rankCount: -1,
+  return { heap: [], buf: [], lum: [], rankSrc: null, rankCap: -1, rankCount: -1,
     rankEyeX: NaN, rankEyeY: NaN, rankEyeZ: NaN, rankFwdX: NaN, rankFwdZ: NaN,
     rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN, rankFade: NaN,
     entrySrc: null, entryLvl: new Float32Array(0), entryStamp: new Uint32Array(0), entryFrame: 1, entryT: 0 };
@@ -553,7 +560,12 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // absent, the baked full set is used exactly as before.
   const src = srcSet || track._lights;
   // Empty set / not a lit session (caller usually gates, but count===0 is free).
-  if (!src || !src.length) { frame.lights = null; _S_MAIN.rankSrc = null; _last.ranked = false; return; }
+  if (!src || !src.length) { frame.lights = frame.lampLum = null; _S_MAIN.rankSrc = null; _last.ranked = false; return; }
+  // frame.lampLum[i]: record i's max-channel level WITHOUT flicker (time-of-day
+  // scale, warm-up and the cull fade kept). The lamp-shadow pick scores on it:
+  // scored on the flickered level, two floods near equal range swapped the
+  // shadowed lamp (a full prop rebuild) at the flicker's rate.
+  frame.lampLum = _S_MAIN.lum;
   // Reserve slots for car tail lights: appendCarTailLights fills AFTER this
   // cull, against the same budget (see lampCap).
   const CAP = lampCap(cars.length, mobileTier);
@@ -600,13 +612,16 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     // backing store, so `= 0` + push() regrew this buffer every lit frame —
     // the pooling above never pooled (node: 360 minor GCs vs 2 per 20k frames).
     let j = 0;
+    const lum = _S_MAIN.lum;
     for (let i = 0; i < src.length; i += 15) {
       const f = fl(i);
+      lum[i / 15] = Math.max(src[i+3] * sr * f[3], src[i+4] * sg * f[4], src[i+5] * sb * f[5]);
       out[j++] = src[i]; out[j++] = src[i+1]; out[j++] = src[i+2];
       out[j++] = src[i+3] * sr * f[0]; out[j++] = src[i+4] * sg * f[1]; out[j++] = src[i+5] * sb * f[2]; out[j++] = src[i+6];
       for (let k = 7; k < 15; k++) out[j++] = src[i+k];
     }
     out.length = j;
+    lum.length = j / 15;
     frame.lights = out;
     if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
     return;

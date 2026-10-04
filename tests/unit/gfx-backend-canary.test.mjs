@@ -5214,8 +5214,9 @@ test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the k
   assert.match(lamp, /const _playerIn = _hasLivePlayerShadow && \(_pdx \* _pdx \+ _pdy \* _pdy \+ _pdz \* _pdz\) <= _lsR2;/,
     "the player is tested against the same _lsR2 as the AI casters");
   assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the key hashes the player only when it is cast");
-  assert.match(lamp, /if \(_playerIn\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\), _livePlayerShadowMat\);/,
+  assert.match(lamp, /if \(_playerIn\) _castPlayer\(\);/,
     "the cast draws the player only when it is within reach");
+  assert.match(lamp, /const _pm = _playerMat\(\);/, "…and tests and keys it at the matrix _castPlayer draws it with");
   assert.doesNotMatch(lamp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow/, "no unconditional player cast left in the lamp pass");
 });
 

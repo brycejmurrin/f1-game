@@ -3495,7 +3495,7 @@ const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAero
 const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
-const shadowPass = ShadowPass.create(G, { teamMesh, vStd });
+const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
 // The HUD rear-view mirror (js/render/shared/mirror-pass.js): a second camera, rendered in the env probe's slot below.
 const mirrorPass = MirrorPass.create(G, { drawWorldMeshes, drawCar: carDraw.drawMirrorCar, renderPosOf, playerAnchor, yawVisInterp, basisMat,
   carPaint: (wet, night) => carPaintMat(wet ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY) : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY)),
@@ -6939,11 +6939,11 @@ function render(dt) {
     const _msh = LT.moonShadow != null ? LT.moonShadow : 0.25;
     frame.moonGate = Math.max(frame.moonK, clamp((_msh - 0.5) * 2, 0, 1));
   }
-  // Resolve the moving player before any shadow-map pass. AI keeps using the
-  // pooled matrices from the preceding frame; only the player's high-speed,
-  // chase-camera shadow makes that latency visible.
+  // Resolve the moving player before any shadow-map pass (first-person views cast
+  // the cockpit body where the car loop draws it). AI keeps the pooled matrices
+  // from the preceding frame; only the player's shadow makes that latency visible.
   const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat);
+  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player)); }
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
   if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps

@@ -5,10 +5,11 @@
    night LAMP map (the nearest floodlight, content-keyed on the lamp and the
    cars under it). Owns the light-space matrices, the snap keys, the caster
    pools the render loop fills (pushCaster) and the blob-shadow flush. One
-   ShadowPass.create(G, deps) at boot; the render loop calls beginFrame /
-   pushCaster / sunPass / lampPass / flushBlobs and loadTrack calls reset.
-   Reads G.gfx / G.track / G.player / G.state / G.camEye / G.camTgt /
-   G._studioRig; teamMesh (the silhouette caster) and vStd come through deps. */
+   ShadowPass.create(G, deps) at boot; the render loop calls resolvePlayer /
+   beginFrame / pushCaster / sunPass / lampPass / flushBlobs and loadTrack calls
+   reset. Reads G.gfx / G.track / G.player / G.state / G.camEye / G.camTgt /
+   G._studioRig; teamMesh (the silhouette caster), cockpitCaster (the player's
+   first-person body, car-draw.js) and vStd come through deps. */
 "use strict";
 
 const ShadowPass = (function () {
@@ -77,6 +78,10 @@ const ShadowPass = (function () {
     let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
     let _lampShR = null, _lampShC = null, _lampShDx = null, _lampShDy = null, _lampShDz = null;   // ...and its VP inputs (radius, cone, aim)
     let _lampShCarKey = 0;   // quantised positions of the cars in the map
+    // A rival lamp takes the map only when its score (distance² / level, lower
+    // wins) beats the current lamp's by 20% — ~10% in range, well past the
+    // flicker's few percent (tests/unit/lamp-shadow-pick.test.mjs).
+    const LAMP_HANDOVER = 1.2;   // a parked car near the midline of two floods keeps one
     const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
     // Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
@@ -88,6 +93,8 @@ const ShadowPass = (function () {
     const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
     const _shadowCast = [];   // parallel: false = blob only, never a sun / lamp map caster (FieldLod: rivals past 50 m)
     const _livePlayerShadowMat = new Float32Array(16);
+    const _cockpitShadowMat = new Float32Array(16);   // first-person views: the cockpit body's matrix
+    let _playerCockpit = null;   // the cockpit body mesh in cockpit / helmet / visor, else null
     let _shadowCount = 0;
 
     // Instanced prop shadow cast: cull to the active light frustum (sun ortho or
@@ -165,6 +172,22 @@ const ShadowPass = (function () {
       _shadowCars[_shadowCount] = car;
       _shadowCast[_shadowCount] = cast !== false;   // omitted = casts (the apex26.fieldLod=0 path)
       _shadowCount++;
+    }
+    // THE PLAYER CASTS WHAT THE PLAYER SEES, WHERE IT IS DRAWN. game.js calls
+    // this once livePlayerMat holds the grounded transform, before either pass.
+    // In cockpit, helmet and visor the visible body is the cockpit build (no
+    // driver, the player's own halo) at the camera-anchored cockpit matrix, but
+    // both maps cast the EXTERIOR silhouette at the grounded matrix: its helmet
+    // crown (~0.83 m) sits ~0.3 m over the sidepod tops, past the 0.32 m bias,
+    // and with the factory halo it stamped dark blobs on the cockpit sides with
+    // no visible caster. deps.cockpitCaster (car-draw.js) resolves the mesh and
+    // matrix the car loop draws; null = an exterior view, the silhouette as before.
+    function resolvePlayer(smp, yv) {
+      _playerCockpit = deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
+    }
+    function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
+    function _castPlayer() {
+      G.gfx.castShadow(_playerCockpit || deps.teamMesh(G.player.team, G.player, true), _playerMat());
     }
     // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
     // depthMask are set once for the whole field instead of ping-ponging with the
@@ -370,7 +393,7 @@ const ShadowPass = (function () {
             // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
             // originally-tuned bias exactly.
             G.gfx.carShadowBegin(_mCVP, cBox / 42);
-            if (_hasLivePlayerShadow) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
+            if (_hasLivePlayerShadow) _castPlayer();
             // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
             // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
             // uploads uModel and draws, ~22k verts per silhouette car (wheels +
@@ -438,7 +461,16 @@ const ShadowPass = (function () {
           // 512 map with a frustum slung off a moving car. glx/chunked.js's drawChunked guards its
           // own slot this way; the lit path and godray never did.
           const tailFrom = frame.tailCount > 0 ? frame.tailStart : nRec;
-          let flBest = -1, flScore = Infinity;
+          // THE PICK MUST NOT FOLLOW THE FLICKER. Scored on the emitted level
+          // (L[o+3..5] carries flicker x breathe), two floods near equal range
+          // traded first place with each lamp's sine, and every trade is a LAMP
+          // change: a full prop rebuild, the car's flood shadow and the carved
+          // beam jumping sides several times a second with the car parked.
+          // Score on frame.lampLum (frame-lights.js: the same level without the
+          // flicker; warm-up kept), and hold the current lamp while it is still a
+          // candidate unless a rival beats its score by LAMP_HANDOVER.
+          const lum = frame.lampLum && frame.lampLum.length >= tailFrom ? frame.lampLum : null;
+          let flBest = -1, flScore = Infinity, flCur = -1, flCurScore = Infinity;
           for (let i = 0; i < nRec; i++) {
             const o = i * 15;
             if (i >= tailFrom) continue;   // never shadow-map a car tail-light
@@ -447,9 +479,11 @@ const ShadowPass = (function () {
             // Nearest-strongest: distance² over luminance, so a bright flood bank
             // beats a dim work lamp at similar range.
             const s = (dx * dx + dy * dy + dz * dz) /
-                      Math.max(Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+                      Math.max(lum ? lum[i] : Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
             if (s < flScore) { flScore = s; flBest = i; }
+            if (L[o] === _lampShX && L[o + 1] === _lampShY && L[o + 2] === _lampShZ) { flCur = i; flCurScore = s; }
           }
+          if (flCur >= 0 && flBest !== flCur && flScore * LAMP_HANDOVER >= flCurScore) flBest = flCur;
           if (flBest >= 0) {
             const o = flBest * 15;
             const rad = L[o + 6];
@@ -491,7 +525,7 @@ const ShadowPass = (function () {
             // player exactly as for an AI car: beyond rad + 8 its shadow can only
             // fall on fragments this lamp does not light. Position from the same
             // resolved transform the cast uses (game.js fills it before both passes).
-            const _pm = _livePlayerShadowMat;
+            const _pm = _playerMat();
             const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
             const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
             // Every caster is keyed from the SAME matrix the cast draws with, on
@@ -549,7 +583,7 @@ const ShadowPass = (function () {
             // static map (first pass, a failed copy, GLX/WGX): the full pass below.
             const _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
             if (!_carsOnlyPass) G.gfx.lampShadowBegin(_mFlVP, flBest);
-            if (_playerIn) G.gfx.castShadow(deps.teamMesh(G.player.team, G.player, true), _livePlayerShadowMat);
+            if (_playerIn) _castPlayer();
             // Distance-cull the casters, the twin of the sun pass's _csR above — the
             // comment there notes the field pays the caster cost TWICE at night, and
             // this is the second half. Only 1-3 cars are ever under a lamp, so this
@@ -593,7 +627,7 @@ const ShadowPass = (function () {
     }
 
     return {
-      reset, beginFrame, pushCaster, flushBlobs, sunPass, lampPass,
+      reset, beginFrame, pushCaster, flushBlobs, sunPass, lampPass, resolvePlayer,
       livePlayerMat: _livePlayerShadowMat,
       get count() { return _shadowCount; },
     };
