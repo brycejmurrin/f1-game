@@ -1742,10 +1742,10 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-inputs-cv { display: block; width: 128px; height: 48px; background: color-mix(in oklab, var(--carbon) 70%, transparent); }
 #hud-inputs-gear { font-size: var(--fs-3); font-weight: 800; min-width: 1.4ch; text-align: center; }
-#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden],
+#hud-rel[hidden], #hud-strat[hidden], #hud-inputs[hidden], #hud-rel > div[hidden], #hud-strat > div[hidden] { display: none !important; }
 body[data-hud-hide~="rel"] #hud-rel,
 body[data-hud-hide~="strat"] #hud-strat,
-body[data-hud-hide~="inputs"] #hud-inputs,
+body[data-hud-hide~="inputs"] #hud-inputs { display: none !important; }
 body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
 body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
 body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }

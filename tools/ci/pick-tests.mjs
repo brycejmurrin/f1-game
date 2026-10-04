@@ -224,6 +224,7 @@ export const RULES = [
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
+  [/^js\/ui\/hud-(relative|strategy|inputs)\.js/, ["state-unit", "ui"], "hud-relative / hud-strategy / hud-inputs .test.mjs"],
   [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
   [/^js\/ui\/hud-readouts\.js/, ["state-unit", "ui"], "hud-readouts.test.mjs"],
   [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
