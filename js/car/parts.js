@@ -650,6 +650,9 @@ const Parts = (function () {
     _legalKey = _legal ? String(key || "on") : "";
   }
   function legalityKey() { return _legalKey; }
+  // The installed predicate itself, so a caller that must read the WORKS build
+  // outside the era (CareerAiDev.worksSetup) can put the exact ruleset back.
+  function legality() { return _legal; }
   function isOptionAvailable(opt, team, owned) {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
@@ -833,7 +836,7 @@ const Parts = (function () {
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
     getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
-    setLegality, legalityKey,
+    setLegality, legalityKey, legality,
   };
 })();
 Object.freeze(Parts);

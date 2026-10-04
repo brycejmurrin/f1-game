@@ -235,8 +235,11 @@ const CareerBackup = (function () {
     const live = Career.slot && Career.slot();
     if (!live || live.flavour !== f || live.i !== i) return false;
     if (Career.conflicted && Career.conflicted()) return true;
-    if (Career.slotRevision) {
-      const seen = Career.slotRevision(f, i);
+    // The ARMED revision, not slotRevision(): that is the store's current
+    // revision of this same key, so `seen !== now` compared a value with itself
+    // and never fired — only conflicted() guarded the live slot.
+    if (Career.armedRevision) {
+      const seen = Career.armedRevision();
       const now = revisionOf(f, i);
       if (seen != null && now != null && seen !== now) return true;
     }
@@ -312,6 +315,52 @@ const CareerBackup = (function () {
     return out;
   }
 
+  // THE DAILY CHALLENGE MERGES PER DAY, like badges: a day's best is the
+  // faster of the two (each class too), laps the larger count, and the streak
+  // is the one with the later `last` day (the longer one on the same day).
+  // Writing the backup wholesale reset today's streak and bests to last week's.
+  function betterBest(a, b) {
+    const fa = Number.isFinite(a) && a > 0, fb = Number.isFinite(b) && b > 0;
+    if (fa && fb) return Math.min(a, b);
+    return fa ? a : (fb ? b : null);
+  }
+  function mergeDayEntry(mine, theirs) {
+    if (!isObj(mine)) return theirs;
+    if (!isObj(theirs)) return mine;
+    const out = Object.assign({}, theirs, mine);
+    out.best = betterBest(mine.best, theirs.best);
+    out.laps = Math.max(mine.laps | 0, theirs.laps | 0);
+    if (isObj(mine.classes) || isObj(theirs.classes)) {
+      const a = isObj(mine.classes) ? mine.classes : {}, b = isObj(theirs.classes) ? theirs.classes : {};
+      out.classes = {};
+      for (const k of Object.keys(Object.assign({}, b, a))) out.classes[k] = mergeDayEntry(a[k], b[k]);
+    }
+    return out;
+  }
+  function mergeDaily(local, incoming) {
+    if (!isObj(local)) return incoming;
+    const out = Object.assign({}, incoming, local);
+    const a = isObj(local.days) ? local.days : {}, b = isObj(incoming.days) ? incoming.days : {};
+    if (isObj(local.days) || isObj(incoming.days)) {
+      out.days = {};
+      for (const day of Object.keys(Object.assign({}, b, a)).sort()) out.days[day] = mergeDayEntry(a[day], b[day]);
+    }
+    const sa = isObj(local.streak) ? local.streak : null, sb = isObj(incoming.streak) ? incoming.streak : null;
+    if (sa || sb) {
+      const la = sa && typeof sa.last === "string" ? sa.last : "", lb = sb && typeof sb.last === "string" ? sb.last : "";
+      out.streak = !sb ? sa : !sa ? sb
+        : lb > la ? sb : la > lb ? sa
+        : ((sb.count | 0) > (sa.count | 0) ? sb : sa);
+    }
+    return out;
+  }
+  // The records book has no first-class writer yet (a pass-through key), so
+  // there is no "better" to compute: the import fills only the entries this
+  // device lacks and never replaces one it has.
+  function mergeRecords(local, incoming) {
+    return isObj(local) ? Object.assign({}, incoming, local) : incoming;
+  }
+
   function apply(envelope, opts) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
@@ -385,10 +434,10 @@ const CareerBackup = (function () {
         s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
       }
       if (envelope.daily != null && isObj(envelope.daily) && progressExtras) {
-        s.write("daily.v1", envelope.daily);
+        s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
       }
       if (envelope.records != null && isObj(envelope.records) && progressExtras) {
-        s.write("records", envelope.records);
+        s.write("records", mergeRecords(s.get("records", null), envelope.records));
       }
       // Identity only with a MY TEAM slot actually written; a key the backup
       // lacks (or carries malformed) leaves the local value alone.

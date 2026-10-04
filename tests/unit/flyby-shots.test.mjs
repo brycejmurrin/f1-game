@@ -723,6 +723,15 @@ test("the loading screen flies only the world built for THIS selection", () => {
     assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()|]/g, "\\$&")), call + " waits for the right world");
 });
 
+// CPU TIME, NOT WALL TIME (2026-10-04). The two "every shot was pre-planned"
+// legs below tell a cache hit (well under a millisecond) from a cold plan
+// (150-380 ms on a built-up circuit) by timing one solve. Wall time measured
+// the box too: tooling-fast runs files in parallel next to other agents' work,
+// and a descheduled cache hit read as a cold plan. process.cpuUsage() counts
+// only the time this process actually ran, so the same 20/25 ms bounds now
+// measure the work.
+const cpuMs = (since) => { const d = process.cpuUsage(since); return (d.user + d.system) / 1000; };
+
 test("warm() plans the opening shots at once and the rest in slices, never through solve()", async () => {
   await withTrack("monza", async (track, g) => {
     const F = g.sandbox.FlybySeq, list = F.vary(F.DEFAULT, 11);
@@ -735,7 +744,7 @@ test("warm() plans the opening shots at once and the rest in slices, never throu
     // Everything is planned: a solve at each shot's middle is a cache hit (fast).
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0;
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 20, `every shot was pre-planned (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   }, { fresh: true });   // a COLD plan cache, and its own timer queue to flush
@@ -771,7 +780,7 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
     assert.ok(b1.every((s, i) => s === b2[i]), "a re-made list binds to the SAME shot objects");
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0; F.reset();
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 25, `every shot was planned in the menu (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   });

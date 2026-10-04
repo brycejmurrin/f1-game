@@ -874,6 +874,55 @@ test("join()'s late prompt does not wipe an error said during its ICE wait", asy
   } finally { h.lobby.cancel(); }
 });
 
+// ── L8-a: the verification code on both screens, and the host's REMOVE ──────
+// The room code's PBKDF2 table is precomputable once for every room, so a
+// middleman can answer a sealed offer. The 4-letter code from both DTLS
+// fingerprints is what the two players compare; the host removes a guest whose
+// screen shows a different one.
+test("a connection shows its verification code, and only the HOST can remove that guest", async () => {
+  const pcs = [];
+  const rendezvous = { usingPrivateRelay: () => false, verifyFor: async (pc) => (pc && pc.remoteDescription ? "K7QZ" : null) };
+  const made = [], closers = [];
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open", rendezvous });
+  let closed = 0;
+  h.lobby.setTransportFactory(() => {
+    const pc = { localDescription: { sdp: "l" }, remoteDescription: { sdp: "r" } };
+    pcs.push(pc);
+    const mine = [];
+    const t = { status: "open", pc, onClose(fn) { mine.push(fn); closers.push(fn); },
+      close() {   // idempotent and self-emitting, as transport.js shutdown()
+        if (t.status === "closed") return;
+        closed++; t.status = "closed"; for (const fn of mine) fn("local");
+      } };
+    return t;
+  });
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1, "the host's session was bound");
+    for (let i = 0; i < 20 && !Object.keys(h.lobby.verifyCodes()).length; i++) await new Promise((r) => setTimeout(r, 10));
+    const codes = h.lobby.verifyCodes();
+    assert.deepEqual(Object.values(codes), ["K7QZ"], "one code per direct connection");
+    assert.match(h.status.textContent, /K7QZ/, "and the status line names it");
+    const [id] = Object.keys(codes);
+    assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
+    assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
+    assert.equal(closed, 1, "by closing that guest's transport");
+    assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest cannot remove anybody, and a transport with no pc shows no code", async () => {
+  const { h } = await connectedGuest();
+  try {
+    assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "the loopback-style fake has no descriptions: no code");
+    assert.equal(h.lobby.removeGuest("peer"), false, "REMOVE is the host's");
+  } finally { h.lobby.cancel(); }
+});
+
 test("HOST A RACE (link) closes a room code left open by a code join", () => {
   // INVITE ANOTHER -> HOST A RACE after a guest joined by code: the reopened
   // room kept advertising a dead offer for up to JOIN_TIMEOUT_MS, and a friend

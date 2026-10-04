@@ -1586,6 +1586,9 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), null,
     "race settings inherit the one .sel-chip.active look — no per-screen restatement");
   assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
+  // Same layer and specificity as the tap-target floor in css/components.css,
+  // and later: a `min-width: 0` here silently cancelled that WCAG 2.5.8 floor.
+  assert.equal(decl(carsetup, ".cs-tab", "min-width"), "var(--tap-min)", "the garage tabs keep the 24px width floor");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
