@@ -99,8 +99,11 @@ const CustomTracks = (function () {
    *  only labels it. The theme is in it on purpose — game.js skips a rebuild
    *  when builtTrackId matches, and a theme change must rebuild. */
   function canonical(it) {
-    return [it.theme, it.baseHW, it.seed, it.pts.map((p) => p[0] + "," + p[1]).join(";"),
-      JSON.stringify([it.hwZones, it.bankZones, it.elevations, it.bridges])].join("|");
+    const parts = [it.theme, it.baseHW, it.seed, it.pts.map((p) => p[0] + "," + p[1]).join(";"),
+      JSON.stringify([it.hwZones, it.bankZones, it.elevations, it.bridges])];
+    // The scenery options rebuild the circuit too; absent at their defaults, so older ids hold.
+    if (it.look) parts.push("look:" + it.look.time + "," + it.look.trees + "," + it.look.crowd);
+    return parts.join("|");
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
 
@@ -142,6 +145,8 @@ const CustomTracks = (function () {
       created: num(raw.created, 0, 8.64e15, Date.now()),
       updated: num(raw.updated, 0, 8.64e15, Date.now()),
     };
+    const look = TrackThemes.sanitizeLook(raw.look);
+    if (look) it.look = look;
     if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
