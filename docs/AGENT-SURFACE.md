@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Twenty-four `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
+do the work. Twenty-six `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -159,7 +159,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Twenty-four tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Twenty-six tools (30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -172,7 +172,9 @@ track session: boot once, then shots in ~10–25 s instead of ~45 s each),
 `apex_job_start`/`_status`/`_cancel` (survey-track, layout-audit matrices,
 flicker-gate, frame-report --fleet, parts-sweep, livery-contrast in the
 background), `apex_ui_fit`/`apex_ui_shot` (one menu screen × viewport, ~15 s)
-and `apex_car_audit`/`apex_track_audit` (offline checks, seconds)).
+and `apex_car_audit`/`apex_track_audit` (offline checks, seconds); 24 → 26 on
+2026-10-04 for `apex_hud_shot` and `apex_hud_survey`, the race-HUD survey —
+one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -201,6 +203,8 @@ and `apex_car_audit`/`apex_track_audit` (offline checks, seconds)).
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
 | `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
+| `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
+| `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -228,6 +232,15 @@ Pins the wrap always applies (you cannot override them):
   browser kinds hold the lock until they exit; `apex_job_cancel` kills the group
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
 - `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
+- `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,
+  never `--plan` / `--self-test` / `--url`; `apex_hud_shot` always passes
+  `--device` and `--cam` (one cell, never the quick matrix); every knob is an
+  enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
+  under `artifacts/` or `scratch/`) are validated by the CLI's own pure
+  validators before the lock; `matrix: exhaustive` (~4 h) is refused without
+  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). Results carry `structuredContent`, its
+  serialized copy as the first text block, and `resource_link`s (PNG /
+  findings.md / index.html / report.json)
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 

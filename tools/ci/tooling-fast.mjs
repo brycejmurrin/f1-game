@@ -378,6 +378,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
+  "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
