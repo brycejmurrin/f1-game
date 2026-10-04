@@ -313,6 +313,7 @@ const FULL = [
   "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
+  "js/race/flying-start.js",   // FlyingStart.create(G): qualifying + time trial begin at speed (uses RealRace.dropSpeed at call time)
   "js/race/weather-arc.js",
   "js/race/start-lights.js",   // StartLights.create(G): the start gantry's five lamps follow the countdown (after fx/particles.js)
   "js/race/marshal-panels.js", // MarshalPanels.create(G): the marshal posts' light panels follow race control (after race-control.js)

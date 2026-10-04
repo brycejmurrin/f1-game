@@ -1269,6 +1269,7 @@ const api = {
     return { head: G.player.head };
   },
   go() {
+    if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
