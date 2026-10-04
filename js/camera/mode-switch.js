@@ -84,6 +84,9 @@ window.CamModes = (function () {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
         if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(CAM_MODES[G.camMode].id);
+        // A cut: the new rig's eased bend sides start from its own target,
+        // not from wherever that rig was the last time it was on air.
+        if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
       }
       if (typeof GameAudio !== "undefined") GameAudio.setCameraMix(CAM_MODES[G.camMode].id);   // onboard / chase / TV mix
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
