@@ -39,6 +39,10 @@ const XrInput = (function () {
     let thr = 0, brk = 0, stickX = 0, held = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
+    // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
+    let hasLeft = false;
+    for (let i = 0; i < list.length; i++)
+      if (list[i] && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
       const src = list[i];
       if (!src || src.targetRayMode === "gaze") continue;
@@ -55,7 +59,7 @@ const XrInput = (function () {
       const sx = axis(gp, AXIS_STICK_X);
       // Prefer left stick for steer when both present; else any.
       if (hand === "left" || (hand !== "right" && !stickX)) stickX = sx;
-      else if (hand === "right" && !list.some((s) => s && s.handedness === "left")) stickX = sx;
+      else if (hand === "right" && !hasLeft) stickX = sx;
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
       // Squeeze on either hand = look-back hold bit (Input.remoteSample.held).

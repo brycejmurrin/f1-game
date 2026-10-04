@@ -149,6 +149,7 @@ $("pm-phonepad").onclick = () => {
       qr: (url, code) => {
         LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
         $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
         $("pm-phonepad-pair").hidden = !code;
         // The code appears below the button: bring it into view on the sheet,
         // or a short screen shows "scan the code" with nothing to scan.

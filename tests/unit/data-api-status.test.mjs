@@ -489,3 +489,16 @@ test("a full quota drops the disposable api cache and the save lands", async () 
   assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.api.")).length, 0);
   assert.equal(run("GameStore.store.rawSet('apex26.x', 'y'.repeat(300000))"), true);
 });
+
+
+test("pit duration prefers OpenF1 lane_duration and accepts cached legacy pit_duration", async () => {
+  const rows = [{ lane_duration: 22.2, pit_duration: 99 }, { pit_duration: 23.4 },
+    { lane_duration: null, pit_duration: 24.5 }, { lane_duration: 0, pit_duration: 30 }];
+  const context = vm.createContext({ fetch: async () => ({ ok: true, status: 200,
+    headers: { get: () => null }, json: async () => rows, text: async () => JSON.stringify(rows) }),
+    AbortController, Date, setTimeout, clearTimeout });
+  seedLog(context);
+  const api = vm.runInContext(apiSource + ";F1API", context);
+  const pits = await api.pits(1);
+  assert.deepEqual(Array.from(pits, (p) => p.duration), [22.2, 23.4, 24.5, 0]);
+});
