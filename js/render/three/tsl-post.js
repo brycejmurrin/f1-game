@@ -45,14 +45,16 @@
       return m;
     }
 
-    const brightU = { threshold: uniform(0.75) };
+    // threshold is in EXPOSED units (glsl-post.js BRIGHT_FS): the test runs on
+    // luminance x exposure; the output stays scene-referred.
+    const brightU = { threshold: uniform(0.75), exposure: uniform(1.0) };
     const bright = {
       U: brightU,
       mat: passMaterial(Fn(() => {
         const suv = vec2(screenUV).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const c = vec3(sceneT.sample(TL(vUV)).rgb).toVar();
-        const l = max(max(c.r, c.g), c.b).toVar();
+        const l = max(max(c.r, c.g), c.b).mul(brightU.exposure).toVar();
         const knee = brightU.threshold.mul(0.5).add(1e-4).toVar();
         const soft = clamp(l.sub(brightU.threshold).add(knee), 0.0, knee.mul(2.0)).toVar();
         soft.assign(soft.mul(soft).div(knee.mul(4.0)));
@@ -466,6 +468,34 @@
         sceneT.sample(TL(uvGl.sub(dd.mul(a)))).b);
     };
 
+    // The post-ACES COLOUR GRADE and the output DITHER (glsl-post.js COLOUR_GRADE
+    // / DITHER_LSB) as graph builders on a vec3 var: the composite and the
+    // mirror / PiP inset call the same nodes on the same C uniforms.
+    function colourGradeT(c) {
+      c.mulAssign(vec3(1.015, 1.008, 0.992));
+      c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
+      // pow(0, n) NaNs on mobile GPUs and is -inf through WGSL exp2/log2;
+      // the 1e-6 floor keeps black black (glsl-post.js).
+      c.assign(pow(max(c, vec3(1e-6)), vec3(C.contrast)));
+      const luma = dot(c, vec3(0.299, 0.587, 0.114)).toVar();
+      const mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+      const sat = mx.sub(mn);
+      c.assign(mix(vec3(luma), c,
+        clamp(sat.mul(1.5), 0.0, 1.0).oneMinus().mul(C.vibrance).add(1.0)));
+      c.assign(mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, C.saturation));
+      c.mulAssign(vec3(C.tint.mul(0.07).add(1.0), 1.0, C.tint.mul(-0.07).add(1.0)));
+      const gl2 = dot(c, vec3(0.299, 0.587, 0.114));
+      const toneTint = mix(C.gradeShadow, C.gradeHi, smoothstep(0.0, 0.85, gl2));
+      c.assign(mix(c, c.mul(toneTint), C.gradeStr));
+      c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
+    }
+    function ditherT(c, xy) {
+      const dc = xy.add(mod(floor(C.grainTime.mul(60.0)), 64.0).mul(5.588238)).toVar();
+      const d0n = ignoise(dc);
+      const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
+      c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
+    }
+
     const composite = {
       U: C, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN },
       mat: passMaterial(Fn(() => {
@@ -781,22 +811,7 @@
         // Filmic tone-map (parameterised Narkowicz ACES) + WHITE POINT knee.
         c.assign(acesTonemap(c.div(C.whitePoint)));
 
-        c.mulAssign(vec3(1.015, 1.008, 0.992));
-        c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
-        // pow(0, n) NaNs on mobile GPUs and is -inf through WGSL exp2/log2;
-        // the 1e-6 floor keeps black black (glsl-post.js).
-        c.assign(pow(max(c, vec3(1e-6)), vec3(C.contrast)));
-        const luma = dot(c, vec3(0.299, 0.587, 0.114)).toVar();
-        const mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
-        const sat = mx.sub(mn);
-        c.assign(mix(vec3(luma), c,
-          clamp(sat.mul(1.5), 0.0, 1.0).oneMinus().mul(C.vibrance).add(1.0)));
-        c.assign(mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, C.saturation));
-        c.mulAssign(vec3(C.tint.mul(0.07).add(1.0), 1.0, C.tint.mul(-0.07).add(1.0)));
-        const gl2 = dot(c, vec3(0.299, 0.587, 0.114));
-        const toneTint = mix(C.gradeShadow, C.gradeHi, smoothstep(0.0, 0.85, gl2));
-        c.assign(mix(c, c.mul(toneTint), C.gradeStr));
-        c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
+        colourGradeT(c);
 
         const sunVis = float(0.0).toVar();
         If(C.flareStr.greaterThan(0.0)
@@ -845,10 +860,7 @@
         c.mulAssign(mix(C.vignette, float(1.0), vig));
 
         // Triangular-PDF LDR dither, golden-ratio time-stepped js/render/glx/shaders/glsl-post.js.
-        const dc = fragXY.add(mod(floor(C.grainTime.mul(60.0)), 64.0).mul(5.588238)).toVar();
-        const d0n = ignoise(dc);
-        const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
-        c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
+        ditherT(c, fragXY);
         // FILM GRAIN: luminance-weighted animated noise js/render/glx/shaders/glsl-post.js.
         If(C.grain.greaterThan(0.001), () => {
           const gUV = vUV.add(vec2(fract(C.grainTime.mul(1.37)), fract(C.grainTime.mul(0.61))).mul(3.17));
@@ -1050,8 +1062,9 @@
      *    (tlx-post.js), FLIPPED left-right here — a negative-x projection would
      *    invert winding and FrontSide-cull the world. U.rect is that rect in
      *    top-left target pixels, the space screenCoordinate is in on both three
-     *    backends. Exposure and the ACES curve are the composite's own uniforms
-     *    (C), so the TONE CURVE knobs reach the mirror; the grade does not. */
+     *    backends. Exposure, the ACES curve, the colour grade and the dither
+     *    are the composite's own uniforms and builders (C, colourGradeT,
+     *    ditherT), so the inset sits in the frame's look. */
     const mirrorTex = texture(ctx.blackTex);
     const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1), flip: uniform(1) };   // flip 0: the broadcast PiP
     const mirror = {
@@ -1059,7 +1072,9 @@
       mat: passMaterial(Fn(() => {
         const p = vec2(screenCoordinate).sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
         const c = vec3(mirrorTex.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
-        const t = acesTonemap(c.mul(C.exposure).div(C.whitePoint));
+        const t = vec3(acesTonemap(c.mul(C.exposure).div(C.whitePoint))).toVar();
+        colourGradeT(t);
+        ditherT(t, vec2(screenCoordinate.xy));
         return vec4(select(mirrorU.hdr.greaterThan(0.5), t, c), 1.0);
       })(), "tlx-post-mirror"),
     };

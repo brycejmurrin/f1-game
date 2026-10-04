@@ -1658,6 +1658,18 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   core WebGPU cannot resolve a depth attachment, so the native path stays
   single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
   scene MSAA on any backend (the mobile recipe).
+- **Decals, bloom, inset, blocker (2026-10-04), all three backends:** car decal
+  atlases upload PREMULTIPLIED and blend ONE / ONE_MINUS_SRC_ALPHA; the decal
+  shader takes a 4-tap box PCF on the static sun map and the baked lamp pools
+  (GLX units 0/12/13, TLX `lit.decalLight`, WGX group 1 = the lit frame group).
+  The bloom bright pass tests EXPOSED luminance (`present` threshold is in
+  exposed units; game.js multiplies the per-TOD value by the TOD exposure). The
+  rear-view mirror / PiP inset takes the composite's colour grade + dither
+  (GLSL `COLOUR_GRADE`/`DITHER_LSB`, TSL `colourGradeT`/`ditherT`, WGSL
+  `colourGradeP`/`ditherLSB`). The PCSS blocker is 32-bit float, the min over
+  each 4×4 source footprint. No soft particles yet: every backend draws them in
+  the scene pass with its depth attachment bound, so the depth is not sampleable
+  there without a copy.
   (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
   itself is also live on all three (GLX/TLX composite, WGX half-res pass →
   composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds

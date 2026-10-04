@@ -449,7 +449,8 @@ const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on stor
 // Bloom lower and hotter than the race default: the ceiling panels ARE the
 // subject. ssao needs the proj/invProj pair passed to begin(); contact shadows
 // would additionally need sunViewDir, and the sun is now only a fill.
-const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62, contact: 0 };
+// threshold is in EXPOSED units (glsl-post.js BRIGHT_FS): 0.62 scene-referred x 1.28.
+const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62 * 1.28, contact: 0 };
 function renderSetupPreview(dt, holdDriveOut = false) {
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
   // so its rect stayed set and present() composited it over the car.

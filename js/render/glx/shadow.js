@@ -167,7 +167,7 @@ const GLXShadow = (function () {
       S.pcssEnabled = false;
       // Desktop only, matching carTex and lampTex above. PCSS is a soft-shadow
       // refinement — the penumbra grows with blocker distance — and it costs a
-      // 512x512 R16F target (0.5 MiB) plus a per-frame blocker-search pass. Its
+      // 512x512 R32F target (1 MiB) plus a per-frame blocker-search pass. Its
       // two siblings in this same function are already `ok && !core.IS_MOBILE`
       // for exactly that reasoning; this one was just `ok`, so every phone paid
       // for a refinement it cannot afford on a shadow map that is already
@@ -175,10 +175,12 @@ const GLXShadow = (function () {
       if (ok && !core.IS_MOBILE) {
         blockerProg = link(POST_VS, BLOCKER_FS);
         if (blockerProg) {
-          blockerU = locs(blockerProg, ["uDepthTex", "uSrcTexel"]);
+          blockerU = locs(blockerProg, ["uDepthTex"]);
           S.blockerTex = gl.createTexture();
           gl.bindTexture(gl.TEXTURE_2D, S.blockerTex);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, 512, 512, 0, gl.RED, gl.HALF_FLOAT, null);
+          // R32F (renderable under EXT_color_buffer_float, like the R16F it
+          // replaces; NEAREST-only, which is how the lit pass reads it).
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 512, 512, 0, gl.RED, gl.FLOAT, null);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -317,7 +319,6 @@ const GLXShadow = (function () {
         gl.bindTexture(gl.TEXTURE_2D, S.mapTex);
         gl.bindSampler(0, blockerSampler);
         gl.uniform1i(blockerU.uDepthTex, 0);
-        gl.uniform2f(blockerU.uSrcTexel, 1 / SHADOW_SIZE, 1 / SHADOW_SIZE);
         gl.disable(gl.DEPTH_TEST); setBlend(false);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         gl.bindSampler(0, null);

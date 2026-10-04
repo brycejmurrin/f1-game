@@ -1329,7 +1329,7 @@ const TLX = (function () {
       let fx = null;
       try {
         if (window.TLXShaders && TLXShaders.fx) {
-          fx = TLXShaders.fx(THREE, TSL, { chunks, sharedUniforms: _sharedUniforms });
+          fx = TLXShaders.fx(THREE, TSL, { chunks, sharedUniforms: _sharedUniforms, lit });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: fx factory failed, FX paths off —", e); } catch (_) {}
@@ -3011,6 +3011,7 @@ const TLX = (function () {
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
           t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
+          t.premultiplyAlpha = true;            // decal atlas: premultiplied, ONE/ONE_MINUS_SRC_ALPHA (GLX parity)
           // Drop the CPU source once three has copied it to the GPU (see
           // releaseTexSource). onUpdate fires inside three's updateTexture after
           // the upload and mip generation, on both the WebGPU and WebGL backends,
