@@ -146,15 +146,23 @@ const WeatherArc = (function () {
       const seq = arc.seq;
       const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
       if (G.raceWeather !== want) { setWeatherLive(want, true); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
-      // The rain loop follows wetness (isRaining, ≥ 0.72), which an arc ramps
-      // continuously — the stage flips above land below it (dry→rain's "rain"
-      // flip at 2/3 reads 0.667), so the loop was stopped there and never
-      // started when the road crossed the line. Re-decide on each crossing.
-      const raining = G.isRaining();
+      // The rain follows WETNESS (isWetRoad ≥ 0.25 shows the field, isRaining
+      // ≥ 0.72 picks the storm tier and the rain loop), which an arc ramps
+      // continuously — and the stage flips above land off those lines: rain→dry
+      // flips "dry" at 0.333 (still wet, so it seeded and showed), dry→rain
+      // flips "rain" at 0.667 (still drizzle). Until 2026-10-04 only the audio
+      // was re-decided here, so a drying race left a frozen box of streaks
+      // hanging for the rest of it and a storm ran on drizzle-tier drops.
+      // Re-decide visibility, tier and loop on each crossing.
+      const wet = G.isWetRoad(), raining = G.isRaining();
+      if (arc.wet !== undefined && (wet !== arc.wet || (wet && raining !== arc.raining))) {
+        if (wet) G.initRainDrops();   // reseed: drizzle below 0.72, storm above
+        Particles.rainShow(wet);
+      }
       if (raining !== arc.raining) {
         if (arc.raining !== undefined && G.soundOn) { if (raining) GameAudio.startRain(); else GameAudio.stopRain(); }
-        arc.raining = raining;
       }
+      arc.wet = wet; arc.raining = raining;
       if (f >= 1) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
         arc = null;   // arc complete — weather stays at `to`

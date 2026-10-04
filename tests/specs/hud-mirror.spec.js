@@ -173,18 +173,30 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
   // day race). A v-flip inverts the glass and not the HUD.
   // WAITED FOR, not read once: TLX on llvmpipe renders a race frame every few
   // hundred ms, and remote gfx shard 1/4 (run 37103719285) read the same count
-  // twice with no frame between. Poll for the next glass draw, then measure.
+  // twice with no frame between. Poll for the next glass draw, present that
+  // frame (glass.screen is this draw; #game-soft lags until the blit), then
+  // measure.
   const glass0 = on.m.backend.glass || 0;
   await page.waitForFunction((g) => {
     const m = window.__apex.mirror();
     return !!(m && m.backend && m.backend.glass > g && m.glass && m.glass.live > 0);
   }, glass0, { polling: 100, timeout: FRAME_MS });
+  await awaitPresentedFrame(page, 12000);
   const lens = await page.evaluate(() => window.__apex.mirror());
   const ld = JSON.stringify({ backend: lens.backend, glass: lens.glass });
   expect(lens.backend.glass, ld).toBeGreaterThan(glass0);
   expect(lens.glass && lens.glass.live, ld).toBeGreaterThan(0);
-  const bands = await glassBands(page, lens.glass.screen, on.m.rect);
-  test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify(bands) });
+  // The HUD rows are read at the rect the backend COMPOSITED at for this frame
+  // (lens.backend.rect), never the `on` snapshot: between the two the radio
+  // card step and hud.js's 10 Hz refits can move #hud-mirror (its top is the
+  // runtime --hud-top-h), and mirror-pass.js re-measures every 500 ms, so the
+  // composite follows and a stale rect samples rows a few px off — one bright
+  // feature then lands in the "wrong" band, and the glass-0 verdict flipped
+  // run to run on an unchanged image (2026-10-04: a bisect blamed a
+  // netplay-only merge; the glass means were identical in every run).
+  expect(lens.backend.rect, ld).toEqual(lens.rect);
+  const bands = await glassBands(page, lens.glass.screen, lens.backend.rect);
+  test.info().annotations.push({ type: "mirror-glass-bands", description: JSON.stringify({ bands, rect: lens.backend.rect, onRect: on.m.rect }) });
   if (requirePixels) expect(bands, "GLX presents through #game-soft").toBeTruthy();
   if (bands) {
     const bd = JSON.stringify(bands);
@@ -192,11 +204,16 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
     for (const [i, b] of bands.entries()) {
       expect(b.off, `cockpit glass ${i} is on the canvas: ${bd}`).toBeFalsy();
       const hud = b.hudTop - b.hudBottom;
-      if (Math.abs(hud) < 6) continue;   // no vertical contrast in the HUD's rows: nothing to orient by
+      const glass = b.top - b.bottom;
+      // Both sides need a vertical step. HUD contrast alone is not a v-flip:
+      // the left lens at the Red Bull grid (CI 37232795851) samples the pit
+      // wall (~0 luma delta) while its HUD crop still covers sky/road. A real
+      // v-flip inverts a band that HAS contrast.
+      if (Math.abs(hud) < 6 || Math.abs(glass) < 6) continue;
       decided++;
-      expect((b.top - b.bottom) * Math.sign(hud), `glass ${i} top/bottom ordered like the HUD mirror (a v-flip inverts it): ${bd}`).toBeGreaterThan(2);
+      expect(glass * Math.sign(hud), `glass ${i} top/bottom ordered like the HUD mirror (a v-flip inverts it): ${bd}`).toBeGreaterThan(2);
     }
-    expect(decided, `at least one glass has HUD contrast to orient by: ${bd}`).toBeGreaterThan(0);
+    expect(decided, `at least one glass has HUD and glass contrast to orient by: ${bd}`).toBeGreaterThan(0);
   }
 
   // A TAP collapses it to the chip (the phone toggle — no M key there), and a

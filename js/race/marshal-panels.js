@@ -10,19 +10,22 @@
    the glow lights exactly that board.
 
    Built like js/race/start-lights.js: no geometry and no uniform — each lit
-   frame re-spawns one additive glow particle per panel (Particles.glow, life
-   0.05 s), capped to the NEAREST_N posts to the eye so a safety car on a
-   52-post circuit never floods the 256-particle pool. Posts come from the
-   scenery registry (track.props.list, kind "marshalPost"); a post's sector
+   frame issues one additive ONE-FRAME disc per panel (Particles.flare, from
+   the flare budget's lamp reserve), capped to the NEAREST_N posts to the eye.
+   Until 2026-10-04 each panel was a pooled particle of life 0.05 s re-spawned
+   every frame: the brightness scaled with the refresh rate (0.38× at 30 Hz,
+   1.14× at 60, 3.5× at 144) and at 120 Hz the panels held 96 slots, the whole
+   mobile pool, through every SC/VSC. GAIN keeps the 60 Hz look at every rate.
+   Posts come from the scenery registry (track.props.list, kind "marshalPost"); a post's sector
    follows race control's convention (the circuit's authored splits or thirds). Race control is
    read through G.cautionLevel (allocation-free, every frame) and
    G.cautionInfo (the sector; polled at 4 Hz under a local yellow only).
    Read by js/game.js: MarshalPanels.create(G).update(dt) each frame before
-   Particles.update. */
+   Particles.draw. */
 const MarshalPanels = (function () {
   "use strict";
-  const LIFE = 0.05;        // s: outlives one frame, three alive per panel at most
-  const NEAREST_N = 16;     // panels lit per frame (16 × 3 = 48 of the 256 pool)
+  const GAIN = 1.14;        // the pooled glow's additive sum at 60 Hz (life 0.05 s), now one disc
+  const NEAREST_N = 16;     // panels lit per frame — inside Particles' LAMP_RESERVE with the start lights' 5
   const GREEN_S = 4;        // s of green after a caution clears
   const INFO_EVERY = 0.25;  // s between cautionInfo() reads under a local yellow
   const COL = { yellow: [1.0, 0.78, 0.08], red: [1.0, 0.12, 0.06], green: [0.15, 1.0, 0.25] };
@@ -88,7 +91,7 @@ const MarshalPanels = (function () {
 
     function update(dt) {
       _t += dt > 0 ? dt : 0;
-      if (!P || !P.glow) return;
+      if (!P || !P.flare) return;
       const show = showing(dt > 0 ? dt : 0);
       if (!show || G.state !== "race") return;
       const posts = postsFor(G.track);
@@ -101,7 +104,7 @@ const MarshalPanels = (function () {
           ((a.x - eye[0]) ** 2 + (a.z - eye[2]) ** 2) - ((b.x - eye[0]) ** 2 + (b.z - eye[2]) ** 2)).slice(0, NEAREST_N);
       }
       const c = show.col, a = 0.9 * show.flash;
-      for (const p of lit) P.glow(p.x, p.y, p.z, 0.45, c[0], c[1], c[2], a, LIFE);
+      for (const p of lit) P.flare(p.x, p.y, p.z, 0.45, c[0] * GAIN, c[1] * GAIN, c[2] * GAIN, a, true);
     }
 
     return { update, postsFor, showing };

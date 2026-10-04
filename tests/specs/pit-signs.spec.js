@@ -8,9 +8,18 @@ import { test, expect, BOOT_MS, TRACK_MS, awaitTrackBuild } from "../helpers/fix
 
 test.describe("pit signs", () => {
   test("every bay wears its team's sign as one decal, and meshToggle hides it", async ({ page }) => {
+    // Exercise the real decal upload/draw with the supported LOW preset.
+    // Env probes, SSR and car shadows can stall SwiftShader for 20 s per
+    // frame; none gates PitSigns.draw or changes these atlas assertions.
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxPreset", JSON.stringify("low")));
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.race("albert_park", "day", "dry", { laps: 3 }));
+    const preset = await page.evaluate(() => {
+      window.__apex.renderScale(0.5);
+      window.__apex.race("albert_park", "day", "dry", { laps: 3 });
+      return GfxQuality.current();
+    });
+    expect(preset).toBe("low");
     await awaitTrackBuild(page);
     // A CI runner renders Albert Park at ~12 s a frame under SwiftShader, so
     // every wait below is ONE frame at half the render scale (its floor).

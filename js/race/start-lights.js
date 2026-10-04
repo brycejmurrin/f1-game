@@ -4,10 +4,13 @@
    looking at. Until 2026-10-01 the gantry carried three static grey boxes and
    nothing drove them (the second graphics-detail survey, item 5).
 
-   The lamps are not geometry: each lit frame re-spawns one additive particle
-   disc per lit lamp (Particles.glow, life 0.1 s), so the glow blooms like a
-   floodlight, needs no uniform and no per-frame mesh, and costs five particles
-   out of a 256 pool during the five seconds a race starts. The gantry comes
+   The lamps are not geometry: each lit frame issues one additive ONE-FRAME
+   disc per lit lamp (Particles.flare, from the flare budget's lamp reserve),
+   so the glow blooms like a floodlight, needs no uniform and no per-frame
+   mesh, and takes nothing from the particle pool. Until 2026-10-04 each lamp
+   was a pooled particle of life 0.1 s re-spawned every frame, so the copies
+   alive at once — and the brightness — scaled with the refresh rate (1.1× at
+   30 Hz, 2.8× at 60, 7.1× at 144); GAIN keeps the 60 Hz look at every rate. The gantry comes
    from the scenery registry (track.props.list, kind "gantry", side 0) — the one
    with the fewest nodes to the start line, within 3 % of a lap. A record names
    its lamp row (`lamp`, the row's centre, and `face`, how far toward the grid
@@ -19,14 +22,16 @@
    (track.startGate, js/track/tracks.js buildGate), which every circuit has —
    until 2026-10-04 the fallback was no lights at all, and 22 of 52 circuits
    started in the dark. Positions are memoised per track. Read by js/game.js:
-   StartLights.create(G).update() each frame before Particles.update. */
+   StartLights.create(G).update() each frame before Particles.draw. */
 const StartLights = (function () {
   "use strict";
   const LAMPS = 5;          // COUNTDOWN_S in js/game.js lights one a second
   const SPACING = 0.9;      // metres between lamp centres
   const DROP = 0.62;        // housing centre below the beam top (structures.js gantry)
   const FACE = 0.30;        // disc sits proud of the housing's grid-facing face
-  const LIFE = 0.10;        // seconds: outlives one frame, dies before the next spawn stacks
+  // The pooled glow's additive sum at 60 Hz (life 0.1 s, the pool's fade), now
+  // drawn as one disc: the same lamp at 60 Hz, and at every other rate too.
+  const GAIN = 2.84;
   const NEAR = 0.03;        // the start gantry is within this fraction of a lap of the line
 
   function create(G, deps) {
@@ -80,14 +85,14 @@ const StartLights = (function () {
     }
 
     function update() {
-      if (!P || !P.glow || G.state !== "count") return;
+      if (!P || !P.flare || G.state !== "count") return;
       const lit = G.lightsLit | 0;
       if (lit <= 0) return;
       const lamps = lampsFor(G.track);
       if (!lamps) return;
       for (let i = 0; i < lit && i < lamps.length; i++) {
         const l = lamps[i];
-        P.glow(l[0], l[1], l[2], 0.55, 1.0, 0.10, 0.05, 0.95, LIFE);
+        P.flare(l[0], l[1], l[2], 0.55, 1.0 * GAIN, 0.10 * GAIN, 0.05 * GAIN, 0.95, true);
       }
     }
 

@@ -223,8 +223,10 @@ const Gfx = (function () {
    */
   async function create(canvas, opts) {
     try {
-      let pref = null;
-      try { pref = localStorage.getItem(BACKEND_KEY); } catch (_) {}
+      // RendererBoot has already resolved ephemeral overrides (notably XR).
+      // Direct callers may omit the option and keep the saved 2D preference.
+      let pref = opts && opts.backend;
+      if (pref == null) try { pref = localStorage.getItem(BACKEND_KEY); } catch (_) {}
       if (pref == null) pref = "three";
 
       // unset / "three" -> TLX (three.js/TSL backend; WebGPU with automatic
