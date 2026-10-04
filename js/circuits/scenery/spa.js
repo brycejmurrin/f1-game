@@ -451,22 +451,15 @@
         const L = anchor(kb, -1, 3), R = anchor(kb, 1, 3);
         const span = Math.hypot(R.c[0] - L.c[0], R.c[2] - L.c[2]) + 3;
         const h = 6.5, id = `spa-footbridge-${Math.round(s * 1000)}`;
-        for (const [suffix, a] of [["left", L], ["right", R]]) {
-          const b = [a.r, a.u, a.t], c = vadd(a.c, a.u, h / 2);
-          modelGroup(`${id}-${suffix}-support`, {
-            center: c, size: [3, h, 3], basis: b,
-          }, (stage) => {
-            stage._mat = MAT.METAL;
-            addBox(stage, c, [3, h, 3], [0.55, 0.56, 0.58], b);
-          }, { required: true });
-        }
+        // One set of piers: overheadSpan's ground-anchored legs. A second
+        // Frenet 6.5 m modelGroup box at the same feet shared those 3×3 faces
+        // (~15 mm, 17.6 m²) after SRTM elevation moved the legs (coplanar-
+        // audit, two spots). Dropping the span legs instead left the deck
+        // hanging (ground-audit unsupported 4 > 3). supportWidth 3 m keeps
+        // the chunky Ardennes piers without a duplicate mesh.
         overheadSpan({
           id, frac: s, clearance: h, thickness: 0.5, depth: 3.4, span,
-          // The required modelGroup piers above already stand the deck.
-          // overheadSpan's own legs share those 3×3 faces (~15 mm, 17.6 m²)
-          // once the SRTM elevation moves the ground-anchored boxes — two
-          // coplanar spots, one per bridge (coplanar-audit, #878).
-          supports: false, color: deckCol, required: true,
+          supportWidth: 3.0, supportGap: 1.5, color: deckCol, required: true,
         });
       }
 
