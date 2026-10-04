@@ -261,3 +261,26 @@ test("identity() reads the same ufrag + fingerprint off the verbatim and the reb
   assert.equal(NetSdp.fingerprint(both), verbatim.fp);
   assert.equal(NetSdp.identity("v=0\r\n"), null, "no ufrag/fingerprint, no identity");
 });
+
+// L8-e: candidates no other device can reach, and ports that are not ports,
+// never take one of the MAX_CANDS slots (and a NaN port was packed as 0).
+test("link-local IPv6, loopback and non-numeric ports are not packed", () => {
+  const withCands = (lines) => REAL.replace(/^a=candidate:.*\r\n/m, lines.map((l) => "a=candidate:" + l + "\r\n").join(""));
+  const sdp = withCands([
+    "1 1 udp 2113937151 fe80::1%eth0 50000 typ host generation 0",
+    "2 1 udp 2113937151 ::1 50001 typ host generation 0",
+    "3 1 udp 2113937151 127.0.0.1 50002 typ host generation 0",
+    "4 1 udp 2113937151 192.168.1.10 abc typ host generation 0",
+    "5 1 udp 2113937151 192.168.1.11 0 typ host generation 0",
+    "6 1 udp 2113937151 192.168.1.12 54321 typ host generation 0",
+    "7 1 udp 2113937151 2001:db8::5 54322 typ host generation 0",
+  ]);
+  const out = NetSdp.unpack(NetSdp.pack(sdp));
+  const cands = out.match(/^a=candidate:.*$/gm);
+  assert.equal(cands.length, 2, "only the two reachable candidates: " + cands.join(" | "));
+  assert.match(out, /192\.168\.1\.12 54321 typ host/);
+  assert.match(out, /2001:db8::5 54322 typ host/);
+  assert.doesNotMatch(cands.join("\n"), /fe80|::1 |127\.0\.0\.1| 0 typ /);
+  // Nothing reachable at all: nothing to pack, as before.
+  assert.equal(NetSdp.pack(withCands(["1 1 udp 2113937151 fe80::2 5 typ host generation 0"])), null);
+});
