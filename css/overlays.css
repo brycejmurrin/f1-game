@@ -454,6 +454,10 @@
   opacity: 0.5;
 }
 #vsfriend .vs-ready.on { opacity: 1; color: #7CFC7C; }
+/* The 4-letter verification code (lobby.js verifyRow): read aloud and compared
+   with the other screen, so it reads like the room code, not like a label. */
+#vsfriend .vs-driver [data-verify] { flex: 0 0 auto; font-weight: 700; letter-spacing: var(--ls-3); }
+#vsfriend .vs-driver [data-verify-remove] { flex: 0 0 auto; font-size: var(--fs-micro); }
 #vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
 
 /* ---- room codes ---- */
@@ -566,4 +570,17 @@
 /* Failure here is usually NAT traversal, which the player can act on only if
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
+/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above every
+   menu sheet, bottom-right clear of the safe area, a full tap target; never
+   shown in a race (the module hides it there). The HUD chip's plate, not the
+   team accent (nontext-contrast: --accent is decoration only). */
+#update-chip {
+  position: fixed; z-index: 9000;
+  right: calc(var(--sar) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
+#update-chip[hidden] { display: none; }
 } /* @layer overlays */

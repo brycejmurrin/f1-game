@@ -185,10 +185,28 @@ export async function update(data = load(), { dryRun = false, lowerOnly = false 
  * shell addition made tooling-fast fail once and pass immediately after.
  * The commit hook still calls this WITHOUT dryRun: there the write is the
  * point, and it is staged into the diff a human reads. */
-export async function autoRaise({ maxRaise = 40, dryRun = false } = {}) {
-  const data = load();
+/* WHAT THE HOOK MAY ABSORB (2026-10-04): a per-file LINE count, nothing else.
+ * autoRaise used to raise every row that was over by <= maxRaise — tree
+ * metrics included — so a commit adding one zero-reference module raised
+ * zeroRefModules 0 -> 1, or one expect-less spec raised implicitAsserts, and
+ * staged it; CI's --base only warns below 40. Those counts are shrink-only
+ * (several carry `slack: 0`, exact equality), and nothing else enforces them.
+ * A tree metric, a non-line metric (gMembers, topLets, blanketOnlyRoutes) and
+ * any entry with slack 0 now BLOCK with the reason; the fix is to shrink the
+ * count, or `--update` with a reason in the commit. */
+export const AUTO_RAISE_METRICS = new Set(["lines", "codeLines"]);
+export function autoRaiseBlockReason(r, maxRaise = 40) {
+  if (r.missing) return "the file is missing";
+  if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
+  if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
+  if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";
+  if (r.over > maxRaise) return `past the ${maxRaise}-line auto-raise`;
+  return null;
+}
+
+export async function autoRaise({ maxRaise = 40, dryRun = false, data = load() } = {}) {
   const v = verdict(await measure(data));
-  const big = v.over.filter((r) => r.over > maxRaise || r.missing);
+  const big = v.over.map((r) => ({ ...r, reason: autoRaiseBlockReason(r, maxRaise) })).filter((r) => r.reason);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
   if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
   if (dryRun) {
@@ -300,7 +318,7 @@ async function main() {
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff)`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
-    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — past the ${maxRaise}-line auto-raise: extract, or raise it deliberately (node tools/check/ratchets.mjs --update) and say why in the commit`);
+    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update) and say why in the commit`);
     process.exitCode = r.ok ? 0 : 1;
     return;
   }

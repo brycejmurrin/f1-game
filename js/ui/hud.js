@@ -686,7 +686,30 @@ function fitHud() {
   const capNo = capFor(leftN);
   _gapTight = capLong < scale;
   _gapDrop = _gapTight && capShort < scale;
-  const capTop = Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo));
+  // THE TOP-RIGHT BUTTONS SHARE THE TOWER'S ROW. `right` above budgets the
+  // sector box, but on touch CHASE and PAUSE sit at the top edge further in
+  // than it (640x360 @130: CHASE at x 489.6, sectors at 577.6), so the centred
+  // tower grew under the camera button — BEST over a tap target (hud-survey,
+  // 2026-10-04). They size by BUTTON SIZE in screen px, not by this zoom, so
+  // the limit is their left edge. But that edge MOVES WITH THE CAP: the buttons
+  // ride --hud-btn-z = max(1, --hud-z-top) (css/hud.css), so capping from where
+  // they stand now shrank both and overshot (z 0.979 where 1.09 fits, the gap
+  // 39 px). Their span is taken back to zoom 1 (k) and solved WITH the tower:
+  // the answer does not depend on the zoom painted now, so it cannot hunt.
+  // The centred layout only: broadcast anchors the tower left, far from them.
+  let capChrome = Infinity;
+  if (!bcast && top) {
+    const tR = layoutRect(_hudTop), room = window.innerWidth - FIT_AIR - half;
+    const bzNow = Math.max(1, +root.style.getPropertyValue("--hud-z-top") || scale);
+    for (const el of [els.btnCam, els.pausebtn]) {
+      const r = el && !el.hidden ? layoutRect(el) : null;
+      if (!(r && r.width && r.left > half && r.top < tR.bottom + FIT_AIR)) continue;
+      const k = (window.innerWidth - r.left) / bzNow;
+      const z = room / (top / 2 + k);
+      capChrome = Math.min(capChrome, z >= 1 ? z : (room - k) / (top / 2));
+    }
+  }
+  const capTop = Math.min(capChrome, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its

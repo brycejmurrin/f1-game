@@ -32,7 +32,7 @@ export const EXCLUDED = {
   "test:xr": "IWER emulated-VR — path-gated xr job in ci.yml, not a nightly rotation slot",
   "test:baseline": "the golden trial runs itself on the nightly, non-blocking",
   "test:gallery": "a screenshot gallery with no assertions — nothing to go red",
-  "test:render": "empty group (its specs live in the renderer job)",
+  "test:render": "a PARTITION (--project=render), not a topical group: every RENDER_SPECS file also sits in a topical group the rota already runs",
   "test:smoke": "already runs unconditionally on EVERY push and every train",
 };
 

@@ -28,7 +28,11 @@
     // would stand inside it.
     ownPitStraight: true,
     dressingExclusions: [
-      { kind: "city", s0: 0.02, s1: 0.14 },
+      // 0.02-0.30 is Magdalena Mixiuhca park (T1 -> Esses): the generic city
+      // pass stood 20-50 m towers 25-30 m off both edges here (measured 44
+      // props h > 20 within 60 m). The skyline stays the scenery file's
+      // far ring and backdrop; the park band is its forestEdge/avenue.
+      { kind: "city", s0: 0.02, s1: 0.30 },
       { kind: "city", s0: 0.60, s1: 0.94 },
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],

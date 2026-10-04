@@ -151,6 +151,13 @@ const MirrorPass = (function () {
       _wired = true;
       e.addEventListener("click", () => { _collapsed = true; _measureAt = -Infinity; });
       c.addEventListener("click", () => { _collapsed = false; _measureAt = -Infinity; });
+      // A rotation or resize moves the frame NOW; the MEASURE_MS clock alone
+      // painted the old rect for up to half a second after a phone turned.
+      const remeasure = () => { _measureAt = -Infinity; _pipMeasureAt = -Infinity; };
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("resize", remeasure);
+        window.addEventListener("orientationchange", remeasure);
+      }
     }
     function canvasEl() { return _canvas || (_canvas = document.getElementById("game")); }
 
