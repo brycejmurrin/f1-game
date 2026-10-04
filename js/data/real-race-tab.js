@@ -160,7 +160,7 @@ const DataRealRace = (function () {
     for (const p of arr(raw.pits)) {
       const d = byNum[num(p && p.driver_number)];
       const lap = num(p && p.lap_number);
-      if (d && lap != null) { d.pits.push(lap); (d.pitT = d.pitT || []).push(secs(p.date)); (d.pitDur = d.pitDur || []).push(num(p.pit_duration)); }
+      if (d && lap != null) { d.pits.push(lap); (d.pitT = d.pitT || []).push(secs(p.date)); (d.pitDur = d.pitDur || []).push(num(p.lane_duration ?? p.pit_duration)); }
     }
     for (const r of arr(raw.result)) {
       const d = byNum[num(r && r.driver_number)];
