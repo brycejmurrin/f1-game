@@ -147,6 +147,7 @@ test("cockpit and other cameras keep separate layouts; setCam swaps them", () =>
   const { H, els } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } });
   assert.equal(H.camSet("cockpit"), "cockpit");
   assert.equal(H.camSet("visor"), "cockpit");
+  assert.equal(H.camSet("helmet"), "cockpit", "HELMET looks at the same wheel");
   assert.equal(H.camSet("chase"), "other");
   assert.equal("data-hl" in els["#hud-tyre"].attrs, false, "chase layout shows by default");
   H.setCam("cockpit");
