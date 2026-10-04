@@ -117,7 +117,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     return { status: transportStatus || "new", onClose() {}, close() {} };
   });
   return {
-    lobby, elements, scan, video, transports, replacements, location, G, room, status,
+    lobby, elements, scan, video, transports, replacements, location, G, room, status, context,
     click(id) { const el = elements.get(id); return el && el.onclick ? el.onclick() : undefined; },
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
     emitWindow(type) { for (const fn of winListeners.get(type) || []) fn(); },
@@ -735,6 +735,72 @@ test("an invalid seed or round rejects the whole payload, as every other field d
       assert.equal(h.G.raceLaps, 3, `${JSON.stringify(bad)} must reject the payload whole`);
     }
   } finally { h.lobby.cancel(); }
+});
+
+// ── dirty air and AI pace are race rules; a guest's own rules come back ───────
+// Both change every AI car's grip / vmax, and each peer simulated its own saved
+// choice. And applySettings overwrote the guest's laps/difficulty/tyres/… in
+// memory with nothing to put them back after the room or the race.
+test("the host publishes dirty air and AI pace with its settings", () => {
+  assert.match(SOURCE, /dirtyAir: G\.raceDirtyAir, aiPace: G\.aiPace,/);
+});
+
+function ruleGuestStubs(h) {
+  const stored = new Map([["dirtyAir", "classic"]]);
+  const sets = [];
+  h.G.store = {
+    get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+    set: (k, v) => { sets.push([k, v]); stored.set(k, v); },
+    rawDel: (k) => stored.delete(k),
+  };
+  h.context.PhysicsConsts = { DirtyAir: { isLevel: (v) => ["off", "classic", "cfd"].includes(v) } };
+  h.context.AiBand = { isMode: (v) => v === "scripted" || v === "catchup" };
+  let dirty = "classic", pace = "scripted";
+  Object.defineProperty(h.G, "raceDirtyAir", { get: () => dirty, set: (v) => { dirty = v; h.G.store.set("dirtyAir", v); }, configurable: true });
+  Object.defineProperty(h.G, "aiPace", { get: () => pace, set: (v) => { pace = v; h.G.store.set("aiPace", v); }, configurable: true });
+  return stored;
+}
+
+test("a guest applies dirty air and AI pace in memory, and rejects bad values", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    const stored = ruleGuestStubs(h);
+    s.deliver("settings", { laps: 5, dirtyAir: "cfd", aiPace: "catchup" });
+    assert.equal(h.G.raceDirtyAir, "cfd");
+    assert.equal(h.G.aiPace, "catchup");
+    assert.equal(stored.get("dirtyAir"), "classic", "the guest's saved choice is put back");
+    assert.equal(stored.has("aiPace"), false, "unset stays unset");
+    for (const bad of [{ dirtyAir: "max" }, { dirtyAir: 1 }, { aiPace: "rubber" }, { aiPace: true }]) {
+      s.deliver("settings", Object.assign({ laps: 9 }, bad));
+      assert.equal(h.G.raceLaps, 5, `${JSON.stringify(bad)} must reject the payload whole`);
+    }
+    assert.equal(h.G.raceDirtyAir, "cfd");
+    assert.equal(h.G.aiPace, "catchup");
+  } finally { h.lobby.cancel(); }
+});
+
+test("leaving the room gives the guest back its own rules", async () => {
+  const { h, s } = await connectedGuest();
+  ruleGuestStubs(h);
+  h.G.raceLaps = 3; h.G.difficulty = "normal"; h.G.seed = 77; h.G.raceRound = 1;
+  try {
+    s.deliver("settings", { laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" });
+    s.deliver("settings", { laps: 15 });   // a second payload must not re-snapshot the host's values
+    assert.equal(h.G.raceLaps, 15);
+  } finally { h.lobby.cancel(); }
+  assert.equal(h.G.raceLaps, 3);
+  assert.equal(h.G.difficulty, "normal");
+  assert.equal(h.G.seed, 77);
+  assert.equal(h.G.raceRound, 1);
+  assert.equal(h.G.raceDirtyAir, "classic");
+  assert.equal(h.G.aiPace, "scripted");
+  assert.equal(h.G.store.get("aiPace", undefined), undefined, "restoring did not persist the guest's in-memory value");
+});
+
+test("the race end (a LOCAL NetPlay stop) restores the guest's rules, a mid-race drop does not", () => {
+  assert.match(SOURCE, /onStop: restoreOwnRules,/);
+  assert.match(NETPLAY, /if \(!active\) \{ lastReason = null; runOnStop\(reason\); return false; \}/);
+  assert.match(NETPLAY, /if \(reason != null && reason !== "local"\) return;/);
 });
 
 // ── a typo is refused as a typo, even before the transport exists ─────────────
