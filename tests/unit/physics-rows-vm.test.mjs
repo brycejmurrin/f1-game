@@ -353,11 +353,16 @@ test("a descent does not confiscate existing overspeed; flat throttle bleeds it"
   g.apex.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
   const a = g.apex;
   let dnAt = 0, dn = 0;
+  // Steepest descent on a near-STRAIGHT stretch: the probe drives steer 0 for
+  // 0.75 s, so a descent inside a bend (Spa's real profile drops into Eau
+  // Rouge and Pouhon on curves) measures the car leaving the road, not the
+  // downhill-overspeed rule this row pins.
   for (let i = 0; i < 300; i++) {
     const f = i / 300;
     a.jump(f, 40, 0); a.step(1 / 60, 1);
     const s = a.physState().slope;
-    if (s < dn) { dn = s; dnAt = f; }
+    const bend = Math.max(...a.scan([0, 20, 40, 60]).map((p) => Math.abs(p.k)));
+    if (bend < 0.003 && s < dn) { dn = s; dnAt = f; }
   }
   a.jump(dnAt, 40, 0);
   const vmax = a.physState().vmaxNow || 72;

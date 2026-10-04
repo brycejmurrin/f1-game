@@ -27,15 +27,13 @@ const OPTIONAL_ASSET_MS = 4000;
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 // Written after the BACKGROUND optional pool: the cache holds everything its
-// build will eventually precache. The opportunistic sweep waits for it. The
-// install-critical set (essentials + GLX + chosen backend) finishes earlier and
-// may skipWaiting before this marker — activate must NOT delete prior
-// generations until SETTLED, or a mid-background offline window loses assets.
+// build will eventually precache. Every sweep (fetch path and activate) waits
+// for it; install calls skipWaiting only after writing it.
 const INSTALL_SETTLED_URL = "__apex_install_settled__";
 
 // Default chosen backend at install: TLX (three) is the shipped picker default.
-// GLX stays in the required pool separately. WGX + scenery + data/net wait for
-// the background pool after skipWaiting.
+// GLX stays in the required pool separately. WGX + scenery + data/net are the
+// background pool, fetched after it (download priority only — see install).
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
 }
@@ -191,8 +189,8 @@ async function sweepStaleCaches() {
   if (!keys.includes(name)) return;
   // SETTLED, not just complete: the complete marker lands before the optional
   // pool, and an OLD active worker that has learned the new name would sweep its
-  // own cache inside the window "SKIPWAITING STAYS LAST" protects (an old-shell
-  // tab offline then lost its lazy ?v=<old> assets).
+  // own cache while the new install is still seeding (an old-shell tab offline
+  // then lost its lazy ?v=<old> assets).
   if (!(await caches.match(INSTALL_SETTLED_URL, { cacheName: name }))) return;
   const stale = keys.filter((k) => cacheBuild(k) < build);
   await Promise.all(stale.map((k) => caches.delete(k)));
@@ -498,23 +496,26 @@ self.addEventListener("install", (event) => {
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
-    // INSTALL-CRITICAL first (chosen backend = TLX + three.js). Then skipWaiting
-    // so the new worker can activate without waiting on ~5 MB of scenery/WGX/
-    // data/net. The BACKGROUND pool runs after skipWaiting still inside this
-    // waitUntil; activate refuses to delete prior generations until SETTLED.
+    // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
+    // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then
+    // skipWaiting. The order of the pools is a download priority, nothing
+    // more: skipWaiting() only SETS A FLAG, and the browser reads it after
+    // every install extend-lifetime promise has settled
+    // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
+    // skipWaiting between the pools — the old layout — activated nothing early
+    // and only read as if it did; activation always followed SETTLED.
     const critical = stamped.filter((u) => isInstallCriticalOptional(u.replace(/\?v=.*$/, "")));
     const background = stamped.filter((u) => isBackgroundOptional(u.replace(/\?v=.*$/, "")));
     let optionalMissed = 0, firstMissed = "";
-    await pooled(critical, 4, async (u) => {
-      if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
-    });
-    await self.skipWaiting();
-    await pooled(background, 4, async (u) => {
-      if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
-    });
+    for (const pool of [critical, background]) {
+      await pooled(pool, 4, async (u) => {
+        if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+      });
+    }
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
     await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     invalidateCacheOrder();
+    await self.skipWaiting();
   })().catch((e) => {
     // An essential miss or an unreadable build aborts the install (the old
     // worker and its cache stay in charge). Say so, then keep the rejection.
@@ -526,20 +527,46 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const name = await currentCacheName();
-    const cache = await openCache(name);
-    // No claim and no sweep until the BACKGROUND optional pool has settled —
-    // install may skipWaiting after the critical set alone, and deleting prior
-    // generations in that window would strand an offline client mid-seed.
-    // Test-asserted (service-worker.test.mjs "activation preserves prior…").
-    if (!(await cache.match(INSTALL_SETTLED_URL))) return;
-    const keys = await caches.keys();
-    const build = cacheBuild(name);
-    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && cacheBuild(k) < build).map((k) => caches.delete(k)));
-    invalidateCacheOrder();
+    // Activation follows a SETTLED install (skipWaiting is install's last step,
+    // and the spec activates only once install has settled), so this is the
+    // ordinary stale sweep — the SAME guarded one the fetch path runs. There is
+    // no separate "not settled yet: no claim, no sweep" branch any more: it
+    // could not fire in a browser. The guard inside sweepStaleCaches() still
+    // matters for one real case — a worker restarted between install and
+    // activate re-reads version.json, and a deploy in that gap names a newer,
+    // EMPTY generation; sweeping below it would delete the cache just
+    // installed.
+    await sweepStaleCaches();
+    invalidateCacheOrder();   // a new active worker ranks the generations afresh
     await self.clients.claim();
     swLog("info", "activated " + name);
   })().catch((e) => { swLog("warn", "activate failed: " + errMsg(e)); throw e; }));
 });
+
+function packNetworkFirst(event, req) {
+  const network = fetch(req).then(async (res) => {
+    if (res && res.ok) {
+      try {
+        const cache = await openCache(await currentCacheName());
+        await cache.put(req, res.clone());
+      } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+    }
+    return res;
+  });
+  event.waitUntil(network.then(() => undefined, () => undefined));   // the late write outlives a lost race
+  event.respondWith((async () => {
+    const cached = matchPreferCurrent(req);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
+    try {
+      const res = await Promise.race([network, timeout]);
+      if (res && res.ok) return res;
+    } catch (_) { /* offline: the cache below */ }
+    const hit = await cached;
+    if (hit) return hit;
+    // No cached copy: a slow network is still the only answer there is.
+    try { return await network; } catch (_) { return Response.error(); }
+  })());
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -652,6 +679,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // THE BAKED ASSET PACK IS NETWORK-FIRST. assets/pack/ URLs carry no ?v= (the
+  // deploy's rewrite stamps only the shell's own tags, and js/render/shared/
+  // assets.js asks for bare paths), so cache-first answered a new build's JS
+  // with the OLD generation's manifest and strips for the whole first session
+  // after a deploy — the layer index IS the MAT id. Network first (HTTP
+  // revalidation makes an unchanged file a 304), the cache when the network
+  // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
+  if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
+    packNetworkFirst(event, req);
+    return;
+  }
+
   // Cache-first for everything else. Every DEPLOYED ?v= URL carries a content
   // hash (pages.yml stamps it while staging), and audio/sfx never change
   // post-release, so a cache hit is always correct — no revalidation needed.
@@ -662,15 +701,20 @@ self.addEventListener("fetch", (event) => {
   // life of the cache generation. Network-first there, cache as the offline
   // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
-  event.respondWith((async () => {
+  let cacheWrite = Promise.resolve();
+  const remember = (res) => {
+    const copy = res.clone();
+    cacheWrite = (async () => {
+      const cache = await openCache(await currentCacheName());
+      await cache.put(req, copy);
+    })().catch(noteCacheWriteFail);
+  };
+  const response = (async () => {
     if (DEV_HOST && url.origin === self.location.origin) {
       try {
         const res = await fetch(req);
         if (res && res.ok) {
-          try {
-            const cache = await openCache(await currentCacheName());
-            await cache.put(req, res.clone());
-          } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+          remember(res);
           return res;
         }
       } catch (_) { /* offline: fall through to the cache */ }
@@ -683,13 +727,14 @@ self.addEventListener("fetch", (event) => {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        try {
-          const cache = await openCache(await currentCacheName());
-          await cache.put(req, res.clone());
-        } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+        remember(res);
       }
       return res;
     } catch (_) { /* network rejected */ }
     return Response.error();
-  })());
+  })();
+  // Keep the write alive without delaying a good response on version.json or
+  // CacheStorage. Register synchronously while the fetch event is dispatching.
+  event.waitUntil(response.then(() => cacheWrite));
+  event.respondWith(response);
 });

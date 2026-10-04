@@ -97,23 +97,35 @@ const Collide = (() => {
       p.sweepAngle = bodyAngle(c);
       p.sweepEligible = !(Math.abs(wrapDelta(p.sweepAngle - p.angle, TWO_PI)) > 0.15);
     }
+    // Body velocity in the contact plane (prog, x), +x RIGHT, angle + = nose
+    // toward +x: forward (cs, sn), RIGHT (−sn, cs). c.vLat is +RIGHT (the
+    // PlayerForces frame and game.js's world writeback); until 2026-10-04 both
+    // maps below used the LEFT vector, so a sliding car's lateral motion and a
+    // shove's lateral impulse entered the contact with the wrong sign.
     function body(c, speed, out) {
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       out.angle = bodyAngle(c);
-      out.vx = speed * cs + (c.vLat || 0) * sn;
-      out.vy = speed * sn - (c.vLat || 0) * cs;
+      out.vx = speed * cs - (c.vLat || 0) * sn;
+      out.vy = speed * sn + (c.vLat || 0) * cs;
       out.omega = c.human ? (c.yawRateCur || 0) : 0;
       out.invMass = netPlay.owns(c) ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
       out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
       return out;
     }
+    // A HUMAN ALREADY REVERSING KEEPS ITS SIGN. Every contact response floored
+    // c.speed at 0, so a player backing out of a side-by-side wedge lost the
+    // whole -5 m/s on the first touch and rebuilt it at REVERSE_ACCEL. Forward
+    // contacts, and every AI car (which never reverses on purpose), keep the floor.
+    function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }
+    // A scrub is a loss of MAGNITUDE, whichever way the car is rolling.
+    function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }
     function pushVelocity(c, state, dx, dy, dw) {
       if (netPlay.owns(c)) return;
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       const vx = state.vx + dx, vy = state.vy + dy;
-      c.speed = Math.max(0, vx * cs + vy * sn);
+      c.speed = floorFwd(c, vx * cs + vy * sn);
       if (c.human) {
-        c.vLat = clamp(vx * sn - vy * cs, -40, 40);
+        c.vLat = clamp(vy * cs - vx * sn, -40, 40);   // V · RIGHT, the inverse of body()
         c.yawRateCur = clamp(state.omega + dw, -4, 4);
       }
     }
@@ -380,8 +392,8 @@ const Collide = (() => {
         if (corr > CORR_EPS) {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
-          else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
+          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
+          else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
           // touching with no correction left to apply — re-fired audio, shake
@@ -425,10 +437,10 @@ const Collide = (() => {
             // pace-scaled), while the AI behind still pays its whole share.
             const capV = AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05);
             if (sgn >= 0) {
-              b.speed = Math.max(0, b.speed - iB * jImp);
+              b.speed = floorFwd(b, b.speed - iB * jImp);
               a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
             } else {
-              a.speed = Math.max(0, a.speed - iA * jImp);
+              a.speed = floorFwd(a, a.speed - iA * jImp);
               b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
             }
           }

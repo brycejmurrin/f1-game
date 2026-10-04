@@ -123,6 +123,21 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
             "timeout": 180
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|apex-tools__apex_(eval|shot|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/mcp-browser-guard.sh\"",
+            "timeout": 10
           }
         ]
       }

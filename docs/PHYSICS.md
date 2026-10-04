@@ -75,6 +75,17 @@ peak; a rear haptic fires past the rear's peak. `c.frontUtil` / `c.rearUtil`
 literature: `docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md`; the shape is
 locked by `tests/unit/player-dynamics-vm.test.mjs`.
 
+**Frame (one basis, everywhere).** `+vLat` is the car's RIGHT and `+yawRateCur`
+turns the nose right (`head -= r·dt`); for a heading `(fx, fz) = (sin h, cos h)`
+the right vector is `(−fz, fx)`, the same side as the track's `r = t × up`.
+The world writeback (`game.js`), the contact plane (`collide.js` `body` /
+`pushVelocity`) and the Rapier promote/handback (`incident-sim.js`) all map
+`vLat` along that vector. Until 2026-10-04 all three used `(fz, −fx)`, the LEFT
+vector: the body-slip angle was mirrored in the world (β_world = −β_dyn; a
+slide swung the car toward the apex) while every yaw/slip/force number was
+unchanged. Pinned by `player-dynamics-vm` ("the world path carries the body
+slip"), `contact-geometry` and `incident-gate`.
+
 **Combined-slip (friction ellipse), per axle**: `LONG_GRIP = 34 m/s²` is the
 longitudinal axis of the traction circle and each axle pays for what IT does.
 Braking charges both axles from the smoothed deceleration `axEstSm` (split by

@@ -571,9 +571,14 @@ function saveScreenshot() {
         if (!href) { done(false, "NO 2D"); return; }
       }
       if (!href) { done(false, "BLANK"); return; }
+      const name = "apex26-" + readBackend() + ".png";
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+        await NativeDownload.saveBlob(await (await fetch(href)).blob(), name);
+        done(true); return;
+      }
       const a = document.createElement("a");
       a.href = href;
-      a.download = "apex26-" + readBackend() + ".png";
+      a.download = name;
       if (typeof a.click === "function") a.click();
       done(true);
     } catch (_) {

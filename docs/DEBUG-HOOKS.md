@@ -1218,8 +1218,9 @@ and re-laid at another rate are noise however they are placed.
 alone will pass a defect it was written to catch.
 
 ### The two trims that depend on the core
-`detune` is cents on the sample core's own `detune` param; under the oscillator
-fallback it is the spread between the two saws. `sub` weights `engC` in that
+`detune` is cents on the sample core's own `detune` param — 0..1 is no offset
+(the shipped 0 is "chorus off", not 30 cents flat), each step past 1 adds
++30 cents; under the oscillator fallback it is the spread between the two saws. `sub` weights `engC` in that
 fallback and a dedicated sub-octave oscillator on the sample core. (The
 `granular` core and its `audio().granular` report were removed on 2026-09-04 —
 see above for why.)
@@ -1995,7 +1996,7 @@ HUD overlay and returns the new state.
 
 ### `uiScale(v?)` · `hudScale(v?)` · `btnScale(v?)` → `{pct, stored, min, max, step}`
 The three size sliders (pause ▸ SETTINGS ▸ DISPLAY ▸ HUD), as **percentages**,
-40–200 (`btnScale` alone runs on to 300: a 200 % dock was still small in the hand on
+40–200 (`hudScale` floors at 70; `btnScale` alone runs on to 300: a 200 % dock was still small in the hand on
 a tall landscape phone, and `fitHud`'s `--hud-z-dock` cap stops the columns wherever
 the screen runs out of room, so the slider is the wish and the cap the fit). `uiScale` drives `--ui-scale`, which the menu sheets and the overlay
 children `zoom`; `hudScale` drives `--hud-scale`, which the in-race HUD readout
@@ -2018,7 +2019,8 @@ FIRST paint rather than from whenever `game.js` runs. Passing `null` clears back
 to that; a number sets and persists it (clamped to `min`/`max`).
 
 ```js
-__apex.hudScale(130)   // {pct:130, stored:130, min:40, max:200}
+__apex.hudScale(130)   // {pct:130, stored:130, min:70, max:200}
+__apex.uiScale(1.3)    // {ok:false, error:"bad_argument"} — a fraction is refused, not stored as 40 %
 __apex.uiScale()       // {pct:100, stored:null, …}  ← device default, nothing stored
 __apex.hudScale(null)  // back to the device default
 ```
@@ -2727,8 +2729,10 @@ __apex.clearCarMeshCaches();
 ```
 
 ### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
-Adaptive-resolution control. No arg: report the current state. A number pins the
-3D render scale (clamped `0.5–1`) and disables the auto-governor — a big
+Adaptive-resolution control. No arg: report the current state. A number in
+`0.5–1` (a FRACTION — the opposite unit to `uiScale`) pins the 3D render scale
+and disables the auto-governor; anything else (`60`, `"auto"`, `false`) returns
+`{ok:false, error:"bad_argument"}` and leaves the governor alone — a big
 fill-rate win (softer 3D; the HUD stays crisp). `true` re-enables the
 auto-governor. `floorMs` is the governor's derived per-device budget (the
 observed floor of frame intervals, not a hardcoded 16.7 ms) — it rises to match
@@ -2966,8 +2970,10 @@ distance in metres, with the mutators that change the call: `uphill`/`downhill`,
 characters. It also adds
 `nextCorners:[{turn, dir, radiusM, severity, distM, apexSpeedKph, exitsOntoStraight,
 suggestBrakeM}]` (the next few corners as a sequence, ordered by distance),
-`rivals:[{id, code, team, rel, gapM, gapS, lateralM, side, speedKph, closingMps,
-threat, lap}]` (sorted by gap, capped at 4), and `affordances` / `unavailable`.
+`rivals:[{id, code, team, rel, gapM, lapsAhead, speedKph, lap, retired, gapS,
+lateralM, side, closingMps, pace, threat}]` (sorted by gap, capped at 4; `gapM` is
+the distance ON THE ROAD, wrapped to the nearest lap, so a lapped car 10 m ahead
+is 10 m ahead — `lapsAhead` carries the standing, -1 = a lap down on you), and `affordances` / `unavailable`.
 
 **Road shape.** `bankingDeg` is the real road-plane roll (`+` = the right edge is
 raised, which holds a **left**-hander), and `camber` says what that means for
@@ -3625,7 +3631,7 @@ a question a few hundred can ("did that change carry more speed through T4?").
 
 ```js
 __apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
-// { ran:{ticks,dt,seconds,policy}, from:{frac,lap}, to:{frac,lap}, distanceM,
+// { ran:{ticks,requestedTicks,dt,seconds,stoppedEarly,policy}, from:{frac,lap}, to:{frac,lap}, distanceM,
 //   speedKph:{min,max,mean,final}, offTrack:{events,seconds,pct},
 //   minClearanceM, wallContacts, lapsCompleted, lastLapS,
 //   cornerMinSpeedKph:[{turn,minSpeedKph}], terminal:{done,reason,atS},
@@ -3635,7 +3641,15 @@ __apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
 `policy` implements the loop the real-time agent literature converges on: an LLM
 cannot decide at 60 Hz, so the policy is consulted at `policyHz` while physics
 steps every tick. A policy that throws returns a typed `PolicyError` rather than
-tearing down the run.
+tearing down the run. `policyHz` must be > 0 (`BadArgumentError`), and
+`ran.policy` reports the rate actually run (ticks are whole, so 7 Hz at 60 Hz
+physics runs at 7.5 Hz).
+
+The run STOPS AT THE FLAG: once the race leaves `race` (the results screen),
+ticking on only repeats the last frame, so the loop ends, `ran.stoppedEarly`
+says when and why (`{atS, reason:"state:results"}`), `ran.ticks` counts the
+ticks actually run (`requestedTicks` what was asked) and the means divide by
+those. Calling it with no race running returns `RaceOverError`.
 
 `cornerMinSpeedKph` is the field to watch for setup and physics work — minimum
 speed through each corner *actually driven* is what a change moves.
