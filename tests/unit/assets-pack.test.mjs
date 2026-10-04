@@ -1092,7 +1092,10 @@ test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the cl
   const i = src.indexOf("function ensureScenery(");
   assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
   const fn = src.slice(i, src.indexOf("\n}\n", i));
-  assert.match(fn, /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "ensureScenery no longer waits for the circuit's baked models");
+  const h = src.indexOf("function sceneryModels(");
+  assert.ok(h >= 0, "sceneryModels(def) is ensureScenery's model wait");
+  assert.match(fn, /sceneryModels\(def\)/, "ensureScenery no longer waits for the circuit's baked models");
+  assert.match(src.slice(h, src.indexOf("\n}\n", h)), /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "sceneryModels no longer reads the closure source");
   assert.match(fn, /return p\.then\(models\)/, "the models are resolved from the closure once the scenery script lands");
   assert.match(fn, /return models\(\)\.then/, "a resident or inline scenery must still wait for its models");
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
