@@ -3182,7 +3182,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
 // RendererBoot.start() itself, booted in a VM: the canary's strike ledger
 // across cold boots that share one localStorage. `bindPick` = the deferred
 // backend's create() succeeds; GLX always attaches.
-function rendererBootRun(ls, { bindPick = true } = {}) {
+function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [] } = {}) {
   const ss = new Map();
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
@@ -3194,20 +3194,41 @@ function rendererBootRun(ls, { bindPick = true } = {}) {
       getItem: (k) => (ss.has(k) ? ss.get(k) : null),
       setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
     },
-    navigator: {}, location: { reload() { throw new Error("no reload expected"); } },
+    ApexXR: { bootPick: () => xrPick },
+    navigator: { gpu: {} }, location: { reload() { throw new Error("no reload expected"); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
-    GLX: { init: () => true },
+    GLX: { init: () => { calls.push("GLX.init"); return true; } },
     Gfx: { create: async () => (bindPick ? { api: "three" } : null) },
   });
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
   seedLog(ctx);
+  if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx);
   vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
   return vm.runInContext("RendererBoot", ctx).create({
-    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async () => {},
+    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async (files) => {
+      calls.push(...files);
+      if (files.includes("tlx.js")) ctx.TLX = { create: async () => { calls.push("TLX.create"); return { api: "three" }; } };
+    },
   });
 }
+
+test("XR's resolved backend reaches Gfx without changing the saved 2D renderer", async () => {
+  for (const saved of [null, "webgl2", "webgpu", "three"]) {
+    const ls = new Map(saved ? [["apex26.gfxBackend", saved]] : []), calls = [];
+    const rb = rendererBootRun(ls, { xrPick: "three", realGfx: true, calls });
+    const boot = await rb.start();
+    assert.equal(boot.bound, true, "XR binds TLX over saved " + saved);
+    assert.equal(boot.gfx.api, "three");
+    assert.deepEqual(calls, ["tlx.js", "TLX.create"]);
+    assert.equal(ls.get("apex26.gfxBackend") ?? null, saved, "the 2D choice survives XR");
+  }
+  const ls = new Map([["apex26.gfxBackend", "three"]]), calls = [];
+  assert.equal((await rendererBootRun(ls, { xrPick: "webgl2", realGfx: true, calls }).start()).bound, false);
+  assert.deepEqual(calls, ["GLX.init"], "ordinary VR still selects GLX without loading TLX");
+  assert.equal(ls.get("apex26.gfxBackend"), "three");
+});
 
 test("a GLX fallback boot that proves itself does not erase the pick's crash strike", async () => {
   // A phone whose THREE dies inside its first ~5 s (before PROVE_FRAMES). The
@@ -3575,8 +3596,10 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
-  assert.match(cd, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
+  // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
+  assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
+  assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyEntry invalidates on store.rev");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -4957,6 +4980,9 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
+  // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
+  let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+  const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");

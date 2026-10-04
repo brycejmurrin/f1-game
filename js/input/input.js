@@ -594,6 +594,11 @@ const Input = (function () {
     const v = axes[i];
     return (typeof v === "number" && isFinite(v)) ? v : 0;
   }
+  // A wheel can assign either right-stick slot to a pedal or steering. Those
+  // axes belong to driving, including a pedal's -1 rest position.
+  function readLookAxis(axes, i) {
+    return i === padAxisMap.steer || i === padAxisMap.throttle || i === padAxisMap.brake ? 0 : readPadAxis(axes, i);
+  }
   /* Scaled-radial shaping, which on a single axis degenerates to scaled-axial
      — but the RESCALE is the part that matters and the part we lacked. A bare
      `if (|x| < dz) x = 0` leaves a step at the boundary: output jumps from 0
@@ -1082,7 +1087,7 @@ const Input = (function () {
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
     {
-      const rx = readPadAxis(axes, 2), ry = readPadAxis(axes, 3);
+      const rx = readLookAxis(axes, 2), ry = readLookAxis(axes, 3);
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {

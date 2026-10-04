@@ -2,33 +2,38 @@
 name: survey-track
 context: fork
 agent: track-surveyor
-description: "Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → agent-view."
+description: "Use when one circuit needs an end-to-end accuracy or grounding pass (gaps, terrain channels/steps, sunk water). Worker analysis is browser-free with parent captures; reusable or parallel multi-track campaigns → track-realism; prop implementation → scenery-dress; geometry hooks only → agent-view."
 ---
 
 # Survey & update a track
 
-Orchestrator for taking one circuit from "roughly dressed" to "reads like the
-real place". Work one circuit at a time.
+Browser-free worker workflow for one assigned circuit's end-to-end accuracy
+pass. The parent owns web research, captures, shared engine work and integration.
+For a reusable or parallel multi-track campaign, the parent uses the
+[track-realism workflow](../track-realism/SKILL.md).
 
 Runs FORKED as the **track-surveyor** subagent (`context: fork`,
 `agent: track-surveyor`): the browser-free measurements and source diagnosis stay in the
-fork; the parent captures survey framings, its edits are confined to that circuit's pair of files, and it stops at
+fork; the parent captures survey framings. The fork edits only that circuit's
+pair of files, and it stops at
 `verify-track` — engine work and the fleet gate below are the PARENT's, after
 the fork returns.
 
 ```sh
-node tools/track/survey-track.mjs <id>            # screenshots + flagged ground probe
-node tools/track/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown + N/E/S/W
-# --oblique may sit anywhere; a comma-list after <id> is fracs (no label required):
-#   survey-track.mjs monaco --oblique 0.1,0.5
-node tools/track/verify-track.cjs <id>            # after every edit
-node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
-# survey-track.mjs and ground-profile.mjs BOOT CHROMIUM (a probe, not a test group; ~1 min).
-# No-browser first pass (Node VM, ~4 s each): verify-track.cjs <id>, float-audit.cjs <id>
-# ("clean" = 0 elevated clusters; it checks props, NOT terrain-over-road or water level).
+node tools/track/verify-track.cjs <id>            # baseline; again after all pair edits
+node tools/track/float-audit.cjs <id> --json      # props, not terrain-over-road/water
+node tools/track/coplanar-audit.cjs <id>         # when overlapping faces matter
 ```
 
-Hands off: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
+For centreline measurements, load `buildContext()` from
+`tools/track/verify-track.cjs`, select the def by id, then call
+`Tracks.buildCenterline(def, { line: false })`. For retained road/terrain/prop
+geometry use `tools/lib/track-build-vm.cjs`; read its API before use. No browser
+launch/capture/automation in the fork, including `survey-track.mjs`,
+`ground-profile.mjs`, `tools/shot/` commands and cloudBrowser. A numerical-only
+output does not make a Chromium-backed tool browser-free.
+
+Related workflows, coordinated by the parent: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
 **new-track** (the def itself — `path`, `turns`/`sectors`, elevation, banking,
 widths: a survey that finds the LAYOUT wrong hands over here, not to dressing),
 **agent-view** (geometry hooks), **playwright-probe** (`shot.mjs`),
@@ -39,29 +44,40 @@ circuit's pair — def + scenery closure; no browser runs).
 
 1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
    landmarks-by-lap-position. Start here.
-2. No-browser layout check (corner order / sector lengths / elevation): `js/circuits/<id>.js`
-   `turns` × `path.len` = metres per corner, `sectors` × `path.len` = sector lengths;
-   `tests/data/f1-circuit-reference.geojson` = OSM length; elevation = conditional baked override in `js/track/circuit-elevations.js`;
-   when absent, inspect authored/default elevation in the def and core/def.js. A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
+2. No-browser layout check: compare the BUILT centreline's `total`, apexes,
+   widths, sectors and elevation against dated evidence. `path.len` is source
+   metadata, not built length; the existing OSM comparison normalizes scale,
+   rotation and lap origin, so it cannot certify those quantities. Surveyed
+   elevation conditionally overrides authored bumps via `TrackDef.fromRaw`
+   (`js/track/core/def.js`); absent profiles do not prove flatness. `startFrac`
+   and width zones use control-index fractions, built `s/total` arc fractions,
+   and turns/sectors racing-space fractions. Respect `_sceneryShift` through
+   wrapped helpers; never pre-shift `K(s)`. A wrong LAYOUT → **new-track**.
+   Probe flags are NOT findings until confirmed off lat 0
    ([loop.md](references/loop.md), "Artefacts" paragraph).
-3. Real-place photos: `WebSearch` / image search. Treat heights/distances as
-   best-effort.
+3. Parent-supplied real-place photos/maps and numerical sources: retain URLs,
+   document year and uncertainty. Distinguish source claims from measurements;
+   a photograph's perspective does not establish a metre dimension or camber.
 
 ## Short loop
 
-1. Read the brief — 3–5 highest-leverage fixes.
-2. Parent captures `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
-   flagged probe (`--` holes, >1 m steps, sag). Add `--oblique` when you need
-   a bounds-fitted topdown and N/E/S/W high obliques (floating props, floor voids).
+1. Read the brief, source pair and parent evidence — select 3–5 fixes supported
+   by a measured defect or dated source.
+2. Read the parent's baseline captures and record camera framings alongside
+   Node VM measurements. Request missing views in the hand-back; the fork
+   never captures them. Parent probes may include aerial/orbit/EYE and obliques.
 3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
-   `js/circuits/<id>.js` is the other half of the pair). New terrain `def` flags need
-   `buildTerrain` **and** `groundYAt` plus the `LIST` whitelist in
-   `js/track/tracks.js` — that is **engine** work (parent / not
-   **track-surveyor**).
+   `js/circuits/<id>.js` is the other half of the pair). Complete all pair edits
+   before verification. New fields, terrain consumers, the `TrackDef.fromRaw`
+   copy, shared engine code, landmark registries, baselines and tests belong to
+   the parent. Coordinate edits around any live parent browser run.
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
-5. Parent captures `survey-track.mjs <id> after` — same framings; flags should clear.
-6. Per-circuit gate: `node tools/track/verify-track.cjs <id>`. The fork stops here. Parent ship, after it returns (optional fleet; a browser run is blocked inside the fork): `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). The
-   **track-surveyor** subagent stops at verify-track / coplanar / float-audit.
+5. Return changes, before/after numbers, source/year evidence, baseline deltas
+   and uncertainties. Parent captures the same framings after integration.
+6. The fork stops after verify-track / applicable coplanar / float-audit.
+   Parent integration, targeted browser checks and shipping follow
+   **check-changes**, after the fork returns. New fields, landmark registries,
+   baselines and tests remain parent-owned.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.

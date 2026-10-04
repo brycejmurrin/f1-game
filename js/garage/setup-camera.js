@@ -475,6 +475,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // shifting the wrong one is what left the car invisible behind a full-width
   // sheet in portrait.
   const canvasEl = $("game"), panelEl = home.active ? home.panel : $("cs-inner");
+  const photoOpen = home.active && $("photo-studio") && !$("photo-studio").hidden;
+  const autoFrame = !photoOpen && (setupPreviewSpin || home.active);
   let homePane = null;
   if (home.active) getSetupPreviewMesh();   // the first held home frame needs its silhouette now, before framing
   let panelFrac = 0, panelFracY = 0;
@@ -520,9 +522,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const spFitD = Math.min(SP_FIT_DIST_MAX,
     SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - Math.abs(panelFrac)), 0.05));
   const homeFov = homePane && gfx.aspect < 1 ? 72 : (home.lens && home.lens.fov) || 36;
-  const homeFit = homePane && GarageExperience.fitHome(_spHull, { az: setupPreviewAz, el: setupPreviewEl,
+  const homeFit = !photoOpen && homePane && GarageExperience.fitHome(_spHull, { az: setupPreviewAz, el: setupPreviewEl,
     center: setupPreviewTgt, aspect: gfx.aspect, fov: homeFov, minDist: SP_DIST_MIN, maxDist: home.lens.maxDist || SP_FIT_DIST_MAX }, homePane);
-  const spDist = homeFit ? homeFit.dist : (setupPreviewSpin || home.active)
+  const spDist = homeFit ? homeFit.dist : autoFrame
     ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
   // Publish what the camera USES: garageCam() reported setupPreviewDist, which
   // is the effective distance only when the turntable is off — so on the auto
@@ -554,7 +556,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   }
   M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
   M4.mulTo(_spVP, _spProj, _spView);
-  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && (setupPreviewSpin || home.active) && !(arriving && arriving.active), _spHull);
+  GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   if (gfx.begin({

@@ -205,6 +205,39 @@ test("T-camera bar and LED ride the same snorkel-aware pod datum", () => {
   }
 });
 
+test("fuel filler rides the engine-cover skin across coverHeight", () => {
+  // Collar/cap used to be literals at y 0.828/0.85. The tank breather next to
+  // them already uses coverSurfaceY; the filler did not, so a short cover left
+  // the cap floating (~13 cm on coverHeight 0.78) and a tall cover buried it.
+  const CAP = [0.91, 0.22, 0.88];
+  const midY = (pts) => {
+    let lo = Infinity, hi = -Infinity;
+    for (const p of pts) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1]; }
+    return (lo + hi) / 2;
+  };
+  for (const coverHeight of [0.78, 1.0, 1.28]) {
+    const parts = {
+      engine: 1, fuel: 1,
+      _visual: {
+        engine: { ...BASE, coverHeight },
+        fuel: { cap: CAP, filler: 1, hatch: 0, vent: 0, breather: 0, line: 0 },
+      },
+    };
+    const mesh = S.Car3D.build([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
+      noWheels: true, parts,
+    });
+    const anchors = S.Car3D.bodyAnchors(parts, undefined, undefined, true);
+    const coverY = S.Car3D.coverSurfaceY(anchors.coverAt(-0.50), 0.12);
+    const cap = verticesFor(mesh, CAP)
+      .filter((p) => Math.abs(p[0] - 0.12) < 0.06 && Math.abs(p[2] + 0.50) < 0.10);
+    assert.ok(cap.length > 0, `coverHeight ${coverHeight}: no fuel-filler cap`);
+    const capY = midY(cap);
+    // Proud of the skin by a collar/cap stack, not floating or buried.
+    assert.ok(Math.abs(capY - coverY) < 0.08,
+      `coverHeight ${coverHeight}: fuel cap y ${capY.toFixed(3)} vs cover y ${coverY.toFixed(3)}`);
+  }
+});
+
 test("functionalEmissive stays reserved for the FIA rain light", () => {
   // The nose running lights are SURFACES.glass for this reason: id 25 is both
   // `emissive` and `functionalEmissive`, and the rain light owns it. A decorative
