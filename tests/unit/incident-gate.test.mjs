@@ -26,13 +26,13 @@ const SRC = readFileSync(join(ROOT, "js/physics/incident-sim.js"), "utf8");
 const RACE_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
 
 function load(over = {}) {
-  const promoted = [];
+  const promoted = [], launched = {};
   const pose = over.pose || null;
   const DebrisWorld = {
     active: () => true,
     rapierReady: () => true,
     worldGen: () => 1,
-    promoteCarDynamic: (i) => { promoted.push(i); return true; },
+    promoteCarDynamic: (i, lin) => { promoted.push(i); launched[i] = lin; return true; },
     demoteCarKinematic: () => {},
     carBodyPose: () => pose,
   };
@@ -62,7 +62,7 @@ function load(over = {}) {
               worldFromTrack: over.worldFromTrack || (() => ({ x: 0, z: 0 })),
               rescuePlayer: () => {}, smp: {} };
   const sim = IncidentSim.create(G);
-  return { sim, cars, promoted, G };
+  return { sim, cars, promoted, launched, G };
 }
 
 test("r2-only config: a car-car launch at relV >= R2_CAR_V queues AND promotes as r2", () => {
@@ -176,10 +176,13 @@ test("postStep hands a finished car back instead of tracking it", () => {
 /* ── the handback must INVERT the promote, not approximate it ──────────────
  *
  * startIncident maps the bespoke (speed, vLat) into Rapier's world with
- *   vWx = spd*fx + vLat*fz ;  vWz = spd*fz - vLat*fx      (fx=sin h, fz=cos h)
- * which is the matrix [[fx,fz],[fz,-fx]]. Its determinant is -1 and it is its
- * own inverse, so reading back with the SAME two lines against the body's new
- * heading returns the originals exactly.
+ *   vWx = spd*fx - vLat*fz ;  vWz = spd*fz + vLat*fx      (fx=sin h, fz=cos h)
+ * i.e. forward (fx, fz) plus +vLat along the car's RIGHT vector (-fz, fx) —
+ * the rotation [[fx,-fz],[fz,fx]], whose inverse is its transpose, so
+ * projecting back onto forward and RIGHT against the body's new heading
+ * returns the originals exactly. (Until 2026-10-04 both halves used the LEFT
+ * vector (fz, -fx): self-inverse, so these round trips passed while every
+ * slide was launched mirrored — the basis tests below pin the direction.)
  *
  * The old handback used `Math.hypot(vx, vz)` and `vLat = 0`. hypot is
  * unsigned, so a car that spun 180 deg during a takeover was handed back
@@ -190,11 +193,11 @@ test("postStep hands a finished car back instead of tracking it", () => {
  */
 const fwd = (spd, vLat, head) => {
   const fx = Math.sin(head), fz = Math.cos(head);
-  return { vWx: spd * fx + vLat * fz, vWz: spd * fz - vLat * fx };
+  return { vWx: spd * fx - vLat * fz, vWz: spd * fz + vLat * fx };
 };
 const inv = (vWx, vWz, head) => {
   const fx = Math.sin(head), fz = Math.cos(head);
-  return { speed: vWx * fx + vWz * fz, vLat: vWx * fz - vWz * fx };
+  return { speed: vWx * fx + vWz * fz, vLat: vWz * fx - vWx * fz };
 };
 
 test("promote -> handback round-trips speed and vLat, at any heading", () => {
@@ -235,7 +238,7 @@ test("a lateral-only promote survives the round trip instead of being zeroed", (
 
 test("the shipped handback uses the inverse, not hypot, for speed and vLat", () => {
   assert.match(SRC, /const vFwd = vWx \* fxh \+ vWz \* fzh/);
-  assert.match(SRC, /const vSide = vWx \* fzh - vWz \* fxh/);
+  assert.match(SRC, /const vSide = vWz \* fxh - vWx \* fzh/);
   assert.match(SRC, /c\.vLat = fin\(vSide\)/);
   assert.doesNotMatch(SRC, /const speed = fin\(vHoriz\)/,
     "speed must come from the signed forward component, not the magnitude");
@@ -295,6 +298,36 @@ test("a settled human facing back up the road is turned to face it", () => {
   runToHandback(sim, cars);
   assert.ok(Math.abs(cars[0].head) < 1e-9, `faces the road (+Z, head 0), got ${cars[0].head}`);
   assert.ok(cars[0].speed > 0, "and goes forward");
+});
+
+/* ── +vLat is RIGHT in the world, both ways ─────────────────────────────────
+ * PlayerForces integrates +vLat as the car's RIGHT (axle slip vLat ± a·r,
+ * +yawRate = nose right) and tracks.js builds the road's right as t × up,
+ * which for a car heading +Z (head 0) is world -X. So a car sliding right at
+ * head 0 must launch with a NEGATIVE world x velocity, and a body drifting
+ * toward -X must come back as +vLat. The round-trip tests above cannot see
+ * this: a mirrored pair round-trips just as exactly.
+ */
+test("promote launches a right slide along the car's right vector (-fz, fx)", () => {
+  const { sim, cars, launched } = load();
+  cars[0].human = true; cars[0].head = 0; cars[0].speed = 40; cars[0].vLat = 5;
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  const lin = launched[0];
+  assert.ok(lin, "the car was promoted");
+  assert.ok(Math.abs(lin.z - 40) < 1e-9, `forward speed along +Z (got ${lin.z})`);
+  assert.ok(Math.abs(lin.x - -5) < 1e-9, `a +vLat (right) slide launches toward world -X (got ${lin.x})`);
+});
+
+test("handback reads a world drift toward the car's right as +vLat", () => {
+  // Identity quaternion: head 0, forward +Z, RIGHT -X. 10 m/s forward, 3 m/s right.
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: -3, vz: 10 };
+  const { sim, cars } = load({ pose });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  sim.postStep(1 / 60);
+  assert.ok(Math.abs(cars[0].speed - 10) < 1e-9, `forward speed (got ${cars[0].speed})`);
+  assert.ok(Math.abs(cars[0].vLat - 3) < 1e-9, `drift toward -X at head 0 is +vLat, sliding right (got ${cars[0].vLat})`);
 });
 
 // HANDBACK SIGN, AI. An AI car moves along the road (c.s += c.speed*dt), so a

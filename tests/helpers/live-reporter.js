@@ -33,6 +33,7 @@ class LiveReporter {
   onBegin(config, suite) {
     this.total = suite.allTests().length;
     this.done = 0;
+    this.skipped = 0;      // final results that were skips — never counted as executed
     this.failed = 0;       // running failure count — lets you abort a tailed run early
     this.durations = [];   // {name, dur} per completed test — for the slowest-N summary
     this.flakyTests = [];  // {spec,title} of tests that FAILED then PASSED on retry (hidden flakiness)
@@ -98,6 +99,7 @@ class LiveReporter {
                  result.status === "skipped" ? "~ skip  " :
                  willRetry ? "! retry " : "x FAIL  ";
     if (mark === "x FAIL  ") { this.failed++; this.failures.push(this.name(test)); }
+    if (result.status === "skipped") this.skipped++;
     this.write(`[${ts()}] ${mark} ${this.done}/${this.total} ${this.name(test)} (${dur}s)`);
     if (result.status !== "passed" && result.status !== "skipped" && result.error) {
       // Keep the first 4 NON-EMPTY lines. Playwright separates the custom
@@ -202,7 +204,17 @@ class LiveReporter {
         this.write(`[${ts()}] = APEX_FAIL_ON_FLAKY=1: ${verdict.blocking.length} flaky test(s) not in tests/data/flaky-quarantine.json — the run is RED`);
       }
     }
-    this.write(`[${ts()}] = run ${status}  (${this.done}/${this.total} done, ${this.failures.length} failed)`);
+    // A RUN THAT EXECUTED NOTHING DID NOT PASS (2026-10-04). Skips counted as
+    // "done", so an all-skip run (a file-level test.skip, a missing fixture, a
+    // null hook routed to test.skip) printed `= run passed (N/N done, 0 failed)`
+    // — indistinguishable from a real pass. Skips are counted on their own,
+    // and a run with tests but none executed is failed.
+    const executed = this.done - this.skipped;
+    if (status === "passed" && this.total > 0 && executed <= 0) {
+      status = "failed";
+      this.write(`[${ts()}] = ALL ${this.total} TEST(S) SKIPPED — nothing executed, so nothing passed: the run is RED`);
+    }
+    this.write(`[${ts()}] = run ${status}  (${this.done}/${this.total} done, ${this.failures.length} failed, ${this.skipped} skipped)`);
     // LAST, and only under the flag: the verdict line above is what every
     // `grep -E '= run (passed|failed…)'` anchors on (AGENTS.md rule 5) and must
     // not move behind an await.

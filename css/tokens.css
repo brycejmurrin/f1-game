@@ -593,6 +593,10 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #a3e635;
   --slower: #ff3b30;
+  /* The RED FLAG chip's field (css/hud.css #hud-flag.flag-red): a fixed flag
+     red like the yellow and the VSC amber, so COLOUR VISION never remaps it,
+     and dark enough that --hud-ink-light reads on it (5.6:1). */
+  --flag-red: #c8102e;
   /* The HUD's dark halo — the recipe #hud-speed-n, .sec-val and .hud-energy-label
      all spell out by hand so light ink stays legible over the live scene. Named
      here so a new HUD readout can reach for it instead of restating the literal
@@ -1036,12 +1040,19 @@ body:not(.desktop) {
    the always-dark HUD plate: the published values (#0077bb, #cc3311) are a
    white-paper palette and measured ~3:1 on rgb(8 8 14 / .72) over a mid-grey
    scene. Every ink here clears 4.5:1 there (tests/unit/apca-timing.test.mjs).
-   --red stays the dark accent: it is never HUD ink (see that test). */
+   --red stays the dark accent: it is never HUD ink (see that test).
+   WARN IS NOT HIT: --sec-slow (a warning, a penalty WARN, damage level 1) and
+   --slower (a penalty HIT, damage level 3) once shared #ee7733 under deutan /
+   protan, which merged penalty-warn with penalty-hit on the radio card and
+   turned damage level 2 — a 50/50 mix of the two — into the same colour as
+   both. Tol's sand #ddcc77 keeps the yellow "caution" meaning and sits well
+   above either red in LIGHTNESS, the one channel every dichromacy keeps
+   (tritan's #ff6a4d / #ee7733 were ~0.01 apart in OKLab L). */
 :root[data-cvd="deutan"],
 :root[data-cvd="protan"] {
   --faster: #4aa3ff;
   --slower: #ee7733;
-  --sec-slow: #ee7733;
+  --sec-slow: #ddcc77;
   --sec-best: #80e0ff;
   --you: #ff6a4d;
   --red: #cc3311;
@@ -1049,7 +1060,7 @@ body:not(.desktop) {
 :root[data-cvd="tritan"] {
   --faster: #00b8a3;
   --slower: #ff6a4d;
-  --sec-slow: #ee7733;
+  --sec-slow: #ddcc77;
   --sec-best: #4aa3ff;
   --you: #ff6699;
 }
@@ -1069,33 +1080,55 @@ body:not(.desktop) {
   --look-hud-bg: var(--hc-hud-plate);
   --look-hud-dim: var(--look-hud-ink);
 }
-/* THE RACE HUD IS DARK IN EVERY THEME. Its plates are literal rgb(8 8 14 / …)
-   (css/hud.css), so LIGHT's ink tokens — a white --hud-halo, a mid-grey
-   --dim, dark hairlines and a light --bg used as ink on --you — painted a
-   glowing smear and ~2:1 labels on them. Same move as .touchbtn in
-   css/overlays.css: restate the DARK values inside #hud. Custom properties
-   resolve where declared, so HIGH CONTRAST's :root --dim (a light-theme mix)
-   must be restated here too, from the dark --text/--bg. */
-:root[data-ui-theme="light"] #hud {
-  --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
+/* THE RACE CHROME IS DARK IN EVERY THEME. Its plates are dark — literal
+   rgb(8 8 14 / …) in css/hud.css, or --plate-opaque — so LIGHT's ink tokens
+   (a white --hud-halo, a mid-grey --dim, dark hairlines, a light --bg used as
+   ink on --you) and LIGHT's plates (--plate-opaque at #fbfbfc) must never
+   reach it. Custom properties resolve where they are DECLARED, so a light
+   --plate-opaque arrives at #hud already computed from the light --carbon:
+   restating --text alone (the first cut of this block) left RELATIVE,
+   STRATEGY, INPUTS, the MIRROR chip, the blue flag and the broadcast tower at
+   ~1.05:1 on a near-white plate, and #announce / #game-metrics (siblings of
+   #hud, not children) got no restatement at all.
+   So ONE scope, unconditional: every token the light block re-points is
+   restated here with its :root (dark) value, on every in-race overlay root.
+   In the dark theme this is a no-op; tests/unit/nontext-contrast.test.mjs
+   pins that each value equals the :root one and resolves every overlay's ink
+   on its plate under LIGHT, SYSTEM-light and LIGHT + HIGH CONTRAST. Same move
+   as .touchbtn in css/touch-controls.css. */
+:is(#hud, #announce, #game-metrics) {
+  --bg: #0c0c14;
+  --carbon: #15151E;
+  --text: #f6f6f9;
+  --dim: #9a9aa8;
+  --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
+  --surf-1: color-mix(in oklab, #fff 4%, var(--bg));
+  --surf-3: color-mix(in oklab, #fff 11%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 62%, transparent);
+  --plate-line: rgba(255, 255, 255, 0.16);
+  --card-line: rgba(255, 255, 255, 0.12);
+  --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
+  --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 74%, transparent);
+  --scrim: rgba(6, 6, 10, 0.42);
+  --scrim-heavy: rgba(6, 6, 10, 0.92);
   --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
-  --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+  --focus: #fff;
+  --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
   /* and the INHERITED ink: .hud-value, #hud-speed and friends set no colour of
-     their own, so they inherit body's already-resolved (dark) --text. */
+     their own, so they would inherit body's already-resolved (light) --text. */
   color: var(--text);
 }
-@media (prefers-color-scheme: light) {
-  :root[data-ui-theme="system"] #hud {
-    --text: #f6f6f9; --dim: #9a9aa8; --bg: #0c0c14;
-    --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
-    --plate-line: rgba(255, 255, 255, 0.16); --card-line: rgba(255, 255, 255, 0.12);
-    color: var(--text);
-  }
-}
-:root[data-ui-contrast="high"] #hud {
-  --dim: color-mix(in oklab, #f6f6f9 86%, #0c0c14);
-  --plate-line: color-mix(in oklab, #f6f6f9 55%, transparent);
-  --card-line: color-mix(in oklab, #f6f6f9 40%, transparent);
+/* HIGH CONTRAST inside the scope: the :root block's own expressions, which
+   re-resolve here against the dark --text/--bg/--carbon above. Without it the
+   unconditional restatement would undo HIGH CONTRAST on the HUD in DARK too. */
+:root[data-ui-contrast="high"] :is(#hud, #announce, #game-metrics) {
+  --dim: color-mix(in oklab, var(--text) 86%, var(--bg));
+  --plate: color-mix(in oklab, var(--carbon) 96%, transparent);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 98%, transparent);
+  --plate-line: color-mix(in oklab, var(--text) 55%, transparent);
+  --card-line: color-mix(in oklab, var(--text) 40%, transparent);
   --hud-halo: 0 0 2px #000, 0 1px 3px #000;
 }
 

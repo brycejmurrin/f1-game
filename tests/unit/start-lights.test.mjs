@@ -2,8 +2,9 @@
 //
 // js/race/start-lights.js finds the gantry nearest the start line in the
 // scenery registry (with none there, the engine's start gate) and, every
-// frame of the "count" state, re-spawns one
-// additive glow particle per lit lamp (G.lightsLit, one a second in game.js).
+// frame of the "count" state, issues one additive ONE-FRAME flare per lit
+// lamp (G.lightsLit, one a second in game.js) — so the gantry is equally
+// bright at every refresh rate and takes nothing from the particle pool.
 // Until 2026-10-01 the gantry was three static grey boxes the countdown never
 // touched (the second graphics-detail survey, item 5). Run in a VM with
 // Particles stubbed; no browser.
@@ -15,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8");
@@ -37,22 +39,22 @@ function track(gantries, startGate) {
 // centre 15 m before the line (z = -15 on this straight), the direction of
 // travel, and how far toward the grid its face stands.
 const GATE = { c: [0, 6.2, -15], t: [0, 0, 1], face: 0.65 };
-const stub = () => { const calls = []; return { calls, glow: (...a) => calls.push(a) }; };
+const stub = () => { const calls = []; return { calls, flare: (...a) => calls.push(a) }; };
 
-test("each lit lamp is one additive glow on the start gantry, under the beam, proud of the grid-facing face", () => {
+test("each lit lamp is one additive flare on the start gantry, under the beam, proud of the grid-facing face", () => {
   const P = stub();
   // k = 1, not 0: the fake track is a straight line, so the wrap-around
   // neighbour of node 0 (a real circuit closes the loop) would flip the tangent.
   const G = { state: "count", lightsLit: 3, track: track([{ k: 1 }, { k: 50 }]) };
   load().create(G, { Particles: P }).update();
-  assert.equal(P.calls.length, 3, "three lit lamps → three glows");
+  assert.equal(P.calls.length, 3, "three lit lamps → three flares");
   const ys = new Set(P.calls.map((c) => c[1].toFixed(3)));
   assert.equal(ys.size, 1, "all lamps hang at one height");
   assert.ok(Math.abs(P.calls[0][1] - (4.5 + 4.5 - 0.62)) < 1e-6, `lamp height ${P.calls[0][1]} is not beam top − 0.62`);
   for (const c of P.calls) {
     assert.ok(c[2] < 4 && c[2] > 3.5, `lamp z ${c[2]} must sit just behind the gantry plane (z = 4), toward the grid (−tangent)`);
-    assert.ok(c[4] > 0.9 && c[5] < 0.2 && c[6] < 0.2, "lamps are red");
-    assert.ok(c[8] > 0.016 && c[8] < 0.25, `life ${c[8]} must outlive one frame and die before the next spawn stacks`);
+    assert.ok(c[4] > 0.9 && c[5] < 0.2 * c[4] && c[6] < 0.2 * c[4], "lamps are red");
+    assert.equal(c[8], true, "a race lamp: drawn from the flare budget's lamp reserve");
   }
   const xs = P.calls.map((c) => c[0]).sort((a, b) => a - b);
   assert.ok(Math.abs((xs[1] - xs[0]) - 0.9) < 1e-6, "lamps sit on a 0.9 m pitch across the beam");
@@ -121,11 +123,60 @@ test("a record that names its lamp row (a startLights span) places the lamps the
   }
 });
 
-test("game.js wires StartLights and the particle pool exposes glow", () => {
+test("game.js wires StartLights and the particle pool exposes the lamp flare", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /const startLights = StartLights\.create\(G\)/);
-  assert.match(game, /startLights\.update\(\);[^\n]*\n(?:\s*marshalPanels\.update\(dt\);[^\n]*\n)?\s*Particles\.update\(dt\);/, "lamps spawn before the pool ages this frame (the posts' panels may sit between)");
+  assert.match(game, /startLights\.update\(\);[^\n]*\n(?:\s*marshalPanels\.update\(dt\);[^\n]*\n)?\s*Particles\.update\(dt\);\s*\n\s*Particles\.draw\(\);/, "lamps are issued before this frame's draw (the posts' panels may sit between)");
   const particles = fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8");
-  assert.match(particles, /function glow\(x, y, z, size, r, g, b, alpha, life\)/);
-  assert.match(particles, /return \{[^}]*\bglow\b/);
+  assert.match(particles, /function flare\(x, y, z, size, r, g, b, alpha, lamp\)/);
+  assert.match(particles, /return \{[^}]*\bflare\b/);
+  assert.doesNotMatch(particles, /function glow\(/, "the pooled per-frame lamp is gone: it stacked with the refresh rate");
+});
+
+// The REAL pool and the real lamps in one VM, driven the way game.js's render
+// loop does (lamps, Particles.update, Particles.draw), at three refresh rates.
+// Brightness = Σ alpha × red over the additive quads of a drawn frame — what
+// the viewer sees on that frame. The pooled glow it replaces summed 1.14 / 2.84
+// / 7.14 lamp-copies at 30 / 60 / 144 Hz.
+function runAt(hz, seconds, mobile = false) {
+  const ctx = vm.createContext({ Math, Float32Array, Uint8Array, Array, Object });
+  seedLog(ctx);
+  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  let frameB = 0;
+  P.init({ mobileTier: mobile, drawParticles: (data, floats, additive) => {
+    if (!additive) return;
+    for (let o = 0; o < floats; o += 60) frameB += data[o + 9] * data[o + 5];   // alpha × red, one quad
+  } });
+  const SL = vm.runInContext(SRC + ";StartLights", ctx);
+  const G = { state: "count", lightsLit: 5, track: track([{ k: 1 }]) };
+  const sl = SL.create(G, { Particles: P });
+  const dt = 1 / hz, frames = Math.round(seconds * hz);
+  let sum = 0, maxPool = 0, maxFl = 0;
+  for (let f = 0; f < frames; f++) {
+    sl.update();
+    maxFl = Math.max(maxFl, P.flareCount());
+    P.update(dt);
+    maxPool = Math.max(maxPool, P.count());
+    frameB = 0;
+    P.draw();
+    sum += frameB;
+  }
+  return { mean: sum / frames, maxPool, maxFl };
+}
+
+test("the lit gantry is equally bright at 30, 60 and 144 Hz and takes nothing from the pool", () => {
+  const r = { 30: runAt(30, 1), 60: runAt(60, 1), 144: runAt(144, 1) };
+  for (const hz of [30, 144]) {
+    const k = r[hz].mean / r[60].mean;
+    assert.ok(Math.abs(k - 1) <= 0.05, `${hz} Hz frame brightness is ${k.toFixed(3)}× the 60 Hz one (the pooled glow gave ${hz === 30 ? "0.40" : "2.51"}×)`);
+  }
+  for (const hz of [30, 60, 144]) {
+    assert.equal(r[hz].maxPool, 0, `${hz} Hz: the lamps never occupy a pool slot`);
+    assert.equal(r[hz].maxFl, 5, `${hz} Hz: exactly one flare per lit lamp per frame`);
+  }
+  // The 60 Hz look is the one the pooled glow had there (GAIN): five lamps ×
+  // 2.84 copies × alpha 0.95 × red 1.0 ≈ 13.5.
+  assert.ok(Math.abs(r[60].mean - 5 * 2.84 * 0.95) < 0.05, `60 Hz brightness ${r[60].mean}`);
+  // The mobile tier's flare budget still holds every lamp.
+  assert.equal(runAt(60, 0.2, true).maxFl, 5);
 });

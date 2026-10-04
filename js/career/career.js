@@ -300,6 +300,10 @@ function deleteSlot(flavour, i, expectedRevision) {
   return Object.assign({}, lastSave);
 }
 function slotRevision(flavour, i) { return store.keyRevision(slotKey(flavourIn(flavour), slotIn(i))); }
+// The live slot's revision as this module last ARMED it (load / own save), or
+// null. slotRevision() is the store's CURRENT one, so comparing the two is the
+// "did someone else write the live slot?" test (CareerBackup.liveConflict).
+function armedRevision() { return careerRevision; }
 
 function rosterEntry(agent, left) {
   return { name: agent.name, code: agent.code, num: agent.num,
@@ -1665,7 +1669,7 @@ function state() {
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
-  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, anySave, firstFree,
+  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, armedRevision, anySave, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash, seasonSeed,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,

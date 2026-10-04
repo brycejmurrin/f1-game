@@ -12,9 +12,11 @@
  *   - AI LOCK-UP MARKS lay on each car's own cadence (SkidMarks.stampFor),
  *     race state only, never for the player (game.js stamps it).
  *   - POOL DISCIPLINE: embers stop at 60 % of the pool and spray at 75 %, so
- *     collision sparks and smoke always find room; a flare lives outside the
- *     pool and is drawn exactly one frame (a pooled glow on a moving car
- *     stacked copies into a trail).
+ *     collision sparks and smoke always find room; a full pool recycles its
+ *     oldest particle instead of dropping the newest; a rate·dt request is
+ *     honoured down to 10 fps (the old 4-per-call clamp cut embers below
+ *     ~27.5 fps); a flare lives outside the pool and is drawn exactly one
+ *     frame (a pooled glow on a moving car stacked copies into a trail).
  *   - THE ARC MUST NOT REACH THE DRIVER: car-draw adds the bend's Ackermann
  *     angle (c.kCur) to AI front wheels only.
  *   - EXHAUST HEAT HAZE (CarFx.heatHaze): one plume anchor, sustained on
@@ -337,4 +339,40 @@ test("haze source guards: visual only, wired once, the post shaders' opts.haze u
   assert.match(game, /po\.haze = gfx\.mobileTier \? null : carFx\.haze\.at\(_mVP\);/, "one {u, v, str} (or null) for the post; off on phones");
   for (const f of ["carFx.haze.pick(", "carFx.haze.mark(", "carFx.haze.at("]) assert.equal(game.split(f).length - 1, 1, f + " once");
   assert.doesNotMatch(game, /_hazeStr|_hazeWorld/, "no second haze path in game.js");
+});
+
+test("a full pool recycles its oldest particle: the newest emission is never the one dropped", () => {
+  const { P, draws } = load();
+  const MAX = P.capacity();
+  for (let i = 0; i < MAX / 8; i++) P.tyreSmoke(-100, 0, 0, 0, 0, 0.5, 4);   // 4 a call: the old half
+  P.update(0.3);
+  for (let i = 0; i < MAX / 8; i++) P.tyreSmoke(100, 0, 0, 0, 0, 0.5, 4);    // the young half
+  P.update(0.05);
+  assert.equal(P.count(), MAX, "the pool is full");
+  P.sparks(500, 0, 0, 0, 1, 10, 5);
+  assert.equal(P.count(), MAX, "still full: recycled, not grown");
+  P.update(0.02);
+  draws.length = 0;
+  P.draw();
+  const near = (x0, additive) => draws.filter((d) => d.additive === additive)
+    .reduce((n, d) => { for (let o = 0; o < d.floats; o += 60) if (Math.abs(d.data[o + 2] - x0) < 5) n++; return n; }, 0);
+  assert.equal(near(500, true), 5, "the five new embers are drawn (a full pool used to drop them)");
+  assert.equal(near(-100, false), MAX / 2 - 5, "the slots came from the OLDEST plume");
+  assert.equal(near(100, false), MAX / 2, "the young plume is untouched");
+});
+
+test("emission follows the requested rate at any frame rate: plank embers at 10, 20 and 60 fps", () => {
+  for (const hz of [10, 20, 60]) {
+    const { P } = load();
+    const dt = 1 / hz, frames = 20 * hz;
+    let spawned = 0;
+    for (let f = 0; f < frames; f++) {
+      const n0 = P.count();
+      P.scrape(0, 0, 0, 0, 70, dt * 110);   // car-fx.js: dt × SPARK_RATE × k, k = 1
+      spawned += P.count() - n0;
+      P.clear();
+    }
+    const rate = spawned / 20;
+    assert.ok(Math.abs(rate / 110 - 1) <= 0.03, `${hz} fps: ${rate.toFixed(1)} embers/s, want 110 (the 4-per-call clamp gave ${Math.min(110, 4 * hz)})`);
+  }
 });

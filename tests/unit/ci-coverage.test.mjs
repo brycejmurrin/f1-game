@@ -10,6 +10,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import vm from "node:vm";
+import { parse as parseYAML } from "yaml";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 // DERIVED, never re-typed. This file was the FIFTH place the selected gate's
 // per-test timeout appeared as a literal, and raising it 120 -> 180 s reddened
@@ -317,6 +318,42 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
     assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
   }
+  // 2026-10-04: CI needed `selected` and not `selected-verdict`, so a plan
+  // that dropped every routed spec (selected skipped) passed CI while the
+  // verdict failed. Requiring only `CI` would have lost that rule.
+  assert.match(body, /^      - selected-verdict$/m, "ci-verdict must need selected-verdict");
+  // Every job a required check names must feed CI, so requiring CI alone
+  // loses no rule (the API showed 12 fast-tier names on 2026-10-04).
+  const parsed = parseYAML(ciWorkflow);
+  const needs = new Set(parsed.jobs["ci-verdict"].needs);
+  for (const [id, job] of Object.entries(parsed.jobs)) {
+    if (id === "ci-verdict") continue;
+    assert.ok(needs.has(id), `job ${id} (${job.name || id}) does not feed CI — a red there would pass the required check`);
+  }
+});
+
+test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
+  const job = parseYAML(ciWorkflow).jobs["selected-verdict"];
+  const script = job.steps.map((st) => st.run || "").join("\n");
+  // The dropped test sits OUTSIDE the `selected` case: a plan that ran one
+  // spec and named forty as unaffordable used to be green.
+  assert.match(script, /if \[ "\$\{DROPPED:-0\}" != "0" \]; then/);
+  assert.match(script, /exit 1\n\s*fi\n\s*elif \[ "\$SELECTED" = "skipped" \]/,
+    "dropped > 0 off the train must exit 1 whatever `selected` did");
+  assert.match(script, /CALLED" = "true"/, "the train still only warns");
+  const uses = job.steps.map((st) => st.uses || "").join("\n");
+  assert.match(uses, /actions\/download-artifact@[0-9a-f]{40}/, "pinned by SHA like every other action");
+  assert.match(uses, /actions\/cache\/save@/);
+  assert.ok(job.steps.filter((st) => st.uses || /junit-failed/.test(st.run || ""))
+    .every((st) => st["continue-on-error"] === true), "the carry-forward is reporting: it may never decide the verdict");
+  // …and no `selected` shard saves it any more (one key per run, one writer).
+  const selected = parseYAML(ciWorkflow).jobs.selected;
+  assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");
+  const names = selected.steps.map((st) => st.with?.name || "").filter(Boolean);
+  assert.ok(names.length >= 2 && names.every((n) => n.includes("${{ strategy.job-index }}")),
+    `every selected artifact name carries the job index: ${names.join(", ")}`);
+  // The poke must not outrun a dropped-spec red.
+  assert.match(parseYAML(ciWorkflow).jobs["poke-train"].if, /&& needs\.select\.outputs\.dropped == '0' \}\}$/);
 });
 
 test("unit-plan feeds the node-suites matrix and can skip unused slices", () => {
@@ -854,8 +891,10 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
   // The apt + Xvfb + DISPLAY recipe is one composite action since 2026-09-22;
   // each job keeps the step NAME and the opt-out `if:` and takes the body by `uses:`.
   const mesa = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
-  assert.match(mesa, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
+  assert.match(mesa, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n[\s\S]*?echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
     "the action's Xvfb must export DISPLAY so the pinned test command line is unchanged");
+  // …and WAIT for the server's socket before the first browser launch (2026-10-04).
+  assert.match(mesa, /\[ -S \/tmp\/\.X11-unix\/X99 \] && break/, "the action waits for Xvfb's socket");
   for (const [name, job] of [["smoke", smokeJob], ["selected", selectedJob]]) {
     assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'\n\s+uses: \.\/\.github\/actions\/mesa-xvfb/,
       `${name} must install Mesa + Xvfb through the action, and skip it on the \`gl: swiftshader\` opt-out`);
@@ -1384,15 +1423,17 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
     "!cancelled(): a skipped `selected` must still be judged, but a cancelled run (a draft's run superseded by ready_for_review, #510) has no verdict; the events are select's own");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
-  // The reading: select must pass; selected passes, or is skipped with nothing dropped.
+  // The reading: select must pass; selected passes or is skipped; and (since
+  // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
+  // `selected` ran — the dropped-count used to be read only on a skip.
   assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
   assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
   assert.match(job, /DROPPED: \$\{\{ needs\.select\.outputs\.dropped \}\}/);
   assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
-  assert.match(job, /skipped\)\n\s+if \[ "\$\{DROPPED:-0\}" = "0" \]; then/, "an empty plan with nothing dropped is a pass");
-  assert.match(job, /elif \[ "\$CALLED" = "true" \]; then echo "::warning::/, "on the train an unaffordable plan warns");
-  assert.match(job, /else echo "::error::the plan is empty because \$\{DROPPED\} routed spec\(s\) were unaffordable[^\n]*; exit 1/,
-    "on a push or PR an unaffordable plan is a red — the renderer case that poked a train with no backend booted");
+  assert.match(job, /if \[ "\$CALLED" = "true" \]; then\n\s+echo "::warning::/, "on the train an unaffordable plan warns");
+  assert.match(job, /echo "::error::the plan dropped \$\{DROPPED\} routed spec\(s\)[^\n]*\n\s+exit 1/,
+    "on a push or PR a dropped spec is a red — the renderer case that poked a train with no backend booted, and the 41 routed specs that never ran");
+  assert.match(job, /elif \[ "\$SELECTED" = "skipped" \]; then\n\s+echo "nothing this diff touches has a spec/, "an empty plan with nothing dropped is a pass");
   assert.match(job, /\*\) echo "::error::selected specs \$SELECTED"; exit 1 ;;/);
   // It joins the Pages aggregate like every other job (no needs on the renderer chain).
   const verdict = report.jobs.find((j) => j.name === "selected-verdict");
@@ -1400,4 +1441,24 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   // The matrix job's name still varies, which is the whole reason this exists.
   assert.match(ciWorkflow, /^    name: Selected specs \(change-aware gate\)$/m);
   assert.match(ciWorkflow, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
+});
+
+test("every workflow job carries a cap, and the Pages publishable check holds no Pages token", () => {
+  /* 2026-10-04: five jobs ran under the 360-minute default — pages.yml's
+     `deploy` among them, inside the never-cancelled `pages` lock, so one hang
+     could wedge every later deploy for six hours. `publishable` inherited the
+     workflow's pages: write + id-token: write to run one read-only script. */
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const missing = [];
+  for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
+    const wf = parseYAML(fs.readFileSync(new URL(f, dir), "utf8"));
+    for (const [id, job] of Object.entries(wf.jobs || {})) {
+      if (job.uses) continue;   // a reusable-workflow call: its own jobs carry caps
+      if (job["timeout-minutes"] == null) missing.push(`${f}:${id}`);
+    }
+  }
+  assert.deepEqual(missing, [], "a job with no timeout-minutes runs for up to 360 minutes on a hang");
+  const pages = parseYAML(pagesWorkflow);
+  assert.deepEqual(pages.jobs.publishable.permissions, { contents: "read" });
+  assert.ok(pages.jobs.deploy["timeout-minutes"] <= 30, "the deploy job holds the Pages lock: keep its cap tight");
 });
