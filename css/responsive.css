@@ -254,7 +254,11 @@ body.rotate-help-open #rotate-device { display: none !important; }
    (js/game.js) asks whether the GATE wants to show, and with this rule live it
    only ever saw the card it was about to hide, so the gate never came back. */
 body:not(.rotate-probe):has(#pausemenu:not([hidden])) #rotate-device,
-body:not(.rotate-probe):has(#pausemenu[open]) #rotate-device,
+body:not(.rotate-probe):has(#pausemenu[open]) #rotate-device {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 html:has(#pausemenu:not([hidden])) body:not(.rotate-probe) #rotate-device,
 html:has(#pausemenu[open]) body:not(.rotate-probe) #rotate-device {
   display: none !important;
