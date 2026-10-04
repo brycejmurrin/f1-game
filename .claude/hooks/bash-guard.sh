@@ -331,7 +331,7 @@ EOF
       fi
     fi
   else
-    echo "BLOCKED: a size ratchet is over its ceiling by more than the auto-raise allows ($RLOG):" >&2
+    echo "BLOCKED: a size ratchet is over its ceiling in a way the auto-raise may not absorb (only a per-file line count, by <= 40, is absorbed) ($RLOG):" >&2
     grep '^OVER' "$RLOG" >&2
     exit 2
   fi
