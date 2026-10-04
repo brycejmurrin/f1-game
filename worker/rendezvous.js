@@ -1,5 +1,5 @@
 /*
- * The rendezvous relay — a Cloudflare Worker + one Durable Object per room code.
+ * The rendezvous relay — a Cloudflare Worker + one Durable Object per opaque room id.
  *
  * This is the ONLY server anywhere in Apex 26, it is optional, and its entire
  * job is to hold two short strings for a couple of minutes so two browsers can
@@ -7,7 +7,7 @@
  * between the players and this never sees another packet.
  *
  * WHY A DURABLE OBJECT rather than a KV store or a plain Worker: "exactly two
- * people meet at code APEX42" needs ONE canonical place. A Durable Object is
+ * people meet using one token" needs ONE canonical place. A Durable Object is
  * one instance per id by construction, so there is no window where the host
  * writes to one region and the guest reads from another and finds nothing.
  * Regional edge runtimes need a cross-region broadcast to paper over exactly
@@ -28,9 +28,9 @@
  * and the game is unchanged.
  */
 
-// Two minutes is chosen by the thing it has to outlive: a human reading six
-// characters to a friend and that friend typing them. It is also short enough
-// that a code cannot be usefully brute-forced and that nothing accumulates.
+// Two minutes is chosen by the thing it has to outlive: a human sharing
+// a token with a friend and that friend pasting it. It is also short enough
+// that abandoned rooms do not accumulate. Token entropy resists guessing.
 const TTL_MS = 120000;
 
 // A slot is one side's blob. Named rather than positional so a mismatched
@@ -90,6 +90,8 @@ const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET,POST,OPTIONS",
   "access-control-allow-headers": "content-type",
+  "access-control-expose-headers": "x-apex-rendezvous",
+  "x-apex-rendezvous": "3",
   "access-control-max-age": "86400",
 };
 
@@ -203,20 +205,19 @@ export default {
     }
 
     const url = new URL(request.url);
-    // /r/<code>/<slot>
-    // The shipped client has always emitted exactly six characters. Accepting
-    // a 4..12 namespace multiplied the number of billable object ids an abuse
-    // script could mint without enabling any legitimate client.
-    const m = url.pathname.match(/^\/r\/([0-9A-Z]{6})\/(offer|answer)$/);
+    // Legacy routes reveal the encryption secret to the operator. Never serve
+    // or create them, even for a stale client. The new route contains only a
+    // domain-separated id derived from a random 32-character private token.
+    if (/^\/r\//.test(url.pathname)) return json({ error: "upgrade_required" }, 426);
+    const m = url.pathname.match(/^\/v3\/r\/([0-9a-f]{64})\/(offer|answer)$/);
     if (!m) return json({ error: "not_found" }, 404);
-    const [, code, slot] = m;
+    const [, roomId, slot] = m;
     if (!rateAllowed(request)) {
       return json({ error: "rate_limited" }, 429, { "retry-after": "60" });
     }
 
-    // idFromName, not idFromString: the code IS the room, and deriving the id
-    // from it is what guarantees both players reach the same object.
-    const id = env.ROOM.idFromName(code);
+    // Prefix the namespace too: old six-character rooms are never reused.
+    const id = env.ROOM.idFromName("v3:" + roomId);
     const stub = env.ROOM.get(id);
     const inner = new URL(request.url);
     inner.searchParams.set("slot", slot);

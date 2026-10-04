@@ -207,6 +207,29 @@ test('a sector drill announces its time and a stationary slow car is not a direc
   assert.equal(api.summary().lastDrill.clean, true); assert.equal(api.summary().lastDrill.score, 3);
   assert.match(announcements.at(-1)[0], /PRACTICE DONE — 3\.0S/);
 });
+test('sector mastery follows timing boundaries while other saved drill scores remain valid', () => {
+  const { api, G, tick, saves } = fixture();
+  G.track.def = { sectors: [.28, .62] };
+  saves.set('circuitMastery', { version: 1, entries: [
+    { key: 'class:sector:0', best: 1, completed: 5 },
+    { key: 'class:braking:all', best: 12, completed: 2 },
+    { key: 'class:lap:all', best: 60, completed: 3 },
+  ] });
+  assert.equal(api.mastery('sector'), null, 'legacy scores have no recorded split positions');
+  api.startDrill('sector');
+  tick({ prog: 20 });
+  G.sectorIdx = 1; tick({ prog: 40 });
+  G.sectorIdx = 0;
+  assert.equal(api.mastery('sector').best, 2);
+  G.track.def.sectors = [.26536876, .58048447];
+  assert.equal(api.mastery('sector'), null, 'a moved timing line starts a separate comparison');
+  assert.equal(api.mastery('braking').best, 12);
+  assert.equal(api.mastery('lap').best, 60);
+  G.track.def.sectors = [.28, .62];
+  assert.equal(api.mastery('sector').best, 2, 'split-specific records remain stored');
+  assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'class:sector:0'),
+    'unversioned records are retained rather than deleted');
+});
 test('launch drill needs a stopped car and is timed from the first throttle to half of top speed', () => {
   const { api, c, tick, announcements } = fixture();
   assert.equal(api.startDrill('launch'), false); assert.match(announcements.at(-1)[0], /STOP THE CAR/);

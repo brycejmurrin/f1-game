@@ -75,6 +75,18 @@ test("pickPad: the pad being USED drives, even over an idle standard pad in an e
   assert.equal(Input.pickPad([null, wheel], never).id, "wheel", "with no standard pad the non-standard one still drives");
 });
 
+test("pickPad: once a wheel is set up (or its wizard captures), the wheel outranks an idle pad", () => {
+  const Input = bootInput();
+  const wheel = pad("wheel", "", 99999), xbox = pad("xbox", "standard", 1000);
+  assert.equal(Input.pickPad([xbox, wheel], true).id, "wheel", "a mapped wheel drives, not the idle pad beside it");
+  assert.equal(Input.pickPad([xbox, null], true).id, "xbox", "with no wheel the pad still drives");
+  // That preference is the never-used tie-break; a pad actually being USED still drives.
+  assert.equal(Input.pickPad([xbox, wheel], usedAt({ xbox: 5 }), true).id, "xbox", "picking the pad up still hands it the car");
+  // The live wiring: a non-default axis map flips the preference through activePad().
+  Input.setPadAxisMap({ steer: 0, throttle: 2, brake: 3 });
+  assert.equal(Input.padAxesAreDefault(), false);
+});
+
 test("pickPad: among idle pads the newest timestamp wins, slot order breaks ties", () => {
   const Input = bootInput();
   assert.equal(Input.pickPad([pad("a", "standard", 100), pad("b", "standard", 250)], never).id, "b");

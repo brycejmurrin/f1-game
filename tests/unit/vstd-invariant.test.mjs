@@ -99,6 +99,21 @@ const ALLOWED = [
     why: "sign test — the negative half of the same coast-drag branch",
   },
   {
+    file: "js/game.js", expr: "c.speed > 0",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    why: "sign test — brake held at a standstill is reverse (REVERSE_ACCEL), not a stop; REVERSE_MAX is the flat reverse crawl",
+  },
+  {
+    file: "js/physics/collide.js", expr: "c.speed < 0",
+    code: "function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }",
+    why: "sign test — a human already reversing keeps its sign through a contact",
+  },
+  {
+    file: "js/physics/player-forces.js", expr: "c.speed > 0",
+    code: "c.wheelLock = braking && c.speed > 0 && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code",
+    why: "sign test — wheels lock only while rolling forwards; brake-held reverse is not a lock-up",
+  },
+  {
     file: "js/game.js", expr: "c.speed < 0",
     code: "if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);",
     why: "sign test — reversing sits below every gear band; hold the 1st-gear bog floor so throttle drives forward again",

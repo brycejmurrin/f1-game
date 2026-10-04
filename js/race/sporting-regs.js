@@ -102,20 +102,33 @@ const SportingRegs = (function () {
   function createPassWatch(windowS, troubled) {
     const WIN = windowS > 0 ? windowS : GIVE_BACK_S;
     const fair = typeof troubled === "function" ? (o) => exempt(o) || !!troubled(o) : exempt;
-    let ahead = new Set(), now = new Set(), primed = false;
+    let ahead = new Set(), now = new Set(), primed = false, finished = false;
     const owed = [], lostTo = [];
     let t = 0;
-    function reset() { ahead.clear(); now.clear(); primed = false; owed.length = 0; lostTo.length = 0; t = 0; }
+    function reset() { ahead.clear(); now.clear(); primed = false; finished = false; owed.length = 0; lostTo.length = 0; t = 0; }
     function drop(list, o) { const i = list.indexOf(o); if (i >= 0) list.splice(i, 1); }
     function tick(p, field, level, dt) {
       if (!p) { reset(); return null; }
       now.clear();
-      for (const o of field || []) if (o && o !== p && !o.retired && o.prog > p.prog) now.add(o);
+      const finishPass = p.finished && !finished;
+      for (const o of field || []) {
+        if (!o || o === p || o.retired) continue;
+        const aheadNow = finishPass && o.finished && (o.lap || 0) === (p.lap || 0)
+          && Number.isFinite(p.finishT) && Number.isFinite(o.finishT)
+          ? o.finishT < p.finishT : o.prog > p.prog;
+        if (aheadNow) now.add(o);
+      }
       let ev = null, gained = false;
-      const caution = level >= CAUTION_MIN && !p.finished && !p.retired && !inPit(p);
+      // The first finished sample still contains the final racing step. A
+      // pass made on that step must be charged before post-flag coasting.
+      const caution = level >= CAUTION_MIN && !finished && !p.retired && !inPit(p);
       if (primed && caution) {
         for (const o of ahead) {
-          if (now.has(o) || fair(o)) continue;
+          // Two cars can take the flag in this same sample: the later finisher
+          // was still racing when passed, not an already-finished exemption.
+          const justBehind = finishPass && o.finished && (o.lap || 0) === (p.lap || 0) && !o.retired && !inPit(o)
+            && Number.isFinite(p.finishT) && o.finishT >= p.finishT && !(typeof troubled === "function" && troubled(o));
+          if (now.has(o) || (fair(o) && !justBehind)) continue;
           if (lostTo.indexOf(o) >= 0) { drop(lostTo, o); continue; }   // taking back what was taken
           if (owed.indexOf(o) < 0) { owed.push(o); gained = true; }
         }
@@ -140,7 +153,7 @@ const SportingRegs = (function () {
         }
       } else t = 0;
       const sw = ahead; ahead = now; now = sw;
-      primed = true;
+      primed = true; finished = !!p.finished;
       return ev;
     }
     function info() { return { owed: owed.length, t: +Math.max(0, t).toFixed(2) }; }
