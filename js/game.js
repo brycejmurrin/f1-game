@@ -346,7 +346,7 @@ function aStd(a) { return a / Math.max(PACE, 0.05); }
 // took `G.ACCEL` and so simulated a field that accelerated at pace-5 rates into
 // a pace-scaled vTop() ceiling, which is exactly the mismatch the G façade's own
 // comment promises does not exist ("off the SAME numbers the driving model
-// uses"). Floored like vTop(): standingLoss() divides by it.
+// uses"). Floored like vTop().
 function aTop()  { return ACCEL * Math.max(PACE, 0.05); }
 // Player steering inputs into the dynamic model below. WHEELBASE is the real
 // axle spacing — a SHORTER wheelbase has a smaller yaw inertia so it turns in
@@ -629,7 +629,7 @@ function rpmFor(gear, speed) {
   return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
 const GAME_LAPS = 3;
-const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
+const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js/race/flying-start.js)
 // Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
 // TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
 function isWetRoad() { return trackWetness() >= 0.25; }
@@ -2481,13 +2481,10 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on the LINE, AT REST — a standing qualifying lap. This used
-// to launch at racing speed, since the simulated field is modelled on a
-// flying lap and a driven lap from a standstill would lose the launch every
-// weekend by construction. The fix charges the MODEL the same standing start
-// instead (STANDING_LOSS in js/race/quali-model.js), so both sides begin from
-// rest on one scale. Written in TRACK coordinates and pushed back out through
-// worldFromTrack, exactly as rescuePlayer() and retireCar() do.
+// Put the player on the LINE, AT REST. The FALLBACK only: qualifying is a
+// rolling start (js/race/flying-start.js), and js/race/quali-model.js models a
+// flying lap to match. This runs when that start was declined. Written in TRACK
+// coordinates and pushed back out through worldFromTrack, as rescuePlayer() does.
 function launchFlyingLap() {
   if (!player || !track) return;
   // Just BEHIND the line, not on the P1 box (~14 m back): the timed lap begins
@@ -2527,6 +2524,7 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -2576,7 +2574,7 @@ async function startRaceBody() {
   practiceMode = false;
   makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
-  // Qualifying keeps the full field for simulation, then drives one standing lap.
+  // Qualifying keeps the full field for simulation, then drives one flying lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
@@ -3025,6 +3023,7 @@ const G = {
   get track() { return track; },
   get cars() { return cars; },
   get player() { return player; },
+  get flyingStart() { return flyingStart; },   // js/race/flying-start.js — __apex.go() hands the wheel back at once
   get season() { return season; }, set season(v) { season = v; },
   // flow/session are the authority; seasonMode/timeTrial are DERIVED views kept so
   // the __apex.info() contract and every module that reads them are unchanged.
@@ -3462,6 +3461,7 @@ const coach = DrivingCoach.create(G);
 const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
+const flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // qualifying + time trial start at speed (js/race/flying-start.js)
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4206,6 +4206,7 @@ function update(dt) {
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
   realRace.update(dt);   // every state: it arms in the countdown, places a mid-race jump-in on the first green frame, steps the script in the race, and stands down at the results
+  flyingStart.update(dt);   // qualifying and time trial: a rolling start in place of the gantry (js/race/flying-start.js)
   /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
      and no movement, wrong way, off-track for long enough), so a car wedged
      somewhere it considers fine — nose-in against a barrier, facing the right
@@ -4291,9 +4292,9 @@ function update(dt) {
       restartPending = false;
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
-      // ONE STANDING LAP, from the line. js/race/quali-model.js charges every
-      // modelled lap the same standing start, so the player's lap and the
-      // simulated field both begin from rest and stay on one scale.
+      // Qualifying normally never gets here: js/race/flying-start.js rolls the
+      // car in at speed on the first countdown frame. Only a start it declined
+      // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
     return;
@@ -5831,12 +5832,15 @@ function updateCar(c, dt, ranked) {
   // The FIELD's sector bests — the timing screen's purple is the session best
   // of ANY car, so every car's forward crossing is timed (a per-car index and
   // start stamp; the player's curated split logic below stays as it is).
+  // S3 closes AT THE LINE, inside this step: take off the time past it, as
+  // RaceControl.lineTransition does for the lap (or S1+S2+S3 ran a step long).
+  const s3Past = dLine > 0 && oldS > L * 0.5 && c.s < L * 0.5 && dt > 0 ? dt * (1 - Math.min(1, Math.max(0, (L - oldS) / dLine))) : 0;
   if (state === "race" && track) {
     const ns = sectorAt(c.s);
     if (ns !== c._secIdx) {
       const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
       if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
-        const e = c.lapTime - c._secT0;
+        const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
       }
       c._secIdx = ns; c._secT0 = c.lapTime;
@@ -5858,7 +5862,7 @@ function updateCar(c, dt, ranked) {
         // entry: a backward crossing skips the record but resets sectorStartT,
         // so the next forward crossing times a fraction (measured: 0.217 s "S1").
         if (c.lap >= 1 && !c.incidentInvalidLap && sectorValid) {
-          const elapsed = c.lapTime - sectorStartT;
+          const elapsed = c.lapTime - (newSector === 0 ? s3Past : 0) - sectorStartT;
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
           sectorLast[prevSector] = elapsed;
@@ -5897,6 +5901,7 @@ function updateCar(c, dt, ranked) {
     if (c.lap > 1 && !lineCross.recross) {   // a re-crossing after a reverse was timed the first time
       const lapDone = lineCross.lapDone;
       if (lapValid) c.lastLap = lapDone;
+      else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
       // Tell the rival about our lap. Times are authored by whoever OWNS the
@@ -8468,6 +8473,7 @@ function reportModelQuali() {
 }
 $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
+  if (isCareer()) Career.markWeekendStarted();   // the briefs lock: the grid is known now
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
