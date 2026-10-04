@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// @doc One HTML page of menus then car sides; JPEGs sit beside it so it opens after download.
-// @skill playwright-probe
 // show.mjs — one phone page of the game: menus, then the car from each side.
+// @doc One phone HTML page: menus then car angles, with embedded JPEGs for offline preview.
+// @skill playwright-probe
 //
 //   node tools/shot/show.mjs
 //   node tools/shot/show.mjs --out artifacts/show

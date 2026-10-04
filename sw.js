@@ -554,6 +554,18 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
   maybeSweep(event);
 
+  // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
+  // assets/music/ through an <audio> element (js/audio/soundtrack.js
+  // streamMusic), and media elements fetch with `Range:` — Safari requires a
+  // 206 answer and will not play a whole 200. The cache below holds whole 200s
+  // (caches.match ignores Range, and cache.put refuses a 206), so such a request
+  // is LEFT TO THE NETWORK: no respondWith, the browser answers it natively.
+  // Chosen over slicing a 206 out of a cached body because a streaming phone
+  // never fetches a whole track to cache — the cost is that streamed music does
+  // not play offline (it skips, then stops); the desktop decode path's plain
+  // fetch is still cached as before.
+  if (url.pathname.includes("/assets/music/") && req.headers && req.headers.get && req.headers.get("range")) return;
+
   // Network-first for the HTML shell + version.json: the existing "SHELL
   // VERSION GUARD" in index.html depends on version.json always reflecting the
   // true latest deploy when online, so this SW must never let a cached
