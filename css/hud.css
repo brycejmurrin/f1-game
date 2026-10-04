@@ -631,6 +631,14 @@ body.hud-met-compact #hud-tyre { display: none !important; }
   color: var(--text); text-shadow: var(--hud-halo);
 }
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+/* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
+   LARGER) inside a bar whose height every layout pins in px (14-18), so the
+   ERS label was cut in half: scroll 22 vs client 16 at 1280x720, 20 vs 13 on
+   a phone (survey 2026-10-04). A min-height of one label line plus the border
+   wins over each of those heights at the two raised sizes only — NORMAL keeps
+   its shipped bar. */
+:root:is([data-text-size="large"], [data-text-size="larger"]) #hud-energy { min-height: calc(var(--fs-micro) * 1.2 + 2px); }
+:root:is([data-text-size="large"], [data-text-size="larger"]) .hud-energy-label { line-height: 1.15; }
 #hud-ot {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
@@ -728,9 +736,13 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
    caution, broadcast, dropped strip) is max(own slot, --mir-bot + gap): a
    separate "step down" rule lost to them — the compact and caution rules come
    later or weigh more, so on a phone the radio card sat on the mirror. */
+/* --mir-paint-b is the frame AS PAINTED (js/ui/hud.js mirrorClear, screen px,
+   0 unless it crosses this centre column): MOVE & SIZE can grow or lower the
+   mirror past its shipped box, and the max() follows it down, never up. */
 body.hud-mirror-on :is(#announce, #hud-flag) {
   --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
-  --mir-bot: calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7);
+  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7),
+    calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
 /* BESIDE THE MIRROR where there is room — the card shares the mirror's row
@@ -936,9 +948,12 @@ body[data-density="compact"] #announce {
 }
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
-   together on a broadcast, never one over the other. */
-body:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+   together on a broadcast, never one over the other. It steps aside ONLY where
+   the card's other slot really applies: the beside-the-mirror rule also needs
+   .hud-mirror-on, so a bare .hud-mirror-side used to cancel the step while the
+   card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
