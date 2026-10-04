@@ -1210,6 +1210,7 @@ function teamStandings() {
   const rows = Teams.LIST
     .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
+  // SeasonCal.rankTeams: the results sheet's order too (points, countback, tier, id).
   rows.sort((a, b) => (typeof SeasonCal !== "undefined" && SeasonCal.rankTeams)
     ? SeasonCal.rankTeams(career.season, a.id, b.id)
     : (b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));

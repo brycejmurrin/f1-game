@@ -31,10 +31,10 @@ const TEAMS = {
   black: { short: "BLK", color: [0.02, 0.02, 0.02], color2: [0.9, 0.9, 0.9] },
 };
 
-function boot(drivers, cons) {
+function boot(drivers, cons, api = null) {
   const dom = makeDom();
   const sb = { Math, Array, Object, Number, String, Promise, console, document: dom.document,
-    F1API: { driverStandings: () => Promise.resolve(drivers), constructorStandings: () => Promise.resolve(cons) } };
+    F1API: api || { driverStandings: () => Promise.resolve(drivers), constructorStandings: () => Promise.resolve(cons) } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedDom(ctx);
@@ -132,4 +132,36 @@ test("empty standings read as the empty-state messages, not a blank tab", async 
   const half = await boot(DRIVERS.slice(0, 1), []).loadStandings();
   assert.equal(rowsIn(cols(half)[0]).length, 1);
   assert.equal(textOf(cols(half)[1], "dh-empty"), "No constructor standings yet.");
+});
+
+// review-race-career-data #17: api.js reads the year off the clock, so from
+// January to the opener the tab said "season hasn't started" for ten weeks.
+test("an empty current year falls back to last season's FINAL table, labelled as such", async () => {
+  const asked = [];
+  const byYear = (table) => (year) => { asked.push(year); return Promise.resolve(year === 2026 ? table : []); };
+  const api = { season: () => "2027", driverStandings: byYear(DRIVERS), constructorStandings: byYear(CONS) };
+  const wrap = await boot(null, null, api).loadStandings();
+  const [dcol, ccol] = cols(wrap);
+  assert.deepEqual(asked, [undefined, undefined, 2026, 2026], "current year first, then the one before");
+  assert.equal(rowsIn(dcol).length, 4);
+  assert.equal(rowsIn(ccol).length, 2);
+  assert.equal(textOf(dcol, "dh-section"), "DRIVERS — LAST SEASON · 2026 FINAL");
+  assert.equal(textOf(ccol, "dh-section"), "CONSTRUCTORS — LAST SEASON · 2026 FINAL");
+
+  // A current table, however short, is never replaced; its headings stay plain.
+  asked.length = 0;
+  const live = { season: () => "2026", driverStandings: (y) => { asked.push(y); return Promise.resolve(DRIVERS.slice(0, 1)); },
+    constructorStandings: () => Promise.resolve([]) };
+  const cur = await boot(null, null, live).loadStandings();
+  assert.deepEqual(asked, [undefined]);
+  assert.equal(textOf(cols(cur)[0], "dh-section"), "DRIVERS");
+
+  // Both years empty, or the fallback fetch failing: the empty-state messages, unlabelled.
+  for (const prev of [() => Promise.resolve([]), () => Promise.reject(new Error("offline"))]) {
+    const none = { season: () => "2027", driverStandings: (y) => (y == null ? Promise.resolve([]) : prev()),
+      constructorStandings: (y) => (y == null ? Promise.resolve([]) : prev()) };
+    const w = await boot(null, null, none).loadStandings();
+    assert.equal(textOf(cols(w)[0], "dh-section"), "DRIVERS");
+    assert.equal(textOf(cols(w)[0], "dh-empty"), "No driver standings yet — season hasn't started.");
+  }
 });
