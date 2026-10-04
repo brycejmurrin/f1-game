@@ -1,1 +1,1 @@
-1791112747	Claude	sync #858 fuel-filler + #861 handling-fault onto deploy tip cd55fff62 (guards red was the inherited show-menus ratchet/README red)  [claude/survey-recent-prs-branches-9dofos; session 2c435037b42b64e37ea275cf]
+1791115551	Claude	fix-all from survey: hud tower vs CHASE fit (hud.js capFor), mirror re-measure on resize, survey() cliff ribbon skip, frame-report on-road occlusion, float-audit airborne exemption, flyby landmark framing, mexico 0.20 towers, view() trackside clearance  [claude/survey-recent-prs-branches-9dofos; session 2c435037b42b64e37ea275cf]
