@@ -255,7 +255,9 @@
       // disconnected concrete blocks stepped down the hill. spectatorHill walks
       // the arc, so the bank is continuous, carries a standing crowd and
       // indexes its own footprint against the treelines.
-      spectatorHill(0.072, 0.100, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
+      // Ends at 0.096: past it the bank's top treads ran into a hero-block
+      // pine (clip-audit 2.00 m severe @ racing 0.058).
+      spectatorHill(0.072, 0.096, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
         grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
