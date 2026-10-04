@@ -1297,6 +1297,13 @@ function yawVisInterp(c) {
 // held-then-jump stutter whose size scales with speed × dt — "vibrates more
 // as I speed up". Interpolate it exactly like position, with a wrap-safe
 // shortest-path delta since head crosses ±π every lap.
+// The TV director's subject (js/camera/director.js): the interpolated pose the body is drawn at. Pooled.
+const _dirPos = [0, 0], _dirPose = { s: 0, x: 0, carPos: null, carHead: 0 };
+function camPoseOf(c) {
+  const pa = playerAnchor(c), rp = renderPosOf(c);
+  _dirPose.s = pa.cS; _dirPose.x = pa.cX; _dirPose.carHead = headInterp(c);
+  _dirPose.carPos = rp.world ? (_dirPos[0] = rp.x, _dirPos[1] = rp.z, _dirPos) : null; return _dirPose;
+}
 function headInterp(c) {
   const h1 = c.head || 0;
   if (c.rPrevHead === undefined) return h1;
@@ -3336,7 +3343,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
+  announce, applyCaution, camVantage, camPoseOf, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -8059,7 +8066,7 @@ function tickBody(now) {
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick();
-  onboard.tick(dt); director.tick(dt); // coach marks + TV director (dbgCam only)
+  onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
@@ -8071,6 +8078,7 @@ function tickBody(now) {
     return;
   }
   if (paused && !netPlay.active()) {
+    director.tick(0);   // holds its shot; a camera picked in the pause menu still releases it
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
     // in one burst on the first frame after RESUME (see Input.clearEdges).
@@ -8156,6 +8164,7 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
+  director.tick(dt);   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
