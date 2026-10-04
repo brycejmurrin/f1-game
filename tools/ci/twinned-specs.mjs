@@ -134,6 +134,11 @@ export const BROWSER_ONLY = {
   "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
+  // The selected-gate pin for js/physics/ (same role as render-boot for js/render/).
+  // Adapting or twinning it would pull it off the blocking browser job via
+  // coveredByVmTwin and reopen the empty-plan / dropped=2 verdict hole that
+  // landed red on PR #826 (run 37165166486).
+  "tests/specs/physics-boot.spec.js": "selected-gate boot pin for test:physics-core: must stay on the browser job; a VM twin would empty the change-aware plan for every js/physics/ diff",
   // Measured 2026-09-22 by RUNNING every statically portable spec under the
   // adapter (artifacts/logs/vmpage/*.log): these fail for a reason no static
   // scan sees, and the reason is structural, not a flake.

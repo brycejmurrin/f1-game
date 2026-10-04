@@ -103,14 +103,9 @@ const ALLOWED = [
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);",
     why: "sign test — uphill slope bleed applies only while moving forwards",
   },
-  {
-    file: "js/physics/player-forces.js", expr: "c.speed < 0",
-    code: "const vx = Math.max(vAbs, 4), dirS = c.speed < 0 ? -1 : 1;",
-    // The `, 4)` on the same line is the well-conditioning floor the slip angle
-    // needs (slip is undefined at zero speed); the comparison itself is a sign.
-    // Moved with the PlayerForces carve (2026-09-30); was js/game.js.
-    why: "sign test — the direction of travel, which flips the steer term of the front slip angle",
-  },
+  // player-forces.js dirS was `c.speed < 0 ? -1 : 1` (sign test, approved here);
+  // soft-blended to clamp(c.speed / DIR_BLEND, -1, 1) — a division, not a
+  // speed-literal comparison, so no ALLOWED row.
   {
     file: "js/physics/incident-sim.js", expr: "c.speed < 0",
     code: "const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;",
