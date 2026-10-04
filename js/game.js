@@ -5702,13 +5702,13 @@ function updateCar(c, dt, ranked) {
       coastCut: xCoastCut(c), vTopNow: vTop(), tyres,
     });
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
-    // world velocity = forward + lateral slip. NOTE the perp (fz, -fx) is the
-    // LEFT vector (right of forward is (-fz, fx) — measured against the track's
-    // own right vector), so +vLat is leftward slip. The model is self-consistent
-    // with that sign; only this label was ever wrong, but a camera tuner once copied it
-    // into real knob directions once — check there before reusing this basis.
-    const vWx = c.speed * fx + c.vLat * fz;
-    const vWz = c.speed * fz - c.vLat * fx;
+    // world velocity = forward + lateral slip along the car's RIGHT vector (-fz, fx),
+    // the track's own right (tracks.js r = t×up). PlayerForces integrates +vLat as
+    // RIGHT (axle slip vLat ± a·r, transport −u·r, +r = nose right); writing it back
+    // along the LEFT vector (fz, −fx), as this did until 2026-10-04, mirrored the
+    // body-slip angle in the world (β_world = −β_dyn, VM-measured) — docs/PHYSICS.md §Frame.
+    const vWx = c.speed * fx - c.vLat * fz;
+    const vWz = c.speed * fz + c.vLat * fx;
     // …and MOVE THE CAR, in world metres. This is the whole model: a rigid body
     // going where its own tyres point. The road is not in this equation.
     //

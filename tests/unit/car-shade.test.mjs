@@ -230,9 +230,12 @@ test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is 
   const { Car3D: Opted } = load(true, { getItem: (k) => (optOut.has(k) ? optOut.get(k) : null), setItem() {}, removeItem() {} });
   const opted = Opted.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], opts);
   assert.deepEqual(A(opted.pos), A(ref.pos), "opt-out pos"); assert.deepEqual(A(opted.nrm), A(ref.nrm), "opt-out nrm");
-  const t0 = Date.now();
+  // CPU time, not wall time (2026-10-04): the bound is about the build's
+  // work, and a wall clock in the parallel tooling-fast gate also measured
+  // whatever else the box was running.
+  const t0 = process.cpuUsage();
   const on = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], Object.assign({ smooth: true }, opts));
-  const ms = Date.now() - t0;
+  const used = process.cpuUsage(t0), ms = Math.round((used.user + used.system) / 1000);
   const dflt = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], opts);
   assert.deepEqual(A(dflt.pos), A(on.pos), "nothing chosen builds the rounded car"); assert.deepEqual(A(dflt.nrm), A(on.nrm));
   assert.equal(on.pos.length, on.nrm.length);

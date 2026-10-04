@@ -9,11 +9,11 @@ on:
   # exactly that commit. It is started two ways: ci.yml's `poke-train` job
   # dispatches it when a deploy-branch push's FAST tier (guards, node suites,
   # census, change-aware selection — the verdict an agent waits for) goes
-  # green. That fast tier shares ci.yml's non-cancelling `ship-fast` group: a
-  # running fast tier always finishes, and in a burst only the newest WAITING
-  # push survives (an older pending one ends `cancelled` = superseded; its
-  # commits ride the newer tip). The train itself is unchanged — unique concurrency_key into ci.yml, and this
-  # file's `pages-gate-*` group never cancels. The cron below is the BACKSTOP.
+  # green. That fast tier runs in ci.yml's no-cancel `ship-fast` group (a
+  # running fast tier finishes; only the newest waiting push stays queued —
+  # see ci.yml's concurrency block). The train itself is unchanged — unique
+  # concurrency_key into ci.yml, and this file's `pages-gate-*` group never
+  # cancels. The cron below is the BACKSTOP.
   # The cron is not a clock here:
   # GitHub's scheduler runs this repository's schedules hours late (ci.yml's
   # 03:17 nightly is created around 08:00 every day), so three ticks an hour
@@ -195,6 +195,12 @@ jobs:
     # cancelled gate matches neither and the run stops here.
     if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.verdict.outputs.nothing_new != 'true' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true')) }}
     runs-on: ubuntu-latest
+    # A checkout and one script (2026-10-04): it had no cap (360 min default)
+    # and inherited the workflow's pages: write + id-token: write, neither of
+    # which a read of the live sha needs.
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       deploy: ${{ steps.pub.outputs.publish }}
     steps:
@@ -224,6 +230,11 @@ jobs:
     concurrency:
       group: pages
       cancel-in-progress: false
+    # A CAP, so a hang cannot hold the never-cancelled `pages` lock for the
+    # 360-minute default (2026-10-04). Time queued for the lock does not count;
+    # the job is a full-history checkout, staging and deploy-pages, whose own
+    # deployment `timeout` input defaults to 10 minutes — this sits above it.
+    timeout-minutes: 25
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

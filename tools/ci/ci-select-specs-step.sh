@@ -58,15 +58,20 @@ node -e '
   console.log(`fits ${r.secFit} s (unmeasured specs at the fallback rate, measured specs at their own median); selected ${r.testsSelected} tests (${r.secSelected} s) across ${r.selected.length} specs; ${(r.oversize || []).length} outside the budget`);
   if ((r.circuitsTouched || []).length)
     console.log(`circuits touched: ${r.circuitsTouched.join(", ")}${(r.circuits || []).length ? " (circuit-only diff: per-circuit loops run these alone via APEX_CIRCUITS)" : " (not circuit-only: the whole fleet runs)"}`);
+  for (const s of (r.overBudgetRun || []))
+    console.log(`OVER-BUDGET POOL (routed; declares ${s.ownTimeoutSec}s/test, runs in an overbudget job): ${s.file} (${s.tests} tests)`);
+  // A DROPPED spec is an annotation, not a plain log line: selected-verdict
+  // fails a pull request on any of them (2026-10-04), and the annotation is
+  // what names it on the checks page of the PR.
   for (const s of r.overBudgetSpecs)
-    console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
+    console.log(`::warning::DROPPED (declares ${s.ownTimeoutSec}s/test; the over-budget pool is full): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.overflow || []))
     console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
-  for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
+  for (const s of r.skipped) console.log(`::warning::DROPPED (over budget; the overflow is full): ${s.file} (${s.tests} tests)`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s): ${s.file} (${s.tests} tests)`);
   const shards = r.shards || [];
