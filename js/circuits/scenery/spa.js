@@ -462,7 +462,11 @@
         }
         overheadSpan({
           id, frac: s, clearance: h, thickness: 0.5, depth: 3.4, span,
-          supportGap: 1.5, supportWidth: 3, color: deckCol, required: true,
+          // The required modelGroup piers above already stand the deck.
+          // overheadSpan's own legs share those 3×3 faces (~15 mm, 17.6 m²)
+          // once the SRTM elevation moves the ground-anchored boxes — two
+          // coplanar spots, one per bridge (coplanar-audit, #878).
+          supports: false, color: deckCol, required: true,
         });
       }
 
