@@ -312,6 +312,45 @@ const CareerBackup = (function () {
     return out;
   }
 
+  // The Daily Challenge history ({ days: { day: { best, laps, classes } },
+  // streak }) is a record of laps driven: a restore must not hand back a slower
+  // best than this browser already holds. Per day (and per class) the LOWER best
+  // wins and the larger lap count stands; the streak with the later day wins.
+  function mergeDailyEntry(a, b) {
+    if (!isObj(a)) return b;
+    if (!isObj(b)) return a;
+    const out = Object.assign({}, b, a);
+    const fa = Number.isFinite(a.best), fb = Number.isFinite(b.best);
+    out.best = fa && fb ? Math.min(a.best, b.best) : fa ? a.best : fb ? b.best : null;
+    out.laps = Math.max(Number.isFinite(a.laps) ? a.laps : 0, Number.isFinite(b.laps) ? b.laps : 0);
+    return out;
+  }
+  function mergeDaily(local, incoming) {
+    if (!isObj(local)) return incoming;
+    const out = Object.assign({}, incoming, local);
+    const lDays = isObj(local.days) ? local.days : {};
+    const iDays = isObj(incoming.days) ? incoming.days : {};
+    const days = Object.assign({}, iDays);
+    for (const day of Object.keys(lDays)) {
+      const e = mergeDailyEntry(lDays[day], iDays[day]);
+      if (isObj(e) && isObj(lDays[day]) && isObj(iDays[day]) && (isObj(lDays[day].classes) || isObj(iDays[day].classes))) {
+        const lc = isObj(lDays[day].classes) ? lDays[day].classes : {};
+        const ic = isObj(iDays[day].classes) ? iDays[day].classes : {};
+        const classes = Object.assign({}, ic);
+        for (const k of Object.keys(lc)) classes[k] = mergeDailyEntry(lc[k], ic[k]);
+        e.classes = classes;
+      }
+      days[day] = e;
+    }
+    out.days = days;
+    const ls = isObj(local.streak) ? local.streak : null, is = isObj(incoming.streak) ? incoming.streak : null;
+    const lLast = ls && typeof ls.last === "string" ? ls.last : "", iLast = is && typeof is.last === "string" ? is.last : "";
+    out.streak = !ls ? is : !is ? ls : lLast !== iLast ? (lLast > iLast ? ls : is)
+      : ((ls.count | 0) >= (is.count | 0) ? ls : is);
+    if (out.streak == null) delete out.streak;
+    return out;
+  }
+
   function apply(envelope, opts) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
@@ -382,7 +421,7 @@ const CareerBackup = (function () {
         s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
       }
       if (envelope.daily != null && isObj(envelope.daily) && o.includeExtras !== false) {
-        s.write("daily.v1", envelope.daily);
+        s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
       }
       if (envelope.records != null && isObj(envelope.records) && o.includeExtras !== false) {
         s.write("records", envelope.records);

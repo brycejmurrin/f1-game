@@ -340,6 +340,37 @@ test("import unions badges and keeps a standalone season that is further along",
   assert.deepEqual(JSON.parse(d.disk.get("apex26.badges")).got, { first_win: 50, pole: 10 });
 });
 
+test("import merges the Daily Challenge history per day: the faster best and the later streak stand", () => {
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.disk.set("apex26.daily.v1", JSON.stringify({
+    days: { "2026-10-01": { best: 80, laps: 5, classes: { std: { best: 80, laps: 5 } } }, "2026-10-02": { best: 90, laps: 1 } },
+    streak: { count: 2, last: "2026-10-02" },
+  }));
+  a.Career.load();
+  const envelope = a.CareerBackup.build();
+
+  const b = loadHarness();
+  b.disk.set("apex26.daily.v1", JSON.stringify({
+    days: { "2026-10-01": { best: 85, laps: 7, classes: { std: { best: 79, laps: 2 } } }, "2026-10-03": { best: 70, laps: 3 } },
+    streak: { count: 3, last: "2026-10-03" },
+  }));
+  b.Career.load();
+  assert.equal(b.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" }).ok, true);
+  const d = JSON.parse(b.disk.get("apex26.daily.v1"));
+  assert.equal(d.days["2026-10-01"].best, 80, "the backup's faster day best wins");
+  assert.equal(d.days["2026-10-01"].laps, 7, "the larger lap count stands");
+  assert.equal(d.days["2026-10-01"].classes.std.best, 79, "the local faster class best is not overwritten");
+  assert.equal(d.days["2026-10-02"].best, 90, "a day only the backup has is restored");
+  assert.equal(d.days["2026-10-03"].best, 70, "a newer local day survives the restore");
+  assert.deepEqual(d.streak, { count: 3, last: "2026-10-03" }, "the later streak stands");
+
+  const c = loadHarness();   // nothing local: the backup's history as-is
+  c.Career.load();
+  c.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "driver" });
+  assert.equal(JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-02"].best, 90);
+});
+
 test("malformed history / offers / moves / roster rows import without crashing career", () => {
   const h = loadHarness();
   const driver = Object.assign(save(), {
