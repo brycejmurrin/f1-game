@@ -64,3 +64,33 @@ test("a car that retires past 90 % of the winner's laps is classified and scores
     assert.ok(late.finPos < early.finPos, "the classified retirement ranks above the unclassified one");
   } finally { g2.close(); }
 });
+
+test("with no finisher, the 90 % rule measures the leader still running", async () => {
+  // The only human retiring ends the race 2.2 s later (RaceControl.finishDelay)
+  // with nobody past the flag. winDone was taken from finishers only, so it
+  // read 0 and EVERY retirement went unclassified — a car out with one lap to
+  // go scored nothing. The leader on the road is the reference instead.
+  const g3 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g3.apex, G = g3.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g3.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    const [late, early, run] = ai;
+    for (const c of ai.slice(3)) a.retire(G.cars.indexOf(c));
+    const place = (c, s, lap, v) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.speed = v; c.x = 0; };
+    place(run, L * 0.5, 10, 70); run.dnfAt = null;                   // the leader: 9 of 10 done, never reaches the flag
+    place(late, L - 1000, 9, 0); a.retire(G.cars.indexOf(late));     // out on lap 9: 8 >= floor(0.9 * 9)
+    place(early, L - 1000, 5, 0); a.retire(G.cars.indexOf(early));   // out on lap 5: 4 of 9
+    a.jump(0.3, 0, 0); P.lap = 10; P.prog = 9 * L + 0.3 * L; a.retire(null);   // the human stops on lap 10
+    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g3.step(1);
+    assert.equal(G.state, "results", "a retired solo human ends the race");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody took the flag");
+    assert.equal(late.classified, true, "8 of the leader's 9 laps is classified");
+    assert.equal(early.classified, false, "4 of 9 is not");
+    assert.equal(P.classified, true, "the human, out on the leader's lap, is classified too");
+    assert.ok(late.finPos < early.finPos, "the classified retirement ranks above the unclassified one");
+  } finally { g3.close(); }
+});
