@@ -5,6 +5,10 @@ const DataRealRace = (function () {
   const OPENF1 = "https://api.openf1.org/v1";
   const TTL = 7 * 24 * 60 * 60 * 1000;   // a finished race never changes; the same TTL api.js gives a historic session
   const CACHE_KEY = "apex26.realrace.v1.";   // one compact script per session key (the raw laps body is 480 KB and never cached)
+  // A script is ~45 KB; one per watched session with no eviction filled the 5 MB origin quota
+  // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
+  const CACHE_LRU = "apex26.realrace.lru";
+  const CACHE_MAX = 8;
   const SCRIPT_V = 4;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
@@ -464,11 +468,35 @@ const DataRealRace = (function () {
     try {
       const raw = localStorage.getItem(CACHE_KEY + sessionKey);
       const s = raw ? JSON.parse(raw) : null;
-      return s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      if (ok) lruWrite(lruFront(sessionKey));
+      return ok;
     } catch (e) { return null; }
   }
+  function lruRead() {
+    try { const a = JSON.parse(localStorage.getItem(CACHE_LRU) || "[]"); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
+  }
+  function lruFront(sessionKey) {
+    const k = String(sessionKey);
+    return [k].concat(lruRead().filter((x) => x !== k)).slice(0, CACHE_MAX);
+  }
+  function lruWrite(order) { try { localStorage.setItem(CACHE_LRU, JSON.stringify(order)); } catch (e) { /* quota: the order is advisory */ } }
+  /** Drop every cached script not in `keep` — indexed ones and any written before the index existed. */
+  function pruneScripts(keep) {
+    try {
+      const drop = new Set(lruRead().filter((k) => keep.indexOf(k) < 0).map((k) => CACHE_KEY + k));
+      const n = typeof localStorage.length === "number" && typeof localStorage.key === "function" ? localStorage.length : 0;
+      for (let i = 0; i < n; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(CACHE_KEY) === 0 && keep.indexOf(k.slice(CACHE_KEY.length)) < 0) drop.add(k);
+      }
+      for (const k of drop) localStorage.removeItem(k);
+    } catch (e) { /* no storage */ }
+  }
   function remember(script) {
-    try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); } catch (e) { /* quota: the next open refetches */ }
+    const order = lruFront(script.sessionKey);
+    pruneScripts(order);   // before the write, so the room it frees is there for it
+    try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); lruWrite(order); } catch (e) { /* quota: the next open refetches */ }
   }
 
   function create(deps) {
@@ -859,7 +887,7 @@ const DataRealRace = (function () {
              setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached,
-           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, DISTANCES, CACHE_KEY };
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
+           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, DISTANCES, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);
