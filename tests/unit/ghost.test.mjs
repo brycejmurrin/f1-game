@@ -114,6 +114,23 @@ test("Ghost lap recording and playback basics", () => {
   assert.equal(atNeg.done, false);
 });
 
+// A parked car still samples at HZ (s never goes backwards), and with no best yet
+// that lap became the ghost however long it was: past MAX_LAP_S it is dropped.
+test("Ghost drops a lap left open past MAX_LAP_S; the next lap records", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  assert.equal(Ghost.MAX_LAP_S, 600);
+  Ghost.startLap();
+  const dt = 1 / Ghost.HZ;
+  for (let i = 0; i <= Ghost.MAX_LAP_S * Ghost.HZ + 2; i++) Ghost.record(i * dt, 120, 0);   // parked on the grid
+  assert.equal(Ghost.finishLap(Ghost.MAX_LAP_S + 1), false, "the open lap was dropped, not saved");
+  assert.equal(Ghost.hasGhost(), false);
+  Ghost.startLap();
+  for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, 0);
+  assert.equal(Ghost.finishLap(1.0), true);
+  assert.equal(Ghost.bestTime(), 1.0);
+});
+
 test("Ghost.snapshot returns a defensive shareable copy of the current PB", () => {
   const { Ghost } = createHarness();
   Ghost.setTrack("monza");
@@ -295,11 +312,14 @@ test("loading an inherited over-budget store trims it before other saves compete
 });
 
 test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
-  const { Ghost, store } = createHarness();
+  // A 4000 s trace can no longer be RECORDED (MAX_LAP_S drops it), but one saved
+  // before that cap still sits on disk: the budget repair thins it, never evicts it.
+  const n = 40_000, big = { time: 5000, t: [], s: [], x: [], _used: 1 };
+  for (let i = 0; i < n; i++) { big.t.push(Math.round(i * 0.1 * 1000) / 1000); big.s.push(i * 10); big.x.push(i % 7); }
+  const { Ghost, store, flushMicrotasks } = createHarness({ disk: { "apex26.ghost.v1": JSON.stringify({ endurance: big }) } });
   Ghost.setTrack("endurance");
-  Ghost.startLap();
-  for (let i = 0; i < 40_000; i++) Ghost.record(i * 0.1, i * 10, i % 7);
-  assert.equal(Ghost.finishLap(5000), true);
+  flushMicrotasks();
+  assert.equal(Ghost.bestTime(), 5000);
 
   const raw = store.getItem("apex26.ghost.v1");
   assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "the single trace respects the total budget");

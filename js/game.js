@@ -2716,7 +2716,7 @@ async function startRaceBody() {
   // nothing until it is done, so it is raised again, disarmed, and render()
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
-  clearMenuScreens();
+  clearMenuScreens(); garagePre.release();  // garage GPU set is not the race's (js/garage/prebuild.js); next idle title rebuilds it
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
@@ -5608,9 +5608,9 @@ function updateCar(c, dt, ranked) {
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
+  // bankAngle === banking().roll (mesh.js); no second lookup.
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
-  const bankRoll = Math.max(bankPhys ? Math.abs(bankPhys.roll) : 0,
-                            Math.abs(Tracks.bankAngle(track, c.s)));
+  const bankRoll = bankPhys ? Math.abs(bankPhys.roll) : 0;
   const bankMu = 1 + Math.sin(bankRoll) * 0.8;
   // Track-frame dynamic bicycle model for the player. c.head = real world
   // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.

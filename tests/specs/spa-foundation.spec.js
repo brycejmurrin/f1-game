@@ -171,6 +171,16 @@ test.describe("Spa track-owned foundation migration", () => {
       expect(requiredFailures).toEqual([]);
 
       const emitted = new Map(result.models.emitted.map((entry) => [entry.id, entry]));
+      // Footprint seating must retain complete units, not improve grounding
+      // counts by silently dropping the camp or putting supports outside bounds.
+      for (let i = 0; i < 8; i++) {
+        const unit = emitted.get(`spa-rv-camp-130-1:unit-${i}`);
+        expect(unit?.vertices).toBe(i === 6 ? 38 : 72);
+      }
+      expect(emitted.get("spa-rv-camp-130-1")?.vertices).toBeGreaterThanOrEqual(39);
+      const seatedEscape = (result.models.escaped || []).filter((entry) =>
+        /^spa-(chalet-|rv-camp-)/.test(entry.id));
+      expect(seatedEscape).toEqual([]);
       expect(emitted.get("spa-timing-tower")?.required).toBe(true);
       for (const id of ["spa-footbridge-125", "spa-footbridge-500"]) {
         expect(emitted.get(id)?.overhead).toBe(true);

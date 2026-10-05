@@ -217,6 +217,33 @@ test("the script cache round-trips through localStorage and rejects a stale shap
   assert.equal(D.cached(11377), null);
 });
 
+// One script per watched session (~45 KB) with no eviction filled the 5 MB origin
+// quota after ~115 sessions and starved every save: the cache keeps the newest
+// CACHE_MAX, most recently used first, and prunes any written before the index.
+test("the script cache keeps only the newest CACHE_MAX sessions, LRU by use", () => {
+  const store = new Map();
+  const localStorage = { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+    getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  const { D, findTeam } = load({ localStorage });
+  const base = host(D.build(rawBaku(), findTeam, TRACKS));
+  for (let i = 0; i < 5; i++) store.set(D.CACHE_KEY + "legacy" + i, JSON.stringify(base));   // written before the index existed
+  store.set("apex26.settings", "{}");
+  const scripts = () => [...store.keys()].filter((k) => k.startsWith(D.CACHE_KEY));
+  for (let i = 0; i < 200; i++) {
+    D.remember({ ...base, sessionKey: 1000 + i });
+    assert.ok(scripts().length <= D.CACHE_MAX, "at most CACHE_MAX scripts after write " + i);
+  }
+  assert.equal(scripts().length, D.CACHE_MAX);
+  assert.ok(!scripts().some((k) => k.includes("legacy")), "pre-index scripts are pruned");
+  assert.ok(store.has(D.CACHE_KEY + "1199") && !store.has(D.CACHE_KEY + "1191"));
+  // a cache hit is a use: the oldest kept session survives the next write, the next-oldest goes
+  assert.equal(host(D.cached(1192)).laps, 51);
+  D.remember({ ...base, sessionKey: 2000 });
+  assert.ok(store.has(D.CACHE_KEY + "1192"), "the session just read is kept");
+  assert.ok(!store.has(D.CACHE_KEY + "1193"), "the least recently used one is evicted");
+  assert.equal(store.get("apex26.settings"), "{}", "other keys are untouched");
+});
+
 // A DOM stand-in with the surface the tab touches (the data-results.test.mjs shape).
 function makeDom() {
   function el(tag, cls, text) {

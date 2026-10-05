@@ -10,6 +10,11 @@ const InputGhost = (function () {
   const KEY = "apex26." + STORE_KEY;
   const MAX_STORE_BYTES = 256 * 1024;   // half the pose budget — inputs pack denser
   const MIN_STEPS = 30;                 // half a second at 60 Hz
+  // A lap left open (parked, stuck, AFK) grew two arrays per physics step without
+  // bound (~3-4 MB/h), and with no best yet a one-hour lap became the ghost.
+  // Ten minutes is several times the slowest lap of the longest circuit (7 km):
+  // past it the lap is dropped, as an invalid one is.
+  const MAX_LAP_S = 600;
   const DEFAULT_DT = 1 / 60;
 
   let trackId = null, context = null, storageId = null;
@@ -211,6 +216,7 @@ const InputGhost = (function () {
 
   function record(inp) {
     if (!rec) return;
+    if (rec.n >= MAX_LAP_S / (meta && meta.dt > 0 ? meta.dt : DEFAULT_DT)) { rec = null; return; }
     rec.steer.push(quantizeSteer(inp && inp.steer));
     rec.flags.push(packFlags(inp));
     rec.n++;
@@ -304,7 +310,7 @@ const InputGhost = (function () {
   }
 
   return {
-    STORE_KEY, KEY, MIN_STEPS, DEFAULT_DT,
+    STORE_KEY, KEY, MIN_STEPS, MAX_LAP_S, DEFAULT_DT,
     setTrack, startLap, record, finishLap,
     hasGhost, bestTime, snapshot, envelope, steps,
     atStep, beginReplay, next, replayIndex,

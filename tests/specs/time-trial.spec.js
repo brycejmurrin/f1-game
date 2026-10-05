@@ -515,10 +515,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
         // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its
         // hit centre is still clipped by the safe-area/chrome strip, so a bare
-        // tap times out for 60 s (tip flake on c1308cb / #968 selected-2; ship
-        // dropped the harden in a93ad6a22 to deselect TT for scenery — re-port
-        // here because audio → test:modes still packs this cell). Bring it into
-        // the actionability box before the gesture.
+        // tap times out for 60 s (tip flake on c1308cb / #968 selected-2; same
+        // on this PR packed-2 at d1185bda5). Bring it into the actionability
+        // box before the gesture.
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
