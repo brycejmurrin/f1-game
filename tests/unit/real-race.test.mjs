@@ -808,7 +808,53 @@ test("fetchTraces never caches a set with a failed request (a hub closed mid-loa
   assert.deepEqual(puts, [], "…but never cached");
   ctx.F1API = { locationData: () => Promise.resolve([]) };
   await D.fetchTraces(s);
-  assert.equal(puts.length, 1, "a complete set is cached");
+  assert.equal(puts.filter((k) => k !== "__lru").length, 1, "a complete set is cached");
+});
+
+// ~1.5 MB per watched race with no eviction, and every get/put opened its own
+// IDBDatabase that nothing closed. One memoised connection (closed on
+// versionchange, reopened after), and only the newest TRACE_MAX races kept.
+function traceIdb(seed = []) {
+  const rows = new Map(seed), stats = { opens: 0, closes: 0 }, dbs = [];
+  const later = (fn) => setTimeout(fn, 0);
+  const req = (fn) => { const r = {}; later(() => { r.result = fn(); if (r.onsuccess) r.onsuccess(); }); return r; };
+  const idb = { stats, rows, dbs, open() {
+    stats.opens++;
+    const db = { objectStoreNames: { contains: () => true }, close() { stats.closes++; db.closed = true; }, transaction() {
+      let pending = 0;
+      const t = {};
+      const done = () => { if (--pending === 0) later(() => t.oncomplete && t.oncomplete()); };
+      const op = (fn) => { pending++; const r = req(fn); later(() => later(done)); return r; };
+      t.objectStore = () => ({ get: (k) => op(() => rows.get(k)), put: (v, k) => op(() => { rows.set(k, v); return k; }),
+        delete: (k) => op(() => { rows.delete(k); }), getAllKeys: () => op(() => [...rows.keys()]) });
+      return t;
+    } };
+    dbs.push(db);
+    const r = { result: db }; later(() => r.onsuccess && r.onsuccess()); return r;
+  } };
+  return idb;
+}
+
+test("race traces share one IndexedDB connection and keep only the newest TRACE_MAX races", async () => {
+  const { ctx } = load();
+  const legacy = { v: 1, sessionKey: "legacy", cars: {} };
+  const idb = traceIdb([["legacy", legacy]]);   // a race stored before the order existed
+  ctx.indexedDB = idb;
+  const D = vm.runInContext("DataRealRace", ctx);
+  const N = D.TRACE_MAX + 3;
+  for (let i = 0; i < N; i++) {
+    assert.equal(await D.tracePut({ v: 1, sessionKey: 500 + i, t0: 1, hz: 2, cars: { 1: [] }, failed: [] }), true);
+    assert.ok(await D.traceGet(500 + i), "the race just stored reads back");
+  }
+  const races = [...idb.rows.keys()].filter((k) => k !== "__lru");
+  assert.equal(races.length, D.TRACE_MAX, "at most TRACE_MAX races are kept");
+  assert.ok(!idb.rows.has("legacy") && !idb.rows.has("500") && idb.rows.has(String(500 + N - 1)), "the oldest go first");
+  assert.equal(idb.stats.opens, 1, N * 2 + " reads and writes share one connection");
+  assert.equal(idb.stats.closes, 0);
+  idb.dbs[0].onversionchange();   // another tab upgrades the DB: let go, and reopen on the next use
+  assert.equal(idb.stats.closes, 1);
+  assert.ok(await D.traceGet(500 + N - 1));
+  assert.equal(idb.stats.opens, 2);
 });
 
 test("leaving the tab mid-download drops the queued position requests; a pick here re-renders the sibling tabs", async () => {

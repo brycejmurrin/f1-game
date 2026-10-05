@@ -161,6 +161,9 @@ const CamFeel = (function () {
     _ns = prev + prefix;
     try { return fn(); } finally { _ns = prev; }
   }
+  // The key as the current scope sees it: state kept beside a follow (vantage's
+  // bend-hang maps) must use it, or the two cameras share it after all.
+  function scopeKey(key) { return _ns + key; }
   function follow(key, target, lambda, dt) {
     if (_ns) key = _ns + key;
     if (!(dt > 0)) { _fol[key] = target; return target; }
@@ -414,7 +417,7 @@ const CamFeel = (function () {
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
     lookingBackNow, consumeAimSnap, shake, shakeNoise, TUB_EYE_MAX,
     follow, resetFollow, drive,
-    initUI, loadSettings, scoped,
+    initUI, loadSettings, scoped, scopeKey,
   };
 })();
 Object.freeze(CamFeel);

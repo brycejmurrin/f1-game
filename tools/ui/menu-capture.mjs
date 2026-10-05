@@ -12,7 +12,7 @@
 //   await runMenuGallery({ jobs: 2, force: false });
 //
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
-import { menuReady } from "./menu-readiness.mjs";
+import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -133,16 +133,7 @@ async function waitScreenReady(page, screen) {
   await page.waitForFunction(menuReady, screen.root, { polling: 100, timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(150);
   if (screen.id.split("#")[0] === "select") {
-    await page.waitForFunction(() => {
-      const cv = document.getElementById("sel-preview-map");
-      if (!(cv instanceof HTMLCanvasElement) || cv.width <= 8 || cv.height <= 8) return false;
-      const r = cv.getBoundingClientRect();
-      const z = cv.currentCSSZoom || 1;
-      const bufferAspect = cv.width / cv.height;
-      const boxAspect = (r.width / z) / Math.max(1, r.height / z);
-      return Math.abs(bufferAspect - boxAspect) /
-        Math.max(bufferAspect, boxAspect, 0.001) < 0.03;
-    }, null, { polling: 50, timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(previewMapSettled, null, { polling: 100, timeout: 5000 }).catch(() => {});
   }
 }
 

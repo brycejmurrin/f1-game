@@ -5,14 +5,23 @@ const InputHaptics = (function () {
   function create({ clamp, activePad, padConnected, remoteActive, remoteHaptics, now }) {
     let hapticScale = 1;
     function setHaptics(v) {
-      if (typeof v === "number" && isFinite(v)) hapticScale = clamp(v, 0, 1);
+      if (typeof v !== "number" || !isFinite(v)) return;
+      const next = clamp(v, 0, 1);
+      if (next === hapticScale) return;
+      hapticScale = next;
+      if (!next) { pulses.length = 0; mixDirty = false; nextChange = 0; stopActuator(); }
+      else if (pulses.length) mixDirty = true;
     }
     // TRIGGER HAPTICS (L2/R2 motors via "trigger-rumble"): a separate on/off from
     // the strength slider. Off forces every channel back to dual-rumble grips.
     // Adaptive-trigger RESISTANCE is NOT this — Gamepad API cannot set it (needs
     // WebHID, Chromium only); that path is out of scope. See PLATFORM-INPUT-NOTES.
     let triggerHapticsOn = true;
-    function setTriggerHaptics(on) { triggerHapticsOn = !!on; }
+    function setTriggerHaptics(on) {
+      if (triggerHapticsOn === !!on) return;
+      triggerHapticsOn = !!on;
+      if (pulses.length) mixDirty = true;
+    }
     function triggerHapticsEnabled() { return triggerHapticsOn; }
     function actuatorHas(a, effect) {
       return !!(a && a.effects && typeof a.effects.includes === "function" && a.effects.includes(effect));
@@ -97,6 +106,18 @@ const InputHaptics = (function () {
     let mixDirty = false, frameEmitted = false, nextChange = 0, mixSeq = 0;
     let noTrigActuator = null;     // the actuator that refused trigger-rumble
     const clockMs = typeof now === "function" ? now : () => 0;
+    let lastActuator = null;
+    function stopActuator() {
+      ++mixSeq; // an older effect resolving "preempted" cannot resurrect it
+      const a = lastActuator;
+      lastActuator = null;
+      if (!a) return;
+      try {
+        const p = typeof a.reset === "function" ? a.reset() : typeof a.playEffect === "function"
+          ? a.playEffect("dual-rumble", { duration: 0, strongMagnitude: 0, weakMagnitude: 0 }) : a.pulse(0, 0);
+        if (p && p.catch) p.catch(() => {});
+      } catch (_) { /* stopping an unavailable actuator is best-effort */ }
+    }
     function addPulse(motor, mag, until) { if (mag > 0) pulses.push({ motor, mag, until }); }
     // Best-effort rumble on the active pad. channel:
     //   "brake"    → left trigger (lock-up) when trigger-rumble is available
@@ -110,12 +131,12 @@ const InputHaptics = (function () {
     function rumble(intensity, ms, channel) {
       if (hapticScale <= 0) return;
       if (!padConnected()) return;
-      const mag = clamp(intensity, 0, 1) * hapticScale;
+      const mag = clamp(intensity, 0, 1); // scale at emission so pending effects follow Settings
       const dur = Math.min(MIX_MAX_MS, Math.max(0, ms | 0));
       if (!(mag > 0) || !dur) return;
       const t = clockMs(), until = t + dur;
-      if (triggerHapticsOn && channel === "brake") addPulse("left", mag, until);
-      else if (triggerHapticsOn && channel === "throttle") addPulse("right", mag, until);
+      if (channel === "brake") addPulse("left", mag, until);
+      else if (channel === "throttle") addPulse("right", mag, until);
       else { addPulse("strong", mag, until); addPulse("weak", mag * 0.7, until); }
       if (frameEmitted) { mixDirty = true; return; }
       emit(t);
@@ -133,21 +154,21 @@ const InputHaptics = (function () {
     function emit(t) {
       mixDirty = false; nextChange = 0;
       prune(t);
-      if (!pulses.length) return;     // the last effect simply runs out
+      if (!hapticScale || !pulses.length) return;     // the last effect simply runs out
       const pad = activePad();
       if (!pad) { pulses.length = 0; return; }
       frameEmitted = true;
       const m = { strong: 0, weak: 0, left: 0, right: 0 };
       let first = Infinity, last = 0;
       for (const p of pulses) {
-        if (p.mag > m[p.motor]) m[p.motor] = p.mag;
+        if (p.mag * hapticScale > m[p.motor]) m[p.motor] = p.mag * hapticScale;
         if (p.until < first) first = p.until;
         if (p.until > last) last = p.until;
       }
       const duration = Math.max(1, Math.round(last - t));
       if (first < last) nextChange = first;   // a shorter pulse ends: re-mix then
       const a = pad.vibrationActuator;
-      const trig = (m.left > 0 || m.right > 0) && a && a !== noTrigActuator && actuatorHas(a, "trigger-rumble");
+      const trig = triggerHapticsOn && (m.left > 0 || m.right > 0) && a && a !== noTrigActuator && actuatorHas(a, "trigger-rumble");
       if (!trig && (m.left > 0 || m.right > 0)) {
         // No trigger motors here (or TRIGGER HAPTICS was on when queued and the
         // pad cannot): the grips carry it, as the per-call path always did.
@@ -156,6 +177,7 @@ const InputHaptics = (function () {
         m.left = m.right = 0;
       }
       if (a && typeof a.playEffect === "function") {
+        lastActuator = a;
         const seq = ++mixSeq;
         try {
           const p = trig
@@ -175,6 +197,7 @@ const InputHaptics = (function () {
       // It returns a Promise in Gecko too: the try only sees a synchronous throw.
       const legacy = pad.hapticActuators && pad.hapticActuators[0];
       if (legacy && typeof legacy.pulse === "function") {
+        lastActuator = legacy;
         try {
           const p = legacy.pulse(Math.max(m.strong, m.left, m.right), duration);
           if (p && p.catch) p.catch(() => {});
