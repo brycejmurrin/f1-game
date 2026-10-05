@@ -46,12 +46,12 @@ test("--help exits 0 and documents --live visual filter plus the failure-mode ta
   assert.match(r.stdout, /LIGHTING-TUNER-SLIDERS/);
 });
 
-test("--json lists ~183 knobs with id/group", () => {
+test("--json lists ~189 knobs with id/group", () => {
   const data = json(["--json"]);
   const knobs = data.knobs;
   assert.ok(Array.isArray(knobs), "expected { knobs: [...] }");
-  assert.ok(knobs.length >= 178 && knobs.length <= 188,   // actual 183; the 30-wide band could lose 7 knobs silently
-    `expected ~183 knobs, got ${knobs.length}`);
+  assert.ok(knobs.length >= 184 && knobs.length <= 192,   // actual 189 (beamCore, 2026-10-05); move the band with the registry
+    `expected ~189 knobs, got ${knobs.length}`);
   for (const k of knobs) {
     assert.equal(typeof k.id, "string");
     assert.ok(k.id.length, "empty id");
@@ -220,7 +220,7 @@ test("--live --all --dry-run prints a plan for every knob, batched by condition"
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stderr, /PAGEERR|playwright|launchChromium/i);
   const data = JSON.parse(r.stdout);
-  assert.ok(data.count >= 178 && data.count <= 188, `count=${data.count}`);
+  assert.ok(data.count >= 184 && data.count <= 192, `count=${data.count}`);
   assert.equal(data.plans.length, data.count);
   assert.ok(data.bucketCount >= 4, `bucketCount=${data.bucketCount} (one recipe is not enough)`);
   assert.ok(data.bucketCount < data.count, "should park once per condition, not per knob");

@@ -6,6 +6,12 @@ instead of emitting inline triangles. Replay goes through **GUARDED** emitters
 from `buildProps`. **UNGUARDED** `raw` emitters are only for canonical mesh
 baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 
+## Contents
+- When to Use
+- When NOT to Use
+- Quick Reference
+- Migration workflow and mistakes
+
 ## When to Use
 
 - Converting a composite emitter to `instance(...)`.
@@ -16,7 +22,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 ## When NOT to Use
 
 - First-time dressing → the scenery-dress index (`SKILL.md`). Track spline/elevation →
-  **agent-view**. Shader/GL errors → **webgl-debug**. Treating a pine
+  **agent-view**. Shader/GL errors → **renderer-debug**. Treating a pine
   re-param mismatch vs old HEAD as a regression — that look change is the
   worklist (SCENE-GRAPH-PLAN §6).
 
@@ -39,7 +45,7 @@ node tools/ci/test-bg.mjs gfx                # instanced-draw.spec.js
 node tools/track/verify-track.cjs <id>
 ```
 
-Related: **webgl-debug**, **agent-view**.
+Related: **renderer-debug**, **agent-view**.
 
 ## Migration workflow and mistakes
 
@@ -80,7 +86,7 @@ judging a `graph-parity` mismatch.
 
 4. **Reuse check** after build (browser-only; node substitute: the parity tool's own
    `by emitter` table + `instanced handoff: N batches, M instances (+K un-instanceable -> bake)`
-   line — K is the `bakeOnly` count; Monaco at HEAD~1: 20 batches, 4290 inst, +4 bake, ~20 s for one id):
+   line — K is the `bakeOnly` count; Monaco at HEAD~1: 20 batches, 4286 inst, +5 bake, ~20 s for one id):
    ```js
    __apex.race("spa"); __apex.trackGraph().stats().byKind
    ```
@@ -89,7 +95,7 @@ judging a `graph-parity` mismatch.
    discrete keys) before expecting instancing savings. Pine already batches: canonical 12 m geometry is uniformly scaled per placement.
    Discrete sparse/tier/lean/jitter keys determine the remaining variants.
 
-5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, 20 tests, <1 s) **then GL wiring** (browser):
+5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, 25 tests, <1 s) **then GL wiring** (browser):
    ```sh
    npm run test:tooling-fast
    node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background

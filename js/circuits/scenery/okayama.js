@@ -213,10 +213,20 @@
       //    built windows so trunks do not grow through the pit / Williams /
       //    last-corner compounds (clip-audit call-site pairings). Bushes live
       //    in the corner blocks only — same-node bush×tree here was 49 clips.
+      // Terraced banks / clay cuts (spectatorHill, clayCut) are solid masses
+      // 8-16 m deep starting 9-28 m out — exactly where the ranks stand. Keep
+      // trunks off the terraces: each span below is one of those banks
+      // (blocks 5, 7, 12, 13, 16, 18), padded 0.004 at each end.
+      const HILLS = { "-1": [[0.996, 0.018], [0.051, 0.074], [0.094, 0.146],
+                             [0.316, 0.362], [0.600, 0.658], [0.894, 0.934]],
+                      "1":  [[0.290, 0.332]] };
+      const onHill = (s, side) => HILLS[side].some(([a, b]) =>
+        a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
       every(16, (k) => {
         const s = k / n;
         for (const side of [-1, 1]) {
           if (side > 0 && inBuilt(s)) continue;
+          if (onHill(s, side)) continue;
           const h = hash(k * 29 + (side < 0 ? 101 : 211));
           if (h < 0.22) continue;                     // occasional gap
           const ranks = h > 0.86 ? 3 : 2;
@@ -347,7 +357,7 @@
         safeBox(0.0180 + i * 0.0090, 1, 34, [4.3, 1.4, 1.9], CAR[i % CAR.length]);
       billboard(K(0.0300), 1, 12, 7, 2.4, [0.86, 0.20, 0.18]);
       billboard(K(0.0550), 1, 13, 7, 2.4, [0.18, 0.34, 0.66]);
-      hedge(0.004, 0.060, 1, 36, 1.4, SCRUB);
+      hedge(0.012, 0.060, 1, 36, 1.4, SCRUB);
 
       // 5. MAIN GRANDSTAND (-1, 10 m) — one modest covered bank, short, forest
       //    closing immediately behind its top row. Behind and beside it: the
@@ -418,7 +428,10 @@
       sponsorHoarding(0.112, 0.130, 1, 13, { h: 1.3 });
       // Hedge gap pushed out past the apron pads — was flatCoplanar with itself
       // and with the Attwood hedge start at 3.8–5.2 m².
-      hedge(0.106, 0.134, 1, 21, 1.5, SCRUB);
+      // Approach only: the Turn 1 inside radius is 22-25 m from 0.113 on, so
+      // a 21 m-offset run collapses onto one point past there and its
+      // segments stacked into each other (1.78 m hedge x hedge at 0.133).
+      hedge(0.100, 0.1125, 1, 21, 1.5, SCRUB);
 
       // 9. ATTWOOD CURVE, s=0.1658 (-1, 7 m) — guardrail then an unbroken tree
       //    wall: ranks and bush infill to the barrier line, no sky gap. Four
@@ -512,7 +525,7 @@
       hut(0.2870, -1, 11, ROOF_GRN);
       for (let i = 0; i < 8; i++) {
         const s = 0.270 + (i / 7) * 0.030, hh = hash(i * 43 + 19);
-        bush(K(s), -1, 6.5 + hh, LEAF_D);
+        if (Math.abs(s - 0.2928) > 0.004) bush(K(s), -1, 6.5 + hh, LEAF_D);   // marshal post
         tree(K(s), -1, 9 + hh * 3, 10 + hh * 6, hh > 0.85 ? CEDAR : LEAF_D);
       }
 
@@ -524,15 +537,18 @@
       spectatorHill(0.294, 0.328, 1, 17, { h: 7.5, col: GRASS_D, steps: 3 });
       hedge(0.296, 0.326, 1, 7, 1.3, SCRUB);
       fence(0.294, 0.328, 1, 15, 1.2, [0.52, 0.54, 0.50]);
+      // Bushes flank the bank ends: between the 7 m hedge and the 9 m bank
+      // there is no room for a 3 m clump (bush x tread was 18 clips).
       for (let i = 0; i < 6; i++)
-        bush(K(0.296 + (i / 5) * 0.030), 1, 7.5 + hash(i * 11 + 3) * 1.5, SCRUB);
+        bush(K(i < 3 ? 0.2880 + i * 0.0025 : 0.3335 + (i - 3) * 0.0025), 1,
+          7.5 + hash(i * 11 + 3) * 1.5, SCRUB);
       billboard(K(0.3130), 1, 9, 9, 3.2, [0.90, 0.84, 0.20]);
       billboard(K(0.2990), 1, 9, 7, 2.6, [0.20, 0.52, 0.30]);
       for (let i = 0; i < 3; i++)                     // stall row on the crest
         bld(0.2995 + i * 0.0085, 1, 25, 5.0, 3.0, 4.0,
           i & 1 ? WALL_CREAM : [0.90, 0.90, 0.88], i & 1 ? ROOF_RED : ROOF_BLUE, 1);
       forestEdge(0.290, 0.332, 1, 34, { col: LEAF_M, h: 16, rows: 3 });
-      marshalPost(K(0.3220), 1, 10);
+      marshalPost(K(0.3300), 1, 10);   // past the bank end, not on its treads
 
       // 13. HAIRPIN, s=0.3372 (-1, 6 m) — tyres on a pale clay cut, a stepped
       //     spectator bank in the slope above, bamboo clumps on the crest. The
@@ -550,11 +566,8 @@
         box(0.3245 + i * 0.0060, -1, 12.5, [1.8, 1.2, 1.8],
           i & 1 ? [0.14, 0.14, 0.15] : [0.86, 0.30, 0.16]);
       hut(0.3480, -1, 12, ROOF_TIN);
-      for (let i = 0; i < 10; i++) {
-        const s = 0.320 + (i / 9) * 0.038, hh = hash(i * 67 + 31);
-        tree(K(s), -1, 28 + hh * 5, 11 + hh * 6, hh > 0.5 ? BAMBOO : BAMBOO_D);
-        if (hh > 0.55) tree(K(s), -1, 35 + hh * 4, 10 + hh * 5, BAMBOO);
-      }
+      // (The crest bamboo clumps that stood at 28-39 m grew through the 28 m
+      // terrace; the BAMBOO_D band at 38 m is the crest now.)
       marshalPost(K(0.3480), -1, 8);
 
       // 14. REVOLVER, s=0.3992 (+1, 11 m) — marshal post and hoarding on the
@@ -597,8 +610,9 @@
       billboard(K(0.5980), 1, 10, 8, 3.0, [0.88, 0.80, 0.22]);
       for (let i = 0; i < 14; i++) {
         const s = 0.440 + (i / 13) * 0.180, hh = hash(i * 19 + 7);
-        bush(K(s), -1, 6.5 + hh * 2, hh > 0.7 ? SCRUB_L : SCRUB);
-        bush(K(s), 1, 7 + hh * 2, LEAF_D);
+        // The Hobbs clay cut starts at 0.614, 9 m out: no outfield bush on it.
+        if (s < 0.610) bush(K(s), -1, 6.5 + hh * 2, hh > 0.7 ? SCRUB_L : SCRUB);
+        if (Math.abs(s - 0.6220) > 0.004) bush(K(s), 1, 7 + hh * 2, LEAF_D);   // Hobbs marshal post
         tree(K(s), hh > 0.5 ? 1 : -1, 8 + hh * 4, 9 + hh * 7,
           hh > 0.88 ? CEDAR : (hh > 0.82 ? BAMBOO : LEAF_D));
       }
@@ -632,7 +646,7 @@
       for (let i = 0; i < 8; i++) {
         const s = 0.616 + (i / 7) * 0.038, hh = hash(i * 59 + 23);
         tree(K(s), -1, 32 + hh * 6, 10 + hh * 5, hh > 0.6 ? BAMBOO : LEAF);
-        bush(K(s), 1, 6.5 + hh * 2, SCRUB);
+        if (Math.abs(s - 0.6220) > 0.004) bush(K(s), 1, 6.5 + hh * 2, SCRUB);
       }
 
       // 17. MIKE KNIGHT, s=0.6937 (+1, 10 m) — marshal post, guardrail and
@@ -692,6 +706,7 @@
       hut(0.8560, -1, 12, ROOF_RED);
       for (let i = 0; i < 7; i++) {
         const s = 0.790 + (i / 6) * 0.140, hh = hash(i * 47 + 29);
+        if (s > 0.894 && s < 0.934) continue;        // the last-corner banks
         bush(K(s), -1, 6.5 + hh * 2, hh > 0.7 ? SCRUB_L : SCRUB);
         tree(K(s), -1, 11 + hh * 4, 9 + hh * 6, hh > 0.8 ? BAMBOO : LEAF);
       }

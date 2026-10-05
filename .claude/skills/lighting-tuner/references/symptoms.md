@@ -7,7 +7,7 @@ Load this when a look complaint has a named field, or when validating a
 
 ```js
 __apex.lightState()
-// {
+// {   (subset — the full field list is in docs/DEBUG-HOOKS.md §lightState)
 //   ambientSky:    [r,g,b]   → uAmbSky
 //   ambientGround: [r,g,b]   → uAmbGround
 //   sunColor:      [r,g,b]   → directional sun

@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs are being changed or a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not for standalone Season configuration (season-mode), menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view)."
+description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs change, a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not standalone Season setup (season-mode), hub menu layout (ui-menu-a11y) or in-race physState telemetry (agent-view)."
 ---
 
 # Data Hub / F1API
@@ -8,6 +8,9 @@ description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetr
 `js/data/hub.js` is the overlay (`#datahub`). Tab loaders live in the
 split `js/data/*` modules. Styles in `css/data.css` (`dh-` prefix).
 In-race slip/grip/timing is **agent-view** (`references/state.md`), not this overlay.
+WATCH/HIGHLIGHTS loading the wrong driver/race after a picker change is here; a camera
+that snaps or keeps an old anchor after a SEEK, follow change or exit/re-entry is
+follow-owner state → **replay-camera** (new camera motion → **f1-animation-cameras**).
 
 ## Tabs
 
@@ -59,17 +62,25 @@ comparison is the TELEMETRY tab (`telemetry.js`, `telemetry-compare.spec.js`).
 No unit test pins zip/CRC/gather (only `data-lazy-loader` load order and a browser-ui-hunt
 "Gather prerequisite" check): a change here is browser-only unverified - say so.
 
-Season/year: standings, schedule and results take NO year argument. `F1API`
-derives the Jolpica season from the clock per call (`season()`, `js/data/api.js`
-~L18; URL = `/<year>/driverstandings.json`). Only the OpenF1 pickers carry a year
-(`hub.js` `apiYears()` / `sel.year`; `export.js` its own). "Last year's
-standings" = wrong system clock, a stale `apex26.api.*` cache entry, or a mock
-still answering 2026 (`tests/helpers/f1-api-mock.js` pins `season: "2026"`).
+Season/year: schedule and results take NO year argument and standings take an
+OPTIONAL one. `F1API` derives the Jolpica season from the clock per call
+(`season()`, `js/data/api.js` ~L18; URL = `/<year>/driverstandings.json`;
+a past year caches 7 d). `loadStandings` (`standings.js`) asks for the current
+year and, when that table is empty (Jan to the opener), falls back to last
+season's FINAL table, headings tagged `LAST SEASON · <y> FINAL` (pinned by
+`tests/unit/data-standings.test.mjs`). Only the OpenF1 pickers carry a year
+(`hub.js` `apiYears()` / `sel.year`; `export.js` its own); the year/GP/SESSION
+picker drives RESULTS, LIVE and TELEMETRY (`invalidateOther`), never STANDINGS
+or SCHEDULE. So "standings show last year after a picker change" = the
+`LAST SEASON` tag above (intended), a wrong system clock, a stale
+`apex26.api.*` cache entry, a 60 min `MAX_AGE` node, or the mock
+(`tests/helpers/f1-api-mock.js` pins `season: "2026"` and answers EVERY
+year's path with it).
 
 Start with `tests/specs/data-lifecycle.spec.js` or the telemetry comparison
 spec through `test-solo.mjs <path>` in the background with a log (parent-owned browser). Reserve the
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
-`node --test tests/unit/data-api-status.test.mjs` (also `data-results`,
+`node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
 `lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first
 does read `api.js`/`live.js`), not the hub spec.

@@ -2,8 +2,9 @@
 // deploy.mjs — the ONE deploy command (2026-09-01).
 //
 // A DIRECT PUSH TO THE DEPLOY BRANCH IS REFUSED (2026-09-30): branch protection
-// requires a pull request with the eight fast-tier checks green and allows no
-// bypass, so the default mode's final `git push` fails with GH006. `--pr` is
+// requires a pull request with the 12 fast-tier checks green (`enforcement_level:
+// non_admins`, so only an admin token bypasses it; AGENTS.md §Git branch &
+// deploy), so the default mode's final `git push` fails with GH006. `--pr` is
 // the form that lands work now; `--gate-only` is still the pre-push check.
 // @doc The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`.
 // Full description: the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else only the targeted sweeps that read it) → verify-track → push the deploy branch (or --pr); pages.yml stamps it

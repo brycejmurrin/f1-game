@@ -37,6 +37,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -160,6 +161,10 @@ function annotations(jobId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>]
+  Polls every workflow run for a SHA (default HEAD): one [ci-watch] line per job, a red\'s failing step,
+  then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
+  --once polls one time and exits. Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
 // The commit-associated endpoint avoids a stale/incomplete broad open-PR

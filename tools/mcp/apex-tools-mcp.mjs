@@ -384,13 +384,15 @@ const CATALOG = [
   {
     name: "apex_eval",
     week: 2,
-    description: "Browser (lock first) — boot harness Chromium and evaluate one __apex expression. Local only, no --url. Skill: playwright-probe.",
+    description: "Browser (lock first) — boot harness Chromium and evaluate one __apex expression; `backend` pins three|webgl2|webgpu (a `GLX.*` expr under the default answers for TLX); `vm: true` runs the same expr in the Node VM instead (no browser, no pixels, ~4 s). Local only, no --url. Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       properties: {
         track: { type: "string" },
         expr: { type: "string" },
         raw: { type: "boolean" },
+        backend: { type: "string", enum: ["three", "webgl2", "webgpu"], description: "Pin the renderer the expr measures (default three = TLX)." },
+        vm: { type: "boolean", description: "Node VM route (tools/lib/game-vm.cjs): no Chromium, no rasters; refuses `backend`." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -504,7 +506,7 @@ const CATALOG = [
   {
     name: "apex_graph_parity",
     week: 4,
-    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. Skill: scenery-dress.",
+    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. id: one circuit, ~2–5 s. all:true outlasts the 180 s tool cap, so it starts apex_job_start graph_parity_all and returns its jobId — watch with apex_job_status. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -621,6 +623,7 @@ const CATALOG = [
         btnScale: { type: "number", description: "BUTTON SIZE percent (40..300; touch devices)." },
         off: { type: "array", items: { type: "string", enum: Object.keys(HUD_TOGGLES) }, description: "HudElements ids switched OFF." },
         inlineImage: { type: "boolean", description: "Also return the PNG as image content (≤ 1.5 MB)." },
+        backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer the cell boots (default three = TLX; webgl2 = GLX)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -638,6 +641,7 @@ const CATALOG = [
         matrix: { type: "string", description: "quick (default) | full | leads | exhaustive (needs shard) | path to a matrix JSON under scratch/ or artifacts/." },
         only: { type: "array", items: { type: "string" }, description: "Keep cells whose id contains any of these substrings." },
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
+        backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
         track: { type: "string" },
         frac: { type: "number" },
@@ -655,7 +659,7 @@ const CATALOG = [
     name: "apex_track",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,side,tod,name} / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
+    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,h,side,tod,name} (eye: el = pitch, h = eye height; orbit: h = aim height, so a prop 200 m up frames) / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -664,7 +668,10 @@ const CATALOG = [
         track: { type: "string", description: "Circuit id (open; op track switches)." },
         frac: { type: "number", minimum: 0, maximum: 1 },
         cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
-        az: { type: "number" }, el: { type: "number" }, dist: { type: "number" },
+        az: { type: "number" },
+        el: { type: "number", description: "Degrees. orbit/cinematic: elevation; eye: pitch (+ up; omit to look ahead)." },
+        dist: { type: "number" },
+        h: { type: "number", description: "Metres above the road at frac. eye: eye height (default 2.5); orbit: aim-point height (default 1.5)." },
         side: { type: "number", enum: [-1, 1] },
         tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
         hud: { type: "boolean" },
@@ -696,6 +703,7 @@ const CATALOG = [
         scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
         site: { type: "string", description: "flicker_gate: comma list of site ids (default all)." },
         team: { type: "string", description: "livery_contrast: one team id (default every team — slow)." },
+        base: { type: "string", description: "graph_parity_all: the git ref for BASE= (required)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -777,17 +785,36 @@ const CATALOG = [
     name: "apex_track_audit",
     week: 7,
     kind: "tree",
-    description: "Tree — one circuit's offline health in one call (~4 s, no browser): verify-track build guard + float-audit floating/sunken prop clusters. Confirm suspects with apex_track shots. Skill: survey-track.",
+    description: "Tree — one circuit's offline health in one call (no browser): verify-track build guard + float-audit (~4 s); with `checks`, any of verify | float | clip | coplanar | props | ground against their baselines via track/audit-circuit.cjs (~16 s for all six). Confirm suspects with apex_track shots. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         track: { type: "string" },
+        checks: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", enum: ["verify", "float", "clip", "coplanar", "props", "ground"] }, description: "Which audits to run (audit-circuit.cjs); omit for the verify + float pair." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
       },
       required: ["track"],
+    },
+  },
+  {
+    name: "apex_unit_test",
+    week: 8,
+    kind: "tree",
+    description: "Tree — `node --test` of ONE file under tests/unit/ (seconds, no browser): the check eight skills run every session. `pattern` is --test-name-pattern. Not for tests/specs (browser groups go through test-bg). Skill: check-changes.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        file: { type: "string", description: "tests/unit/<name>.test.mjs (the path as the repo spells it)." },
+        pattern: { type: "string", description: "Only tests whose name matches this regex (--test-name-pattern)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+      required: ["file"],
     },
   },
 ];
@@ -915,6 +942,10 @@ bound("apex_shot", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_shot", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_shot", "el", { minimum: -90, maximum: 90 });
 bound("apex_shot", "side", { enum: [-1, 1] });
+bound("apex_track", "dist", { exclusiveMinimum: 0, maximum: 10000 });
+bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
+bound("apex_track", "el", { minimum: -90, maximum: 90 });
+bound("apex_track", "h", { minimum: -100, maximum: 3000 });
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
@@ -1045,6 +1076,9 @@ function hudCommonArgv(args, kind) {
   const argv = [...nodeTool(HUD_TOOL), "--json"];
   if (args.track) argv.push("--track", String(args.track));
   if (args.frac != null) argv.push("--frac", String(args.frac));
+  // The CLI pins three|webgl2 (apex26.gfxBackend); over MCP a cell silently
+  // measured TLX whatever the caller meant until this flag (2026-10-05).
+  if (args.backend) argv.push("--backend", String(args.backend));
   argv.push("--out", assertSafeOut(args.out || `artifacts/hud-survey/mcp-${kind}-${hudStamp()}`));
   return argv;
 }
@@ -1202,9 +1236,25 @@ function buildArgv(name, args) {
       if (args.since) argv.push("--since", String(args.since));
       return argv;
     }
+    case "apex_unit_test": {
+      const file = String(args.file || "");
+      if (!/^tests\/unit\/[A-Za-z0-9_.-]+\.test\.mjs$/.test(file)) badArgs(`apex_unit_test: file must be tests/unit/<name>.test.mjs (got "${file}")`, "Name one unit file, e.g. tests/unit/hud-layout.test.mjs.");
+      if (!fs.existsSync(path.join(ROOT, file))) badArgs(`apex_unit_test: ${file} does not exist`, "ls tests/unit/ for the file's name.");
+      const argv = [process.execPath, "--test"];
+      if (args.pattern != null && args.pattern !== "") {
+        const pat = String(args.pattern);
+        if (pat.length > 200 || /[\u0000-\u001f]/.test(pat)) badArgs("apex_unit_test: pattern must be a short regex", "Keep --test-name-pattern under 200 printable characters.");
+        argv.push("--test-name-pattern", pat);
+      }
+      argv.push(file);
+      return argv;
+    }
     case "apex_eval": {
       const argv = [...nodeTool("shot/apex-eval.mjs"), String(args.track || "monza"), String(args.expr || "a.info()")];
       if (args.raw) argv.push("--raw");
+      if (args.vm && args.backend) badArgs("apex_eval: vm has no renderer, so backend means nothing there", "Drop `vm` or `backend`.");
+      if (args.backend) argv.push("--backend", String(args.backend));
+      if (args.vm) argv.push("--vm");
       return argv;
     }
     case "apex_shot": {
@@ -1214,7 +1264,15 @@ function buildArgv(name, args) {
         String(args.frac ?? 0.1),
         String(args.cam || "orbit"),
       ];
-      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.out) {
+        // shot.mjs's 4th positional is a FILE (`[out.png]`); a directory here
+        // made it write a path with no extension and die 84 s later with
+        // "unsupported mime type null" (measured 2026-10-05). Keep the CLI's
+        // own default name inside the directory instead.
+        const out = assertSafeOut(args.out);
+        const track = String(args.track || "monza"), cam = String(args.cam || "orbit");
+        argv.push(/\.png$/i.test(out) ? out : path.join(out, `${track}-${Math.round(Number(args.frac ?? 0.1) * 100)}-${cam}.png`));
+      }
       if (args.az != null) argv.push("--az", String(args.az));
       if (args.el != null) argv.push("--el", String(args.el));
       if (args.dist != null) argv.push("--dist", String(args.dist));
@@ -1800,6 +1858,18 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === "apex_graph_parity" && args.all === true) {
+    // Every circuit twice outlasts the 180 s cap (killed at ~46 of 52,
+    // 2026-10-05): the whole fleet runs as a background job instead.
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    const r = extras().handlers.apex_job_start(   // sync: returns the jobId at once
+      { kind: "graph_parity_all", base: args.base, dryRun: args.dryRun });
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: "apex_job_start graph_parity_all",
+      hint: "all:true runs in the background: apex_job_status {jobId} until state is done; the verdict is in tail / log." });
+  }
   if (Object.hasOwn(extras().handlers, name)) {
     const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
     if (gate) return gate;
@@ -1887,7 +1957,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -1936,8 +2006,47 @@ const HUD_RESULT_SCHEMA = {
     sheets: { type: "array" },
   },
 };
+// Per-tool shapes, measured from real calls on 2026-10-05 (docs/notes/
+// AGENT-SURFACE-SURVEY-2026-10-05.md §8). Every CLI wrap returns the runSpawn
+// envelope {ok, exit, argv, stdout, stderr, out, durationMs}; `out` is the
+// CLI's --json object (null when the CLI printed none). Nothing is `required`
+// because a refusal body ({ok:false, error, message, fix}) and a dryRun body
+// ({ok, dryRun, argv}) share the tool; `additionalProperties: true` because a
+// CLI may grow a key before this map does. The test validates real results.
+const CLI_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: { ...RESULT_SCHEMA.properties, exit: { type: "number" }, stdout: { type: "string" }, stderr: { type: "string" },
+    out: { type: ["object", "null"] } },
+};
+const cliOut = (properties, type = ["object", "null"]) => ({
+  ...CLI_RESULT_SCHEMA,
+  properties: { ...CLI_RESULT_SCHEMA.properties, out: { type, properties, additionalProperties: true } },
+});
+const S = (type) => ({ type });
+const OUTPUT_SCHEMAS = {
+  apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
+    testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+  apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
+  apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
+  apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
+    shards: S("array"), cap: S("object"), testsSelected: S("number"), testsFit: S("number"), secSelected: S("number"), secFit: S("number") }),
+  apex_session_status: cliOut({ at: S("string"), branch: S("string"), base: S("string"), upstream: S("string"), ahead: S("number"),
+    behind: S("number"), unpushed: S("number"), sessions: S("array"), commits: S("array"), dirty: S("array"), logs: S("array"),
+    live: S(["object", "null"]) }),
+  apex_bump_cache_check: cliOut({ consistent: S("boolean"), mode: S("string"), tagCount: S("number"), assetMismatches: S("array"),
+    shellBuild: S("number"), versionJson: S("number") }),
+  apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
+    touched: S("array") }),
+  apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
+    float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
+    message: S("string"), fix: S("string") } },
+  apex_hud_shot: HUD_RESULT_SCHEMA,
+  apex_hud_survey: HUD_RESULT_SCHEMA,
+};
 function toolOutputSchema(entry) {
-  return /^apex_hud_(shot|survey)$/.test(entry.name) ? HUD_RESULT_SCHEMA : RESULT_SCHEMA;
+  return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
 }
 
 function listTools() {
@@ -1976,8 +2085,9 @@ Browser (harness Chromium; lock + occupancy first):
 ${browser}
 
 Everything else is a plain tools/ CLI (tools/README.md) — the 2026-09 trim
-dropped 18 wraps (verify-track, survey-track, carshot, wgx-shot, the audits,
-startline, …); run those CLIs directly.
+dropped 18 wraps (verify-track, survey-track, carshot, wgx-shot, clip-audit,
+coplanar-audit, startline-snap/-probe, …); run those CLIs directly. Two audits
+came back on 2026-10-03: apex_track_audit (float-audit) and apex_car_audit.
 Local working tree only — no github.io. Deploy checks: deploy-research subagent.
 Mock: APEX_MCP_MOCK=1  Design: docs/research/APEX-TOOLS-MCP.md
 `);

@@ -215,7 +215,13 @@
       // Clipped hedging along the plaza edges — the park is landscaped, not wild.
       // Gap 24/22 (was 22/20): clears the Turn-5 arcStand deck (flatCoplanar ×4
       // with sochi.js arcStand rows when both sat on the same plane).
-      hedge(0.02, 0.28, 1, 24, 3.0, [0.17, 0.36, 0.18]);
+      // The right-hand run is split where 24 m off the road stops being plaza
+      // edge: 0.037-0.076 sits in the T16-17 infield between the start straight
+      // and the final sector (it planted through the Turn 17 arcStand rows and
+      // the infield bushes, clip-audit frac ~0.80), and 0.166-0.179 is the
+      // inside of the Turn 2 hairpin, where the run folds back onto itself.
+      for (const [h0, h1] of [[0.02, 0.036], [0.077, 0.165], [0.180, 0.28]])
+        hedge(h0, h1, 1, 24, 3.0, [0.17, 0.36, 0.18]);
       hedge(0.02, 0.28, -1, 22, 3.0, [0.17, 0.36, 0.18]);
 
       for (const [i, s] of [0.938, 0.958, 0.978, 0.998].entries()) {
@@ -238,7 +244,7 @@
           }
           // Roof plane oversailing the glass on both faces.
           addBox(stage, vadd(a.c, a.u, 16.6), [23, 0.7, 46], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -11.2), a.u, 16.0), [0.6, 0.8, 46],
+          addBox(stage, vadd(vadd(a.c, a.r, -11.3), a.u, 16.0), [0.6, 0.8, 46.4],
             [0.20, 0.36, 0.62], b);
           for (let c = 0; c < 5; c++) {
             addCyl(stage, vadd(vadd(vadd(a.c, a.t, (c - 2) * 8.8), a.r, -10.4), a.u, 8),
@@ -292,19 +298,34 @@
         opts = opts || {};
         const rows = opts.rows || 8, rise = opts.rise || 0.82, depth = opts.depth || 1.25;
         const R = opts.span != null ? opts.span : 9.5, lift = opts.lift || 1.35;
+        // Stations first, rows second: each row box is capped by the REAL
+        // distance to the same row on the neighbouring stations. `spacing` is
+        // the nominal step on the centreline, but stations snap to nodes and a
+        // row `back` metres out on the inside of a bend runs a shorter arc, so
+        // full-length rows overlapped their neighbours (Turn 13, frac 0.536,
+        // 1.02 m deep, clip-audit 2026-10-05).
+        const stations = [];
         along(s0, s1, opts.step || 10, (k, spacing) => {
-          const a = anchor(k, side, gap);
+          stations.push({ k, spacing, a: anchor(k, side, gap) });
+        });
+        const rowAt = (st, back) => st && vadd(st.a.c, st.a.r, side * back);
+        const apart = (p, q) => q ? Math.hypot(p[0] - q[0], p[2] - q[2]) : Infinity;
+        stations.forEach(({ k, spacing, a }, si) => {
           const b = [a.r, a.u, a.t], seg = spacing * 0.95;
           out._mat = MAT.CONCRETE;
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.6 + r * rise;
+            const here = rowAt(stations[si], back);
+            const near = Math.min(apart(here, rowAt(stations[si - 1], back)),
+              apart(here, rowAt(stations[si + 1], back)));
+            const rowSeg = Math.min(seg, near * 0.95);
             addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
-              [depth, rise + 0.2, seg], r & 1 ? [0.72, 0.73, 0.76] : [0.66, 0.67, 0.70], b);
+              [depth, rise + 0.2, rowSeg], r & 1 ? [0.72, 0.73, 0.76] : [0.66, 0.67, 0.70], b);
             const h = hash(k * 19 + r * 5);
             if (h > 0.5) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
-              a.t, (h - 0.25) * seg * 0.8), a.u, up + rise * 0.5 + 0.55),
+              a.t, (h - 0.25) * rowSeg * 0.8), a.u, up + rise * 0.5 + 0.55),
               [0.55, 1.0, 0.6],
               h < 0.16 ? [0.86, 0.24, 0.20] : h < 0.32 ? [0.92, 0.92, 0.90] : [0.20, 0.40, 0.70], b);
             out._mat = MAT.CONCRETE;
@@ -528,6 +549,9 @@
         groundPatch(K(s), side, gap, [10, 0.14, 44], [0.24, 0.42, 0.22],
           { id: `sochi-parterre-${id}`, samples: 5 });
         hedge(s - 0.018, s + 0.018, side, gap - 1.2, 0.9, [0.15, 0.34, 0.18]);
-        hedge(s - 0.018, s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
+        // The approach parterre's outer hedge (gap 17.5) starts clear of the
+        // Turn 5 arcStand (0.225-0.285, gap 18): from 0.282 it ran into the
+        // stand's last station's deck rows (clip-audit frac 0.283, 0.90 m).
+        hedge(id === "approach" ? 0.288 : s - 0.018, s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
       }
     };

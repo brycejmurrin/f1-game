@@ -11,7 +11,7 @@
 //
 // Usage:
 //   node tools/track/verify-track.cjs <trackId>     # verify one track
-//   node tools/track/verify-track.cjs --all         # verify every track in js/track/tracks.js
+//   node tools/track/verify-track.cjs --all         # verify every circuit in Tracks.LIST (js/circuits/)
 //   node tools/track/verify-track.cjs <id> --quiet  # OK line only (no diagnostics report)
 //
 // Success: prints "OK <id>: props N verts (road Y, terrain Z)" and, unless
@@ -34,6 +34,10 @@ const MANIFEST = require("../manifest.cjs");
 if (require.main === module) main();
 
 function main() {
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node tools/track/verify-track.cjs <trackId> [--quiet]   # build one circuit in a VM; any THROW fails\n       node tools/track/verify-track.cjs --all [--quiet]       # every circuit (APEX_CIRCUITS narrows it)");
+  process.exit(0);
+}
 const quiet = process.argv.includes("--quiet");
 const args = process.argv.slice(2).filter((a) => a !== "--quiet");
 if (args[0] === "--all") {
@@ -336,11 +340,14 @@ function verifyDef(Tracks, def, opts) {
 // reverted. buddh and korea need more than a point
 // move: a hairpin of 5-10 m point spacing at the end of a 0.7-1.2 km
 // one-segment straight, where the Catmull-Rom tangent overshoots, and every fix
-// found shifts a turns apex or the start line past 2 m. fuji's fold moves
-// cleanly, but every variant tried re-rolled its scenery into 2-6 floating
-// tree canopies (float-audit, baseline 0), so it waits on that.
+// found shifts a turns apex or the start line past 2 m. One colinear sample
+// on the chord into the kink does clear the ones that sit at the END of a
+// long straight when the apex budget holds: fuji's only fold (40 m before
+// 300R; apexes within 0.3 m, lap within 0.02 %, float-audit still clean),
+// buddh's at 0.119 and 0.792 (40 m; the 0.869 fold, opening a 742 m straight,
+// does not), and korea's at 0.428 (40 m; the other four do not).
 function knownTarmacFolds() {   // a function, not a const: main() runs above this line
-  return new Set(["bahrain", "buddh", "fuji", "korea"]);
+  return new Set(["bahrain", "buddh", "korea"]);
 }
 
 // Road-ribbon geometry checks on track.roadGeo (the 14-column main ribbon, then

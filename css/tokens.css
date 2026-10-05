@@ -384,7 +384,18 @@
      scale (the --slider precedent) holds the PAINTED size: on a coarse
      pointer it paints 52 at every UI SIZE (the touch ladder below) — 52, not
      --tap's 56.7, at the default, and 52, not 104, at 200%. With a mouse it
-     IS --tap-min, so desktop compact layouts do not move. */
+     IS --tap-min, so desktop compact layouts do not move.
+     --tap-paint-at is the PAINTED target it divides (24 with a mouse, 52 on
+     touch, below), published on its own so a fit-capped sheet can divide it by
+     the zoom it ACTUALLY paints at: css/components.css (.sheet) and
+     css/data.css (.dh-card) re-derive --tap-paint against --sheet-scale, the
+     same way they re-derive --slider. Divided by the requested slider instead,
+     a capped sheet painted under the floor — MEASURED 2026-10-05 (layout-audit,
+     ios-iphone-landscape 734x343 @130/@150): the data hub ✕ and all seven
+     tabs 47 / 41 tall, QUALIFYING's three doors and the career hub's MAIN MENU
+     48 at 150 %, because the hub's --sheet-scale capped at ~1.18 and 52 / 1.3
+     x 1.18 is 47. */
+  --tap-paint-at: 24px;
   --tap-paint: var(--tap-min);
   /* Painted 32px at every UI SIZE (24 × 4/3 of the WCAG floor). Divide by
      --ui-scale so a 150% sheet does not paint a 48px track. Buttons still
@@ -771,12 +782,24 @@ body:not(.desktop) {
      734x343: the circuit picker's ALL / SEASON / CLASSICS, search and detail
      chips, all 95 SEASON SETUP chips, the circuit card's favourite, the
      garage's FREE BUILD / INSPECT chips and the pause tool tray at 50x50.
-     48 x 1.09 paints 52.3. Still one rung under --tap: a chip is secondary. */
-  --chip-h: max(48px, calc(24px / var(--ui-scale)));
+     48 x 1.09 paints 52.3. Still one rung under --tap: a chip is secondary.
+     ...EXCEPT AT UI SIZE 100 %, where 48 local px paints 48. MEASURED
+     2026-10-05 (layout-audit, ios-iphone-landscape 734x343 @100): the circuit
+     picker's five toolbar chips, all 95 SEASON SETUP chips and the garage's
+     FREE BUILD at 48 tall, four under the floor. The middle arm is
+     min(52/s, 52 x s): it is exactly 52 at s = 1 and falls away on both sides
+     — 52/s reaches 48 at s = 1.083 (the 48 arm takes over and paints >= 52),
+     52 x s reaches 48 at s = 0.923 (under 100 % the player asked for a SMALLER
+     UI and --tap itself paints under 52, so the chip keeps its rung). So the
+     chip meets the floor at every s >= 1 and nothing moves outside 92-108 %;
+     at exactly 100 % it is as tall as --tap, which is the price of the floor.
+     The 24/s arm is the WCAG floor at small scales. */
+  --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
   /* --tap-paint (see :root): 52 PAINTED px, local = 52 / --ui-scale. The 24px
      arm keeps the WCAG floor where the division would undercut it. */
-  --tap-paint: max(24px, calc(52px / var(--ui-scale)));
+  --tap-paint-at: 52px;
+  --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--ui-scale)));
   --tap-0: var(--tap);         /* the touch values, frozen here too (see :root) */
   --chip-h-0: var(--chip-h);
   /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */

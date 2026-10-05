@@ -31,6 +31,22 @@ test("encode → decode is the identity on the lattice, and the id survives", as
   assert.equal(back.design.bridges[0].rise, 8);
 });
 
+test("the country rides as a label: round-trips, stays out of the content id, absent when unset", async () => {
+  const { CD, C } = bootEditor();
+  const base = design({ name: "LAKE LOOP", theme: "lakeside" });
+  const withC = C.sanitize({ ...base, country: "Sweden" }), without = C.sanitize(base);
+  assert.equal(withC.country, "Sweden");
+  assert.equal("country" in without, false, "unset: nothing stored");
+  assert.equal(withC.id, without.id, "a label: same content id");
+  assert.equal(C.toRaw(withC).country, "Sweden", "the def carries it to the picker's flag");
+  const back = await CD.decode(await CD.encode({ ...base, country: "Sweden" }));
+  assert.equal(back.ok, true, back.reason);
+  assert.equal(back.design.country, "Sweden");
+  const bytes = CD.encodeBytes(without, true);
+  assert.equal(bytes[1] & CD.FLAG.country, 0, "a code without a country sets no country bit (older builds refuse it)");
+  assert.equal(C.sanitizeCountry("  Côte  d'Ivoire<script>  "), "Côte d'Ivoirescript", "letters, digits, space . ' - only");
+});
+
 test("second-order deltas keep a 150-point loop under ~700 chars; deflate is used only when shorter", async () => {
   const { CD, TR } = bootEditor();
   const g = TR.generate(11);

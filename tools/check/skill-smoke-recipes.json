@@ -731,37 +731,10 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
-      "skill": "webgl-debug",
+      "skill": "renderer-debug",
       "task": "Exercise setOutputTarget routes the final pass",
       "fixture": "tests/unit/glx-output-target.test.mjs",
       "pattern": "setOutputTarget\\ routes\\ the\\ final\\ pass",
-      "expected": {
-        "minPass": 1,
-        "maxFail": 0
-      },
-      "timeoutMs": 15000,
-      "prerequisites": [
-        "Node.js and npm install; repository test fixture only"
-      ],
-      "followups": [
-        {
-          "kind": "browser",
-          "status": "unverified",
-          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
-        },
-        {
-          "kind": "hardware",
-          "status": "unverified",
-          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
-        }
-      ],
-      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
-    },
-    {
-      "skill": "webgpu-debug",
-      "task": "Exercise WebGPU releases textures if decal or material-array view creation fails",
-      "fixture": "tests/unit/webgpu-lifecycle.test.mjs",
-      "pattern": "WebGPU\\ releases\\ textures\\ if\\ decal\\ or\\ material\\-array\\ view\\ creation\\ fails",
       "expected": {
         "minPass": 1,
         "maxFail": 0

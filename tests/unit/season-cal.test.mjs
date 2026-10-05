@@ -939,3 +939,45 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   const sheet = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
   assert.match(sheet, /const all = seasonTable\(cars, season\)\.slice\(0, 10\);/, "the results DRIVERS list ranks the same table");
 });
+
+test("repeated menu loads preserve unknown calendar ids and keep every lossy view unsavable", () => {
+  const raw = { round: 2, pts: { d0: 25 }, teamPts: {}, driverCodes: {},
+    config: { trackIds: ["monza", "unknown", "monaco", "imola"] } };
+  const before = JSON.stringify(raw);
+  const { S, stored, writes } = load({ season: raw });
+  const bootSeason = S.load();
+  S.engage("season");
+  const menuSeason = S.load();
+  assert.equal(menuSeason.round, 1);
+  assert.equal(S.track(menuSeason.round).id, "monaco");
+  assert.equal(S.lastLoadLossy(), true);
+  assert.equal(JSON.stringify(stored.get("season")), before, "normalization never mutates the raw cache");
+  assert.equal(S.save(bootSeason).ok, false, "a retained boot reference cannot save after menu re-entry");
+  assert.equal(S.save(menuSeason).ok, false);
+  assert.equal(writes("season"), 0);
+  assert.equal(S.save(S.restart()).ok, true, "an intentional new season still replaces the old one");
+});
+
+test("an all-unknown calendar cannot be saved when its fallback has the same length", () => {
+  const raw = { round: 1, pts: { d0: 25 }, config: { trackIds: trackDefs().SEASON.map((t) => "old-" + t.id) } };
+  const before = JSON.stringify(raw);
+  const { S, stored, writes } = load({ season: raw });
+  for (let i = 0; i < 2; i++) {
+    const season = S.load();
+    assert.equal(S.lastLoadLossy(), true);
+    assert.equal(S.save(season).ok, false);
+  }
+  assert.equal(writes("season"), 0);
+  assert.equal(JSON.stringify(stored.get("season")), before);
+});
+
+
+test("an empty saved calendar retains the existing lossy-read protection", () => {
+  const raw = { round: 0, pts: { d0: 25 }, config: { trackIds: [] } };
+  const { S, stored, writes } = load({ season: raw });
+  const season = S.load();
+  assert.equal(S.lastLoadLossy(), true);
+  assert.equal(S.save(season).ok, false);
+  assert.equal(writes("season"), 0);
+  assert.equal(stored.get("season").config.trackIds.length, 0);
+});

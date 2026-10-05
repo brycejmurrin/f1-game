@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { MessageChannel } from "node:worker_threads";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://apex.test";
@@ -21,7 +22,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -72,7 +73,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
   };
 
   const self = {
-    location: { origin: ORIGIN, hostname },
+    location: { origin: ORIGIN, hostname, href: workerURL || `${ORIGIN}/sw.js?v=321` },
     ...(registration ? { registration } : {}),
     clients: {
       async claim() {
@@ -156,6 +157,11 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       return keysCalls;
     },
     lifecycleEvent,
+    messageEvent(data, ports) {
+      const lifetimes = [];
+      listeners.get("message")({ data, ports, waitUntil(p) { lifetimes.push(p); } });
+      return Promise.all(lifetimes);
+    },
     fetchEvent,
   };
 }
@@ -1107,4 +1113,72 @@ test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed
   const ev = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abc`));
   assert.equal(await (await ev.responsePromise).text(), "cached");
   assert.equal(fetched, 0);
+});
+
+for (const cached of [false, true]) {
+  test(`a fresh pack response bypasses a stalled generation read (cached=${cached})`, async () => {
+    const version = deferred();
+    const h = createHarness({ fetchImpl: async (request) => {
+      const u = typeof request === "string" ? request : request.url;
+      return u.includes("version.json") ? version.promise : new Response("fresh pack");
+    } });
+    const url = `${ORIGIN}/assets/pack/manifest.json`;
+    if (cached) h.stores.set("apex26-320", new Map([[url, new Response("old pack")]]));
+    const ev = h.fetchEvent(new Request(url));
+    let settled = false;
+    ev.responsePromise.then(() => { settled = true; });
+    await new Promise(setImmediate);
+    assert.equal(settled, true, "successful network response is not gated by version.json");
+    assert.equal(await (await ev.responsePromise).text(), "fresh pack");
+    let durable = false;
+    Promise.all(ev.lifetimes).then(() => { durable = true; });
+    await Promise.resolve();
+    assert.equal(durable, false, "waitUntil still protects the deferred cache write");
+    version.resolve(new Response('{"build":321}'));
+    await Promise.all(ev.lifetimes);
+    assert.equal(await h.stores.get("apex26-321").get(url).text(), "fresh pack");
+  });
+}
+
+test("a pack response bypasses a stalled CacheStorage write without abandoning it", async () => {
+  const write = deferred();
+  const h = createHarness({
+    fetchImpl: async (request) => new Response(String(typeof request === "string" ? request : request.url).includes("version.json") ? '{"build":321}' : "fresh pack"),
+    putImpl: () => write.promise,
+  });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  let answered = false, durable = false;
+  ev.responsePromise.then(() => { answered = true; });
+  Promise.all(ev.lifetimes).then(() => { durable = true; });
+  await new Promise(setImmediate);
+  assert.equal(answered, true);
+  assert.equal(durable, false);
+  assert.equal(await (await ev.responsePromise).text(), "fresh pack");
+  write.resolve(); await Promise.all(ev.lifetimes);
+  assert.equal(durable, true);
+});
+
+test("a same-URL worker installs a new generation and blocks old-shell lazy injection", async () => {
+  const scriptURL = `${ORIGIN}/sw.js?v=320`, lazy = `${ORIGIN}/js/editor/codec.js?v=320`;
+  const h = createHarness({ workerURL: scriptURL, fetchImpl: installFetch() });
+  h.stores.set("apex26-320", new Map([[lazy, new Response("old code")]]));
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  assert.deepEqual(h.deleted, ["apex26-320"]);
+  assert.equal(h.claimed, 1);
+  let appended = 0;
+  const controller = { scriptURL, postMessage(data, ports) { h.messageEvent(data, ports); } };
+  const ctx = vm.createContext({
+    navigator: { serviceWorker: { controller } }, MessageChannel, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval() {}, Log: { info() {}, warn() {} },
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 320 },
+    document: { createElement: () => ({}), head: { appendChild() { appended++; } } },
+  });
+  vm.runInContext(await readFile(new URL("../../js/ui/update-check.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(await readFile(new URL("../../js/core/script-loader.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext("globalThis.u = UpdateCheck.create({booted:320}); globalThis.loader = ScriptLoader.create();", ctx);
+  assert.equal(await ctx.loader.load(["js/editor/codec.js"], []), false);
+  assert.equal(appended, 0, "no request into the replacement generation");
+  assert.equal(ctx.u.state().ready, 321, "UPDATE READY names the actual cache generation, not URL320");
+  ctx.u.stop();
 });

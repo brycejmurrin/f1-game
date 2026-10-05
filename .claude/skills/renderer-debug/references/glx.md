@@ -1,10 +1,14 @@
----
-name: webgl-debug
-description: "Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer → asset-pack; shimmer while driving → playwright-probe."
+# GLX (WebGL2) probes: HDR, light state, GL errors, point-light upload
 
----
+Load from SKILL.md when `env.backend` reads `webgl2`. Failure modes (shadow
+acne, bloom blow-out), the Playwright probe pattern and apex-eval one-liners
+are in [glx-failures.md](glx-failures.md).
 
-# Debug WebGL2 / GLX renderer issues
+## Contents
+- 1. Check HDR availability
+- 2. Verify the CPU-side light state
+- 3. Detect WebGL errors
+- 4. Point-light upload — uniform arrays, 15 floats per light
 
 The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It is NOT the
 default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
@@ -27,8 +31,15 @@ GLX.hdrMode()   // boolean — true = WebGL2 HDR float-FBO path active
 composite at all), or `EXT_color_buffer_float` is absent so the chain runs on an
 8-bit RGBA8 target (bloom and ACES still run, but nothing exceeds 1.0 to bloom
 from). Record browser/device, extension availability, post-enabled state and FBO/init errors before calling this a regression; GPU age is not a capability test. `true` says nothing
-about bloom strength: for over-bright/blown-out frames go to failures.md
+about bloom strength: for over-bright/blown-out frames go to glx-failures.md
 "Bloom blows out the whole frame".
+
+There is no HDR toggle: `hdrMode()` is a read-only capability readout (no menu
+or `__apex` setter). "Black after switching to HDR" is really a backend pick
+(`apex26.gfxBackend`), GRAPHICS tier, `lightTune()`/exposure change or a lost
+context: run `__apex.diag({download:false})` once (BROWSER-ONLY) and read
+`glCaps.lost`/`colorFloat`, `gpuErrors`, `backendState`, `stored.lightTune`
+before touching shader source; a NaN `po.exposure` also blacks the frame.
 
 **Do not confuse with GPU timing:** when someone says HDR/GPU features are
 "unsupported", they usually mean `__apex.gpuTimer().supported === false`
@@ -94,10 +105,3 @@ nothing.) If light
 positions look scrambled, the usual culprit is a record pushed with the wrong
 field COUNT in `buildTrackLights` — every `lights.push(...)` must be exactly
 15 values (`frame.lights.length` must be a multiple of 15).
-
-
----
-
-## Load on demand
-
-- Shadow acne (which shader chunk, uniforms, knobs), common failure modes, Playwright probe pattern, apex-eval one-liners → [references/failures.md](references/failures.md).

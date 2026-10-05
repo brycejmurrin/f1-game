@@ -25,8 +25,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pick } from "./pick-tests.mjs";
+import { createRequire } from "node:module";
+import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -63,6 +65,16 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 export const FIXED_GATE_SPECS = new Set([
   "tests/specs/smoke.spec.js",
   "tests/specs/physics-characterization.spec.js",
+]);
+
+// Opt-in / manual specs: the body is behind an env gate (APEX_SHIMMER=1) and
+// nightly-group.mjs lists them as manual with no pass/fail verdict. Selecting
+// them without the env makes every test SKIP and the runner treat "all
+// skipped" as RED (PR #968 sync: T2 circuit-racing routed material-shimmer
+// after a fleet props-tris remeasure). Keep them named in the report; never
+// put them on a selected command.
+export const MANUAL_OPT_IN_SPECS = new Set([
+  "tests/specs/material-shimmer.spec.js",
 ]);
 
 /** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
@@ -143,8 +155,10 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // expected work, which two jobs' worth dropped and six carry. Raised to 7
 // (2026-10-04, PR #915): a synced 84-file bug-hunt batch with the
 // bot/spec-timings overlay still dropped tracks-walls + props-over-road at 6
-// (overflow 2740/2880 s) and cleared both at 7.
-export const MAX_OVERFLOW_SHARDS = 7;
+// (overflow 2740/2880 s) and cleared both at 7. Raised to 8 (2026-10-05,
+// PR #951): a synced bug-hunt batch with the failing-spec hoist dropped
+// tracks-walls + dev-tools at 7 (Selected specs verdict on run 37327254206).
+export const MAX_OVERFLOW_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -226,11 +240,37 @@ export function playwrightShard(args) {
   return null;
 }
 
-/** Mega solos run once: on shard 1 of a sharded group, or on any unsharded run.
- *  Other shards peel them and do not re-run them. */
-export function shouldRunMegaOnThisShard(args) {
+/** WHICH SHARD RUNS EACH MEGA SOLO (test audit T1, 2026-10-05). Every peeled
+ *  mega ran on shard 1, so the nightly modes group put career (101 tests) AND
+ *  quali (20) on one runner: shard 1 1827 s against 185/276/410 s for 2-4
+ *  (run 37195789273); hooks 1040 s vs 170/111/229 s. Longest-first onto the
+ *  least-loaded shard (LPT) spreads them by expected seconds — declared tests
+ *  x the spec's per-test rate. The rate comes from the COMMITTED timings file
+ *  only, never the APEX_SPEC_TIMINGS overlay: every shard must compute the
+ *  same plan from the same commit, or a mega runs twice or not at all. Ties
+ *  break on the path, so the plan is a pure function of (megas, total). */
+export function megaShardPlan(mega, total, db = loadDb(path.join(ROOT, TIMINGS_FILE))) {
+  const plan = new Map();
+  if (!(total >= 1)) return plan;
+  const rows = [...new Set(mega)].map((f) => ({ f, sec: (declaredTests(f) || 1) * specSecPerTest(f, db).sec }))
+    .sort((a, b) => b.sec - a.sec || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0));
+  const load = new Array(total).fill(0);
+  for (const r of rows) {
+    let k = 0;
+    for (let i = 1; i < total; i++) if (load[i] < load[k]) k = i;
+    load[k] += r.sec;
+    plan.set(r.f, k + 1);
+  }
+  return plan;
+}
+
+/** The peeled megas THIS invocation runs: all of them unsharded, else the
+ *  ones megaShardPlan gives this shard. Each mega runs on exactly one shard. */
+export function megasForThisShard(args, mega, db) {
   const s = playwrightShard(args);
-  return !s || s.index === 1;
+  if (!s) return [...mega];
+  const plan = megaShardPlan(mega, s.total, db);
+  return mega.filter((f) => plan.get(f) === s.index);
 }
 
 /** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
@@ -295,7 +335,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
   const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
-  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [];
+  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
   const unreadable = [];
   for (const file of specs) {
     const tests = declaredTests(file);
@@ -307,6 +347,10 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     if (tests == null) { unreadable.push({ file, tests: null }); continue; }
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
+      continue;
+    }
+    if (MANUAL_OPT_IN_SPECS.has(file)) {
+      coveredByManualOptIn.push({ file, tests });
       continue;
     }
     // A spec whose assertions a VM twin replays test-for-test, in a node group
@@ -465,7 +509,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
   }
-  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
+  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
@@ -640,6 +684,64 @@ const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
 export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
 
+/* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
+ * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
+ * bahrain, zandvoort, jeddah, shanghai, singapore, redbull — so a circuit-only
+ * diff to imola ran both halves (4 min of runner) for nothing. Read from the
+ * files, never listed: the circuit ids a file (or a tests/helpers module it
+ * imports) names as a string literal, plus every foundation circuit for a file
+ * that globs the `*-foundation.spec.js` twins. A file that walks the whole
+ * roster (the manifest's CIRCUITS, a loop over Tracks.LIST) builds EVERY
+ * circuit and keeps its script in the plan — fail safe, as everything here. */
+const CIRCUIT_IDS = () => require_cjs("../manifest.cjs").CIRCUITS;
+const require_cjs = (rel) => createRequire(import.meta.url)(rel);
+const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
+  /readdirSync\([^)]*circuits/];
+const FOUNDATION_GLOB = /-foundation\.spec\.js/;
+const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
+  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
+
+/** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
+export function circuitsOf(file, seen = new Set()) {
+  if (seen.has(file)) return new Set();
+  seen.add(file);
+  let text;
+  try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
+  if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
+  const ids = new Set();
+  if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
+  for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
+  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
+    const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
+    if (sub === null) return null;
+    for (const id of sub) ids.add(id);
+  }
+  return ids;
+}
+
+/* THE HIDDEN CIRCUIT DEPENDENCY (test audit T2, 2026-10-05). A circuit edit
+ * routes to `circuits` and its own foundation spec, but most specs RACE a
+ * fixed circuit — monza is the fixtures' default, a score of others race
+ * bahrain or monaco — and read targets off its geometry. #878 moved Bahrain's
+ * startFrac and steering.spec's racing-line assist went red on six unrelated
+ * PRs, because no ship run had selected it. circuitsOf() already reads which
+ * circuits a test file builds (literals, its helper imports one hop), so a
+ * touched circuit routes every spec that names it, generated at run time from
+ * the files, never listed. They join the ROUTED candidates (rank 3) and
+ * compete for the budget like a group's specs: a monza edit may route most of
+ * the tree, and fit() cuts and names the rest exactly as it always has. A
+ * roster walker (circuitsOf null) is the `circuits` group's business. */
+export function specsRacing(ids, root = ROOT) {
+  if (!ids.length) return [];
+  const out = [];
+  for (const name of fs.readdirSync(path.join(root, "tests", "specs")).filter((f) => f.endsWith(".spec.js")).sort()) {
+    const rel = `tests/specs/${name}`;
+    const built = circuitsOf(rel);
+    if (built && ids.some((id) => built.has(id))) out.push(rel);
+  }
+  return out;
+}
+
 /** Circuit ids a per-circuit data file's rows changed for, or null when the
  *  diff cannot be read (then the file stays infra). */
 export function dataCircuits(file, ref, root = ROOT) {
@@ -809,6 +911,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
+  // An edited spec already runs first, alone (changedSpecs, rank 0); its
+  // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
+  stripSpecOwner(g);
   const bootCoveredBySmoke = dropBootFallback(g);
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
   const browserGroups = [...g.keys()].map((n) => `test:${n}`)
@@ -836,7 +941,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs])]
+  // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
+  const racing = specsRacing(circ.ids);
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
@@ -858,7 +965,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // also touches the engine must leave it empty (the whole fleet runs).
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
-              changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
+              changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
   return r;
@@ -867,8 +974,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
+  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   if (si < 0 || !argv[si + 1]) {
-    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--stale-first] [--json]");
+    console.error(usage);
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");
@@ -891,6 +1000,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
+  if (r.racing?.length) console.error(
+    `RACES A TOUCHED CIRCUIT (${r.circuitsTouched.join(", ")}): ${r.racing.length} spec(s) routed, budgeted like a group's`);
   for (const s of r.failedDropped || []) console.error(
     `CARRY-FORWARD DROPPED (not routed by this change): ${s}`);
   console.error(`budget fits ${r.secFit} s — ${r.testsFit} tests at the ${MEASURED.secPerTest} s fallback, measured specs at ` +
@@ -900,6 +1011,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `DROPPED (declares ${s.ownTimeoutSec}s/test and the over-budget pool is full): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
     `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of r.coveredByManualOptIn || []) console.error(
+    `COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByVmTwin || []) console.error(
     `COVERED BY A VM TWIN ON THE NODE GATE: ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of r.unreachable) console.error(

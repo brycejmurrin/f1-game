@@ -332,3 +332,45 @@ test("a snapped chase frame clears the bend hang the next live frame eases from"
   const first = live(100);
   assert.ok(Math.abs(first - snap) < 0.1, `first live frame ${first.toFixed(3)} vs snap ${snap.toFixed(3)}`);
 });
+
+// #913 scoped the CamFeel follows under "tv:", but bendHang's own previous-hang
+// and fast-catch maps were module-wide: a TV chase shot of a car in a right
+// bend read the player's left-bend hang as a sign flip (3.2x catch toggling),
+// and every director cut (hangReset) zeroed the player's hang mid-corner.
+test("a TV-director solve never perturbs the player's bend hang", () => {
+  let K = 0;
+  const n = 1000, total = 4000;
+  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
+    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
+    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
+    surface: { heightAt: () => -0.12 } };
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
+    curvature: () => K,
+    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  const boot = () => {
+    const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
+      GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
+      Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
+    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+      .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams; this.CF = CamFeel;", ctx);
+    return ctx;
+  };
+  // Frame 0 is the player's own cut (hang zeroed), so the rest ease into the bend.
+  const player = (ctx, i) => { K = 0.04; return ctx.GC.vantage(track, "chase", 500, 0, 60, 0,
+    { carPos: [0, 500], carHead: 0, dt: i ? 1 / 60 : 0, snap: !i, att: {} }).eye[0]; };
+  const tv = (ctx, cut) => { K = -0.04; return ctx.CF.scoped("tv:", () => ctx.GC.vantage(track, "chase", 900, 0, 60, 0,
+    { carPos: [0, 900], carHead: 0, dt: cut ? 0 : 1 / 60, snap: !!cut, att: {} })); };
+  // Reference: the player alone, easing into a left bend for 40 frames.
+  const ref = boot(), mixed = boot();
+  const want = [], got = [];
+  for (let i = 0; i < 40; i++) {
+    want.push(player(ref, i));
+    tv(mixed, i % 10 === 0);            // the director solves (and cuts) every frame on a right-bend car
+    got.push(player(mixed, i));
+  }
+  for (let i = 0; i < 40; i++)
+    assert.ok(Math.abs(got[i] - want[i]) < 1e-9, `frame ${i}: player eye.x ${got[i].toFixed(4)} vs alone ${want[i].toFixed(4)}`);
+});

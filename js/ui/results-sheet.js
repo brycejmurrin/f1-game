@@ -107,7 +107,7 @@ if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
 // Returns the newly unlocked ids — the toast is hidden behind this very sheet.
 function awardBadges(order, duel) {
   const p = G.player;
-  if (typeof Badges === "undefined" || !p || G.practice || G.timeTrial || duel || order.length < 3) return [];
+  if (typeof Badges === "undefined" || !p || p.classified === false || G.practice || G.timeTrial || duel || order.length < 3) return [];
   let best = Infinity;
   for (const c of order) if (!c.retired && !c.dsq && c.best < best) best = c.best;   // finished or running at the flag, as endRace finds it
   return Badges.onRace({
@@ -244,7 +244,7 @@ function buildResults(order, race) {
   if (playerPlace >= 0 && !watched) {
     const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
     const card = document.createElement("div"); card.className = "res-personal";
-    const heading = document.createElement("strong"); heading.textContent = dnfOf(self) ? "YOUR RACE · " + outLabel(dnfOf(self)) : "YOUR RACE · P" + (playerPlace + 1);
+    const heading = document.createElement("strong"); heading.textContent = "YOUR RACE · " + (dnfOf(self) ? outLabel(dnfOf(self)) : self.classified === false ? "NC" : "P" + (playerPlace + 1));
     const detail = document.createElement("span");
     detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
     card.append(heading, detail); els.resultsTable.appendChild(card);
@@ -263,12 +263,13 @@ function buildResults(order, race) {
   }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
+    const nc = c.classified === false && !dnf;
     const row = document.createElement("div");
-    const podium = PODIUM[i] || "";
+    const podium = nc ? "" : PODIUM[i] || "";
     const other = c.human && !c.local ? " q-real" : "";
     row.className = `res-row${podium}${c.isPlayer ? " you" : ""}${other}`;
     row.style.setProperty("--i", i);   // settle stagger, css/components.css
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = nc ? "NC" : i + 1;
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = G.cssCol(c.team.color);
     const nm = document.createElement("span"); nm.className = "res-name";
@@ -301,9 +302,9 @@ function buildResults(order, race) {
     // A CLASSIFIED retirement (past 90 % of the winner's laps, endRace sets
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
-    const paid = !dnf || (c.classified && !c.dsq);
+    const paid = c.classified !== false && (!dnf || (c.classified && !c.dsq));
     pt.textContent = G.practice && !watched ? "Unscored"
-      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
+      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "0 pts" : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {

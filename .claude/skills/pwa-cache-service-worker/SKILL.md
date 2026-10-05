@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright failures caused by bumping version.json mid-run in Apex 26."
+description: "Use when editing sw.js, version.json, PWA offline install, stale shell, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright hangs from a mid-run version.json bump."
 ---
 
 # PWA cache and service worker
@@ -25,6 +25,22 @@ deployed build is newer reloads once with `?b=<build>` (hash and query kept;
 `sessionStorage` `apex26.shellReloadedTo` stops loops). It also registers
 `sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
 Stale installed shell = this guard did not fire or `version.json` did not move.
+The deploy stamps the build (`2000 + commit count`, `pages.yml`) into `version.json` and the meta; the
+committed numbers are not what is live. Live check: `tools/ci/pages-live-sha.sh` / **deploy-research**.
+
+**In-session generation check.** A registration's `scriptURL` is not its cache
+identity: the browser can install changed worker bytes at the same URL.
+`UpdateCheck.prepareLazyLoad()` asks the exact controller for
+`apex-cache-generation` over a private MessageChannel before ScriptLoader injects.
+The worker answers from `currentCacheName()`, not its URL. Parallel requests share
+one handshake; later loads query again because a restarted worker can re-read
+version.json. A replaced controller's reply cannot authorize a load. The wait is
+bounded to 1.5 s per ScriptLoader.load invocation for older workers without this
+protocol (not per serial dependency); a known newer build
+still refuses lazy loading after timeout and shows UPDATE READY outside races.
+Refs: [update()](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/update),
+[scriptURL](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorker/scriptURL),
+[message ports](https://developer.mozilla.org/en-US/docs/Web/API/ExtendableMessageEvent/ports).
 
 **Cache name.** `apex26-{build}` from `version.json`. `INSTALL_COMPLETE` records required success; `INSTALL_SETTLED` records
 completion of optional work. Activate retains older generations until settled,
@@ -34,6 +50,9 @@ preserved. Essential 404 aborts install; optional failures are recorded.
 **Fetch.** Ordinary navigation is network-first with a bounded cache fallback. Online
 `version.json` failure must not mask a newer generation with stale precache.
 A `?b=` shell-bust navigation bypasses generic stale-shell fallback.
+Unversioned asset packs use a three-second network/cache race. Successful network
+responses never await generation lookup or CacheStorage writes; synchronous
+`waitUntil()` registration keeps those writes alive after the response is sent.
 Everything else = cache-first (network-first on a dev host, where every tag reads
 `?v=dev`). Deploy stamps **content hashes and shell generation** together; source tags
 stay `?v=dev`. Check with `node tools/gen/gen-shell.mjs --check`. Never bump `version.json`

@@ -3,15 +3,24 @@
 Load this when regenerating the pack, adding a CC0 layer, or chasing a MAT-id
 mismatch.
 
+## Contents
+- MAT layers
+- Workflow
+- One material garbled on ONE backend (e.g. grass, TLX only)
+- Common mistakes
+
 ## MAT layers
 
 17 slots — `MAT.FLAT(0)` … `MAT.ASPHALT(16)`. Must match `TrackGeom.MAT`
 (`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
 `js/render/shared/assets.js`. If you change the layer count, `17` is also hardcoded
-in `js/render/glx/shaders/glsl-lit.js` (`uMatTexScale[17]`, `mid > 16` in `matTexUV()`)
-and `js/render/three/tsl-lit.js` (`uniformArray(new Array(17)...)` and the
-`for (let i = 0; i < 17; i++)` upload loop). Miss either and the extra
-layer's scale silently reads `0.0` (GLX) or is dropped (TLX).
+in `js/render/glx/shaders/glsl-lit.js` (`uMatTexScale[17]`, `mid > 16` in `matTexUV()`),
+`js/render/glx/glx.js` (`MAT_TEX_LAYERS`), `js/render/three/tsl-lit.js`
+(`uniformArray(Array(17).fill(0))` and the `for (let i = 0; i < 17; i++)` upload
+loop), `js/render/three/tlx.js` (`grey()` placeholders and `layers || 17`) and
+`js/render/webgpu/` (`wgx.js` `MAT_TEX_LAYERS`; `wgsl-chunks.js` `MatScaleU`
+`array<vec4<f32>, 5>` and `mid > 16`). Miss one and the extra layer's scale
+silently reads `0.0` (GLX) or is dropped (TLX/WGX).
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
 vertex-displaced; FLAT is the no-material id.
@@ -30,8 +39,8 @@ WGX is a device/feature miss, not "WGX has no arrays."
    ```
 
 2. **Check the pack offline** (Node only, ~2 s, writes nothing; expect
-   `verify: OK`, ~3.7 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the
-   26-test guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
+   `verify: OK`, ~4.1 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the
+   43-test guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
    (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
@@ -73,7 +82,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
    npm run test:tooling-fast
    node tools/ci/test-bg.mjs hooks   # whole browser group (10-40 min); a lone `npm test -- tests/specs/assets-api.spec.js` is the pack's own spec
    ```
-   Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
+   Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.
 
 7. **Ship** — commit `assets/pack/` when regenerated. Nothing to bump

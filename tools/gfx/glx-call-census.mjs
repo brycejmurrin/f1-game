@@ -1,5 +1,5 @@
 // @doc What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages.
-// @skill webgl-debug
+// @skill renderer-debug
 /* glx-call-census.mjs — what does ONE GLX frame actually cost in GL calls?
  *
  * docs/PERF-FINDINGS.md §"COUNT THE WORK AVOIDED, DO NOT TIME IT": a
@@ -11,6 +11,9 @@
  * Run: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames]
  */
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv.slice(2), `usage: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames] [pack] [apex26.<key>=<value> ...]
+  Per-frame GL call averages (draw / bind / upload) of ONE GLX frame mid-race with a full field (boots Chromium).`);
 const TRACK = process.argv[2] || "vegas";
 const TOD = process.argv[3] || "night";
 const FRAMES = +(process.argv[4] || 40);

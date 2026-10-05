@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: "Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
+description: "Use when AI racecraft is wrong: overtakes/dive-bombs too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, wall, kerb or pit lane; rescue teleport), driver ratings craft/awareness/experience, ai-drive.js. Not player physics (tune-physics) or flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model
@@ -66,6 +66,10 @@ lockout blocker): they cost monaco passes. Measure: `ai-race.mjs tactics`.
 
 ## Stuck / unstuck (AI wedged, never recovers)
 
+Discriminator: `__apex.caution().level` 0 with `speed < 7` and `stuckT` growing is
+this skill; level ≠ 0 or `caution().sinceT` growing (flag or safety car stuck
+out) is **race-incidents-control**.
+
 Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
 `stuckT` grows while speed is below 7 and `AiDrive.isBoxed` finds no room both
 sides or a close blocker. `AiDrive.stuckThreshold(aiT)` reads a traits object
@@ -79,6 +83,10 @@ half-second `offT` gate. Pit-box and red-held states remain exempt. A queued
 pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`.
 Road rescue preserves existing speed with a pace-scaled floor; pit-lane rescue
 uses its own lane/floor rule.
+A kerb is NOT off-road (`c.offroad` excludes `onKerb`, game.js ~5077): a car wedged on a kerb
+never counts as `beachedAt`, so only the `speed < 5` rescue branch (after `stuckT` / dig-out)
+fires; kerb drag is only `kerbGripSm` (0.7 grip, ~6 m/s² cut). "Stuck on the kerb" is therefore
+usually a dive/contact problem (see Brake target and Traffic tactics), not a rescue bug.
 Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
 `stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
 timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:
@@ -91,7 +99,8 @@ count rescues. Browser collision/appearance evidence remains separate.
 node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s
 node --test tests/unit/ai-band.test.mjs       # scripted vs catch-up factor pins
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
-node tools/ci/test-bg.mjs collisions   # BROWSER group (background, AGENTS rule 4/5); racecraft lives in the contact specs
+node tools/ci/test-bg.mjs collisions   # BROWSER group, optional behaviour evidence (background, AGENTS rule 4/5)
+# For a `ai-drive.js` edit `pick-tests` wins (it names physics-core); `collisions` is extra, not the gate.
 
 # Field instruments (VM, no browser) — one dispatcher:
 node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
@@ -103,5 +112,6 @@ node tools/check/ai-race.mjs ratings [--json]                     # Pearson / st
 node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # catch-up rubber-band profile (forces aiPace=catchup)
 # Race subcommands take --wear off|light|real (default off: no pits/deg).
 # Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band.mjs;
-# tyre strategy over a race: node tools/check/ai-strategy-census.mjs (wear real).
+# tyre strategy over a race, wear real (default --track bahrain --laps 10):
+node tools/check/ai-strategy-census.mjs --track redbull --laps 10 [--json]
 ```

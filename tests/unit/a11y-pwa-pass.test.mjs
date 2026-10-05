@@ -265,7 +265,7 @@ test("the CAM button's accessible name starts with the word it shows", () => {
 // (≤ 1 per 10 min), shows #update-chip outside races, and its tap persists
 // state, then reloads the way the boot guard does (?b=, query + hash kept).
 // https://developer.chrome.com/docs/workbox/handling-service-worker-updates
-function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false } = {}) {
+function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist } = {}) {
   let t = 1_000_000, fetches = 0, replaced = null, persisted = 0;
   const chip = { hidden: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
   const store = new Map();
@@ -283,7 +283,7 @@ function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = f
   const u = UC.create({
     now: () => t, inRace: () => racing, chip: () => chip,
     fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); return { ok: true, json: async () => ({ build }) }; },
-    persist: () => { persisted++; },
+    persist: () => { persisted++; return persist && persist(); },
     location: { pathname: "/f1-game/", search: "?log=net", hash: "#vs=CODE", replace: (u2) => { replaced = u2; } },
   });
   return { UC, u, chip, store, advance: (ms) => { t += ms; }, race: (v) => { racing = v; },
@@ -315,6 +315,23 @@ test("update check: a newer build shows the chip outside races only, and the tap
   assert.equal(h.persisted, 1, "transient state is persisted BEFORE the reload");
   assert.equal(h.replaced, "/f1-game/?log=net&b=105#vs=CODE", "the boot guard's URL shape: ?b=, query and hash kept");
   assert.equal(h.store.get("apex26.shellReloadedTo"), "105", "so the guard does not reload the new shell again");
+});
+
+test("update check: a race starting during persistence cancels navigation and keeps the update available", async () => {
+  let finish;
+  const h = bootUpdateCheck({ persist: () => new Promise((resolve) => { finish = resolve; }) });
+  h.u.markReady(105);
+  const applying = h.u.apply();
+  await Promise.resolve();
+  h.race(true); finish();
+  assert.equal(await applying, false);
+  assert.equal(h.replaced, null);
+  assert.equal(h.store.has("apex26.shellReloadedTo"), false, "no reload marker until navigation is safe");
+  assert.equal(h.chip.hidden, true);
+  h.race(false); h.u.render();
+  assert.equal(h.chip.hidden, false, "update remains available after the race");
+  const retry = h.u.apply(); await Promise.resolve(); finish();
+  assert.equal(await retry, true);
 });
 
 test("update check: an older or unreadable version.json never shows the chip", async () => {
@@ -349,4 +366,128 @@ test("UPDATE READY and the save warning stand down under a modal dialog", () => 
   assert.match(css, /body:has\(dialog:modal\) #update-chip \{ display: none; \}/);
   assert.match(css, /body:has\(dialog\[open\]\) #save-warning \{ display: none; \}/);
   assert.doesNotMatch(css, /Above every\s+menu sheet/, "the comment no longer promises what the top layer forbids");
+});
+
+// Ports are private to the queried controller; replacements and a worker that
+// restarts at the same URL cannot reuse an earlier generation answer.
+function generationHarness() {
+  const replies = [], timers = [];
+  const sw = { controller: null };
+  class Channel {
+    constructor() {
+      this.port1 = { onmessage: null, close() {} };
+      this.port2 = { postMessage: (data) => this.port1.onmessage({ data }), close() {} };
+    }
+  }
+  const makeWorker = () => ({ scriptURL: "https://x.test/sw.js?v=100", postMessage(_data, ports) { replies.push(ports[0]); } });
+  sw.controller = makeWorker();
+  const sb = vm.createContext({
+    navigator: { serviceWorker: sw }, MessageChannel: Channel,
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+    setInterval: () => 1, clearInterval() {}, Log: { info() {} },
+  });
+  vm.runInContext(read("js/ui/update-check.js"), sb);
+  const UC = vm.runInContext("UpdateCheck", sb), u = UC.create({ booted: 100 });
+  return { UC, u, sw, makeWorker, replies, timers, sb };
+}
+
+test("generation handshakes coalesce and recheck the same controller for the next lazy batch", async () => {
+  const h = generationHarness();
+  const scope = {};
+  const a = h.UC.prepareLazyLoad(scope), b = h.UC.prepareLazyLoad(scope);
+  assert.equal(h.replies.length, 1);
+  h.replies[0].postMessage({ type: "apex-cache-generation", build: 100 });
+  assert.equal(await a, true); assert.equal(await b, true);
+  const next = h.UC.prepareLazyLoad(scope);
+  assert.equal(h.replies.length, 2);
+  h.replies[1].postMessage({ type: "apex-cache-generation", build: 101 });
+  assert.equal(await next, false);
+  assert.equal(h.u.state().ready, 101);
+});
+
+test("a replaced controller's late answer cannot authorize a lazy injection", async () => {
+  const h = generationHarness(), first = h.UC.prepareLazyLoad();
+  h.sw.controller = h.makeWorker();
+  h.replies[0].postMessage({ type: "apex-cache-generation", build: 100 });
+  assert.equal(await first, false);
+  const next = h.UC.prepareLazyLoad();
+  h.replies[1].postMessage({ type: "apex-cache-generation", build: 102 });
+  assert.equal(await next, false);
+  assert.equal(h.u.state().ready, 102);
+});
+
+test("old worker handshake timeout permits ordinary boot but refuses a known newer build", async () => {
+  const h = generationHarness(), old = h.UC.prepareLazyLoad();
+  h.timers[0]();
+  assert.equal(await old, true, "older deployed workers have no message protocol");
+  h.u.markReady(101);
+  const newer = h.UC.prepareLazyLoad();
+  h.timers[1]();
+  assert.equal(await newer, false, "timeout cannot erase the known update");
+  assert.equal(h.UC.blocksLazyLoad(), true);
+});
+
+function generationLoader(h, appended) {
+  h.sb.ApexRoster = { DEFERRED_EDGES: [] };
+  h.sb.window = { __APEX_BUILD: 100 };
+  h.sb.Log.warn = () => {};
+  h.sb.document = {
+    createElement: () => ({ dataset: {} }),
+    head: { appendChild(node) { appended.push(node.src); queueMicrotask(() => node.onload()); } },
+  };
+  vm.runInContext(read("js/core/script-loader.js"), h.sb);
+  return vm.runInContext("ScriptLoader.create()", h.sb);
+}
+
+test("a serial lazy chain pays the legacy-worker timeout once per load invocation", async () => {
+  const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
+  const files = ["a.js", "b.js", "c.js"], edges = [["a.js", "b.js"], ["b.js", "c.js"]];
+  const first = loader.load(files, edges);
+  assert.equal(h.timers.length, 1);
+  h.timers[0]();
+  assert.equal(await first, true);
+  assert.equal(appended.length, 3);
+  assert.equal(h.replies.length, 1, "serial dependencies reuse only this call's legacy fallback");
+  const second = loader.load(files, edges);
+  assert.equal(h.timers.length, 2, "a new call asks the worker again");
+  h.timers[1]();
+  assert.equal(await second, true);
+  assert.equal(h.replies.length, 2);
+});
+
+test("a serial chain rechecks a replacement controller after its legacy fallback", async () => {
+  const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
+  const append = h.sb.document.head.appendChild;
+  h.sb.document.head.appendChild = (node) => { append(node); h.sw.controller = h.makeWorker(); };
+  const pending = loader.load(["a.js", "b.js"], [["a.js", "b.js"]]);
+  h.timers[0]();
+  await new Promise(setImmediate);
+  assert.equal(h.replies.length, 2);
+  h.replies[1].postMessage({ type: "apex-cache-generation", build: 101 });
+  assert.equal(await pending, false);
+  assert.deepEqual(appended, ["a.js?v=100"]);
+});
+
+test("a known newer build still blocks a serial chain using legacy fallback", async () => {
+  const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
+  const append = h.sb.document.head.appendChild;
+  h.sb.document.head.appendChild = (node) => { append(node); h.u.markReady(101); };
+  const pending = loader.load(["a.js", "b.js"], [["a.js", "b.js"]]);
+  h.timers[0]();
+  assert.equal(await pending, false);
+  assert.equal(h.replies.length, 1);
+  assert.deepEqual(appended, ["a.js?v=100"]);
+});
+
+for (const broken of ["constructor", "postMessage", "close"]) test(`generation channel ${broken} errors settle the loader`, async () => {
+  const h = generationHarness(), appended = [], loader = generationLoader(h, appended);
+  if (broken === "constructor") h.sb.MessageChannel = class { constructor() { throw new Error("channel unavailable"); } };
+  if (broken === "postMessage") h.sw.controller.postMessage = () => { throw new Error("transfer failed"); };
+  const pending = loader.load(["a.js"], []);
+  if (broken === "close") {
+    h.replies[0].close = () => { throw new Error("closed"); };
+    h.replies[0].postMessage({ type: "apex-cache-generation", build: 100 });
+  }
+  assert.equal(await pending, broken === "close");
+  assert.equal(appended.length, broken === "close" ? 1 : 0);
 });

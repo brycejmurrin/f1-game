@@ -963,6 +963,33 @@ test("the radio card's top-row slot ends at a touch dock group in the tower's ro
   assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under the tower's rows does not bound it");
 });
 
+test("on touch the centred radio card is capped to the lane between the dock groups (cockpit BOOST, 844x390)", () => {
+  // Survey 2026-10-04: #announce [500,66 223x65] over #btn-boost [603,72 88x88].
+  const h = fitHarness(), lane = () => h.root.style.getPropertyValue("--announce-lane-w");
+  // innerWidth 800 (centre 400); the tower ends at y 62, so the band is 62..262.
+  // Both fixture groups (0..150, 650..800 at y 200) leave 400 - 150 - 8 = 242 a side.
+  assert.equal(lane(), "484.0px");
+  const boost = h.dom.document.createElement("div"); boost.className = "boost";
+  h.dom.byId("dock-right").appendChild(boost);
+  boost._rect = { left: 520, top: 72, right: 608, bottom: 160, width: 88, height: 88 };
+  h.refit();
+  assert.equal(lane(), (2 * (520 - 400 - 8)).toFixed(1) + "px", "BOOST in the band ends the lane at its left edge");
+  boost._rect = { left: 520, top: 300, right: 608, bottom: 388, width: 88, height: 88 };
+  h.refit();
+  assert.equal(lane(), "484.0px", "a group below the band does not narrow it");
+  for (const g of [boost, ...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  h.refit();
+  assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");
+  // The CSS: touch only, both widths over the card's own zoom; the side and
+  // top-row slots outweigh it with their own dock-aware widths.
+  const css = read("css/hud.css");
+  const rule = css.match(/body:not\(\.desktop\) #announce \{[^}]*\}/);
+  assert.ok(rule, "a touch-only #announce lane rule");
+  assert.match(rule[0], /max-width: min\(440px, calc\(72 \* var\(--vwzh\)\), calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
+  assert.match(rule[0], /min-width: min\(200px, calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
+  assert.doesNotMatch(css, /body\.desktop[^{]*#announce[^{]*\{[^}]*announce-lane/, "desktop never reads the lane");
+});
+
 test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {
   const h = fitHarness(), x = () => h.root.style.getPropertyValue("--radio-top-x");
   assert.equal(x(), "558.0px", "the shipped tower ends at 550");
@@ -1006,6 +1033,31 @@ test("a moved (data-hl) piece that unhides after the fit re-runs it, so HudLayou
   assert.equal(fits, 1, "TYRES unhiding re-fits on the next tick");
   h.tick();
   assert.equal(fits, 1, "and only once");
+});
+
+test("a moved (data-hl) piece whose words change width re-fits on the next tick, not on the 3 s timer", () => {
+  // The AERO chip's text changes all lap and the cockpit strip parks it +30vw
+  // from centre, so a longer string pushed its right edge past the viewport
+  // (survey 2026-10-05, 1280x720 cockpit: right edge 1297) until the same-key
+  // safety re-measure came round. hlKey carried `hidden` and nothing else.
+  const h = fitHarness();
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  const aero = h.dom.byId("hud-aero");
+  aero.setAttribute("data-hl", ""); aero.style.setProperty("--hl-x", "30");
+  aero.textContent = "CORNER MODE";
+  h.refit();
+  fits = 0;
+  h.tick(); h.tick();
+  assert.equal(fits, 0, "same words: the same-key backoff holds");
+  aero.textContent = "STRAIGHT MODE"; h.tick();
+  assert.equal(fits, 1, "a longer string re-fits on the next tick");
+  h.tick();
+  assert.equal(fits, 1, "and only once");
+  aero.textContent = "AERO 523m"; h.tick();
+  assert.equal(fits, 2, "a shorter one re-fits too (the clamp it was given may now be too much)");
+  aero.textContent = "AERO 522m"; h.tick();
+  assert.equal(fits, 2, "a countdown that keeps its length costs nothing");
 });
 
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {

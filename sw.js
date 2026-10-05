@@ -571,17 +571,37 @@ self.addEventListener("activate", (event) => {
   })().catch((e) => { swLog("warn", "activate failed: " + errMsg(e)); throw e; }));
 });
 
+// Reply on the transferred port, so a page can bind the answer to the exact
+// controller it queried. scriptURL's ?v= is only the registration URL: browser
+// updates can execute new bytes at that SAME URL.
+self.addEventListener("message", (event) => {
+  const port = event.ports && event.ports[0];
+  if (!event.data || event.data.type !== "apex-cache-generation" || !port) return;
+  event.waitUntil((async () => {
+    try {
+      const name = await currentCacheName();
+      port.postMessage({ type: "apex-cache-generation", build: cacheBuild(name) });
+    } catch (_) { port.postMessage({ type: "apex-cache-generation", build: 0 }); }
+    finally { port.close(); }
+  })());
+});
+
 function packNetworkFirst(event, req) {
-  const network = fetch(req).then(async (res) => {
+  let cacheWrite = Promise.resolve();
+  const network = fetch(req).then((res) => {
     if (res && res.ok) {
-      try {
+      // Clone before returning the body to the page. Neither version.json nor
+      // a slow CacheStorage write may hold a successful download hostage.
+      const copy = res.clone();
+      cacheWrite = (async () => {
         const cache = await openCache(await currentCacheName());
-        await cache.put(req, res.clone());
-      } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+        await cache.put(req, copy);
+      })().catch(noteCacheWriteFail);
     }
     return res;
   });
-  event.waitUntil(network.then(() => undefined, () => undefined));   // the late write outlives a lost race
+  // Register synchronously; the late write survives even if cached content won.
+  event.waitUntil(network.then(() => cacheWrite, () => undefined));
   event.respondWith((async () => {
     const cached = matchPreferCurrent(req);
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));

@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asking whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -24,6 +24,13 @@ absolute magnitudes.
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer |
 | `yawInertia` (`YAW_INERTIA` 0.58; 1.0 on a coarse pointer) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
+| GRIP STEER (`js/physics/grip-steer.js`; notch 1 = OFF) | assist-gated steering cap at the front's peak slip | steadier front under steer |
+
+`expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
+SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
+There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip / (1 + vStd(speed)/speedRef)`,
+so A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+moves with `frontGrip` and `yawInertia`.
 
 Boot-effective defaults come from `js/input/steer-tuning.js`
 `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) — game.js

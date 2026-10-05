@@ -66,21 +66,25 @@ name for a server that left `.mcp.json`.
 Cursor, `.codex/config.toml` for Codex — the same THREE servers, lockstepped by
 `tests/unit/agent-config.test.mjs`; trimmed from seven on 2026-09). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
-`playwright-official` row pins the same package the shell wrapper audits
-(`@playwright/mcp@0.0.79`) — never `@latest`. Cloud often does **not**
+`playwright-official` row launches the shell wrapper's `run`, which pins
+`@playwright/mcp@0.0.79` (never `@latest`) and passes the Chromium
+`tools/lib/chromium-path.mjs` discovers — the bare package cannot launch in the
+cloud container (measured 2026-10-05: its default `chrome` channel wants
+/opt/google/chrome, and `--browser chromium` wants the build its own bundled
+Playwright pins, not the installed one). Cloud often does **not**
 auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
 | **apex-tools** | `apex_*` | Pin safe flags on committed `tools/` CLIs against the **working tree** (the wrap map below is the count). Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
-| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
+| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
 | Was | Why it left the catalog | The CLI that remains |
 |---|---|---|
-| **playwright** (wrapper `run`, `--browser chromium`) | Failed to connect as a server; `playwright-official` is the same upstream without wrapper flags. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
+| **playwright** (the wrapper under its old name) | Its 2026-09 `run` combined `--isolated` with `--user-data-dir` and failed to connect; the bare package replaced it, then failed to launch in the container (above). Since 2026-10-05 the fixed `run` IS **playwright-official**. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
 | **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.7.0` by hand |
 | **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
 | **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/mcp/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
@@ -185,7 +189,15 @@ flicker-gate, frame-report --fleet, parts-sweep, livery-contrast in the
 background), `apex_ui_fit`/`apex_ui_shot` (one menu screen × viewport, ~15 s)
 and `apex_car_audit`/`apex_track_audit` (offline checks, seconds); 24 → 26 on
 2026-10-04 for `apex_hud_shot` and `apex_hud_survey`, the race-HUD survey —
-one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
+one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix); 26 → 27 on
+2026-10-05 for `apex_unit_test` (`node --test` of one `tests/unit/` file, the
+browser-free check eight skills run every session and none had a wrap). The
+same day `apex_eval` gained `backend` and `vm` (the Node VM route, no
+Chromium), `apex_hud_shot` / `apex_hud_survey` gained `backend`, and
+`apex_track_audit` gained `checks` (every per-circuit audit against its
+baseline through `track/audit-circuit.cjs`; the bare call still runs the
+verify-track + float-audit pair). `apex_unit_test` is built-in: `node --test`
+of one `tests/unit/` file, no CLI of its own.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -209,7 +221,8 @@ one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
 | `apex_ui_fit` | `ui/layout-audit.mjs` | browser | ui-menu-a11y |
 | `apex_ui_shot` | `ui/layout-audit.mjs` | browser | survey-ui-matrix |
 | `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
-| `apex_track_audit` | `track/float-audit.cjs` | tree | survey-track |
+| `apex_track_audit` | `track/audit-circuit.cjs` | tree | survey-track |
+| `apex_unit_test` | built-in | tree | check-changes |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
@@ -224,7 +237,9 @@ Pins the wrap always applies (you cannot override them):
 - `apex_bump_cache_check` → `--check --json` (never `--apply`)
 - `apex_pick_tests` / `apex_select_specs` → `--json` (never `--bg`)
 - `apex_rotate_markings_check` → `--check` (never `--write`)
-- `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean)
+- `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean); `all:true`
+  outlasts the 180 s cap (killed at ~46 of 52 circuits, 2026-10-05), so it starts the
+  `graph_parity_all` job (`BASE` by env, `--all` pinned) and returns its `jobId`
 - `apex_frame_report` → one circuit: `track` must be a `Tracks.LIST` id, `u`
   (numbers in 0..1, ≤ 64) or `frames` (1..120) but not both, `shots` must be an
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
@@ -237,10 +252,14 @@ Pins the wrap always applies (you cannot override them):
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `cam`/`tod`/`frac` are enum- and range-checked,
-  `track` must be a `Tracks.LIST` id, `out` stays under `artifacts/`/`scratch/`
+  `az`/`el`/`dist`/`h` bounded, `track` must be a `Tracks.LIST` id, `out` stays under
+  `artifacts/`/`scratch/`. `h` is metres above the road (eye height on `eye`, aim
+  point on `orbit` — frames a prop far overhead); `el` on `eye` is the pitch
 - `apex_job_start` → `kind` from a fixed list, each with its own argv builder;
   callers pass values (ids, comma lists), never flags; at most two jobs run;
-  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group
+  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group.
+  The reported `log` is the CLI's stdout (its report; the status `tail` reads it),
+  `stderr` the file beside it, both in `artifacts/logs/apex-jobs/`
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
 - `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
 - `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,

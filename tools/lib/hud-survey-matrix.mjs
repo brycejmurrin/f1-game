@@ -48,10 +48,13 @@ export const CAMS = Object.freeze(["chase", "far", "drift", "cockpit", "hood", "
 // js/ui/hud.js BCAM_IDS / ONBOARD_IDS.
 export const BCAM_IDS = Object.freeze(["heli", "side", "cinematic", "low", "overhead", "rival", "pitwall", "drone"]);
 export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "visor", "helmet"]);
-// CamGroups.COCKPIT_LAYOUT (js/camera/cam-groups.js): the cameras that draw a
-// steering wheel, so MOVE & SIZE gives them the cockpit layout — and the same
-// pair mode-switch.js marks body.cockpit-cam (with a wheel that has a screen).
-export const COCKPIT_LAYOUT_IDS = Object.freeze(["cockpit", "helmet"]);
+// CamGroups.COCKPIT_LAYOUT (js/camera/cam-groups.js): the camera that reads
+// gear and speed off the wheel's LCD, so MOVE & SIZE gives it the cockpit
+// layout — and the one mode-switch.js marks body.cockpit-cam (with a wheel that
+// has a screen). HELMET_LAYOUT_IDS: the same wheel seen from inside the lid,
+// whose HUD is the visor (its own set, no cockpit-cam).
+export const COCKPIT_LAYOUT_IDS = Object.freeze(["cockpit"]);
+export const HELMET_LAYOUT_IDS = Object.freeze(["helmet"]);
 // Cameras whose framing the TV director / auto-cut owns: no camera-keyed expectation.
 const DYNAMIC_CAMS = new Set(["tv", "trackside"]);
 // HudElements.ELEMENTS ids (js/ui/hud-elements.js) → the probe key each hides
@@ -95,7 +98,7 @@ export const PRESETS = Object.freeze({
 });
 // HudLayout.ELEMENTS ids and LIM (js/ui/hud-layout.js).
 export const LAYOUT_IDS = Object.freeze(["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce",
-  "gearbox", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"]);
+  "gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"]);
 export const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
 // Percent ranges the CLI accepts; the game clamps to its own (HUD 70..200,
 // UI 40..200, BUTTON 40..300 — js/ui/scale.js).
@@ -483,10 +486,10 @@ export function contrastRatio(fg, bg, under = { r: 128, g: 128, b: 128 }) {
  *  (COCKPIT_LAYOUT), the map hide (MAP ON / OFF, or AUTO: ONBOARD or MINIMAL —
  *  js/ui/hud.js) and body.cockpit-cam (the COCKPIT_LAYOUT pair, default wheel). */
 export function camGroupFacts(cell) {
-  const wheel = COCKPIT_LAYOUT_IDS.includes(cell.cam);
+  const wheel = COCKPIT_LAYOUT_IDS.includes(cell.cam), visor = HELMET_LAYOUT_IDS.includes(cell.cam);
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const mapAutoHides = cell.map === "off" || (cell.map === "auto" && (ONBOARD_IDS.includes(cell.cam) || prof === "minimal"));
-  return { layoutSet: wheel ? "cockpit" : "other", mapAutoHides, cockpitCam: wheel };
+  return { layoutSet: wheel ? "cockpit" : visor ? "helmet" : "other", mapAutoHides, cockpitCam: wheel };
 }
 /** Decide one cell's CHECKS. rec = this cell's measured record (state.vars,
  *  records, transientRecords, extras[i]); byId(id) → another cell's record. */
@@ -665,11 +668,12 @@ export function expectedVisibility(cell, ctx = {}) {
   const dynamic = DYNAMIC_CAMS.has(cam);
   const onboard = ONBOARD_IDS.includes(cam);
   const bcam = BCAM_IDS.includes(cam);
-  const cockpitCam = ctx.cockpitCam != null ? !!ctx.cockpitCam : (cam === "cockpit" || cam === "helmet");
+  const cockpitCam = ctx.cockpitCam != null ? !!ctx.cockpitCam : cam === "cockpit";
   // The touch-cockpit strip hide follows the cockpit LAYOUT set (body[data-hl-set],
   // js/ui/hud-layout.js) — the camera alone, whatever the wheel; cockpitCam is
-  // only the wheel LCD's gear / speed hide.
-  const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam);
+  // only the wheel LCD's gear / speed hide. HELMET is its own set, the visor:
+  // on touch it leaves out OT / AERO and BRAKE BIAS only.
+  const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam), helmetSet = HELMET_LAYOUT_IDS.includes(cam);
   const big = dev.w >= 900 && dev.h >= 600;
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const minimal = prof === "minimal", broadcast = prof === "broadcast";
@@ -700,13 +704,13 @@ export function expectedVisibility(cell, ctx = {}) {
   else want("gaps", !minimal, "GAPS: AUTO hides under MINIMAL only");
   if (minimal || lay === "driver" || lay === "compact") want("sectors", false, "sectors drop under MINIMAL / DRIVER / COMPACT");
   else camRule("sectors", !(bcam && !broadcast), "a broadcast camera hides sectors outside the BROADCAST profile");
-  camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR");
+  camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
   camRule("speed", !((cockpitCam && big) || (broadcast && bcam)),
     "cockpit-cam hides the floating speed only at >= 900x600; BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
-    else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k))),
-      "broadcast cams hide it; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css); desktop cockpit keeps it beside the wheel");
+    else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),
+      "broadcast cams hide it; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css); desktop cockpit keeps it beside the wheel; a touch helmet keeps ENERGY and leaves OT / AERO to their buttons");
   }
   if (minimal || lay === "timing" || lay === "compact") want("bb", false, "BRAKE BIAS drops under MINIMAL / TIMING / COMPACT");
   else camRule("bb", !(bcam || (!desktop && !placed.has("bb"))), "BRAKE BIAS is desktop-only unless placed (css/hud.css)");

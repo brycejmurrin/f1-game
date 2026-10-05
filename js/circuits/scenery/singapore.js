@@ -176,14 +176,15 @@
             tT = a.t;
           }
           const b = [rT, uT, tT];
+          const dz = (t + 1) * 1.4;   // per-tower depth: faces stop sharing a plane
           stage._mat = MAT.CONCRETE;
-          seat.box(stage, base,                         [TOWERW, H, 28],               wall,               b);
+          seat.box(stage, base,                         [TOWERW, H, 28 + dz],               wall,               b);
           stage._mat = MAT.GLASS;
-          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
+          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6 + dz], winC,               b);
           stage._mat = MAT.METAL;
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2],         finCol,             b);
-          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
+          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2 + dz],         finCol,             b);
+          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29 + dz],    [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
 
@@ -749,7 +750,7 @@
             seat.box(stage, vadd(vadd(a.c, a.r, 11.1), a.u, 2), [0.4, 8, 48], GLASS, b);
             for (let i = 0; i < 5; i++) {
               const rc = vadd(vadd(a.c, a.t, (i - 2) * 10), a.u, 12 + Math.sin(i * 1.1) * 1.8);
-              seat.box(stage, rc, [24, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
+              seat.box(stage, rc, [24 + i * 0.2, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
             }
             seat.box(stage, vadd(a.c, a.u, 0.2), [24, 0.6, 58], [0.22, 0.28, 0.24], b);
           }, { required: true });
@@ -1046,43 +1047,80 @@
         bush(k, side, 10, [0.16, 0.40, 0.18]);
       }
 
+      // s 0.58 R — MERLION PARK: the 8.6 m lion-fish statue on a bay
+      // promontory (Wikipedia Merlion Park, 1°17′12.5″N 103°51′16.2″E;
+      // F1.com landmark list). Was anonymous `out` prims — not a required
+      // modelGroup, so flyby/landmark gates never saw it, and the bay sheet
+      // stopped short of this frac so the park sat on dry verge. Now a
+      // required assembly + a local waterBand just beyond the plinth.
+      waterBand(0.545, 0.615, 1, 42, 110, 12, BAY, {
+        id: "marina-water-merlion", required: true,
+      });
       {
-        const a = anchor(K(0.58), 1, 34);
+        // Dist 38 puts the plinth on the quay inside the waterBand's 42 m
+        // inner edge (same clearance idiom as the bay reflection strips).
+        const a0 = anchor(K(0.58), 1, 38);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a  = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
         if (!onTrack(a.c[0], a.c[2], 12)) {
-          const b   = [a.r, a.u, a.t];
-          const jetB = [a.t, a.r, a.u];    // 'up' slot = a.r → jet fires outward over water
-          const WHITE = [0.92, 0.93, 0.95];
-          const SHADE = [0.80, 0.82, 0.86];
-          // Round plinth in the splash pool
-          out._mat = MAT.CONCRETE;
-          addCyl(out, vadd(a.c, a.u, 0.6), 7, 1.2, [0.60, 0.62, 0.66], 12, b);
-          // Fish-body base: three stacked scale rings tapering up (curved body)
-          addFrustum(out, vadd(a.c, a.u, 1.2), 6.2, 5.0, 5, WHITE, 10, b);
-          addFrustum(out, vadd(a.c, a.u, 6.0), 5.0, 4.2, 5, SHADE, 10, b);
-          addFrustum(out, vadd(a.c, a.u, 10.8), 4.2, 3.4, 5, WHITE, 10, b);
-          // Upright chest/torso
-          addBox(out, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
-          // Lion head block + snout jutting toward the bay
-          const head = vadd(a.c, a.u, 20.5);
-          addBox(out, head, [5.2, 4.4, 4.6], WHITE, b);
-          addBox(out, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);   // snout
-          // Mane — a ring of short cones around the head
-          for (let m = 0; m < 8; m++) {
-            const ang = (m / 8) * Math.PI * 2;
-            const dx = Math.cos(ang) * 3.2, dz = Math.sin(ang) * 3.2;
-            const mc = [head[0] + a.r[0] * dx + a.t[0] * dz, head[1] + 0.5, head[2] + a.r[2] * dx + a.t[2] * dz];
-            addCone(out, mc, 1.1, 2.4, [0.86, 0.88, 0.92], 5, [a.r, a.u, a.t]);
-          }
-          // Ears
-          for (const o of [-1.6, 1.6]) addCone(out, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
-          out._mat = 0;
-          // Water jet — a long tapering cyan cone arcing out over the bay
-          const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
-          addCone(out, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
-          addCone(out, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);   // splash burst
-          // Splash pool + reflective disc at the base
-          addCyl(out, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
-          addBox(out, vadd(a.c, a.u, 0.4), [22, 0.15, 22], [0.40, 0.55, 0.65], b);
+          const b    = [a.r, a.u, a.t];
+          // 'up' slot = a.r → jet fires outward over the bay sheet.
+          const jetB = [a.t, a.r, a.u];
+          const WHITE = [0.94, 0.95, 0.97];
+          const SHADE = [0.82, 0.84, 0.88];
+          const MANE  = [0.88, 0.90, 0.94];
+          // Named emit keeps `{ required: true }` inside the landmark-contract
+          // 2200-char window of the group call (an inline stage body pushes
+          // the opts past that slice).
+          const emitMerlion = (stage) => {
+            // Round concrete plinth in the splash pool (no coplanar plaza
+            // slab — a flat deck fought the pool face at the same y).
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, vadd(a.c, a.u, 0.6), 7.5, 1.2, [0.62, 0.64, 0.68], 12, b);
+            // Fish-body: three stacked scale rings tapering up (curved body).
+            addFrustum(stage, vadd(a.c, a.u, 1.2), 6.4, 5.1, 5.0, WHITE, 10, b);
+            addFrustum(stage, vadd(a.c, a.u, 6.0), 5.1, 4.2, 5.0, SHADE, 10, b);
+            addFrustum(stage, vadd(a.c, a.u, 10.8), 4.2, 3.4, 5.0, WHITE, 10, b);
+            // Upright chest/torso under the lion head.
+            addBox(stage, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
+            // Lion head + snout jutting toward the bay.
+            // Depth 4.9 (was 4.6) keeps the head/chest same-facing faces apart.
+            const head = vadd(a.c, a.u, 20.5);
+            addBox(stage, head, [5.2, 4.4, 4.9], WHITE, b);
+            addBox(stage, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);
+            for (let m = 0; m < 8; m++) {
+              const ang = (m / 8) * Math.PI * 2;
+              const dx = Math.cos(ang) * 3.2, dz = Math.sin(ang) * 3.2;
+              const mc = [head[0] + a.r[0] * dx + a.t[0] * dz,
+                          head[1] + 0.5,
+                          head[2] + a.r[2] * dx + a.t[2] * dz];
+              addCone(stage, mc, 1.1, 2.4, MANE, 5, b);
+            }
+            for (const o of [-1.6, 1.6]) {
+              addCone(stage, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
+            }
+            stage._mat = 0;
+            // Cyan spout + splash burst over the bay (night-readable).
+            const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
+            addCone(stage, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
+            addCone(stage, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);
+            // Splash pool rim slightly ABOVE the reflective disc so the two
+            // horizontal faces never share a plane (flatCoplanar).
+            addCyl(stage, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
+            addBox(stage, vadd(a.c, a.u, 0.55), [18, 0.12, 18], [0.40, 0.55, 0.65], b);
+            // Low park rail posts — Merlion Park's viewing edge, not a wall.
+            for (let i = -3; i <= 3; i++) {
+              if (i === 0) continue;
+              const p = vadd(vadd(a.c, a.r, 12), a.t, i * 3.2);
+              addCyl(stage, p, 0.18, 1.6, [0.70, 0.72, 0.76], 6, b);
+            }
+          };
+          modelGroup("singapore-merlion", {
+            center: vadd(a.c, a.u, 12), size: [28, 28, 28], basis: b,
+          }, emitMerlion, { required: true });
         }
       }
 

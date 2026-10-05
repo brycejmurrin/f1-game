@@ -1,16 +1,19 @@
 #!/usr/bin/env node
-// @doc Every menu and popup, then the Display survey, into one HTML preview.
-// show-menus.mjs — every menu and popup, then the Display survey, into the preview.
-// @doc Shoot every menu/popup plus the Display survey into one preview HTML page.
+// @doc Every menu and popup, then the Display survey, as JPEGs plus an index.html in artifacts/show-menus.
+// show-menus.mjs — every menu and popup, then the Display survey, into one page.
 // @skill playwright-probe
 //
 //   node tools/shot/show-menus.mjs
+//   node tools/shot/show-menus.mjs --only=title,settings,hud
+//
+// The car from each side is garage-angles.mjs (`--views=hero,front,side,rear,top`);
+// show.mjs, which did a three-menu subset of this plus those angles, was
+// folded away 2026-10-05.
 //
 // One boot. Menus are opened the way a player opens them, then closed.
 // Display's own panels (lighting, camera, flyby) are shot over a race,
 // because that is where they actually open.
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
@@ -20,6 +23,7 @@ import { getScreen, OVERLAY_IDS } from "../ui/menu-screens.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const outDir = resolveRepoDefault(ROOT, "artifacts", "show-menus");
+mkdirSync(outDir, { recursive: true });   // a fresh checkout has no artifacts/show-menus
 
 const MENUS = [
   ["title", "Title"],
@@ -58,7 +62,6 @@ const flag = (n) => {
   return hit ? hit.slice(n.length + 1) : "";
 };
 const only = new Set(flag("--only").split(",").filter(Boolean));
-const appendFirst = argv.includes("--append");
 const shots = [];
 
 async function shotPage(page) {
@@ -111,18 +114,24 @@ async function resetToTitle(page, base) {
   }
 }
 
-function publish(append) {
-  const gallery = "/workspace/scripts/show-shots.mjs";
-  if (!shots.length || !existsSync(gallery)) return;
-  const args = [gallery];
-  if (append) args.push("--append");
-  else {
-    args.push("--heading", "Menus and display", "--note", "Scroll. Every menu, then Display and the panels that open from it.");
-  }
-  for (const s of shots) args.push("--title", s.title, s.file);
-  const pub = spawnSync(process.execPath, args, { stdio: "inherit" });
-  if (pub.status) console.error("preview publish failed", pub.status);
-  shots.length = 0;
+// One page beside the JPEGs, relative links, rewritten after each batch so a
+// run that dies in the race half still leaves the menu half viewable. It used
+// to hand the JPEGs to a gallery script outside the repo that exists on one
+// host, and silently did nothing everywhere else.
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function publish() {
+  if (!shots.length) return;
+  const figs = shots.map((s) => `<figure><img src="${esc(s.id)}.jpg" alt="${esc(s.title)}" loading="lazy">` +
+    `<figcaption>${esc(s.title)}</figcaption></figure>`).join("\n");
+  writeFileSync(join(outDir, "index.html"), `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apex 26 — menus</title>
+<style>body{margin:0;background:#0c0c0e;color:#ece8e1;font:15px/1.4 sans-serif}img{display:block;width:100%;height:auto}figure{margin:0 0 14px}figcaption{padding:6px 16px}</style>
+</head><body>
+${figs}
+</body></html>
+`);
+  console.log("page", join(outDir, "index.html"), shots.length);
 }
 
 const srv = await startStaticServer(ROOT);
@@ -162,7 +171,7 @@ try {
     }
   }
 
-  publish(appendFirst);
+  publish();
 
   if (!only.size || only.has("hud")) {
     try {
@@ -228,7 +237,7 @@ try {
   }
   }
 
-  publish(true);
+  publish();
 } finally {
   if (browser) await browser.close().catch(() => {});
   await shutdown(srv).catch(() => {});
