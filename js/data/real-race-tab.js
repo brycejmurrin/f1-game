@@ -400,12 +400,12 @@ const DataRealRace = (function () {
       r.onerror = r.onblocked = () => res(null);
     });
   }
-  function traceGet(sessionKey) {
+  function traceGet(sessionKey, script) {
     return traceDb().then((db) => new Promise((res) => {
       if (!db) { res(null); return; }
       try {
         const rq = db.transaction(TRACE_STORE, "readonly").objectStore(TRACE_STORE).get(String(sessionKey));
-        rq.onsuccess = () => { const v = rq.result; res(v && v.v === TRACE_V && v.cars ? v : null); };
+        rq.onsuccess = () => { const v = rq.result; res(v && v.v === TRACE_V && v.cars && (!script || traceFits(v, script)) ? v : null); };
         rq.onerror = () => res(null);
       } catch (e) { res(null); }
     }));
@@ -434,29 +434,47 @@ const DataRealRace = (function () {
     }
     return Float32Array.from(out);
   }
+  function traceEnd(script) {
+    let end = 0;
+    for (const d of script.drivers) arr(d.lapStart).forEach((ls, i) => { if (ls != null && d.laps[i] > 0) end = Math.max(end, ls + d.laps[i]); });
+    return end;
+  }
+  // Session identity alone is not coverage: timing can grow after a successful
+  // download. Include its clock, window, roster and completion state; legacy
+  // entries without this stamp must be fetched again rather than trusted.
+  function traceCoverage(script) {
+    return JSON.stringify([script.t0, traceEnd(script), script.complete === true,
+      script.drivers.map((d) => d.num).sort((a, b) => a - b)]);
+  }
+  function traceFits(traces, script) {
+    return !!(traces && traces.v === TRACE_V && traces.sessionKey === script.sessionKey &&
+      traces.coverage === traceCoverage(script));
+  }
   /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
   function fetchTraces(script, onProgress, previous) {
     if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
-    return traceGet(script.sessionKey).then((hit) => {
+    return traceGet(script.sessionKey, script).then((hit) => {
       if (hit) return hit;
       const t0 = script.t0;
-      let end = 0;
-      for (const d of script.drivers) d.lapStart.forEach((ls, i) => { if (ls != null && d.laps[i] > 0 && ls + d.laps[i] > end) end = ls + d.laps[i]; });
+      const end = traceEnd(script);
       const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
-      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ, cars: {}, failed: [] };
-      if (previous && previous.sessionKey === script.sessionKey) {
+      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ,
+        coverage: traceCoverage(script), complete: script.complete === true, cars: {}, failed: [] };
+      if (traceFits(previous, script)) {
         for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k)) traces.cars[k] = previous.cars[k];
       }
       let done = 0, failed = 0;
       const total = script.drivers.length;
       return Promise.all(script.drivers.map((d) => (Object.prototype.hasOwnProperty.call(traces.cars, d.num)
-        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO)
+        // This layer owns coverage-aware caching. A raw HTTP cache entry may
+        // predate the completed timing even when its URL/window is identical.
+        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
           .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
         .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
         .then(() => failed === total ? Promise.reject(new Error("the positions did not load"))
-          : failed ? traces : tracePut(traces).then(() => traces));
+          : failed || !traces.complete ? traces : tracePut(traces).then(() => traces));
     });
   }
 
@@ -486,7 +504,8 @@ const DataRealRace = (function () {
     // A download in flight leaves ~20 queued /location requests in the transport's
     // FIFO that every other tab would wait behind; drop them (showTab cancels this
     // tab BEFORE it starts the next tab's load).
-    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
+    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
+    function releaseIncomplete() { partialTraces = null; if (traces && !traces.complete) traces = null; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -529,6 +548,7 @@ const DataRealRace = (function () {
 
     function renderBody(meta, body) {
       ++requestGen;
+      releaseIncomplete();
       loading = null; replayUi = null; driveAction = null; traceError = "";
       const myGen = ++bodyGen;
       clear(body);
@@ -605,7 +625,7 @@ const DataRealRace = (function () {
      *  where it really was. Until they load, the WATCH buttons load them first. */
     function replayRow(script, slot) {
       const row = el("div", "dh-rounds");
-      const have = traces && traces.sessionKey === script.sessionKey;
+      const have = traceFits(traces, script);
       const canReplay = !!script.t0 && typeof RealRace !== "undefined" && !!RealRace.replay;
       if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
       const state = el("span", "dh-lr-meta"); state.setAttribute("role", "status");
@@ -624,14 +644,14 @@ const DataRealRace = (function () {
       replayUi = { script, slot, state, progress, load, highlights, full, cancel };
       updateReplayRow();
       const generation = requestGen;
-      if (!have && !loading) traceGet(script.sessionKey).then((hit) => {
+      if (!have && !loading) traceGet(script.sessionKey, script).then((hit) => {
         if (generation === requestGen && (!isOpen || isOpen()) && hit && replayUi && replayUi.slot === slot && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
       });
       return row;
     }
     function updateReplayRow() {
       if (!replayUi) return;
-      const u = replayUi, sk = u.script.sessionKey, tr = traces && traces.sessionKey === sk ? traces : null;
+      const u = replayUi, sk = u.script.sessionKey, tr = traceFits(traces, u.script) ? traces : null;
       const busy = loading && loading.sessionKey === sk, failed = tr && tr.failed ? tr.failed : [];
       u.state.textContent = busy ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total + " CARS"
         : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
@@ -649,7 +669,7 @@ const DataRealRace = (function () {
       fetchTraces(script, (done, total, tr) => {
         if (!current()) return;
         partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
-      }, traces && traces.sessionKey === script.sessionKey ? traces : partialTraces)
+      }, traceFits(traces, script) ? traces : partialTraces)
         .then((tr) => {
           if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();
@@ -673,7 +693,7 @@ const DataRealRace = (function () {
         if (close) close();
         return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
-      if (traces && traces.sessionKey === script.sessionKey) return go(traces);
+      if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);
     }
 
@@ -846,8 +866,8 @@ const DataRealRace = (function () {
     function jumpIn(script, code) {
       if (typeof RealRace === "undefined" || !RealRace.launch) { Log.warn("data", "RealRace is not loaded"); return false; }
       Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
+      const tr = traceFits(traces, script) ? traces : null;
       if (close) close();
-      const tr = traces && traces.sessionKey === script.sessionKey ? traces : null;
       return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
