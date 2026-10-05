@@ -134,7 +134,7 @@ not.
 | `track-` | 32 | `select.css` | `race-setup.css`, `components.css` |
 | `sp-` | 10 | `tuner.css` | — |
 | `team-` | 7 | `select.css` | `components.css` |
-| `steer-` | 11 | `touch-controls.css` | — |
+| `steer-` | 11 | `touch-controls.css` | `hud.css` |
 | `bc-` | 25 | `hud.css` | — |
 | `tdc-` | 7 | `track-detail.css` | — |
 | `co-` | 12 | `career.css` | — |
@@ -201,6 +201,10 @@ file changes a screen owned by another.
   their zoom and anchors around its side or bottom dock while it is open.
 - `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
   hidden by a `hud` rule when the pause card is up.
+- `.steer-touch` — `touch-controls` + `hud`. Body class from `js/game.js` when
+  STEERING INPUT is touch: pedals sit lower in `touch-controls`, and `#hud-sectors`
+  takes `--dock-r-w` / the right-dock CSS anchor in `hud` so the strip clears
+  BOOST without dragging BUTTONS landscape into `#announce`.
 - `.minibtn` — `menus` + `responsive`
 - `.cs-stat-*` (4 classes) — `carsetup` + `menus` + `responsive`
 - `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components`

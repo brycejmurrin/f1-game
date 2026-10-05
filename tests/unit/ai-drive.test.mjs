@@ -1366,8 +1366,14 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
   const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
   const b = src.indexOf(endMark, a);
   assert.ok(a > 0 && b > a, "the scan is where this test expects it");
+  // otNeedAhead gates the walk in game.js; force it on (and drop the raceCtl
+  // seed) so this test still compares the pre-reject body to the full wrap.
+  let body = src.slice(a, b + endMark.length)
+    .replace(/if \(c\._otLap[\s\S]*?c\._otS = c\.s; \}\n/, "")
+    .replace(/const otOpen = raceCtl\.otDetectOpen\(\);\n/, "")
+    .replace(/const otNeedAhead =[\s\S]*?;\n/, "const otNeedAhead = true;\n");
   const scan = new Function("c", "ranked", "track", "OT_GAP", "pits",
-    src.slice(a, b + endMark.length) + "\nreturn { ahead, gapAhead };");
+    body + "\nreturn { ahead, gapAhead };");
   // A car in the pit lane or retired is not the car ahead ON THE ROAD
   // (verify-physics #15); the reference applies the same skip.
   const pits = { inLane: (o) => !!o.inLane };

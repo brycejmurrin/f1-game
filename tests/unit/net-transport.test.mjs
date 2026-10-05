@@ -707,6 +707,48 @@ test("a fetched ICE entry that makes the constructor throw is dropped and rtc() 
       "the retry gathers with STUN only");
     assert.ok(!fresh.iceServers({}).some((e) => e.urls === "garbage"),
       "the fetched list is forgotten, so the next prefetch is a fresh answer");
+    // The STUN-only retry must stamp stats().turn false — hasRelay() after a
+    // later good prefetch must not flip the already-built PC's failure copy.
+    assert.equal(ep.stats().turn, false, "STUN-only retry stamps turn:false");
+  } finally {
+    delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
+  }
+});
+
+// ── stats().turn is the iceServers THIS PC was built with ───────────────────
+// Lobby failureMsg branches on st.turn: "a relay was offered and did not carry
+// it" vs "no relay is configured". hasRelay() is the LIVE module list — a
+// credentials fetch that lands after new RTCPeerConnection (or expires while
+// the PC still has TURN) made the copy lie. Stamp at construction.
+test("stats().turn follows the PC's iceServers, not a later hasRelay() flip", async () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    createDataChannel(label) { return { label, readyState: "connecting", close() {} }; }
+    close() {}
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    assert.equal(fresh.hasRelay(), false, "control: no relay yet");
+    const ep = fresh.rtc({ role: "host" });
+    assert.ok(ep && ep.pc);
+    assert.equal(ep.stats().turn, false, "STUN-only PC reports turn:false");
+
+    const turnServer = { urls: ["turn:relay.example:443"], username: "u", credential: "c" };
+    global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+    await fresh.prefetchIce();
+    assert.equal(fresh.hasRelay(), true, "module list now has TURN");
+    assert.equal(ep.stats().turn, false,
+      "the already-built PC must not claim a relay it never gathered with");
+
+    const withTurn = fresh.rtc({ role: "host" });
+    assert.equal(withTurn.stats().turn, true, "a PC built after prefetch stamps turn:true");
+    assert.equal(fresh.hasRelay(), true);
   } finally {
     delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
   }
