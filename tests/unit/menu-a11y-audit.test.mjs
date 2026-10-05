@@ -565,6 +565,30 @@ test("setting-row chevrons are pointer-only decoration; the named select owns ac
   }
 });
 
+// UI-06 (hunt2): from a disabled CUSTOM value › skipped the first option.
+test("setting-row chevrons step from a disabled CUSTOM to its real neighbours", () => {
+  const mk = (tag) => ({ tagName: tag.toUpperCase(), children: [], attrs: {}, disabled: false, value: "",
+    appendChild(c) { this.children.push(c); return c; }, replaceChildren() { this.children = []; },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+    addEventListener() {} });
+  const ctx = { window: {}, document: { createElement: mk, getElementById: () => null } };
+  vm.createContext(ctx);
+  vm.runInContext(read("js/ui/setting-row.js"), ctx);
+  const SR = ctx.window.SettingRow;
+  const row = mk("div"), wrap = mk("div"), prev = mk("button"), sel = mk("select"), next = mk("button");
+  prev.attrs["data-step"] = "-1"; next.attrs["data-step"] = "1";
+  wrap.children = [prev, sel, next]; row.children = [wrap];
+  let cur = "custom";
+  SR.wire(row, { values: [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]],
+    read: () => cur, write: (v) => { cur = v; } });
+  next.onclick({});
+  assert.equal(cur, "off", "› from CUSTOM wraps to the first option, not the second");
+  cur = "custom"; prev.onclick({});
+  assert.equal(cur, "full", "‹ from CUSTOM is the option before it");
+  next.onclick({}); assert.equal(cur, "off", "› from FULL skips the disabled CUSTOM");
+  prev.onclick({}); assert.equal(cur, "full", "‹ from OFF skips it too");
+});
+
 test("the steering Advanced disclosure exposes button and expanded state semantics", () => {
   const summary = HTML.match(/<summary[^>]*\bid="adv-more"[^>]*>/);
   assert.ok(summary, "#adv-more exists");

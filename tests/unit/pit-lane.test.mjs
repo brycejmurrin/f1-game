@@ -486,6 +486,24 @@ test("it says what to DO at the entry, and only while the entry road lasts", () 
   assert.equal(pits.cue(c), null, "the cue outlived the entry road it points at");
 });
 
+// UI-03 (hunt2): the lane cue is "the one number the driver compares against
+// the speedo", and the speedo reads AppearanceOpts.speed(dashKph). Under MPH the
+// cue still said "80 LIMIT" against a speedo reading 50 on the limiter.
+test("the lane cue's limit follows SPEED UNITS, like the speedo it is read against", () => {
+  const { pits, zone, car, ctx } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitState = "lane";
+  assert.equal(pits.cue(c).text, "STAY IN LANE · 80 LIMIT", "no AppearanceOpts (or km/h): the board's bare number");
+  let units = "kmh";
+  ctx.AppearanceOpts = {
+    speed: (kph) => Math.round(units === "mph" ? kph / 1.609344 : kph),
+    unitLabel: () => (units === "mph" ? "MPH" : "KM/H"),
+  };
+  assert.equal(pits.cue(c).text, "STAY IN LANE · 80 LIMIT", "km/h: unchanged");
+  units = "mph";
+  assert.equal(pits.cue(c).text, "STAY IN LANE · 50 MPH LIMIT", "mph: the number the speedo shows, with its unit");
+});
+
 test("it follows the car through the stop: armed, lane, box, then silence", () => {
   const { pits, zone, car } = commitSession();
   const c = car(0);

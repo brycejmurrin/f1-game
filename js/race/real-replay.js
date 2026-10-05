@@ -360,8 +360,15 @@ const RealReplay = (function () {
 
     function onKey(e) {
       if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
-      const tag = e.target && e.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
+      const t = e.target, tag = t && t.tagName;
+      // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
+      // leaves focus there, and the keys went dead until something else took
+      // focus. Space / Enter stay the focused control's (press it, not pause).
+      // Text fields and selects keep every key (typing, type-ahead).
+      const ctl = t && typeof t.closest === "function" && t.closest(".watch-transport") &&
+        (tag === "BUTTON" || (tag === "INPUT" && t.type === "range"));
+      if (ctl ? (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter")
+          : (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON")) return;
       let used = true;
       if (e.code === KEY_NEXT) { follow(-1); if (bc) bc.manual(); }   // up the order: the viewer has the picture
       else if (e.code === KEY_PREV) { follow(+1); if (bc) bc.manual(); }   // down the order

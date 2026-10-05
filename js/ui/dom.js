@@ -1,5 +1,5 @@
 /* Apex 26 — Dom: the three DOM/format helpers every DOM-built screen shares
-   (el / paintFold / fmtLap). Pure functions over `document` — no game state,
+   (el / paintFold / fmtLap / fmtRaceClock). Pure functions over `document` — no game state,
    no G. Loads before its first consumer (js/audio/panel.js in tools/manifest.cjs);
    career-ui and season-ui destructure it at eval. */
 const Dom = (function () {
@@ -37,6 +37,20 @@ const Dom = (function () {
     return m ? `${m}:${secs}` : r.toFixed(3);
   }
 
-  return { el, paintFold, fmtLap };
+  // A RACE-LENGTH clock: 1:32:14.530 past the hour, 59:59.999 under it (no
+  // hours field), 0:59.999 under the minute. `digits` decimals (3: timing
+  // sheet; 0: a whole-second playhead, which FLOORS — the seek bar must not
+  // read the next second early). ROUND FIRST, then split: 3599.9996 split
+  // first read "59:60.000". Not a finite number >= 0 → null.
+  function fmtRaceClock(t, digits = 3) {
+    if (typeof t !== "number" || !isFinite(t) || t < 0) return null;
+    const k = Math.pow(10, digits);
+    const u = digits ? Math.round(t * k) : Math.floor(t);
+    const h = Math.floor(u / (3600 * k)), m = Math.floor((u - h * 3600 * k) / (60 * k));
+    const r = (u - h * 3600 * k - m * 60 * k) / k;
+    return (h ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (r < 10 ? "0" : "") + r.toFixed(digits);
+  }
+
+  return { el, paintFold, fmtLap, fmtRaceClock };
 })();
 Object.freeze(Dom);

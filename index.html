@@ -151,6 +151,20 @@
   try {
     var buildMeta = document.querySelector('meta[name="apex-build"]');
     var loaded = buildMeta ? parseInt(buildMeta.content, 10) : 0;
+    // A SPENT ?b= SHELL BUST LEAVES THE ADDRESS BAR. The reload below (and
+    // UpdateCheck.apply) adds ?b=BUILD so the navigation skips every cached
+    // shell; once this shell is running the bust has done its job, and a tab
+    // left on ?b= was reloaded, restored or bookmarked as a bust for good
+    // (sw.js treats only a b newer than its cached shell as one). Query and
+    // hash survive: ?log= and a #vs= invite must not vanish here either.
+    try {
+      var bq = new URLSearchParams(location.search);
+      if (bq.has("b") && history.replaceState) {
+        bq.delete("b");
+        var bs = bq.toString();
+        history.replaceState(history.state, "", location.pathname + (bs ? "?" + bs : "") + location.hash);
+      }
+    } catch (e) { /* a sandboxed frame may refuse replaceState: the URL keeps b, the worker copes */ }
     // OFFLINE CACHE: register the service worker (sw.js) so the game installs
     // and plays offline after one visit. The query mirrors the shell generation
     // this guard just parsed — a new deploy is therefore a genuinely
@@ -2490,7 +2504,7 @@
         <canvas id="track-detail-elev" width="240" height="48" role="img" aria-label="Elevation profile"></canvas>
       </div>
       <div id="track-detail-drs-wrap" hidden>
-        <div class="tds-subtitle">DRS ZONES</div>
+        <div class="tds-subtitle">AERO ZONES</div>
         <div id="track-detail-drs-list"></div>
       </div>
       <div id="track-detail-corners">

@@ -425,6 +425,8 @@
     "tests/unit/node-plan.test.mjs",
     "tests/unit/nontext-contrast.test.mjs",
     "tests/unit/onboard.test.mjs",
+    "// updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.",
+    "tests/unit/ot-ahead-scan-gate.test.mjs",
     "tests/unit/overtake-mode.test.mjs",
     "tests/unit/pad-haptics.test.mjs",
     "// particles.js dirty latch: parked rain skips expand/upload until eye cell moves.",
