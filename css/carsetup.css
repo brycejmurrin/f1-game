@@ -336,8 +336,8 @@
    grid placement above is play-shape's. MEASURED (layout-audit,
    ios-iphone-portrait 393x659, 2026-10-05, on 42cb42fbf): the tall garage
    kept two tab rows of two-line tabs and a roomy head, and #cs-options was a
-   62 px box over 2832 px (50.7 screens). With the tall --compact-at below the
-   portrait phone takes the compact head and this one 52-tall strip, and the
+   62 px box over 2832 px (50.7 screens). With the portrait --compact-at (the
+   orientation block near the end) the portrait phone takes the compact head and this one 52-tall strip, and the
    list gets ~280 own. Each tab is floored at 52 painted in BOTH axes: ERS and
    FUEL measured 44 and 51 wide in the landscape strip on 42cb42fbf. */
 #cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs {
@@ -921,11 +921,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    row and the action bar. SheetShape converts this to a per-panel zoom cap only
    when the safe viewport cannot afford the user's requested UI size. */
 /* --fit-at by sheet shape (zoom-corrected) not viewport orientation. */
-/* --compact-at 560 on a TALL garage (480 elsewhere, see above): the portrait
-   phone with Safari's bars up (393x659) has 519 own px of room, so it read
-   NORMAL and kept the roomy head and two-line tab rows over a 62 px parts
-   list (layout-audit 2026-10-05). 393x852 at 100% has 696 and stays normal. */
-#cs-inner[data-shape="tall"]             { --fit-at: 340px; --compact-at: 560px; }
+#cs-inner[data-shape="tall"]             { --fit-at: 340px; }
 #cs-inner:not([data-shape="tall"])       { --fit-at: 240px; }
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so the tab strip
    stays horizontal. A 852×393 phone is compact and still wide enough for
@@ -1577,7 +1573,21 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      portrait the sheet stacks ABOVE the row: where the band holds the row (any
      taller phone) nothing changes; where it does not, the row tucks under the
      sheet instead of covering the sheet's own buttons. */
-  #cs-inner { position: relative; z-index: 3; }  /* The two-column stat block, by orientation as well as by shape: a 70%
+  #cs-inner { position: relative; z-index: 3; }
+  /* --compact-at 560 IN A PORTRAIT VIEWPORT (480 elsewhere, beside --pair-at):
+     the phone with Safari's bars up (393x659) has 519 own px of room, so it
+     read NORMAL and kept the roomy head and two-line tab rows over a 62 px
+     parts list (layout-audit 2026-10-05; 229 px with this). 393x852 at 100%
+     has 696 and stays normal.
+     ORIENTATION, NOT data-shape="tall". Keyed on the shape (936478f9a) it
+     also caught a 1000x490 desktop window — a 420x490 sheet reads tall — and
+     moved it from normal + pair to compact + stacked, a state no audit had
+     measured; tests/specs/ui-resize.spec.js then saw DONE off screen right
+     after a live resize into exactly that size (ui run 37264681517, passed
+     on retry). A landscape window keeps the 480 it was measured against, and
+     orientation is an outside fact, so this cannot feed its own input. */
+  #cs-inner { --compact-at: 560px; }
+  /* The two-column stat block, by orientation as well as by shape: a 70%
      sheet on a phone is WIDER than it is tall, so data-shape reads "wide" and
      the four bars stacked one per row cost ~110px the list needed. */
   #cs-inner #cs-stats-inner { grid-template-columns: 1fr 1fr; column-gap: calc(var(--gap) * 0.8); }
