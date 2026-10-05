@@ -52,8 +52,13 @@ survey-*).
 ## Merge-train exclusion — tooling/docs class
 
 #979 / #981 / #969-class (tooling, MCP glue, prompt/AGENTS cleanup, plugin
-install-only) stay off merge-train auto-launch, per-PR resolve lists, sync
-queues, and MERGE-arm batches. Merge on explicit Bryce ask. Batch small
-tooling/doc fixes into one PR before arming. CI red on that class: one optional
-sync+re-run, no swarm. A docs change that ships with player-facing `js/`/`css/`
-stays on the normal train once green.
+install-only) stay off merge-train lists and per-PR resolve swarms. Batch small
+tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
+no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
+the normal train once green.
+
+Specialty bots and cloud agents never enable GitHub auto-merge or merge/squash
+(#986: app/cursor auto-merged a MERGE commit). An armed `autoMergeRequest` is
+disabled and reported to CI Watch. CI Watch is the sole merge pacer and the
+only one who squash-merges when ready. Launch prompts carry the exact line
+`Do not enable auto-merge or merge.`
