@@ -105,9 +105,11 @@ test("a ghost for an unknown circuit is refused", async () => {
   );
 });
 
+// The last sample lands ON the lap time, as a recorded ghost's does (within
+// one sample, js/car/ghost.js): GhostShare binds the claimed time to it.
 const trace = (n, time) => ({
   time,
-  t: Array.from({ length: n }, (_, i) => i * time / n),
+  t: Array.from({ length: n }, (_, i) => i * time / (n - 1)),
   s: Array.from({ length: n }, (_, i) => i * 3.7),
   x: Array.from({ length: n }, (_, i) => (i % 101) / 100),
 });
@@ -363,4 +365,38 @@ test("Phase 1 wires sharing into load order, results, boot/hashchange, HUD, and 
   assert.match(game, /GhostShare\.hasGuest\(\)\s*\?\s*GhostShare\s*:\s*Ghost/);
   assert.match(hud, /GhostShare\.hasGuest\(\)\s*\?\s*GhostShare\s*:\s*Ghost/);
   assert.match(hud, /RIVAL GHOST/);
+});
+
+// ── the claimed time is bound to the trace (2026-10-04) ────────────────────
+// validGhost checked only `time > 0`, so a hand-edited link could show any
+// "best time" against an ordinary trace.
+test("a link whose lap time does not match its own trace is refused", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const g = trace(40, 90);
+  assert.equal(GhostShare.fileExport({ ...g, time: 60 }, { track: "monza" }).ok, false,
+    "a 60 s claim on a trace that ends at 90 s is not exportable");
+  const body = JSON.parse(GhostShare.fileExport(g, { track: "monza" }).text);
+  assert.equal(typeof body.h, "string", "the envelope carries the trace hash");
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, true, "the untouched export decodes");
+  // Edit the time AND the last sample together: still bound, but the hash breaks.
+  const edited = { ...body, time: 80, t: [...body.t.slice(0, -1), 80] };
+  assert.equal((await GhostShare.decode(JSON.stringify(edited))).ok, false, "an edit after export no longer matches h");
+  // Edit the time alone on an old (hashless) link: refused by the binding.
+  const old = { ...body, time: 70 };
+  delete old.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(old))).ok, false, "a hashless link must still bind its time");
+  const oldOk = { ...body };
+  delete oldOk.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(oldOk))).ok, true, "an old link that binds still loads");
+});
+
+test("a thinned link keeps its time bound to the trace", async () => {
+  const { GhostShare } = harness();
+  const long = trace(9000, 135);
+  const r = await GhostShare.encode(long, { track: "spa" });
+  assert.equal(r.ok, true);
+  assert.ok(r.thinned > 0, "precondition: the link copy was thinned");
+  const back = await GhostShare.decode(r.code);
+  assert.equal(back.ok, true, "thinning keeps the last sample, so the time still binds and the hash matches");
+  assert.equal(back.ghost.time, 135);
 });

@@ -61,6 +61,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.394, 0.679],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.1435, 0.1500, 0.2775, 0.3200, 0.3460, 0.7535, 0.7660, 0.8420, 0.9105, 0.9170, 0.9290],
     furniture: { tree: "palm",  fol: [0.18, 0.44, 0.20], lamp: "post",  lc: [1.0, 0.88, 0.62] },  // Rio coconut palm over restinga
     kit: { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "banner" },

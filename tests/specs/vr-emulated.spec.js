@@ -236,8 +236,11 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   expect(last, "expected remoteSample traffic").toBeTruthy();
   expect(last.thr).toBeGreaterThan(0.5);
   expect(last.brk).toBeGreaterThan(0.5);
-  // steerToTilt scales roll; just assert non-zero direction
-  expect(Math.abs(last.roll)).toBeGreaterThan(0);
+  // The thumbstick is a STICK command (Input.remoteSample({ steer })), not a
+  // roll dressed through steerToTilt: no tilt filter, slew or lamp-1 zero.
+  // Left stick at +0.9, past XrRig's 0.12 dead zone: a finite rightward command.
+  expect(last.roll).toBeUndefined();
+  expect(last.steer).toBeGreaterThan(0.5);
   expect(last.held | 0).toBe(1);
   expect(mapped.events).toContain("pause");
 

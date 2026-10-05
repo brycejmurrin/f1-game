@@ -16,6 +16,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 function boot() {
   const listeners = {};
+  const clock = { t: 0 };
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -26,7 +27,7 @@ function boot() {
   const sb = {
     Math, Object, Array, Number, isFinite, JSON, Map, Set, Date, String, RegExp,
     Promise,
-    performance: { now: () => 0 },
+    performance: { now: () => clock.t },
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
     removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
@@ -51,13 +52,14 @@ function boot() {
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
-  return { Input, sb, fire };
+  return { Input, sb, fire, clock };
 }
 
-function attachPad(sb, fire, { effects = ["dual-rumble", "trigger-rumble"], reject = false } = {}) {
+function attachPad(sb, fire, { effects = ["dual-rumble", "trigger-rumble"], reject = false, result = null } = {}) {
   const calls = [];
   const playEffect = (type, params) => {
     calls.push({ type, params });
+    if (typeof result === "function") return result(type, params);
     if (reject) return Promise.reject(new Error("InvalidStateError"));
     return Promise.resolve("complete");
   };
@@ -103,6 +105,7 @@ test("handles / omitted channel stays on dual-rumble even when trigger-rumble ex
   Input.setHaptics(1);
   Input.poll();
   Input.rumble(0.25, 90, "handles");
+  Input.poll();                      // next frame: the mixer plays one effect per frame
   Input.rumble(0.4, 120);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].type, "dual-rumble");
@@ -128,6 +131,7 @@ test("TRIGGER HAPTICS off forces dual-rumble for brake/throttle", () => {
   Input.setTriggerHaptics(false);
   Input.poll();
   Input.rumble(0.8, 90, "brake");
+  Input.poll();
   Input.rumble(0.6, 110, "throttle");
   assert.equal(calls.length, 2);
   assert.equal(calls[0].type, "dual-rumble");
@@ -173,4 +177,104 @@ test("visibility-hidden rejection does not throw", async () => {
   assert.doesNotThrow(() => Input.rumble(0.5, 80, "handles"));
   assert.equal(calls.length, 1);
   await new Promise((r) => setTimeout(r, 20));
+});
+
+/* THE MIXER (2026-10-04). One actuator plays one effect, and a new playEffect
+ * PREEMPTS the running one, so a lock-up trigger pulse and a kerb grip rumble
+ * fired on overlapping cadences used to cut each other short. Every channel
+ * now rides ONE effect per frame, carrying all four motors.
+ * https://developer.mozilla.org/en-US/docs/Web/API/GamepadHapticActuator/playEffect */
+const tick = () => new Promise((r) => setImmediate(r));
+
+test("mixer: a lock-up and a kerb in one frame play together — one effect, both motors", () => {
+  const { Input, sb, fire } = boot();
+  const { calls } = attachPad(sb, fire);
+  Input.setHaptics(1); Input.setTriggerHaptics(true);
+  Input.poll();
+  Input.rumble(0.8, 90, "brake");          // plays at once: no added latency
+  Input.rumble(0.25, 90, "handles");       // same frame: queued into the mix
+  Input.rumble(0.4, 60, "handles");
+  assert.equal(calls.length, 1, "at most one playEffect per frame");
+  Input.poll();                            // next frame flushes the sum
+  assert.equal(calls.length, 2);
+  const mix = calls[1];
+  assert.equal(mix.type, "trigger-rumble");
+  assert.ok(mix.params.leftTrigger > 0.79, "the lock-up survives the kerb");
+  assert.ok(Math.abs(mix.params.strongMagnitude - 0.4) < 1e-9, "the strongest grip pulse wins its motor");
+  assert.ok(mix.params.weakMagnitude > 0, "the kerb survives the lock-up");
+  Input.poll();
+  assert.equal(calls.length, 2, "nothing changed: nothing re-played");
+});
+
+test("mixer: when the shorter pulse ends the longer one is re-played alone", () => {
+  const { Input, sb, fire, clock } = boot();
+  const { calls } = attachPad(sb, fire);
+  Input.setHaptics(1);
+  Input.poll();
+  Input.rumble(0.3, 200, "handles");
+  Input.rumble(0.9, 50, "brake");
+  Input.poll();
+  assert.equal(calls.at(-1).params.duration, 200, "the mix lasts as long as its longest pulse");
+  clock.t = 60; Input.poll();
+  const last = calls.at(-1);
+  assert.equal(last.type, "dual-rumble", "the trigger pulse ended, so did the trigger motor");
+  assert.equal(last.params.duration, 140);
+  assert.ok(Math.abs(last.params.strongMagnitude - 0.3) < 1e-9);
+});
+
+test("mixer: preempted by its own newer effect is the design; preempted by anything else re-plays", async () => {
+  const { Input, sb, fire } = boot();
+  const answers = ["preempted"];          // per call, then "complete"
+  const { calls } = attachPad(sb, fire, { result: () => Promise.resolve(answers.shift() || "complete") });
+  Input.setHaptics(1);
+  Input.poll();
+  Input.rumble(0.5, 300, "handles");       // preempted by someone else
+  await tick();
+  Input.poll();
+  assert.equal(calls.length, 2, "a foreign preemption with a pulse still live re-plays it next frame");
+  await tick(); Input.poll();
+  assert.equal(calls.length, 2, "a completed effect is not re-played");
+
+  answers.push("preempted");               // ours, preempted by our own next frame's mix
+  Input.rumble(0.6, 300, "brake");
+  Input.poll();
+  Input.rumble(0.2, 300, "handles");
+  const n = calls.length;
+  await tick(); Input.poll();
+  assert.equal(calls.length, n, "preempted by our own newer effect: nothing to re-play");
+});
+
+test("mixer: NotSupportedError on trigger-rumble folds the triggers into the grips from then on", async () => {
+  const { Input, sb, fire } = boot();
+  const err = Object.assign(new Error("nope"), { name: "NotSupportedError" });
+  const { calls } = attachPad(sb, fire, { result: (type) => type === "trigger-rumble" ? Promise.reject(err) : Promise.resolve("complete") });
+  Input.setHaptics(1);
+  Input.poll();
+  Input.rumble(0.7, 300, "brake");
+  assert.equal(calls[0].type, "trigger-rumble");
+  await tick();
+  Input.poll();
+  assert.equal(calls.at(-1).type, "dual-rumble", "re-played on the grips");
+  assert.ok(calls.at(-1).params.strongMagnitude > 0.69);
+});
+
+test("Firefox legacy pulse(): a rejection is caught too", async () => {
+  const { Input, sb, fire } = boot();
+  const pulsed = [];
+  const pad = { connected: true, mapping: "standard", id: "Gecko pad", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+    hapticActuators: [{ pulse: (m, d) => { pulsed.push([m, d]); return Promise.reject(new Error("InvalidStateError")); } }] };
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.setHaptics(1);
+  Input.poll();
+  let unhandled = 0;
+  const onRej = () => { unhandled++; };
+  process.on("unhandledRejection", onRej);
+  try {
+    Input.rumble(0.5, 80, "handles");
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(pulsed.length, 1);
+    assert.equal(unhandled, 0, "pulse()'s rejection must be caught inside the mixer");
+  } finally { process.off("unhandledRejection", onRej); }
 });

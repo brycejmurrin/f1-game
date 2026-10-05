@@ -51,6 +51,9 @@ const IncidentSim = (function () {
   // upright landing from a dead stop that would instantly trip rescue.
   const RETAIN_MAX = 0.71;
   const RETAIN_FLOOR = 0.43;
+  // The game's reverse crawl cap (js/physics/consts.js); the literal is the
+  // bare-test-VM fallback, like FIXED_DT above.
+  const REVERSE_MAX = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.REVERSE_MAX) || -5;
   const INVERT_UP_Y = 0.40;
 
   // Deterministic PRNG (mulberry32), seeded purely from game state.
@@ -421,17 +424,39 @@ const IncidentSim = (function () {
               if (w && fin(w.x) && fin(w.z)) { c.px = w.x; c.pz = w.z; }
             }
           } catch (e) { /* c.px/pz keep their prior value */ }
-          // THE CLAMP IS ON THE MAGNITUDE; THE SIGN IS PHYSICS. c.speed < 0 is
-          // a legal state (REVERSE_MAX / REVERSE_ACCEL in game.js, and the
-          // wrong-way and progress checks both read the sign), so handing a car
-          // back through Math.abs turned a rival that the incident left rolling
-          // backwards into one accelerating forwards at up to RETAIN_MAX of its
-          // entry speed. Clamp the magnitude exactly as before, then restore the
-          // direction the sim actually ended on.
-          const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;
-          let outV = fin(c.speed) ? Math.abs(c.speed) : 0;
-          if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
-          c.speed = dir * (fin(outV) ? outV : (inV * RETAIN_FLOOR));
+          // NEVER HAND A CAR BACK RACING BACKWARDS. The RETAIN band is a
+          // FORWARD relaunch: a floor of 0.43× entry speed exists so an upright
+          // landing from a dead stop does not instantly trip rescue. It used to
+          // keep the sign of the settled roll — a wreck at rest with a slight
+          // backward drift (|v| < SETTLE_V, either sign) came back at −0.43×
+          // inV (−30 m/s after a 70 m/s hit), and REVERSE_MAX only clamps the
+          // brake branch in game.js, so it reversed into traffic for seconds.
+          //   - Settled, or moving forward: relaunch FORWARD in the band. A
+          //     settled HUMAN facing back up the road is turned to face it.
+          //   - Still genuinely rolling backwards when the window closed: the
+          //     sign is physics, but the speed is the reverse crawl at most.
+          // An AI car's direction is the ROAD's (it integrates s += speed·dt;
+          // its heading is not its direction of travel), so its signed speed
+          // is the body velocity projected on the tangent, not on its yaw.
+          let tX = NaN, tZ = NaN;
+          try {
+            Tracks.sample(G.track, c.s, G.smp);
+            const t = G.smp && G.smp.t;
+            if (t) { const tl = Math.hypot(t[0], t[2]) || 1; tX = t[0] / tl; tZ = t[2] / tl; }
+          } catch (e) { /* no tangent: fall back to the body's own heading below */ }
+          const haveT = fin(tX) && fin(tZ);
+          const pvx = pose && fin(pose.vx) ? pose.vx : 0, pvz = pose && fin(pose.vz) ? pose.vz : 0;
+          const settled = !pose || !!pose.sleeping || Math.hypot(pvx, pvz) < SETTLE_V;
+          let v = fin(c.speed) ? c.speed : 0;
+          if (!c.human && haveT && pose) v = pvx * tX + pvz * tZ;
+          if (settled || v >= 0) {
+            if (c.human && settled && haveT && fin(c.head) && Math.sin(c.head) * tX + Math.cos(c.head) * tZ < 0) c.head = Math.atan2(tX, tZ);
+            let outV = v > 0 ? v : 0;
+            if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
+            c.speed = fin(outV) ? outV : inV * RETAIN_FLOOR;
+          } else {
+            c.speed = Math.max(REVERSE_MAX, v);
+          }
           c.vLat = 0; c.yawRateCur = 0;
           c.wasOnWall = false; c.rescueT = 0;
         }

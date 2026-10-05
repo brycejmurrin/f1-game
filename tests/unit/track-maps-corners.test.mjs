@@ -157,3 +157,48 @@ test("fitCanvas never commits a 1px transient during layout convergence", () => 
   assert.ok(fit.w > 8 && fit.h > 8, `${fit.w}x${fit.h} is not a useful preview`);
   assert.ok(Math.abs(fit.w / fit.h - TrackMaps.aspect(bahrain)) < 0.05);
 });
+
+// THE ACTIVATION ZONE ACROSS THE LINE. AeroZones.zonesFor starts its straight
+// scan at a corner, so the main-straight zone ends past the lap (end > total).
+// drsZones clamped `b` to 1 and every drawer clamped its last index to n-1, so
+// on 46 of 52 circuits the minimap, the picker map and the HUD strip cut that
+// zone off at the start/finish line (Suzuka drew 80 of 704 m).
+function withAeroZones() {
+  const ctx = loadTrackMaps();
+  const src = fs.readFileSync(path.join(ROOT, "js/physics/aero-zones.js"), "utf8").replace(/^const\b/gm, "var");
+  vm.runInContext(src, ctx, { filename: "js/physics/aero-zones.js" });
+  return ctx;
+}
+
+test("a zone across the start/finish line keeps its full length (b > 1)", () => {
+  const { TrackMaps, Tracks, AeroZones } = withAeroZones();
+  for (const id of ["suzuka", "silverstone", "monza"]) {
+    const def = Tracks.LIST.find((d) => d.id === id);
+    const tr = Tracks.buildCenterline(def, { line: false });
+    const want = AeroZones.zonesFor(tr), got = TrackMaps.drsZones(def);
+    assert.equal(got.length, want.length, `${id}: one map zone per race zone`);
+    assert.ok(got.some((z) => z.b > 1), `${id}: the main-straight zone crosses the line`);
+    got.forEach((z, i) => {
+      const lenM = (z.b - z.a) * tr.total;
+      assert.ok(Math.abs(lenM - want[i].len) < 1e-6, `${id} zone ${i + 1}: map ${lenM.toFixed(1)} m vs race ${want[i].len.toFixed(1)} m`);
+    });
+  }
+});
+
+test("TrackMaps.draw strokes a crossing zone past the line, wrapping to pts[0]", () => {
+  const { TrackMaps, Tracks } = withAeroZones();
+  const def = Tracks.LIST.find((d) => d.id === "suzuka");
+  const strokes = [];
+  let cur = null;
+  const g = {
+    clearRect() {}, beginPath() { cur = { style: g.strokeStyle, n: 0 }; }, closePath() {},
+    moveTo() { cur.n++; }, lineTo() { cur.n++; }, stroke() { strokes.push(cur); },
+    arc() {}, fill() {}, fillText() {}, measureText: () => ({ width: 10 }), save() {}, restore() {}, setLineDash() {},
+  };
+  TrackMaps.draw({ width: 400, height: 300, getContext: () => g }, def, { drs: true, start: false });
+  const m = TrackMaps.outline(def).length;
+  const zones = TrackMaps.drsZones(def);
+  const drawn = strokes.filter((s) => s.style === "rgba(0,220,180,0.85)").map((s) => s.n);
+  const want = Array.from(zones, (z) => Math.floor(z.b * m) - Math.floor(z.a * m) + 1);
+  assert.deepEqual(drawn, want, "every zone is stroked over its whole index span, wrapping % m");
+});

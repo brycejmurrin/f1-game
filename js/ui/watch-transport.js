@@ -74,24 +74,36 @@ const WatchTransport = (function () {
       root.appendChild(caption); document.body.appendChild(root);
       document.body.classList.add("watch-controls-on"); paint();
     }
+    // WRITE ONLY ON CHANGE. paint() runs every 0.1 s; rewriting the same text,
+    // value and aria-valuetext ten times a second is DOM churn, and on the
+    // focused timeline it is a screen reader re-announcing the clock.
+    const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+    const setAttr = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+    const setVal = (el, v) => { if (el.value !== v) el.value = v; };
     function paint() {
       if (!root) return;
       const s = replay.status(); if (!s) { stop(); return; }
-      refs.play.textContent = s.paused ? "▶" : "Ⅱ";
-      refs.play.setAttribute("aria-label", s.paused ? "Play replay" : "Pause replay");
-      refs.play.setAttribute("aria-pressed", String(s.paused));
-      if (!scrubbing) refs.seek.value = String(Math.max(0, s.T));
-      refs.seek.setAttribute("aria-valuetext", clock(s.T) + " of " + clock(s.duration));
-      refs.time.textContent = clock(s.T); refs.speed.value = String(s.speed);
-      if (s.follow) refs.driver.value = s.follow;
+      // PLAY/PAUSE is an action button whose LABEL says what it does — not a
+      // toggle: aria-pressed=paused ("Play replay, pressed") said the opposite,
+      // and painted the button in the pressed red while paused.
+      setText(refs.play, s.paused ? "▶" : "Ⅱ");
+      setAttr(refs.play, "aria-label", s.paused ? "Play replay" : "Pause replay");
+      if (!scrubbing) setVal(refs.seek, String(Math.max(0, s.T)));
+      // The timeline's spoken value follows the clock only while a reader is not
+      // sitting on it during playback: a focused range whose valuetext changes
+      // every second is read every second. Paused, scrubbing or elsewhere: live.
+      const focused = typeof document !== "undefined" && document.activeElement === refs.seek;
+      if (!(focused && !s.paused && !scrubbing)) setAttr(refs.seek, "aria-valuetext", clock(s.T) + " of " + clock(s.duration));
+      setText(refs.time, clock(s.T)); setVal(refs.speed, String(s.speed));
+      if (s.follow) setVal(refs.driver, s.follow);
       const cams = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      if (cams[G.camMode]) refs.camera.value = cams[G.camMode].id;
+      if (cams[G.camMode]) setVal(refs.camera, cams[G.camMode].id);
       const b = s.broadcast;
-      refs.auto.setAttribute("aria-pressed", String(!!(b && b.auto && !b.locked && !b.manual)));
-      refs.lock.setAttribute("aria-pressed", String(!!(b && b.locked)));
-      refs.director.textContent = b && b.locked ? "FOLLOW LOCKED" : b && b.manual && b.auto ? "AUTO IN " + Math.ceil(b.manualRemaining) + "s" : b && b.auto ? "TV DIRECTOR" : "MANUAL CAMERA";
+      setAttr(refs.auto, "aria-pressed", String(!!(b && b.auto && !b.locked && !b.manual)));
+      setAttr(refs.lock, "aria-pressed", String(!!(b && b.locked)));
+      setText(refs.director, b && b.locked ? "FOLLOW LOCKED" : b && b.manual && b.auto ? "AUTO IN " + Math.ceil(b.manualRemaining) + "s" : b && b.auto ? "TV DIRECTOR" : "MANUAL CAMERA");
       const current = desc.events.find((e) => e.t >= s.T - 5);
-      refs.event.textContent = current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : "CHEQUERED FLAG";
+      setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : "CHEQUERED FLAG");
       const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
       refs.prev.disabled = !desc.events.some((e) => e.t - lead < s.T - 1);
       refs.next.disabled = !desc.events.some((e) => e.t - lead > s.T + 1);

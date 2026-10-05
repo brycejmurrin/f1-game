@@ -42,12 +42,41 @@ const FieldLod = (function () {
     const dx = p[0] - eye[0], dy = p[1] - eye[1], dz = p[2] - eye[2];
     return dx * dx + dy * dy + dz * dz;
   }
-  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M), 2 lite wheels and no decal (beyond NO_DECAL_M).
-  function tier(dist2) {
-    if (!on) return 0;
-    return dist2 > sq(T.NO_DECAL_M) ? 2 : dist2 > sq(T.WHEEL_EXTRAS_M) ? 1 : 0;
+  // THE LENS. The thresholds are camera metres at the REFERENCE field of view
+  // (60° vertical, the chase camera's neighbourhood). What a cut has to preserve
+  // is how big the car is ON SCREEN, and that goes as 1/(d·tan(fov/2)): the
+  // trackside / TV cameras close to FOV 18° past ~50 m (js/camera/trackside.js),
+  // where a rival 130 m away fills the frame like one 36 m away at 60° — and
+  // lost its whole livery at 120 m. lensK2(fovY) is the factor on d² that turns
+  // a camera distance into the reference-lens distance with the same projected
+  // size; 1 for a missing or nonsensical fov (callers that do not know it).
+  const REF_HALF_TAN = Math.tan(Math.PI / 6);   // tan(60° / 2)
+  function lensK2(fovY) {
+    if (!(fovY > 0.01 && fovY < 3.1)) return 1;
+    const k = Math.tan(fovY * 0.5) / REF_HALF_TAN;
+    return k * k;
   }
-  function wheelsLite(dist2) { return on && dist2 > sq(T.WHEEL_EXTRAS_M); }
+  // HYSTERESIS. A car hovering at a threshold flipped its decal on and off
+  // every few frames. With `car` given, its last tier is kept on it (car._lodTier)
+  // and a boundary is crossed outward only past +10 % of its distance and back
+  // inward only inside -10 %. Without `car`, the plain table (tests, __apex).
+  const HYST_OUT = 1.1 * 1.1, HYST_IN = 0.9 * 0.9;
+  function crossed(d2, m, beyond, sticky) {
+    if (!sticky) return d2 > sq(m);
+    return beyond ? d2 >= sq(m) * HYST_IN : d2 > sq(m) * HYST_OUT;
+  }
+  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M), 2 lite wheels and no
+  // decal (beyond NO_DECAL_M) — in reference-lens metres when fovY is given.
+  function tier(dist2, fovY, car) {
+    if (!on) return 0;
+    const d2 = dist2 * lensK2(fovY);
+    const prev = car ? car._lodTier : undefined, sticky = prev === 0 || prev === 1 || prev === 2;
+    const t = crossed(d2, T.NO_DECAL_M, prev === 2, sticky) ? 2
+      : crossed(d2, T.WHEEL_EXTRAS_M, prev >= 1, sticky) ? 1 : 0;
+    if (car) car._lodTier = t;
+    return t;
+  }
+  function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
   function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
   function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
@@ -79,6 +108,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, tier, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);

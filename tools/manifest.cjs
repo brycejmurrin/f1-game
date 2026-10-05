@@ -347,6 +347,7 @@ const FULL = [
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
+  "js/ui/live-region.js",    // LiveRegion: the one writer of #announce-live (flag > penalty > save > radio > HUD queue)
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud

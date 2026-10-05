@@ -41,7 +41,7 @@ function load(over = {}) {
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
     isNaN, isFinite, console, DebrisWorld,
     Tracks: {
-      sample: () => {},
+      sample: over.sample || (() => {}),
       wallAt: () => wall,
     },
   });
@@ -242,6 +242,62 @@ test("the shipped handback uses the inverse, not hypot, for speed and vLat", () 
   assert.match(SRC, /c\.vLat = fin\(vSide\)/);
   assert.doesNotMatch(SRC, /const speed = fin\(vHoriz\)/,
     "speed must come from the signed forward component, not the magnitude");
+});
+
+/* ── the handback never returns a car reversing (verify-physics #5) ────────
+ * A settled wreck (|v| < SETTLE_V for SETTLE_HOLD_S) is relaunched FORWARD in
+ * the RETAIN band whatever the sign of its last drift; only a car still
+ * genuinely rolling backwards when the 3 s window closes keeps its sign, and
+ * then at the reverse crawl (REVERSE_MAX, -5 m/s) at most. Before: the sign of
+ * a near-zero settled roll picked the direction, so a slight backward drift
+ * came back at -0.43 x entry speed (-17.2 m/s for these 40 m/s cars).
+ */
+function runToHandback(sim, cars, maxSteps = 400) {
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2, "promoted");
+  let n = 0;
+  while (sim.status().owned > 0 && n < maxSteps) { sim.postStep(1 / 60); n++; }
+  assert.equal(sim.status().owned, 0, `handed back within ${maxSteps} steps`);
+  return n;
+}
+
+test("a settled wreck drifting slightly backwards is handed back FORWARD in the retain band", () => {
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: -1, sleeping: true };
+  const { sim, cars } = load({ pose });
+  const n = runToHandback(sim, cars);
+  assert.ok(n < 60, `settled, not timed out (${n} steps)`);
+  assert.ok(Math.abs(cars[0].speed - 40 * 0.43) < 1e-9, `relaunched forward at the floor (got ${cars[0].speed})`);
+});
+
+test("a car still rolling backwards when the window closes keeps its sign at the reverse crawl", () => {
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: -20 };
+  const { sim, cars } = load({ pose });
+  const n = runToHandback(sim, cars);
+  assert.ok(n >= 170, `the window, not the settle band, ended it (${n} steps)`);
+  assert.equal(cars[0].speed, -5, "capped at REVERSE_MAX, not -0.43..-0.71 x entry speed");
+});
+
+test("an AI spun to face back up the road but travelling forward is handed back forward", () => {
+  // Road tangent +Z; the body is yawed pi (qy = 1) and moving +Z at 12 m/s, so
+  // its BODY-forward speed is -12 — an AI integrates s += speed*dt along the
+  // road, so that sign would drive it backwards into the field.
+  const pose = { x: 0, z: 0, qx: 0, qy: 1, qz: 0, qw: 0, vx: 0, vz: 12 };
+  const sample = (track, s, out) => { out.t = [0, 0, 1]; out.p = [0, 0, s]; out.hw = 7; };
+  const { sim, cars } = load({ pose, sample });
+  runToHandback(sim, cars);
+  assert.ok(cars[0].speed > 0, `AI handed back reversing (${cars[0].speed})`);
+  assert.ok(Math.abs(cars[0].speed - 40 * 0.43) < 1e-9, `in the retain band (got ${cars[0].speed})`);
+});
+
+test("a settled human facing back up the road is turned to face it", () => {
+  const pose = { x: 0, z: 0, qx: 0, qy: 1, qz: 0, qw: 0, vx: 0, vz: 0, sleeping: true };
+  const sample = (track, s, out) => { out.t = [0, 0, 1]; out.p = [0, 0, s]; out.hw = 7; };
+  const { sim, cars } = load({ pose, sample });
+  cars[0].human = true;
+  runToHandback(sim, cars);
+  assert.ok(Math.abs(cars[0].head) < 1e-9, `faces the road (+Z, head 0), got ${cars[0].head}`);
+  assert.ok(cars[0].speed > 0, "and goes forward");
 });
 
 /* ── +vLat is RIGHT in the world, both ways ─────────────────────────────────

@@ -150,10 +150,44 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
-  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2\)\)/);
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)/);
   // lite: the rotating wheel draw, then only the far brake flare (a Particles
   // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
   assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
+});
+
+// ── the lens and the hysteresis (2026-10-04) ───────────────────────────────
+// The thresholds are reference-lens (60°) metres. A trackside / TV camera at
+// FOV 18° sees a rival 130 m away as big as one 36 m away at 60°; it used to
+// strip that car's livery (past 120 m) while it filled the frame.
+const DEG = Math.PI / 180;
+
+test("the LOD scales by the lens: a long lens keeps the livery, a wide one cuts sooner", () => {
+  const { FieldLod: L } = loadLod();
+  assert.equal(L.lensK2(60 * DEG), 1, "the reference lens is the table");
+  assert.equal(L.lensK2(undefined), 1, "no fov: the plain table");
+  assert.equal(L.tier(at(130)), 2, "130 m with no lens: no decal (unchanged)");
+  assert.equal(L.tier(at(130), 18 * DEG), 0, "130 m at 18°: full detail — it projects like ~36 m at 60°");
+  assert.equal(L.tier(at(130), 60 * DEG), 2, "130 m at 60°: the table");
+  const k = Math.tan(18 * DEG / 2) / Math.tan(30 * DEG);
+  assert.equal(L.tier(at(119 / k), 18 * DEG), 1, "just inside 120 reference metres at 18°: the decal stays");
+  assert.equal(L.tier(at(121 / k), 18 * DEG), 2, "just past it: gone");
+  assert.equal(L.tier(at(100), 90 * DEG), 2, "a 90° lens shrinks a car at 100 m below the decal cut");
+  assert.ok(!L.wheelsLite(at(130), 18 * DEG) && L.wheelsLite(at(130)), "the wheel extras take the same lens");
+});
+
+test("hysteresis: a car hovering at a threshold does not flicker between tiers", () => {
+  const { FieldLod: L } = loadLod();
+  const c = {};
+  const walk = (ms) => ms.map((m) => L.tier(at(m), undefined, c));
+  // First look, then wobble ±5 m around 120 m: ±4 %, inside the ±10 % band.
+  assert.deepEqual(walk([118, 122, 117, 123, 119, 121]), [1, 1, 1, 1, 1, 1], "stays with its decal on the way out");
+  assert.deepEqual(walk([133, 125, 115, 110]), [2, 2, 2, 2], "out past +10 %, then held until -10 %");
+  assert.deepEqual(walk([107, 112]), [1, 1], "back inside -10 %, and it holds there");
+  assert.deepEqual(walk([56, 46, 44, 30]), [1, 1, 0, 0], "the 50 m boundary has its own band");
+  assert.equal(c._lodTier, 0, "the last tier lives on the car");
+  const LO = loadLod(0).FieldLod;
+  assert.equal(LO.tier(at(400), 18 * DEG, {}), 0, "apex26.fieldLod = 0 still turns every cut off");
 });
 
 // ── the flap set ────────────────────────────────────────────────────────────

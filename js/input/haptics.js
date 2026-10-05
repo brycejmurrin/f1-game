@@ -2,7 +2,7 @@
 "use strict";
 
 const InputHaptics = (function () {
-  function create({ clamp, activePad, padConnected, remoteActive, remoteHaptics }) {
+  function create({ clamp, activePad, padConnected, remoteActive, remoteHaptics, now }) {
     let hapticScale = 1;
     function setHaptics(v) {
       if (typeof v === "number" && isFinite(v)) hapticScale = clamp(v, 0, 1);
@@ -68,11 +68,41 @@ const InputHaptics = (function () {
       if (typeof navigator === "undefined" || !navigator.vibrate) return;
       try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
     }
+    /* ONE EFFECT PER FRAME PER ACTUATOR — A MIXER, NOT A QUEUE OF RIVALS.
+       An actuator plays one effect at a time and a new playEffect() PREEMPTS
+       the running one (its promise resolves "preempted"). rumble() used to
+       call playEffect directly, and the callers overlap on purpose: a lock-up
+       pulses the left trigger every 0.14 s while a kerb pulses the grips every
+       0.12 s, so each cut the other short and a braking-zone lock-up on a kerb
+       felt like neither. The "trigger-rumble" params carry all four motors
+       (strongMagnitude, weakMagnitude, leftTrigger, rightTrigger), so every
+       channel can ride ONE effect.
+       rumble() records a PULSE (channel motor, magnitude, end time). The first
+       pulse of a frame plays at once (no added latency); later ones that frame
+       mark the mix dirty and flush() — run by Input.poll() at the top of every
+       frame — plays the SUM: the strongest live pulse per motor, for as long as
+       the longest lasts, re-emitted when a shorter one ends. So at most one
+       playEffect per frame, and nothing is cut short by its neighbour.
+       The promise: "preempted" by our OWN newer effect is the design; one
+       preempted by anything else (another page, a reset) with pulses still
+       live re-plays them next frame. A rejection is always caught — an
+       unhandled one paints index.html's full-screen overlay — and
+       NotSupportedError on trigger-rumble folds the triggers into the grips
+       for that actuator from then on.
+       https://developer.mozilla.org/en-US/docs/Web/API/GamepadHapticActuator/playEffect
+       https://w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect
+       (the spec RECOMMENDS a 5 s ceiling on duration: MIX_MAX_MS). */
+    const MIX_MAX_MS = 5000;
+    const pulses = [];             // { motor: "strong"|"weak"|"left"|"right", mag, until }
+    let mixDirty = false, frameEmitted = false, nextChange = 0, mixSeq = 0;
+    let noTrigActuator = null;     // the actuator that refused trigger-rumble
+    const clockMs = typeof now === "function" ? now : () => 0;
+    function addPulse(motor, mag, until) { if (mag > 0) pulses.push({ motor, mag, until }); }
     // Best-effort rumble on the active pad. channel:
     //   "brake"    → left trigger (lock-up) when trigger-rumble is available
     //   "throttle" → right trigger (wheelspin / rear slide)
     //   "handles" / omitted → dual-rumble grip motors (kerbs, contact, wall)
-    // Unsupported trigger-rumble, or TRIGGER HAPTICS off, falls back to dual-rumble.
+    // Unsupported trigger-rumble, or TRIGGER HAPTICS off, falls back to the grips.
     // Silently no-ops where unsupported — note this is EVERY iOS browser:
     // Gamepad.vibrationActuator is false on Safari iOS, so a paired DualSense
     // cannot rumble from a web page and never will. Callers fire vibrate()
@@ -80,56 +110,80 @@ const InputHaptics = (function () {
     function rumble(intensity, ms, channel) {
       if (hapticScale <= 0) return;
       if (!padConnected()) return;
-      const pad = activePad();
-      if (!pad) return;
-      const a = pad.vibrationActuator;
       const mag = clamp(intensity, 0, 1) * hapticScale;
-      const dur = Math.max(0, ms | 0);
-      const wantTrig = triggerHapticsOn && (channel === "brake" || channel === "throttle");
+      const dur = Math.min(MIX_MAX_MS, Math.max(0, ms | 0));
+      if (!(mag > 0) || !dur) return;
+      const t = clockMs(), until = t + dur;
+      if (triggerHapticsOn && channel === "brake") addPulse("left", mag, until);
+      else if (triggerHapticsOn && channel === "throttle") addPulse("right", mag, until);
+      else { addPulse("strong", mag, until); addPulse("weak", mag * 0.7, until); }
+      if (frameEmitted) { mixDirty = true; return; }
+      emit(t);
+    }
+    // Once per frame, from Input.poll(): open the frame and play what changed.
+    function flush() {
+      frameEmitted = false;
+      const t = clockMs();
+      prune(t);
+      if (mixDirty || (nextChange && t >= nextChange)) emit(t);
+    }
+    function prune(t) {
+      for (let i = pulses.length - 1; i >= 0; i--) if (pulses[i].until <= t) pulses.splice(i, 1);
+    }
+    function emit(t) {
+      mixDirty = false; nextChange = 0;
+      prune(t);
+      if (!pulses.length) return;     // the last effect simply runs out
+      const pad = activePad();
+      if (!pad) { pulses.length = 0; return; }
+      frameEmitted = true;
+      const m = { strong: 0, weak: 0, left: 0, right: 0 };
+      let first = Infinity, last = 0;
+      for (const p of pulses) {
+        if (p.mag > m[p.motor]) m[p.motor] = p.mag;
+        if (p.until < first) first = p.until;
+        if (p.until > last) last = p.until;
+      }
+      const duration = Math.max(1, Math.round(last - t));
+      if (first < last) nextChange = first;   // a shorter pulse ends: re-mix then
+      const a = pad.vibrationActuator;
+      const trig = (m.left > 0 || m.right > 0) && a && a !== noTrigActuator && actuatorHas(a, "trigger-rumble");
+      if (!trig && (m.left > 0 || m.right > 0)) {
+        // No trigger motors here (or TRIGGER HAPTICS was on when queued and the
+        // pad cannot): the grips carry it, as the per-call path always did.
+        const tm = Math.max(m.left, m.right);
+        m.strong = Math.max(m.strong, tm); m.weak = Math.max(m.weak, tm * 0.7);
+        m.left = m.right = 0;
+      }
       if (a && typeof a.playEffect === "function") {
-        // playEffect() returns a Promise, so this catch only ever saw a
-        // SYNCHRONOUS throw — and every failure the Gamepad spec defines is a
-        // rejection instead (w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect):
-        // TypeError for bad params, NotSupportedError for an effect type the
-        // actuator cannot play, and — the one that fires in ordinary play —
-        // InvalidStateError whenever the document is not fully active or
-        // `visibilityState === "hidden"`. rumble() fires on every collision,
-        // kerb and gear shift, so a player who alt-tabs or whose phone locks
-        // mid-race lands a rejection in the split second a rumble is in flight,
-        // and index.html's unhandledrejection handler paints a full-screen
-        // overlay over the race on it. Preemption does NOT reject (the spec
-        // RESOLVES the older promise with "preempted"), so the arm below only
-        // ever swallows a real failure.
+        const seq = ++mixSeq;
         try {
-          let p;
-          if (wantTrig && actuatorHas(a, "trigger-rumble")) {
-            p = a.playEffect("trigger-rumble", {
-              duration: dur,
-              leftTrigger: channel === "brake" ? mag : 0,
-              rightTrigger: channel === "throttle" ? mag : 0,
-            });
-          } else {
-            p = a.playEffect("dual-rumble", {
-              duration: dur,
-              strongMagnitude: mag,
-              weakMagnitude: mag * 0.7,
-            });
+          const p = trig
+            ? a.playEffect("trigger-rumble", { duration, strongMagnitude: m.strong, weakMagnitude: m.weak,
+              leftTrigger: m.left, rightTrigger: m.right })
+            : a.playEffect("dual-rumble", { duration, strongMagnitude: m.strong, weakMagnitude: m.weak });
+          if (p && typeof p.then === "function") {
+            p.then((r) => { if (r === "preempted" && seq === mixSeq) mixDirty = true; },
+              (e) => { if (trig && e && e.name === "NotSupportedError") { noTrigActuator = a; mixDirty = true; } });
           }
-          if (p && p.catch) p.catch(() => {});
-        } catch (e) { /* actuator busy or unsupported effect type */ }
+        } catch (e) { /* a bad receiver can still throw synchronously */ }
         return;
       }
       // Firefox never shipped playEffect and exposes the older, non-standard
       // hapticActuators[].pulse() instead — so without this branch every Firefox
       // player had silent controllers while the code looked like it supported them.
+      // It returns a Promise in Gecko too: the try only sees a synchronous throw.
       const legacy = pad.hapticActuators && pad.hapticActuators[0];
       if (legacy && typeof legacy.pulse === "function") {
-        try { legacy.pulse(mag, dur); } catch (e) { /* same */ }
+        try {
+          const p = legacy.pulse(Math.max(m.strong, m.left, m.right), duration);
+          if (p && p.catch) p.catch(() => {});
+        } catch (e) { /* same */ }
       }
     }
 
     return { setHaptics, setTriggerHaptics, triggerHapticsEnabled, hapticsSupported,
-      triggerRumbleSupported, primeHaptics, vibrate, rumble, scale: () => hapticScale };
+      triggerRumbleSupported, primeHaptics, vibrate, rumble, flush, scale: () => hapticScale };
   }
 
   return { create };

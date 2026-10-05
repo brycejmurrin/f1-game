@@ -68,6 +68,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.333, 0.667],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0569, 0.2229, 0.2504, 0.2684, 0.3594, 0.3659, 0.4384, 0.4764, 0.6234, 0.6364, 0.8819, 0.8884, 0.9014, 0.9224],
     furniture: { tree: "stonePine",   fol: [0.13, 0.30, 0.16], lamp: "post",  lc: [1.0, 0.90, 0.66], sparse: true },  // sparse Thracian hillside pine
     kit: { marshal: "kiosk",     rail: "armco",       fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },

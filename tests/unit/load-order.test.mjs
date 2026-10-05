@@ -68,6 +68,29 @@ test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
 // seed and js/roster.js are projections of the manifest; a hand edit inside a
 // generated block, or a manifest edit without a regeneration, shows up here as
 // the first differing line.
+// L8-f: the CSP is generated (tools/gen/gen-shell.mjs CSP), sits before every
+// script it governs, and is the strictest the shell boots under: no script
+// origin but ours and the Spotify SDK, no eval (WASM only), no plugins, no <base>.
+test("the shell's Content-Security-Policy is generated, first, and strict where it can be", async () => {
+  const { CSP } = await import("../../tools/gen/gen-shell.mjs");
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const at = html.indexOf('<meta http-equiv="Content-Security-Policy" content="' + CSP + '">');
+  assert.ok(at > 0, "the generated meta is in the shell");
+  assert.ok(at < html.indexOf("<script"), "before the first <script>, or that script is ungoverned");
+  const dir = Object.fromEntries(CSP.split(/;\s*/).map((d) => { const [k, ...v] = d.split(/\s+/); return [k, v]; }));
+  assert.deepEqual(dir["object-src"], ["'none'"]);
+  assert.deepEqual(dir["base-uri"], ["'self'"]);
+  assert.ok(!dir["script-src"].includes("'unsafe-eval'"), "no eval; Rapier needs only 'wasm-unsafe-eval'");
+  assert.ok(dir["script-src"].includes("'wasm-unsafe-eval'"));
+  const origins = dir["script-src"].filter((s) => /^https?:/.test(s));
+  assert.deepEqual(origins, ["https://sdk.scdn.co"], "the only third-party script is the Spotify SDK");
+  // Every absolute script URL the game injects is allowed by script-src.
+  const spotify = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
+  for (const u of spotify.match(/https:\/\/[a-z.]+\/[\w./-]+\.js/g) || []) assert.ok(origins.includes(new URL(u).origin), u);
+  // The Nostr relays are wss:, the data APIs https: — both inside connect-src.
+  assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
+});
+
 test("every gen-shell block is byte-identical to a fresh generation", () => {
   const drift = genShellStale();
   assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],

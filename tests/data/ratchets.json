@@ -12,9 +12,9 @@
       "lines": 3483
     },
     "js/game.js": {
-      "codeLines": 4824,
+      "codeLines": 4826,
       "gMembers": 287,
-      "lines": 8983,
+      "lines": 8990,
       "topLets": 148
     },
     "js/lighting/presets.js": {
@@ -24,7 +24,7 @@
       "lines": 1948
     },
     "js/render/glx/glx.js": {
-      "lines": 2788
+      "lines": 2820
     },
     "js/track/tracks.js": {
       "lines": 702
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2150,
+      "ceiling": 2152,
       "slack": 25
     },
     "subFloorFontSize": {

@@ -9,7 +9,7 @@
     const {
       Fn, uniform, attribute, texture, materialReference, mrt, renderGroup,
       float, vec2, vec3, vec4,
-      positionGeometry, cameraPosition, normalWorld,
+      positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
 
@@ -226,7 +226,9 @@
     }
 
     // Car decals (DECAL_VS/FS): sun + hemisphere lit so marks sit INTO the
-    // paint's shading; uGlow lifts them at night. Frame uniforms are fx-local
+    // paint's shading; uGlow lifts them at night. opts.lit.decalLight (tsl-lit)
+    // adds the sun-map shadow and the baked floodlight pools on the lit pass's
+    // own uniforms; no lit factory = sun + ambient only, as before. Frame uniforms are fx-local
     // (keyMul-scaled sun + ambientMul-scaled ambient, as glx.js) so the pass
     // keeps working without the lit factory. One material per (texture, glow)
     // pair, cached: ~2 textures/car x 2 glow states.
@@ -255,15 +257,21 @@
     // car's 0.35). The callers use a fixed handful of values, and
     // decalMaterialFor / fxMaterial already key on the same number.
     const _decalGraph = new Map();
+    const DL = (opts && opts.lit && opts.lit.decalLight) || null;
     function sharedDecal(glow) {
       let packed = _decalGraph.get(glow);
       if (!packed) {
         packed = Fn(() => {
+          // The atlas is PREMULTIPLIED (tlx.js createTexture premultiplyAlpha,
+          // ONE / ONE_MINUS_SRC_ALPHA below): t.rgb x light stays premultiplied.
           const t = materialReference("map", "texture").toVar();
-          const N = normalize(vec3(normalWorld).toVar());
+          const N = normalize(vec3(normalWorld).toVar()).toVar();
+          const wp = vec3(positionWorld).toVar();
           const ndl = max(dot(N, U.sunDir), 0.0);
+          const sh = DL && DL.shadow ? DL.shadow(wp, N) : float(1.0);
+          const pool = DL && DL.pool ? DL.pool(wp, N) : vec3(0.0);
           const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
-          const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
+          const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl.mul(sh))).add(pool)).add(t.rgb.mul(glow));
           return vec4(rgb, t.a);
         })();
         _decalGraph.set(glow, packed);
@@ -317,6 +325,7 @@
           }
         }
         m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal-" + glow });   // GLX: cull off, depth write off
+        m.blendSrc = THREE.OneFactor;            // premultiplied atlas (GLX drawDecal ONE / ONE_MINUS_SRC_ALPHA)
         m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
         m.map = tex;
         const packed = sharedDecal(glow);

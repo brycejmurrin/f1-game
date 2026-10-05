@@ -1083,6 +1083,65 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
   }
 });
 
+/* P3 INPUT PASS (2026-10-04): an XR thumbstick is a STICK, not a lean; and a
+ * burst of phone samples delivered in one millisecond is not a duplicate. */
+test("an XR stick steers directly: no tilt filter lag, and lamp 1's calibrate cannot capture it", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ steer: 0.5, thr: 0, brk: 0, held: 0 });
+  assert.ok(Input.remoteSteers(), "a stick sample steers");
+  assert.equal(Input.steer(), 0.5, "the first frame already carries the stick (no One-Euro, no 8/s slew)");
+  Input.calibrate();                               // lamp 1 with the stick held over
+  Input.remoteSample({ steer: 0, thr: 0, brk: 0, held: 0 });
+  assert.equal(Input.steer(), 0, "centred stick is centre: the held deflection was not taken as the race's zero");
+  Input.remoteSample({ steer: -0.8, thr: 0, brk: 0, held: 0 });
+  assert.equal(Input.steer(), -0.8);
+  assert.equal(Input.debugState().remote.stick, -0.8);
+  Input.remoteLost();
+  assert.equal(Input.remoteSteers(), false, "a lost link drops the stick at once");
+});
+
+test("phone samples bunched into one millisecond still reach the filter", () => {
+  const { Input, clock } = bootInput();
+  clock.t = 1000;
+  Input.remoteSample({ seq: 1, roll: 0, thr: 0, brk: 0, held: 0 });
+  clock.t = 1100;
+  Input.remoteSample({ seq: 2, roll: 0, thr: 0, brk: 0, held: 0 });
+  Input.remoteSample({ seq: 3, roll: 20, thr: 0, brk: 0, held: 0 });   // same host millisecond as seq 2
+  // The newer roll entered the filter: steering heads right on the next frames.
+  let v = 0;
+  for (let i = 0; i < 30; i++) { clock.t += 16; v = Input.steer(); }
+  assert.ok(v > 0.1, "the burst's newer roll was applied, not dropped (odt 0 returned the old value): " + v);
+});
+
+// Cold start through the REAL XR seam (vr-emulated.spec.js drives the same
+// path under IWER): one mapFrame -> inject on a fresh Input carries a finite
+// `steer` and NO `roll`, and the first frame's steer/pedals are finite.
+test("XR from a cold start: the first injected stick sample is finite all the way through Input", () => {
+  const { Input, sb, clock } = bootInput();
+  for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
+  const XrInput = vm.runInContext("XrInput", sb);
+  const pad = (axes, buttons) => ({ axes, buttons: buttons.map((v) => ({ value: v, pressed: v > 0.5 })) });
+  const sources = [
+    { handedness: "left", targetRayMode: "tracked-pointer", gamepad: pad([0, 0, 0.9, 0], [0.8, 0, 0, 0, 0, 0]) },
+    { handedness: "right", targetRayMode: "tracked-pointer", gamepad: pad([0, 0, 0, 0], [1, 1, 0, 0, 1, 1]) },
+  ];
+  const seen = [];
+  const real = Input.remoteSample;
+  const spy = { remoteSample: (s) => { seen.push(s); return real(s); }, remoteEvent: Input.remoteEvent };
+  clock.t = 5000;
+  const mapped = XrInput.mapFrame(sources, null);
+  assert.ok(XrInput.inject(spy, mapped));
+  const s = seen[0];
+  assert.ok(Number.isFinite(s.steer) && s.steer > 0.5, "a finite rightward stick: " + s.steer);
+  assert.equal(s.roll, undefined, "no roll: the stick is not dressed as a lean");
+  const steer = Input.steer(1 / 60);
+  assert.ok(Number.isFinite(steer) && steer > 0.5, "the very first frame steers, finite: " + steer);
+  assert.ok(Number.isFinite(Input.throttleLevel()) && Input.throttleLevel() > 0.5);
+  assert.ok(Number.isFinite(Input.brakeLevel()) && Input.brakeLevel() > 0.5);
+  assert.ok(Input.lookingBack(), "squeeze is the look-back hold bit");
+});
+
 test("wheel pedal axes never feed onboard free-look; an ordinary right stick still does", () => {
   const { Input, sb, clock } = bootInput();
   const pad = { index: 0, connected: true, id: "wheel", mapping: "", axes: [0, 0, -1, -1],
@@ -1098,8 +1157,10 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
       clock.t += STEP; Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
     }
     assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "pedal rest and travel leave the view centered");
-    assert.equal(Input.throttleLevel(), (pedal + 1) / 2, "the mapped throttle still drives");
-    assert.equal(Input.brakeLevel(), (pedal + 1) / 2, "the mapped brake still drives");
+    // Pedal travel (pedal + 1) / 2 through input.js's rescaled 0.12 dead zone (padPedalLevel).
+    const lvl = ((pedal + 1) / 2) > 0.12 ? (((pedal + 1) / 2) - 0.12) / 0.88 : 0;
+    assert.ok(Math.abs(Input.throttleLevel() - lvl) < 1e-12, "the mapped throttle still drives");
+    assert.ok(Math.abs(Input.brakeLevel() - lvl) < 1e-12, "the mapped brake still drives");
   }
   Input.setPadAxisMap({ steer: 2, brake: 3 });
   Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);

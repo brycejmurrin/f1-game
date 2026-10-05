@@ -173,7 +173,9 @@ test("XrInput.inject feeds Input.remoteSample / remoteEvent", () => {
     events: ["pause"],
   });
   assert.equal(samples.length, 1);
-  assert.equal(samples[0].roll, 5);
+  // A STICK, not a lean: no steerToTilt, so no tilt filter, slew or lamp-1 recalibration.
+  assert.equal(samples[0].steer, 0.5);
+  assert.equal(samples[0].roll, undefined);
   assert.equal(samples[0].thr, 0.2);
   assert.deepEqual(events, ["pause"]);
 });
