@@ -41,6 +41,16 @@ const Particles = (function () {
   let _vertA = null;          // alpha-blended group (smoke / dust / spray)
   let _vertB = null;          // additive group (sparks)
   const _CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
+  // Dirty latch (audit 2026-10-05 #4): skip CPU expand + GPU upload when the
+  // pool/flares/rain-cell are unchanged. Rain dirties on eye-cell / knob change
+  // (not every falling step) so a parked wet session stops re-uploading.
+  let _dirty = true, _lastPa = 0, _lastPb = 0;
+  let _rainCellX = 0x7fffffff, _rainCellY = 0x7fffffff, _rainCellZ = 0x7fffffff;
+  let _rainKnobKey = "";
+  const RAIN_CELL_M = 2;
+  let _statUpload = 0, _statExpand = 0, _statSkip = 0;
+
+  function markDirty() { _dirty = true; }
 
   function init(gfx) {
     Log.info("game", "Particles.init");
@@ -63,11 +73,14 @@ const Particles = (function () {
     _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
+    _dirty = true; _lastPa = _lastPb = 0;
   }
 
-  function clear() { _n = 0; _flN = 0; }
+  function clear() { _n = 0; _flN = 0; _dirty = true; _lastPa = _lastPb = 0; }
   function count() { return _n; }
   function capacity() { return MAX; }
+  function stats() { return { uploadFloats: _statUpload, expands: _statExpand, skips: _statSkip }; }
+  function resetStats() { _statUpload = 0; _statExpand = 0; _statSkip = 0; }
 
   function mul() {
     if (typeof LightTune !== "undefined" && LightTune.LT && LightTune.LT.particleMul !== undefined)
@@ -114,6 +127,7 @@ const Particles = (function () {
     _a0[i] = alpha;
     _drg[i] = drag; _grv[i] = grav;
     _add[i] = additive ? 1 : 0;
+    _dirty = true;
   }
 
   function tyreSmoke(x, y, z, bvx, bvz, inten, count) {
@@ -202,6 +216,7 @@ const Particles = (function () {
     const o = _flN++ * 8;
     _fl[o] = x; _fl[o + 1] = y; _fl[o + 2] = z; _fl[o + 3] = size;
     _fl[o + 4] = r; _fl[o + 5] = g; _fl[o + 6] = b; _fl[o + 7] = alpha;
+    _dirty = true;
     return true;
   }
   function flareCount() { return _flN; }
@@ -233,6 +248,7 @@ const Particles = (function () {
   function update(dt) {
     if (!_n || !(dt > 0)) return;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport particles
+    _dirty = true;
     for (let i = 0; i < _n; ) {
       _age[i] += dt;
       if (_age[i] >= _life[i]) {
@@ -264,8 +280,21 @@ const Particles = (function () {
     // hanging for the rest of the race until 2026-10-04.
     const rainLive = _rainFed; _rainFed = false;
     if (!_gfx || !_gfx.drawParticles) { _flN = 0; return; }
-    if (!_n && !_flN && !(rainLive && _rainN && _rainOn)) return;
+    if (!_n && !_flN && !(rainLive && _rainN && _rainOn)) {
+      _lastPa = _lastPb = 0;
+      return;
+    }
+    // Clean: re-issue the last upload without expanding (rain-cell / idle pool).
+    if (!_dirty && (_lastPa || _lastPb)) {
+      _statSkip++;
+      if (_lastPa) _gfx.drawParticles(_vertA, _lastPa, false, false);
+      if (_lastPb) _gfx.drawParticles(_vertB, _lastPb, true, false);
+      _flN = 0;
+      return;
+    }
+    _statExpand++;
     let pa = 0, pb = 0;
+    const hadFlare = _flN > 0;
     for (let i = 0; i < _n; i++) {
       const t = _age[i] / _life[i];
       // quick fade-in (kills the "pop"), long fade-out
@@ -299,8 +328,12 @@ const Particles = (function () {
     // The shower rides in the SAME alpha call: TLX keeps one vertex stream per
     // blend group and a second drawParticles() in a frame overwrites the first.
     if (rainLive) pa = rainFill(_vertA, pa);
-    if (pa) _gfx.drawParticles(_vertA, pa, false);
-    if (pb) _gfx.drawParticles(_vertB, pb, true);
+    _lastPa = pa; _lastPb = pb;
+    _statUpload += pa + pb;
+    if (pa) _gfx.drawParticles(_vertA, pa, false, true);
+    if (pb) _gfx.drawParticles(_vertB, pb, true, true);
+    // Flares are one-frame: force a rebuild next draw so they do not stick.
+    _dirty = hadFlare;
   }
 
   // ── RAIN: a falling-streak field around the camera ──────────────────────────
@@ -344,8 +377,31 @@ const Particles = (function () {
   }
 
   // Show/hide without dropping the seed (menus, results sheet, quit).
-  function rainShow(on) { _rainOn = !!on; if (!on) _rainEyeOk = false; }
+  function rainShow(on) {
+    const next = !!on;
+    if (next !== _rainOn) _dirty = true;
+    _rainOn = next;
+    if (!on) _rainEyeOk = false;
+  }
   function rainActive() { return _rainN > 0; }
+
+  function _rainDirtyFromEye(eye) {
+    const cx = Math.floor(eye[0] / RAIN_CELL_M);
+    const cy = Math.floor(eye[1] / RAIN_CELL_M);
+    const cz = Math.floor(eye[2] / RAIN_CELL_M);
+    // Cam-speed buckets keep streak rake/stretch fresh when the eye stays in
+    // cell but velocity changes (parked→pullaway); 4 m/s ≈ one gear of slant.
+    const spdQ = (Math.hypot(_camVel[0], _camVel[1], _camVel[2]) / 4) | 0;
+    const LT = _lt();
+    const key = ((_rainRaining ? 1 : 0) + "|" + _rainShown() + "|" + spdQ + "|" +
+      (LT.rainWind != null ? LT.rainWind : 0) + "|" + (LT.rainSpeed != null ? LT.rainSpeed : 1) + "|" +
+      (LT.rainOpacity != null ? LT.rainOpacity : 1) + "|" + (LT.rainShearWind != null ? LT.rainShearWind : 0.9) + "|" +
+      (LT.rainShearLen != null ? LT.rainShearLen : 2) + "|" + (LT.windDir != null ? LT.windDir : 35));
+    if (cx !== _rainCellX || cy !== _rainCellY || cz !== _rainCellZ || key !== _rainKnobKey) {
+      _rainCellX = cx; _rainCellY = cy; _rainCellZ = cz; _rainKnobKey = key;
+      _dirty = true;
+    }
+  }
 
   function _rainScatter(i) {
     _rox[i] = rnd(RAIN_R);
@@ -380,6 +436,9 @@ const Particles = (function () {
     }
     _rainLastShown = count;
     _rainEyeOk = false;
+    _dirty = true;
+    _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
+    _rainKnobKey = "";
     // The alpha batch must hold the pool AND the shower in ONE call (see draw()).
     const need = (MAX + count) * FLOATS_PER;
     if (!_vertA || _vertA.length < need) _vertA = new Float32Array(need);
@@ -434,6 +493,7 @@ const Particles = (function () {
       if (z > RAIN_R) z -= 2 * RAIN_R; else if (z < -RAIN_R) z += 2 * RAIN_R;
       _rox[i] = x; _roy[i] = y; _roz[i] = z;
     }
+    _rainDirtyFromEye(eye);
   }
 
   // Append the shower's quads to the alpha batch at float cursor `p`; returns
@@ -488,6 +548,6 @@ const Particles = (function () {
   }
 
   return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray,
-           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive };
+           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, stats, resetStats, markDirty };
 })();
 Object.freeze(Particles);
