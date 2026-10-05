@@ -1072,8 +1072,8 @@
           const SHADE = [0.82, 0.84, 0.88];
           const MANE  = [0.88, 0.90, 0.94];
           // Named emit keeps `{ required: true }` inside the landmark-contract
-          // 2200-char window of modelGroup("singapore-merlion" (inline stage
-          // bodies push the opts past that slice).
+          // 2200-char window of the group call (an inline stage body pushes
+          // the opts past that slice).
           const emitMerlion = (stage) => {
             // Round concrete plinth in the splash pool (no coplanar plaza
             // slab — a flat deck fought the pool face at the same y).
