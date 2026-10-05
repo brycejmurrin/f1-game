@@ -456,9 +456,10 @@
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
 /* The garage team card is the only .team-card in a ~260px option pane; the
-   select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap. */
-#cs-team-card .tm-name,
-#cs-team-card .tm-sub {
+   select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap the
+   name/sub spans (not a second .tm-name/.tm-sub definition — that coupling
+   would have to be listed in COMPONENTS.md). */
+#cs-team-card span {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;

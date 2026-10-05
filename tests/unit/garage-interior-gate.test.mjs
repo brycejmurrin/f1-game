@@ -97,7 +97,7 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "pair rail uses a themed scrollbar, not the platform white track");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*padding:[^;]*var\(--pad\)\s+var\(--pad\)/s,
     "pair rail keeps bottom padding so ERS can scroll fully into view");
-  assert.match(css, /#cs-team-card \.tm-sub \{[^}]*white-space:\s*normal/s,
+  assert.match(css, /#cs-team-card span \{[^}]*white-space:\s*normal/s,
     "garage team line wraps instead of ellipsizing the engine");
   assert.match(css, /#carsetup\[data-cs-exit="one"\] #cs-back \{ display: none; \}/);
   assert.match(sheet, /root\.setAttribute\("data-cs-exit", "one"\)/);
