@@ -99,7 +99,10 @@ beside an active Playwright run. UI matrix → `layout-audit.mjs` (not the archi
 ## Load on demand
 
 - Shot / lighting / camera comparison failures → read
-  [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
+  [`references/traps.md`](references/traps.md), or its slice directly:
+  [traps-chrome.md](references/traps-chrome.md) (Playwright vs Chrome MCP),
+  [traps-camera.md](references/traps-camera.md) (`snapCam` / free-cam),
+  [traps-scene.md](references/traps-scene.md) (soft-present / lights / `scene()`).
 - Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →

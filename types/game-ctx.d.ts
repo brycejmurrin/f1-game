@@ -818,6 +818,7 @@ declare const CustomTracks: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
 declare const ShadowPass: GameModuleFactory;
+declare const GaragePrebuild: GameModuleFactory;
 declare const MirrorPass: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;

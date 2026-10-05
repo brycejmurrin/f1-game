@@ -746,6 +746,7 @@ test("Sector M fascia attaches to track-facing walls and canopy fits its declare
     n, px: Array(n).fill(0), pz: Array(n).fill(0), pyMin: 0, out: {}, MAT: Geom.MAT,
     K: s => Math.round(s * n) % n, hash: () => 0.25, onTrack: () => false,
     vadd: Geom.vadd, groundYAt: () => 0, terrainYAt: () => 0,
+    lapBounds: () => ({ cx: 0, cz: 0 }),   // the São Paulo bowl ring centres on it
     anchor: (k, side, gap) => {
       anchors.push({ k, side, gap });
       return { c: [side * (6 + gap), 0, k * 4], r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] };

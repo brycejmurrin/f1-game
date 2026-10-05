@@ -40,11 +40,27 @@ async function library(action, value) {
   try {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction("photos", action === "list" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
-      let result = null;
-      const req = action === "list" ? store.getAll() : action === "delete" ? store.delete(value) : store.put(value);
-      req.onsuccess = () => { result = req.result; };
+      let result = null, failure = null;
+      const req = action === "delete" ? store.delete(value) : store.getAll();
+      req.onsuccess = () => {
+        if (action !== "save") { result = req.result; return; }
+        // Queue every mutation in this active request callback. Readwrite
+        // transactions on the same store serialize across tabs; an await here
+        // would let this transaction become inactive and lose that isolation.
+        try {
+          const photos = req.result.filter((p) => p.id !== value.id).concat(value)
+            .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+          const keep = photos.slice(0, LIMIT);
+          for (const old of photos.slice(LIMIT)) if (old.id !== value.id) store.delete(old.id);
+          if (keep.some((p) => p.id === value.id)) {
+            const put = store.put(value); put.onsuccess = () => { result = put.result; };
+          }
+        } catch (e) { failure = e; tx.abort(); }
+      };
       tx.oncomplete = () => resolve(result);
-      tx.onerror = tx.onabort = () => reject(tx.error || new Error("Photo storage is full or unavailable"));
+      tx.onerror = (e) => { failure = failure || (e && e.target && e.target.error) || tx.error; };
+      // Reject only once abort has finished rolling back the whole write.
+      tx.onabort = () => reject(failure || tx.error || new Error("Photo storage is full or unavailable"));
     });
   } finally { db.close(); }
 }
@@ -178,8 +194,12 @@ function create(G, deps) {
       st.borrowed = null;
     }
     if (deps.onClose) deps.onClose({ restoredPhoto: !!G.photoMode });
+    const target = focus, generation = st.generation;
     if (back && returnTo) returnTo();
-    if (back && focus && focus.isConnected && focus.focus) focus.focus();
+    // Let the caller paint its restored visibility after modal isolation settles.
+    if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!st.open && st.generation === generation && target.isConnected) target.focus();
+    }));
   }
   async function frame() {
     const gfx = G.gfx;
@@ -267,8 +287,7 @@ function create(G, deps) {
       if (blob.size > 3 * 1024 * 1024) throw new Error("This photo is too large. Download the PNG instead");
       const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, thumb: thumbnail(canvas) };
       try {
-        const photos = await library("list"); await library("put", entry);
-        const sorted = photos.sort((a, b) => b.at - a.at); for (const old of sorted.slice(LIMIT - 1)) await library("delete", old.id);
+        await library("save", entry);
         if (gen === st.generation) say("Saved to My Photos on this device.");
       } catch (_) { session.unshift(entry); session.splice(LIMIT); if (gen === st.generation) say("Device storage is unavailable. Saved for this visit; download to keep it."); }
       if (gen === st.generation) await paintLibrary();

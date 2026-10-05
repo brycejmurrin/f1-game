@@ -53,6 +53,33 @@ const DrivingCues = (function () {
     return bestK > 0 ? 1 : -1;
   }
 
+  // Metres ahead of s0 where the called corner ends: from the NEAREST entry of
+  // `side` in the window (first sample with k*side >= K_CALL), walk on until the
+  // turn opens (|k| < K_CALL/2, hysteresis so a double-apex dip stays one turn)
+  // or flips side. Nearest — not sharpest — so a sharper second turn already in
+  // the lookahead does not stretch exit past the first. Capped at one lap / 3 km.
+  const EXIT_STEP_M = 5, EXIT_CAP_M = 3000;
+  function cornerExit(track, s0, lookM, samples, side) {
+    if (!track || typeof Tracks === "undefined" || !(lookM > 0) || !side) return 0;
+    const L = track.total || 1;
+    const n = Math.max(2, samples | 0);
+    let entryD = 0, found = false;
+    for (let i = 1; i <= n; i++) {
+      const dist = lookM * i / n;
+      const k = Tracks.curvature(track, ((s0 + dist) % L + L) % L) * side;
+      if (k >= K_CALL) { entryD = dist; found = true; break; }
+    }
+    if (!found) return 0;
+    const cap = Math.min(L, EXIT_CAP_M);
+    let d = entryD;
+    while (d < cap) {
+      d += EXIT_STEP_M;
+      const k = Tracks.curvature(track, ((s0 + d) % L + L) % L) * side;
+      if (k < K_CALL * 0.5) break;
+    }
+    return Math.min(d, cap);
+  }
+
   let inst = null;
 
   function create(G) {
@@ -60,10 +87,13 @@ const DrivingCues = (function () {
     let level = 1;
     let cfg = fromSlider(level);
     let nextBrakeT = 0, lastMs = 0, lastU = 0;
-    // callArmed: a SAME-side call needs the road to have run straight since the
-    // last one. Distance alone re-called a turn still inside the lookahead every
-    // CALL_COOLDOWN_M (a 400 m sweeper said "L" six times).
-    let lastCallS = null, lastCallSide = 0, callArmed = true;
+    // callArmed: a SAME-side call needs the called turn to be behind the car —
+    // either the window ran straight, or the car has travelled past that turn's
+    // exit (callExitM, metres from lastCallS). Distance alone re-called a turn
+    // still inside the lookahead every CALL_COOLDOWN_M (a 400 m sweeper said "L"
+    // six times); straight-only re-arming missed a second same-side turn after a
+    // straight shorter than the window.
+    let lastCallS = null, lastCallSide = 0, callArmed = true, callExitM = 0;
     let brakeFired = 0, callFired = 0;
 
     function setLevel(v) {
@@ -93,7 +123,7 @@ const DrivingCues = (function () {
       // OFF path: no curvature reads, no audio. Assists-off contract.
       if (!cfg.on || !G || G.paused || G.state !== "race") {
         nextBrakeT = 0; lastU = 0; lastMs = 0;
-        lastCallS = null; lastCallSide = 0; callArmed = true;   // a new race (or a resume) starts with no call pending
+        lastCallS = null; lastCallSide = 0; callArmed = true; callExitM = 0;   // a new race (or a resume) starts with no call pending
         return;
       }
       const p = G.player, track = G.track;
@@ -142,14 +172,23 @@ const DrivingCues = (function () {
 
       // Corner call — once per turn, +k = LEFT.
       const side = cornerSide(track, p.s, look * 0.85, nS);
-      if (side === 0) callArmed = true;   // straight road between: the next turn is a new one
-      else {
+      // Re-arm once the called turn is behind the car (forward arc past callExitM).
+      // Forward-only (fwd < L/2): a rewind/flashback behind lastCallS wraps the
+      // long way (~L) and must not re-arm. side===0 alone is not enough — a
+      // flashback onto the straight before the same turn would re-arm and call it
+      // twice.
+      if (!callArmed && lastCallS != null) {
+        const fwd = ((p.s - lastCallS) % L + L) % L;
+        if (fwd >= callExitM && fwd < L * 0.5) callArmed = true;
+      }
+      if (side !== 0) {
         const ds = lastCallS == null ? Infinity
           : Math.min(Math.abs(p.s - lastCallS), L - Math.abs(p.s - lastCallS));
         if (side !== lastCallSide || (callArmed && ds > CALL_COOLDOWN_M)) {
           lastCallS = p.s;
           lastCallSide = side;
           callArmed = false;
+          callExitM = cornerExit(track, p.s, look * 0.85, nS, side);
           if (G.soundOn && typeof GameAudio !== "undefined" && GameAudio.cornerCall) {
             GameAudio.cornerCall(side > 0 ? "L" : "R");
             callFired++;

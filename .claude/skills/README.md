@@ -48,7 +48,6 @@ stayed separate in the 2026-09-03 pass.
 | **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
 | **webgl-debug** | Blank/dark GLX canvas (GLX is the explicit/fallback backend, not the default), shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL compile/validation failures, device lost, silent fallback to WebGL2. |
-
 | **replay-camera** | WATCH/HIGHLIGHTS camera seeks, follow/exit/reentry anchors; offline fixture then serialized rendered lifecycle probe. |
 | **f1-animation-cameras** | Garage/Flyby/WATCH/replay motion, framing, shot transitions and camera tuners; local game guide and deterministic evidence. |
 
