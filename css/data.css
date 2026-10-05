@@ -168,12 +168,17 @@ body[data-density="compact"] .dh-card {
   border-radius: var(--r-md);
 }
 body[data-density="compact"] .dh-card .sheet-head h2 { font-size: var(--fs-4); }
+/* --tap-paint, not --tap-min (css/tokens.css): on a landscape iPhone (734x343,
+   layout-audit 2026-10-05) --tap-min painted the ✕ — here and on the circuit
+   card, which shares the recipe — at 26x26 and every destination tab 26 tall.
+   --tap-paint is 52 PAINTED px on touch at every UI SIZE (56.7 at full --tap,
+   104 at 200%) and stays --tap-min with a mouse. */
 body[data-density="compact"] .dh-close {
-  width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min);
+  width: var(--tap-paint); height: var(--tap-paint); min-height: var(--tap-paint);
 }
 body[data-density="compact"] .dh-tabs { gap: var(--gap); padding: 0 var(--gap); }
 body[data-density="compact"] .dh-tab {
-  min-height: var(--tap-min); padding: 0 var(--gap); font-size: var(--fs-micro);
+  min-height: var(--tap-paint); padding: 0 var(--gap); font-size: var(--fs-micro);
 }
 body[data-density="compact"] .dh-content { padding: var(--gap); }
 body[data-density="compact"] .dh-loading,

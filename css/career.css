@@ -352,10 +352,19 @@
 #cr-inner[data-density="compact"] #cr-foot {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+/* --tap-paint, not --tap-min: MAIN MENU painted 187x26 on a landscape iPhone
+   (734x343, layout-audit 2026-10-05) — the hub's exits at half the touch
+   floor. --tap-paint is 52 PAINTED px on touch at every UI SIZE and stays
+   --tap-min with a mouse (css/tokens.css), so the foot keeps one row. */
 #cr-inner[data-density="compact"] #cr-foot .bigbtn {
-  width: 100%; min-width: 0; min-height: var(--tap-min);
+  width: 100%; min-width: 0; min-height: var(--tap-paint);
   padding-block: 0; font-size: var(--fs-micro);
 }
+/* SAVE / LOAD CAREER FILE and PROTECT LOCAL SAVES are plain <button>s
+   (js/ui/settings-export.js careerRow) sized only by the base 10px padding:
+   51 tall on a landscape iPhone (layout-audit 2026-10-05), a pixel under the
+   touch floor. Every density — the padding is the same everywhere. */
+#cr-career-file > button { min-height: var(--tap-paint); }
 #cr-inner[data-density="compact"] #cr-meters {
   margin-left: 0;
   width: 100%;
@@ -768,12 +777,18 @@
 #career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
 #career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
 #career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
+/* BACK / DRIVE MY LAP / SIMULATE painted 285x26 on a landscape iPhone
+   (734x343, layout-audit 2026-10-05): the screen's only actions on --tap-min.
+   --tap-paint makes them 52 painted on touch (css/tokens.css); three columns,
+   not two, so the three pre-session buttons share ONE row and the taller
+   floor grows the foot once, not twice. After the session only TO THE GRID
+   shows, spanning all three (below). */
 #quali .sheet[data-density="compact"] #q-foot {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.6);
 }
 #quali .sheet[data-density="compact"] #q-foot .bigbtn {
-  min-height: var(--tap-min); min-width: 0; margin: 0;
+  min-height: var(--tap-paint); min-width: 0; margin: 0;
   padding-block: 0; font-size: var(--fs-micro);
 }
 #quali .sheet[data-density="compact"] #q-foot #q-drive,
