@@ -1346,6 +1346,7 @@
         "tests/specs/menu-survey.spec.js",
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
+        "tests/specs/photo-studio.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",

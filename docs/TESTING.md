@@ -1193,7 +1193,7 @@ what it covers.
 | `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
 | `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
 | `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |
-| `photo-studio.test.mjs` | Real frame crop/export metadata, library limits, input validation and stored background. |
+| `photo-studio.test.mjs` | Real frame crop/export metadata, atomic concurrent save/prune, deterministic library limits, commit/rollback and session fallback, input validation and stored background. |
 | `home-world.test.mjs` | Circuit and actual pit-ribbon camera framing, camera ownership, readiness and bounded/reduced-motion render cadence. |
 | `ui-experience.test.mjs` | Pause race context from actual session state and direct task door/layer contracts. |
 | `smoke.spec.js` | page loads, `__apex` available, race starts, no WebGL error |
@@ -1434,6 +1434,7 @@ what it covers.
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
 | `rotation-recovery.spec.js` | portrait-phone race blocker guidance, focus, controls escape and exit-race recovery |
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
+| `photo-studio.spec.js` | Home shot and camera restoration, native CAPTURE/DONE, portrait/landscape UI 200% hit targets, paused-race scroll isolation, real keyboard accent listboxes, and two-tab native IndexedDB concurrent saves retaining exactly six durable photos. |
 | `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/ui/sheet-shape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |
 | `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
 | `ui-redesign.spec.js` | the redesign foundation in one renderer-light journey: searchable circuits, the Garage's roving tab contract, Settings at 200% on a short landscape phone, Advanced steering `--fit-at`, compact lighting tuner (one scroller, help off), How to Play and Career guide contents rails, standings leftover height, compact HUD density, and fixed-layout Last Race columns at phone portrait width |

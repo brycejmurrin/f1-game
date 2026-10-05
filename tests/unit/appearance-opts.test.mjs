@@ -64,6 +64,8 @@ function load({
         child.parentNode = el;
         return child;
       },
+      focus() { sb.document.activeElement = el; },
+      click() { el._emit("click"); },
       insertBefore(child, ref) {
         const i = ref ? children.indexOf(ref) : -1;
         if (i < 0) children.push(child);
@@ -84,8 +86,8 @@ function load({
         if (sel === ".pm-accent-chip") return children.filter((c) => String(c.className).includes("pm-accent-chip"));
         return [];
       },
-      _emit(type) {
-        for (const fn of listeners[type] || []) fn();
+      _emit(type, event = {}) {
+        for (const fn of listeners[type] || []) fn(event);
       },
     };
     // Per-element style map for chips uses a namespace; root uses bare keys.
@@ -219,7 +221,7 @@ function load({
   vm.runInContext(SRC, ctx, { filename: "js/ui/appearance-opts.js" });
   return {
     M: vm.runInContext("AppearanceOpts", ctx),
-    rows, written, style, dataset, stored, byId, created, mqListeners,
+    rows, written, style, dataset, stored, byId, created, mqListeners, document: sb.document,
     fireMq: () => { for (const fn of mqListeners) fn(); },
   };
 }
@@ -396,6 +398,53 @@ test("swatch click selects the accent", () => {
   assert.equal(written.menuAccent, "cyan");
   assert.equal(M.menuAccent(), "cyan");
   assert.equal(cyan.getAttribute("aria-selected"), "true");
+});
+
+test("each accent list has one tab stop and keyboard focus selects only that list", () => {
+  const { M, byId, written, document } = load();
+  const menu = byId("pm-menuaccent-swatches").children, hud = byId("pm-hudaccent-swatches").children;
+  const current = chips => chips.filter(chip => chip.tabIndex === 0);
+  assert.deepEqual(current(menu).map(chip => chip.dataset.accent), ["brand"]);
+  assert.deepEqual(current(hud).map(chip => chip.dataset.accent), ["team"]);
+  const key = (name, expected, chips) => {
+    let prevented = false, stopped = false;
+    document.activeElement._emit("keydown", { key: name, preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } });
+    assert.equal(prevented, true); assert.equal(stopped, true);
+    assert.equal(document.activeElement.dataset.accent, expected);
+    assert.deepEqual(current(chips), [document.activeElement]);
+    assert.deepEqual(chips.filter(chip => chip.getAttribute("aria-selected") === "true"), [document.activeElement]);
+  };
+  menu[0].focus();
+  key("ArrowRight", "team", menu); key("ArrowDown", "ember", menu);
+  key("ArrowLeft", "team", menu); key("ArrowUp", "brand", menu);
+  key("ArrowUp", "brand", menu); key("End", "custom", menu); key("ArrowDown", "custom", menu);
+  key("Home", "brand", menu);
+  assert.equal(M.hudAccent(), "team"); assert.equal(written.hudAccent, undefined);
+  hud[1].focus(); key("End", "custom", hud); key("Home", "brand", hud);
+  assert.equal(M.menuAccent(), "brand"); assert.equal(M.hudAccent(), "brand");
+});
+
+test("swatches leave Tab and modified shortcuts alone; pointer choice and restoration maintain focus ownership", () => {
+  const { M, byId, document } = load();
+  const menu = byId("pm-menuaccent-swatches").children, hud = byId("pm-hudaccent-swatches").children;
+  menu[0].focus();
+  for (const event of [{ key: "Tab" }, { key: "ArrowUp", isTrusted: false }, { key: "ArrowDown", isTrusted: false },
+    { key: "ArrowRight", ctrlKey: true }, { key: "End", altKey: true },
+    { key: "Home", metaKey: true }, { key: "ArrowDown", defaultPrevented: true }]) {
+    menu[0]._emit("keydown", { ...event, preventDefault() { assert.fail("unowned key was consumed"); }, stopPropagation() { assert.fail("unowned key was stopped"); } });
+    assert.equal(document.activeElement, menu[0]); assert.equal(M.menuAccent(), "brand");
+  }
+  menu[0]._emit("keydown", { key: "ArrowRight", isTrusted: false, preventDefault() {}, stopPropagation() {} });
+  assert.equal(document.activeElement, menu[1]); assert.equal(M.menuAccent(), "team", "pad Right selects the next accent");
+  menu[4].click(); assert.equal(document.activeElement, menu[4]); assert.equal(M.menuAccent(), "cyan");
+  M.restore({ menuAccent: "violet", hudAccent: "lime", menuAccentHex: "#abcdef", hudAccentHex: "#123456" });
+  assert.equal(document.activeElement, menu[5]); assert.equal(menu[5].tabIndex, 0); assert.equal(hud[6].tabIndex, 0);
+  M.setTheme("light"); assert.equal(document.activeElement, menu[5]);
+  const hex = byId("pm-menuaccent-hextext"); hex.focus(); hex.value = "#00ffaa"; hex._emit("input");
+  assert.equal(document.activeElement, hex); assert.equal(menu[7].tabIndex, 0); assert.equal(M.menuHex(), "#00ffaa");
+  M.restore({ menuAccent: "team", hudAccent: "custom", hudAccentHex: "#123456" });
+  assert.equal(document.activeElement, hex); assert.equal(menu[1].tabIndex, 0); assert.equal(hud[7].tabIndex, 0);
+  assert.equal(M.hudHex(), "#123456");
 });
 
 test("hex text field accepts a full #rrggbb and rejects junk", () => {
