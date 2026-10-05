@@ -20,6 +20,14 @@
 
 Chrome setup, renderer probes, A/B ports, post-deploy checks (deploy-research).
 
+## Contents
+- Probing a specific renderer
+- Chrome DevTools MCP — live 3D / __apex debugging
+- Post-deploy liveness check (deploy-research — host fetch, NOT tinyfish)
+- Research recipes (public web — no Chrome)
+- Getting a report off a REAL device (a phone with the bug)
+- Offline capability preflight
+
 ## Probing a specific renderer
 
 `node tools/mcp/mcp-cli.mjs probe` is the shape a renderer question takes. One

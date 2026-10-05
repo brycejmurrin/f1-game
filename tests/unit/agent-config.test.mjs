@@ -587,3 +587,45 @@ test("every agent-memory store declares its schema and how an entry expires", ()
       `${s.name} has a memory store but its frontmatter never declares memory:`);
   }
 });
+
+// ── SKILL REFERENCES: ONE HOP, AND A CONTENTS BLOCK PAST 100 LINES ──────────
+// Anthropic's skill-authoring guide (platform.claude.com/docs/en/agents-and-tools/
+// agent-skills/best-practices, read 2026-10-05): a reference reached through
+// another reference may be previewed with `head -100`, so every reference links
+// directly from SKILL.md, and a reference over 100 lines opens with a table of
+// contents so a partial read still shows its scope. CLAUDE.md, AGENTS.md and
+// SKILL.md load whole on every session or invocation and are NOT covered: a
+// Contents block there spends lines the 200-line target wants back.
+test("every skill reference is linked from its SKILL.md and, past 100 lines, opens with a Contents block", () => {
+  const skillsDir = path.join(ROOT, ".claude/skills");
+  const problems = [];
+  for (const d of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!d.isDirectory() || !exists(`.claude/skills/${d.name}/references`)) continue;
+    const skillMd = read(`.claude/skills/${d.name}/SKILL.md`);
+    const refs = fs.readdirSync(path.join(skillsDir, d.name, "references")).filter((f) => f.endsWith(".md"));
+    for (const ref of refs) {
+      const rel = `.claude/skills/${d.name}/references/${ref}`;
+      if (!skillMd.includes(`references/${ref}`)) problems.push(`${rel}: not linked from SKILL.md (keep references one hop deep)`);
+      const lines = read(rel).split("\n");
+      const n = lines.length - 1;
+      if (n <= 100) continue;
+      let fence = false;
+      const h2 = [];
+      for (const l of lines) {
+        if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+        else if (!fence && /^## /.test(l)) h2.push(l.slice(3).trim());
+      }
+      if (h2[0] !== "Contents") { problems.push(`${rel}: ${n} lines, its first H2 must be "## Contents"`); continue; }
+      const listed = [];
+      for (let i = lines.indexOf("## Contents") + 1; i < lines.length && !/^## /.test(lines[i]); i++) {
+        const m = lines[i].match(/^- (.+)$/);
+        if (m) listed.push(m[1].trim());
+      }
+      const want = h2.slice(1);
+      if (listed.join("\n") !== want.join("\n")) {
+        problems.push(`${rel}: Contents lists [${listed.join(" | ")}] but the H2s are [${want.join(" | ")}]`);
+      }
+    }
+  }
+  assert.deepEqual(problems, [], problems.join("\n"));
+});

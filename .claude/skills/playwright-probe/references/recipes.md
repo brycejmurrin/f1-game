@@ -2,6 +2,14 @@
 
 Load from the SKILL.md index when the task needs this detail.
 
+## Contents
+- UI screens (DOM, not canvas)
+- `apex-capture cameras` — 12 modes, no drift
+- Why one server + Chromium workers
+- Environment gotchas (already handled in the tools — replicate in custom harnesses)
+- Custom-harness skeleton (parent-owned browser)
+- Shared Playwright fixtures (`tests/helpers/fixtures.js`)
+
 ## UI screens (DOM, not canvas)
 
 The menu/setup/results screens are DOM — follow the `tests/specs/ui-audit.spec.js`
@@ -16,15 +24,16 @@ tools start their own server + Chromium; no setup beyond `npm install`.
 
 ## `apex-capture cameras` — 12 modes, no drift
 
-The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/camera/mode-switch.js`):
+The harness hardcodes 12 of the game's **20** `CAM_MODES` (`js/camera/mode-switch.js`):
 `chase`, `far`, `cockpit`, `hood`, `overhead`, `heli`, `reverse`, `side`,
-`cinematic`, `low`, `tcam`, `rear` — **`drift` is omitted**. It also hardcodes
+`cinematic`, `low`, `tcam`, `rear` — **`drift`, `visor`, `trackside`, `rival`,
+`pitwall`, `drone`, `tv`, `helmet` are omitted**. It also hardcodes
 `park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep
 with `previewCam(mode, frac)` (mode FIRST — it is validated first and the call
 silently returns `false` if the arguments are swapped) or a fork of
 `tools/shot/apex-capture.mjs`.
 
-To include **drift**, append it to the `CAMS` array in `apex-capture.mjs` (or
+To include one of them (e.g. **drift**), append it to the `CAMS` array in `apex-capture.mjs` (or
 run a one-off):
 
 ```sh
@@ -103,7 +112,7 @@ try {
   for (const id of TRACKS) { // serialize; never Promise.all browser boots
     const page = await browser.newPage({viewport:{width:844,height:390}});
     try {
-      await installProbeInit(page, {backend:"webgl2"});
+      await installProbeInit(page, {backend:"webgl2"}); // GLX; "three" = TLX (pins tlxForceGL), "webgpu" = WGX
       await page.goto(srv.url);
       await page.waitForFunction(() => window.__apex != null, null, {polling:100,timeout:45000});
       await page.evaluate(t => { __apex.seed(42); __apex.race(t); }, id);

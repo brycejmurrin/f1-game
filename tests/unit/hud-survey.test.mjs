@@ -296,9 +296,18 @@ test("expected-visible rules", () => {
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, true, "phone cockpit keeps speed");
   // A wheel with no LCD (CLASSIC / NONE) drops body.cockpit-cam, but the strip
   // still paints at the cockpit offsets: the touch hide follows the layout set.
-  const classic = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  const classic = E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: false });
   assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
     "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
+  // HELMET is the visor HUD (its own layout set, never cockpit-cam): a touch
+  // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
+  // OT / AERO to their buttons; a desktop helmet shows the lot.
+  const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, false, true],
+    "touch helmet: the visor keeps ENERGY / TYRES / speed");
+  const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
+  assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
+  assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");
   assert.equal(E({ device: "phone-portrait-390x844" }).rotateDevice.want, true);
   const off = E({ off: ["pos", "gear", "limits"] });
   assert.deepEqual([off.pos.want, off.gearbox.want, off.limits.want, off.lap.want, off.speed.want], [false, false, false, true, true]);

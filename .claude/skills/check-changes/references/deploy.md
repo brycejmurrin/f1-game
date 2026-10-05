@@ -35,8 +35,8 @@ What changed underneath it, and why the old steps are gone:
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
 4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
-   branch is protected (a PR with the eight fast-tier checks green, no
-   bypass), so the default mode's direct push fails with GH006. GitHub
+   branch is protected (a PR with the twelve fast-tier checks green; admin
+   tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
    creates the merge commit, so the PR is a real record — a local
    fast-forward auto-closes the PR instead (#67). Auto-merge is attempted;
    if it does not arm, merge the PR yourself once CI is green.

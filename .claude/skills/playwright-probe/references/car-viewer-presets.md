@@ -26,6 +26,7 @@ names. Repeatable customs: `--shot=label,az,el,dist` (keeps ONE Chromium).
   inboard of the wheel; fuel tells (airbox collar vs exhaust ember) are too
   far apart for one tight crop.
 - `livery` — side / front-3-quarter / rear-3-quarter for sponsor placement.
+- `cockpit` — over / ahead / flank, aimed at the tub opening.
 
 ```sh
 node tools/car/render-car.mjs --team=redbull --preset=spine
@@ -60,13 +61,10 @@ shot, columns = tod). Capture is soft `#view` / `#game-soft` → CDP (never
   `--plight=x,y,z,r,g,b,intensity,radius` (repeatable); `--sweep=1`.
 - `--w= --h=` viewport, `--url=` (default `http://127.0.0.1:3456`).
 
-All-teams side batch (`custom` / MY TEAM is runtime-only — grep
-`js/data/teams.js`):
+All-teams side batch — `--team=all` (or a list) walks every roster team in ONE Chromium:
 
 ```sh
-grep -oP 'id: "\K[^"]+' js/data/teams.js | while read -r t; do
-  node tools/car/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
-done
+node tools/car/render-car.mjs --team=all --views=side --out=scratch/renders/cars-grid/
 ```
 
 ## Interactive page
