@@ -70,15 +70,12 @@ materials:
 
 Most of the researched list was already built: the Sphere, the Bellagio hotel
 with its lake and an 18-jet fountain show spread across the full frontage,
-Caesars, the Venetian, the High Roller, the Eiffel replica, and the Harmon
-grandstands. One landmark was missing.
+Caesars, the Venetian, the High Roller, the Eiffel replica / Montgolfier
+balloon, and the Harmon grandstands.
 
-**Paris Las Vegas is a two-landmark resort and only one was modelled.** The
-half-scale Eiffel was there; the enormous ornate **Montgolfier balloon** that
-sits at street level in front of it, carrying the marquee, was not. On the
-Strip the balloon reads *bigger* than the tower does, because it is down at eye
-height on the pavement while the tower is 130 m up and half sky. Built as a
-stacked-frustum envelope in Second-Empire red and gold — widest a third of the
-way up, then closing to the crown — with blue vertical **gore ribs** (the thing
-that makes it a balloon and not a bulb), the basket slung underneath on its
-rigging, and the marquee plinth it stands on.
+**2026-10-05 — Shanghai-style frac drift.** After `startFrac` moved to 0.9899
+with `sceneryStartFrac` held at 0.8575, bare authored fracs (Sphere `K(0.30)`,
+Strip canyon `0.485–0.815`, Caesars/Bellagio/Paris) landed ~0.16 lap early —
+Sphere on Koval, Strip densify on Sands Ave — so the racing Strip read thin
+(PR #928 follow-up). Re-keyed heroes + Strip canyon through `sl()` onto the
+racing frame; registered `tests/data/landmarks/vegas.json`.

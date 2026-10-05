@@ -1,0 +1,10 @@
+{
+  "why": "Las Vegas Strip Circuit heroes — Sphere in the T5–T9 loop, Strip casino cluster (Caesars/Bellagio), Paris Montgolfier balloon, Grand Prix Plaza paddock. High Roller stays required at runtime but its emit body exceeds the 2200-char BATCH-01 window (same carve as Shanghai pudong). Re-keyed onto racing frame 2026-10-05 (Shanghai-style frac drift).",
+  "ids": [
+    "vegas-sphere",
+    "vegas-caesars",
+    "vegas-bellagio",
+    "vegas-paris-balloon",
+    "vegas-grand-prix-plaza"
+  ]
+}

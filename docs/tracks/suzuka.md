@@ -45,7 +45,23 @@ Figure-8 **crossover** (underpass at s≈0.37, bridge at s≈0.82); the high-spe
 - Pavilion roofs at Motopia seat on their `place()` box tops (terrainY), not a ribbon-relative `anchor()` height — the Motopia drop left of S/F disagrees by ~10 m.
 - Giant screens at Casio Triangle + main straight are representative (Japan.gp grandstand map cites large TVs); exact LED dimensions are UNCERTAIN.
 
-## 7. Research pass — the Mie landscape
+## 7. Research pass — Circuit Wheel seat + landmarks (2026-10-05)
+
+Gap pass against Motopia / main-straight photos (Wikimedia Commons Jupiter
+Motopia; Suzuka Circuit 21-09-2024), Esri World Imagery + OSM z15 tiles at
+34.8431, 136.5407, and Wikipedia summary art:
+
+| Gap | Evidence | Fix |
+|---|---|---|
+| Circuit Wheel legs 2.21 m clear of Motopia drop | `ground-audit` unsupported @ scenery:73 | Local `suzuka-circuit-wheel` modelGroup (Zandvoort seat pattern); teal rim from Motopia photo |
+| Hero wheel / main stand missing from landmarks | `tests/data/landmarks/suzuka.json` | Register `suzuka-circuit-wheel` + `suzuka-main-stand-crown` |
+| Shrine bottom tread buried 0.08 m | `ground-audit` buried @ scenery:849 | Lift stone steps +0.12 m |
+
+Deliberately not touched: shared `ferrisWheel` helper, pit floats in
+`pits.js`, mountain-ring "buried" bases (terrain anchors), Motopia coaster
+clutter (still declined — Ferris owns the skyline).
+
+## 8. Research pass — the Mie landscape
 
 Suzuka's built environment was already well covered: the Ferris wheel hero on
 the main straight, the Motopia park behind it, the hotel block, the

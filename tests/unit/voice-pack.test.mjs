@@ -722,3 +722,27 @@ test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (
   assert.equal(desk.d.cacheS, 90);
   assert.equal(desk.d.cache.george.clips, 22, "desktop: the larger budget, still under the 80-clip count bound");
 });
+
+// THE PIT GARAGE STOPS THE RADIO. openPitWork freezes the race behind
+// #carsetup WITHOUT the pause card, so the #pausemenu observer that halts the
+// radio never fires, and the frozen card never ages out: an engineer line, a
+// spotter clip and the hiss bed played on over the garage. halt() is the pause
+// card's own stop — every channel, duck released — and the garage calls it.
+test("the pit garage halts every radio channel the way the pause card does", () => {
+  const r = radio();
+  assert.equal(r.v.say("BOX BOX BOX", 3, "info", 0.5), true);
+  assert.equal(r.v.busy(), true, "precondition: a line is on air");
+  assert.equal(r.ducks.at(-1), true, "precondition: the music is ducked under it");
+  r.packCalls.length = 0;
+  r.v.halt();
+  assert.equal(r.v.busy(), false, "the line is gone");
+  assert.equal(r.ducks.at(-1), false, "the music comes back up");
+  assert.ok(r.packCalls.filter((c) => c === "stop").length >= 2, "the engineer channel and then every channel (the spotter's too) are cut");
+  assert.equal(typeof RadioVoice.inert().halt, "function", "the inert radio carries it, so the call site needs no guard");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = game.slice(game.indexOf("function openPitWork() {"), game.indexOf("function closePitWork() {"));
+  assert.match(body, /paused = true;/, "precondition: found openPitWork");
+  assert.doesNotMatch(body, /setPaused\(/, "precondition: the garage pauses without the card (so the observer cannot help)");
+  assert.ok(body.indexOf("radioVoice.halt();") > 0 && body.indexOf("radioVoice.halt();") < body.indexOf('openGarage("pit")'),
+    "openPitWork halts the radio before the garage opens");
+});
