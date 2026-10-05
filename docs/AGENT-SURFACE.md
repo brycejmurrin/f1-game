@@ -237,7 +237,9 @@ Pins the wrap always applies (you cannot override them):
 - `apex_bump_cache_check` → `--check --json` (never `--apply`)
 - `apex_pick_tests` / `apex_select_specs` → `--json` (never `--bg`)
 - `apex_rotate_markings_check` → `--check` (never `--write`)
-- `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean)
+- `apex_graph_parity` → requires `base` (never vacuous HEAD-vs-clean); `all:true`
+  outlasts the 180 s cap (killed at ~46 of 52 circuits, 2026-10-05), so it starts the
+  `graph_parity_all` job (`BASE` by env, `--all` pinned) and returns its `jobId`
 - `apex_frame_report` → one circuit: `track` must be a `Tracks.LIST` id, `u`
   (numbers in 0..1, ≤ 64) or `frames` (1..120) but not both, `shots` must be an
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
@@ -250,10 +252,14 @@ Pins the wrap always applies (you cannot override them):
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `cam`/`tod`/`frac` are enum- and range-checked,
-  `track` must be a `Tracks.LIST` id, `out` stays under `artifacts/`/`scratch/`
+  `az`/`el`/`dist`/`h` bounded, `track` must be a `Tracks.LIST` id, `out` stays under
+  `artifacts/`/`scratch/`. `h` is metres above the road (eye height on `eye`, aim
+  point on `orbit` — frames a prop far overhead); `el` on `eye` is the pitch
 - `apex_job_start` → `kind` from a fixed list, each with its own argv builder;
   callers pass values (ids, comma lists), never flags; at most two jobs run;
-  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group
+  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group.
+  The reported `log` is the CLI's stdout (its report; the status `tail` reads it),
+  `stderr` the file beside it, both in `artifacts/logs/apex-jobs/`
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
 - `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
 - `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,

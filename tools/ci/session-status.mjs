@@ -102,6 +102,10 @@ export function toMarkdown(s) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log("usage: node tools/ci/session-status.mjs [--json]   # the branch's handoff block for the draft PR body (Markdown, or data)");
+    process.exit(0);
+  }
   const s = collect();
   console.log(process.argv.includes("--json") ? JSON.stringify(s, null, 2) : toMarkdown(s));
 }

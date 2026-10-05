@@ -17,10 +17,14 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // One street circuit and one open circuit: they take different paths through
 // buildTerrain (lats, floor grading, how much road passes close to itself), and
@@ -155,4 +159,35 @@ test("Tracks.bankAngle is banking()'s roll at every node (zandvoort)", () => {
   }
   assert.equal(off, 0, "bankAngle and banking().roll disagree");
   assert.ok(maxDeg > 15, `the planner sees Zandvoort's bowl (max ${maxDeg.toFixed(1)}°)`);
+});
+
+// bankAngle used to wrap banking() (scratch write + smooth branch + atan2 on
+// every flat node). pushLook calls it ~200×/physics step; routing through
+// banking() was measurable waste (~10–13 % of step wall time in the game-vm).
+// The fast path must stay independent of banking() and still match its roll
+// (test above). A revert that re-wraps banking() fails this call-count pin.
+test("Tracks.bankAngle does not call banking() (AI look hot path)", () => {
+  const Tracks = _ctx || (_ctx = buildContext());
+  const tr = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === "monza"), { line: false });
+  let hits = 0;
+  const keep = Tracks.banking;
+  Tracks.banking = function () { hits++; return keep.apply(this, arguments); };
+  try {
+    for (let k = 0; k < tr.n; k++) Tracks.bankAngle(tr, (k + 0.37) * tr.total / tr.n);
+  } finally {
+    Tracks.banking = keep;
+  }
+  assert.equal(hits, 0, `bankAngle must not route through banking() (got ${hits} calls)`);
+});
+
+// Source pin for the updateCar grip path: bankAngle === banking().roll, so the
+// executor must not pay for a second lookup. A Math.max(..., bankAngle(...))
+// re-introduction is the regression this catches.
+test("updateCar bank grip does not re-read bankAngle", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const bankMu = src.indexOf("const bankMu = 1 + Math.sin(bankRoll)");
+  assert.ok(bankMu >= 0, "bankMu site present");
+  const window = src.slice(Math.max(0, bankMu - 400), bankMu + 80);
+  assert.match(window, /bankPhys\s*\?\s*Math\.abs\(bankPhys\.roll\)/, "bankRoll from banking() scratch");
+  assert.doesNotMatch(window, /Tracks\.bankAngle\s*\(/, "no second bankAngle lookup next to bankMu");
 });

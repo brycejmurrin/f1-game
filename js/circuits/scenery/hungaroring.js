@@ -746,4 +746,21 @@
               a + Math.PI / 2, 190 + h * 65, 105 + h * 35,
               22 + h * 10, i % 2 ? HAZE : HAZE2);
       }
+
+      // FIA 2025 preview: the T5 exit grass strip became gravel. Physical T5
+      // is the long RIGHT bend at racing ~0.423, beyond the LEFT T4; its exit
+      // strip is racing-left. The old turn list mislabeled T4 as T5.
+      // Width/gap/endpoints are bounded visual estimates, NOT surveyed 2025
+      // dimensions (the FIA's "last four metres" quote concerns July 2024).
+      // Keep this local ~48 x 3 m margin and its kerb-side separation; do not
+      // replace the whole outfield. Append after existing groundPatch calls
+      // so their drape lift slots remain unchanged.
+      const t5Exit = 0.447, gravelPieces = 6, gravelStep = 8;
+      const sceneryShift = api.def._sceneryShift || 0;
+      for (let i = 0; i < gravelPieces; i++) {
+        const racingFrac = t5Exit + (i - (gravelPieces - 1) / 2) * gravelStep / (n * ds);
+        const authoredFrac = ((racingFrac - sceneryShift) % 1 + 1) % 1;
+        groundPatch(K(authoredFrac), -1, 2.2, [3, 0.08, gravelStep + 0.6], [0.68, 0.62, 0.49],
+                    { id: `hungaroring-t5-exit-gravel-${i}`, kind: "runoff", samples: 2, material: MAT.ROCK });
+      }
     };

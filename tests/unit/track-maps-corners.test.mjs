@@ -202,3 +202,19 @@ test("TrackMaps.draw strokes a crossing zone past the line, wrapping to pts[0]",
   const want = Array.from(zones, (z) => Math.floor(z.b * m) - Math.floor(z.a * m) + 1);
   assert.deepEqual(drawn, want, "every zone is stroked over its whole index span, wrapping % m");
 });
+
+// A custom circuit's id is its content hash, so every saved revision the picker
+// drew stayed in the outline cache for the page: it keeps only what Tracks.LIST
+// still lists (CustomTracks.sync replaces the custom rows) plus the one drawn.
+test("the outline cache drops custom revisions Tracks.LIST no longer lists", () => {
+  const { TrackMaps, Tracks } = loadTrackMaps();
+  const monza = Tracks.LIST.find((d) => d.id === "monza");
+  assert.ok(TrackMaps.outline(monza), "a shipped circuit is cached");
+  for (let rev = 0; rev < 20; rev++) {
+    for (let i = Tracks.LIST.length - 1; i >= 0; i--) if (Tracks.LIST[i].custom) Tracks.LIST.splice(i, 1);   // CustomTracks.sync
+    const def = Object.assign({}, monza, { id: "custom-rev" + rev, custom: true });
+    Tracks.LIST.push(def);
+    assert.ok(TrackMaps.outline(def), "revision " + rev + " draws");
+  }
+  assert.deepEqual([...TrackMaps.cachedIds()].sort(), ["custom-rev19", "monza"], "only the listed revision and the shipped circuit");
+});

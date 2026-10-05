@@ -12,6 +12,8 @@ measure the transition that prompted the change with a deterministic fixture.
 `node tools/check/skill-smoke.mjs --skill f1-animation-cameras --check` exercises
 the local chase-rig contract. Replay transitions use **replay-camera**; camera
 modes and still framing use **playwright-probe** `references/cameras.md`.
+Flyby framing (cover, occlusion, sky, motion) has a no-browser node-VM report:
+`node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`).
 WATCH/HIGHLIGHTS loading the wrong driver or race is **data-hub**. Garage mesh/ownership uses **garage-parts-livery**. The parent owns every
 browser; subagents can inspect fixture, source and recorded evidence.
 

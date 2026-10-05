@@ -73,6 +73,31 @@ test("a host RESULT must be a bijection before its timing mutates any guest car"
   assert.deepEqual(accepted.cars.map((c) => c.finishT), [11, 21, 31]);
 });
 
+test("host RESULT preserves authoritative laps and NC status, with optional fields for older payloads", () => {
+  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const cars = [{ driverId: "winner", lap: 11, classified: true }, { driverId: "guest", lap: 10, classified: true }];
+  let verdict;
+  const netPlay = { active: () => true, ownsClassification: () => true, reportResult: (rows) => { verdict = rows; } };
+  const ctx = vm.createContext({ cars, netPlay });
+  vm.runInContext(netOrderSource, ctx);
+  cars[1].lap = 8; cars[1].classified = false;
+  vm.runInContext("netOrder(cars)", ctx);
+  assert.equal(verdict[1].classified, false); assert.equal(verdict[1].lap, 8);
+  // The guest's delayed pose had crossed another line and locally qualified.
+  cars[1].lap = 10; cars[1].classified = true;
+  netPlay.ownsClassification = () => false; netPlay.peerResult = () => verdict;
+  vm.runInContext("netOrder(cars)", ctx);
+  assert.equal(cars[1].lap, 8); assert.equal(cars[1].classified, false);
+  verdict = [{ d: "winner" }, { d: "guest" }];
+  vm.runInContext("netOrder(cars)", ctx);
+  assert.equal(cars[1].lap, 8); assert.equal(cars[1].classified, false, "absent fields preserve the existing verdict");
+  for (const field of [{ classified: "false" }, { lap: -1 }, { lap: 2.5 }, { lap: 256 }]) {
+    verdict = [{ d: "winner", lap: 1, classified: false }, { d: "guest", ...field }];
+    vm.runInContext("netOrder(cars)", ctx);
+    assert.equal(cars[0].lap, 11); assert.equal(cars[0].classified, true, "the entire verdict validates before any mutation");
+  }
+});
+
 /** A session NetPlay can bind to, with a hand-fed inbound event channel. */
 function fakeSession() {
   const handlers = new Map();
@@ -242,8 +267,11 @@ test("a GUEST obeys a RESULT from the host", () => {
 
 test("a malformed host RESULT does not end the guest's classification wait", () => {
   const { net, s } = started("guest");
-  s.deliver("result", [{ d: "drv0" }, { d: "drv0" }]);
-  assert.equal(net.peerResult(), null);
+  for (const rows of [[{ d: "drv0" }, { d: "drv0" }],
+    [{ d: "drv0", classified: "false" }, { d: "drv1" }],
+    [{ d: "drv0" }, { d: "drv1", lap: -1 }]]) {
+    s.deliver("result", rows); assert.equal(net.peerResult(), null);
+  }
   assert.equal(net.awaitingResult(1000), true);
 });
 
@@ -1051,6 +1079,62 @@ test("a guest seats the host's AI as host-owned remotes and poses them from the 
   assert.equal(net2.start({ role: "guest", session: stateSession(), hostAi: false }).ok, true);
   assert.equal(net2.owns(G2.cars[2]), false);
   net.stop(); net2.stop();
+});
+
+test("the host's actual AI retirement reaches a guest, including one that binds after it happened", () => {
+  const host = poseG(3), guest = poseG(3);
+  host.track.def = guest.track.def = { id: "monza" };
+  guest.cars[0].local = guest.cars[0].human = false;
+  guest.cars[1].local = guest.cars[1].human = true; guest.player = guest.cars[1];
+  const hn = NetPlay.create(host), gn = NetPlay.create(guest), hs = stateSession(), gs = stateSession();
+  hn.start({ role: "host", session: hs }); gn.start({ role: "guest", session: gs });
+  const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
+  hs.deliver("model", gm); gs.deliver("model", hm);
+  // Execute the game's real sender, not a reproduction of its local/host gate.
+  vm.runInNewContext(fnSource(src("js/game.js"), "function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
+    car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
+    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
+    clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
+    OvertakeMode: { reset() {} }, announce() {}, soundOn: false,
+  });
+  const event = hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").at(-1);
+  assert.ok(event, "the host sends an AI retirement immediately");
+  assert.equal(event.d.epoch, gm.epoch, "state belongs to the receiver's race");
+  gs.deliver(event.t, event.d);
+  assert.equal(guest.cars[2].retired, true);
+  assert.equal(guest.cars[2].dnf, "engine");
+  assert.equal(guest.cars.filter((c) => !c.retired).includes(guest.cars[2]), false, "the game's ranked/collision filter excludes it");
+  assert.equal(gn.owns(guest.cars[2]), true, "the parked car is still posed by its host");
+  gs.feed(10000, 2, lapPose(1200), 10000); gn.tick(10000);
+  assert.equal(guest.cars[2].retired, true, "an older unreliable pose cannot resurrect terminal state");
+  // A new receiver epoch simulates late binding/rejoining after the DNF event.
+  const late = poseG(3); late.track.def = { id: "monza" };
+  const ln = NetPlay.create(late), ls = stateSession(); ln.start({ role: "guest", session: ls });
+  hs.deliver("model", ls.sent.find((e) => e.t === "model").d);
+  hs.sent.length = 0; hn.tick(10000);
+  const repeated = hs.sent.find((e) => e.t === "lap" && e.d.driverId === "drv2");
+  assert.ok(repeated, "the existing reliable sync repeats terminal AI state");
+  ls.deliver(repeated.t, repeated.d);
+  assert.equal(late.cars[2].retired, true);
+  hn.stop(); gn.stop(); ln.stop();
+});
+
+test("AI retirements require the host and the current receiver epoch", () => {
+  const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+  net.start({ role: "guest", session: s });
+  const epoch = s.sent.find((e) => e.t === "model").d.epoch;
+  const retirement = { driverId: "drv2", code: "D2", lap: 1, retired: "engine", invalid: true };
+  for (const d of [retirement, { ...retirement, epoch: "previous-race" }]) {
+    s.deliver("lap", d); assert.equal(!!G.cars[2].retired, false);
+  }
+  s.deliver("lap", { ...retirement, epoch }); assert.equal(G.cars[2].retired, true);
+  net.stop();
+  const host = poseG(3), hn = NetPlay.create(host), hs = stateSession();
+  hn.start({ role: "host", session: hs });
+  hs.deliver("lap", { ...retirement, epoch: hs.sent.find((e) => e.t === "model").d.epoch });
+  assert.equal(!!host.cars[2].retired, false, "a guest cannot retire host AI");
+  assert.equal(!!host.cars[1].retired, false, "nor can the spoof retire another car by accident");
+  hn.stop();
 });
 
 test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire when it speaks; the race session waits 25 s", () => {

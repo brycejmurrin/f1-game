@@ -1069,6 +1069,23 @@ test("two rival voices still give a LEFT and a RIGHT", async () => {
   assert.ok(l.gain > 0 && r.gain > 0, "both alongside cars must be audible");
 });
 
+test("on two voices a car bound to slot 3 takes the free voice, not silence", async () => {
+  // RivalAudio binds A-D to slots 0-3. A drops out of the nearest four; the
+  // nearest two are B (slot 1) and C (slot 3). B takes voice 1; C's slot is out
+  // of range on a phone and its rank fallback (1) is B's — it used to be
+  // dropped while voice 0 sat idle.
+  const { GameAudio: A, release } = boot({ mobile: true });
+  A.init(); await release(); A.startEngine();
+  A.setRivals([
+    { lat: 4, arc: 2, rev: 0.7, approach: 0, slot: 1 },    // B, on your right
+    { lat: -4, arc: 3, rev: 0.7, approach: 0, slot: 3 },   // C, on your left
+  ]);
+  const [v0, v1] = A.rivalState();
+  assert.ok(v1.gain > 0 && v1.pan > 0.3, `B keeps its bound voice 1 (gain ${v1.gain}, pan ${v1.pan})`);
+  assert.ok(v0.gain > 0, "C must be audible on the free voice 0, not muted");
+  assert.ok(v0.pan < -0.3, `C on voice 0 is still on your left (pan ${v0.pan})`);
+});
+
 test("IDLE and REV RANGE reach a low idle AND a high redline at once", async () => {
   // The complaint that started the redesign: PITCH scaled both ends of the
   // curve, so a low, grumbling idle could only be bought by dragging the whole

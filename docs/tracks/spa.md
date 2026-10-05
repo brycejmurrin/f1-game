@@ -31,6 +31,32 @@ it does not establish surveyed grades or exact trackside elevations. Confirm
 plan scale, road heights and landmark footprints independently before making
 survey-level accuracy claims.
 
+Spa opts into `terrainFalloffStart: 54` at its existing 90 m terrain-ribbon
+width. Beyond 54 m from the road edge, the shared surface profile distributes
+the descent toward the distant floor across the remaining ribbon instead of
+reserving it for the final 18%. The near-road profile, lateral rail count,
+pit flattening and 64 road-elevation knots remain unchanged. This is a bounded
+visual terrain approximation, not an off-track survey. The 54 m start preserves
+the middle foreground pine ranks; nearby road-channel
+clipping still takes precedence and can leave steep faces at crossing legs.
+Wider ribbons require separate grounding and overlap measurements.
+Existing campsite units and chalets sample their own footprints when seating
+on this terrain. Raised floors carry stone supports down to the hillside,
+and their declared bounds include each complete support and embedded foot;
+locations, colors and campsite layouts remain authored approximations.
+The La Source campsite moves from authored .075 to .065, keeping its 40 m
+gap, side and eight-unit layout. Its original .075 source node still keys
+unit choices, colors and IDs. This bounded clearance adjustment keeps the
+units outside the nearby road's footprint; the location is an authored
+estimate, not a surveyed campsite position.
+
+The two existing mixed Pouhon belts opt into lobed broadleaf crowns, limited
+to 30 accepted substitutions per side. Their pine fraction, height ranges,
+spacing and placement hashes stay unchanged; rejected or excess candidates
+use the legacy tree. The existing Blanchimont marshal shelter opts into
+opaque structural detail within its original placement and envelope. These
+are procedural detail pilots, not surveyed species or building reconstructions.
+
 ## 1. Setting
 Carved into the hilly Ardennes forest of eastern Belgium. Roads thread through dense pine and deciduous woodland on steep terrain. Notoriously changeable weather — often misty, damp, and wet even when one part of the track is dry.
 
