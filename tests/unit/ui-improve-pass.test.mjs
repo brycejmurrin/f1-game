@@ -446,9 +446,11 @@ test("high-scale settings and Last Race retain useful local width", () => {
   assert.equal(decl(data, ".dh-table", "table-layout"), "fixed");
   assert.ok(!declares(data, ".dh-td-driver", "display", "flex"),
     "a table cell must not opt out of the fixed table layout");
-  assert.equal(decl(data, ".dh-td-driver", "overflow-wrap"), "break-word",
+  assert.equal(decl(data, ".dh-td-driver", "overflow-wrap"), "normal",
     "driver names wrap at spaces, not mid-word");
-  assert.equal(decl(data, ".dh-td-driver .dh-name", "overflow-wrap"), "break-word");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "overflow-wrap"), "normal");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "display"), "block",
+    "the surname sits under the chip so VERSTAPPEN keeps a full cell");
   assert.ok(!declares(data, ".dh-td-driver", "overflow-wrap", "anywhere"));
   assert.equal(decl(data, ".dh-cons-main .dh-name", "flex"), "0 1 auto",
     "live/constructor names do not grow and park the team on the far right");

@@ -428,18 +428,21 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* chip + driver name side by side in the driver cell */
 .dh-td-driver {
   min-width: 0; overflow: visible; text-overflow: clip; white-space: normal;
-  /* Spaces only — `anywhere` split VERSTAPPEN to VERSTAPPE / N. */
-  overflow-wrap: break-word; word-break: normal;
+  /* Spaces only — `anywhere` / `break-word` split VERSTAPPEN to VERSTAPPE / N
+     when the chip left too little inline room. Name sits under the chip so
+     the surname gets the full cell. */
+  overflow-wrap: normal; word-break: normal;
+  width: 28%;
 }
 .dh-td-driver .dh-codechip { display: inline-flex; margin-right: calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-driver .dh-name {
-  display: inline; min-width: 0; white-space: normal;
-  overflow-wrap: break-word; word-break: normal;
+  display: block; min-width: 0; white-space: normal;
+  overflow-wrap: normal; word-break: normal;
 }
 .dh-td-team {
   color: var(--dim); font-size: var(--fs-2); width: 100px; max-width: 100px;
   overflow: visible; text-overflow: clip; white-space: normal;
-  overflow-wrap: break-word; word-break: normal;
+  overflow-wrap: normal; word-break: normal;
 }
 .dh-td-grid { width: 30px; text-align: center; color: var(--dim); }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
@@ -892,7 +895,7 @@ body[data-width="narrow"] .dh-td-driver .dh-name,
 body[data-density="compact"] .dh-td-driver .dh-name {
   white-space: normal;
   word-break: normal;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
 }
 
 /* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
