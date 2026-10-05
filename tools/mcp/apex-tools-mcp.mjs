@@ -1944,8 +1944,47 @@ const HUD_RESULT_SCHEMA = {
     sheets: { type: "array" },
   },
 };
+// Per-tool shapes, measured from real calls on 2026-10-05 (docs/notes/
+// AGENT-SURFACE-SURVEY-2026-10-05.md §8). Every CLI wrap returns the runSpawn
+// envelope {ok, exit, argv, stdout, stderr, out, durationMs}; `out` is the
+// CLI's --json object (null when the CLI printed none). Nothing is `required`
+// because a refusal body ({ok:false, error, message, fix}) and a dryRun body
+// ({ok, dryRun, argv}) share the tool; `additionalProperties: true` because a
+// CLI may grow a key before this map does. The test validates real results.
+const CLI_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: { ...RESULT_SCHEMA.properties, exit: { type: "number" }, stdout: { type: "string" }, stderr: { type: "string" },
+    out: { type: ["object", "null"] } },
+};
+const cliOut = (properties, type = ["object", "null"]) => ({
+  ...CLI_RESULT_SCHEMA,
+  properties: { ...CLI_RESULT_SCHEMA.properties, out: { type, properties, additionalProperties: true } },
+});
+const S = (type) => ({ type });
+const OUTPUT_SCHEMAS = {
+  apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
+    testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+  apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
+  apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
+  apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
+    shards: S("array"), cap: S("object"), testsSelected: S("number"), testsFit: S("number"), secSelected: S("number"), secFit: S("number") }),
+  apex_session_status: cliOut({ at: S("string"), branch: S("string"), base: S("string"), upstream: S("string"), ahead: S("number"),
+    behind: S("number"), unpushed: S("number"), sessions: S("array"), commits: S("array"), dirty: S("array"), logs: S("array"),
+    live: S(["object", "null"]) }),
+  apex_bump_cache_check: cliOut({ consistent: S("boolean"), mode: S("string"), tagCount: S("number"), assetMismatches: S("array"),
+    shellBuild: S("number"), versionJson: S("number") }),
+  apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
+    touched: S("array") }),
+  apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
+    float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
+    message: S("string"), fix: S("string") } },
+  apex_hud_shot: HUD_RESULT_SCHEMA,
+  apex_hud_survey: HUD_RESULT_SCHEMA,
+};
 function toolOutputSchema(entry) {
-  return /^apex_hud_(shot|survey)$/.test(entry.name) ? HUD_RESULT_SCHEMA : RESULT_SCHEMA;
+  return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
 }
 
 function listTools() {

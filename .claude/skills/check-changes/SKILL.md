@@ -5,6 +5,13 @@ description: "Use when asked did I break anything, run or pick the right tests f
 
 # Validate changes before committing/pushing
 
+## This tree, right now
+
+Live selection, run when the skill loads (Claude Code expands the line; Cursor and
+Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
+
+!`node tools/ci/pick-tests.mjs 2>&1 | head -24`
+
 ## Prerequisites
 
 `--fast` needs only Node modules; browser batches need the headless shell.
