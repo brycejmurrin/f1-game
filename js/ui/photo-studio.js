@@ -79,7 +79,7 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
-  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0 };
+  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, focus = null, libraryPaint = 0;
   const mk = (tag, props, kids) => {
@@ -107,10 +107,21 @@ function create(G, deps) {
   const group = (title, kids) => mk("section", { attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
+  // SUBJECT: the Home door opens on whatever the Home scene shows, and the
+  // default scene is the garage, so the circuit shoot (free camera over the
+  // track) was reachable only by changing Appearance › Scene · Home first.
+  // The row hands the pick to the door (opts.subject), which swaps the Home
+  // world for this visit and reopens the studio; the stored scene is untouched.
+  const subjectValue = () => (isGarage() ? "garage" : "circuit");
+  const subjectRow = select("Subject", [["garage", "Garage"], ["circuit", "Circuit"]], subjectValue,
+    (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
+  const subjectGroup = group("SUBJECT", [subjectRow,
+    mk("p", { className: "adv-help", textContent: "Your car in the garage, or the free camera on the circuit. Your Home scene stays as it is." })]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
+      subjectGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
@@ -152,6 +163,7 @@ function create(G, deps) {
     if (st.open) close(false);
     last = null; E["ps-preview"].hidden = true;
     st.source = opts.source || "race"; st.metadata = opts.metadata || {}; st.back = typeof opts.back === "function" ? opts.back : null;
+    st.subject = typeof opts.subject === "function" ? opts.subject : null;
     focus = document.activeElement;
     if (isGarage()) {
       if (!deps.garage) return false;
@@ -167,6 +179,8 @@ function create(G, deps) {
       if (fc.setOverlaysVisible) fc.setOverlaysVisible(false);
     }
     st.open = true; st.generation++; root.hidden = false;
+    subjectGroup.hidden = !st.subject;
+    if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
     E["ps-context"].textContent = text(st.metadata.title || (isGarage() ? "Your garage" : G.track && (G.track.name || G.track.id)) || "Race photo");
     E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.";
@@ -332,7 +346,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, source: st.source, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
+  function state() { return { open: st.open, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
   const api = { open, close, capture, state, background, setBackground, exportPhoto, savePhoto };
   live = api; busy(false); return api;
 }
