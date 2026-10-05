@@ -8589,7 +8589,7 @@ function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
   paused = true;
-  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
   openGarage("pit");
 }
 /** Back to the race. Called by BOTH garage exits — there is no "cancel" here

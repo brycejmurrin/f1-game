@@ -2110,8 +2110,10 @@ const GameAudio = (function () {
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up
-    // to 25% down for the rest of the race.
-    if (!sfxEnabled) soundtrack.releaseEngineDuck(now(), false);
+    // to 25% down for the rest of the race. And the way stopEngine() does it:
+    // a radio line still on air keeps ITS duck — `false` here released that too,
+    // so SFX OFF during a radio TEST put the music back over the voice.
+    if (!sfxEnabled) soundtrack.releaseEngineDuck(now(), true);
     return sfxEnabled;
   }
   function volumes() { return { sfx: sfxVol, music: soundtrack.volume() }; }
