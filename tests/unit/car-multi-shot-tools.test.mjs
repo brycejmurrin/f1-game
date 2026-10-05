@@ -70,6 +70,24 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
     "no raw page.screenshot — that hung under SwiftShader");
 });
 
+test("garage-angles --aero walks same-camera corner/straight without stealing the view", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /"--aero"/, "--aero is an OWN_FLAG, not a livery field");
+  assert.match(src, /function parseAero/, "corner/straight aliases");
+  assert.match(src, /keepCam:\s*true/, "setSetupAero must not steal wingRear after framing");
+  assert.match(src, /aero\$\{cap\(c\.aero\.key\)\}/, "filename encodes the mode");
+  const r = spawnSync(process.execPath, [
+    "tools/shot/garage-angles.mjs", "--plan", "--json",
+    "--views=wingRear", "--aero=corner,straight", "--team=ferrari",
+  ], { cwd: ROOT, encoding: "utf8", timeout: 8000 });
+  assert.equal(r.status, 0, r.stderr);
+  const plan = JSON.parse(r.stdout);
+  assert.deepEqual(plan.cams.map((c) => c.key), ["wingRear_aeroCorner", "wingRear_aeroStraight"]);
+  assert.equal(plan.cams[0].aero.on, false);
+  assert.equal(plan.cams[1].aero.on, true);
+  assert.equal(plan.shotCount, 2);
+});
+
 test("garage-angles --help exits 0 without launching Chromium", () => {
   // Regression 2026-10-01: bare --help was silently ignored and ran the
   // default McLaren spine shoot (~2.5 min). Must stay side-effect-free.

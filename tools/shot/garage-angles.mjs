@@ -4,7 +4,7 @@
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--part.engine=turbo,stock]
 //     [--design='[{"spineLogo":"wrap"},…]'|@file.json] [--zip] [--base=<liveryId>] [--against=HEAD~1]
 //     [--az=60deg,90deg|50deg..130deg:9] [--el=0.1,0.35] [--dist=6,9] [--zoom=8,4] [--pan=2,0;4,0]
-//     [--cam=bay,bayFront|side:1.2,0.3,7;…] [--target=crown,fin,wall|x,y,z] [--lamp=side,off]
+//     [--cam=bay,bayFront|side:1.2,0.3,7;…] [--target=crown,fin,wall|x,y,z] [--lamp=side,off] [--aero=corner,straight]
 //     [--az-nudge=-1] [--el-nudge=1] [--viewport=1280x720,844x390] [--dpr=1,2] [--crop=0.3,0.2,0.4,0.5]
 //     [--driver=0,1] [--light.keyMul=0.8,1.2] [--spineSide=all] [--part.aero=all] [--base=default,rb_white]
 //     [--oracle] [--baseline=dir] [--budget=10m]
@@ -252,6 +252,19 @@ const distList = nums(pflag("--dist", "dist", ""));
 const LAMPS = ["hero", "bay", "bayFront", "wingRear", "rear", "side", "front", "wingFront", "off"];
 const lampList = listOf(pflag("--lamp", "lamp", "")).map((l) => (l === "all" ? LAMPS : [l])).flat();
 for (const l of lampList) if (!LAMPS.includes(l)) { console.error(`--lamp "${l}" is not one of ${LAMPS.join(", ")}`); process.exit(1); }
+// Same-camera active-aero: 0/Z/corner = shut, 1/X/straight = open. Applied
+// AFTER framing with keepCam so setSetupAero does not steal wingRear.
+function parseAero(v) {
+  const s = String(v).toLowerCase();
+  if (s === "1" || s === "x" || s === "straight" || s === "open") return { key: "straight", on: true };
+  if (s === "0" || s === "z" || s === "corner" || s === "shut" || s === "closed") return { key: "corner", on: false };
+  return null;
+}
+const aeroList = listOf(pflag("--aero", "aero", "")).map(parseAero);
+if (listOf(pflag("--aero", "aero", "")).some((v, i) => !aeroList[i])) {
+  console.error('--aero wants 0,1 or corner,straight (also Z/X, shut/open)');
+  process.exit(1);
+}
 // Where the orbit LOOKS. Every preset orbits the car centre (or a flap); a
 // target lets any azimuth look at the crown instead of panning toward it.
 // Names are car-space points, metres, +z nose; `x,y,z` is accepted too.
@@ -417,7 +430,7 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
   "--rollup-view", "--rollup-side", "--rollup-logo",
   "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
   "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
-  "--lamp", "--target", "--dpr", "--budget", "--baseline",
+  "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
   "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
   "--serve", "--watch", "--overlay"]);
 const axes = [];
@@ -637,6 +650,7 @@ function camKey(c) {
   if (c.eye) b.push(`eye${xyzKey(c.eye)}`);
   if (c.target && !c.eye) b.push(`at${cap(c.target.name)}`);
   if (c.lamp) b.push(`lamp${cap(c.lamp)}`);
+  if (c.aero) b.push(`aero${cap(c.aero.key)}`);
   if (c.az != null) b.push(`az${degs(c.az)}`);
   if (c.el != null) b.push(`el${degs(c.el)}`);
   if (c.dist != null) b.push(`d${c.dist}`);
@@ -651,6 +665,7 @@ function aliasKey(b, c) {
   const bits = [b.alias];
   if (c.target && !(b.target && c.target.name === b.target.name)) bits.push(`at${cap(c.target.name)}`);
   if (c.lamp && c.lamp !== b.lamp) bits.push(`lamp${cap(c.lamp)}`);
+  if (c.aero && c.aero !== b.aero) bits.push(`aero${cap(c.aero.key)}`);
   if (c.az !== b.az) bits.push(`az${degs(c.az)}`);
   if (c.el !== b.el) bits.push(`el${degs(c.el)}`);
   if (c.dist !== b.dist) bits.push(`d${c.dist}`);
@@ -676,6 +691,7 @@ const bases = [
 const pick = (list, dflt) => (list.length ? list : [dflt ?? null]);
 for (const b of bases) {
   for (const target of pick(targetList, b.target)) for (const lamp of pick(lampList, b.lamp)) {
+  for (const aero of pick(aeroList, b.aero)) {
   for (const az of pick(azList, b.az)) for (const el of pick(elList, b.el)) {
     for (const dist of pick(distList, b.dist)) for (const zoom of zoomList) {
       for (const [ps, pd] of panList) for (const azNudge of orNull(azNudgeList)) {
@@ -683,7 +699,7 @@ for (const b of bases) {
           const c = { view: b.view, alias: b.alias || null, station: b.station || null, az, el, dist, zoom,
                       strafe: (b.strafe || 0) + ps, dolly: (b.dolly || 0) + pd,
                       azNudge: azNudge || 0, elNudge: elNudge || 0,
-                      target: target && target.at ? target : null, lamp: lamp || null,
+                      target: target && target.at ? target : null, lamp: lamp || null, aero: aero || null,
                       crop: b.crop || null, clamp: b.clamp === false ? false : undefined };
           // A named base keeps its NAME, and appends only what was changed on
           // top of it, so `bay`, `bay_az100` and `bay_z6` are distinct files.
@@ -692,6 +708,7 @@ for (const b of bases) {
         }
       }
     }
+  }
   }
   }
 }
@@ -1232,6 +1249,12 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     await nudge(page, cam.dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", cam.dolly);
     await nudge(page, cam.azNudge > 0 ? "cs-view-right" : "cs-view-left", cam.azNudge);
     await nudge(page, cam.elNudge > 0 ? "cs-view-up" : "cs-view-down", cam.elNudge);
+  }
+  if (cam.aero) {
+    await page.evaluate((on) => {
+      window.__apex.garageAero(on, { keepCam: true });
+      window.__apex.garageStep(1 / 60, 60);
+    }, cam.aero.on);
   }
   await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);

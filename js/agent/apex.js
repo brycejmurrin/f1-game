@@ -536,9 +536,9 @@ const api = {
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
   // reads the state; garageStep(dt) advances the ease by dt seconds.
-  garageAero(on) {
+  garageAero(on, opts) {
     if (!G.setupPreviewOn) return null;
-    if (on !== undefined) G.setSetupAero(!!on);
+    if (on !== undefined) G.setSetupAero(!!on, opts);
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
   },

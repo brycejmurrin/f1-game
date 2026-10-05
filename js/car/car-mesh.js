@@ -580,7 +580,7 @@ function _flatQuadData(w, h, col) {
 let rainLightMesh = null;
 function getRainLight() {
   if (rainLightMesh) return rainLightMesh;
-  rainLightMesh = _gfx.createMesh(_flatQuadData(0.055, 0.07, [2.4, 0.10, 0.08]));
+  rainLightMesh = _gfx.createMesh(_flatQuadData(0.068, 0.082, [1.75, 0.18, 0.12]));
   return rainLightMesh;
 }
 const _exhaustMeshes = {};
@@ -1681,7 +1681,7 @@ function gridStrobe(countT) { return ((countT * 5.0) % 1) < 0.5; }
 let _epLightMesh = null;
 function getEndplateLight() {
   if (_epLightMesh) return _epLightMesh;
-  _epLightMesh = _gfx.createMesh(_flatQuadData(0.026, 0.034, [2.4, 0.10, 0.08]));
+  _epLightMesh = _gfx.createMesh(_flatQuadData(0.030, 0.038, [1.75, 0.18, 0.12]));
   return _epLightMesh;
 }
 // Its own scratch and its own opts bag ON PURPOSE. game.js's _ringWorld /
@@ -1707,6 +1707,44 @@ function drawRearLights(mat, emissive) {
     W[14] += W[2] * (s * 0.50) + W[6] * 0.62 - W[10] * 2.705;
     _gfx.draw(getEndplateLight(), W, _RL_FX);
   }
+}
+// STRAIGHT-MODE telltale: an emissive trailing-edge strip on the top rear
+// flap (and the top front flap). Same draw path as the rain light — existing
+// emissive opts, not a new SURFACES id — so it only appears while X-mode is
+// open and never steals the FIA rain-light reservation on the baked mesh.
+let _aeroEdgeMesh = null;
+function getAeroEdgeStrip() {
+  if (_aeroEdgeMesh) return _aeroEdgeMesh;
+  _aeroEdgeMesh = _gfx.createMesh(_flatQuadData(0.44, 0.011, [1.35, 1.55, 1.95]));
+  return _aeroEdgeMesh;
+}
+const _aeW = new Float32Array(16);
+const _AE_FX = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+function drawAeroEdge(modelMat, aLvl, style, blend) {
+  if (!(blend > 0.45) || !_gfx) return;
+  const flaps = Car3D.aeroFlaps(aLvl, style);
+  const pick = (wing) => { let last = null; for (const e of flaps) if (e.wing === wing) last = e; return last; };
+  const drawOne = (fg, half) => {
+    if (!fg) return;
+    const ang = fg.zAngle + (fg.xAngle - fg.zAngle) * blend;
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const teY = fg.te[1] - fg.y, teZ = fg.te[0] - fg.z;
+    const y = teY * ca - teZ * sa + fg.y;
+    const z = teY * sa + teZ * ca + fg.z;
+    const W = _aeW;
+    W.set(modelMat);
+    for (let k = 0; k < 3; k++) {
+      const uu = modelMat[4 + k], ff = modelMat[8 + k];
+      W[4 + k] = uu * ca + ff * sa;
+      W[8 + k] = -uu * sa + ff * ca;
+      W[12 + k] += modelMat[4 + k] * y + modelMat[8 + k] * z;
+    }
+    if (half !== 1) { W[0] *= half; W[1] *= half; W[2] *= half; }
+    _AE_FX.emissive = 0.55 + 0.45 * Math.min(1, (blend - 0.45) / 0.55);
+    _gfx.draw(getAeroEdgeStrip(), W, _AE_FX);
+  };
+  drawOne(pick("rear"), 1);
+  drawOne(pick("front"), 0.72);
 }
 // TAIL-LIGHT EMIT 0: the red spill a tail-light casts on the road, painted
 // instead of lit by a point light — a flat decal behind the car, drawn through
@@ -1830,7 +1868,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawAeroEdge, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);
