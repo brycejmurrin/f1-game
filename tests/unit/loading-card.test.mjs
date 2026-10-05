@@ -330,8 +330,8 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
   assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
     "startRaceBody still decides handoff from the screen that was up before the sweep");
-  assert.match(body, /clearMenuScreens\(\);\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
-    "startRaceBody raises the handoff card right after the sweep, only when the screen was up");
+  assert.match(body, /clearMenuScreens\(\); garagePre\.release\(\);[^\n]*\n\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
+    "startRaceBody raises the handoff card right after the sweep (and garage GPU release), only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx, mirrorPass\.preparing\(\)\);/,
     "render() lowers it via afterPresent after a present that painted");

@@ -28,6 +28,9 @@
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
   #practice-goal { min-height: var(--tap); max-width: 100%; color: var(--text); background: var(--carbon); border: 1px solid var(--plate-line); }
   #home-motion { position: absolute; z-index: 2; top: var(--safe-t); left: var(--safe-l); padding: calc(var(--gap) / 2) var(--gap); min-height: var(--tap); font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
+  /* Disabled still hits-tests: Playwright (and a finger) land on this chip
+     instead of HOW TO PLAY when it overlaps the door column. */
+  #home-motion:disabled { pointer-events: none; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--carbon) 20%, transparent) 40%, var(--carbon) 66%); }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #title-car { opacity: 0; }
   #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, transparent, var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
@@ -82,7 +85,17 @@
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * 0.5); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }
-  :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); max-width: min(calc(50% - var(--safe-l) - var(--gap)), 22rem); }
+  /* #menu-brand / #menu-buttons cap geometry at --ui-compact-brand/scale
+     (menus.css, max-width 899 / max-height 699). #home-motion is a SIBLING,
+     so it kept `#overlay > * { zoom: var(--ui-scale) }`. At UI SIZE 200% on
+     a 852x344 phone that doubled the chip over HOW TO PLAY (Pages 37293090788:
+     disabled #home-motion intercepts #mb-help). Same cap as the brand. */
+  @media (max-width: 899px), (max-height: 699px) {
+    :where(body[data-density="compact"]) #home-motion {
+      zoom: var(--ui-compact-brand-scale);
+    }
+  }
   /* No font-size here: a flat var(--fs-micro) overrode menus.css's compact
      `calc(var(--fs-4) * var(--ui-compact-text))`, so UI SIZE 200% painted the
      doors at 17.5px (ui-scale.spec "200% keeps title navigation reachable",

@@ -45,8 +45,8 @@ Model this as three long, gentle cosine bumps, not a flat plane with two dents.
 | 0.00 | L | mid | Yu Garden paddock (required `shanghai-yu-pavilions`): white pavilion boxes with red prism roofs on island pads in the lakes |
 | 0.00 | R | near | Pit wall + low garage boxes, white/grey, red-edged |
 | 0.04 | L | mid | Start grandstand tiers: stacked grey stepped boxes |
-| 0.05–0.11 | R | near | Snail T1–3: coiling pale `runoffApron` pads + dense red/white kerb verge |
-| 0.08 | R | mid | Secondary overlapping-circles / lotus-leaf roof stand (required `shanghai-circles-stand`) — grandprix.com 2004; Taiyo Kogyo PTFE lotus canopies on SE secondary stands |
+| 0.04–0.11 | R | near | Snail T1–3 (racing-frame via `sl()`): coiling pale `runoffApron` pads + dense red/white kerb verge |
+| 0.075 | R | mid | Secondary overlapping-circles / lotus-leaf roof stand (required `shanghai-circles-stand`, racing-frame) — grandprix.com 2004; Taiyo Kogyo PTFE lotus canopies on SE secondary stands |
 | 0.30 | L | far | One hazy Pudong cluster (Pearl + Jin Mao + Shanghai Tower) — soft cue only; no wraparound skyline rings |
 | 0.45 | R | mid | Mid-sector grandstand: low stepped grey box bank |
 | 0.47 | over | near | Mid-arena spectator footbridge: white span crossing the track (7.2 m clearance) |

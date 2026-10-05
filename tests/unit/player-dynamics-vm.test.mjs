@@ -366,3 +366,26 @@ test("manual gearbox: throttle leaves reverse within 0.5 s (no rescue)", async (
       `must not rely on rescue to leave reverse; rescueT=${gm.G.player.rescueT}`);
   } finally { gm.close(); }
 });
+
+test("a light LIVE analog brake: the weight-transfer estimate tracks the decel actually applied", () => {
+  // #888 floored a live pedal's decel at COAST_DRAG (it skips the coast drag) but
+  // left axEstTarget on BRAKE·level, so a 0.1 DualSense trigger slowed at ~6 m/s²
+  // while loadF/loadR were sized for ~2.2 — light trail-braking under-loaded the
+  // front. ONE value (brakeDecel) now feeds both. The pedal goes through Input
+  // (no setInput: a scripted pedal is exact and never takes the floor).
+  const a = g.apex, I = g.sandbox.Input;
+  const saved = { braking: I.braking, brakeLevel: I.brakeLevel, throttle: I.throttle };
+  try {
+    a.setPhysics({ pace: 1 });
+    a.clearInput();
+    a.jump(0.0, 60, 0);
+    I.braking = () => true; I.brakeLevel = () => 0.1; I.throttle = () => false;
+    const v0 = a.probe().speed;
+    for (let i = 0; i < 30; i++) a.step(1 / 60, 1);
+    const decel = (v0 - a.probe().speed) / 0.5;
+    const axEst = a.physState().axEstSm;
+    assert.ok(decel > 5, `a live 0.1 pedal never slows less than lifting (${decel.toFixed(2)} m/s²)`);
+    assert.ok(Math.abs(-axEst - decel) < 0.5,
+      `axEstSm (${axEst}) must track the applied decel (${decel.toFixed(2)} m/s²), not BRAKE·level`);
+  } finally { Object.assign(I, saved); a.clearInput(); }
+});

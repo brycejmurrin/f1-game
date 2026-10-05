@@ -9,12 +9,12 @@
       "lines": 3289
     },
     "js/car/car3d.js": {
-      "lines": 3489
+      "lines": 3496
     },
     "js/game.js": {
-      "codeLines": 4833,
+      "codeLines": 4837,
       "gMembers": 287,
-      "lines": 8998,
+      "lines": 9009,
       "topLets": 148
     },
     "js/lighting/presets.js": {
@@ -24,7 +24,7 @@
       "lines": 2024
     },
     "js/render/glx/glx.js": {
-      "lines": 2820
+      "lines": 2832
     },
     "js/track/tracks.js": {
       "lines": 702

@@ -28,7 +28,10 @@ test.describe("garage prebuild on the title", () => {
     const before = await page.evaluate(() => window.__apex.garagePrebuild());
     expect(before.enabled).toBe(true);
     expect(before.previewMeshes, "the preview LRU never grows past its six slots").toBeLessThanOrEqual(6);
-    expect(before.garageReady).toBe(true);
+    // garageReady = the setup garage DREW (programs compiled); a circuit or garage
+    // Home's frameless plan only preps the car/room, so race settings still draws.
+    expect(before.garageReady, "marked drawn exactly when the plan drew frames").toBe(!!before.last.frames);
+    expect(before.garageReady || before.prepped).toBe(true);
     expect(before.last.result).toBe("ready");
     const visit = before.firstFrame ? before.firstFrame.visit : 0;
 

@@ -32,7 +32,7 @@
   function (api) {
       const { out,
         n, hash, every, anchor, onTrack,
-        pine, tree, bush, forestEdge,
+        pine: plantPine, tree: plantTree, bush: plantBush, forestEdge,
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
@@ -102,6 +102,68 @@
       const clear = (k, side, d, r) => {
         const a = anchor(k, side, d);
         return !onTrack(a.c[0], a.c[2], r === undefined ? 10 : r);
+      };
+      // STRUCTURE FOOTPRINTS. The forest shell (block 1) and the per-block
+      // pine rows are emitted BEFORE the stands, banks and sheds they surround,
+      // so no engine guard sees those masses yet — pines grew up through the
+      // T8 terrace rake, both spectator banks and, where the lap folds back,
+      // through hangar 3, the club tower and the paddock silo from ANOTHER
+      // leg (clip-audit 2026-10-05). Each entry mirrors the call it protects;
+      // a tree whose crown would reach into one is not planted at all.
+      // Spans: [s0, s1, side, inner gap, outer gap] — terrace = 6 rows x 2.6 +
+      // 2.4 deep; spectatorHill = 4 rows x 2.0 + 1 (plus a tread).
+      const FOOT_SPAN = [
+        [0.955, 0.982, -1, 20, 38.4],   // block 17 terrace (T8 outside)
+        [0.900, 0.925, -1, 26, 36.0],   // block 17 spectatorHill
+        [0.172, 0.212,  1, 28, 38.0],   // block 7 spectatorHill (Sodra)
+      ];
+      // Boxes: [s, side, centre gap, across, along] — building() centres at
+      // gap + w/2; place() centres at gap.
+      const FOOT_BOX = [
+        [0.636,  1, 105, 26, 46],      // block 13 hangar 3
+        [0.690,  1,  56,  8,  9],      // block 13 club tower
+        [0.144,  1,  35, 10, 18],      // block 5 rusted shed
+        [0.136,  1,  66, 4.6, 4.6],    // block 5 fuel silo
+        [0.136,  1,  74, 3.0, 3.0],    // block 5 second tank
+        [0.478, -1, 24.5, 5,  7],      // block 11 marshal hut
+      ];
+      const spanPts = FOOT_SPAN.map(([s0, s1, side, g0, g1]) => {
+        const pts = [], k0 = K(s0), k1 = K(s1);
+        for (let k = k0; k <= k1; k++) pts.push(anchor(k, side, (g0 + g1) / 2).c);
+        return { pts, half: (g1 - g0) / 2 };
+      });
+      const boxFr = FOOT_BOX.map(([s, side, g, w, l]) => {
+        const a = anchor(K(s), side, g);
+        return { c: a.c, r: a.r, t: a.t, hw: w / 2, hl: l / 2 };
+      });
+      const segDist = (x, z, p, q) => {
+        const dx = q[0] - p[0], dz = q[2] - p[2], L2 = dx * dx + dz * dz;
+        const u = L2 > 0 ? Math.max(0, Math.min(1, ((x - p[0]) * dx + (z - p[2]) * dz) / L2)) : 0;
+        return Math.hypot(x - p[0] - u * dx, z - p[2] - u * dz);
+      };
+      const inFootprint = (k, side, d, rad) => {
+        const c = anchor(k, side, d).c;
+        for (const f of boxFr) {
+          const ox = c[0] - f.c[0], oz = c[2] - f.c[2];
+          if (Math.abs(ox * f.r[0] + oz * f.r[2]) < f.hw + rad &&
+              Math.abs(ox * f.t[0] + oz * f.t[2]) < f.hl + rad) return true;
+        }
+        for (const f of spanPts) {
+          for (let i = 0; i + 1 < f.pts.length; i++)
+            if (segDist(c[0], c[2], f.pts[i], f.pts[i + 1]) < f.half + rad) return true;
+        }
+        return false;
+      };
+      // Crown radii: pine() notes a crown h*0.45 across; tree() crowns spread
+      // wider; a bush clump is ~2 m.
+      const pine = (k, side, d, h, col, o) => {
+        if (!inFootprint(k, side, d, h * 0.225 + 0.5)) plantPine(k, side, d, h, col, o);
+      };
+      const tree = (k, side, d, h, col, o) => {
+        if (!inFootprint(k, side, d, h * 0.35 + 0.5)) plantTree(k, side, d, h, col, o);
+      };
+      const bush = (k, side, d, col, o) => {
+        if (!inFootprint(k, side, d, 2.0)) plantBush(k, side, d, col, o);
       };
       const farPine = (k, side, d, ht, col) => { if (clear(k, side, d)) pine(k, side, d, ht, col); };
       const farTree = (k, side, d, ht, col) => { if (clear(k, side, d, 12)) tree(k, side, d, ht, col); };
@@ -295,7 +357,9 @@
         }, { required: true });
       }
       building(K(0.012), 1, 64, 14, 9, 34, { col: WHITEGREY });   // race control
-      building(K(0.012), 1, 82, 10, 5.5, 22, { col: CORR_CREAM }); // annex behind
+      // Annex abuts race control (gap 79, 7 deep): at 82/10 deep its back wall
+      // reached across the infield onto the paddock-leg shed (clip @0.105).
+      building(K(0.012), 1, 79, 7, 5.5, 22, { col: CORR_CREAM }); // annex behind
       building(K(0.031), 1, 68, 8, 10.5, 9, { col: WHITEGREY });   // timing tower
       building(K(0.060), 1, 70, 7, 4.2, 12, { col: FALU });        // timekeepers
       // Pit garages: a long low rank tucked in behind the stands (modern
@@ -435,7 +499,9 @@
       billboard(K(0.214), 1, 17, 9, 3.6, [0.24, 0.36, 0.60]);
       billboard(K(0.228), 1, 18, 8, 3.2, [0.82, 0.76, 0.34]);
       building(K(0.192), 1, 48, 6, 4.4, 8, { col: FALU });     // commentary hut
-      building(K(0.216), 1, 46, 8, 3.8, 12, { col: TIMBER });  // refreshments
+      // Refreshments inside the fence (gap 30): at 46 it sat ~7 m off the
+      // runway leg's edge where the lap folds back (clip @0.809 vs roadside pine).
+      building(K(0.222), 1, 30, 8, 3.8, 12, { col: TIMBER });  // refreshments
       building(K(0.204), 1, 62, 7, 4.0, 10, { col: FALU_D });
       // Campers omitted — clipped the Sodra pine scatter (clip @0.224).
       fence(0.166, 0.234, 1, 40, 1.8, [0.58, 0.60, 0.58]);
@@ -484,8 +550,8 @@
       // × cone, clip 5.23 m @0.325) on this flat airfield. Forest + hoarding
       // carry the outside of Opel instead.
       cameraTower(K(0.336), -1, 36);
-      marshalPost(K(0.324), -1, 14);
-      marshalPost(K(0.348), -1, 14);
+      marshalPost(K(0.324), -1, 11.5);   // in front of the tyre wall (gap 15), not in it
+      marshalPost(K(0.358), -1, 14);   // past the tyre wall's end (0.352): it stood in the stack
       building(K(0.356), -1, 38, 7, 5.5, 9, { col: CORR_BLUE });  // scoreboard
       building(K(0.310), -1, 40, 5, 3.6, 7, { col: FALU });       // marshal hut
       for (let i = 0; i < 3; i++) {
@@ -755,7 +821,9 @@
       // Grass patches stay OUTSIDE the Flight Straight apron window (APR1
       // ends 0.830) so they do not co-plane with runway slabs.
       building(K(0.820), 1, 34, 14, 7.5, 24, { col: CORR_BLUE });
-      building(K(0.802), 1, 38, 9, 5.0, 14, { col: CORR_RUST });
+      // Gap 32, not 38: further out it crossed onto the Sodra leg's roadside
+      // pine (clip @0.224), the lap folding back across the infield.
+      building(K(0.802), 1, 32, 9, 5.0, 14, { col: CORR_RUST });
       building(K(0.842), 1, 40, 7, 4.2, 10, { col: TIMBER });
       sponsorHoarding(0.808, 0.836, 1, 26, {});
       groundPatch(K(0.838), 1, 36, [16, 0.20, 32], CONC_W);
@@ -824,8 +892,10 @@
       for (let i = 0; i < 4; i++) {
         place(K(0.966 + i * 0.0035), -1, 36, [0.30, 8.5, 0.30], TRIM);
       }
-      marshalPost(K(0.930), -1, 14);
-      marshalPost(K(0.958), -1, 14);
+      // Gap 11.5 — between the armco (9) and the tyre wall (15): at 14 the
+      // hut and its panel pole stood inside the tyre stacks (clip 1.00 m).
+      marshalPost(K(0.930), -1, 11.5);
+      marshalPost(K(0.958), -1, 11.5);
       boards(0.908, -1, 12, 0.0110);
       for (let i = 0; i < 18; i++) {
         const s = 0.896 + i * 0.0056;

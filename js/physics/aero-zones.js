@@ -107,8 +107,8 @@ const AERO_ZONE_TURNS = {
   redbull: [[1, 2], [2, 3], [8, 9], [10, 1]],
   silverstone: [[5, 6], [8, 9], [14, 15], [18, 1]],   // re-derived when `turns` became the 18 curvature peaks (2026-09-24)
   spa: [[1, 2], [3, 4], [9, 10], [11, 12], [20, 1]],
-  hungaroring: [[1, 2], [4, 5], [10, 11], [14, 1]],
-  imola: [[14, 15]],
+  hungaroring: [[1, 2], [3, 4], [11, 12], [14, 1]], // re-keyed to 14 physical corners; gameplay intervals retained
+  imola: [[13, 14]], // physical Acque Minerali exit → Alta approach; authored gameplay zone
   zandvoort: [[11, 12], [14, 1]],
   monza: [[10, 11], [11, 1]],   // [9,10] bounded no straight, so the WHOLE table was dropped
   baku: [[2, 3], [20, 1]],

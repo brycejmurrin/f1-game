@@ -119,6 +119,9 @@ function page({ kind = "none", painted = true, surface = "title", worldWarm = 0 
     prebuild(part) { built.push(part); if (part === "car") meshKey = team + ":parts:4"; return true; },
     roomReady: () => built.includes("room"),
     get meshKey() { return meshKey; }, set meshKey(v) { meshKey = v; },
+    released: 0,
+    // setup-camera.js release(): refused under an open garage, else frees the room and every car.
+    release() { if (G.setupPreviewOn) return false; cam.released++; meshKey = ""; built.length = 0; return true; },
   };
   const home = { home: kind === "garage" || kind === "studio", painted, scene: { mode: kind === "studio" ? "studio" : "garage" },
     world: { active: kind === "track" } };
@@ -232,6 +235,34 @@ test("a circuit Home gets the car and the room on the CPU, no frames over the ci
   assert.equal(h.warms(), 0);
 });
 
+// The frameless title plans (a circuit or garage Home) build on the CPU only:
+// the programs are compiled by the hidden frames, so race settings must still
+// draw them — a title-ready that short-circuited RACE SETTINGS left the
+// drive-out's first garage frame compiling on the tap (the freeze #930 targets).
+test("a frameless title prebuild never stands in for race settings' hidden frames", async () => {
+  for (const kind of ["track", "garage"]) {
+    const h = page({ kind });
+    const title = h.pre.run(owned(h), "title");
+    await h.flush(2);
+    assert.equal(await title, true, kind);
+    assert.equal(h.pre.state().ready, true, kind + ": the title poll stops");
+    assert.equal(h.gate.garageReady, false, kind + ": nothing was drawn, so nothing is marked drawn");
+    assert.equal(h.gate.garageWarm, 0);
+    // RACE SETTINGS opens on the same circuit/weather/time: same key.
+    h.els["race-settings"].hidden = false; h.els.overlay.hidden = true;
+    const settings = h.pre.run(owned(h), "settings");
+    await h.flush(2);
+    assert.equal(h.gate.garageWarm, 2, kind + ": settings arms the hidden frames instead of returning early");
+    assert.equal(h.warms(), 1);
+    assert.deepEqual(h.built, ["car", "room"], kind + ": the prepped car is not rebuilt; only a missing room is built");
+    h.gate.garageWarm = 0; h.gate.garageReady = true;   // render()'s hidden branch drew
+    await h.flush();
+    assert.equal(await settings, true);
+    assert.equal(h.pre.state().last.want, "settings");
+    assert.equal(await h.pre.run(owned(h), "settings"), false, kind + ": drawn — now settings is ready");
+  }
+});
+
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {
   const h = page();
   h.ctx.navigator = { connection: { saveData: true } };
@@ -280,11 +311,12 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
 
 // ── the real room: GarageScene.prepare() is the rebuild draw() runs first ──
 function sceneHarness() {
-  const made = [];
+  const made = [], live = new Set();
+  const mk = (kind, extra) => { made.push(kind); const h = { id: made.length, ...extra }; live.add(h); return h; };
   const gfx = {
-    createMesh(data) { made.push("mesh"); return { id: made.length }; },
-    createTexMesh() { made.push("tex"); return { id: made.length, tex: true }; },
-    freeMesh() {}, freeTexture() {}, createTexture() { made.push("texture"); return { id: made.length }; },
+    createMesh() { return mk("mesh"); },
+    createTexMesh() { return mk("tex", { tex: true }); },
+    freeMesh(h) { live.delete(h); }, freeTexture(h) { live.delete(h); }, createTexture() { return mk("texture"); },
     draw() {}, drawDecal() {}, drawGlow() {},
   };
   const ctx = vm.createContext({
@@ -296,7 +328,7 @@ function sceneHarness() {
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
-  return { GarageScene, made };
+  return { GarageScene, made, live };
 }
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
@@ -344,4 +376,54 @@ test("the A/B switch: apex26.garagePrewarm=\"off\" at boot, or setEnabled(false)
   const again = h.pre.run(owned(h), "title"); await h.flush(2); h.gate.garageReady = true; await h.flush();
   assert.equal(await again, true);
   assert.equal(h.pre.state().last.result, "ready");
+});
+
+// RACE START RELEASES THE GARAGE (~12.5 MB GPU + ~5 MB canvases had stayed resident
+// through every race after the first visit): the prebuild forgets readiness, so the
+// next idle title builds it again; an open garage (drive-out studio, pit visit) is kept.
+test("release at race start frees the garage and re-arms the next title prebuild", async () => {
+  const h = page();
+  const go = async () => { const p = h.pre.run(owned(h), "title"); await h.flush(2); h.gate.garageReady = true; await h.flush(); return p; };
+  assert.equal(await go(), true);
+  assert.equal(h.pre.state().ready, true);
+  h.G.setupPreviewOn = true;
+  assert.equal(h.pre.release(), false, "a garage on screen is never freed under itself");
+  assert.equal(h.pre.state().ready, true);
+  h.G.setupPreviewOn = false; h.G.state = "count";
+  assert.equal(h.pre.release(), true);
+  assert.equal(h.cam.released, 1);
+  assert.equal(h.gate.garageReady, false);
+  assert.equal(h.gate.garageKey, "");
+  assert.equal(h.pre.state().ready, false, "readiness is forgotten with the meshes");
+  assert.ok(h.logs.includes("game: garage released for the race"));
+  assert.equal(await h.pre.run(owned(h), "title"), false, "nothing is rebuilt during the race");
+  h.G.state = "menu";
+  assert.equal(await go(), true, "the next idle title builds it again");
+  assert.deepEqual(h.built, ["car", "room"]);
+  assert.equal(h.pre.state().ready, true);
+  const game = read("js/game.js");
+  assert.match(game, /  clearMenuScreens\(\); garagePre\.release\(\);/, "startRaceBody releases it once the garage screen is down");
+});
+
+test("GarageScene.release frees every garage handle; the next draw rebuilds the room", () => {
+  const { GarageScene, live } = sceneHarness();
+  const setupCtx = { track: { id: "monza" }, weather: "dry", tod: "default", night: false };
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0, setupCtx);
+  const car = { pos: [-1, 0, -2, 1, 0, -2, 1, 1, 2, -1, 1, 2], nrm: [], col: [], idx: [0, 1, 2] };
+  GarageScene.previewMesh("mclaren:a:4", "mclaren:a:4|h", () => car);
+  GarageScene.previewMesh("mclaren:b:4", "mclaren:b:4|h", () => car);
+  const held = live.size;
+  assert.ok(held > 10, "the room, its atlases, the props and two cars are resident: " + held);
+  assert.equal(GarageScene.release(), held, "every handle the garage created is freed");
+  assert.equal(live.size, 0);
+  assert.equal(GarageScene.debug().previewMeshes, 0);
+  assert.equal(GarageScene.debug().key, "");
+  assert.equal(GarageScene.prepared(TEAM, LIV, null, 0, setupCtx), false, "a released room is not prepared");
+  assert.equal(GarageScene.release(), 0, "a second release frees nothing");
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0, setupCtx);
+  assert.equal(GarageScene.prepared(TEAM, LIV, null, 0, setupCtx), true, "draw() rebuilt it");
+  const rebuilt = live.size;
+  assert.ok(rebuilt > 0);
+  assert.equal(GarageScene.release(), rebuilt, "…and it can be released again");
+  assert.equal(live.size, 0);
 });

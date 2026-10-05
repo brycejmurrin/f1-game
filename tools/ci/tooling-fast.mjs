@@ -159,6 +159,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
+  "tests/unit/circuit-corner-anchors.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
   "tests/unit/circuit-scope.test.mjs",
   // ...and the same question one level down: a def may name a tree species or
@@ -435,6 +436,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
+  "tests/unit/lobed-trees.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
@@ -469,6 +471,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
+  // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
+  "tests/unit/particles-dirty.test.mjs",
   // ~29 s of pure geometry (measured 2026-09-24): builds every catalog option ONCE and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
   // is edited rather than in a 2-hour render sweep nobody runs.
@@ -635,6 +639,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/team-livery.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
+  "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",

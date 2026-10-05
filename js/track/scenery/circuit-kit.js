@@ -297,6 +297,34 @@ const CircuitKit = (function () {
 
     function marshalShelter(spec) {
       return route("marshalShelter", spec, (stage, place) => {
+        if (spec.detail === "structure") {
+          const [W, H, L] = place.size;
+          const materials = typeof TrackGeom !== "undefined" ? TrackGeom.MAT : {};
+          const previous = stage._mat;
+          // The full size is the envelope, including the overhang and posts.
+          // Dark solid panels are recessed behind the posts, not glass-pass
+          // geometry. All parts stay in this facility's atomic staging buffer.
+          try {
+            stage._mat = materials.CONCRETE || 0;
+            if (!box(stage, place, [0, -H * 0.14, 0], [W * 0.82, H * 0.72, L * 0.82], "shell")) return false;
+            stage._mat = materials.METAL || 0;
+            for (const x of [-0.43, 0.43]) for (const z of [-0.43, 0.43]) {
+              if (!box(stage, place, [W * x, -H * 0.04, L * z],
+                [W * 0.08, H * 0.92, L * 0.08], "service")) return false;
+            }
+            if (!box(stage, place, [0, H * 0.46, 0], [W * 0.98, H * 0.08, L * 0.98], "roof")) return false;
+            stage._mat = materials.FLAT || 0;
+            const shade = color("glass", "service");
+            if (!shade) return false;
+            const dark = shade.map((value) => value * 0.35);
+            return boxRgb(stage, place, [-spec.side * W * 0.416, -H * 0.01, 0],
+              [W * 0.014, H * 0.26, L * 0.58], dark) &&
+              boxRgb(stage, place, [0, -H * 0.01, L * 0.416],
+                [W * 0.58, H * 0.26, L * 0.014], dark);
+          } finally {
+            stage._mat = previous;
+          }
+        }
         if (!box(stage, place, [0, -place.size[1] * 0.08, 0],
           [place.size[0], place.size[1] * 0.84, place.size[2]], "shell")) return false;
         return landmark("roof", stage, place, {

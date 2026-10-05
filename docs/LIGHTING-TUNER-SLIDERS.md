@@ -679,16 +679,16 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×8, weather-arc.js×5, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
-| `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
+| `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |
 | `drizzleCount` | DRIZZLE DENSITY | 0 … 1 | 0.3 | — | ✓ | particles.js×2 |
 | `drizzleLen` | DRIZZLE STREAK | 0 … 1 | 0.5 | — |   | particles.js×2 |
 | `drizzleSpeed` | DRIZZLE FALL SPEED | 0 … 1 | 0.6 | — |   | particles.js×2 |
-| `rainOpacity` | RAIN OPACITY | 0 … 4 | 1 | — |   | particles.js×2 |
-| `rainWind` | RAIN WIND | -3 … 3 | 0.18 | — | ✓ | particles.js×2 |
-| `rainShearWind` | RAIN SPEED SLANT | 0 … 2.25 | 0.9 | — |   | particles.js×2 |
-| `rainShearLen` | RAIN SPEED STRETCH | 0 … 5 | 2 | — |   | particles.js×2 |
+| `rainOpacity` | RAIN OPACITY | 0 … 4 | 1 | — |   | particles.js×4 |
+| `rainWind` | RAIN WIND | -3 … 3 | 0.18 | — | ✓ | particles.js×4 |
+| `rainShearWind` | RAIN SPEED SLANT | 0 … 2.25 | 0.9 | — |   | particles.js×4 |
+| `rainShearLen` | RAIN SPEED STRETCH | 0 … 5 | 2 | — |   | particles.js×4 |
 | `windSpeed` | WIND | 0 … 3 | 1 | `uWind` |   | live.js×2, glx.js×2 |
-| `windDir` | WIND DIRECTION | -180 … 180 | 35 | — |   | particles.js×2, glx.js×2 |
+| `windDir` | WIND DIRECTION | -180 … 180 | 35 | — |   | particles.js×4, glx.js×2 |
 | `lightning` | LIGHTNING FREQ | 0 … 2.75 | 1 | — | ✓ | game.js×4, glx.js×2 |
 | `lightningFlash` | LIGHTNING FLASH | 0 … 2 | 1 | — |   | game.js×2 |
 | `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | game.js×4 |

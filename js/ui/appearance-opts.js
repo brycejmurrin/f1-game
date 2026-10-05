@@ -106,20 +106,40 @@ const AppearanceOpts = (function () {
     const hi = Math.max(L1, L2), lo = Math.min(L1, L2);
     return (hi + 0.05) / (lo + 0.05);
   }
-  function readCssRgb(prop) {
-    const el = root();
-    if (!el || typeof getComputedStyle !== "function") return null;
-    const raw = getComputedStyle(el).getPropertyValue(prop).trim();
+  // ONE getComputedStyle flush for both token reads, cached across pickInk calls
+  // until theme/contrast attrs change (ForcedReflow 2026-10-05: readCssRgb top at
+  // 34 ms; apply() calls pickInk for menu + HUD + every preset chip).
+  function readCssRgbFrom(cs, prop) {
+    if (!cs) return null;
+    const raw = cs.getPropertyValue(prop).trim();
     const hex = raw.match(/^#([0-9a-fA-F]{6})$/);
     if (hex) return hexRgb("#" + hex[1]);
     const rgb = raw.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
     if (rgb) return [+rgb[1] / 255, +rgb[2] / 255, +rgb[3] / 255];
     return null;
   }
+  function readCssRgb(prop) {
+    const el = root();
+    if (!el || typeof getComputedStyle !== "function") return null;
+    return readCssRgbFrom(getComputedStyle(el), prop);
+  }
+  let _inkKey = "", _inkText = null, _inkBg = null;
+  function themeInkPair() {
+    const el = root();
+    const k = (el && el.getAttribute("data-ui-theme") || "") + "|" +
+      (el && el.getAttribute("data-ui-contrast") || "") + "|" +
+      (typeof document !== "undefined" && document.documentElement
+        ? document.documentElement.className : "");
+    if (k === _inkKey && _inkText && _inkBg) return [_inkText, _inkBg];
+    const cs = el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+    _inkKey = k;
+    _inkText = readCssRgbFrom(cs, "--text") || [0.965, 0.965, 0.976];
+    _inkBg = readCssRgbFrom(cs, "--bg") || [0.047, 0.047, 0.078];
+    return [_inkText, _inkBg];
+  }
   function pickInk(accentHex) {
     const a = hexRgb(accentHex);
-    const text = readCssRgb("--text") || [0.965, 0.965, 0.976];
-    const bg = readCssRgb("--bg") || [0.047, 0.047, 0.078];
+    const [text, bg] = themeInkPair();
     if (!a) return "var(--text)";
     return wcag(a, text) >= wcag(a, bg) ? "var(--text)" : "var(--bg)";
   }
