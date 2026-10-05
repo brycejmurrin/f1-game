@@ -34,7 +34,24 @@ const CASES = [
   ["tools/ci/test-solo.mjs", /test-solo/],
   ["tools/track/verify-track.cjs", /verify-track/],
   ["tools/track/float-audit.cjs", /float-audit/],
+  // Round 2 (same day): shot.mjs, livery-contrast, rtc-e2e and glx-call-census
+  // booted Chromium (or ran a 2-minute sweep) on --help in the improvement
+  // drive; graph-parity printed "nothing to compare"; gen-shell took an
+  // unknown flag as WRITE mode.
+  ["tools/shot/shot.mjs", /shot\.mjs/],
+  ["tools/car/livery-contrast.mjs", /livery-contrast/],
+  ["tools/net/rtc-e2e.mjs", /rtc-e2e/],
+  ["tools/track/graph-parity.cjs", /graph-parity/],
+  ["tools/gfx/glx-call-census.mjs", /glx-call-census/],
+  ["tools/gen/gen-shell.mjs", /gen-shell/],
 ];
+
+test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
+  const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /unknown argument --bogus/);
+  assert.doesNotMatch(r.stdout, /written|unchanged/);
+});
 
 for (const [rel, want] of CASES) {
   test(`${path.basename(rel)} --help exits 0 before work`, () => {

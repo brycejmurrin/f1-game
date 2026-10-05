@@ -233,6 +233,18 @@ test("apex_bump_cache_check argv never contains --apply", () => {
   assert.ok(!body.argv.includes("--merge"), body.argv);
 });
 
+test("apex_shot: a directory `out` becomes the CLI's default file inside it", () => {
+  // shot.mjs's 4th positional is `[out.png]`; the wrap used to pass the
+  // directory through and the CLI died with "unsupported mime type null".
+  const r = callCli("apex_shot", { track: "monaco", frac: 0.52, cam: "trackside", out: "artifacts/mcp-track-test", dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  const outArg = body.argv.find((a) => a.includes("mcp-track-test"));
+  assert.match(outArg, /mcp-track-test\/monaco-52-trackside\.png$/, body.argv);
+  const r2 = callCli("apex_shot", { track: "monza", out: "artifacts/mcp-track-test/x.png", dryRun: true });
+  assert.match(JSON.parse(r2.stdout).argv.find((a) => a.includes("mcp-track-test")), /x\.png$/);
+});
+
 test("apex_pick_tests argv never contains --bg; includes --json", () => {
   const r = callCli("apex_pick_tests", { dryRun: true });
   assert.equal(r.status, 0, r.stderr);
