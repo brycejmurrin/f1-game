@@ -9,12 +9,12 @@
       const { K, out, track, n, px, pz, py, hw, pyMin, hash, vadd,
         place, prop, groundYAt, anchor, addBox, addCyl, addCone, seat,
         addFrustum, addPrism, addPyramid, along, every,
-        building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
+        building, house, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
         forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
         waterSurface, groundPatch, terrainYAt, frameAt,
         cameraTower, broadcastCompound, sponsorHoarding,
-        groundUnder,
+        groundUnder, indexSolid,
       } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
@@ -228,11 +228,30 @@
         // at 0); exact stand length is UNCERTAIN, the read is "huge stand".
         // https://en.wikipedia.org/wiki/Shanghai_International_Circuit
         // https://www.autosport.com/f1/news/analysis-china-raises-f1-to-new-heights-5067038/5067038/
+        // Detail 2026-10-05: every bay gets endWalls + a local closed shell under
+        // the cantilever so the crimson/alu sail-roof no longer reads hollow
+        // from the S/F cameras (sheet-03). Shared grandstandEx stays untouched.
         for (let i = 0; i < 7; i++) {
-          grandstandEx(sl(-0.052 + i * 0.0098), -1, 12, 52, null, null, {
+          const sBay = sl(-0.052 + i * 0.0098);
+          grandstandEx(sBay, -1, 12, 52, null, null, {
             livery: i % 2 ? "alu" : "crimson", tiers: 2, roof: "cantilever",
-            suites: true, endWalls: i === 0 || i === 6,
+            suites: true, endWalls: true, pylons: true,
           });
+          // Closed under-sail soffit only — a thin slab under the cantilever
+          // overhang (trackside of the stand shell), offset so it does not
+          // coplanar-fight grandstandEx's own rear shell (ground-audit).
+          const aS = anchor(K(sBay), -1, 8.4), bS = [aS.r, aS.u, aS.t];
+          out._mat = MAT.METAL;
+          addBox(out, vadd(aS.c, aS.u, 12.05), [7.2, 0.42, 46],
+            i % 2 ? WHITE : [0.88, 0.86, 0.84], bS);
+          // End fascias close the bay sides under the roof (extra to endWalls).
+          for (const sgn of [-1, 1]) {
+            const aE = anchor(K(sBay), -1, 14);
+            addBox(out, vadd(vadd(aE.c, aE.t, sgn * 24), aE.u, 6.2),
+              [10.5, 11.5, 0.55], i % 2 ? [0.78, 0.80, 0.84] : [0.55, 0.24, 0.24],
+              [aE.r, aE.u, aE.t]);
+          }
+          out._mat = 0;
         }
       })();
 
@@ -382,12 +401,17 @@
         }, (stage) => {
           for (const [s, sd, d, w, h, len] of cluster) {
             const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
-            addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
-            seat.prism(stage, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
+            const foot = a.c.slice();
+            const gy = groundUnder(foot[0], foot[2]);
+            if (gy !== null) foot[1] = gy;
+            seat.box(stage, foot, [w, h, len], WHITE, b);
+            seat.prism(stage, vadd(foot, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
+            addBox(stage, vadd(vadd(foot, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                    [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
           }
         }, { required: true });
+        // Outer Yu / T1 red-roof houses — seat.box so feet stay on grade
+        // (sheet-03 overview showed floating red roofs near T1).
         for (const [s, sd, d, w, h, len] of [
           [sl(0.055), -1, 108, 11, 5.5, 9],
           [sl(0.075), -1, 122,  9, 5.0, 8],
@@ -395,10 +419,20 @@
           [sl(0.115), -1, 128, 10, 5.5, 8],
         ]) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
-          seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          if (onTrack(foot[0], foot[2], Math.max(w, len) * 0.45)) continue;
+          seat.box(out, foot, [w, h, len], WHITE, b);
+          seat.prism(out, vadd(foot, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
+          addBox(out, vadd(vadd(foot, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                  [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
+        }
+        // Extra low houses near T1 outside (racing ~0.05–0.12) — grounded via house().
+        for (const [sf, gap] of [[0.048, 78], [0.068, 86], [0.088, 74], [0.112, 92]]) {
+          house(K(sl(sf)), -1, gap, 9, 5.5, 8, {
+            wall: WHITE, roof: RED, roofType: "gable", lit: true,
+          });
         }
       })();
 
@@ -535,6 +569,8 @@
         const a = anchor(K(0.30), -1, 300), b = [a.r, a.u, a.t];
         const u = b[1];
 
+        // Detail 2026-10-05: replace open frustum "stacked slabs" with closed
+        // solid box cores + shallow window ribbons (local only; city.js untouched).
         for (let i = 0; i < 11; i++) {
           const off   = (i - 5) * 30 + (hash(i * 5) - 0.5) * 12;
           const depth = 40 + hash(i * 7) * 50;
@@ -543,18 +579,30 @@
           const base = vadd(vadd(a.c, a.r, off), a.t, depth);
           const gy = groundUnder(base[0], base[2]);
           if (gy !== null) base[1] = gy;
-          addFrustum(out, vadd(base, u, 0),
-                     w / 2, w / 3.8, h, GLASS_HAZE, 5, b);
+          out._mat = MAT.CONCRETE;
+          seat.box(out, base, [w, h, w * 0.72],
+            hash(i * 3) > 0.5 ? GLASS_HAZE : [0.62, 0.66, 0.72], b);
+          out._mat = MAT.GLASS;
+          for (let band = 1; band <= 3; band++) {
+            addBox(out, vadd(base, u, h * (0.22 * band)),
+              [w * 1.04, h * 0.06, w * 0.76], WIN_TOWER, b);
+          }
+          out._mat = 0;
         }
 
-        // Soft local backdrop band, farther and sky-haze tinted.
+        // Soft local backdrop band, farther and sky-haze tinted — solid boxes
+        // (backdrop isBld can read as open slabs until the shared city fix lands).
         for (let i = 0; i < 12; i++) {
           const k2 = K(0.25 + i / 12 * 0.12);
           const h   = 50 + hash(i * 19 + 100) * 70;
           const w   = 22 + hash(i * 23 + 100) * 16;
-          backdrop(k2, -1, 220 + hash(i * 11) * 50,
-            [w, h, 26],
-            [SKY_HAZE[0], SKY_HAZE[1], SKY_HAZE[2]]);
+          const aB = anchor(k2, -1, 220 + hash(i * 11) * 50);
+          if (onTrack(aB.c[0], aB.c[2], w * 0.4)) continue;
+          const bB = [aB.r, aB.u, aB.t];
+          const foot = aB.c.slice();
+          const gyB = groundUnder(foot[0], foot[2]);
+          if (gyB !== null) foot[1] = gyB;
+          seat.box(out, foot, [w * 0.55, h, w * 0.45], SKY_HAZE, bB);
         }
 
         const pc = vadd(vadd(a.c, a.r, -2), a.t, 50);
@@ -604,17 +652,17 @@
           cyl(vadd(pc, u, spireBase), 0.9, 32, [0.88, 0.78, 0.72], 6);
           cone(vadd(pc, u, spireBase + 32), 0.9, 12, [0.90, 0.82, 0.76], 6);
 
-          // Shanghai Tower and Jin Mao complete the compact three-tower cue.
-          frustum(stC, 11, 6.5, 80, GLASS_HAZE, 6);
-          frustum(vadd(stC, u, 80), 6.5, 3.2, 60, [0.62, 0.68, 0.74], 6);
-          frustum(vadd(stC, u, 140), 3.2, 1.0, 30, [0.66, 0.72, 0.78], 6);
+          // Shanghai Tower and Jin Mao — solid tapering box cores (closed).
+          box(vadd(stC, u, 40), [18, 80, 16], GLASS_HAZE);
+          box(vadd(stC, u, 110), [12, 60, 11], [0.62, 0.68, 0.74]);
+          box(vadd(stC, u, 155), [6, 30, 5.5], [0.66, 0.72, 0.78]);
           box(vadd(stC, u, 172), [2.5, 22, 2.5], STEEL);
-          frustum(jmC, 9.5, 7, 55, [0.70, 0.69, 0.68], 8);
-          frustum(vadd(jmC, u, 55), 7, 4.5, 35, [0.72, 0.71, 0.70], 8);
-          frustum(vadd(jmC, u, 90), 4.5, 1.8, 20, [0.74, 0.73, 0.72], 8);
+          box(vadd(jmC, u, 27.5), [16, 55, 14], [0.70, 0.69, 0.68]);
+          box(vadd(jmC, u, 72.5), [12, 35, 11], [0.72, 0.71, 0.70]);
+          box(vadd(jmC, u, 100), [8, 20, 7], [0.74, 0.73, 0.72]);
           cyl(vadd(jmC, u, 110), 0.7, 18, STEEL, 5);
 
-          frustum(swC, 10, 7, 114, [0.58, 0.66, 0.74], 6);
+          box(vadd(swC, u, 57), [16, 114, 14], [0.58, 0.66, 0.74]);
           box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
           box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
           box(vadd(swC, u, 149), [14.4, 3, 11.4], STEEL);
@@ -627,6 +675,104 @@
           const w = 26 + hash(i * 9) * 12;
           const h = 7 + hash(i * 5) * 3;
           backdrop(k, -1, 150 + hash(i * 7) * 25, [w, h, 16], [0.60, 0.60, 0.58]);
+        }
+      })();
+
+      // Midfield between the 上 loops — sheet-03 overview was empty green.
+      // Cheap instanced service roads, grass variety, low tech sheds.
+      (function midfieldCampus() {
+        const GRASS_A = [0.32, 0.48, 0.28];
+        const GRASS_B = [0.28, 0.42, 0.24];
+        const GRASS_C = [0.38, 0.52, 0.30];
+        const TECH = [0.72, 0.74, 0.76];
+        const TECH_D = [0.58, 0.60, 0.64];
+        // Service road ribbons cutting the infield (racing mid-lap, inside).
+        for (const [sf, side, gap, len, wid] of [
+          [0.22, -1, 55, 90, 6.5],
+          [0.28, -1, 72, 70, 5.5],
+          [0.34,  1, 48, 80, 6.0],
+          [0.40, -1, 60, 95, 6.5],
+          [0.52, -1, 70, 85, 5.5],
+          [0.18,  1, 65, 60, 5.0],
+        ]) {
+          groundPatch(K(sf), side, gap, [wid, 0.18, len], TARMAC, {
+            id: `shanghai-svc-${Math.round(sf * 1000)}`, samples: 4,
+          });
+        }
+        // Grass variety patches — break the flat plate.
+        for (let i = 0; i < 10; i++) {
+          const sf = 0.18 + i * 0.038;
+          const side = (i % 2) ? -1 : 1;
+          const gap = 40 + hash(i * 17) * 50;
+          const col = i % 3 === 0 ? GRASS_A : (i % 3 === 1 ? GRASS_B : GRASS_C);
+          groundPatch(K(sf), side, gap,
+            [18 + hash(i * 5) * 22, 0.16, 22 + hash(i * 9) * 28], col, {
+              id: `shanghai-mid-grass-${i}`, samples: 3,
+            });
+        }
+        // Low tech / paddock support buildings — solid seat.box cores, far
+        // enough out that plantTree cannot land inside them; indexSolid reserves
+        // the footprint for the deferred foliage pass.
+        for (let i = 0; i < 8; i++) {
+          const sf = 0.20 + i * 0.042;
+          const side = (i % 3 === 0) ? 1 : -1;
+          const gap = 88 + hash(i * 11) * 36;
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 22)) continue;
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          const w = 10 + hash(i * 7) * 8;
+          const h = 4.5 + hash(i * 13) * 3.5;
+          const d = 12 + hash(i * 19) * 10;
+          const hf = (d / 2 + 4) / track.total;
+          indexSolid(sf - hf, sf + hf, side, gap - w / 2 - 2, w + 6);
+          out._mat = MAT.CONCRETE;
+          seat.box(out, foot, [w, h, d], i % 2 ? TECH : TECH_D, b);
+          out._mat = MAT.METAL;
+          addBox(out, vadd(foot, a.u, h + 0.25), [w * 1.08, 0.45, d * 1.08], WHITE, b);
+          out._mat = MAT.GLASS;
+          addBox(out, vadd(vadd(foot, a.u, h * 0.55), a.r, side * (w * 0.5 + 0.08)),
+            [0.2, h * 0.4, d * 0.55], WIN_LIT, b);
+          out._mat = 0;
+        }
+        // Sparse tree variety in midfield (break cone monoculture) — gaps that
+        // stay clear of the tech shed band above.
+        for (let i = 0; i < 12; i++) {
+          const sf = 0.19 + i * 0.035;
+          const side = (i % 2) ? -1 : 1;
+          const gap = 42 + hash(i * 23) * 28;
+          const ht = 6 + hash(i * 29) * 5;
+          if (i % 3 === 0) pine(K(sf), side, gap, ht + 2, TREE_G);
+          else if (i % 3 === 1) tree(K(sf), side, gap, ht, MARSH_N);
+          else bush(K(sf), side, gap, MARSH);
+        }
+      })();
+
+      // Chinese GP pit/paddock signage — red/gold/yellow brand read.
+      (function chinaGpSignage() {
+        sponsorHoarding(sl(-0.040), sl(0.018), -1, 10, {
+          step: 12, palette: [RED, YELLOW, WHITE, [0.82, 0.16, 0.14]], postCol: DARK,
+        });
+        sponsorHoarding(sl(-0.030), sl(0.010), 1, 8, {
+          step: 11, palette: [YELLOW, RED, WHITE], postCol: STEEL,
+        });
+        for (const [sf, side, gap, w, h, col] of [
+          [sl(-0.020), 1, 26, 18, 5.0, RED],
+          [sl(0.005),  1, 24, 16, 4.5, YELLOW],
+          [sl(0.018), -1, 26, 20, 5.5, RED],
+          [sl(0.038),  1, 22, 14, 4.0, WHITE],
+          [0.468, 1, 28, 16, 4.5, RED],
+          [0.770, 1, 22, 18, 5.0, YELLOW],
+          [0.835, -1, 20, 14, 4.0, RED],
+        ]) {
+          billboard(K(sf), side, gap, w, h, col);
+        }
+        // Pit-lane motorhome / hospitality row cues (side +1, racing paddock).
+        for (let i = 0; i < 4; i++) {
+          motorhome(K(sl(-0.024 + i * 0.014)), 1, 56, 7, 3.8, 14, {
+            wall: WHITE, accent: RED, lit: true,
+          });
         }
       })();
 
