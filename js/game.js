@@ -2608,8 +2608,17 @@ async function startRaceBody() {
   if (announcer.stop) announcer.stop();
   if (hud.resetRace) hud.resetRace();
   rlap("resets");
-  loadTrack(trackIdx);
+  // Pace the rebuild: sync loadTrack + warmCarAssets was one ≤3 s long task
+  // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
+  // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
+  // live() stays true: this session owns the build (menu prep uses a generation gate).
+  if (!(await loadTrackStepped(trackIdx, () => true))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
+  // Break the remaining sync legs (settings → car meshes) into separate tasks.
+  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  await yieldMain();
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2744,6 +2753,7 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  await yieldMain();   // do not glue car-mesh warm onto the settings/grid sync stretch
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
