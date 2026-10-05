@@ -374,7 +374,7 @@ test("release at race start frees the garage and re-arms the next title prebuild
   assert.deepEqual(h.built, ["car", "room"]);
   assert.equal(h.pre.state().ready, true);
   const game = read("js/game.js");
-  assert.match(game, /  clearMenuScreens\(\);\n  garagePre\.release\(\);/, "startRaceBody releases it once the garage screen is down");
+  assert.match(game, /  clearMenuScreens\(\); garagePre\.release\(\);/, "startRaceBody releases it once the garage screen is down");
 });
 
 test("GarageScene.release frees every garage handle; the next draw rebuilds the room", () => {
