@@ -17,7 +17,8 @@
      9  s 0.3342 +1  Old Hairpin bank
     10  s 0.4552 +1  Starkey's Bridge
     11  s 0.5162 -1  Schwantz Curve, trees only
-    12  s 0.5713 +1  McLeans
+     12  s 0.5713 +1  McLeans
+    12b s 0.640  -1  East Midlands Airport airliner (departure path)
     13  s 0.6803 -1  Coppice
     14  s 0.7592 -1  The Esses
     15  s 0.7887 +1  Melbourne Hairpin
@@ -44,7 +45,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit, modelGroup, vadd, addBox, seat, MAT } = api;
+        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, seat, MAT } = api;
 
       // 1. PALETTE + LOCAL HELPERS
       //    Overcast English green: desaturated, cool, low contrast. Nothing
@@ -440,6 +441,33 @@
       groundPatch(K(0.574), 1, 34, [22, 0.16, 62], ROUGH);
       hedge(0.548, 0.606, 1, 56, 2.0, HEDGE_L);
       rank(0.544, 0.610, 1, 66, 16, 1600, 9.0, 15.5);
+
+      // 12b. EAST MIDLANDS AIRPORT — departure path over McLeans / Coppice
+      //    Wikipedia: EMA runway west end is ~365 m from the track's east end.
+      //    PPRuNe / spotters: McLeans and Coppice sit under the departure path;
+      //    aircraft overhead are the venue's distinctive sky cue (Madrid Barajas
+      //    / Mexico Benito Juárez pattern). One low-poly airliner on climb-out,
+      //    outside the eastern parkland — never a trackside prop. Dunlop
+      //    Bridge is NOT modelled: Adroit rebuild (2010) left it out (Wikipedia).
+      {
+        const sAir = 0.640;                         // between McLeans and Coppice
+        const a = anchor(K(sAir), -1, 480);          // east of Coppice woods; ~EMA side
+        const alt = 130;                            // low departure — "fairly low overhead"
+        const c = [a.c[0], a.c[1] + alt, a.c[2]];
+        const bn = [a.r, a.u, a.t];
+        const bf = [a.r, a.t, a.u];                 // cylinder axis along fuselage
+        const FUSE = [0.78, 0.80, 0.83];             // pale airliner skin
+        const DARK = [0.30, 0.32, 0.34];
+        const TAIL = [0.16, 0.38, 0.55];             // cool EMA-ish fin
+        modelGroup("donington-ema-airliner", {
+          center: c, size: [48, 16, 48], basis: bn,
+        }, (stage) => {
+          addCyl(stage, vadd(c, a.t, -16), 1.85, 34, FUSE, 8, bf);
+          addBox(stage, c, [32, 0.65, 4.4], DARK, bn);                    // wings
+          addBox(stage, vadd(c, a.t, 14.5), [0.55, 4.8, 3.8], TAIL, bn);  // fin
+          addBox(stage, vadd(c, a.t, 13.6), [9.5, 0.5, 2.6], DARK, bn);   // tailplane
+        }, { required: true });
+      }
 
       // 13. s 0.6803 -1 14 — COPPICE, the woodland the uphill right runs into
       forestEdge(0.650, 0.720, -1, 16, { col: LEAF_D, spacing: 10 });
