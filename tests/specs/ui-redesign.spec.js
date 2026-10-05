@@ -221,18 +221,23 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       density: document.getElementById("cs-inner").dataset.density,
       tabsOY: tcs.overflowY,
       tabsOX: tcs.overflowX,
+      rowDisplay: [...tabsEl.querySelectorAll(".cs-tab-row")].map((row) => getComputedStyle(row).display),
       optsOY: getComputedStyle(opts).overflowY,
     };
   });
   expect(compactWideGarage.pair).toBe("off");
   expect(compactWideGarage.density).toBe("compact");
   expect(["auto", "scroll"]).not.toContain(compactWideGarage.tabsOY);
-  // Compact non-tall tabs are a 7×2 GRID, not a sideways strip — both axes
-  // clip (css/carsetup.css "#cs-tabs … display: grid"). That rule and this
-  // assertion's old strip expectation landed in the SAME 1496 all-PR merge,
-  // contradicting each other from birth; the suite had not actually run
-  // since, so the stale half survived until the round-7 batch.
-  expect(compactWideGarage.tabsOX).toBe("hidden");
+  // A COMPACT stacked garage is ONE pan-x strip: #cs-tabs is the sideways
+  // scroller and both named rows are `display: contents`, so they flatten into
+  // it with no scroll of their own (the pair rail's mechanism). It replaced the
+  // 7×2 grid of 31px tabs because one 52px-floor strip, with BACK/DONE riding
+  // beside it, gives the options list ~2× the height — measured 2026-10-05
+  // (layout-audit): #cs-options 80 -> 182 px landscape, 62 -> 229 px portrait.
+  // This assertion was last rewritten when the grid landed; it moves with the
+  // design, never the CSS with it.
+  expect(["auto", "scroll"]).toContain(compactWideGarage.tabsOX);
+  expect(compactWideGarage.rowDisplay.every((d) => d === "contents"), JSON.stringify(compactWideGarage.rowDisplay)).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(compactWideGarage.optsOY);
 
   // Garage stacked: portrait sheet is under --pair-at 400 — a strip, not a grid.
@@ -271,8 +276,11 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const body = document.getElementById("cs-body");
     const tcs = getComputedStyle(tabsEl);
     const rowOX = [...tabsEl.querySelectorAll(".cs-tab-row")].map((row) => getComputedStyle(row).overflowX);
+    const rowDisplay = [...tabsEl.querySelectorAll(".cs-tab-row")].map((row) => getComputedStyle(row).display);
     return {
       pair: document.getElementById("cs-inner").dataset.pair,
+      density: document.getElementById("cs-inner").dataset.density,
+      rowDisplay,
       tabsOY: tcs.overflowY,
       tabsOX: tcs.overflowX,
       rowOX,
@@ -285,8 +293,18 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   expect(stackedGarage.pair).not.toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedGarage.tabsOY);
-  expect(stackedGarage.tabsOX).toBe("hidden");
-  expect(stackedGarage.rowOX.every((v) => ["auto", "scroll"].includes(v))).toBe(true);
+  // Two contracts, chosen by density. A COMPACT tall sheet (a 393x659 phone:
+  // a tall garage compacts under 560 own px of room) is the same one pan-x
+  // strip as above — #cs-tabs scrolls sideways, the rows are `display:
+  // contents`. A roomy tall sheet (this 390x844 window) keeps two named rows,
+  // each its own sideways strip inside a clipped #cs-tabs.
+  if (stackedGarage.density === "compact") {
+    expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
+    expect(stackedGarage.rowDisplay.every((d) => d === "contents")).toBe(true);
+  } else {
+    expect(stackedGarage.tabsOX).toBe("hidden");
+    expect(stackedGarage.rowOX.every((v) => ["auto", "scroll"].includes(v))).toBe(true);
+  }
   expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
   expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
   expect(stackedGarage.tabsSf).toBe(false);
