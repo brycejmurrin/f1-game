@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: "Use when AI racecraft is wrong — overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall or the pit lane, rescue teleport), driver ratings craft/awareness/experience, or js/physics/ai-drive.js. Do not change player physics (tune-physics), or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
+description: "Use when AI racecraft is wrong — overtakes/dive-bombs too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, a wall, kerb or pit lane, rescue teleport), driver ratings craft/awareness/experience, or ai-drive.js. Not player physics (tune-physics) or race control — flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model
@@ -79,6 +79,10 @@ half-second `offT` gate. Pit-box and red-held states remain exempt. A queued
 pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`.
 Road rescue preserves existing speed with a pace-scaled floor; pit-lane rescue
 uses its own lane/floor rule.
+A kerb is NOT off-road (`c.offroad` excludes `onKerb`, game.js ~5077): a car wedged on a kerb
+never counts as `beachedAt`, so only the `speed < 5` rescue branch (after `stuckT` / dig-out)
+fires; kerb drag is only `kerbGripSm` (0.7 grip, ~6 m/s² cut). "Stuck on the kerb" is therefore
+usually a dive/contact problem (see Brake target and Traffic tactics), not a rescue bug.
 Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
 `stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
 timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:

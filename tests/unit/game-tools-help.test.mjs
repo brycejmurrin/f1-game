@@ -21,7 +21,37 @@ const CASES = [
   ["tools/check/player-dyn.mjs", /player-dyn/],
   ["tools/check/physics-tune-sweep.mjs", /physics-tune-sweep/],
   ["tools/car/career-economy.mjs", /career-economy/],
+  // 2026-10-05 skill test-drive: four subagents booted Chromium by running
+  // `apex-eval --help` (it took --help as a track id); the rest answered --help
+  // with a poll, a default run, a stack trace or exit 1.
+  ["tools/shot/apex-eval.mjs", /apex-eval/],
+  ["tools/car/render-car.mjs", /render-car/],
+  ["tools/car/spine-station.mjs", /spine-station/],
+  ["tools/check/check-physics.mjs", /check-physics/],
+  ["tools/check/vstd-lint.mjs", /vstd-lint/],
+  ["tools/ci/ci-watch.mjs", /ci-watch/],
+  ["tools/ci/bump-cache.mjs", /bump-cache/],
+  ["tools/ci/test-solo.mjs", /test-solo/],
+  ["tools/track/verify-track.cjs", /verify-track/],
+  ["tools/track/float-audit.cjs", /float-audit/],
+  // Round 2 (same day): shot.mjs, livery-contrast, rtc-e2e and glx-call-census
+  // booted Chromium (or ran a 2-minute sweep) on --help in the improvement
+  // drive; graph-parity printed "nothing to compare"; gen-shell took an
+  // unknown flag as WRITE mode.
+  ["tools/shot/shot.mjs", /shot\.mjs/],
+  ["tools/car/livery-contrast.mjs", /livery-contrast/],
+  ["tools/net/rtc-e2e.mjs", /rtc-e2e/],
+  ["tools/track/graph-parity.cjs", /graph-parity/],
+  ["tools/gfx/glx-call-census.mjs", /glx-call-census/],
+  ["tools/gen/gen-shell.mjs", /gen-shell/],
 ];
+
+test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
+  const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /unknown argument --bogus/);
+  assert.doesNotMatch(r.stdout, /written|unchanged/);
+});
 
 for (const [rel, want] of CASES) {
   test(`${path.basename(rel)} --help exits 0 before work`, () => {

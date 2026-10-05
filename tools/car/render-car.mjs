@@ -84,6 +84,11 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
+import { exitIfHelp } from '../lib/cli-args.mjs';
+
+exitIfHelp(process.argv.slice(2), `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
+  Headless batch renderer for tools/carview.html (needs a static server on :3456).
+  Views: hero front rear side frontquarter rearquarter nose tail top turntable all. Full option list: the header of this file.`);
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshotPresentedCanvas } from '../shot/probe-page.mjs';

@@ -20,7 +20,7 @@ Playwright hang after a mid-run `version.json` bump.
    - Preserve network-first for navigate + `version.json`.
    - Do not cache cross-origin or blob requests.
 
-3. **Sync the DEFERRED triple**, then:
+3. **Sync the DEFERRED triple** (`tools/manifest.cjs` → `js/roster.js` → `sw.js` optional seed; step 1's `gen-shell.mjs` writes the last two), then:
    ```sh
    npm run test:tooling-fast
    ```
@@ -59,6 +59,10 @@ Playwright hang after a mid-run `version.json` bump.
 - Forgetting the `sw.js` optional entry — first TLX/WGX boot misses cache.
 - Promoting vendor/fonts to essential — the install fails on one unreachable
   optional path (GLX is required; TLX/vendor are critical optional dependencies).
+- Judging "still stale" from the committed `version.json` / `apex-build` meta — the deploy
+  restamps both (`2000 + commit count`); read the LIVE shell's `apex-sha` meta (`tools/ci/pages-live-sha.sh`,
+  **deploy-research**), and remember the guard reloads once per session per build
+  (`apex26.shellReloadedTo`), so clear it in a retest.
 - Expecting the SW to cache Jolpica/OpenF1 — same-origin guard blocks it.
 - Caching `blob:` music URLs — throws or breaks playback.
 - Expecting `test:service-worker` to catch DEFERRED drift — it does not; the

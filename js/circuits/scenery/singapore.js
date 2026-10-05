@@ -788,26 +788,50 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 7);
       }
 
-      for (const [s0, s1, side] of [
-        [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
-        [0.00, 0.16,  1], [0.30, 0.44,  1], [0.582, 0.66,  1], [0.92, 0.99,  1],
-      ]) {
-        // Sit behind the 1.2 m concrete wall rather than sharing its edge.
-        fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
-      }
-      // The +1 (authored = racing -1, the pit side) fences end at the pit
+      // CATCH FENCE over the street wall, all lap. The engine draws the wall
+      // itself (def.street: a 0.4 m x 1.1 m concrete panel run at barrierGap
+      // 1.2, back face 1.4 m out); the fence stands right behind it, not
+      // 1.8 m back over open verge as it did at gap 3.0. The kit's
+      // "chainlink" style draws only a 7 cm top rail on its posts — the
+      // 2026-10-05 survey shots read it as no fence at all — so this run uses
+      // "panelled" (posts + two rails): Marina Bay carries ~4 m debris
+      // fencing over its walls the whole lap. NOT "mesh": fence() sizes each
+      // 5 m panel at CENTRELINE spacing and lays it straight on the node
+      // tangent, so on the inside of a bend the solid sheet's ends swing
+      // into the wall and overlap the next sheet — measured 11 -> 28
+      // coplanar-audit spots (21 fence x street-barrier pairs at gap 1.7).
+      // A true mesh panel here needs an engine fix to that spacing.
+      //
+      // TecPro stacks (1.5 m deep at gap 1.6, so 0.85-2.35 m out) sit in
+      // front of the wall at five corners; across them the fence steps back
+      // to 2.6 m so its posts stand behind the blocks, not through them.
+      const SG_FENCE_GAP = 1.7, SG_FENCE_BACK = 2.6, SG_FENCE_COL = [0.56, 0.60, 0.66];
+      const SG_FENCE = { style: "panelled", postCol: [0.30, 0.32, 0.36] };
+      const SG_TYRES = [
+        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
+        [0.66, 0.675,  1], [0.82, 0.835,  -1],
+      ];
+      const sgFence = (s0, s1, side) => {
+        let a = s0;
+        for (const [t0, t1, ts] of SG_TYRES) {
+          if (ts !== side || t1 <= s0 || t0 >= s1) continue;
+          if (t0 > a) fence(a, t0, side, SG_FENCE_GAP, 3.4, SG_FENCE_COL, SG_FENCE);
+          fence(Math.max(a, t0), Math.min(s1, t1), side, SG_FENCE_BACK, 3.4, SG_FENCE_COL, SG_FENCE);
+          a = Math.min(s1, t1);
+        }
+        if (s1 > a) fence(a, s1, side, SG_FENCE_GAP, 3.4, SG_FENCE_COL, SG_FENCE);
+      };
+      // Side +1 (authored = racing -1, the pit side) ends at the pit
       // complex's window (authored .4850-.5816): 101 posts measured
       // superseded across it, and a fence that visibly ends at the pit wall
       // reads right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
+      // The old runs left ~50 m holes every tenth of the lap; they are closed
+      // now (side -1 whole, side +1 everything but the pit window).
       for (const [s0, s1, side] of [
-        [0.17, 0.29,  1], [0.45, 0.485,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
-        [0.185, 0.195, -1], [0.405, 0.415, -1], [0.625, 0.635, -1],
-      ]) fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
+        [0.00, 0.998, -1], [0.00, 0.485, 1], [0.582, 0.998, 1],
+      ]) sgFence(s0, s1, side);
 
-      for (const [s0, s1, side] of [
-        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
-        [0.66, 0.675,  1], [0.82, 0.835,  -1],
-      ]) {
+      for (const [s0, s1, side] of SG_TYRES) {
         tyreWall(s0, s1, side, 1.6, NEON[K(s0) % 4]);
       }
 
@@ -1022,43 +1046,79 @@
         bush(k, side, 10, [0.16, 0.40, 0.18]);
       }
 
+      // s 0.58 R — MERLION PARK: the 8.6 m lion-fish statue on a bay
+      // promontory (Wikipedia Merlion Park, 1°17′12.5″N 103°51′16.2″E;
+      // F1.com landmark list). Was anonymous `out` prims — not a required
+      // modelGroup, so flyby/landmark gates never saw it, and the bay sheet
+      // stopped short of this frac so the park sat on dry verge. Now a
+      // required assembly + a local waterBand just beyond the plinth.
+      waterBand(0.545, 0.615, 1, 42, 110, 12, BAY, {
+        id: "marina-water-merlion", required: true,
+      });
       {
-        const a = anchor(K(0.58), 1, 34);
+        // Dist 38 puts the plinth on the quay inside the waterBand's 42 m
+        // inner edge (same clearance idiom as the bay reflection strips).
+        const a0 = anchor(K(0.58), 1, 38);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        const a  = {
+          c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
+          r: a0.r, u: a0.u, t: a0.t,
+        };
         if (!onTrack(a.c[0], a.c[2], 12)) {
-          const b   = [a.r, a.u, a.t];
-          const jetB = [a.t, a.r, a.u];    // 'up' slot = a.r → jet fires outward over water
-          const WHITE = [0.92, 0.93, 0.95];
-          const SHADE = [0.80, 0.82, 0.86];
-          // Round plinth in the splash pool
-          out._mat = MAT.CONCRETE;
-          addCyl(out, vadd(a.c, a.u, 0.6), 7, 1.2, [0.60, 0.62, 0.66], 12, b);
-          // Fish-body base: three stacked scale rings tapering up (curved body)
-          addFrustum(out, vadd(a.c, a.u, 1.2), 6.2, 5.0, 5, WHITE, 10, b);
-          addFrustum(out, vadd(a.c, a.u, 6.0), 5.0, 4.2, 5, SHADE, 10, b);
-          addFrustum(out, vadd(a.c, a.u, 10.8), 4.2, 3.4, 5, WHITE, 10, b);
-          // Upright chest/torso
-          addBox(out, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
-          // Lion head block + snout jutting toward the bay
-          const head = vadd(a.c, a.u, 20.5);
-          addBox(out, head, [5.2, 4.4, 4.6], WHITE, b);
-          addBox(out, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);   // snout
-          // Mane — a ring of short cones around the head
-          for (let m = 0; m < 8; m++) {
-            const ang = (m / 8) * Math.PI * 2;
-            const dx = Math.cos(ang) * 3.2, dz = Math.sin(ang) * 3.2;
-            const mc = [head[0] + a.r[0] * dx + a.t[0] * dz, head[1] + 0.5, head[2] + a.r[2] * dx + a.t[2] * dz];
-            addCone(out, mc, 1.1, 2.4, [0.86, 0.88, 0.92], 5, [a.r, a.u, a.t]);
-          }
-          // Ears
-          for (const o of [-1.6, 1.6]) addCone(out, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
-          out._mat = 0;
-          // Water jet — a long tapering cyan cone arcing out over the bay
-          const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
-          addCone(out, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
-          addCone(out, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);   // splash burst
-          // Splash pool + reflective disc at the base
-          addCyl(out, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
-          addBox(out, vadd(a.c, a.u, 0.4), [22, 0.15, 22], [0.40, 0.55, 0.65], b);
+          const b    = [a.r, a.u, a.t];
+          // 'up' slot = a.r → jet fires outward over the bay sheet.
+          const jetB = [a.t, a.r, a.u];
+          const WHITE = [0.94, 0.95, 0.97];
+          const SHADE = [0.82, 0.84, 0.88];
+          const MANE  = [0.88, 0.90, 0.94];
+          // Named emit keeps `{ required: true }` inside the landmark-contract
+          // 2200-char window of the group call (an inline stage body pushes
+          // the opts past that slice).
+          const emitMerlion = (stage) => {
+            // Round concrete plinth in the splash pool (no coplanar plaza
+            // slab — a flat deck fought the pool face at the same y).
+            stage._mat = MAT.CONCRETE;
+            addCyl(stage, vadd(a.c, a.u, 0.6), 7.5, 1.2, [0.62, 0.64, 0.68], 12, b);
+            // Fish-body: three stacked scale rings tapering up (curved body).
+            addFrustum(stage, vadd(a.c, a.u, 1.2), 6.4, 5.1, 5.0, WHITE, 10, b);
+            addFrustum(stage, vadd(a.c, a.u, 6.0), 5.1, 4.2, 5.0, SHADE, 10, b);
+            addFrustum(stage, vadd(a.c, a.u, 10.8), 4.2, 3.4, 5.0, WHITE, 10, b);
+            // Upright chest/torso under the lion head.
+            addBox(stage, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
+            // Lion head + snout jutting toward the bay.
+            const head = vadd(a.c, a.u, 20.5);
+            addBox(stage, head, [5.2, 4.4, 4.6], WHITE, b);
+            addBox(stage, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);
+            for (let m = 0; m < 8; m++) {
+              const ang = (m / 8) * Math.PI * 2;
+              const dx = Math.cos(ang) * 3.2, dz = Math.sin(ang) * 3.2;
+              const mc = [head[0] + a.r[0] * dx + a.t[0] * dz,
+                          head[1] + 0.5,
+                          head[2] + a.r[2] * dx + a.t[2] * dz];
+              addCone(stage, mc, 1.1, 2.4, MANE, 5, b);
+            }
+            for (const o of [-1.6, 1.6]) {
+              addCone(stage, vadd(vadd(head, a.t, o), a.u, 2.6), 0.7, 1.6, WHITE, 5, b);
+            }
+            stage._mat = 0;
+            // Cyan spout + splash burst over the bay (night-readable).
+            const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
+            addCone(stage, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
+            addCone(stage, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);
+            // Splash pool rim slightly ABOVE the reflective disc so the two
+            // horizontal faces never share a plane (flatCoplanar).
+            addCyl(stage, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
+            addBox(stage, vadd(a.c, a.u, 0.55), [18, 0.12, 18], [0.40, 0.55, 0.65], b);
+            // Low park rail posts — Merlion Park's viewing edge, not a wall.
+            for (let i = -3; i <= 3; i++) {
+              if (i === 0) continue;
+              const p = vadd(vadd(a.c, a.r, 12), a.t, i * 3.2);
+              addCyl(stage, p, 0.18, 1.6, [0.70, 0.72, 0.76], 6, b);
+            }
+          };
+          modelGroup("singapore-merlion", {
+            center: vadd(a.c, a.u, 12), size: [28, 28, 28], basis: b,
+          }, emitMerlion, { required: true });
         }
       }
 

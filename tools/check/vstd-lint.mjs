@@ -45,6 +45,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../manifest.cjs");
@@ -219,6 +220,9 @@ export function readFiles(list = defaultFiles(), root = ROOT) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
+  exitIfHelp(args, `usage: node tools/check/vstd-lint.mjs [file-or-dir ...]
+  Lists every .speed-vs-literal comparison in js/ (default scope) or the given files/dirs (non-recursive).
+  A REPORT, not a gate: always exits 0; the gate is tests/unit/vstd-invariant.test.mjs.`);
   // A directory argument expands to its .js files (non-recursive), so
   // `vstd-lint.mjs js/game.js js/game/` works the way the auditor prompt
   // spells it instead of dying on EISDIR.
@@ -235,7 +239,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // ALWAYS EXITS 0, deliberately. The approved-absolute set (ALLOWED +
   // SUSPECT) lives in tests/unit/vstd-invariant.test.mjs, which imports this
   // module — so this CLI cannot know it without a cycle, and every hit it
-  // prints on a clean tree (21 today) is already justified there. That test
+  // prints on a clean tree (26 on 2026-10-05) is already justified there. That test
   // is the gate; this is the listing. An exit code here would be a guard that
   // fails on a healthy tree, which is worse than no guard at all.
   const hits = speedLiteralViolations(readFiles(list));

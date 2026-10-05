@@ -9,7 +9,7 @@
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         px, pz, hw, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop,
+        fence, guardrail, tyreWall, groundPatch, modelGroup, prop, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit,
         bleacher, scaffoldStand, seat, groundedSegments,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
@@ -20,45 +20,49 @@
       const SHELL = [0.78, 0.78, 0.76], SHELL2 = [0.70, 0.71, 0.73];
       const ROOF = [0.86, 0.86, 0.84];
 
-      // Outer oval wall — skip the SF stretch where indy-main-stands owns the
-      // continuous Paddock / Tower Terrace face (IMS facility map; front stretch
-      // grandstands). No fabric seat overlays on the crowdBank risers: they
-      // are flatCoplanar hotspots (38 m²).
-      const OUTER_BAYS = 28, OUTER_SPAN = 0.28;
-      const OUTER_RUN = 1100;
-      const OUTER_BAY_LEN = OUTER_RUN / OUTER_BAYS;
-      for (let i = 0; i < OUTER_BAYS; i++) {
-        // Span 0.78..1.06 (=0.06): mid-straight + T4 only.
-        const s = 0.78 + i * (OUTER_SPAN / OUTER_BAYS);
-        const g = Math.floor(i * 10 / OUTER_BAYS);
-        const s01 = ((s % 1) + 1) % 1;
-        // Leave SF (indy-main-stands), T1 bleachers, and the south bend alone.
-        if (s01 < 0.10 || s01 > 0.90) continue;
-        if (s01 >= 0.16 && s01 <= 0.26) continue;
-        const gap = 18;
-        grandstandEx(s01, 1, gap, Math.min(OUTER_BAY_LEN * 0.9, 40), null, null, {
+      // SIDES (measured on the built centreline, 2026-10-05): the F1 lap runs
+      // the oval clockwise, so the INFIELD is side +1 (r at frac 0 = (-1, 0),
+      // toward the road course at x 3..230) and the OUTSIDE of the oval is
+      // side -1. The lap is on the oval from the south short chute (~0.76)
+      // through oval Turn 1 (0.84-0.91, run backwards) and up the front
+      // stretch to the F1 T1 turn-off (0.145).
+      // Real IMS: continuous grandstands outside the front stretch and around
+      // the turns, the Pagoda, pit road and Gasoline Alley inside, open grass
+      // and the Brickyard Crossing golf holes in the infield, and the town of
+      // Speedway beyond the outer wall.
+      const OUT = -1, IN = 1;
+      // A 180-degree turn about the up axis: geometry authored facing the road
+      // from one side keeps its handedness (digits read the right way round)
+      // when it moves to the other side.
+      const neg = (v) => [-v[0], -v[1], -v[2]];
+      const rot = (a) => ({ c: a.c, u: a.u, r: neg(a.r), t: neg(a.t) });
+
+      // Outside grandstand bank: short chute, oval Turn 1 and the whole front
+      // stretch, gap 18 behind the outer wall and catch fence. Skips the
+      // start/finish window that indy-main-stands owns.
+      const BAY_LEN = 38, BAY_F = 40 / 4073;
+      for (let s = 0.770, i = 0; s < 1.150; s += BAY_F, i++) {
+        const s01 = s % 1;
+        if (s01 > 0.986 || s01 < 0.014) continue;
+        const g = i % 6;
+        grandstandEx(s01, OUT, 18, BAY_LEN, null, null, {
           livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
-          tiers: 2, roof: g % 5 === 0 ? "cantilever" : null,
-          endWalls: false, pylons: g % 5 === 0,
-        });
-      }
-      // Inner (infield) stands facing back across the front straight.
-      for (let i = 0; i < 8; i++) {
-        const s = (0.92 + i * 0.018) % 1;
-        if (s < 0.08 || s > 0.92) continue;
-        grandstandEx(s, -1, 18, 36, null, null, {
-          livery: i % 2 ? "alu" : "concrete", tiers: 2, endWalls: false,
+          tiers: s01 > 0.90 || s01 < 0.10 ? 3 : 2,
+          roof: g === 0 ? "cantilever" : null, endWalls: false, pylons: g === 0,
         });
       }
 
-      // Continuous main-straight stand — Paddock / Tower Terrace wall opposite
-      // the Pagoda (IMS facility map; https://www.indianapolismotorspeedway.com/).
-      // Positive rake: each tier steps further from the road and rises.
+      // Continuous main-straight stand at the Yard of Bricks — the Paddock /
+      // Tower Terrace face across pit road from the Pagoda (IMS facility map;
+      // https://www.indianapolismotorspeedway.com/). Positive rake: each tier
+      // steps further from the road and rises.
+      const outAnchor = anchor;
       (function indyMainStands() {
-        const side = 1;
+        const side = 1;   // authored facing as before; rot() carries it outside
         const FACE = 48;
         const DEPTH = 18;
         const gap0 = 18;
+        const anchor = (k, _side, gap) => rot(outAnchor(k, OUT, gap));
         const a0 = anchor(K(0.0), side, gap0 + DEPTH * 0.4);
         if (onTrack(a0.c[0], a0.c[2], FACE * 0.3)) return;
         const b0 = [a0.r, a0.u, a0.t];
@@ -75,14 +79,17 @@
               const h = 1.8 + t * 2.2;
               const len = FACE * 0.30 - t * 1.0;
               const c = vadd(a.c, a.t, along);
+              // seat.box takes the FOOT point: tier on grade, seat band on
+              // the tier, sun deck on the band (a centre point here lifted
+              // each piece by half its height).
               stage._mat = MAT.CONCRETE;
-              seat.box(stage, vadd(c, a.u, h * 0.5), [3.6, h, len], t % 2 ? SHELL : SHELL2, b);
+              seat.box(stage, c, [3.6, h, len], t % 2 ? SHELL : SHELL2, b);
               // Bucket-seat bands: blue / white / red — the Speedway read.
               stage._mat = MAT.FABRIC;
-              seat.box(stage, vadd(c, a.u, h + 0.5),
+              seat.box(stage, vadd(c, a.u, h),
                 [3.0, 0.95, len - 2.2], SEAT[(bay + t + 3) % 3], b);
               stage._mat = 0;
-              seat.box(stage, vadd(c, a.u, h + 1.1),
+              seat.box(stage, vadd(c, a.u, h + 0.95),
                 [3.3, 0.16, len - 0.8], ROOF, b);
             }
           }
@@ -95,7 +102,7 @@
           addBox(stage, vadd(aR.c, aR.u, 14.8), [DEPTH * 0.5, 0.6, FACE + 1], ROOF,
             [aR.r, aR.u, aR.t]);
           // Fascia stripe facing the track.
-          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 7.2), aR.u, 14.2),
+          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.3), aR.u, 14.25),
             [0.3, 0.5, FACE * 0.85], [0.20, 0.28, 0.48], [aR.r, aR.u, aR.t]);
           stage._mat = 0;
         }, { required: true });
@@ -106,7 +113,7 @@
         // 26 m-deep pagoda stood in the garages and was superseded. Gap 52
         // clears the neonTower ring that clipped the 26×30 m group AABB at
         // gap 46 (clip-audit 9.95 m @ frac 0.006).
-        const a = anchor(K(0.005), -1, 62);
+        const a = rot(anchor(K(0.005), IN, 62));
         const b = [a.r, a.u, a.t];
         modelGroup("indy-pagoda", {
           center: vadd(a.c, a.u, 26), size: [22, 58, 26], basis: b,
@@ -132,7 +139,7 @@
       }
 
       {
-        const a = anchor(K(0.030), -1, 24);
+        const a = rot(anchor(K(0.030), IN, 24));
         const b = [a.r, a.u, a.t];
         const AMBER = [1.0, 0.74, 0.12], PANEL = [0.07, 0.07, 0.08];
         const ORDER = [[1, 16], [4, 63], [55, 81], [44, 14], [23, 22],
@@ -175,7 +182,7 @@
       }
 
       {
-        const a = anchor(K(0.955), -1, 15);
+        const a = rot(anchor(K(0.955), IN, 15));
         const b = [a.r, a.u, a.t];
         modelGroup("indy-pit-stalls", {
           center: vadd(a.c, a.u, 4), size: [12, 10, 120], basis: b,
@@ -207,7 +214,7 @@
       }
 
       for (let row = 0; row < 3; row++) {
-        const a = anchor(K(0.906 + row * 0.020), -1, 40 + row * 20);
+        const a = rot(anchor(K(0.906 + row * 0.020), IN, 40 + row * 20));
         const b = [a.r, a.u, a.t];
         modelGroup(`indy-gasoline-alley-${row + 1}`, {
           center: vadd(a.c, a.u, 5), size: [18, 12, 68], basis: b,
@@ -235,16 +242,16 @@
         });
       }
       for (const [id, s, gap] of [["a", 0.916, 52], ["b", 0.916, 72]]) {
-        groundPatch(K(s), -1, gap, [12, 0.16, 66], [0.56, 0.56, 0.55],
+        groundPatch(K(s), IN, gap, [12, 0.16, 66], [0.56, 0.56, 0.55],
           { id: `indy-alley-${id}`, samples: 8 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
         if (!(s > 0.88 || s < 0.04) || h < 0.55) return;
-        motorhome(k, -1, 62 + h * 10, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
+        motorhome(k, IN, 62 + h * 10, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
       });
-      broadcastCompound(K(0.895), -1, 78, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.97, 0.01, 0.04]) billboard(K(s), -1, 10, 14, 5, [0.20, 0.30, 0.60]);
+      broadcastCompound(K(0.895), IN, 78, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.97, 0.01, 0.04]) billboard(K(s), IN, 10, 14, 5, [0.20, 0.30, 0.60]);
 
       groundPatch(K(0.300), 1, 8, [22, 0.18, 28], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-a", samples: 6 });
@@ -313,11 +320,19 @@
       // against a 9 m walk made every slab overlap its neighbour by 0.6 m, and
       // on the oval's straights the two inner faces are one plane — 20
       // same-facing coplanar pairs (2026-09-22). The pitch tiles exactly.
-      along(0.80, 0.22, 9, (k, spacing) => {
-        const a = anchor(k, 1, 1.4);
+      // It is the OUTER wall (side -1): short chute, oval Turn 1 and the front
+      // stretch up to the F1 T1 turn-off. Pit road owns the inside of the
+      // front stretch (pit.side +1 in the def).
+      // Alternate slabs sit 3 cm apart radially: where the walk bunches on
+      // the bend, neighbours' road faces would otherwise share one plane
+      // (coplanar-audit, 3 pairs on the first outside pass, 2026-10-05).
+      let slab = 0;
+      along(0.765, 0.140, 9, (k, spacing) => {
+        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.03);
         addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
-      fence(0.86, 0.18, 1, 12, 5, [0.74, 0.76, 0.80]);
+      // Catch fence just behind it, in front of the stand bank (gap 18).
+      fence(0.765, 0.140, OUT, 4, 5, [0.74, 0.76, 0.80]);
       for (const s of [0.28, 0.36, 0.44, 0.58, 0.66, 0.74]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -335,15 +350,38 @@
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
         }
       }
-      for (let i = 0; i < 9; i++) {
-        floodMast(K((0.84 + i * 0.042) % 1), 1, 44, { h: 34, cool: true, arms: 3, light: false });
-      }
       // Broadcast platforms at the show corners.
       cameraTower(K(0.115), 1, 30, { h: 18 });
       cameraTower(K(0.500), -1, 26, { h: 15 });
 
-      spectatorHill(0.085, 0.150, -1, 26,
-        { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
+      // Brickyard Crossing: four of its holes lie inside the oval, on the
+      // back half of the infield (side -1 of the 0.43-0.65 infield run,
+      // toward the back stretch), with water hazards. Greens are above.
+      for (const [id, s, gap, sz] of [
+        ["a", 0.470, 62, [36, 0.3, 54]],
+        ["b", 0.600, 56, [30, 0.3, 46]],
+      ]) {
+        waterSurface(K(s), -1, gap, sz, [0.10, 0.24, 0.26], { id: `indy-golf-pond-${id}` });
+        // Willows / oaks fringing the pond, both ends.
+        for (const [dt, dg] of [[-1, 0.4], [1, 0.7], [-1, 1.1]]) {
+          const kk = (K(s) + dt * Math.round(sz[2] / 2 / (4073 / n) + 3) + n) % n;
+          tree(kk, -1, gap + sz[0] * dg, 9 + dg * 4, dg > 0.6 ? LEAF : LEAF_D);
+        }
+      }
+      // IMS Museum: low, broad building in the south infield (side +1 of the
+      // short chute), set well back from the circuit.
+      building(K(0.805), IN, 92, 34, 9, 56, { wall: [0.86, 0.85, 0.82] });
+
+      // The town of Speedway, IN: low-rise blocks OUTSIDE the outer wall and
+      // well behind the stand bank (gap >= 120), never at trackside.
+      every(70, (k) => {
+        const s = k / n;
+        if (!(s > 0.775 || s < 0.130)) return;
+        const h = hash(k * 13 + 7);
+        if (h < 0.35) return;
+        building(k, OUT, 120 + h * 50, 14 + h * 8, 6 + h * 6, 18 + h * 10,
+          { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
+      });
 
       // Turn 1 outside viewing — bleachers instead of grandstandEx so
       // crowdBank/rejBox on the banked bend cannot suppress the whole stand

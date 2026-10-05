@@ -40,11 +40,27 @@ async function library(action, value) {
   try {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction("photos", action === "list" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
-      let result = null;
-      const req = action === "list" ? store.getAll() : action === "delete" ? store.delete(value) : store.put(value);
-      req.onsuccess = () => { result = req.result; };
+      let result = null, failure = null;
+      const req = action === "delete" ? store.delete(value) : store.getAll();
+      req.onsuccess = () => {
+        if (action !== "save") { result = req.result; return; }
+        // Queue every mutation in this active request callback. Readwrite
+        // transactions on the same store serialize across tabs; an await here
+        // would let this transaction become inactive and lose that isolation.
+        try {
+          const photos = req.result.filter((p) => p.id !== value.id).concat(value)
+            .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+          const keep = photos.slice(0, LIMIT);
+          for (const old of photos.slice(LIMIT)) if (old.id !== value.id) store.delete(old.id);
+          if (keep.some((p) => p.id === value.id)) {
+            const put = store.put(value); put.onsuccess = () => { result = put.result; };
+          }
+        } catch (e) { failure = e; tx.abort(); }
+      };
       tx.oncomplete = () => resolve(result);
-      tx.onerror = tx.onabort = () => reject(tx.error || new Error("Photo storage is full or unavailable"));
+      tx.onerror = (e) => { failure = failure || (e && e.target && e.target.error) || tx.error; };
+      // Reject only once abort has finished rolling back the whole write.
+      tx.onabort = () => reject(failure || tx.error || new Error("Photo storage is full or unavailable"));
     });
   } finally { db.close(); }
 }
@@ -63,7 +79,7 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
-  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0 };
+  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, focus = null, libraryPaint = 0;
   const mk = (tag, props, kids) => {
@@ -91,10 +107,21 @@ function create(G, deps) {
   const group = (title, kids) => mk("section", { attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
+  // SUBJECT: the Home door opens on whatever the Home scene shows, and the
+  // default scene is the garage, so the circuit shoot (free camera over the
+  // track) was reachable only by changing Appearance › Scene · Home first.
+  // The row hands the pick to the door (opts.subject), which swaps the Home
+  // world for this visit and reopens the studio; the stored scene is untouched.
+  const subjectValue = () => (isGarage() ? "garage" : "circuit");
+  const subjectRow = select("Subject", [["garage", "Garage"], ["circuit", "Circuit"]], subjectValue,
+    (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
+  const subjectGroup = group("SUBJECT", [subjectRow,
+    mk("p", { className: "adv-help", textContent: "Your car in the garage, or the free camera on the circuit. Your Home scene stays as it is." })]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
+      subjectGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
@@ -136,6 +163,7 @@ function create(G, deps) {
     if (st.open) close(false);
     last = null; E["ps-preview"].hidden = true;
     st.source = opts.source || "race"; st.metadata = opts.metadata || {}; st.back = typeof opts.back === "function" ? opts.back : null;
+    st.subject = typeof opts.subject === "function" ? opts.subject : null;
     focus = document.activeElement;
     if (isGarage()) {
       if (!deps.garage) return false;
@@ -151,6 +179,8 @@ function create(G, deps) {
       if (fc.setOverlaysVisible) fc.setOverlaysVisible(false);
     }
     st.open = true; st.generation++; root.hidden = false;
+    subjectGroup.hidden = !st.subject;
+    if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
     E["ps-context"].textContent = text(st.metadata.title || (isGarage() ? "Your garage" : G.track && (G.track.name || G.track.id)) || "Race photo");
     E["ps-help"].textContent = isGarage() ? "Choose a shot or drag the scene to orbit. Guides stay out of the exported photo." : "WASD move · drag to look · R/F height · Shift boost. Guides and HUD stay out of the photo.";
@@ -178,8 +208,12 @@ function create(G, deps) {
       st.borrowed = null;
     }
     if (deps.onClose) deps.onClose({ restoredPhoto: !!G.photoMode });
+    const target = focus, generation = st.generation;
     if (back && returnTo) returnTo();
-    if (back && focus && focus.isConnected && focus.focus) focus.focus();
+    // Let the caller paint its restored visibility after modal isolation settles.
+    if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!st.open && st.generation === generation && target.isConnected) target.focus();
+    }));
   }
   async function frame() {
     const gfx = G.gfx;
@@ -267,8 +301,7 @@ function create(G, deps) {
       if (blob.size > 3 * 1024 * 1024) throw new Error("This photo is too large. Download the PNG instead");
       const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, thumb: thumbnail(canvas) };
       try {
-        const photos = await library("list"); await library("put", entry);
-        const sorted = photos.sort((a, b) => b.at - a.at); for (const old of sorted.slice(LIMIT - 1)) await library("delete", old.id);
+        await library("save", entry);
         if (gen === st.generation) say("Saved to My Photos on this device.");
       } catch (_) { session.unshift(entry); session.splice(LIMIT); if (gen === st.generation) say("Device storage is unavailable. Saved for this visit; download to keep it."); }
       if (gen === st.generation) await paintLibrary();
@@ -313,7 +346,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, source: st.source, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
+  function state() { return { open: st.open, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
   const api = { open, close, capture, state, background, setBackground, exportPhoto, savePhoto };
   live = api; busy(false); return api;
 }

@@ -1,20 +1,20 @@
 # Camera debug hooks
 
-Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **17 built-in camera
+Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **20 built-in camera
 modes** (C / CAM button) and the **free debug camera** (`view()` and friends)
 that overrides them for framing.
 
-## The 17 camera modes
+## The 20 camera modes
 
 `__apex.camera()` → `{ mode, index, modes:[...] }`. Cycle order
 (`CamModes.CAM_MODES` in `js/camera/mode-switch.js`):
 
 ```
-chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear  visor  rival  pitwall  drone
+chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear  visor  trackside  rival  pitwall  drone  tv  helmet
 ```
 
-Set by id, label, or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
-All 17 render non-blank. After switching, `__apex.snapCam()` jumps the rig
+Set by id (case-insensitive; a label like "TV SIDE" returns `false`) or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
+Index is append-only (`apex26.camMode`). After switching, `__apex.snapCam()` jumps the rig
 without damping (every mode). `camera()` clears any `view()` / debug override.
 Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 
@@ -24,6 +24,7 @@ Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 - **rival** — frames the nearest battle rival (Broadcast.battles); solo fallback is a three-quarter chase.
 - **pitwall** — pit-lane / pit-exit wall cam; optional auto-cut via `__apex.pitCamAuto()`.
 - **drone** — smoothed tether with corner look-ahead (ExtraRigs); calmer heli alternative.
+- **trackside** — fixed corner cams that auto-switch as the car passes; **tv** — live TV director (`js/camera/director.js`); **helmet** — cockpit from inside the lid; **visor** — cockpit without the wheel.
 
 ## `orbit()` vs `snapCam()`
 

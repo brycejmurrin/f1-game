@@ -30,6 +30,13 @@ from). Record browser/device, extension availability, post-enabled state and FBO
 about bloom strength: for over-bright/blown-out frames go to failures.md
 "Bloom blows out the whole frame".
 
+There is no HDR toggle: `hdrMode()` is a read-only capability readout (no menu
+or `__apex` setter). "Black after switching to HDR" is really a backend pick
+(`apex26.gfxBackend`), GRAPHICS tier, `lightTune()`/exposure change or a lost
+context: run `__apex.diag({download:false})` once (BROWSER-ONLY) and read
+`glCaps.lost`/`colorFloat`, `gpuErrors`, `backendState`, `stored.lightTune`
+before touching shader source; a NaN `po.exposure` also blacks the frame.
+
 **Do not confuse with GPU timing:** when someone says HDR/GPU features are
 "unsupported", they usually mean `__apex.gpuTimer().supported === false`
 (`EXT_disjoint_timer_query_webgl2` absent — SwiftShader, many mobile GPUs). That
