@@ -619,21 +619,29 @@ const TrackMaps = (function () {
         g.fillStyle = L.col;
         g.fillText(String(L.n), L.lx, L.ly + 0.5);
       }
-      // Compact class legend (large preview only).
-      if (W >= 280 && H >= 200) {
-        const legend = ["HAIRPIN", "SLOW", "MEDIUM", "FAST"];
-        g.font = "600 9px system-ui, sans-serif";
+      // Compact class legend (large preview only). CIRCUIT DETAIL paints the
+      // same key in the DOM (tdc-legend) and passes legend:false — 9px here
+      // was unreadable on the modal. Silver S2 is the grey sector stroke.
+      if (opts.legend !== false && W >= 280 && H >= 200) {
+        const legend = [
+          ["HAIRPIN", CLASS_COLORS.HAIRPIN],
+          ["SLOW", CLASS_COLORS.SLOW],
+          ["MEDIUM", CLASS_COLORS.MEDIUM],
+          ["FAST", CLASS_COLORS.FAST],
+          ["S2", sectorColors()[1]]
+        ];
+        const fontPx = Math.max(12, Math.round(Math.min(W, H) / 36));
+        g.font = "600 " + fontPx + "px system-ui, sans-serif";
         g.textAlign = "left"; g.textBaseline = "middle";
-        let lx = 8, ly = H - 10;
+        let lx = 8, ly = H - Math.max(12, fontPx);
         for (let i = legend.length - 1; i >= 0; i--) {
-          const name = legend[i];
-          const col = CLASS_COLORS[name];
+          const name = legend[i][0], col = legend[i][1];
           const tw = g.measureText(name).width;
           g.fillStyle = col;
-          g.beginPath(); g.arc(lx + 4, ly, 3.5, 0, Math.PI * 2); g.fill();
-          g.fillStyle = "rgba(220,220,230,0.85)";
-          g.fillText(name, lx + 11, ly);
-          lx += tw + 22;
+          g.beginPath(); g.arc(lx + 4, ly, Math.max(4, fontPx * 0.32), 0, Math.PI * 2); g.fill();
+          g.fillStyle = "rgba(220,220,230,0.92)";
+          g.fillText(name, lx + 12, ly);
+          lx += tw + 24;
         }
       }
       g.textAlign = "left";

@@ -564,6 +564,26 @@ test("VS Friend text uses the menu type scale instead of sub-floor rem literals"
   assert.equal(decl(section, /\.vs-summary dd$/, "font-size"), "var(--fs-2)");
 });
 
+test("track select + circuit detail: readable selected title, sheet chrome, wrapping DRS", () => {
+  const html = read("index.html");
+  assert.match(html, /id="td-inner" class="sheet"/, "Circuit Detail is a sheet like standings, not a full-bleed overlay");
+  assert.doesNotMatch(html, /id="track-detail-legend"/, "legend is built once in JS so the shell ratchet stays flat");
+  const sel = css("css/select.css");
+  assert.equal(decl(sel, "#sel-preview-gp", "color"), "var(--text)",
+    "GP title is ink, not brand red (~2.6:1 on the still)");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active", "background"), "transparent");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(sel, /#sel-tracks/, "scrollbar-color"), "var(--scroll-thumb) var(--scroll-track)");
+  const td = css("css/track-detail.css");
+  assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
+  assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
+  assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
+  const menus = code("js/ui/select-screen.js");
+  assert.match(menus, /past S\/F/, "a DRS zone that wraps the line says so");
+  assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
+  assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+});
+
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
   const menus = code("js/ui/select-screen.js");
   const drawAt = menus.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);

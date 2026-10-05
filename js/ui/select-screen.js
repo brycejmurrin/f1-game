@@ -984,6 +984,34 @@ function openTrackDetail() {
     paintFav();
   }
 
+  // Legend is built once (like FAVOURITE) so the shell does not pay five
+  // extra nodes. Fast/medium/slow/hairpin reuse tdc-* colour; Sector is the
+  // grey S2 stroke that the 9px canvas key never named.
+  const wrap = document.getElementById("track-detail-canvas-wrap");
+  let legend = document.getElementById("track-detail-legend");
+  if (!legend && wrap) {
+    legend = document.createElement("ul");
+    legend.id = "track-detail-legend";
+    legend.setAttribute("aria-label", "Circuit map colours");
+    const items = [
+      ["tdc-fast", "Fastest"],
+      ["tdc-medium", "Medium"],
+      ["tdc-slow", "Slow"],
+      ["tdc-hairpin", "Hairpin"],
+      ["", "Sector"]
+    ];
+    for (let i = 0; i < items.length; i++) {
+      const li = document.createElement("li");
+      const sw = document.createElement("i");
+      if (items[i][0]) sw.className = items[i][0];
+      else li.setAttribute("data-leg", "sector");
+      li.appendChild(sw);
+      li.appendChild(document.createTextNode(" " + items[i][1]));
+      legend.appendChild(li);
+    }
+    wrap.appendChild(legend);
+  }
+
   // Elevation sparkline — same painter as the preview chart above; here the
   // canvas has a WRAPPER that carries the hidden state (the preview canvas
   // hides itself), which was the only real difference between the two blocks.
@@ -997,10 +1025,14 @@ function openTrackDetail() {
     if (dz && dz.length) {
       const trackLen = (t.lengthKm || 5) * 1000;
       // A zone across the line ends past 1 lap (z.b > 1): print its end in
-      // the next lap's metres, so it reads "5480 m – 320 m", not past the length.
+      // the next lap's metres. Name the wrap — "4870 m – 514 m" looked broken.
       const lapM = function (f) { const m = Math.round(f * trackLen); return m > trackLen ? m - trackLen : m; };
       drsList.innerHTML = dz.map(function (z, i) {
-        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + lapM(z.a) + ' m &ndash; ' + lapM(z.b) + ' m</div>';
+        const a = lapM(z.a), b = lapM(z.b);
+        const range = z.b > 1
+          ? (a + " m &ndash; past S/F &ndash; " + b + " m")
+          : (a + " m &ndash; " + b + " m");
+        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + range + "</div>";
       }).join("");
       drsWrap.hidden = false;
     } else {
@@ -1029,7 +1061,6 @@ function openTrackDetail() {
   Log.info("ui", "Menus.open track-detail");
   vt(() => { modal.hidden = false; });
   const cv = document.getElementById("track-detail-canvas");
-  const wrap = document.getElementById("track-detail-canvas-wrap");
   // A TALL CIRCUIT CANNOT SPEND THE MODAL'S WIDTH, so give it to the panel.
   // The map fits by height here, and the layout audit measured what that
   // leaves: at 1280x800 the wrap is 982px wide and Jeddah's outline is 363 of
@@ -1048,7 +1079,8 @@ function openTrackDetail() {
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
     const wrapW = wrap ? wrap.clientWidth : (window.innerWidth - 24);
-    const wrapH = wrap ? wrap.clientHeight : (window.innerHeight - 80);
+    const legendH = legend ? legend.offsetHeight : 0;
+    const wrapH = wrap ? Math.max(0, wrap.clientHeight - legendH) : (window.innerHeight - 80);
     // Floors apply ONLY to the unmeasured fallbacks. Flooring a MEASURED wrap
     // at 200/150 pinned a canvas bigger than its box whenever the local wrap
     // was smaller than the floor — fitCanvas writes an inline max-width, which
@@ -1081,7 +1113,7 @@ function openTrackDetail() {
       color: TrackMaps.themeColor(t), startColor: "#e10600",
       width: Math.max(2 * br, Math.round(5 * mk * br)), pad: Math.max(12 * br, Math.round(42 * mk * br)),
       corners: true, cornerR: Math.max(4 * br, Math.round(6 * mk * br)), cornerFont: Math.max(8 * br, Math.round(12 * mk * br)),
-      sectors: true, drs: true
+      sectors: true, drs: true, legend: false
     });
   };
   requestAnimationFrame(drawDetail);

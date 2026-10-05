@@ -14,6 +14,33 @@
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     var(--scrim);
+  /* Token scrollbars — native Chrome thumbs on this dark UI are near-white.
+     tokens.css is claimed elsewhere; these resolve existing colour tokens. */
+  --scroll-thumb: color-mix(in oklab, var(--text) 34%, transparent);
+  --scroll-track: color-mix(in oklab, var(--surf-1) 82%, transparent);
+}
+#select .pane,
+#sel-tracks,
+#sel-preview-info {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+#select .pane::-webkit-scrollbar,
+#sel-tracks::-webkit-scrollbar,
+#sel-preview-info::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+#select .pane::-webkit-scrollbar-track,
+#sel-tracks::-webkit-scrollbar-track,
+#sel-preview-info::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+}
+#select .pane::-webkit-scrollbar-thumb,
+#sel-tracks::-webkit-scrollbar-thumb,
+#sel-preview-info::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: var(--r-sm);
 }
 @media (prefers-reduced-transparency: reduce) {
   #select { background: var(--scrim-heavy); }
@@ -130,10 +157,14 @@
 }
 #sel-tracks .track-row:last-child { border-bottom: none; }
 #sel-tracks .track-row.active {
+  /* Accent bar + flag ring, not a red wash: --red-on-red failed 4.5:1 on
+     desert/night stills (BAHRAIN GP) and on --plate-on tiles. */
   border-left: none;
   padding-left: calc(var(--gap) * 0.45);
-  background: var(--plate-on);
+  background: transparent;
+  box-shadow: inset 0 -3px 0 var(--red);
 }
+#sel-tracks .track-row.active .track-row-name { color: var(--text); }
 /* .track-row-meta is the FLAG box in the strip (the list rows in season setup
    still use it for the country text — the tile look is scoped here). */
 #sel-tracks .track-row-meta {
@@ -482,9 +513,13 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #sel-preview-gp {
-  font-size: var(--fs-micro); color: var(--red); font-weight: 700;
+  /* Same grammar as .sheet-head: --text ink (≥4.5:1) + a leading accent rail.
+     Brand red as type on the hero still measured ~2.6:1 (tokens.css --focus note). */
+  font-size: var(--fs-micro); color: var(--text); font-weight: 700;
   letter-spacing: var(--ls-3); text-transform: uppercase;
   margin-top: calc(var(--gap) * 0.15);
+  padding-left: calc(var(--gap) * 0.55);
+  box-shadow: inset 3px 0 0 var(--red);
   text-shadow: 0 1px 2px var(--carbon);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
