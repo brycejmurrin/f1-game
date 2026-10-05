@@ -2978,9 +2978,9 @@ is 10 m ahead — `lapsAhead` carries the standing, -1 = a lap down on you), and
 **Road shape.** `bankingDeg` is the real road-plane roll (`+` = the right edge is
 raised, which holds a **left**-hander), and `camber` says what that means for
 *this* corner: `banked into the turn` / `off-camber` / `flat`. Note the source:
-authored `def.bankZones` → `track.bankP` → `Tracks.banking()`, **not**
-`Tracks.bankAngle()`/`track.bank[]`, which is a per-node tilt almost no circuit
-sets. `gradientPct`/`elevation` measure the climb across the corner, and `kerbs`
+authored `def.bankZones` → `track.bankP` → `Tracks.banking()`. Since
+2026-10-04 `Tracks.bankAngle()` returns that same roll (it read
+`track.bank[]`, a per-node tilt no circuit sets, and was 0 everywhere). `gradientPct`/`elevation` measure the climb across the corner, and `kerbs`
 lists the sides that carry one. The same facts appear as rally mutators in
 `world().pacenotes` (`uphill`, `downhill`, `off-camber`).
 

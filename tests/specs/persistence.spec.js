@@ -77,6 +77,21 @@ test.describe("persistence failure is visible", () => {
     await expect(warning).toBeVisible();
     await expect(warning).toContainText("SESSION ONLY");
     await expect(warning).toContainText("QuotaExceededError");
+    // DISMISS folds it to its own toggle; the toggle opens it again.
+    const toggle = page.locator("#save-dismiss");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#save-retry")).toBeHidden();
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#save-retry")).toBeVisible();
+    // It stands down while racing (js/game.js puts body.in-race on at the
+    // start and takes it off at the end; the CSS rule keys on exactly that).
+    await page.evaluate(() => document.body.classList.add("in-race"));
+    await expect(warning).toBeHidden();
+    await page.evaluate(() => document.body.classList.remove("in-race"));
+    await expect(warning).toBeVisible();
   });
 
   test("the exception's own name is reported, not a generic flag", async ({ page }) => {

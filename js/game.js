@@ -1313,6 +1313,13 @@ function yawVisInterp(c) {
 // held-then-jump stutter whose size scales with speed × dt — "vibrates more
 // as I speed up". Interpolate it exactly like position, with a wrap-safe
 // shortest-path delta since head crosses ±π every lap.
+// The TV director's subject (js/camera/director.js): the interpolated pose the body is drawn at. Pooled.
+const _dirPos = [0, 0], _dirPose = { s: 0, x: 0, carPos: null, carHead: 0 };
+function camPoseOf(c) {
+  const pa = playerAnchor(c), rp = renderPosOf(c);
+  _dirPose.s = pa.cS; _dirPose.x = pa.cX; _dirPose.carHead = headInterp(c);
+  _dirPose.carPos = rp.world ? (_dirPos[0] = rp.x, _dirPos[1] = rp.z, _dirPos) : null; return _dirPose;
+}
 function headInterp(c) {
   const h1 = c.head || 0;
   if (c.rPrevHead === undefined) return h1;
@@ -2103,8 +2110,10 @@ async function loadTrackStepped(idx, live) {
     const opts = trackBuildOpts(sessionDark, wantSlots);
     const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
-    built = msg ? await TrackBuildClient.replay(msg, def, gfx) : await Tracks.buildPaced(def, opts, live, freeTrackMeshes);
+    // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
+    if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
+    if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
   } finally {
     try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
@@ -3359,7 +3368,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: (blendS) => applyRaceSettings(blendS),   // const initialised below — defer; blendS: see Atmosphere
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
+  announce, applyCaution, camVantage, camPoseOf, endRace, gridUp, gripMult, trackWetness, isErsDeploying, cautionInfo, cautionLevel,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -4643,7 +4652,7 @@ function updateCar(c, dt, ranked) {
   // stays separate because the player's already lives in mods.cornering.
   if (!c.human && c.tyreClass) {
     vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
-                       : AiDrive.tyrePace(c.tyreClass, c.lap);
+                       : AiDrive.tyrePace(c.tyreClass, Math.max(0, c.lap - 1));   // laps DONE: c.lap counts line crossings (TyreModel lapsDone)
   } else if (c.human) vmax *= tyres.tractionMul(c);   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
@@ -5560,7 +5569,7 @@ function updateCar(c, dt, ranked) {
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX);
+      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
     }
@@ -5570,7 +5579,7 @@ function updateCar(c, dt, ranked) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
+  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX, aeroDfMult(c));
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -5852,7 +5861,10 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   let oldS = c._prevS ?? c.s;
-  if (!c.human) c.s = wrapS(c.s + c.speed * dt);
+  // AI arc = ground distance ÷ the Frenet stretch h, as trackFrom charges the player (AI-only
+  // column). At speed·dt the AI got ~7 % free arc on the outside of a bend and nothing inside.
+  const hAi = c.human ? 1 : frenetH(c.s, c.x);
+  if (!c.human) c.s = wrapS(c.s + c.speed * dt / hAi);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
   // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
@@ -5868,12 +5880,8 @@ function updateCar(c, dt, ranked) {
   }
 
   const dLine = ds;   // signed change in s, contact shove INCLUDED — the lap-line test needs it
-  if (c.human) {
-    c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
-  } else {
-    ds = c.speed * dt;
-    c.prog += ds;
-  }
+  if (c.human) c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
+  else c.prog += (ds = c.speed * dt / hAi);
   c._pushD = 0; c.totalT += dt;
   c.lapTime += dt;
   // OUR QUALIFYING LAP, AS IT HAPPENS. Everyone else in a friend race is
@@ -8083,7 +8091,7 @@ function tickBody(now) {
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick();
-  onboard.tick(dt); director.tick(dt); // coach marks + TV director (dbgCam only)
+  onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
@@ -8095,6 +8103,7 @@ function tickBody(now) {
     return;
   }
   if (paused && !netPlay.active()) {
+    director.tick(0);   // holds its shot; a camera picked in the pause menu still releases it
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
     // in one burst on the first frame after RESUME (see Input.clearEdges).
@@ -8180,6 +8189,7 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
+  director.tick(dt);   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt

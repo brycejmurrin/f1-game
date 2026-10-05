@@ -153,7 +153,16 @@ const CamFeel = (function () {
   // shipped framing stays exact. A racing frame eases toward it, so a bend
   // that flips side pans instead of teleporting the eye across the circuit.
   const _fol = Object.create(null);
+  // A second camera solving the same vantage branches (the TV director) runs
+  // under its own key prefix so the two never damp one state toward two cars.
+  let _ns = "";
+  function scoped(prefix, fn) {
+    const prev = _ns;
+    _ns = prev + prefix;
+    try { return fn(); } finally { _ns = prev; }
+  }
   function follow(key, target, lambda, dt) {
+    if (_ns) key = _ns + key;
     if (!(dt > 0)) { _fol[key] = target; return target; }
     const cur = _fol[key];
     const next = cur == null || cur !== cur ? target : dampToward(cur, target, lambda, dt);
@@ -161,7 +170,7 @@ const CamFeel = (function () {
     return next;
   }
   function resetFollow(key) {
-    if (key) delete _fol[key];
+    if (key) delete _fol[_ns + key];
     else for (const k in _fol) delete _fol[k];
   }
 
@@ -405,7 +414,7 @@ const CamFeel = (function () {
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
     lookingBackNow, consumeAimSnap, shake, shakeNoise, TUB_EYE_MAX,
     follow, resetFollow, drive,
-    initUI, loadSettings,
+    initUI, loadSettings, scoped,
   };
 })();
 Object.freeze(CamFeel);

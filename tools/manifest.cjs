@@ -280,6 +280,7 @@ const FULL = [
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
+  "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -982,6 +983,17 @@ const LAZY_WORKER = [
   "js/track/build-worker.js",
 ];
 
+// THE BUILD WORKER'S OWN EXTRAS, imported after TRACK_VM. NOT TRACK_VM itself:
+// every Node VM build (verify-track, the audits, the VM tests) reads TRACK_VM
+// and runs `assets: false` by design, so adding assets.js there would change
+// what every one of them builds. The worker is a browser build and must match
+// the page's: without assets.js, bakedModel() returned false in the worker and
+// a background build shipped none of the baked pack models (procedural boxes
+// where the main-thread build stamps the real ones).
+const TRACK_WORKER_EXTRA = [
+  "js/render/shared/assets.js",
+];
+
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
 // <script> subset, in order: the signalling + transport half of js/net, the
 // shared roll math, and the pad module. No game, no renderer, no store.
@@ -1328,7 +1340,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, LAZY_EDITOR, LAZY_EDITOR_EDGES,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
