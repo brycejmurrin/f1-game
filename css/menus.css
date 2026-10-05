@@ -146,12 +146,19 @@
    min-content is the label's longest word plus the icon and padding: where it
    fits the 2x2 nothing moves (every 100 % layout, both goldens), and where it
    does not, the balanced row wraps that door onto a line of its own at full
-   width instead of clipping it. Rooms used to keep min-width: 0 — at
-   ~752–768px a 5-across row then wrapped TRACK DESIGNER / HOW TO PLAY
-   onto two lines while DATA HUB stayed one (apex9). nowrap + min-content
-   keeps every label one line and lets the leftover door wrap the row. */
-#menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
-#menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
+   width instead of clipping it. The rooms other than USE AS CONTROLLER keep
+   min-width: 0 — their labels already fit the cell they get. */
+#menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
+#menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
+/* apex9 ~752–768: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
+   onto two lines; WATCH REAL RACES wrapped inside its tile. nowrap +
+   min-content on every room is mid-wide only — on 1440 it forced
+   PHOTO STUDIO onto a leftover banner and dropped SETTINGS (6%
+   title-desktop, CI 37371854254). */
+@media (max-width: 899px) {
+  #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
+  #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
+}
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {

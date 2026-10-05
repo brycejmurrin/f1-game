@@ -192,13 +192,18 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   const menus = readCssSource("css/menus.css");
   assert.match(
     menus,
-    /#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ min-width: min-content/,
-    "rooms wrap the leftover door, not the label, once TRACK DESIGNER no longer fits",
+    /#menu-buttons :is\(#menu-primary, #menu-explore\)\.balanced-row > \.bigbtn,[\s\S]*?#mb-phonepad \{ min-width: min-content/,
+    "desktop explore/primary keep ship min-content; rooms stay shrinkable so PHOTO STUDIO stays 3-up",
   );
   assert.match(
     menus,
-    /#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
-    "WATCH REAL RACES / TRACK DESIGNER / HOW TO PLAY stay one line",
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ min-width: min-content/,
+    "rooms wrap the leftover door, not the label, once TRACK DESIGNER no longer fits — mid-wide only",
+  );
+  assert.match(
+    menus,
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
+    "WATCH REAL RACES / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
   );
   assert.match(
     menus,
