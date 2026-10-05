@@ -1,22 +1,21 @@
 # garage-angles.mjs — when, how, and how fast
 
-**Contents**
-
-- [Pick the cheapest path first](#pick-the-cheapest-path-first)
-- [Everything is an axis](#everything-is-an-axis)
-  - [Cameras](#cameras)
-  - [Stations — cameras keyed to a PART](#stations-cameras-keyed-to-a-part)
-  - [Designs](#designs)
-  - [Free camera](#free-camera)
-  - [Comparisons](#comparisons)
-  - [Session — hot-swapping designs](#session-hot-swapping-designs)
-  - [Output](#output)
-- [Presets are starting points](#presets-are-starting-points)
-- [Fast iteration](#fast-iteration)
-- [Multi-team](#multi-team)
-- [Before you run](#before-you-run)
-- [When NOT to use](#when-not-to-use)
-- [Offline preflight](#offline-preflight)
+## Contents
+- Pick the cheapest path first
+- Everything is an axis
+  - Cameras
+  - Stations — cameras keyed to a PART
+  - Designs
+  - Free camera
+  - Comparisons
+  - Session — hot-swapping designs
+  - Output
+- Presets are starting points
+- Fast iteration
+- Multi-team
+- Before you run
+- When NOT to use
+- Offline preflight
 
 
 The garage is the only place occlusion, wall crests, and real lighting get a

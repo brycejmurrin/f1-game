@@ -1,5 +1,6 @@
 ---
 name: check-changes
+allowed-tools: Bash(node tools/ci/pick-tests.mjs:*)
 description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the no-bump shell/cache policy (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
