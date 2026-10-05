@@ -194,3 +194,56 @@ test("the call memory resets when the cues stand down (a new race starts clean)"
   for (let i = 0; i < 400; i++) { ctx._t = 10000 + i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
   assert.equal(ctx._calls.length, 2, "the first call of the next race is not suppressed");
 });
+
+test("cornerExit uses the nearest same-side entry, so a sharper second turn already in the window still gets its own call", () => {
+  // Was: cornerExit walked from the sharpest peak in the window, so a sharper
+  // second left already inside the lookahead stretched exit past both turns and
+  // the second left was never called.
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 1000 && u < 1080) return 0.02;   // first left
+    if (u > 1120 && u < 1200) return 0.05;   // sharper second, 40 m gap
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    // Start with BOTH turns already inside a long lookahead window.
+    player: { s: 970, speed: 90, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 100,
+  };
+  // Lower BRAKE so lookHi is long enough to cover both at the first call.
+  ctx.PhysicsConsts.BRAKE = 10;
+  ctx.PhysicsConsts.VMAX = 100;
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(10);
+  for (let i = 0; i < 350; i++) { ctx._t = i * 1000 / 60; G.player.s = 970 + i; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L", "L"], "each left once, got " + JSON.stringify(ctx._calls));
+});
+
+test("a rewind behind lastCallS does not re-arm and double-call the same turn", () => {
+  // Was: ((p.s - lastCallS) % L + L) % L after a flashback behind lastCallS is
+  // nearly a full lap, which satisfied >= callExitM and re-armed; the next
+  // approach then called the same sweeper again.
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 500 && u < 900) return 0.02;
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 300, speed: 60, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  for (let i = 0; i < 250; i++) { ctx._t = i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
+  assert.equal(ctx._calls.length, 1, "sweeper called once on approach");
+  G.player.s = 350;   // flashback / rewind behind lastCallS
+  for (let i = 0; i < 5; i++) { ctx._t = 5000 + i * 16; ctx.DrivingCues.tick(); }
+  for (let i = 0; i < 300; i++) { ctx._t = 6000 + i * 1000 / 60; G.player.s = 350 + i; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L"], "same sweeper is not called again after rewind, got " + JSON.stringify(ctx._calls));
+});

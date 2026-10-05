@@ -53,22 +53,25 @@ const DrivingCues = (function () {
     return bestK > 0 ? 1 : -1;
   }
 
-  // Metres ahead of s0 where the called corner ends: from the window's peak of
-  // `side`, walk on until the turn opens (|k| < K_CALL/2, hysteresis so a
-  // double-apex dip stays one turn) or flips side. Capped at one lap / 3 km.
+  // Metres ahead of s0 where the called corner ends: from the NEAREST entry of
+  // `side` in the window (first sample with k*side >= K_CALL), walk on until the
+  // turn opens (|k| < K_CALL/2, hysteresis so a double-apex dip stays one turn)
+  // or flips side. Nearest — not sharpest — so a sharper second turn already in
+  // the lookahead does not stretch exit past the first. Capped at one lap / 3 km.
   const EXIT_STEP_M = 5, EXIT_CAP_M = 3000;
   function cornerExit(track, s0, lookM, samples, side) {
     if (!track || typeof Tracks === "undefined" || !(lookM > 0) || !side) return 0;
     const L = track.total || 1;
     const n = Math.max(2, samples | 0);
-    let peakD = 0, bestAbs = 0;
+    let entryD = 0, found = false;
     for (let i = 1; i <= n; i++) {
       const dist = lookM * i / n;
       const k = Tracks.curvature(track, ((s0 + dist) % L + L) % L) * side;
-      if (k > bestAbs) { bestAbs = k; peakD = dist; }
+      if (k >= K_CALL) { entryD = dist; found = true; break; }
     }
+    if (!found) return 0;
     const cap = Math.min(L, EXIT_CAP_M);
-    let d = peakD;
+    let d = entryD;
     while (d < cap) {
       d += EXIT_STEP_M;
       const k = Tracks.curvature(track, ((s0 + d) % L + L) % L) * side;
@@ -169,11 +172,16 @@ const DrivingCues = (function () {
 
       // Corner call — once per turn, +k = LEFT.
       const side = cornerSide(track, p.s, look * 0.85, nS);
-      if (side === 0) callArmed = true;   // straight road between: the next turn is a new one
-      else {
-        // Past the called turn's exit: whatever the window holds now is a new turn.
-        if (!callArmed && lastCallS != null
-          && ((p.s - lastCallS) % L + L) % L >= callExitM) callArmed = true;
+      // Re-arm once the called turn is behind the car (forward arc past callExitM).
+      // Forward-only (fwd < L/2): a rewind/flashback behind lastCallS wraps the
+      // long way (~L) and must not re-arm. side===0 alone is not enough — a
+      // flashback onto the straight before the same turn would re-arm and call it
+      // twice.
+      if (!callArmed && lastCallS != null) {
+        const fwd = ((p.s - lastCallS) % L + L) % L;
+        if (fwd >= callExitM && fwd < L * 0.5) callArmed = true;
+      }
+      if (side !== 0) {
         const ds = lastCallS == null ? Infinity
           : Math.min(Math.abs(p.s - lastCallS), L - Math.abs(p.s - lastCallS));
         if (side !== lastCallSide || (callArmed && ds > CALL_COOLDOWN_M)) {
