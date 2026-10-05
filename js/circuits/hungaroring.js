@@ -23,7 +23,7 @@
       { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
     ],
     terrainOuter: 90,
-    pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.42, 0.40, 0.22], runoff: [0.58, 0.50, 0.34], ambientSky: [0.62, 0.58, 0.50], ambientGround: [0.40, 0.36, 0.28], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },
+    pal: { zenith: [0.55, 0.62, 0.78], horizon: [0.78, 0.72, 0.58], fog: [0.72, 0.68, 0.55], fogDensity: 0.0022, grass: [0.34, 0.46, 0.20], runoff: [0.44, 0.48, 0.28], ambientSky: [0.62, 0.60, 0.54], ambientGround: [0.32, 0.38, 0.24], sunDir: [0.7401805851129838, 0.587790464648546, 0.3265502581380811], sun: [1.0, 0.94, 0.78], sunColor: [1.0, 0.94, 0.78] },
     // Elevation from SRTM bake in js/track/circuit-elevations.js
     // (`node tools/gen/bake-elevation.mjs hungaroring`). Three authored cosine
     // bumps left ~59% of the lap dead-flat between the T1 plunge and mid-sector
@@ -43,7 +43,7 @@
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
     turns: [0.0899, 0.1990, 0.2182, 0.2503, 0.3612, 0.4226, 0.4914, 0.5399, 0.5702, 0.6628, 0.7544, 0.8241, 0.8653, 0.8983],
-    furniture: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },  // dry straw-olive, dusty bowl
+    furniture: { tree: "broad", fol: [0.28, 0.42, 0.18], lamp: "none", sparse: true, treeCrown: "round" },  // mixed deciduous (oak, black locust) in a green Pest County valley
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "sandstone", "steel"],  // poured 1986 terracing; alu reads as steel at distance
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
