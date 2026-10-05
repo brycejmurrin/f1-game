@@ -155,8 +155,10 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // expected work, which two jobs' worth dropped and six carry. Raised to 7
 // (2026-10-04, PR #915): a synced 84-file bug-hunt batch with the
 // bot/spec-timings overlay still dropped tracks-walls + props-over-road at 6
-// (overflow 2740/2880 s) and cleared both at 7.
-export const MAX_OVERFLOW_SHARDS = 7;
+// (overflow 2740/2880 s) and cleared both at 7. Raised to 8 (2026-10-05,
+// PR #951): a synced bug-hunt batch with the failing-spec hoist dropped
+// tracks-walls + dev-tools at 7 (Selected specs verdict on run 37327254206).
+export const MAX_OVERFLOW_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -972,8 +974,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
+  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   if (si < 0 || !argv[si + 1]) {
-    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--stale-first] [--json]");
+    console.error(usage);
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");

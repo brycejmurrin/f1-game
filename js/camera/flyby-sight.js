@@ -543,10 +543,10 @@ const FlybySight = (function () {
    *  report's own scale — tools/lib/frame-math.mjs judge(), term for term
    *  where this model can see the term: 100 - cost ~ its score. */
   const STEEP = 25 * Math.PI / 180;
-  function frame(track, eye, tgt, fov, subj, coarse, withMix) {
+  function frame(track, eye, tgt, fov, subj, coarse, withMix, lapCover) {
     const cam = camera(eye, tgt, fov, 16 / 9);
     let inF = 0, vis = 0, nearSubj = 0, sx = 0, sy = 0, n = 0;
-    const pts = subj.pts, step = coarse ? 2 : 1, Ts = subj.strip ? new Float32Array(pts.length).fill(-1) : null;
+    const pts = subj.pts, step = coarse ? 2 : 1, Ts = subj.strip || (subj.lap && lapCover) ? new Float32Array(pts.length).fill(-1) : null;
     for (let i = 0; i < pts.length; i += step) {
       n++;
       const q = project(cam, pts[i]);
@@ -582,6 +582,10 @@ const FlybySight = (function () {
     } else if (subj.strip) cover = stripCover(cam, pts, subj.strip, Ts, vis);
     else if (subj.field) cover = fieldCover(cam, pts) * vis;
     if (cover != null) cost += Math.max(0, SMALL_PCT - cover * 100) * 4;
+    // The whole lap's ribbon, when asked (FlybySeq's raised wide framings), as
+    // a MEASURE only: from hundreds of metres a 32-section polygon is not on
+    // the report's raster scale, so the caller compares it with care (lapLoss).
+    if (subj.lap && lapCover) cover = stripCover(cam, pts, 3, Ts, vis);
     // The whole lap, when asked: the rest of the frame too (mix above).
     let m = null, mc = 0;
     if (subj.lap && withMix) { m = mix(track, cam, coarse); mc = mixCost(m); cost += mc; }

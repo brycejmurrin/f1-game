@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // prune-branches.mjs — delete remote branches that are already merged into the deploy branch.
-// @doc Lists or deletes merged/absorbed branches with no open PR and expired claims, by branch-audit; opted-in verdicts are archived to refs/archive/* first (prune-branches.yml).
+// @doc Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first.
 // Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first to refs/archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
 // @skill check-changes
 //
