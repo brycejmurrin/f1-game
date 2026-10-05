@@ -33,7 +33,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { pick } from "./pick-tests.mjs";
+import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED } from "./twinned-specs.mjs";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
@@ -187,12 +187,19 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   // the selected gate — and logging.spec.js, an ADAPTED spec, lives in it, so
   // without this every js/ edit ran vm-page. select-specs answers that with
   // the fixed smoke gate; the same rule applies here.
+  // An edited browser spec changes no VM file, so its owner group (pick-tests
+  // SPEC_OWNER_REASON) is human advice here — EXCEPT an ADAPTED spec, which
+  // vm-page runs as itself and select-specs therefore never runs in a browser:
+  // before 2026-10-05 an edit to one ran nowhere on a pull request.
+  stripSpecOwner(g);
+  const editedAdapted = changed.filter((f) => Object.hasOwn(ADAPTED, f));
   dropBootFallback(g);
   const groups = [...g.keys()].sort();
   if (!groups.length) return all("no pick-tests rule matched this diff");
   const run = [], skip = [], why = {};
   const circuits = circ.scoped ? circ.ids : [];
   for (const [script, needs] of Object.entries(scoped)) {
+    if (script === "test:vm-page" && editedAdapted.length) { run.push(script); continue; }
     if (!needs.some((n) => g.has(n))) { skip.push(script); why[script] = "no routed group"; continue; }
     // A circuit-only diff: a script whose files never build the touched
     // circuit cannot see the change (circuitsOf reads the files).

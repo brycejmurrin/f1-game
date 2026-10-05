@@ -183,3 +183,15 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   assert.ok(gateNodeSuites().filter((s) => ALWAYS_ON_TOPICAL.includes(s)).length === ALWAYS_ON_TOPICAL.length,
     "every always-on topical script must still parse from the npm run else-branch");
 });
+
+test("a spec edit: an ADAPTED spec runs vm-page; a twinned spec's group runs no VM script (2026-10-05)", () => {
+  // select-specs counts an ADAPTED spec as VM-covered, so vm-page is the only
+  // place its edit can run on a pull request; pick-tests' spec-owner route is
+  // stripped here, so a plain browser-spec edit stays the rules' answer.
+  const adapted = plan(["tests/specs/logging.spec.js"]);
+  assert.equal(adapted.all, false);
+  assert.deepEqual(adapted.run, ["test:vm-page"]);
+  const twinned = plan(["tests/specs/collisions-deep.spec.js"]);
+  assert.deepEqual(twinned.groups, ["audit"], "the owner route must not reach the VM planner");
+  assert.deepEqual(twinned.run, []);
+});

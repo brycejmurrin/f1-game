@@ -25,7 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { pick } from "./pick-tests.mjs";
+import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
@@ -809,6 +809,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean);
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
+  // An edited spec already runs first, alone (changedSpecs, rank 0); its
+  // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
+  stripSpecOwner(g);
   const bootCoveredBySmoke = dropBootFallback(g);
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
   const browserGroups = [...g.keys()].map((n) => `test:${n}`)
