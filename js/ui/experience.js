@@ -18,9 +18,12 @@ const UiExperience = (function () {
      and leave PHOTO STUDIO as a one-line leftover tile next to Garage. */
   function setDoorLabel(el, text) {
     const sub = el && el.querySelector(".mb-sub");
-    if (!sub) { if (el) el.textContent = text; return; }
-    const host = sub.parentNode;
-    while (host.firstChild !== sub) host.removeChild(host.firstChild);
+    const host = sub && sub.parentNode;
+    // game-vm stubs querySelector() as a detached div (parentNode null). Keep
+    // the subtitle in a real tree; fall back to textContent anywhere else.
+    if (!host || !host.firstChild) { if (el) el.textContent = text; return; }
+    while (host.firstChild && host.firstChild !== sub) host.removeChild(host.firstChild);
+    if (host.firstChild !== sub) { el.textContent = text; return; }
     host.insertBefore(document.createTextNode(text + " "), sub);
   }
 
