@@ -8911,7 +8911,7 @@ customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips
 // Not over a season load() refused to write back (lossy: a circuit this build
 // does not know) — saving it here erased that circuit, or blanked a finished season.
 if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season, { migration: true }); }
-teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
+teamIdx = idxOr(teamIdx, Teams.LIST.length, 0);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
 trackIdx = idxOr(trackIdx, Tracks.LIST.length, 0);
