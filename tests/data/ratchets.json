@@ -59,7 +59,7 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 311,
+      "ceiling": 310,
       "slack": 0
     },
     "shellNodes": {
@@ -67,7 +67,7 @@
       "slack": 25
     },
     "subFloorFontSize": {
-      "ceiling": 10,
+      "ceiling": 8,
       "slack": 0
     },
     "twinDebt": {

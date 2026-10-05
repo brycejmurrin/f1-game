@@ -433,6 +433,22 @@
    numbers rather than drifting with the glyph widths. */
 #quali { --sheet-w: 760px; --fit-at: 300px; }
 #q-body { min-height: 0; }
+/* THE CLASSIFICATION IS LAID OUT AS THE GRID IT IS, two cars a row, on a
+   short wide sheet. MEASURED (layout-audit, ios-iphone-landscape 734x343,
+   2026-10-05, tip a7d27757f): #q-body was a 193 own px box over 671 of rows
+   (3.5 screens) in a 550 own px sheet, each one-line row spending most of its
+   width on blank space between the name and the gap. Two columns — P1 left,
+   P2 right, as the cars line up — put 22 rows in 11 (~1.7 screens). The sheet
+   must be 500 own px wide for two ~255 px columns; a long name wraps (the
+   compact quali rule already lets .res-name wrap), it never truncates. Cards
+   (the BADGE UNLOCKED status) span both columns. */
+@container sheet (min-width: 500px) {
+  #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--gap);
+  }
+  #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
+}
 .q-time { font-family: var(--font-hud); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
    differently on purpose — the gaps are dimmed to keep the eye on the leader. */

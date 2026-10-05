@@ -26,6 +26,26 @@
 #res-ghost-clear { opacity: 0.6; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
+/* THE SHORT WIDE RESULT SHEET (a landscape phone). MEASURED (layout-audit,
+   ios-iphone-landscape 734x343, 2026-10-05, tip a7d27757f): a 281 own px sheet,
+   title row 28 + MENU / NEXT bar 59, #results-table 194 over 1192 of content
+   (6.1 screens). Two changes, no content hidden:
+   - the bar joins the title row (title left, MENU / NEXT right), so the table
+     gets ~222 instead of 194;
+   - a lead-lap car's gap to the winner rides on the name line instead of a
+     second line under it (`.res-name > .q-time` is a block in the base), which
+     halves ~20 of the 22 rows. The name may wrap rather than ellipsise if a
+     long suffix ever needs it. Expected ~800 of content, ~3.6 screens. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 2; grid-row: 1; background: none; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name { white-space: normal; overflow-wrap: anywhere; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name > .q-time { display: inline; margin-left: 0.6em; }
 
 /* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
    SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core

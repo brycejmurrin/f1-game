@@ -62,10 +62,44 @@
    .season-upcoming-row's default cursor — but they need centred alignment so a
    chip and a baseline-aligned label sit on the same line. */
 #ss-cal .season-upcoming-row { align-items: center; gap: calc(var(--gap) * 0.5); }
-#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row { flex-wrap: wrap; }
+/* ONE CHIP-TALL ROW PER ROUND. MEASURED (layout-audit, ios-iphone-landscape
+   734x343, 2026-10-05, tip a7d27757f): #ss-cal was a 194 own px pane over 1944
+   of calendar (10 screens). The name claimed the whole first line
+   (`calc(100% - 34px)`), so every round was two lines — R1 + name, then the
+   three chips under it — ~80 own each. Instead the round number sits OVER the
+   name in a left column and ↑ ↓ ✕ span both lines beside it: ~100 own px of
+   name column on a landscape phone (SILVERSTONE needs ~91; a long name wraps
+   at its spaces, never truncates), and the row is one chip tall, ~52 own with
+   the halved block padding. Grid only while the row has its three chips — in
+   SPRINT ROUNDS a fourth (GP / SPRINT) chip keeps the wrapping flex row above,
+   because four chips beside the name would leave it no column at all. */
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row { flex-wrap: wrap; padding-block: calc(var(--gap) / 4); }
 #ss-inner[data-density="compact"] #ss-cal .sur-name {
   flex: 1 1 calc(100% - 34px); min-width: 0; overflow-wrap: anywhere;
 }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row:not(:has(> button:nth-of-type(4))) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  grid-template-rows: auto auto;
+  column-gap: calc(var(--gap) * 0.5); row-gap: 0;
+  align-items: center;
+}
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row:not(:has(> button:nth-of-type(4))) > .sur-rnd { grid-column: 1; grid-row: 1; align-self: end; }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row:not(:has(> button:nth-of-type(4))) > .sur-name { grid-column: 1; grid-row: 2; align-self: start; overflow-wrap: break-word; }
+#ss-inner[data-density="compact"] #ss-cal .season-upcoming-row:not(:has(> button:nth-of-type(4))) > .sel-chip { grid-row: 1 / span 2; }
+/* THE ACTION BAR JOINS THE TITLE ROW on a compact pair (a landscape phone).
+   Same measurement: the sheet is 281 own px, the title row took 28 and the
+   BACK / APPLY bar a 59-unit row of its own, leaving both panes 194 — and the
+   circuit shelf is tap-floored rows (2264 own, 11.7 screens) that no padding
+   trim can shorten. Title left, bar right, one row as tall as a button: both
+   panes get ~222 (+14%). DOM order is untouched, so Tab still reaches the
+   bar after the panes; #ss-back keeps autofocus. */
+#ss-inner[data-pair="on"][data-density="compact"] { grid-template-rows: auto minmax(0, 1fr); }
+#ss-inner[data-pair="on"][data-density="compact"] > .sheet-head { grid-column: 1; grid-row: 1; }
+#ss-inner[data-pair="on"][data-density="compact"] > .sheet-foot { grid-column: 2; grid-row: 1; background: none; }
+#ss-inner[data-pair="on"][data-density="compact"] > .sheet-foot::before { display: none; }
+#ss-inner[data-pair="on"][data-density="compact"] .pair-side,
+#ss-inner[data-pair="on"][data-density="compact"] .pair-main { grid-row: 2; }
 #ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
 /* Armed APPLY on a live season — the career DELETE? treatment: the second
    press is the one that wipes up to 23 raced rounds, so the first must
