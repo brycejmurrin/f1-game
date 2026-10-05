@@ -94,7 +94,7 @@
       // helper. Passing stripeCol/stripeEvery routes them through it instead.
       const SAUDI_BLOCKS = [
         [0.00, 0.16, GREEN], [0.16, 0.31, GOLD], [0.31, 0.47, GREEN],
-        [0.53, 0.68, GOLD], [0.68, 0.84, GREEN], [0.84, 1.00, GOLD],
+        [0.53, 0.68, GOLD], [0.68, 0.84, GREEN], [0.84, 0.997, GOLD],
       ];
       for (const side of [-1, 1]) {
         for (const [b0, b1, accent] of SAUDI_BLOCKS) {
@@ -103,7 +103,7 @@
           // across it, and a wall that visibly ends at the pit wall reads
           // right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
           const a0 = side === -1 && b0 === 0.00 ? 0.0211 : b0;
-          const a1 = side === -1 && b1 === 1.00 ? 0.9643 : b1;
+          const a1 = side === -1 && b1 === 0.997 ? 0.9643 : b1;
           // 4.35, not 3.50: def.barrierGap is 3.4 and the engine's street
           // barrier is 0.8 m thick, so a canyon at 3.50 stands INSIDE it —
           // two walls in one volume, 73 same-facing coplanar pairs where the

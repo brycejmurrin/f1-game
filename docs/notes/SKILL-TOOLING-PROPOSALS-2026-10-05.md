@@ -43,6 +43,13 @@ merge the two routing query files, two smoke recipes, 11 `@skill` tool
 headers, `.claude/rules/render-*.md`, the agent-surface and skill-progressive
 tests, the README rows.
 
+**Status (2026-10-05, same day): done.** `webgl-debug` + `webgpu-debug` are now
+`renderer-debug` (branch `claude/skill-routing-words`): a hub that opens on
+`diag().env.backend` and has one section per backend (TLX inline; references
+`glx.md`, `glx-failures.md`, `wgx.md`, `wgx-defects.md`). The section 2 rows
+that waited on the merge (TLX ownership, the HDR black-screen overlap) are
+closed by it; the interim body lines written earlier the same day point at it.
+
 **One merge was proposed and refuted.** The f1-animation-cameras agent argued
 replay-camera should fold into it (both thin, both parent-owned). The
 replay-camera agent's counter-case holds: the bodies share under half their

@@ -1,6 +1,6 @@
 ---
 name: multiplayer-debug
-description: "Use when VS FRIEND, WebRTC connection, invite links or QR codes, room codes, Nostr signalling, TURN/ICE, build handshakes, replicated rivals, multiplayer lobby flow, or net determinism is being debugged."
+description: "Use when VS FRIEND, phone-as-controller pairing/connection, WebRTC, invite links or QR codes, room codes, Nostr signalling, TURN/ICE, build handshakes, replicated rivals, lobby flow or net determinism break."
 ---
 
 ## Overview
@@ -20,6 +20,10 @@ Use this for:
   rivals.
 - Nostr relay/rendezvous issues, or "build mismatch"/`build_unknown` refusals at pairing.
 - Tests that need the in-page loopback transport instead of a real network.
+- PHONE AS CONTROLLER pairing/connection (QR scan, room code, `controller.html`
+  joining over the VS FRIEND wire, `docs/MULTIPLAYER.md` §Phone as controller,
+  `tests/unit/phone-pad.test.mjs`). Steering/tilt response once paired stays
+  **input-controls**.
 
 Do **not** use this for:
 

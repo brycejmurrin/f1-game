@@ -701,6 +701,36 @@ test("READY is host-relayed with from, and guests key _ready by from||id", () =>
     "guests key _ready by from when present, else the connection id");
 });
 
+test("host catch-ups READY to a late joiner (same as HELLO catch-up)", async () => {
+  // Live repro 2026-10-05 on github.io (apex-sha 5cc9497d): host + guest1
+  // READY, invite guest2 — guest2's #vs-them showed both as "choosing".
+  // HELLO was caught up; READY was only relayed on toggle.
+  const { h, made } = await connectedHost();
+  try {
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2, "second guest session bound");
+    // onConnected catch-up (before the late joiner's own HELLO)
+    const fromConnect = made[1].sent.filter((m) => m.t === "ready");
+    assert.ok(fromConnect.some((m) => m.d && m.d.ready && m.d.from == null),
+      "must catch-up host selfReady on connect: " + JSON.stringify(fromConnect));
+    assert.ok(fromConnect.some((m) => m.d && m.d.ready && m.d.from != null),
+      "must catch-up guest1 READY on connect: " + JSON.stringify(fromConnect));
+    // HELLO path catch-up is idempotent when the late joiner announces
+    const before = made[1].sent.length;
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    assert.ok(made[1].sent.slice(before).some((m) => m.t === "hello" && m.d && m.d.from),
+      "HELLO catch-up control");
+    assert.ok(made[1].sent.slice(before).some((m) => m.t === "ready" && m.d && m.d.ready),
+      "HELLO path also catch-ups READY");
+  } finally { h.lobby.cancel(); }
+});
+
 // ── the sim seed and race round travel with the host's settings ─────────────
 // Every reproducible draw — reliability DNFs, the weather arc, the AI
 // restart/skill rolls, the AI qualifying times that set the grid — hashes on
@@ -886,6 +916,34 @@ test("the host leaving the ROOM forgets every guest it relayed, not just the hos
     assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
     closers[0]("transport");
     assert.equal(h.lobby.roomState().peers.length, 0, "the room is over: no profile survives it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)", async () => {
+  // The waiting-room leave path cleared relayed "g2" profiles; the
+  // friendQualifying branch only said "Keep racing" and left them in place.
+  // QualiNet.waiting() falls back to roomState().peers while NetPlay is not
+  // yet active, so TO THE GRID waited forever for a lap no host can relay.
+  // 2p never saw it: there is no relayed roster there.
+  const { h, made, closers } = closableHarness();
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "relayed guest is in the roster");
+    made[0].deliver("go", {});
+    assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
+    assert.equal(closers.length, 1);
+    closers[0]("transport");
+    assert.equal(h.lobby.qualifying(), true, "still in the quali phase");
+    assert.match(h.status.textContent, /rivals are now AI/i);
+    assert.equal(h.lobby.roomState().peers.length, 0,
+      "relayed guest must die with the host — otherwise QualiNet.waiting() stays locked");
   } finally { h.lobby.cancel(); }
 });
 

@@ -1,5 +1,5 @@
 // @doc What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages.
-// @skill webgl-debug
+// @skill renderer-debug
 /* glx-call-census.mjs — what does ONE GLX frame actually cost in GL calls?
  *
  * docs/PERF-FINDINGS.md §"COUNT THE WORK AVOIDED, DO NOT TIME IT": a

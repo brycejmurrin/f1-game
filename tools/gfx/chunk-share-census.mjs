@@ -1,6 +1,6 @@
 // Do adjacent chunks share a lamp list? — the measurement nobody has run.
 // @doc Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run.
-// @skill webgl-debug / lighting-tuner
+// @skill renderer-debug / lighting-tuner
 //
 // The per-chunk lamp note in js/render/webgpu/wgx-chunked.js asserts "adjacent chunks almost never share an
 // index list", and that sentence is the entire justification for both backends

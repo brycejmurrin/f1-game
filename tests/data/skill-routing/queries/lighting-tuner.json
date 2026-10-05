@@ -4,7 +4,7 @@
 {"query": "The track floodlights never come on in a dusk race even though it's clearly dark, and only a few of the lamps ever seem lit. Figure out why the lamp gate or cap is stopping them and get them firing.", "expect": "lighting-tuner"},
 {"query": "I tweaked the sliders in the lighting tuner panel and copied out a window.LightPresets blob from the console. Bake it into js/lighting/presets.js so the values persist across reloads, and merge any LightEdits proposals too.", "expect": "lighting-tuner"},
 {"query": "Trying a new fog density and exposure via applyRaceSettings before a race starts; I want to confirm the values actually landed by reading lightState and comparing against the LT knob defaults in knobs.js for the overcast day scene.", "expect": "lighting-tuner"},
-{"query": "The bloom on the GLX canvas is blowing out to pure white and there are shader uniform errors in the console when the HDR pass runs. Diagnose the bloom shader defect on the WebGL2 backend.", "expect": "webgl-debug"},
+{"query": "The bloom on the GLX canvas is blowing out to pure white and there are shader uniform errors in the console when the HDR pass runs. Diagnose the bloom shader defect on the WebGL2 backend.", "expect": "renderer-debug"},
 {"query": "I want to add more floodlight masts along the main straight at Baku and move a few that sit too far from the barrier, so the night lighting has proper lamp posts on the scenery.", "expect": "scenery-dress"},
 {"query": "The tarmac looks too shiny and the sheen is wrong when the baked material pack is loaded; tune matTexMix and compare the procedural versus textured tarmac look with the pack on and off.", "expect": "asset-pack"}
 ]

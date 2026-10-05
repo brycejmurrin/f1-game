@@ -21,15 +21,16 @@ const UpdateCheck = (function () {
     } catch (e) { return 0; }
   }
 
-  // The build of the worker CONTROLLING this page. index.html registers
-  // `sw.js?v=<its own build>`, so a controller whose ?v= is newer than the
-  // booted shell means a newer deploy's worker activated under this tab — and
-  // its activate swept the older generation, so every lazy `?v=<booted>`
-  // request now misses the cache and reaches Pages, which ignores the query
-  // and serves the NEW file into the OLD code.
+  // Registration URL fallback for old workers without the generation protocol.
+  // It is NOT proof of the executing worker's cache: update() can replace the
+  // bytes at the same URL. Lazy loads query that exact controller first.
+  function controller() {
+    try { return navigator.serviceWorker && navigator.serviceWorker.controller; }
+    catch (_) { return null; }
+  }
   function controllerBuild() {
     try {
-      const c = navigator.serviceWorker && navigator.serviceWorker.controller;
+      const c = controller();
       const m = c && /[?&]v=(\d+)/.exec(String(c.scriptURL || ""));
       return m ? parseInt(m[1], 10) : 0;
     } catch (e) { return 0; }
@@ -44,6 +45,7 @@ const UpdateCheck = (function () {
     const doFetch = o.fetch || ((u, init) => fetch(u, init));
     const inRace = o.inRace || (() => false);
     const chip = o.chip || (() => null);
+    let generationRequest = null, generationController = null, generation = 0;
     let lastCheck = now();
     let ready = 0;
     let inflight = null;
@@ -85,9 +87,62 @@ const UpdateCheck = (function () {
       return inflight;
     }
 
-    function newerActive() {
+    function knownActive() {
       const c = (o.controllerBuild || controllerBuild)();
+      const reported = generationController === controller() ? generation : 0;
+      return Math.max(c, reported);
+    }
+
+    // Coalesce parallel lazy loads, but ask again for the next batch: a worker
+    // can restart at the same scriptURL and re-read a newer version.json.
+    function checkController() {
+      const c = controller();
+      if (!c || typeof c.postMessage !== "function" || typeof MessageChannel === "undefined") return Promise.resolve({ current: true, unsupported: false });
+      if (generationRequest && generationRequest.controller === c) return generationRequest.promise;
+      const request = { controller: c, promise: null };
+      request.promise = new Promise((resolve) => {
+        let channel, timer, ended = false;
+        const finish = (build, unsupported = false, allowed = true) => {
+          if (ended) return;
+          ended = true;
+          clearTimeout(timer);
+          if (channel) for (const port of [channel.port1, channel.port2]) {
+            try { if (port) port.close(); } catch (_) { /* detached or already closed */ }
+          }
+          const current = allowed && controller() === c;
+          if (current && Number.isSafeInteger(build) && build > 0) {
+            generationController = c; generation = build;
+            markReady(build);
+          }
+          // A late former controller may not authorize injection into the new
+          // one's namespace. This load can be retried against the new worker.
+          resolve({ current, unsupported });
+        };
+        try {
+          channel = new MessageChannel();
+          channel.port1.onmessage = (e) => {
+            const d = e.data;
+            if (d && d.type === "apex-cache-generation") finish(d.build);
+          };
+          timer = setTimeout(() => finish(0, true), 1500);
+          c.postMessage({ type: "apex-cache-generation" }, [channel.port2]);
+        } catch (_) { finish(0, false, false); }
+      }).finally(() => { if (generationRequest === request) generationRequest = null; });
+      generationRequest = request;
+      return request.promise;
+    }
+
+    function newerActive() {
+      checkController();
+      const c = knownActive();
       return c > booted ? markReady(c) : false;
+    }
+
+    function blocked() {
+      const c = knownActive();
+      if (c > booted) markReady(c);
+      // An old/unresponsive worker cannot prove a known newer deploy is safe.
+      return ready > booted;
     }
 
     // "Depending on your web app, you may want to auto-save or persist
@@ -101,6 +156,7 @@ const UpdateCheck = (function () {
             new Promise((r) => setTimeout(r, PERSIST_WAIT_MS))]);
         } catch (e) { /* a failed flush is retried by pagehide on the way out */ }
       }
+      if (inRace()) { render(); return false; } // a race may have started while persistence was pending
       const loc = o.location || location;
       try { sessionStorage.setItem(RELOAD_KEY, String(ready)); } catch (e) { /* private mode: the guard may reload once more, harmlessly */ }
       // Same URL shape as the boot guard: ?b= busts the cached shell, the rest
@@ -119,7 +175,7 @@ const UpdateCheck = (function () {
     }
 
     const api = {
-      check, markReady, newerActive, apply, render, onVisible,
+      check, markReady, newerActive, apply, render, onVisible, blocked, checkController,
       state: () => ({ booted, ready, lastCheck, checking: !!inflight }),
       stop: () => { clearInterval(follow); follow = 0; },
     };
@@ -131,9 +187,22 @@ const UpdateCheck = (function () {
   // once the session is wired (create() ran) — at boot the shell guard owns a
   // stale shell, and refusing a backend there would cost the renderer.
   function blocksLazyLoad() {
-    return !!(_active && _active.newerActive());
+    return !!(_active && _active.blocked());
   }
 
-  return { create, blocksLazyLoad, bootedBuild, controllerBuild, THROTTLE_MS };
+  async function prepareLazyLoad(scope) {
+    if (!_active) return true;
+    const c = controller();
+    // Only an unresponsive legacy controller gets one timeout per load(), not
+    // per dependency wave. Never retain that fallback across loader calls, or
+    // apply it to a replacement controller with the same registration URL.
+    if (scope && c && scope.legacyController === c) return !_active.blocked();
+    const result = await _active.checkController();
+    if (!result.current || controller() !== c) return false;
+    if (scope && result.unsupported) scope.legacyController = c;
+    return !_active.blocked();
+  }
+
+  return { create, blocksLazyLoad, prepareLazyLoad, bootedBuild, controllerBuild, THROTTLE_MS };
 })();
 Object.freeze(UpdateCheck);

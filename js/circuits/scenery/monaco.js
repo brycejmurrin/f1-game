@@ -39,6 +39,44 @@
       const _kShift = ((def.reverse ? _offNew - _offOld : _offOld - _offNew) % n + n) % n;
       const KOLD = (s) => (K(s) + _kShift) % n;
       const racingSide = (side) => def.reverse ? -side : side;
+      /* KRACE / KRAW / SRACE: RACING-arc keys for the NAMED LANDMARKS (2026-10-05).
+         This closure declares sceneryCoordinates "source" + reverse, so a wrapped
+         helper (anchor/building/place/palm) maps an authored K(s) to racing
+         wrap(0.1893 - s): TrackSpace.sceneryNode = startFrac 0.2516 - s +
+         _sceneryShift 0.938. The landmark fracs in this file were authored as
+         OLD-RACING positions, so under that map (measured in the Node build,
+         n = 824, scratch/monaco-measure.cjs) the Fairmont stood at the pool
+         (racing 0.789 for the 0.381 hairpin), the Tabac shop in the tunnel
+         (0.470 for Tabac 0.716), the Rascasse bar on the Mirabeau crest
+         (0.284, y 44 m, for Rascasse 0.881), the Hôtel de Paris at the pit
+         exit (0.981 for Casino Square 0.21-0.27). The declaration itself is
+         NOT wrong for the rest of the file: the Armco runs, the pit-complex
+         window (.1526-.2570) and the def's exclusions were measured in the
+         source frame, so the landmarks are re-keyed and the frame stays.
+           KRACE(r): the authored node a WRAPPED helper places at racing arc
+                     frac r — the exact inverse of TrackSpace.sceneryNode, in
+                     node space (sceneryNode(KRACE(r)) === K(r)).
+           KRAW(r):  the node for a RAW px/rx/tx reader — the arrays are
+                     racing-ordered, so no map at all.
+           SRACE(r): the authored frac a RANGE helper (hedge/wall) maps to
+                     racing r; write a range SRACE(r1), SRACE(r0) (r0 < r1),
+                     the reverse map swaps the ends back.
+         The wrapper flips sides (SIDE = -side): pass racingSide(x) for a
+         racing-space x. Corner fracs are curvature peaks of the BUILT lap
+         (def.turns agree to 0.002): Ste Devote 0.0655 | Massenet sweep
+         0.2124-0.2549 | Casino 0.2743 | Mirabeau 0.3422 | hairpin 0.3811
+         (r 9.5 m) | Portier 0.4345 | chicane 0.6383 | Tabac 0.7160 | pool
+         0.7633-0.8216 | Rascasse 0.8811 | Noghes 0.9078. */
+      const _shiftK = Math.round((def._sceneryShift || 0) * n);
+      const KRACE = (r) => (((_offNew + _shiftK - K(r)) % n) + n) % n;
+      const KRAW = (r) => K(r);
+      const SRACE = (r) => TrackSpace.wrap01(def.startFrac + (def._sceneryShift || 0) - r);
+      // A sign-board frame for a building on the racing RIGHT: wordCue lays
+      // its letters along +t, which reads left-to-right only from a viewer
+      // facing -r (the board on the LEFT of the road; r x u = -t here). Rotate
+      // the anchor 180 deg about up so +r offsets still point at the road and
+      // the letters run along -t, which that viewer reads correctly.
+      const faceRoadRight = (a) => ({ c: a.c, r: [-a.r[0], -a.r[1], -a.r[2]], u: a.u, t: [-a.t[0], -a.t[1], -a.t[2]] });
 
       const CREAM  = [0.95, 0.90, 0.78];
       const TERRA  = [0.80, 0.45, 0.32];
@@ -99,30 +137,23 @@
       // fountain is documented at its own site.
       const LANDMARK_REQUIRED = true;
 
-      // ── MEASURED, NOT FIXED: CASINO SQUARE SPANS TWO ORIGIN FRAMES ───────
-      // The square's five landmarks do not share a frame. The Casino reads raw
-      // px/rx/tx and therefore goes through KOLD (+800 nodes); the Hôtel de
-      // Paris, the Café, the Massenet and the fountain all go through
-      // anchor(), which transformSceneryApi wraps with TrackSpace.sceneryNode
-      // (+773, the arc shift). The two differ by 27 nodes — about 108 m of
-      // this lap. Built positions, measured in the Node build:
-      //
-      //   Massenet   anchor K(0.185)   node 101  arc 404 m  y 29.7
-      //   Hôtel      anchor K(0.21)    node 122  arc 488 m  y 24.3
-      //   fountain   anchor K(0.215)   node 126  arc 504 m  y 22.3
-      //   Café       anchor K(0.228)   node 137  arc 548 m  y 16.5
-      //   Casino     raw    KOLD(0.20) node 141  arc 564 m  y 14.5
-      //
-      // So the Casino stands 76 m from the Hôtel de Paris, which in Monte
-      // Carlo faces it across one square, and 15 m below the lap's own high
-      // plateau (nodes 90-110, y 29.4-29.8) that IS Casino Square. Putting the
-      // Casino on anchor() would move it to node 114 — 8 m from the Hôtel, up
-      // on the plateau — but it would also pull it 60 m off the Café that
-      // currently stands beside it, and all five were hand-tuned against the
-      // onTrack guards where they are. That is a rendered-lap call, not a
-      // headless one, so it stays. Re-seating the whole square on ONE
-      // node with metre offsets is the right shape of fix when someone can
-      // actually look at it.
+      // ── CASINO SQUARE, RE-SEATED ON THE MEASURED CREST (2026-10-05) ──────
+      // Before: the five landmarks stood in two frames and neither was the
+      // square. Measured in the Node build (racing arc of the nearest node):
+      //   Casino      raw  KOLD(0.20)  0.1711  (Beau Rivage, 41 m off, y 46)
+      //   Hôtel       anchor K(0.21)   0.9806  (pit exit)
+      //   Café        anchor K(0.228)  0.9612  (pit straight)
+      //   Massenet    anchor K(0.185)  0.0049  (start line)
+      // The built square is the crest between the Massenet sweep (0.2124-
+      // 0.2549, left, y 33-41) and Casino corner (0.2743, right, y 41). Laid
+      // out as Monte Carlo is driven: the Massenet bust on the inside of its
+      // corner, the Hôtel de Paris on the LEFT at the sweep's exit, the
+      // Café de Paris terrace on the RIGHT across the square from it, the
+      // Casino on the LEFT behind the fountain at Casino corner. Clearances
+      // (scratch/monaco-clear.cjs, declared footprint to road edge): Casino
+      // 13 m, Hôtel 1.2 m (declared; emitted mass 22 m wide clears 3 m),
+      // Café 6.3 m, Massenet 8.9 m, fountain 11 m. Visual sign-off is a
+      // rendered-lap call the parent makes.
 
       // ── Continuous Armco lining both sides — tight street feel ───────────
       // 1.2 m leaves the collision limit just outside the authored 5 m road,
@@ -156,10 +187,12 @@
       wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
-      // Sainte Devote chapel (s=0.05, R mid) — small cream nave + dark pitched
-      // roof + campanile; reads as the patron-saint chapel behind the barriers.
+      // Sainte Devote chapel (racing 0.0655, the T1 apex, outside = R) — small
+      // cream nave + dark pitched roof + campanile; reads as the patron-saint
+      // chapel behind the barriers. Was K(0.05) -> racing 0.1396, 244 m past
+      // its corner on Beau Rivage.
       {
-        const k = K(0.05), a = anchor(k, 1, 18);
+        const k = KRACE(0.0655), a = anchor(k, racingSide(1), 18);
         const b = [a.r, a.u, a.t];
         modelGroup("monaco-sainte-devote", {
           center: vadd(a.c, a.u, 6.2), size: [11.2, 14.5, 13.5], basis: b,
@@ -237,7 +270,9 @@
       }
 
       {
-        const k = KOLD(0.20);
+        // Racing 0.268, LEFT, 36 m back: the Casino facade at Casino corner
+        // (0.2743). Raw reader, so KRAW (racing node), not KOLD.
+        const k = KRAW(0.268);
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
         const uu = upOf(track, k);
         const tt = [track.tx[k], track.ty[k], track.tz[k]];
@@ -253,7 +288,7 @@
             center: vadd(a.c, a.u, 24), size: [52, 52, 38], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
-            addBox(stage, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
+            addBox(stage, vadd(a.c, a.u, 13), [44.2, 26, 30], CREAM, b);
             addBox(stage, vadd(a.c, a.u, 28), [18, 12, 16], [0.93, 0.88, 0.76], b);
             for (const o of [-14, 14]) {
               addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 30), [9.5, 18, 9.5], [0.90, 0.85, 0.74], b);
@@ -294,9 +329,12 @@
       }
 
       {
-        const k = K(0.21);
+        // Hôtel de Paris: racing 0.244, LEFT, at the Massenet sweep's exit.
+        // dist 16 (not 14.5): the 34 m frontage sags ~3 m toward the road on
+        // the inside of the r~50 m sweep.
+        const k = KRACE(0.244);
         const HOTEL = [0.92, 0.88, 0.82];
-        const a = anchor(k, 1, 14.5);
+        const a = anchor(k, racingSide(-1), 16);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           // Cream limestone palace + ochre mansard (Hôtel de Paris, 1864).
@@ -331,17 +369,21 @@
       }
 
       {
-        const k = K(0.228);
+        // Café de Paris: racing 0.258, RIGHT, across the square from the
+        // Hôtel. On the right -r is toward the road, so the awning terrace
+        // (-8.2) and planter (-10.2) face the track; dist 16 keeps the
+        // planter 5 m off the road edge. Declared box = the emitted extent
+        // (-11..+7.5 lateral), not the old 28 m that reached the tarmac.
+        const k = KRACE(0.258);
         const CAFE  = [0.94, 0.90, 0.83];
         const AWN_R = [0.72, 0.14, 0.14], AWN_W = [0.95, 0.94, 0.90];
         // Raw primitives, not building() — city exclusion drops building() here.
-        // dist 14 (not 11.5): onTrack(...,12) at 11.5 rejected the whole landmark.
-        const a = anchor(k, 1, 14);
+        const a = anchor(k, racingSide(1), 16);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           // Lower, longer belle-époque pavilion + red/white awning terrace.
           modelGroup("monaco-cafe-de-paris", {
-            center: vadd(vadd(a.c, a.u, 10.5), a.r, -3), size: [28, 24, 44], basis: b,
+            center: vadd(vadd(a.c, a.u, 10.5), a.r, -1.75), size: [19.5, 24, 44], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
             addBox(stage, vadd(a.c, a.u, 7.5), [15, 15, 40], CAFE, b);
@@ -373,7 +415,8 @@
       }
 
       {
-        const k = K(0.185), a = anchor(k, -1, 11);
+        // Massenet bust: racing 0.2124, the inside (LEFT) of its own corner.
+        const k = KRACE(0.2124), a = anchor(k, racingSide(-1), 11);
         if (!onTrack(a.c[0], a.c[2], 7)) {
           const b = [a.r, a.u, a.t];
           const STONE = [0.82, 0.80, 0.74], BRONZE = [0.34, 0.30, 0.20];
@@ -394,16 +437,20 @@
         }
       }
 
-      // Casino Square gardens — formal hedges, palms, fountain
-      hedge(0.195, 0.235, -1, 7, 1.6, PALMGRN);
+      // Casino Square gardens — formal hedges, palms, fountain: the inside
+      // (LEFT) of the Massenet sweep, racing 0.212-0.250.
+      hedge(SRACE(0.250), SRACE(0.212), racingSide(-1), 7, 1.6, PALMGRN);
       for (let i = 0; i < 10; i++) {
-        const k = K(0.20 + i * 0.0035);
-        place(k, -1, 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);
-        prop(k, -1, 3, [2, 0.5, 2], PALMGRN);
-        palm(k, i % 2 ? 1 : -1, 7, 9, PALMGRN);   // dist 7: palm() guards onTrack(c, 4), so dist 4 sat exactly on the margin and every odd (side 1) palm was dropped
+        const k = KRACE(0.215 + i * 0.0035);
+        place(k, racingSide(-1), 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);
+        prop(k, racingSide(-1), 3, [2, 0.5, 2], PALMGRN);
+        // Palms stay on the square (LEFT). RIGHT-side trunks sat in the
+        // Casino-corner hillside after the 2026-10-05 re-key (ground-audit bury).
+        palm(k, racingSide(-1), 7, 9, PALMGRN);
       }
       {
-        const k = K(0.215), a = anchor(k, -1, 14);
+        // The fountain in front of the Casino: racing 0.258, LEFT.
+        const k = KRACE(0.258), a = anchor(k, racingSide(-1), 14);
         if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           // THE ONE THAT STAYS RAW, and the reason is a finding, not a taste.
@@ -418,11 +465,17 @@
           // Casino Square is not inside the pit complex, so wrapping it would
           // trade a silent-failure RISK for an actual silent failure. Left raw
           // deliberately; the engine question belongs in js/track/, not here.
-          addCyl(out, vadd(a.c, a.u, 0.5), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);
-          addCyl(out, vadd(a.c, a.u, 1.6), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);
-          addCyl(out, vadd(a.c, a.u, 3.4), 1.2, 0.4, [0.85, 0.90, 0.96], 8, b);
+          // addCyl's `c` is the BASE (geom.js), not the centre. After the re-key
+          // the square is at the +40 m crest; a road-height basin hung 0.39 m
+          // over the plaza (ground-audit). Embed the basin and stack the
+          // column/bowl so they chain to it.
+          const g = terrainYAt(a.c[0], a.c[2]);
+          const base = g == null ? -0.6 : (g - a.c[1] - 0.08);
+          addCyl(out, vadd(a.c, a.u, base), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);
+          addCyl(out, vadd(a.c, a.u, base + 0.75), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);
+          addCyl(out, vadd(a.c, a.u, base + 2.75), 1.2, 0.5, [0.85, 0.90, 0.96], 8, b);
         }
-        for (let j = 0; j < 6; j++) bush(K(0.198 + j * 0.007), -1, 9 + (j % 2) * 3, [0.24, 0.44, 0.22]);
+        for (let j = 0; j < 6; j++) bush(KRACE(0.213 + j * 0.007), racingSide(-1), 12 + (j % 2) * 3, [0.24, 0.44, 0.22]);
       }
 
       for (let i = 0; i < 4; i++) {
@@ -432,31 +485,34 @@
                  [0.22 + hv * 0.04, 0.40 + hv * 0.05, 0.24]);
       }
 
-      // ── FAIRMONT HAIRPIN HOTEL (s=0.40, R) ──────────────────────────────
+      // ── FAIRMONT HAIRPIN HOTEL (racing 0.381, the outside = R) ──────────
       {
         // Gaps 9-11, not 4-5: tall pale wrap reads close; plinth stays off the
-        // racing line. Apex planter/palms on the inside of the bend.
+        // racing line. Apex planter/palms on the inside (L) of the bend.
+        // Was K(0.385..0.415) -> racing 0.774-0.805: the whole wrap stood at
+        // the swimming pool, 1.35 km from the hairpin (r 9.5 m at 0.3811).
+        // One hotel + two wings. Five 14–24 m masses at ±0.005/±0.015 on a
+        // 9.5 m hairpin occupied the same world cell (clip-audit 4.5 m, frac
+        // 0.40–0.44). 0.022 lap (~73 m) between wings, smaller along-track
+        // depth, slightly further out.
         const FAIRMONT = [0.91, 0.89, 0.84];
-        const k = K(0.40);
-        building(k, 1, 9, 24, 54, 32,
+        const HP = 0.3811;
+        const k = KRACE(HP);
+        building(k, racingSide(1), 11, 20, 50, 22,
           { kind: "notch", wall: FAIRMONT, window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
-        building(K(0.385), 1, 10, 22, 46, 20,
+        building(KRACE(HP - 0.022), racingSide(1), 12, 16, 40, 14,
           { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(K(0.415), 1, 10, 22, 48, 20,
+        building(KRACE(HP + 0.022), racingSide(1), 12, 16, 42, 14,
           { kind: "podium", wall: [0.90, 0.87, 0.80], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(K(0.395), 1, 10.5, 14, 42, 14,
-          { kind: "slab", wall: FAIRMONT, window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
-        building(K(0.405), 1, 10.5, 14, 44, 14,
-          { kind: "slab", wall: [0.93, 0.90, 0.85], window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
         for (let i = 0; i < 5; i++) {
-          const pk = K(0.388 + i * 0.006);
+          const pk = KRACE(HP - 0.012 + i * 0.006);
           // place() seats a box at ground + h/2 - 0.8, so height = 0.8 + the
           // visible height: a 0.7 m planter with its shrubs 0.25 m proud. The
           // shrubs share the planter's centre (prop() added w/2 and pushed
           // them 0.7 m out past its outer wall).
-          place(pk, -1, 3.2, [2.6, 0.8 + 0.7, 3.4], [0.62, 0.58, 0.50]);
-          place(pk, -1, 3.2, [2.0, 0.8 + 0.95, 2.6], PALMGRN);
-          if (i % 2 === 0) palm(pk, -1, 5.5, 8 + (i % 3), PALMGRN);
+          place(pk, racingSide(-1), 3.2, [2.6, 0.8 + 0.7, 3.4], [0.62, 0.58, 0.50]);
+          place(pk, racingSide(-1), 3.2, [2.0, 0.8 + 0.95, 2.6], PALMGRN);
+          if (i % 2 === 0) palm(pk, racingSide(-1), 5.5, 8 + (i % 3), PALMGRN);
         }
       }
 
@@ -830,23 +886,28 @@
         });
       }
       {
-        // Tabac namesake shop at T12: a low, tight shopfront beneath the inland
-        // apartment row, with a dark street canopy and literal TABAC block cue.
-        const k = K(0.72), a = anchor(k, 1, 8.5), b = [a.r, a.u, a.t];
+        // Tabac namesake shop at Tabac (racing 0.716, a left-hander): a low,
+        // tight shopfront on the inland side — the inside, LEFT — with a dark
+        // street canopy and literal TABAC block cue. Was K(0.72) -> racing
+        // 0.4697, inside the tunnel. On the left +r is toward the road, so
+        // the front (+5.05..+5.8) faces it and the letters, laid along +t,
+        // read left-to-right from the car. Seated 0.004 before the apex:
+        // the 15.5 m frontage sags into the inside of the r 21 m bend.
+        const k = KRACE(0.712), a = anchor(k, racingSide(-1), 9), b = [a.r, a.u, a.t];
         modelGroup("monaco-tabac-shop", {
           center: vadd(a.c, a.u, 5.2), size: [11.5, 10.8, 15.5], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.5), [10.5, 9, 14], CREAM, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -5.05), a.u, 2.15), [0.35, 3.5, 12.6], OCHRE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.05), a.u, 2.15), [0.35, 3.5, 12.6], OCHRE, b);
           stage._mat = MAT.GLASS;
           for (const z of [-4.2, 0, 4.2])
-            addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.28), a.t, z), a.u, 2.35), [0.18, 2.8, 3.2], WINLIT, b);
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.28), a.t, z), a.u, 2.35), [0.18, 2.8, 3.2], WINLIT, b);
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 4.15), [2.0, 0.45, 14.6], [0.16, 0.15, 0.14], b);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.8), a.u, 4.15), [2.0, 0.45, 14.6], [0.16, 0.15, 0.14], b);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.r, -5.38), a.u, 6.25), [0.28, 1.65, 7.0], [0.20, 0.18, 0.15], b);
-          wordCue(stage, a, b, "TABAC", -5.57, 5.88, 0.25, [0.98, 0.88, 0.52]);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.38), a.u, 6.25), [0.28, 1.65, 7.0], [0.20, 0.18, 0.15], b);
+          wordCue(stage, a, b, "TABAC", 5.57, 5.88, 0.25, [0.98, 0.88, 0.52]);
           stage._mat = 0;
         }, { required: true });
       }
@@ -897,17 +958,16 @@
         width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
       });
 
-      cityFront(0.87, 0.95, 1, 9, {
-        minH: 10, maxH: 16, depth: 15, step: 18,   // depth = ALONG-track frontage; 7 m on an 18 m step built 7 m slivers 11 m apart
-        palette: [CREAM, STONE, DUSTY, OCHRE],
-        lit: true, windowCol: WINLIT,
-      });
+      // Hairpin/Mirabeau hillside is the Fairmont wrap + Mirabeau apartments.
+      // A cityFront(0.87, 0.95) row here (racing 0.30-0.38) buried plinths in
+      // the slope and clipped the re-seated landmarks. Harbour already has
+      // pastelStreetRow(0.595, 0.655); no replacement row.
       {
         const houses = [
-          ["kenney_sub_building-type-a", 0.88, 1, 22],
-          ["kenney_sub_building-type-c", 0.91, 1, 24],
-          ["kenney_sub_building-type-h", 0.94, 1, 23],
-          ["kenney_sub_building-type-k", 0.89, -1, 16],
+          ["kenney_sub_building-type-a", 0.605, 1, 28],
+          ["kenney_sub_building-type-c", 0.635, 1, 30],
+          ["kenney_sub_building-type-h", 0.665, 1, 29],
+          ["kenney_sub_building-type-k", 0.620, -1, 22],
         ];
         for (const [id, s, side, dist] of houses) {
           if (!bakedModel(id, K(s), side, dist, { scale: 1.15 }))
@@ -919,9 +979,15 @@
       guardrail(0.88, 0.95, 1, 1.0, ARMCO);
 
       {
-        const k = K(0.905);
+        // La Rascasse bar on the inside (RIGHT) of its right-hander (racing
+        // 0.8811, r 11.5 m), seated 0.011 before the apex so the 12 x 10.5 m
+        // box clears the exit leg (2.9 m; at the apex itself it overlapped
+        // by 0.2 m). Was K(0.905) -> racing 0.284 on the Mirabeau crest, 44 m
+        // up. faceRoadRight: +r offsets toward the road and the RASCASSE
+        // letters readable from the car (see the helper).
+        const k = KRACE(0.870);
         const RASCASSE_WALL = [0.86, 0.80, 0.62];
-        const a = anchor(k, -1, 9), b = [a.r, a.u, a.t];
+        const a = faceRoadRight(anchor(k, racingSide(1), 9)), b = [a.r, a.u, a.t];
         modelGroup("monaco-rascasse-bar", {
           center: vadd(vadd(a.c, a.r, 0.2), a.u, 5.0), size: [12, 10.5, 10.5], basis: b,
         }, (stage) => {
@@ -1183,7 +1249,7 @@
         }
         out._mat = 0;
         // Warm lit interior glow band (evening party lights)
-        addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.92, 0.4 * sc, L * 0.5], WINLIT, b);
+        addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.935, 0.4 * sc, L * 0.51], WINLIT, b);
       };
       // Flagship yachts — lead berth at ~0.65 L is the Port Hercule white stack.
       {
@@ -1257,10 +1323,11 @@
 
       {
         // Mirabeau Superior apartment identity: one pale slab replaces the
-        // four hash-varied balcony masses with a regular residential grid.
-        // Baseline diagnostics showed only the 0.285 and 0.372 masses emitted;
-        // this keeps the former's proven 17 x 35 x 13 m footprint envelope.
-        const k = K(0.285), a = anchor(k, -1, 35), b = [a.r, a.u, a.t];
+        // four hash-varied balcony masses with a regular residential grid,
+        // on the outside (LEFT) of the Mirabeau right-hander (racing 0.3422).
+        // Was K(0.285) -> racing 0.9041, beside Anthony Noghes. 35 m back
+        // clears every other fold of the lap by 27 m (scratch/monaco-clear).
+        const k = KRACE(0.3422), a = anchor(k, racingSide(-1), 35), b = [a.r, a.u, a.t];
         modelGroup("monaco-mirabeau-apartments", {
           center: vadd(a.c, a.u, 17), size: [17, 35, 13], basis: b,
         }, (stage) => {

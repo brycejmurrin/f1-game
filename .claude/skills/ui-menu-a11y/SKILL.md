@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, a cramped or clipped single screen, or menu/HUD accessibility regressions are being changed or debugged. Single-screen fit only — a DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
+description: "Use when menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout, a cramped or clipped screen (short landscape phone), or menu/HUD accessibility regressions change. Single-screen fit only — DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
 ---
 
 # Menu / HUD accessibility
@@ -15,6 +15,8 @@ on top, and route Escape/back through the same button path a player would use.
 - `.sheet` / `.pane` / selected chips / UI scale / HUD layout CSS.
 - iPad/touch layout after `zoom`, `getBoundingClientRect()`, or
   `(pointer: coarse)` changes.
+- A cramped / clipped / cut-off single screen, a short landscape phone, UI scale:
+  this skill owns the diagnosis and fix; **css-play** only supplies the edit loop.
 
 Do **not** use for in-race driving input (unless a menu leaks keys) —
 **input-controls**. Data-hub tab logic → **data-hub**. Renderer/canvas

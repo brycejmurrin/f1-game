@@ -1,6 +1,6 @@
 ---
 name: scenery-dress
-description: "Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. For a picture-driven accuracy pass (survey first) use survey-track."
+description: "Use when asked to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. Picture-driven accuracy pass (survey first) → survey-track."
 ---
 
 # Dress a circuit's scenery
@@ -38,6 +38,9 @@ shifted circuit, wrapped helpers and `along()` callbacks both expect authored
 - **Terrain/raw:** `mountain`, `addBox`/`addCyl`/`addCone`/`addPrism`/
   `addPyramid`/`addFrustum`.
 - **Utilities:** `every`, `hash`, `anchor`, `groundYAt`, `onTrack`.
+- **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled
+  luminaire uses `lampPost(spec)` (`docs/SCENERY-API.md`). Whether lights FIRE
+  (dusk/dawn/night gate, lamp cap) → **lighting-tuner**.
 
 ```sh
 node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
