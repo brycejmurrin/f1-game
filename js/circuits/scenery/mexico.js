@@ -608,7 +608,7 @@
       }
       // Papel-picado runs between the hoardings.
       for (const s of [0.03, 0.17, 0.26, 0.35, 0.50, 0.58, 0.64, 0.95])
-        banners(s, s > 0.5 ? -1 : 1, 7);
+        banners(s, s > 0.5 ? -1 : 1, 7.3);
       // Marshal posts on the other side too.
       for (const s of [0.16, 0.26, 0.36, 0.50, 0.60, 0.70, 0.95])
         marshalPost(K(s), -1, 6);
