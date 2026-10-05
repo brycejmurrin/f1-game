@@ -806,6 +806,42 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
 
+test("real results of the fast tree tools conform to their advertised outputSchema", () => {
+  // MCP 2025-06-18: a server that advertises outputSchema MUST return
+  // conforming structuredContent. The shapes were measured from these same
+  // calls on 2026-10-05; a CLI that renames a key fails here, not in a client.
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const schemaOf = (n) => listed.find((t) => t.name === n).outputSchema;
+  const typeOk = (v, type) => (Array.isArray(type) ? type : [type]).some((t) =>
+    t === "null" ? v === null
+    : t === "array" ? Array.isArray(v)
+    : t === "object" ? (v !== null && typeof v === "object" && !Array.isArray(v))
+    : t === "integer" ? Number.isInteger(v)
+    : typeof v === t);
+  const validate = (value, schema, where, errors) => {
+    if (schema.type && !typeOk(value, schema.type)) errors.push(`${where}: expected ${JSON.stringify(schema.type)}, got ${Array.isArray(value) ? "array" : value === null ? "null" : typeof value}`);
+    if (schema.properties && value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [k, sub] of Object.entries(schema.properties)) if (k in value) validate(value[k], sub, `${where}.${k}`, errors);
+    }
+    return errors;
+  };
+  const calls = [
+    ["apex_status", {}], ["apex_doctor", {}], ["apex_pick_tests", {}], ["apex_select_specs", { since: "HEAD~1" }],
+    ["apex_session_status", {}], ["apex_bump_cache_check", {}], ["apex_job_status", {}],
+    ["apex_track_audit", { track: "monza" }], ["apex_car_audit", { check: "ladder" }],
+  ];
+  const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
+  for (const [i, [name]] of calls.entries()) {
+    const r = results.find((m) => m.id === 10 + i).result;
+    assert.ok(r.structuredContent && typeof r.structuredContent === "object", `${name}: structuredContent present`);
+    assert.deepEqual(validate(r.structuredContent, schemaOf(name), name, []), [], `${name} conforms to its outputSchema`);
+  }
+  for (const t of listed) {
+    assert.equal(t.outputSchema.additionalProperties, true, `${t.name}: a CLI may grow a key before the schema does`);
+    assert.equal(t.outputSchema.required, undefined, `${t.name}: refusal and dryRun bodies share the tool, so nothing is required`);
+  }
+});
+
 test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
   for (const tool of listed) {

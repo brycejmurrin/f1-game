@@ -1,6 +1,6 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — before a restructure, to prove a CSS change regressed no other shape, or to check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
+description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — before a restructure, after a CSS change, or for every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
 ---
 
 # Surveying the whole UI across the whole matrix
