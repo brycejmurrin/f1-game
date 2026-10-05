@@ -19,6 +19,15 @@
       const sandLt    = [0.87, 0.81, 0.64];
       const marramG   = [0.33, 0.49, 0.24];   // marram grass green
       const marramT   = [0.67, 0.63, 0.41];   // marram grass tan
+      // Zandvoort's dunes are grown over with marram (helm) and scrub; bare
+      // sand shows only on crests and blowouts. Grey-green, not tan.
+      const marramS   = [0.45, 0.52, 0.33];   // sun-bleached grey-green marram
+      const marramD   = [0.36, 0.46, 0.27];   // marram on the lee slopes
+      const crestSand = [0.78, 0.73, 0.56];   // wind-scoured crest sand
+      // addMountain zones: fr > snowline-0.16 blends rock/snow, fr > 0.34 is
+      // rock, below is forest. 1.02 keeps the SNOW zone (fr > 1.06) out of
+      // reach so only the top ~14 % of a dune reads sandy.
+      const DUNE = { snowline: 1.02, forest: marramD, rock: marramS, snow: crestSand };
       const seaCol    = [0.18, 0.40, 0.56];   // North Sea blue-grey
       const beachCol  = [0.89, 0.83, 0.66];   // wet-sand beach
       const orange    = [0.96, 0.42, 0.02];   // Verstappen-orange crowd
@@ -91,10 +100,8 @@
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const h = (midLap ? 4 : 5) + hash(k * 73 + side) * (midLap ? 7 : 8);
           const w = (midLap ? 34 : 42) + hash(k * 74 + side) * (midLap ? 26 : 34);
-          dune(a.c[0], a.c[2], a.c[1], w, h, {
-            seg: 10, seed: k * 13 + side, rough: 0.35, snowline: 2,
-            forest: marramT, rock: sandDk, snow: sand,
-          });
+          dune(a.c[0], a.c[2], a.c[1], w, h, Object.assign({
+            seg: 10, seed: k * 13 + side, rough: 0.35 }, DUNE));
         }
       });
 
@@ -108,10 +115,11 @@
           const a = anchor(k, side, dist);
           const w = 30 + hash(k * 90 + side) * 18;
           const h = 3 + hash(k * 91 + side) * 5;
-          dune(a.c[0], a.c[2], a.c[1], w, h, {
-            seg: 10, seed: k * 17 + side, rough: 0.25, snowline: 2,
-            forest: marramT, rock: sandDk, snow: sand,
-          });
+          // Close shoulders: one in three is a sand blowout (bare upper slope).
+          const blow = hash(k * 92 + side) < 0.34;
+          dune(a.c[0], a.c[2], a.c[1], w, h, Object.assign({
+            seg: 10, seed: k * 17 + side, rough: 0.25 }, DUNE,
+            blow ? { rock: sandDk, snow: sand } : null));
         }
       });
 
@@ -125,11 +133,9 @@
           if (onTrack(a.c[0], a.c[2], 18)) continue;
           const w = 58 + hash(k * 83 + side) * 42;
           const h = 8 + hash(k * 82 + side) * 10;
-          dune(a.c[0], a.c[2], a.c[1], w, h, {
-            seg: 10, seed: k * 19 + side, rough: 0.28, snowline: 2,
-            forest: marramT, rock: sandDk,
-            snow: hash(k * 84 + side) < 0.5 ? sand : sandLt,
-          });
+          dune(a.c[0], a.c[2], a.c[1], w, h, Object.assign({
+            seg: 10, seed: k * 19 + side, rough: 0.28 }, DUNE,
+            { snow: hash(k * 84 + side) < 0.5 ? crestSand : sandLt }));
         }
       });
 
@@ -155,7 +161,9 @@
             const a = anchor(k, side, dist0 + dd);
             for (let w = w0; w >= 40; w *= 0.8) {
               if (onTrack(a.c[0], a.c[2], w * 1.061 + 3.6)) continue;
-              peak(a.c[0], a.c[2], pyMin, w, h0 * Math.sqrt(w / w0), sand);
+              // Distant dunes: grey-green marram, one in four a pale blowout.
+              peak(a.c[0], a.c[2], pyMin, w, h0 * Math.sqrt(w / w0),
+                   hash(k * 45 + side) < 0.25 ? sand : [0.50, 0.55, 0.39]);
               placed = true;
               break;
             }
@@ -180,13 +188,17 @@
       forestEdge(0.88, 0.99,  1, 28, { density: 0.28, hMin: 5, hMax: 9,
                                        col: pineCol, col2: pineCol2, pineFrac: 0.75 });
 
+      // Tarzan (racing 0.03-0.125): the prism rows read as flat cardboard
+      // slabs on the hairpin's open run-off; real clumps are planted there.
+      const tarzan = (k) => { const f = k / n; return f > 0.03 && f < 0.125; };
       every(6, (k) => {
+        if (tarzan(k)) return;
         for (const side of [-1, 1]) {
           if (hash(k * 61 + side * 5) > 0.40) continue;   // ~60% density
           const baseX = 10 + hash(k * 62 + side) * 8;     // 10–18 m from verge
           const a = anchor(k, side, baseX);
           if (onTrack(a.c[0], a.c[2], 3)) continue;
-          const tuft = hash(k * 63 + side) < 0.5 ? marramG : marramT;
+          const tuft = hash(k * 63 + side) < 0.5 ? marramG : marramS;
           const b = [a.r, a.u, a.t];
           const cnt = 3 + (hash(k * 64 + side) < 0.4 ? 1 : 0);
           for (let i = 0; i < cnt; i++) {
@@ -211,19 +223,33 @@
           hedge(s, Math.min(s + step * 0.88, s1), side, gJ, hJ, col);
         }
       };
-      marramHedge(0.10, 0.22, 1,  26, 1.6, marramT);
-      marramHedge(0.22, 0.55, 1,  32, 1.1, marramT);   // mid-lap thin
+      marramHedge(0.10, 0.22, 1,  26, 1.6, marramS);
+      marramHedge(0.22, 0.55, 1,  32, 1.1, marramS);   // mid-lap thin
       marramHedge(0.20, 0.58, -1, 28, 1.1, marramG);   // mid-lap thin
       marramHedge(0.55, 0.85, 1,  26, 1.5, marramG);
-      marramHedge(0.65, 0.98, -1, 22, 1.5, marramT);
+      marramHedge(0.65, 0.98, -1, 22, 1.5, marramS);
       marramHedge(0.80, 0.95, 1,  28, 1.4, marramG);
 
       every(8, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 51 + side) > 0.35) continue;   // ~65% density
+          const r = hash(k * 53 + side);
           bush(k, side, 7 + hash(k * 52 + side) * 12,
-               hash(k * 53 + side) < 0.5 ? marramG : marramT);
+               r < 0.45 ? marramG : (r < 0.85 ? marramS : marramT));
         }
+      });
+
+      // Tarzan outside (side -1): marram/scrub clumps on the dune face
+      // between the gravel trap and the Tarzan stands, in place of the tufts.
+      every(5, (k) => {
+        if (!tarzan(k)) return;
+        for (const [j, dist] of [[0, 17], [1, 21]]) {
+          if (hash(k * 57 + j) > 0.55) continue;
+          bush(k, -1, dist + hash(k * 58 + j) * 3,
+               hash(k * 59 + j) < 0.5 ? marramG : marramD);
+        }
+        if (hash(k * 56) < 0.45)
+          bush(k, 1, 12 + hash(k * 55) * 5, marramS);
       });
 
       // GRANDSTANDS — Orange Army Verstappen fans; Dutch GP sells out every year.
@@ -303,8 +329,14 @@
         { livery: "steel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true }); // main pit straight R (largest, permanent grandstand)
       duneDeck("zandvoort-deck-tarzan", 0.05, 1, 14, 5,
         { rows: 7, fascia: [0.96, 0.42, 0.02] });   // Tarzan hairpin R
-      grandstandEx(0.09, -1,  14, 26, null, orange,
-        { livery: "orange", roof: "flat" }); // Tarzan exit L
+      // TARZAN BANK — the Tarzantribune stands on the dune on the OUTSIDE of
+      // the hairpin (side -1: T1 is a right-hander, curv -0.032 at 0.086),
+      // facing straight down the pit straight. Gap 26 clears the gravel trap
+      // (runoffApron K(0.055) -1 reaches ~19 m) and the bush band at 17-24 m.
+      grandstandEx(0.071, -1, 26, 64, null, orange,
+        { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // Tarzan main L
+      grandstandEx(0.097, -1, 22, 34, null, orange,
+        { livery: "steel", tiers: 2, roof: "flat", endWalls: true }); // Tarzan exit L (was 14/26 single deck)
       grandstandEx(0.135,-1,  28, 40, null, orange,
         { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
       duneDeck("zandvoort-deck-hugenholtz", 0.18, 1, 16, 5,
@@ -626,10 +658,25 @@
       runoffApron(K(0.520),  1, 5.5, [16, 0.32, 28], gravel);  // Scheivlak outer
       runoffApron(K(0.535), -1, 5.0, [14, 0.32, 24], gravel);  // Scheivlak exit
 
-      bankedKerbStrip(0.115, 0.185, -1, { saferGap: 7.2, kerbRed, kerbWht, saferCol });
-      bankedKerbStrip(0.120, 0.175,  1, { safer: false, kerbRed, kerbWht });
-      bankedKerbStrip(0.885, 0.955,  1, { saferGap: 7.5, kerbRed, kerbWht, saferCol });
-      bankedKerbStrip(0.890, 0.950, -1, { safer: false, kerbRed, kerbWht });
+      // SAFER foam walls only. bankedKerbStrip's kerb ribbon stood 1.35 m
+      // OUT from the road edge (0.83-1.88 m into the grass), a second row of
+      // 1.05 x 2.9 m red/white slabs beside the road mesh's own kerbs
+      // (kerbL/kerbR 0.857-0.917 at Luyendyk, 0.162-0.175 at Hugenholtz) and
+      // running on to 0.955 where no kerb exists: the "red slabs flat in the
+      // grass on both sides" of the 2026-10-05 survey. The engine kerbs are
+      // the real ones; the walls below are the same geometry the helper
+      // emitted (step 4, same boxes), minus the ribbon.
+      const saferRun = (s0, s1, side, gap) => along(s0, s1, 4.0, (k, spacing) => {
+        const a = anchor(k, side, gap);
+        if (onTrack(a.c[0], a.c[2], 1.4)) return;
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
+        addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
+        addCyl(out, vadd(a.c, a.r, side * 0.42), 0.10, 1.25, [0.34, 0.34, 0.37], 5, b);
+      });
+      saferRun(0.115, 0.185, -1, 7.2);
+      saferRun(0.885, 0.955,  1, 7.5);
+      void bankedKerbStrip; void kerbWht;
 
       // Catch / debris fencing in front of grandstands
       fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
