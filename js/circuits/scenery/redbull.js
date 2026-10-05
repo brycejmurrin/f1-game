@@ -499,7 +499,7 @@
         out._mat = MAT.WOOD;
         addBox(out, vadd(vadd(a.c, a.u, h * 0.68), a.r, -side * (w * 0.5 + 0.4)), [0.8, 0.12, d * 0.9], [0.34, 0.22, 0.14], b); // balcony
         out._mat = 0;
-        addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.05)), [0.1, h * 0.28, d * 0.5], [0.98, 0.86, 0.52], b); // window
+        addBox(out, vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.51 + 0.1)), [0.1, h * 0.28, d * 0.5], [0.98, 0.86, 0.52], b); // window
       }
 
       function campTerrace(k, side, dist, count) {

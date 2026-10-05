@@ -182,7 +182,7 @@
           // Portal headwall — the pit lane road disappears into this mass
           addBox(stage, vadd(a.c, a.u, 3.5), [14, 7, 8], [0.30, 0.30, 0.32], b);
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, 1.2), [10, 5.5, 5.6],
+          addBox(stage, vadd(vadd(a.c, a.u, 2.6), a.t, 1.25), [10, 5.5, 5.7],
             [0.02, 0.02, 0.03], b);
         }, { required: true });
         groundPatch(tk, 1, 6, [20, 0.5, 16], [0.16, 0.16, 0.18],
@@ -707,7 +707,7 @@
         // Screen frame — sits atop the grandstand at ~8m height
         addBox(out, vadd(a.c, a.u, 8), [20, 10, 1.5], WIN_EMI, [a.r, a.u, a.t]);
         // Bright screen face
-        addBox(out, vadd(vadd(a.c, a.u, 8), a.r, side * 0.8), [17, 8, 0.8], LED_TEAL, [a.r, a.u, a.t]);
+        addBox(out, vadd(vadd(a.c, a.u, 8), a.r, side * 0.8), [17, 8, 0.7], LED_TEAL, [a.r, a.u, a.t]);
       }
 
       hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
@@ -752,7 +752,7 @@
         for (let i = 0; i < 5; i++) {
           const jk = anchor(K(0.55 + i * 0.022), 1, 13);
           // jetty deck
-          addBox(out, vadd(jk.c, jk.t, 0), [2.4, 0.6, 28], [0.32, 0.30, 0.28], [jk.r, jk.u, jk.t]);
+          addBox(out, vadd(vadd(jk.c, jk.t, 0), jk.u, 0.02), [2.5, 0.6, 28.4], [0.32, 0.30, 0.28], [jk.r, jk.u, jk.t]);
           // jetty accent lighting
           addBox(out, vadd(jk.c, jk.t, 0), [1.2, 0.4, 28.2], [0.95, 0.82, 0.55], [jk.r, jk.u, jk.t]);
         }

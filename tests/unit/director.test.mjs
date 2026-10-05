@@ -241,7 +241,7 @@ function realCamScene() {
     netPlay: { active: () => false }, setCamMode(i) { G.camMode = i; },
     camVantage: (mode, s, x, spd, now, extra) => GameCams.vantage(track, mode, s, x, spd, now, extra),
   };
-  return { Director, CamFeel, G, bend, api: Director.create(G) };
+  return { Director, CamFeel, G, bend, ctx, Tracks, api: Director.create(G) };
 }
 
 test("a side-of-the-bend flip mid-shot pans the TV eye: a few % of the flip a frame, never a teleport", () => {
@@ -282,4 +282,78 @@ test("the director ticks after the physics step, on the pose the car is drawn at
   assert.match(game, /function camPoseOf\(c\) \{\n  const pa = playerAnchor\(c\), rp = renderPosOf\(c\);/, "the subject pose is the interpolated render pose");
   const dir = fs.readFileSync(path.join(ROOT, "js/camera/director.js"), "utf8");
   assert.match(dir, /G\.camPoseOf \? G\.camPoseOf\(car\)/);
+});
+
+// Run the actual game render-pose helpers, including interpolation and the
+// world-position anchor. No full game boot or copied heading implementation.
+function poseScene() {
+  const scene = realCamScene(), { ctx, G } = scene;
+  Object.assign(ctx, {
+    track: G.track, renderAlpha: 0.5,
+    trackFrom: (x, z) => ({ s: x, x: -z }),
+    netPlay: { owns: c => !!c.netOwned }, incidentSim: { owns: c => !!c.incidentOwned },
+  });
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  vm.runInContext(game.slice(game.indexOf("const _rp ="), game.indexOf("function basisMat(")), ctx);
+  G.camPoseOf = c => ctx.camPoseOf(c);
+  return scene;
+}
+
+test("AI TV pose follows the interpolated drawn tangent/yaw, including scaled slope vectors and yaw wrap", () => {
+  const { ctx, G, Tracks } = poseScene();
+  const samples = [];
+  Tracks.sample = (_track, s, out) => {
+    samples.push(s);
+    // Sloped +X forward and -Z right, with different interpolation shrinkage.
+    out.t = [0.48, 0.36, 0]; out.r = [0, 0, -0.9]; return out;
+  };
+  const car = { human: false, s: 160, x: 0, px: 160, pz: -8, rPrevPx: 100, rPrevPz: -4,
+    head: 0, rPrevHead: 0, yawVis: 0.6, rPrevYawVis: 0.2 };
+  const before = JSON.stringify(car);
+  for (const alpha of [0, 0.25, 0.5, 1]) {
+    ctx.renderAlpha = alpha;
+    const pose = G.camPoseOf(car), yaw = 0.2 + 0.4 * alpha;
+    assert.equal(pose.s, 100 + 60 * alpha);
+    assert.equal(samples.at(-1), pose.s, "sample at the body's interpolated world anchor");
+    assert.deepEqual(Array.from(pose.carPos), [100 + 60 * alpha, -4 - 4 * alpha]);
+    // Independently known normalized body forward is [.8*cos(yaw), .6*cos(yaw), -sin(yaw)].
+    assert.ok(Math.abs(pose.carHead - Math.atan2(0.8 * Math.cos(yaw), -Math.sin(yaw))) < 1e-12);
+  }
+  assert.equal(JSON.stringify(car), before, "camera pose cannot write back into the AI model");
+  Object.assign(car, { rPrevYawVis: Math.PI - 0.1, yawVis: -Math.PI + 0.1 });
+  ctx.renderAlpha = 0.5;
+  assert.ok(Math.abs(G.camPoseOf(car).carHead + Math.PI / 2) < 1e-12,
+    "a wrapping yaw interpolates toward the rear, not through the nose");
+});
+
+test("player, remote human, network AI and dynamic incident poses preserve wrap-safe world heading", () => {
+  const { ctx, G, Tracks } = poseScene();
+  Tracks.sample = () => { throw new Error("an authoritative heading must not be road-derived"); };
+  for (const owner of [{ human: true, local: true }, { human: true, local: false }, { netOwned: true }, { incidentOwned: true }]) {
+    const car = { s: 100, x: 0, px: 100, pz: 0, head: -Math.PI + 0.2, rPrevHead: Math.PI - 0.2, yawVis: 0, ...owner };
+    for (const alpha of [0, 0.5, 1]) {
+      ctx.renderAlpha = alpha;
+      assert.ok(Math.abs(G.camPoseOf(car).carHead - (Math.PI - 0.2 + 0.4 * alpha)) < 1e-12);
+    }
+  }
+});
+
+test("actual AI TV CHASE follows +X motion instead of the unchanged grid heading", () => {
+  const { G, Tracks, api, bend } = poseScene();
+  const sample = Tracks.sample;
+  Tracks.sample = (track, s, out) => {
+    sample(track, s, out);
+    out.p[0] = s; out.p[2] = 0;
+    out.t[0] = 1; out.t[2] = 0; out.r[0] = 0; out.r[2] = -1; return out;
+  };
+  bend.k = 0;
+  Object.assign(G.player, { px: 1000, pz: 0, rPrevPx: 998, rPrevPz: 0, head: 0, yawVis: 0, human: false });
+  // Use the real quiet-field shot rotation: side → tcam → chase.
+  for (let i = 0; i < 12 && api.status().shot !== "chase"; i++) api.tick(15);
+  assert.equal(api.status().shot, "chase");
+  const { eye, target } = G.dbgCam;
+  assert.ok(eye[0] < 999 && target[0] > 999, "eye trails the interpolated subject along its real +X nose");
+  const heading = Math.atan2(target[0] - eye[0], target[2] - eye[2]);
+  assert.ok(Math.abs(heading - Math.PI / 2) < 0.2,
+    "only the intentional shoulder offset remains, not the former ~44° shipped-heading error");
 });

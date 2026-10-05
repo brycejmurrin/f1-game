@@ -262,3 +262,94 @@ test("a custom circuit never goes to the worker", async () => {
   assert.deepEqual(posts, [], "no init, no build: the round-trip is skipped");
   await tick();
 });
+
+function smallClient(extra = {}) {
+  const ctx = vm.createContext({ URL, performance, setTimeout, clearTimeout,
+    location: { href: "https://apex.test/index.html" },
+    document: { readyState: "complete", querySelectorAll: () => [] },
+    localStorage: { getItem: () => "1" }, ApexRoster: { TRACK_VM: ["missing.js"] },
+    Log: { info() {}, warn() {} }, TrackSurface: { profile: () => ({}) }, ...extra });
+  ctx.window = ctx;
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx);
+  return ctx.TrackBuildClient;
+}
+
+test("caught worker import failure settles the build, drops the worker and allows a retry", async () => {
+  const workers = [];
+  class Bridge {
+    constructor() {
+      workers.push(this);
+      const me = this, failImport = workers.length === 1;
+      this.ctx = vm.createContext({
+        importScripts() { if (failImport) throw new Error("import unavailable"); },
+        postMessage(data) { queueMicrotask(() => me.onmessage({ data })); },
+      });
+      this.ctx.self = this.ctx;
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), this.ctx);
+    }
+    postMessage(data) { void this.ctx.onmessage({ data }); }
+    terminate() { this.terminated = true; }
+  }
+  const c = smallClient({ Worker: Bridge });
+  const build = c.build(0, { id: "monza" }, {}, {}, null);
+  assert.equal(c.busy(), true);
+  // Let the actual worker's caught, unsequenced error reach the page. Checking
+  // settlement before awaiting keeps this regression from hanging the suite.
+  let settled = false;
+  build.then(() => { settled = true; });
+  await tick();
+  assert.equal(settled, true, "initialization error must release the main-thread fallback");
+  assert.equal(await build, null);
+  assert.equal(c.busy(), false);
+  assert.equal(workers[0].terminated, true);
+  assert.equal(await c.spawn(), true, "a later request can initialize a fresh worker");
+  workers[0].onerror({ message: "late old error" });
+  assert.equal(workers[1].terminated, undefined, "an obsolete worker cannot drop its replacement");
+});
+
+test("synchronous init post failure and unreadable replies also settle readiness", async () => {
+  for (const failure of ["post", "decode"]) {
+    let worker;
+    const c = smallClient({ Worker: class {
+      constructor() { worker = this; }
+      postMessage() {
+        if (failure === "post") throw new Error("post refused");
+        queueMicrotask(() => this.onmessageerror());
+      }
+      terminate() { this.terminated = true; }
+    } });
+    assert.equal(await c.build(0, { id: "monza" }, {}, {}, null), null);
+    assert.equal(c.busy(), false);
+    assert.equal(worker.terminated, true);
+  }
+});
+
+for (const failure of ["fallback", "surface", null]) {
+  test(`replay owns fallback resources through reconstruction (${failure || "success"})`, async () => {
+    const made = [], freed = [];
+    const c = smallClient({ TrackSurface: { profile() {
+      if (failure === "surface") throw new Error("surface allocation");
+      return {};
+    } } });
+    const make = (kind) => { const h = { kind, chunks: kind === "chunked" ? [] : undefined }; made.push(h); return h; };
+    let meshes = 0;
+    const gfx = {
+      createMesh() { if (++meshes === 2 && failure === "fallback") throw new Error("fallback allocation"); return make("mesh"); },
+      createChunkedMesh: () => make("chunked"),
+      freeMesh: (h) => freed.push(h), freeChunkedMesh: (h) => freed.push(h),
+    };
+    const msg = { track: { meshes: { props: { __rec: 0 }, roadChunked: { __rec: 1, chunks: [1] } }, buildProfile: [] },
+      recs: [{ op: "mesh", args: [{}] }, { op: "chunked", args: [{}] }], ms: 1 };
+    if (failure) {
+      await assert.rejects(c.replay(msg, { id: "monza" }, gfx), new RegExp(failure + " allocation"));
+      assert.deepEqual(new Set(freed), new Set(made), "all earlier and replacement handles are freed");
+      assert.equal(freed.length, made.length, "each handle is freed exactly once");
+    } else {
+      const t = await c.replay(msg, { id: "monza" }, gfx);
+      assert.deepEqual(freed, [made[1]], "only the replaced empty chunk is released on success");
+      assert.equal(t.meshes.road, made[2]);
+      assert.equal(t.meshes.props, made[0]);
+      assert.equal(t.meshes.roadChunked, null);
+    }
+  });
+}

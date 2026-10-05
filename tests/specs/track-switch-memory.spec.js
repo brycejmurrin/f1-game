@@ -45,7 +45,13 @@ test.use({ viewport: { width: 960, height: 540 } });
 // least this many render objects. Measured 54–312 on monza/monaco here: a
 // revisit draws less than the first visit (monza 109–145, then 54 every run),
 // so this floor only rules out an undrawn world; assertion 2 is the leak's.
-const MIN_RENDER_OBJECTS = 40;
+// 2026-10-05: the deploy tip's gfx group (llvmpipe, 4 shards, run
+// 37273020922) drew 39 on monza's second visit, twice (retry too), with the
+// world built and lit (apex-state carried the full lightState) — 40 was the
+// SwiftShader revisit's number with no margin under it, and a floor that
+// trips on a drawn world is not the undrawn-world guard it claims to be. An
+// undrawn world reads 0; 20 keeps the guard and the measured margin.
+const MIN_RENDER_OBJECTS = 20;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 

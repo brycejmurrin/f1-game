@@ -304,8 +304,8 @@ test("expected-visible rules", () => {
   // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
   // OT / AERO to their buttons; a desktop helmet shows the lot.
   const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
-  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, false, true],
-    "touch helmet: the visor keeps ENERGY / TYRES / speed");
+  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
+    "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
   const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
   assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
   assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");
