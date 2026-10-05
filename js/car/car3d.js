@@ -1336,13 +1336,13 @@ const Car3D = (function () {
     const style = teamStyleOf(teamId);
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     const crown = style.coverCrown || 0;
+    // Two stations only. A third (z -1.13) made coverAt non-linear and broke
+    // car-shade: downwash gap vs cover.bottom, and cokeFoot xb<=x. coverCrown
+    // lives here; CarShade.coverLoft already walks COVER_Z through coverAt.
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth * (1 - crown * 0.6),
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
         top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise + crown },
-      { z: -1.13, x: 0.20 * eng.tailWidth * (1 - crown * 1.1),
-        bottom: 0.46 - 0.15 * coverHeight,
-        top: 0.46 + 0.22 * coverHeight + rise * 0.72 + crown * 0.85 },
       { z: -2.00, x: 0.13 * eng.tailWidth,
         bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + crown * 0.45 },
     ];
@@ -1584,9 +1584,11 @@ const Car3D = (function () {
     // 1900 mm car. The rails carry an edge lip and a gurney another ~45 mm
     // outboard of whatever this returns, so the cap leaves that much room.
     const floorX = (k) => Math.min(CAR_HALF - 0.055, k * floorEdge);
+    const floorStep = teamStyle.floorStep || 0;
+    const floorStepY = floorStep * 0.85;
     const floorEdgeAt = (z) => {   // hoisted too: the rounded floor plate (CarShade.floor) follows it
       const t = Math.max(0, Math.min(1, (0.78 - z) / 2.36));
-      return floorX(0.70 + (teamStyle.floorStep || 0) - 0.16 * Math.max(0, t - 0.5) * 2);
+      return floorX(0.70 + floorStep - 0.16 * Math.max(0, t - 0.5) * 2);
     };
 
     part("chassis");
@@ -1701,14 +1703,16 @@ const Car3D = (function () {
 
     for (const side of [-1, 1]) {
       addSpan(out,
-        { z: 0.78, x: side * floorX(0.69), y: 0.108 + rideDY, w: 0.062, h: 0.048 },
-        { z: -0.42 - floorCut, x: side * floorX(0.72), y: 0.114 + rideDY, w: 0.052, h: 0.054 },
+        { z: 0.78, x: side * floorX(0.69), y: 0.108 + rideDY + floorStepY, w: 0.062, h: 0.048 + Math.max(0, floorStepY) * 0.35 },
+        { z: -0.42 - floorCut, x: side * floorX(0.72), y: 0.114 + rideDY + floorStepY * 0.55, w: 0.052, h: 0.054 + Math.abs(floorStepY) * 0.25 },
         CARBON, null, SURFACES.carbon);
       addSpan(out,
-        { z: -0.48 + floorCut, x: side * floorX(0.70), y: 0.116 + rideDY, w: 0.048, h: 0.052 },
+        { z: -0.48 + floorCut, x: side * floorX(0.70), y: 0.116 + rideDY + floorStepY * 0.45, w: 0.048, h: 0.052 },
         { z: -1.58, x: side * floorX(0.54 + floorCut * 0.35),
-          y: 0.150 + rideDY, w: 0.040, h: 0.068 },
+          y: 0.150 + rideDY + floorStepY * 0.25, w: 0.040, h: 0.068 },
         CARBON, null, SURFACES.carbon);
+      addBox(out, side * floorX(0.71), 0.128 + rideDY + floorStepY * 0.5, -0.45,
+             0.038, 0.016 + Math.abs(floorStepY) * 0.4, 0.058, CARBON, SURFACES.carbon);
     }
     // 2026 floor leading-edge devices — up to five vortex teeth across the
     // width (motorsport.tech Issue-12). Chase only: they sit under the nose
