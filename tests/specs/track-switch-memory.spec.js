@@ -54,7 +54,11 @@ test.use({ viewport: { width: 960, height: 540 } });
 // Selected-specs job 111655042275 (run 37274796306) then failed visit 1 to
 // monza at Received 10 with the same "world built and lit" dump — that was
 // the census racing menuFinish (car assets, then hidden warm frames), not a
-// drawn world of 10. waitUntilDrawn holds the floor; do not lower it.
+// drawn world of 10; a wait on the render-object count read 10 again (run
+// 37330132243: the previous scene's objects satisfy it before the new world
+// draws). waitUntilDrawn now waits for the "menu warm drawn <id>" record the
+// render loop logs on the last hidden warm frame; the floor stays as the
+// anti-vacuity check behind it — do not lower it.
 const MIN_RENDER_OBJECTS = 20;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
@@ -78,7 +82,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
-      await waitUntilDrawn(page, MIN_RENDER_OBJECTS);
+      await waitUntilDrawn(page, id);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);

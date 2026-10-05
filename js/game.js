@@ -6606,7 +6606,11 @@ function render(dt) {
   // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
   if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
-  if (menuBlank) _menuGate.warm--;
+  // The last hidden warm frame is the one observable "this world has drawn":
+  // tools/lib/mem-census.mjs waits on this record (a census taken before it read
+  // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits
+  // while a picker build is in flight (lazyTrackEnsure).
+  if (menuBlank && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
   // RESULTS: physics and PerfGov already stop; the sheet is translucent over
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
