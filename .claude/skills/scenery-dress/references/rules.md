@@ -15,6 +15,11 @@ A shifted circuit (`sceneryStartFrac`, or `reverse`) has TWO node frames — the
 authored one the closure is written in, and the engine one the built centreline
 uses. `def._sceneryShift` is the single arc number between them.
 
+- **Racing frac → authored frac.** A frac read off a rendered lap or `__apex`
+  hook is the engine frame; `docs/tracks/<id>.md` tables and `circuits/scenery/<id>.js`
+  literals are authored. Engine ≈ (authored + `def._sceneryShift`) mod 1 (Spa: shift
+  0.958, so Blanchimont racing 0.862 ≈ authored 0.904). Print it: build with
+  `tools/lib/track-build-vm.cjs` `buildContext()`, read `def._sceneryShift`.
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
   apply the shift themselves, exactly once.
@@ -39,9 +44,11 @@ oriented footprint** covers tarmac at **any** node it rises above, the
 
 - **Console warning is not universal.** Composite helpers (`building`,
   `tree`/`pine`/`palm`, `wall`/`fence`/`guardrail`, `tower`, `billboard`,
-  `grandstand`, …) `Log.warn("scenery", "<name> SUPPRESSED at k=…")`. Raw
-  primitives only increment `_culled` in `js/track/tracks.js` and log a
-  single build-end `Log.info("track", "<id>: culled N on-track primitive(s)")`
+  `grandstand`, …) call `noteSuppressed` (`js/track/scenery/build-props.js`): the
+  `<name> SUPPRESSED at k=…` line is `Log.debug` only; a normal build logs one
+  build-end `Log.warn("scenery", "<id>: suppressed <kind>=<n> …")` — counts per
+  kind (`verify-track` prints them as `guard drops`). Raw primitives only
+  increment `_culled` and log `Log.info("track", "<id>: culled N on-track primitive(s)")`
   — a count, not a location.
 - **Circuit-inline `onTrack(x, z, margin)`** is a single-point guard. It
   does not prove the full footprint is clear. If a bespoke shape vanishes
@@ -69,9 +76,10 @@ trace direction.
 
 ## Vertex budget — increment, not a ceiling
 
-Shipped circuits run roughly **340k–850k** prop verts (`verify-track --all`,
-2026-09-29: monaco ~376k, zandvoort ~343k, suzuka ~374k, watkins_glen ~533k,
-miami ~664k; **mexico ~852k is the current ceiling — do not grow it**). Rule:
+Shipped circuits run roughly **170k–690k** prop verts (`verify-track --all`,
+2026-10-05: catalunya ~170k, spa ~191k, zandvoort ~343k, suzuka ~360k, monaco
+~376k, watkins_glen ~491k, miami ~586k; **mexico ~692k is the current ceiling —
+do not grow it**). Rule:
 `verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
 `every(20)` for sparse features, `every(5)` only for hero sections; jitter
 with `hash()`; double-place at two distances instead of doubling density.

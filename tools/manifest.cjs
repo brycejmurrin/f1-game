@@ -106,7 +106,7 @@ const CIRCUITS = [
 const CIRCUITS_DIR = "js/circuits";
 const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
 // The bespoke scenery closure for each circuit, split out of its def file.
-// ~27 KB each; all 40 were 1,083 KB of the boot script wall for a session that
+// ~27 KB each; all 40 (52 today) were 1,083 KB of the boot script wall for a session that
 // builds ONE circuit. No <script> tag — game.js fetches the one it is about to
 // build (RACE_SCENERY / sceneryUrl), and js/track/tracks.js resolves through
 // window.TrackScenery[def.id]. The Node build harnesses load the whole dir.

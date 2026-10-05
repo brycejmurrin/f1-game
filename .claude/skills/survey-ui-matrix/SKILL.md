@@ -75,6 +75,12 @@ Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
 `--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
 (summarize the last gallery, no browser), `--out=DIR`.
 
+`--scale` takes a PERCENT (`--scale=125`; `1.25` throws). Viewports are catalog
+names only (`VIEWPORTS`, `menu-screens.mjs`; shortest is 852x344), so a free-form
+size such as 568x320 is `menu-fit.mjs 568x320 --scale=125` (its own 18 screens,
+not the 49) or `fit-audit.mjs --sizes=568x320 --scale=125` (12), or a new
+`VIEWPORTS` row for the full catalog.
+
 Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
 §Enumerate). 2. Measure/capture (browser-only). 3. Stop when every cell of
 screens x viewports x scales you scoped has a row or a "clean" mark; the verdict

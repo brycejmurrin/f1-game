@@ -7,6 +7,11 @@ This reference describes the combined parent/worker loop. All browser-backed
 commands below belong to the parent, never the fork. The track-surveyor reads
 the supplied artifacts, edits only its circuit pair and runs offline audits.
 
+## Contents
+- The loop
+- Worked example — Montreal floating trees
+- Gotchas
+
 ## The loop
 
 ### 1 · Read the brief

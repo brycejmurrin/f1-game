@@ -2,6 +2,11 @@
 
 Load from the SKILL.md index when the task needs this detail.
 
+## Contents
+- Workflow / Implementation
+- Common Mistakes
+- Fresh reset evidence
+
 ## Workflow / Implementation
 
 1. **Classify which authority owns the behavior.**
@@ -62,7 +67,7 @@ Load from the SKILL.md index when the task needs this detail.
    **"A team's car retires on lap 1 / every race" (reliability trace, all node-level):**
    `Reliability.arm` (`js/race/reliability.js`, called by `armReliability` in game.js) plans `dnfAt` in [0.06, 0.94] of race DISTANCE, so in a 25-lap race a *Reliability* draw cannot land on lap 1 (a 3-lap race can: 0.06 x 3 = 0.18 lap). Per-team inputs: `TIER_RISK[car.tier]` x `1 - 0.40*devNorm(team)` (`Career.paceMult`/`tdev`), player-only `BUILD_RELIEF` (off when networked), x `LEVELS` (off 0 / low .5 / real 1). Draw = `Career.hash(seed,"dnf",round,driverId)` — same seed, same field. Other lap-1 sources to rule out first: `real-race.js` `DNS_AT = 0.002` (a game seat with no real driver retires on the first metres), `apex.js` grid setup retiring every planned car at once, and `checkRetirements` (game.js) firing on `prog/(lapsTarget*track.total)`. Steps: `__apex.retirements()` (browser) or `Reliability.plan(cars)` in a VM; `node --test tests/unit/reliability.test.mjs` (4 tests: OFF clears, seed-pure, tier/LOW rate, `at` bounds). NOT pinned by any unit test: team-dev relief, build relief, `checkRetirements`, DNS_AT — a fix there needs a new case in that file (stub `Career.paceMult`).
 
-   **"SC never comes out" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
+   **"SC never deploys" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
    1. `caution().enabled` — **`apex26.caution` defaults OFF** (`race-control.js` `enabled` init), so a fresh page never throws a flag; `caution(true)` or the CAUTIONS race setting turns it on. The switch also gates OVERTAKE lock-out.
    2. `debris().active` — flags are computed ONLY from `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off).
    3. `caution({hazards:true})` — hazard `total` vs thresholds in `js/race/race-control.js`: YELLOW_MIN=3 (one sector), VSC_MIN=6, SC_MIN=10, RED_MIN=16 on `redTotal` (needs >= 2 source cars). Queried at ~4 Hz, so wait 0.25 s+. A pile-up that leaves fewer settled hazards than SC_MIN yields VSC/yellow, not SC.
@@ -71,6 +76,14 @@ Load from the SKILL.md index when the task needs this detail.
       BOTH peers. Guest green while host shows VSC (roles correct via
       `__apex.net().role`) means the guest failed to adopt `EV.CAUTION` via
       `apply()`. Headless proof: loopback + inject caution, then read both sides.
+
+   **"SC deploys but never comes back in" (stuck out)** — all in `RaceControl.update()`, pinned by `race-control.test.mjs` ("a stuck hazard cannot neutralise the race forever", "a frozen flag still AGES", "hold(): a scripted flag flies past the SC cap"):
+   - Normal exits: hazards fall below SC_MIN and `sinceT >= MIN_HOLD` (6 s) lowers it a level at a time, or the hard cap SC_MAX (90 s, VSC/SC; YELLOW_MAX 30 s) forces GREEN even with the hazard picture intact, then CAP_REARM_HOLD (45 s) suppresses a same-level re-raise from that stale picture (an escalation still flies). A flag that outlives ~90 s of `caution().sinceT` is therefore not the hazard loop: look for a `held` flag.
+   - `held` (scripted, `G.holdCaution` from `js/race/real-race.js`): exempt from the cap and MIN_HOLD until `hold(0)`; a real-race replay that never releases keeps the SC out. Hazard-loop inputs cannot lower it.
+   - Debris going inactive or CAUTIONS switched off mid-flag freezes the LEVEL but it still ages to the cap (`capDropIfExpired`); `caution(false)` drops it at once.
+   - "Back in" for the player is two separate things: the flag (`caution().level`) and the OVERTAKE hold (`otHoldLap`, off until the leader's next line crossing, so `otEnabled` stays false for up to a lap after GREEN) — and the field's speed cap is game.js's, read live from `raceCtl.level` (`cautionV`, ~L4620), so cars at SC pace with `level` 0 point at game.js, not race control.
+   - Guest: green on the host but SC on the guest = missed `EV.CAUTION` (`apply()`); `update()` returns early for guests, so only a host message clears it (`reset()` clears it when `G.state !== "race"`).
+   - Repro in the VM: `caution(true)`, raise the flag, step past 90 s of sim time (or `hold()`) and read `caution().sinceT`/`level` each step.
 
 7. **Verify narrowly, then with browser coverage.**
    - Run the pure unit guard `node --test tests/unit/race-control.test.mjs` after
@@ -90,8 +103,9 @@ Load from the SKILL.md index when the task needs this detail.
   the shared race. Inspect `caution()` on each peer — `net()` omits it.
 - Lowering flags directly on hazard count with no hysteresis, causing flicker as
   debris despawns.
-- Assuming safety car/VSC slows cars by itself; this layer sets flags and gates
-  overtake, it does not drive cars.
+- Assuming `RaceControl.update()` slows cars: it only sets the flag and gates
+  overtake. The VSC/SC speed cap (0.6 × vTop; SC queue via `scQueueFrac`, AI
+  `holdCap`) is applied in game.js from `raceCtl.level`; do not drive cars from here.
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped browser failure as logic before checking load and
   re-running the specific spec alone if needed.

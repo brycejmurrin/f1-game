@@ -21,6 +21,19 @@ const CASES = [
   ["tools/check/player-dyn.mjs", /player-dyn/],
   ["tools/check/physics-tune-sweep.mjs", /physics-tune-sweep/],
   ["tools/car/career-economy.mjs", /career-economy/],
+  // 2026-10-05 skill test-drive: four subagents booted Chromium by running
+  // `apex-eval --help` (it took --help as a track id); the rest answered --help
+  // with a poll, a default run, a stack trace or exit 1.
+  ["tools/shot/apex-eval.mjs", /apex-eval/],
+  ["tools/car/render-car.mjs", /render-car/],
+  ["tools/car/spine-station.mjs", /spine-station/],
+  ["tools/check/check-physics.mjs", /check-physics/],
+  ["tools/check/vstd-lint.mjs", /vstd-lint/],
+  ["tools/ci/ci-watch.mjs", /ci-watch/],
+  ["tools/ci/bump-cache.mjs", /bump-cache/],
+  ["tools/ci/test-solo.mjs", /test-solo/],
+  ["tools/track/verify-track.cjs", /verify-track/],
+  ["tools/track/float-audit.cjs", /float-audit/],
 ];
 
 for (const [rel, want] of CASES) {

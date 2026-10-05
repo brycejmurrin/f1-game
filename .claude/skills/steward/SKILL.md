@@ -21,8 +21,9 @@ ready cancels the fast run on the same `head_sha` seconds after it starts
 (ci.yml runs on push for the deploy branch only since 2026-09-24; before that
 a branch push and its PR run did the same). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
-failure. (Dispatch/schedule use `run_id`; deploy-branch pushes use `github.sha`,
-so distinct pushed commits have distinct groups.)
+failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
+no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
+only the newest waiting push stays queued.)
 
 The other two look identical from the conclusion alone:
 
@@ -53,8 +54,8 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
 **Do not sync on every tip move.** Branch protection (2026-09-30) requires
-the eight fast-tier checks green on the PR's own head, NOT an up-to-date
-branch, and every re-sync is a fresh PR run on a 20-slot account — re-syncs
+the 12 fast-tier checks green on the PR's own head, NOT an up-to-date
+branch, and every re-sync is a fresh PR run (the account was 20 slots, now 40) — re-syncs
 were ~80 % of the deploy branch's commits on 2026-09-29. Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands.
@@ -142,7 +143,7 @@ never curl github.io from the main context.
 ONE Playwright process, ONE group per batch, via `node tools/ci/test-bg.mjs
 <group>`. Stop it with `--stop`, never a PID kill and never `pkill -f` (both
 hook-blocked). Never hand a subagent a browser run — report it unverified
-instead. Anchor a verdict on `grep -E '= run (passed|failed|timedout|interrupted)'`,
+instead. Anchor a verdict on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`,
 never a looser pattern or `| tail` on a live log.
 
 ## Host-neutral watch and claims

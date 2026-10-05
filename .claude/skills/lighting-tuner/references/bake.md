@@ -11,7 +11,7 @@ The **LIGHTING TUNER** COPY VALUES button used to export the file+local merge �
 805 conditions, 182,569 characters, which no one could select out of a phone
 textarea or paste into a message. It now exports only the local overrides, as
 `window.LightEdits`, current condition first. That is a DELTA: feeding it to
-`bake.mjs` would write those few keys and delete ~800 others, so `bake.mjs`
+`bake.mjs` would write those few keys and delete ~1,000 others, so `bake.mjs`
 refuses it by name and points here. Either way this skill writes shipped
 `js/lighting/presets.js` and commits (no cache bump). localStorage still
 outranks the file until RESET.
@@ -22,11 +22,16 @@ Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
 `node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
 does not bump cache). Never let a subagent write `js/lighting/presets.js`.
 
+## Contents
+- CRITICAL — `bake.mjs` is a FULL REPLACE
+- Capture, review, ship
+- Read-only preflight receipts
+
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 
 **Never hand `bake.mjs` a partial object.** It replaces the entire
 `window.LightPresets = {…};` literal, so a one-profile paste silently wipes
-~800 other keys. Its only safe input is a complete snapshot. A key-count
+~1,000 other keys. Its only safe input is a complete snapshot. A key-count
 WARNING (incoming < half of shipped) is a stop sign, not a block; a
 `window.LightEdits` paste is refused outright, because that shape is now an
 expected input and guessing wrong destroys the file.

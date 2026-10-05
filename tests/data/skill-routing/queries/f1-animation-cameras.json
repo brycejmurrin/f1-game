@@ -1,0 +1,10 @@
+[
+{"query":"The garage pit-work arrival camera snaps from the door angle to the box angle at 1.8 s instead of easing. Smooth the transition in js/garage/arrival.js without breaking tests/unit/garage-arrival.test.mjs.","expect":"f1-animation-cameras"},
+{"query":"flyby intro at monza jerks between shots, the cut from the grandstand shot to the car shot is way too abrupt. can you make the shot transitions in the flyby smoother and keep the timing deterministic","expect":"f1-animation-cameras"},
+{"query":"The camera tuner sliders for the broadcast rig change the framing live but the garage drive-out animation ignores them. Make the drive-out shot respect the same camera tuner values and validate with the offline fixtures.","expect":"f1-animation-cameras"},
+{"query":"Build a validated camera motion change: the WATCH intro animation should dolly in over 2 s rather than cut, with render-clock evidence that the motion is smooth under reduced-motion settings too.","expect":"f1-animation-cameras"},
+{"query":"The pit-stop arrival in the garage frames the car too low and clips the front wing during the pose-out. Adjust the arrival framing and shot pose in js/garage/arrival.js and show the before/after.","expect":"f1-animation-cameras"},
+{"query":"Replay seek to lap 5 in WATCH keeps the old follow anchor and snaps a second later. Use the serialized render probe to show the discontinuity in the replay camera.","expect":"replay-camera"},
+{"query":"The cockpit camera mode shows the wrong eye height at Monaco and the chase cam lags on fast direction changes. Capture the camera modes headless and compare framing frame by frame.","expect":"playwright-probe"},
+{"query":"Night at Bahrain looks washed out like daytime and the floodlight masts never light up in the garage arrival shot. Fix the lighting preset, not the camera.","expect":"lighting-tuner"}
+]

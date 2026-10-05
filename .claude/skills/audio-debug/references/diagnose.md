@@ -3,19 +3,27 @@
 Load this when the engine is silent, pitch is flat, or a mute toggle did the
 "wrong" bus.
 
+## Contents
+- Layers
+- In-race mute (not `#soundbtn`)
+- Pitch curve
+- Diagnosing silence or flat pitch
+- Gear-shift cue silent
+- Music cuts out on pause / never resumes
+
 ## Layers
 
 | Layer | What it does |
 |---|---|
 | Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` is on disk but nothing loads it) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
-| Pitch curve | `(0.25·idle + 0.45·revRange·rev^curve)·pitch` — four independent tune knobs; `GameAudio.rate()` reads the result |
+| Pitch curve | sample core: `(RATE_IDLE·idle + RATE_SPAN·revRange·rev^curve)·(1 + 0.04·boost·boostPitch)·rateTrim·pitch·(1 + 0.05·revFlare)`, `RATE_IDLE` 0.17, `RATE_SPAN` 0.5115 (`engine.js`); no gear term, so one rev is one note in every gear (the synth fallback does use per-gear `gIdle`/`gSpan`). `rev` is `rpmFor(gear, speed)` normalised, so it pins at 1 in the top of each gear. `GameAudio.rate()` reads the result |
 | Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
 | Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()`. In TOP gear the cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
 | MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
-| Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`; silent-cue path below); the rev-cut duck is the engine's own |
+| Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`; silent-cue path below); the rev-cut duck is the engine's own. A DOWNSHIFT also sets `revFlare` (heel-and-toe blip: +5% playbackRate, decays over ~90 ms); an upshift has the duck but no blip |
 | Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |
 | Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
@@ -69,12 +77,18 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 2. `GameAudio.debug().samplesReady` — if `false`, MP3s have not decoded
    (network/CORS, or CC0 files absent); synth fallback should be active.
    `usingSamples` says which core is running.
-3. Suspended AudioContext (autoplay): a user gesture resumes it. Click
-Use a real UI click/tap or keyboard activation to unlock audio. Script-dispatched events do not establish trusted user activation; programmatic probes work only after unlock.
+3. Suspended AudioContext (autoplay): a user gesture resumes it.
+   Use a real UI click/tap or keyboard activation to unlock audio. Script-dispatched events do not establish trusted user activation; programmatic probes work only after unlock.
 4. Chrome DevTools → **Web Audio** — confirm oscillators / buffer sources
    reach the destination.
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
    `setEngine()` never runs and pitch stays at the last value.
+6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
+   `MAX_RPM·1.04`, `revFrac` is clamped), not a bug in the curve. Above 98.5%
+   revs the limiter chops, and in top gear it fades to a steady note after
+   `LIM_HOLD` 0.5 s + `LIM_FADE` 0.5 s (`limiterHeld()`, `limiterDepth()`). Read
+   `GameAudio.rate()` at two speeds in top gear: equal = pinned by design. To
+   widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
 
 The AudioContext itself is a private var — not exposed. Use
 `GameAudio.debug().samplesReady` and `centroidHz()`.
@@ -99,6 +113,14 @@ above. No browser needed for the unit check:
 (fake AudioContext; asserts one crack per `shift(true)`, peak scales with the
 trim, 0 is silent, duck survives). Green means `shift()` itself is sound, so
 look at the callers.
+
+"No blip" has two readings. An UPSHIFT only ducks the engine (`shiftDuck`) and
+cracks; the heel-and-toe pitch flare (`revFlare`) is DOWNSHIFT-only (`shift(false)`),
+so a missing blip on an upshift is by design. For a missing downshift blip check
+`shiftState().fired` rises, then that the engine is running (`debug().engineOn`;
+`shift()` sets the flare only when `engineOn`). The flare is +5% playbackRate
+decaying over ~90 ms on the sample core only (the synth fallback ignores it; `GameAudio.carSfx().revFlare` reads it) and is not scaled by the SHIFT trim
+(a trim of 0 silences the crack, not the flare).
 
 ## Music cuts out on pause / never resumes
 

@@ -59,6 +59,7 @@ then `a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"
 write the script under `scratch/`, not `/tmp`). Compare circuits: loop `createGame` per id;
 elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`.
 Measured: monza 11 `turns` / 24 peaks / 6.0 m / minR 15 m; spa 20 / 42 / 102 m / 13 m.
+`1/max|k|` is the instantaneous peak (spa 13 m at frac 0.035); `trackInfo` corners' `radiusM` is averaged over the corner window (spa T1 30 m, tightest listed T20 29 m) — name which one "sharpest" means.
 Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turns` (11, 20): quote which hook you used.
 `tools/track/verify-track.cjs <id>` (VM) checks the build only; it prints no geometry stats.
 

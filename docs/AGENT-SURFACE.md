@@ -66,21 +66,25 @@ name for a server that left `.mcp.json`.
 Cursor, `.codex/config.toml` for Codex — the same THREE servers, lockstepped by
 `tests/unit/agent-config.test.mjs`; trimmed from seven on 2026-09). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
-`playwright-official` row pins the same package the shell wrapper audits
-(`@playwright/mcp@0.0.79`) — never `@latest`. Cloud often does **not**
+`playwright-official` row launches the shell wrapper's `run`, which pins
+`@playwright/mcp@0.0.79` (never `@latest`) and passes the Chromium
+`tools/lib/chromium-path.mjs` discovers — the bare package cannot launch in the
+cloud container (measured 2026-10-05: its default `chrome` channel wants
+/opt/google/chrome, and `--browser chromium` wants the build its own bundled
+Playwright pins, not the installed one). Cloud often does **not**
 auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
 | **apex-tools** | `apex_*` | Pin safe flags on twelve committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
-| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
+| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
 | Was | Why it left the catalog | The CLI that remains |
 |---|---|---|
-| **playwright** (wrapper `run`, `--browser chromium`) | Failed to connect as a server; `playwright-official` is the same upstream without wrapper flags. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
+| **playwright** (the wrapper under its old name) | Its 2026-09 `run` combined `--isolated` with `--user-data-dir` and failed to connect; the bare package replaced it, then failed to launch in the container (above). Since 2026-10-05 the fixed `run` IS **playwright-official**. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
 | **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.7.0` by hand |
 | **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
 | **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/mcp/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
