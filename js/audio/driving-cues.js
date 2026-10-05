@@ -10,6 +10,11 @@ const DrivingCues = (function () {
   const LOOK_LO = 0.9, LOOK_HI = 2.0;
   const K_CALL = 0.012;          // |k| above this is a corner worth calling
   const CALL_COOLDOWN_M = 80;    // metres of arc between calls
+  // ANY two calls (opposite side included) need both gaps: crawling through a
+  // chicane flipped the peak side every few ticks (8 calls in ~3 s at Monza T1
+  // while nearly stopped); the closest legitimate race-pace pair measured was
+  // 1.38 s / 69 m apart (Suzuka, Monza), well clear of both.
+  const CALL_MIN_GAP_S = 0.7, CALL_MIN_GAP_M = 12;
   const BRAKE_GATE = 0.14;
   const PERIOD_LO = 0.50, PERIOD_HI = 0.11;
   const clamp = M4.clamp;   // shared scalar helper (js/core/mat4.js)
@@ -94,6 +99,7 @@ const DrivingCues = (function () {
     // six times); straight-only re-arming missed a second same-side turn after a
     // straight shorter than the window.
     let lastCallS = null, lastCallSide = 0, callArmed = true, callExitM = 0;
+    let lastCallMs = -Infinity;
     let brakeFired = 0, callFired = 0;
 
     function setLevel(v) {
@@ -124,6 +130,7 @@ const DrivingCues = (function () {
       if (!cfg.on || !G || G.paused || G.state !== "race") {
         nextBrakeT = 0; lastU = 0; lastMs = 0;
         lastCallS = null; lastCallSide = 0; callArmed = true; callExitM = 0;   // a new race (or a resume) starts with no call pending
+        lastCallMs = -Infinity;
         return;
       }
       const p = G.player, track = G.track;
@@ -184,7 +191,11 @@ const DrivingCues = (function () {
       if (side !== 0) {
         const ds = lastCallS == null ? Infinity
           : Math.min(Math.abs(p.s - lastCallS), L - Math.abs(p.s - lastCallS));
-        if (side !== lastCallSide || (callArmed && ds > CALL_COOLDOWN_M)) {
+        // A flip suppressed by the gap is dropped, not queued: lastCallSide
+        // stays, so flipping back to it within the gap calls nothing.
+        const spaced = (now - lastCallMs) >= CALL_MIN_GAP_S * 1000 && ds >= CALL_MIN_GAP_M;
+        if (spaced && (side !== lastCallSide || (callArmed && ds > CALL_COOLDOWN_M))) {
+          lastCallMs = now;
           lastCallS = p.s;
           lastCallSide = side;
           callArmed = false;

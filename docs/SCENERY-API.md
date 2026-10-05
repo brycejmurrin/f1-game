@@ -102,7 +102,7 @@ sectors and turns remain racing-lap data.
 | `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks; optional `offset` shifts the band laterally; `startLights: true` marks the start/finish span — it registers as the start gantry and `js/race/start-lights.js` hangs the countdown lamps on its deck's grid-facing face (a circuit with no gantry at its line gets them on the engine's start gate) |
 | `lampPost(spec)` | registers a light fixture the circuit has drawn itself, so it emits a real point light |
 | `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
-| `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.collision` optionally registers its visual boundary |
+| `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.material` accepts an existing `MAT` id (default colour-only); `opts.collision` optionally registers its visual boundary |
 | `groundedSegments(spec)` | multi-sample connected model segments grounded at every endpoint |
 | `drape(k, side, gap, [depth, thick, len], col, opts?)` | terrain-fitted flat decal (TrackModels.drapeKit): the footprint is tiled into <= 24 m cells, each tilted to the best-fit plane of 3x3 `terrainYAt` samples, spanning `thick` under its lowest sample to `opts.h` (1 cm) over its highest; cells folded in a tight corner or nearer another part of the lap are dropped. Tops/bottoms snap to a 0.24 m lattice at residue `opts.res` (0.03 steps; +0.12 on alternate cells unless `opts.line`) so overlapping decals never share a plane. `opts.phase`, `opts.cell`, `opts.widen` |
 | `drapeRun(s, side, gap, size, col, res, span?, extra?)` | a `drape` `size[2]` m long centred on lap fraction `s`, laid one `along()` station at a time so it follows the corner; bands of one corner share `span` so their cells abut; `extra` merges into each station's opts |
@@ -216,7 +216,7 @@ with `kit:<track>:`. Do not derive IDs from loop order that may change.
 | `raceControl(spec)` | six-level tower using the hero budget |
 | `pedestrianBridge(spec)` | one atomic overhead span; `clearance` defaults to 5.5 m and cannot be below 4.8 m; optional positive `span`, `thickness`, `depth` |
 | `cameraCrane(spec)` | mast and camera boom |
-| `marshalShelter(spec)` | compact shelter with roof |
+| `marshalShelter(spec)` | compact shelter with roof; optional `detail: "structure"` adds columns, a bounded overhang and opaque recessed panes |
 | `recoveryBay(spec)` | service pad with canopy |
 | `serviceCompound(spec)` | bounded vehicle grid; `vehicles` defaults to 6, maximum 16 |
 | `trackSigns(spec)` | repeated sign slabs; `count` defaults to 8, maximum 64 |
@@ -363,7 +363,7 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `peak(x, z, baseY, w, h, col)` | simple clean pyramid summit |
 | `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
 | `pine(k, side, dist, h, col)` | conifer: tapered trunk + 3 stacked cones |
-| `tree(k, side, dist, h, col)` | broadleaf: trunk + rounded twin-cone canopy |
+| `tree(k, side, dist, h, col, opts?)` | broadleaf; optional `crown: "lobed"`, `variant: 0..2` uses bounded opaque instance recipes with uniform scaling |
 | `palm(k, side, dist, h, frond)` | thin trunk + a crown of frond prisms |
 | `bush(k, side, dist, col)` | low rounded shrub |
 | `hedge(s0, s1, side, gap, h, col)` | continuous clipped hedge / treeline |

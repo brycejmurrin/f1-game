@@ -672,7 +672,7 @@ export function expectedVisibility(cell, ctx = {}) {
   // The touch-cockpit strip hide follows the cockpit LAYOUT set (body[data-hl-set],
   // js/ui/hud-layout.js) — the camera alone, whatever the wheel; cockpitCam is
   // only the wheel LCD's gear / speed hide. HELMET is its own set, the visor:
-  // on touch it leaves out the gearbox chip, OT / AERO and BRAKE BIAS only.
+  // on touch it leaves out OT / AERO and BRAKE BIAS only.
   const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam), helmetSet = HELMET_LAYOUT_IDS.includes(cam);
   const big = dev.w >= 900 && dev.h >= 600;
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
@@ -704,8 +704,7 @@ export function expectedVisibility(cell, ctx = {}) {
   else want("gaps", !minimal, "GAPS: AUTO hides under MINIMAL only");
   if (minimal || lay === "driver" || lay === "compact") want("sectors", false, "sectors drop under MINIMAL / DRIVER / COMPACT");
   else camRule("sectors", !(bcam && !broadcast), "a broadcast camera hides sectors outside the BROADCAST profile");
-  camRule("gearbox", !(cockpitCam || bcam || (helmetSet && !desktop && !placed.has("gearbox"))),
-    "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a touch helmet leaves gear to the LCD glyph unless placed");
+  camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
   camRule("speed", !((cockpitCam && big) || (broadcast && bcam)),
     "cockpit-cam hides the floating speed only at >= 900x600; BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {

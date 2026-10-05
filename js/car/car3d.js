@@ -1555,6 +1555,12 @@ const Car3D = (function () {
     const wheelStyle = design.wheels;
     const teamStyle = teamStyleOf(opts && opts.teamId);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
+    // ownHalo (exterior builds only): the cockpit build's halo (opts.halo, the
+    // player's COCKPIT halo choice; 0 = none) replaces the factory hoop and its
+    // head-surround attachments (blade, wing, cam pods, screen). The player's
+    // first-person shadow caster (car-draw.js cockpitShadowMesh): the real car
+    // around the seat, but nothing over the cockpit the player cannot see.
+    const exHalo = !ckpt && !(opts && opts.ownHalo);
     const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
     const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
@@ -2340,7 +2346,8 @@ const Car3D = (function () {
           addBox(out, s * 0.215, 0.700, -0.13, 0.04, 0.028, 0.10, PAD, SURFACES.carbon);
         }
       }
-    } else if (opts && opts.halo) {
+    }
+    if (!exHalo && opts && opts.halo) {
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
       const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:1.045,0.62,faired?24:10);
@@ -2387,8 +2394,8 @@ const Car3D = (function () {
     const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
     const hr = haloSty === 1 ? 0.024 : 0.028;
     const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
-    const hoop = ckpt ? null : haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49), hoopT = hoop && _round ? CarShade.fine(hoop, 3) : hoop;   // rounded: a spline through it
-    const haloBlade = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.haloBlade || 0)));
+    const hoop = exHalo ? haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49) : null, hoopT = hoop && _round ? CarShade.fine(hoop, 3) : hoop;   // rounded: a spline through it
+    const haloBlade = Math.max(0, Math.min(2, Math.round(exHalo ? cockpitStyle.haloBlade || 0 : 0)));
     if (haloBlade > 0) {
       const bladeC = haloTint || HALO;
       // Co-axial fairing follows the hoop's curve, 8–11 mm proud (no coplanar faces).
@@ -2405,7 +2412,7 @@ const Car3D = (function () {
           0.008, bladeC, null, SURFACES.metal);
       }
     }
-    if (cockpitStyle.haloWing && !ckpt) {
+    if (cockpitStyle.haloWing && exHalo) {
       const wingC = haloTint || HALO;
       addBeveledSpan(out,
         { z: 0.18, x: 0, y: 0.875, w: 0.32, h: 0.016, t: 0.50 },
@@ -2415,7 +2422,7 @@ const Car3D = (function () {
         addBox(out, s * 0.155, 0.872, 0.08, 0.010, 0.028, 0.10, wingC, SURFACES.metal);
       }
     }
-    const camPods = Math.max(0, Math.min(2, Math.round(ckpt ? 0 : cockpitStyle.camPods || 0)));
+    const camPods = Math.max(0, Math.min(2, Math.round(exHalo ? cockpitStyle.camPods || 0 : 0)));
     for (let i = 0; i < camPods; i++) {
       const s = i === 0 ? -1 : 1;
       addBeamBetween(out,
@@ -2425,7 +2432,7 @@ const Car3D = (function () {
       addBox(out, s * 0.12, 0.818, -0.118, 0.030, 0.026, 0.042, DARK);
       addBox(out, s * 0.12, 0.818, -0.094, 0.016, 0.014, 0.008, VISOR, SURFACES.glass);
     }
-    if (cockpitStyle.screen && !ckpt) {
+    if (cockpitStyle.screen && exHalo) {
       addLoft(out, 0.48, 0, 0.655, 0.40, 0.028,
                    0.62, 0, 0.720, 0.20, 0.022, DARK);
       addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
@@ -2574,7 +2581,7 @@ const Car3D = (function () {
     // T-camera bar + LED live next to the snorkel-aware pod in part("engineCover").
 
     part("halo");
-    if (!ckpt) {
+    if (exHalo) {
       const haloC = haloTint || HALO, haloS = haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : SURFACES.metal;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
       // Round titanium hoop with a LEVEL, gently arched top bar: one
       // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown

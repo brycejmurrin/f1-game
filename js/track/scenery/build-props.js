@@ -670,7 +670,11 @@ const TrackBuildProps = (function () {
     // cells vanish from the soup and every roof reads as floating.
     const instance = (key, place, build, meta, opts) => {
       const buf = (opts && opts.buf) || out;
-      const emit = opts && opts.unguarded ? UNGUARDED : GUARDED;
+      const baseEmit = opts && opts.unguarded ? UNGUARDED : GUARDED;
+      // Opt-in crown recipes require the same rounded normals in the fused
+      // fallback and canonical instance. Legacy recipes keep their emit path.
+      const emit = opts && opts.roundNormals
+        ? { ...baseEmit, roundNormals: RAW.roundNormals } : baseEmit;
       if (buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
       const n = graph.instance(key, place, build, meta, emit, buf);
       if (buf === out) buf._preferInstance = false;

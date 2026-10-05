@@ -568,23 +568,43 @@ function collectCareer() {
   return { format: CAREER_FORMAT, exportedAt: new Date().toISOString(), build,
            excluded: CAREER_EXCLUDED, count: n, careers: out };
 }
-function applyCareer(file) {
-  if (!file || file.format !== CAREER_FORMAT) return { ok: false, reason: `not an ${CAREER_FORMAT} file`, applied: 0, skipped: 0 };
-  const bag = file.careers || {};
-  let applied = 0, skipped = 0, failed = 0;
+// Freeze all possible destinations before opening the asynchronous picker.
+function careerRevisions() {
+  const expectedRevisions = {};
+  if (typeof CareerBackup !== "undefined") for (const f of CAREER_FLAVOURS) {
+    for (let i = 0; i < CAREER_SLOT_N; i++) expectedRevisions[f + ":" + i] = CareerBackup.revisionOf(f, i);
+  }
+  const s = typeof GameStore !== "undefined" ? GameStore.store : null;
+  return { expectedRevisions, expectedSelectionRevision: s && s.keyRevision ? s.keyRevision("careerSlot") : null };
+}
+function applyCareer(file, revisions) {
+  const refused = (reason) => ({ ok: false, reason, applied: 0, skipped: 0, failed: 0 });
+  if (!file || file.format !== CAREER_FORMAT) return refused(`not an ${CAREER_FORMAT} file`);
+  const bag = file.careers;
+  if (!bag || typeof bag !== "object" || Array.isArray(bag)) return refused("invalid careers");
+  if (typeof CareerBackup === "undefined") return refused("career backup unavailable");
+  const slots = [];
+  let skipped = 0, liveSlot;
   for (const k of Object.keys(bag)) {
     if (!isCareerKey(k)) { skipped++; continue; }
     if (k === "careerSlot") {
-      const v = bag[k];
-      if (typeof v !== "string" || !/^((driver|myteam):[0-2])$/.test(v)) { skipped++; continue; }
-      try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
+      if (typeof bag[k] === "string" && /^(driver|myteam):[0-2]$/.test(bag[k])) liveSlot = bag[k];
+      else skipped++;
       continue;
     }
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
-    try { if (GameStore.store.set(k, c) !== false) applied++; else failed++; } catch (_) { failed++; }
+    const match = CAREER_SLOT_RE.exec(k);
+    slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
-  return { ok: true, applied, skipped, failed, reason: null };
+  if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
+  // Both file formats share the same live-conflict gate and preflight of ALL
+  // destination revisions. No slot is written if any destination changed.
+  const r = CareerBackup.apply({ format: CareerBackup.FORMAT, slots },
+    Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
+  if (!r.ok) return refused(r.reason);
+  const failed = r.failed || 0;
+  return { ok: true, applied: r.written.length + (r.selectionWritten ? 1 : 0), skipped, failed, reason: null };
 }
 
 function download(obj, name) {
@@ -680,27 +700,29 @@ function create(G) {
     };
     return b;
   };
-  const loadBtn = (id, label, title, apply, what) => {
+  const loadBtn = (id, label, title, apply, what, snapshot) => {
     const b = document.createElement("button");
     b.id = id; b.type = "button"; b.textContent = label; b.title = title;
     b.onclick = () => {
       if (reloading) return;
       if (!armed || armed.el !== b) {
         disarm(); unflash(b);
-        armed = { el: b, label };
+        armed = { el: b, label, snapshot: snapshot ? snapshot() : null };
         b.textContent = `${label} — OVERWRITE ${what}?`;
         armT = setTimeout(disarm, ARM_MS);
         tick();
         return;
       }
+      const revisions = armed.snapshot;
       disarm();
       pick((obj) => {
         if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        const r = apply(obj);
+        const r = apply(obj, revisions);
         if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+        if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
@@ -772,7 +794,7 @@ function create(G) {
         collectCareer, () => `apex26-career-${stamp()}.json`),
       loadBtn("cr-career-load", "LOAD CAREER FILE",
         "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
-        applyCareer, "CAREER SAVES"));
+        applyCareer, "CAREER SAVES", careerRevisions));
     const protection = document.createElement("button");
     protection.type = "button";
     protection.textContent = "PROTECT LOCAL SAVES";
@@ -811,7 +833,7 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", mount, { once: true });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,

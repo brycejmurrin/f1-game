@@ -420,19 +420,23 @@ const TrackModels = (function () {
         return false;
       }
       const track = ctx.track, px = ctx.px, pz = ctx.pz, hw = ctx.hw;
+      const material = typeof TrackGeom !== "undefined" &&
+        Object.values(TrackGeom.MAT).includes(spec.material) ? spec.material : null;
       if (!track || !px || !pz || !hw || !ctx.groundHeight) {
         // Box path: sample groundHeight along the gap (no world frame).
         const samples = Math.max(2, Math.round(spec.samples || 4));
         const depth = spec.size[0] / samples;
         const posBefore = out.pos.length;
+        const mat0 = out._mat;
+        if (material !== null) out._mat = material;
         let emitted = 0;
-        for (let i = 0; i < samples; i++) {
+        try { for (let i = 0; i < samples; i++) {
           const dist = (spec.gap || 0) + depth * (i + 0.5);
           const y = ctx.groundHeight(spec.k || 0, dist);
           if (!Number.isFinite(y)) continue;
           const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
           if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
-        }
+        } } finally { out._mat = mat0; }
         if (!emitted) {
           diagnostics.invalid.push({ id: spec.id || "ground-patch", reason: "no finite ground samples" });
           return false;
@@ -507,7 +511,9 @@ const TrackModels = (function () {
         return false;
       }
       const v0 = out.pos.length / 3, mat0 = out._mat, below = [mid[0], mid[1] - 1e4, mid[2]];
-      out._mat = 0;
+      // Existing patches stay colour-only. A supplied known material enables
+      // textured terrain overlays without changing the frozen scenery API.
+      out._mat = material === null ? 0 : material;
       for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++)
         if (keep[j * cols + i]) emitFace(out, quad(i, j), col, below);
       const skirt = (a, b, cell) => { if (keep[cell]) emitFace(out, [top[a], top[b], bot[b], bot[a]], col, mid); };
