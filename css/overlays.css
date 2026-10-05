@@ -640,6 +640,18 @@ body:has(dialog[open]) #save-warning { display: none; }
 body:has(#home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
+/* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
+   which would otherwise wipe the leftover-row inset (menus.css is
+   @layer components and loses). Extra attrs beat the shorthand. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above every
    menu sheet, bottom-right clear of the safe area, a full tap target; never
    shown in a race (the module hides it there). The HUD chip's plate, not the

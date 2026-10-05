@@ -153,6 +153,13 @@ test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
     /#home-motion:not\(\[hidden\]\)\)[^{]*#install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
     "fixed INSTALL APP sits one --tap above the live-scene toggle, not on top of it",
   );
+  // experience.css's live-scene padding shorthand is @layer overlays; a
+  // components-layer inset loses. The restore has to live in this sheet.
+  assert.match(
+    overlays,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "live-scene leftover column keeps --tap padding in the overlays layer",
+  );
 });
 
 // WCAG 2.5.3 (label in name). Lighthouse's label-content-name-mismatch failed all
