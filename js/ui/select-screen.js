@@ -628,31 +628,13 @@ function buildSelect() {
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
     // Tracks.LIST — selection still indexes into the full list.
     snapTrackToFilter();
-    let group = null;
     const favs = favList();
     const filter = visibleTrackFilter();
     Tracks.LIST.forEach((t, i) => {
       if (!trackInFilter(t, filter, favs)) return;
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
-      if (g !== group) {
-        group = g;
-        // ALL walks Tracks.LIST order (script-tag == picker). That list
-        // interleaves season and classic rows, so a head-on-every-flip reprinted
-        // SEASON / CLASSICS all the way down the strip (apex7 mid-scroll). The
-        // filter chips already name the view; only a single-group filter gets
-        // one divider.
-        if (filter !== "all") {
-          const head = document.createElement("div");
-          head.className = "track-group-head";
-          head.dataset.trackGroup = g;
-          // Short, because the strip draws it as a VERTICAL rule between the two
-          // groups: the full "CLASSIC CIRCUITS" stood taller than the tiles and
-          // stretched the whole strip (measured 131px at 852x393). The filter
-          // chips beside the strip carry the long names.
-          head.textContent = t.custom ? "MINE" : t.classic ? "CLASSICS" : "SEASON";
-          els.selTracks.appendChild(head);
-        }
-      }
+      // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
+      // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).
       const row = trackTile(t, i, { active: i === G.trackIdx });
       row.dataset.trackGroup = g;
       row.dataset.search = [t.name, t.country, t.custom ? "custom mine" : t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
@@ -909,11 +891,13 @@ function updateTrackPreview() {
   }
   // The numbers beside the still, as a definition list (label over value).
   const km = t.lengthKm || 0;
+  const selInner = document.getElementById("sel-inner") || {};
+  const narrowLen = ((selInner.dataset || {}).density === "compact") || ((selInner.clientWidth || 0) > 0 && selInner.clientWidth <= 520);
   const rows = [
     ["LOCATION", t.country || "—"],
     ["TURNS", turns ? String(turns) : "—"],
     ["CIRCUIT LENGTH", !km ? "—"
-      : ((document.getElementById("sel-inner") || {}).dataset || {}).density === "compact"
+      : narrowLen
         ? km.toFixed(3) + " km"
         : km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi"],
     ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],

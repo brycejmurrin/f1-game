@@ -597,8 +597,8 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.match(menus, /past S\/F/, "a DRS zone that wraps the line says so");
   assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
     "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
-  assert.match(menus, /if \(filter !== "all"\)/,
-    "ALL does not reprint SEASON/CLASSICS heads on every LIST group flip");
+  assert.ok(!/className = "track-group-head"/.test(menus),
+    "filter chips name the view; no vertical CLASSICS/SEASON divider");
   assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
   assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
   const maps = code("js/ui/track-maps.js");
@@ -615,23 +615,33 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.equal(decl(sel, '#sel-tracks[data-mode="season"] .track-row', "scroll-snap-align"), "start");
   assert.equal(decl(sel, "#sel-tracks .track-row", "scroll-snap-align"), "start",
     "snap-start so the last flag is not centre-clipped at the strip end");
+  assert.equal(decl(sel, "#sel-tracks .track-row:last-child", "scroll-snap-align"), "end",
+    "last flag snaps to the end slack instead of hanging off the clip");
+  assert.equal(decl(sel, "#sel-tracks", "padding-inline-end"), "calc(var(--pad) + var(--chip-h))",
+    "strip end pad is one chip plus --pad so the last flag clears the edge");
   assert.equal(decl(sel, "#sel-car small", "white-space"), "normal",
     "CHANGE CAR team name wraps at ~500 instead of SCUDERIA FERR…");
   assert.equal(decl(sel, "#sel-tracks .track-group-head", "max-height"), "none",
     "CLASSICS vertical label is not chip-capped");
   assert.equal(decl(sel, '#sel-inner[data-density="compact"] #sel-tracks .track-group-head', "display"), "none",
     "compact strip: the chip already names CLASSICS, so the squeezed divider goes");
+  assert.ok(rulesFor(sel, /#sel-tracks \.track-group-head/).some((r) =>
+    r.context.includes("@container sheet (max-width: 520px)") && r.decls.get("display") === "none"),
+    "~500 width hides the vertical CLASSICS divider even when density is still normal");
   const lowerThirdDd = rulesFor(sel, /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-preview-meta dd/)[0];
   assert.ok(lowerThirdDd, "lower-third stats keep a wrap rule");
   assert.equal(lowerThirdDd.decls.get("white-space"), "normal");
   assert.ok(rulesFor(sel, /#sel-inner > \.sheet-foot/).some((r) =>
     r.context.includes("@container sheet (max-width: 520px)")),
     "foot wraps team names from ~500, not only a tall 480 phone");
+  assert.ok(rulesFor(sel, /data-tip\]:hover::before/).every((r) =>
+    r.context.some((c) => /hover\s*:\s*hover/.test(c))),
+    "season data-tip :hover is gated; :active is the touch twin");
   assert.match(menus, /function snapTrackToFilter/, "CLASSICS (and the other chips) snap the hero onto a visible tile");
   assert.match(menus, /function trackInFilter/, "filter membership is one helper for the strip and the snap");
   assert.match(menus, /fmtElev/, "sparkline labels keep the minus on a trough");
-  assert.match(menus, /dataset \|\| \{\}\)\.density === "compact"/,
-    "compact CIRCUIT LENGTH drops the mile half so TURNS is not 1..");
+  assert.match(menus, /clientWidth <= 520/,
+    "narrow (~500) CIRCUIT LENGTH drops the mile half so TURNS is not 1..");
   assert.equal(decl(td, "#track-detail-header", "padding-inline"), "var(--pad)");
   assert.equal(decl(td, "#track-detail-panel", "padding-inline"), "var(--pad)");
 });

@@ -133,11 +133,14 @@
   gap: calc(var(--gap) * 0.3);
   min-width: 0;
   padding: calc(var(--gap) * 0.3) var(--pad);
+  /* End slack so the last flag can sit fully in view (apex11 ~500 clip). */
+  padding-inline-end: calc(var(--pad) + var(--chip-h));
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain;
   touch-action: pan-x;
   scroll-snap-type: x proximity;
   scroll-padding-inline: var(--pad);
+  scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));
   scrollbar-width: thin;
   border: 1px solid var(--card-line);
   border-radius: var(--r-md);
@@ -155,7 +158,10 @@
   scroll-snap-align: start;
   text-align: center;
 }
-#sel-tracks .track-row:last-child { border-bottom: none; }
+#sel-tracks .track-row:last-child {
+  border-bottom: none;
+  scroll-snap-align: end;
+}
 #sel-tracks .track-row.active {
   /* Accent bar + flag ring, not a red wash: --red-on-red failed 4.5:1 on
      desert/night stills (BAHRAIN GP) and on --plate-on tiles. */
@@ -225,7 +231,9 @@
    by the strip edge; token thumbs so the bar is not Chrome's white overlay. */
 #sel-tracks[data-mode="season"] {
   padding-inline: var(--pad);
+  padding-inline-end: calc(var(--pad) + var(--chip-h));
   scroll-padding-inline: var(--pad);
+  scroll-padding-inline-end: calc(var(--pad) + var(--chip-h));
   scroll-snap-type: x mandatory;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) var(--scroll-track);
@@ -240,7 +248,7 @@
   scroll-snap-align: start;
   position: relative;
 }
-#sel-tracks[data-mode="season"] .track-row[data-tip]:hover::before {
+#sel-tracks[data-mode="season"] .track-row[data-tip]:active::before {
   content: attr(data-tip);
   position: absolute;
   inset: calc(var(--gap) * 0.15);
@@ -257,6 +265,26 @@
   white-space: normal;
   pointer-events: none;
   box-shadow: var(--edge);
+}
+@media (hover: hover) {
+  #sel-tracks[data-mode="season"] .track-row[data-tip]:hover::before {
+    content: attr(data-tip);
+    position: absolute;
+    inset: calc(var(--gap) * 0.15);
+    z-index: 3;
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(var(--gap) * 0.15);
+    border-radius: var(--r-xs);
+    background: var(--surf-1);
+    color: var(--text);
+    font-size: var(--fs-micro);
+    letter-spacing: var(--ls-1);
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: var(--edge);
+  }
 }
 #sel-tracks .track-row[data-done] { opacity: 0.45; }
 #sel-tracks .sur-rnd { min-width: 0; }
@@ -412,7 +440,8 @@
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(2),
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(3) {
-  display: flex; flex: 0 0 auto; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  display: flex; flex: 1 1 7rem; min-width: 0; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  flex-wrap: wrap;
   white-space: normal; overflow: visible;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd {
@@ -450,6 +479,14 @@
     white-space: normal;
   }
   #sel-inner #sel-car small { white-space: normal; overflow-wrap: anywhere; }
+  /* ~500 width is often still data-density=normal (--compact-at is a HEIGHT
+     floor). Hide the vertical CLASSICS/SEASON divider the chip already names,
+     and let the stats values wrap instead of TURNS 1.. / 3.04… */
+  #sel-tracks .track-group-head { display: none; }
+  #sel-inner #sel-preview-meta dd {
+    white-space: normal; overflow-wrap: anywhere;
+    overflow: visible; text-overflow: unset;
+  }
   /* ...AND THE STILL STOPS AT 60% OF THE SECTION, so the numbers under it
      start on screen instead of a scroll away. The section becomes a size
      container (it is a flex remainder with a definite height, never sized by
