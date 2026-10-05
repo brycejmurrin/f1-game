@@ -1171,7 +1171,7 @@ mapping and its public methods. Both are part of the lazy data roster.
 
 Jolpica `https://api.jolpi.ca/ergast/f1/` + OpenF1 `https://api.openf1.org/v1`.
 All methods return Promises of SIMPLIFIED plain objects (not raw API shapes).
-Single internal queue: min 400 ms between requests, localStorage cache
+Separate OpenF1 and Jolpica queues: min 400 ms between requests per provider, localStorage cache
 (`apex26.api.<url>` -> `{t, data}`), TTLs: schedule 24 h, standings/results
 1 h, openf1 latest-session 10 min, finished session data 7 d. On 429 or
 network error: serve stale cache if present, else reject. Never auto-poll.
@@ -1184,6 +1184,8 @@ F1API.latestSession()         -> {sessionKey, name, type, circuit, country, date
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver
 F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
+F1API.locationData(sessionKey, driverNumber, startISO, endISO, options?) -> [{x, y, date}]
+     options.cache=false bypasses raw-response reads/writes and stale fallback.
 F1API.sessionResult(sessionKey)  -> [{pos, num, laps, points, dnf, dns, dsq, duration, gap}]
      duration/gap are a NUMBER for practice/sprint/race and a [Q1,Q2,Q3] ARRAY for
      qualifying; a lapped finisher's gap can be a string ("+1 LAP"). Empty [] when the
@@ -1191,6 +1193,13 @@ F1API.sessionResult(sessionKey)  -> [{pos, num, laps, points, dnf, dns, dsq, dur
 ```
 
 ## js/data/ — the hub and its tabs
+
+WATCH position downloads bypass the raw HTTP cache. Their IndexedDB and
+in-memory caches match the session, lights-out timestamp, requested time window,
+driver roster and timing-completion state. Only completed timing is persisted;
+unfinished positions remain usable in the current view and are fetched again
+after reopening. Legacy entries without coverage metadata are downloaded once
+more rather than potentially truncating a newly completed race.
 
 `hub.js` (`DataHub`, was `data.js`) is the DOM overlay (`#datahub` in
 index.html) and the shared session plumbing; each tab is its own module

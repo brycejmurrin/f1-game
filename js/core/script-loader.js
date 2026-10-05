@@ -6,6 +6,7 @@ function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
   const strict = !!(opts && opts.strict);
+  const generationScope = {};   // legacy-worker timeout fallback belongs only to this load
   const loaded = opts && opts.loaded;
   const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
   const done = new Set(loaded || []), inflight = new Set();
@@ -13,7 +14,9 @@ function loadBackendScripts(files, edges, opts) {
   for (const [a, b] of (edges || BACKEND_EDGES)) {
     if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
   }
-  const inject = (src) => new Promise((resolve) => {
+  const inject = async (src) => {
+    if (typeof UpdateCheck !== "undefined" && UpdateCheck.prepareLazyLoad && !(await UpdateCheck.prepareLazyLoad(generationScope))) return false;
+    return new Promise((resolve) => {
     // NEVER MIX BUILDS. A lazy file is asked for as `?v=<booted build>`; once a
     // newer deploy's worker controls this tab it has swept that generation, the
     // request misses, and Pages (which ignores the query) answers with the NEW
@@ -42,6 +45,7 @@ function loadBackendScripts(files, edges, opts) {
     el.onerror = () => { if (el.remove) el.remove(); resolve(false); };
     document.head.appendChild(el);
   });
+  };
   return new Promise((finish) => {
     let failed = false;
     const pump = () => {
