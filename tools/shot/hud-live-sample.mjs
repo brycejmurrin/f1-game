@@ -105,7 +105,7 @@ export function parseArgs(argv) {
       case "device": o.device = val(); break;
       case "cam": o.cam = val(); break;
       case "ids": o.ids = String(val()).split(",").map((s) => s.trim()).filter(Boolean); break;
-      case "jumps": o.jumps = String(val()).split(",").map((s) => +s.trim()); break;
+      case "jumps": { const v = String(val()).trim(); o.jumps = v === "none" ? [null] : v.split(",").map((x) => +x.trim()); break; }   // "none": sample with no teleport
       case "window": o.window = num(val(), NaN); break;
       case "interval": o.interval = num(val(), NaN); break;
       case "tolerate": o.tolerate = num(val(), NaN); break;
@@ -115,7 +115,7 @@ export function parseArgs(argv) {
     }
   }
   if (!DEVICES[o.device]) return { error: `--device must be one of ${Object.keys(DEVICES).join(" | ")}` };
-  if (!o.jumps.length || o.jumps.some((f) => !(f >= 0 && f <= 1))) return { error: "--jumps takes lap fractions in 0..1, comma separated" };
+  if (!o.jumps.length || o.jumps.some((f) => f !== null && !(f >= 0 && f <= 1))) return { error: "--jumps takes lap fractions in 0..1, comma separated, or \"none\"" };
   for (const k of ["window", "interval", "tolerate", "speed"]) if (!Number.isFinite(o[k]) || o[k] < 0) return { error: `--${k} must be a number >= 0` };
   if (o.interval < 10) return { error: "--interval below 10 ms measures the sampler, not the HUD" };
   return o;
@@ -124,7 +124,7 @@ export function parseArgs(argv) {
 async function main() {
   const argv = process.argv.slice(2);
   exitIfHelp(argv, `usage: node tools/shot/hud-live-sample.mjs [--track monza] [--device desktop-1280] [--cam cockpit]
-         [--ids aero,ot] [--jumps 0.12,0.3,0.55] [--window 3000] [--interval 40] [--tolerate 250] [--speed 70] [--keep]
+         [--ids aero,ot] [--jumps 0.12,0.3,0.55|none] [--window 3000] [--interval 40] [--tolerate 250] [--speed 70] [--keep]
   Samples moved HUD pieces in an UNFROZEN race after each position jump; prints JSON; exit 1 when a piece is
   off screen longer than --tolerate ms. Devices: ${Object.keys(DEVICES).join(", ")}. See the header of this file.`);
   const o = parseArgs(argv);
@@ -174,7 +174,7 @@ async function main() {
     for (const frac of o.jumps) {
       const raw = await page.evaluate(async ({ frac, sels, windowMs, intervalMs, speed }) => {
         const a = window.__apex;
-        a.jump(frac, speed, 0);
+        if (frac != null) a.jump(frac, speed, 0);   // null: no teleport, watch the state the race is in
         const t0 = performance.now();
         const ids = Object.keys(sels), series = Object.fromEntries(ids.map((id) => [id, []]));
         while (performance.now() - t0 < windowMs) {
