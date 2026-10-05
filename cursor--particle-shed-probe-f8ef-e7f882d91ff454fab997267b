@@ -1,0 +1,1 @@
+1791222675	Cursor Agent	particle shed + env-probe cadence: OWNED js/fx/particles.js js/game.js emit/cull + probe cadence; tests/unit/car-fx; NOT #990 hold  [cursor/particle-shed-probe-f8ef; session e7f882d91ff454fab997267b]
