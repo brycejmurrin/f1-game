@@ -34,6 +34,7 @@ stayed separate in the 2026-09-03 pass.
 | **mcp-probe** | Live working-tree canvas via the Chrome DevTools MCP (`chrome_*`) or `probe-mcp.py chrome-start` — poke `__apex`, heap/perf/console during an interactive repro. |
 | **multiplayer-debug** | VS FRIEND, WebRTC connection, phone-as-controller pairing, invite links/QR codes, room codes, build handshakes, Nostr signalling, TURN/ICE, replicated rivals, net determinism. |
 | **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
+| **phone-browser** | User is on a phone and wants the game in Chromium through the custom Grok connector, or that public address has stopped answering. Not chrome-devtools, Playwright tests, or a desktop shell. |
 | **playwright-probe** | Parent-owned headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`; flicker/shimmer/z-fighting via a recorded driven clip (`references/motion-capture.md`); game-loop CPU profile / flame chart (`references/perf-profile.md`); the isolated car studio — livery, sponsors, part geometry (`references/car-studio.md`); camera modes, `orbit()` vs `snapCam()`, framing a corner (`references/cameras.md`). |
 | **pwa-cache-service-worker** | `sw.js`, `version.json`, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache. |
 | **race-incidents-control** | Debris, Rapier side-worlds, incident takeovers, car launches/pileups, cautions, VSC, safety car stuck out (`caution().level` ≠ 0 / `sinceT` growing), reliability retirements. |

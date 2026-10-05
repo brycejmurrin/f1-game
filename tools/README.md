@@ -306,6 +306,8 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
+| **mcp/browser-http-up.mjs** | Keep the phone browser MCP and its public tunnel up. Reuse a live address; start one only when it is dead. | phone-browser |
+| **mcp/browser-http.mjs** | Streamable-HTTP MCP on loopback that opens this tree in Chromium. Tunnel the URL; not a .mcp.json server. | phone-browser |
 | **mcp/cdmcp-bg.mjs** | Detach/status/wait/stop twin of `test-bg.mjs` for `cdmcp-measure.py`: `cdmcp-bg.mjs boot --port 3462`. | mcp-probe |
 | **mcp/cdmcp-cli.py** | Stdio JSON-RPC client for chrome-devtools MCP: `list-tools`, `call`, `survey-title`, `apex-shot`, `slider-ab`. | mcp-probe |
 | **mcp/cdmcp-lamps-tune.py** | Asserts the LAMPS tuner sliders via Chromium MCP using `lightState().meanLampRGB` / `bakedLights` / `lampPosts`. | mcp-probe |

@@ -121,6 +121,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
   // and line presence, pinned against real git in a throwaway repo. ~1 s.
   "tests/unit/branch-audit.test.mjs",
+  // Phone-browser HTTP MCP: token gate + tools/list, and the up-script
+  // reuse/start-tunnel decision. Pure Node (loopback server, no Chromium),
+  // under a second.
+  "tests/unit/browser-http-mcp.test.mjs",
+  "tests/unit/browser-http-up.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
