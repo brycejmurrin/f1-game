@@ -559,15 +559,20 @@ body:has(dialog[open]) #save-warning { display: none; }
   display: block; padding: 0; background: none;
 }
 #vsfriend-inner[data-density="compact"] > .sheet-foot::before { display: none; }
+/* --tap-paint, not --tap-min: layout-audit 2026-10-05 ios-iphone-landscape
+   734×343 measured #vs-close at 62×26 (soft under the 52 touch floor) and
+   HOST / JOIN at 285×44. Compact cannot afford --tap's local 52 (paints
+   56.7–104); --tap-paint holds 52 painted on touch and stays --tap-min
+   with a mouse (css/tokens.css). */
 #vsfriend-inner[data-density="compact"] #vs-close {
-  min-width: var(--tap); min-height: var(--tap-min); padding: 0 var(--gap);
+  min-width: var(--tap); min-height: var(--tap-paint); padding: 0 var(--gap);
   font-size: var(--fs-micro); line-height: 1;
 }
 #vsfriend-inner[data-density="compact"] #vs-pick {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
 }
 #vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn {
-  min-height: var(--tap-min); padding: var(--gap); font-size: var(--fs-2);
+  min-height: var(--tap-paint); padding: var(--gap); font-size: var(--fs-2);
 }
 #vsfriend-inner[data-density="compact"] #vs-pick > .vs-hint,
 #vsfriend-inner[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
