@@ -327,6 +327,7 @@ function buildResults(order, race) {
       addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, k, `${v > 0 ? "+" : "\u2212"}${Math.abs(v).toLocaleString()} cr`);
     };
     line(`Prize money — P${st.pos}`, st.prize);
+    line(`Prize money — team-mate P${st.matePos}`, st.matePrize);   // MY TEAM owns both cars
     line("Salary", st.salary);
     line(`Points bonus — ${st.pts} pts`, st.bonus);
     if (st.obj) {

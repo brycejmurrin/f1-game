@@ -316,9 +316,10 @@
       // Eau Rouge valley floor (authored 0.172-0.192 = racing 0.13-0.15): the
       // thickened base wall, the brook and its service bridge sit at the
       // lowest point of the descent, where the stream really crosses.
+      // The wall IS the thickening. Two bare place() slabs (28 m and 24 m) used
+      // to sit behind it and read as loose grey blocks in the run-off from the
+      // Raidillon side, the same defect the Gold-3 bank below was rebuilt for.
       wall(0.172, 0.192, -1, 3.6, 1.8, [0.55, 0.55, 0.52], 1.2);
-      place(K(0.177), -1, 5.2, [1.6, 1.6, 28], [0.52, 0.52, 0.50]);
-      place(K(0.185), -1, 4.8, [1.4, 1.5, 24], [0.54, 0.54, 0.51]);
       {
         const BROOK = [0.18, 0.28, 0.22];
         waterSurface(K(0.176), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
