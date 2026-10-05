@@ -4344,6 +4344,16 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
+    // THE GRID IDLES. startRaceBody starts the engine with engGain at 0 and only
+    // setEngine opens it, so returning before the race block below kept the
+    // player's car silent through all five lamps and slammed the note in with
+    // LIGHTS OUT. Idle and stationary: speed 0 keeps the wind and whine gated;
+    // the race block takes over on the first green frame.
+    if (state === "count" && soundOn && player && _audioParamStep) {
+      _engArg.slip = 1; _engArg.ax = 0; _engArg.onKerb = false; _engArg.wet = isWetRoad(); _engArg.tow = 0;
+      _engArg.deploy = 0; _engArg.energy = player.energy ?? 1; _engArg.ersDeploy = player.ersDeploy ?? 0.5;
+      GameAudio.setEngine(clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1), 0, false, 0, player.gear, _engArg);
+    }
     return;
   }
   if (state !== "race") return;

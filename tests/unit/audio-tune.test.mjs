@@ -1600,6 +1600,25 @@ test("the saved camera's mix is applied at boot, not only on the first camera ch
   assert.match(tail, /GameAudio\.setCameraMix\(CAM_MODES\[G\.camMode\]\.id\)/);
 });
 
+// EVERY CAMERA HAS A MIX. setCameraMix falls back to "chase" for an id CAM_KIND
+// does not list, so a camera added to CAM_MODES without a CAM_KIND entry is
+// silently heard as the chase cam. The TV director ("tv", 2026-09-30) was
+// missed when rival/pitwall/drone/helmet were added: it played the full chase
+// engine and wind behind spectator shots.
+test("every CAM_MODES id has an explicit camera mix kind", () => {
+  const modes = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const list = modes.slice(modes.indexOf("const CAM_MODES = ["));
+  const ids = [...list.slice(0, list.indexOf("];")).matchAll(/\bid:\s*"([a-z]+)"/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 20 && ids.includes("tv"), "precondition: parsed the camera list, got " + ids.join(","));
+  const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const kindSrc = eng.slice(eng.indexOf("const CAM_KIND"), eng.indexOf("});", eng.indexOf("const CAM_KIND")));
+  const listed = new Set([...kindSrc.matchAll(/\b([a-z]+):\s*"(?:onboard|chase|tv)"/g)].map((m) => m[1]));
+  assert.deepEqual(ids.filter((id) => !listed.has(id)), [], "camera ids with no CAM_KIND entry fall back to the chase mix");
+  const { GameAudio: A } = boot();
+  A.init();
+  assert.equal(A.setCameraMix("tv"), "tv", "the TV director camera gets the TV (spectator) mix");
+});
+
 // STEADY STATE SCHEDULES NOTHING. setEngine re-aimed the core's pitch, the
 // lowpass, the level and four more params on every call, and setSkid wrote
 // skidGain.gain.value (= setValueAtTime) every physics step — 0 onto 0 on
@@ -1823,4 +1842,26 @@ test("synth→sample upgrade seeds playbackRate from lastRate, not 1.0", async (
   assert.ok(src.playbackRate.value < 0.95, "upgraded source must not start at the 1.0 default, got " + src.playbackRate.value);
   assert.ok(A.rate() > 0.3 && A.rate() < 0.95, "live rate after upgrade, got " + A.rate());
   assert.ok(A.engineLevel() > 0, "mid-race upgrade keeps the voice open instead of fading from silence");
+});
+
+// THE GRID IDLES. startRaceBody calls startEngine with engGain at 0, and only
+// setEngine opens it. update() returned out of its countdown branch before the
+// race block that calls setEngine, so the player's car was silent through all
+// five lamps and the note slammed in at LIGHTS OUT (measured: engineLevel 0 at
+// every lamp, then 0 -> 0.16 in one 50 ms probe at green). The countdown must
+// drive the engine at idle, stationary (speed 0, so wind and whine stay gated).
+test("the countdown drives the player's engine at idle, not silence until lights-out", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const upd = src.slice(src.indexOf("function update(dt)"));
+  const count = upd.slice(upd.indexOf('if (state === "count") {'), upd.indexOf('if (state !== "race") return;'));
+  assert.ok(count.length > 0, "precondition: found update()'s countdown branch");
+  assert.match(count, /GameAudio\.setEngine\([^;]*,\s*0,\s*false,\s*0,\s*player\.gear/,
+    "the countdown branch calls setEngine stationary (boost 0, on-road, speed 0)");
+  const { GameAudio: A } = boot();
+  A.init();
+  A.startEngine();
+  assert.equal(A.engineLevel(), 0, "precondition: startEngine alone leaves the engine silent");
+  A.setEngine(0, 0, false, 0, 1, {});
+  assert.ok(A.engineLevel() > 0, "a stationary idle setEngine opens the note");
+  assert.equal(A.windLevel(), 0, "and keeps the wind gated on the grid");
 });
