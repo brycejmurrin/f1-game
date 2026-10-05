@@ -495,15 +495,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
 #pmsettings-inner #audioset .as-sec > summary,
 #pmsettings-inner #audioset .as-sec > summary:active {
-  color: var(--steel);
+  /* --text + a full-width --card-line: steel + --grad-rule faded out by
+     ~70% and left MUSIC · ON unreadable on the sheet. */
+  color: var(--text);
   font-style: italic;
   opacity: 1;
   background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
+  background-image: none;
   border: none;
+  border-bottom: 1px solid var(--card-line);
   border-radius: 0;
   box-shadow: none;
   /* A FLOOR, not a height, and the values wrap: TEAM RADIO · OFF · NORMAL ·
@@ -525,11 +525,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   #pmsettings-inner #audioset .as-sec > summary:hover {
     color: var(--text);
     background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+    background-image: none;
     border: none;
+    border-bottom: 1px solid var(--card-line);
     box-shadow: none;
   }
 }

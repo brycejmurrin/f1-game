@@ -92,12 +92,25 @@
    exactly that way. Only what is true WHEN THE PANES SPLIT lives here. */
 #cr-inner[data-pair="on"] #cr-left {
   overflow-y: auto; overscroll-behavior-y: contain;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--card-line);
   padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
 }
 #cr-inner[data-pair="on"] #cr-right {
   overflow-y: auto; overscroll-behavior-y: contain;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+}
+/* One themed thumb (.sf-scroll::before, --accent). Native gutter + grey
+   overlay stacked a second indicator beside the red bar on NEW CAREER. */
+#cr-inner[data-pair="on"] #cr-left,
+#cr-inner[data-pair="on"] #cr-right,
+#cr-inner:not([data-pair="on"]) > #cr-body {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+#cr-inner[data-pair="on"] #cr-left::-webkit-scrollbar,
+#cr-inner[data-pair="on"] #cr-right::-webkit-scrollbar,
+#cr-inner:not([data-pair="on"]) > #cr-body::-webkit-scrollbar {
+  display: none;
 }
 /* The action bar sits under the left column; border-right continues the column
    divider to the sheet floor so the two columns read as one clean split. */

@@ -372,12 +372,14 @@
 #pm-display-adv-body > :is(.set-row, .adv-help, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
-/* Fold summaries are disclosures, not plates: steel + rule + left chevron
-   (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
-   HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
+/* Fold summaries are disclosures, not plates: readable ink + rule + left
+   chevron (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate
+   made HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
-  color: var(--steel);
+  /* --text, not --steel: steel italic on --surf-1 is the low-contrast
+     accordion complaint. ON/OFF readout chips keep gold/red below. */
+  color: var(--text);
   font-style: italic;
   opacity: 1;
   background-color: transparent;
@@ -450,7 +452,7 @@ button:has(> [data-fold]) {
 }
 #pmsettings-inner details > summary [data-fold] { white-space: nowrap; }
 #pmsettings-inner details > summary [data-fold="k"] {
-  color: var(--steel);
+  color: var(--text);
   font-style: italic;
   font-weight: 700;
 }
@@ -470,7 +472,7 @@ button:has(> [data-fold]) {
   font-weight: 700;
 }
 #pmsettings-inner details > summary [data-fold="sep"] {
-  color: color-mix(in oklab, var(--steel) 55%, transparent);
+  color: var(--dim);
   font-weight: 400;
 }
 #pmsettings-inner #pm-uiscale-h {

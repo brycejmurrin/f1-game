@@ -1436,7 +1436,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.doesNotMatch(read("index.html"), /<h3 class="pm-group-h">(?:DRIVING CONTROLS|DISPLAY|APPEARANCE|STEERING &amp; ASSISTS|MUSIC &amp; SOUND)<\/h3>/,
     "page titles are not duplicated by hidden headings");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--text)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
@@ -1469,12 +1469,22 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--text)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "color"), "var(--text)",
+    "MUSIC fold names use --text, not steel italic");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "border-bottom"), "1px solid var(--card-line)",
+    "MUSIC & SOUND rules span the full content width, not a fading --grad-rule");
+  assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
+    "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
+  assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
+    "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
+    "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
@@ -1499,8 +1509,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
   assert.equal(decl(css("css/components.css"), "#pm-uiscale-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
-    "fold names stay heading steel");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--text)",
+    "fold names stay readable --text, not steel italic");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
     "fold ON chips pick up the live gold the inner ON buttons name");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--red)",
