@@ -1046,7 +1046,7 @@ const Car3D = (function () {
     }, recipe);
   }
   function buildFloorParts(recipe) {
-    return mergeRecipe({ fences: 3, fenceH: 1.15, skid: 0, edgeLip: 0.45,
+    return mergeRecipe({ fences: 5, fenceH: 1, skid: 0, edgeLip: 0,
       plank: 0, gurney: 0, scroll: 0 }, recipe);
   }
   function buildWheelParts(recipe) {
