@@ -8,6 +8,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
@@ -42,6 +43,7 @@ test("default garage flaps travel on BOTH wings (TE front, LE rear)", () => {
     "at least one front flap must drop its TE by a garage-visible amount");
   for (const e of rear) {
     assert.ok(leTravelMm(e) > 80, `${e.id} rear LE travel ${leTravelMm(e).toFixed(0)} mm — DRS slot will not open`);
+    assert.ok(teTravelMm(e) > 80, `${e.id} rear TE travel ${teTravelMm(e).toFixed(0)} mm — wingRear silhouette will not flatten`);
   }
 });
 
@@ -87,9 +89,10 @@ test("baked rain-light emissive is bloom-capped (channel ≤ 1.90)", () => {
   assert.ok(cols.size >= 2, "want a brighter core on a dimmer housing");
 });
 
-test("CarMesh.drawAeroEdge is the straight-mode TE strip (existing emissive)", () => {
+test("CarMesh.drawAeroEdge is opt-in debug, not the shipped wing look", () => {
   assert.equal(typeof M.CarMesh.drawAeroEdge, "function");
   const src = M.CarMesh.drawAeroEdge.toString();
-  assert.match(src, /blend > 0\.45/, "strip only while X-mode is open");
-  assert.match(src, /_AE_FX/, "reuses the rain-light emissive opts, not a new SURFACES id");
+  assert.match(src, /aeroEdgeOn/, "strip is gated, not drawn on every X-mode frame");
+  const file = fs.readFileSync(new URL("../../js/car/car-mesh.js", import.meta.url), "utf8");
+  assert.match(file, /apex26\.aeroEdge/, "off-by-default localStorage latch");
 });

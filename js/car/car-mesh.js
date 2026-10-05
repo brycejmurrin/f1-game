@@ -1720,8 +1720,11 @@ function getAeroEdgeStrip() {
 }
 const _aeW = new Float32Array(16);
 const _AE_FX = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+function aeroEdgeOn() {
+  try { return localStorage.getItem("apex26.aeroEdge") === "1"; } catch (e) { return false; }
+}
 function drawAeroEdge(modelMat, aLvl, style, blend) {
-  if (!(blend > 0.45) || !_gfx) return;
+  if (!aeroEdgeOn() || !(blend > 0.45) || !_gfx) return;
   const flaps = Car3D.aeroFlaps(aLvl, style);
   const pick = (wing) => { let last = null; for (const e of flaps) if (e.wing === wing) last = e; return last; };
   const drawOne = (fg, half) => {

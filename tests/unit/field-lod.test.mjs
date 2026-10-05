@@ -242,7 +242,7 @@ test("drawAeroFlaps: moving = one draw per element; `still` or at rest = ONE dra
     "level 2 moves two elements on each wing (the case worth merging)");
   r.draw(FLAP_TEAM, FLAP_LVL, 0.4, FLAP_MAT, FLAP_PAINT, null);
   assert.equal(flapDraws(r).length, els.length, "moving, inside the gate: the animated per-element path");
-  assert.equal(edgeDraws(r).length, 0, "X-mode strip is off below blend 0.45");
+  assert.equal(edgeDraws(r).length, 0, "TE strip is off unless apex26.aeroEdge");
   for (const [blend, still, why] of [[0.4, true, "a rival past FieldLod.flapsM() / the mirror / the PiP"],
     [0, false, "closed, at rest"], [1, false, "open, at rest"], [0.7, true, "still, mid-travel"]]) {
     r.draws.length = 0;
@@ -253,8 +253,7 @@ test("drawAeroFlaps: moving = one draw per element; `still` or at rest = ONE dra
     assert.deepEqual(flaps[0].mat, Array.from(FLAP_MAT), why + ": on the car's own matrix");
     const verts = els.reduce((n, e) => n + r.M.Car3D.buildFlapGeom(e, r.st.col, null).pos.length, 0);
     assert.equal(flaps[0].mesh.d.pos.length, verts, why + ": every element of both wings");
-    const wantEdge = blend > 0.45 || (still && blend >= 0.5);
-    assert.equal(edgeDraws(r).length > 0, wantEdge, why + ": TE strip only in X-mode");
+    assert.equal(edgeDraws(r).length, 0, why + ": TE strip stays off by default");
   }
 });
 

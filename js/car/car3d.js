@@ -295,22 +295,17 @@ const Car3D = (function () {
   // trailing edge drop in X-mode — the cascade reads as two steps, not one
   // plank. Rear bite is the DRS-style slot; a bit more of it so the crown
   // line is obvious from wingRear.
-  const Z_BITE = { front: 0.12, rear: 0.48 };
+  const Z_BITE = { front: 0.12, rear: 0.55 };
   // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
   // 1 = trailing edge.
-  // This is the thing that makes an opening wing read as opening. Rotating about
-  // the LEADING edge (which is what this did) changes incidence but leaves the
-  // hinge line — the point nearest the element ahead — exactly where it was, so
-  // the SLOT never opens and the whole gesture reads as a plank tilting. A real
-  // DRS/X-mode flap pivots near its TRAILING edge: the leading edge swings up and
-  // away from the element in front of it and daylight appears through the wing,
-  // which is both the mechanism and the visual.
-  // The rear stays trailing-edge-pivoted (the real DRS actuator). The front
-  // sits mid-chord so the trailing edge drops in X-mode — a LE-near hinge
-  // left the cascade looking like one plank. The elements are stacked ~12 mm
-  // apart under the nose, so a full LE swing still has nowhere to go.
-  const HINGE = { front: 0.52, rear: 0.80 };
-  const OPEN_FRAC = { front: 2.2, rear: 1.25 };
+  // wingRear looks at the TRAILING edge. A TE-near hinge (0.80) left that edge
+  // still, so CORNER vs STRAIGHT read as the same black slab plus a telltale
+  // strip. Mid-chord on BOTH wings drops the TE in X-mode (the flap goes
+  // flatter) and lifts the LE off the mainplane (the DRS slot). The front
+  // stays mid-chord for the same reason — a LE-near hinge hid the cascade
+  // under the nose.
+  const HINGE = { front: 0.52, rear: 0.45 };
+  const OPEN_FRAC = { front: 2.2, rear: 2.6 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
   // baked top flap already passes within ~12 mm of it, so an unconditional bite

@@ -542,6 +542,16 @@ const api = {
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
   },
+  // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
+  // light their wings; `apex26.aeroEdge=1` is the debug latch.
+  aeroEdge(on) {
+    const KEY = "apex26.aeroEdge";
+    if (on !== undefined) {
+      try { if (on) localStorage.setItem(KEY, "1"); else localStorage.removeItem(KEY); }
+      catch (e) { /* private mode */ }
+    }
+    try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+  },
   // The resolved (level, style) the garage hands drawAeroFlaps, plus the pose
   // pair each element ends up with. An element whose closed and open angles are
   // EQUAL has been parked by the clearance solver and will never appear to move,
