@@ -316,19 +316,21 @@
             stage._mat = MAT.GLASS;
             TrackGeom.addBox(stage, ac(F_R - 0.2, 7.8, 0), [8.2, 3.8, 46], GLASS_D, b);
             // Stepped zig-zag roof bands — back spine tallest, leading edge thin.
+            // Lengths 44/42/40 (not 48): same-length boxes shared ±t end planes
+            // with the concrete curtain and each other (coplanar-audit +4 spots).
             stage._mat = MAT.METAL;
             const bands = [
-              { rOff:  F_R + 3.5, h: roofRise,       top: roofY + 0.6 },
-              { rOff:  F_R + 0.5, h: roofRise * 0.65, top: roofY - 0.4 },
-              { rOff:  F_R - 2.5, h: 0.55,            top: roofY - 1.6 },
+              { rOff:  F_R + 3.5, h: roofRise,       top: roofY + 0.6, len: 44 },
+              { rOff:  F_R + 0.5, h: roofRise * 0.65, top: roofY - 0.4, len: 42 },
+              { rOff:  F_R - 2.5, h: 0.55,            top: roofY - 1.6, len: 40 },
             ];
             for (const bd of bands) {
               TrackGeom.addBox(stage, ac(bd.rOff, bd.top - bd.h / 2, 0),
-                [4.2, bd.h, 48], ROOF_LT, b);
+                [4.2, bd.h, bd.len], ROOF_LT, b);
             }
             // Cream soffit under the cantilevered leading edge.
             TrackGeom.addBox(stage, ac(F_R - 3.6, roofY - 2.0, 0),
-              [2.2, 0.35, 46], SOFFIT, b);
+              [2.2, 0.35, 44], SOFFIT, b);
             // Red/white edge trim — THE Wing identity marker from trackside.
             const TRIM_R = [0.88, 0.14, 0.14], TRIM_W = [0.96, 0.96, 0.94];
             for (let ti = 0; ti < 12; ti++) {
