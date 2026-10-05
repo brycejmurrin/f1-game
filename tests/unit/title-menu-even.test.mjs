@@ -146,6 +146,47 @@ test("narrow title column hides the native bar and reserves a tap under the last
   );
 });
 
+test("CONTINUE + Daily stack the save line under the label, not beside it", () => {
+  // A Driver Career save unhides CONTINUE next to Daily. The pair used a
+  // row flex + nowrap ellipsis, so desktop painted "2026 · ROU…" and
+  // "MONTREA…" once each chip was half a column (survey 2026-10-05).
+  // Compact-wide already stacked; the base rule must, or a returning
+  // save truncates on every non-compact title.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /#menu-retention \.bigbtn \{[^}]*flex-direction:\s*column/,
+    "retention chips stack label over sub on every title shape",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.mb-sub \{[^}]*max-width:\s*100%/,
+    "the save line gets the chip's full width so ROUND / Montreal are not squeezed beside the label",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.bigbtn > span \{[^}]*max-width:\s*100%/,
+    "the visible label also cannot spill the cell",
+  );
+});
+
+test("tall Classic docks ANIMATE BACKGROUND to the bottom, not under the wordmark", () => {
+  // Live-scene rules used :not([data-home-scene="static"]), so Classic
+  // left #home-motion at top-left under APEX 26. Narrow Classic then
+  // hid INSTALL/ANIMATE entirely (survey apex6, ~500px).
+  const experience = readCssSource("css/experience.css");
+  assert.match(
+    experience,
+    /body\[data-shape="tall"\]\) #home-motion \{[^}]*bottom:\s*var\(--safe-b\)/,
+    "tall title docks the motion chip to the safe bottom even on Classic/static",
+  );
+  assert.doesNotMatch(
+    experience,
+    /body\[data-shape="tall"\]\) #overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #home-motion/,
+    "must not still require a live scene before the chip leaves the wordmark",
+  );
+});
+
 test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(
