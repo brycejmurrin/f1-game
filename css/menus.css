@@ -37,9 +37,10 @@
    did this; the returning-player title is not compact. */
 #menu-retention .bigbtn > span { max-width: 100%; }
 #menu-retention .mb-sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
   max-width: 100%;
 }
 /* Shared gap / stretch. Column count lives on each row: primary is a

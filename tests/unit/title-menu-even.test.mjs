@@ -160,6 +160,11 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   );
   assert.match(
     menus,
+    /#menu-retention \.mb-sub \{[^}]*white-space:\s*normal/,
+    "the save line wraps ROUND + circuit instead of ellipsising to ROU…",
+  );
+  assert.match(
+    menus,
     /#menu-retention \.mb-sub \{[^}]*max-width:\s*100%/,
     "the save line gets the chip's full width so ROUND / Montreal are not squeezed beside the label",
   );
