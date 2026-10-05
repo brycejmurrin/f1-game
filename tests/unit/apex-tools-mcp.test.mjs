@@ -185,6 +185,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_track_audit",
     "apex_ui_fit",
     "apex_ui_shot",
+    "apex_unit_test",
     "apex_verify_change_fast",
     "apex_who_is_on_it",
   ]);
@@ -800,7 +801,7 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   }
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
-  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
@@ -1254,6 +1255,21 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   const audit = ok("apex_track_audit", { track: "monza" });
   assert.match(JSON.stringify(audit.argv), /verify-track\.cjs","monza","--quiet".*float-audit\.cjs","monza","--json/);
   bad("apex_track_audit", { track: "x" });
+  // `checks` routes through tools/track/audit-circuit.cjs (every per-circuit
+  // audit against its baseline, 2026-10-05); the bare call keeps the old pair.
+  const full = ok("apex_track_audit", { track: "monza", checks: ["clip", "coplanar"] });
+  assert.match(JSON.stringify(full.argv), /audit-circuit\.cjs","monza","--json","--checks","clip,coplanar"/);
+  bad("apex_track_audit", { track: "monza", checks: ["nope"] });
+  bad("apex_track_audit", { track: "monza", checks: [] });
+  // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
+  const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
+  assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  const pat = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" });
+  assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  bad("apex_unit_test", { file: "tests/specs/camera.spec.js" });
+  bad("apex_unit_test", { file: "tests/unit/" + "no-such-file.test.mjs" });   // a missing file is refused (docs-integrity: not a path literal)
+  bad("apex_unit_test", { file: "../etc/passwd" });
+  bad("apex_unit_test", {});
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
   for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel", "apex_car_audit", "apex_track_audit"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);

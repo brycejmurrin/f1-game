@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`.
- * @skill webgpu-debug / mcp-probe
+ * @skill renderer-debug / mcp-probe
  *
  * Prefer the parent directly. This shim keeps old recipe paths working.
  */

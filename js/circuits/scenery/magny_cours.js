@@ -128,7 +128,7 @@
           center: vadd(a.c, a.u, 7), size: [24, 16, 40], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 3.6), [14, 7.2, 38], RENDER, b);
+          addBox(stage, vadd(a.c, a.u, 3.6), [14, 7.2 + i * 0.1, 38 + i * 0.2], RENDER, b);
           stage._mat = 0;
           addBox(stage, vadd(vadd(a.c, a.r, -7.05), a.u, 2.8), [0.3, 5.0, 34],
             [0.22, 0.23, 0.26], b);                        // garage door band

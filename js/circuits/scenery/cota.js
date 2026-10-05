@@ -328,10 +328,10 @@
         // Wings sit 4 cm lower and one slat 4 cm higher: their undersides / the
         // two slats' faces were coplanar with their neighbours' (ground-audit).
         addBox(out, vadd(af.c, af.u, 16),              [4, 32, 30], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t,  14), af.u, 8.96), [4, 18, 22], redSteel, fb);
-        addBox(out, vadd(vadd(af.c, af.t, -14), af.u, 8.96), [4, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t,  14), af.u, 8.96), [4.2, 18, 22], redSteel, fb);
+        addBox(out, vadd(vadd(af.c, af.t, -14), af.u, 8.96), [4.2, 18, 22], redSteel, fb);
         addBox(out, vadd(vadd(af.c, af.t,   7), af.u, 12), [6,  1, 18], white,    fb);
-        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12.04), [6,  1, 18], white,    fb);
+        addBox(out, vadd(vadd(af.c, af.t,  -7), af.u, 12.04), [6.2, 1, 18], white,    fb);
       };
       redFramework(K(0.65), 1, 46);
       redFramework(K(0.65), 1, 78);    // second red stand behind the first

@@ -104,7 +104,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/font-digits.py** | Measure every shipped font's DIGIT ADVANCES and OpenType figure features | — |
 | **check/lifecycle-census.mjs** | Offline VM lifecycle census: typed resource snapshots and diffs across entry, reset, cancellation and failed boot. | check-changes |
 | **check/merge-hygiene.mjs** | Keep ratchets.json + groups.json one-entry-per-line and stably sorted; `--check` (default) / `--fix`. | check-changes |
-| **check/occlusion-estimate.mjs** | How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU. | webgl-debug |
+| **check/occlusion-estimate.mjs** | How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU. | renderer-debug |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
@@ -182,8 +182,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | replay-camera |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
-| **shot/show-menus.mjs** | Every menu and popup, then the Display survey, into one HTML preview. | playwright-probe |
-| **shot/show.mjs** | One phone-page HTML preview: menus, then the car from each side. | playwright-probe |
+| **shot/show-menus.mjs** | Every menu and popup, then the Display survey, as JPEGs plus an index.html in artifacts/show-menus. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
 ### `tools/gfx/`
@@ -193,21 +192,21 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | Tool | Does | Paired skill |
 |---|---|---|
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
-| **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | webgl-debug / lighting-tuner |
-| **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / webgpu-debug |
-| **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | webgpu-debug / mcp-probe |
-| **gfx/gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
-| **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | webgl-debug |
+| **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
+| **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
+| **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | renderer-debug / mcp-probe |
+| **gfx/gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | renderer-debug |
+| **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
-| **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
-| **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | webgl-debug |
+| **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
+| **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
-| **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | webgpu-debug |
-| **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | webgpu-debug / mcp-probe |
-| **gfx/wgx-shot.mjs** | WebGPU screenshots, one track or `--gallery`: `canvas.png`, HUD, `view.txt`; polls until pixels are non-black. | webgpu-debug |
-| **gfx/wgx-validate.mjs** | REAL Dawn validation of the WGX renderer in-container (~5 s): full Chromium, races a track, fails on any GPU error. | webgpu-debug |
+| **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
+| **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
+| **gfx/wgx-shot.mjs** | WebGPU screenshots, one track or `--gallery`: `canvas.png`, HUD, `view.txt`; polls until pixels are non-black. | renderer-debug |
+| **gfx/wgx-validate.mjs** | REAL Dawn validation of the WGX renderer in-container (~5 s): full Chromium, races a track, fails on any GPU error. | renderer-debug |
 
 ### `tools/track/`
 
@@ -216,6 +215,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | Tool | Does | Paired skill |
 |---|---|---|
 | **track/aero-zone-turns.cjs** | Pairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked. | agent-view |
+| **track/audit-circuit.cjs** | One circuit's offline audits in one call: verify-track + float + clip + coplanar + props-tris + ground against their… | survey-track |
 | **track/barrier-jumps.cjs** | Pure helpers: max adjacent \|Δbar\| / wallAt step on a barrier table (run-off terminus teleports). | check-changes |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
@@ -406,9 +406,9 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
-| **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/clip-audit.cjs` |
-| **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/coplanar-audit.cjs` |
-| **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs`, `track/float-audit.cjs` |
+| **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
+| **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
+| **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
 | **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs` |
 

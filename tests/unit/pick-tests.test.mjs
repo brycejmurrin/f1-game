@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES, blanketOnly, pick } from "../../tools/ci/pick-tests.mjs";
+import { DEPLOY_BRANCH, RULES, SPEC_OWNER_REASON, blanketOnly, pick, specOwners, stripSpecOwner } from "../../tools/ci/pick-tests.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -219,4 +219,43 @@ test("a source file's own unit test is in a group that editing it selects", () =
       bad.push(`${src}: its suite is in [${homes.join(", ")}] but editing it selects [${sel.join(", ")}]`);
   }
   assert.deepEqual(bad, [], "give the file a RULE naming the group its own test lives in");
+});
+
+// T10 (test audit 2026-10-05): the contact and AI physics modules route to the
+// group whose subject they are, and a spec edit names the group that runs it.
+test("contact/AI physics modules select collisions, not only physics-core", () => {
+  for (const f of ["collide", "contact-geometry", "wall-clamp", "ai-drive", "ai-band", "ai-corridor"]) {
+    const src = `js/physics/${f}.js`;
+    assert.ok(fs.existsSync(path.join(ROOT, src)), `${src} moved — re-point the rule`);
+    const sel = [...pick([src]).keys()];
+    assert.ok(sel.includes("collisions") && sel.includes("physics-core"), `${src} selects [${sel.join(", ")}]`);
+  }
+  assert.ok(!pick(["js/physics/tyre-model.js"]).has("collisions"), "the rule must stay narrow");
+});
+
+test("a spec edit selects the browser group(s) that run it; the CI selectors strip that route", () => {
+  assert.deepEqual(specOwners("tests/specs/collisions-deep.spec.js"), ["collisions"]);
+  assert.deepEqual(specOwners("tests/specs/imola-foundation.spec.js"), ["circuits"], "globs expand");
+  assert.deepEqual(specOwners("tests/specs/smoke.spec.js"), ["smoke", "tiny"], "a multi-group spec names each");
+  assert.deepEqual(specOwners("tests/unit/pick-tests.test.mjs"), []);
+  // Every spec a browser group globs is routed to that group by its own edit.
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"));
+  let owned = 0;
+  for (const name of specs) {
+    const f = `tests/specs/${name}`;
+    const owners = specOwners(f);
+    if (!owners.length) continue;
+    owned++;
+    const sel = pick([f]);
+    for (const g of owners) assert.ok(sel.get(g)?.has(SPEC_OWNER_REASON), `${f} must select ${g}`);
+    assert.ok(sel.has("audit"), "the taxonomy check still rides along");
+  }
+  assert.ok(owned > 100, `only ${owned} specs resolved to a group — the groups.json read broke`);
+  // stripSpecOwner gives the CI selectors exactly the RULES' answer back.
+  const g = pick(["tests/specs/collisions-deep.spec.js", "js/physics/collide.js"]);
+  assert.deepEqual(stripSpecOwner(g), []);
+  assert.ok(g.has("collisions") && ![...g.get("collisions")].includes(SPEC_OWNER_REASON));
+  const only = pick(["tests/specs/hud-mirror.spec.js"]);
+  assert.deepEqual(stripSpecOwner(only), ["gfx"]);
+  assert.deepEqual([...only.keys()], ["audit"]);
 });

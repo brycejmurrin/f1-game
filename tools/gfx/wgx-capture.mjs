@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback).
- * @skill webgpu-debug
+ * @skill renderer-debug
  *
  * Prefer the parent directly:
  *   node tools/gfx/gfx-probe.mjs --backend webgpu [--lite] [track]

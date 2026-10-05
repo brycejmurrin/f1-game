@@ -154,6 +154,12 @@ Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` i
 `.cursor/rules/apex-shared.mdc`, Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks
 (`tools/env/mirror-skills.sh` repairs them). Checklist: `docs/AGENT-SURFACE.md` §Bootstrap.
 
+- Model (Grok desks → cloud): launch with model id `default` only — never invent other model ids.
+- Auto-merge: MERGE commit only; never squash.
+- Pages: one green tip → one train; do not dual-dispatch Pages.
+- Browser MCP on cloud VMs: prefer isolated Playwright + chrome-devtools from `.cursor/mcp.json` / the environment allowlist; do not expect reliable hits on live github.io from the VM — serve locally (`npx serve` / `http.server`) for verification when possible.
+- Acceptance: every cloud PR body must name an exact verify command or measured check.
+
 ## Git branch & deploy
 Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: a direct push there is REFUSED (branch protection since 2026-09-30: a pull request whose 12 fast-tier checks are green; `enforcement_level: non_admins`, so an admin token bypasses it; `CI` is not yet required — the owner adds it, `docs/TESTING.md` §CI aggregator), so `deploy.mjs` lands work only through `--pr`; only it ships

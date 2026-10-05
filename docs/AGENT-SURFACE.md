@@ -189,7 +189,15 @@ flicker-gate, frame-report --fleet, parts-sweep, livery-contrast in the
 background), `apex_ui_fit`/`apex_ui_shot` (one menu screen × viewport, ~15 s)
 and `apex_car_audit`/`apex_track_audit` (offline checks, seconds); 24 → 26 on
 2026-10-04 for `apex_hud_shot` and `apex_hud_survey`, the race-HUD survey —
-one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
+one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix); 26 → 27 on
+2026-10-05 for `apex_unit_test` (`node --test` of one `tests/unit/` file, the
+browser-free check eight skills run every session and none had a wrap). The
+same day `apex_eval` gained `backend` and `vm` (the Node VM route, no
+Chromium), `apex_hud_shot` / `apex_hud_survey` gained `backend`, and
+`apex_track_audit` gained `checks` (every per-circuit audit against its
+baseline through `track/audit-circuit.cjs`; the bare call still runs the
+verify-track + float-audit pair). `apex_unit_test` is built-in: `node --test`
+of one `tests/unit/` file, no CLI of its own.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -213,7 +221,8 @@ one CLI, `shot/hud-survey.mjs`, two wraps: one cell vs a matrix).
 | `apex_ui_fit` | `ui/layout-audit.mjs` | browser | ui-menu-a11y |
 | `apex_ui_shot` | `ui/layout-audit.mjs` | browser | survey-ui-matrix |
 | `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
-| `apex_track_audit` | `track/float-audit.cjs` | tree | survey-track |
+| `apex_track_audit` | `track/audit-circuit.cjs` | tree | survey-track |
+| `apex_unit_test` | built-in | tree | check-changes |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
