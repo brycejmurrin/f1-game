@@ -1,23 +1,5 @@
 # garage-angles.mjs — when, how, and how fast
 
-## Contents
-- Pick the cheapest path first
-- Everything is an axis
-  - Cameras
-  - Stations — cameras keyed to a PART
-  - Designs
-  - Free camera
-  - Comparisons
-  - Session — hot-swapping designs
-  - Output
-- Presets are starting points
-- Fast iteration
-- Multi-team
-- Before you run
-- When NOT to use
-- Offline preflight
-
-
 The garage is the only place occlusion, wall crests, and real lighting get a
 vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
 answered placement and you need **lit, foreshortened** proof.
@@ -254,7 +236,7 @@ the browser lock while open and needs the MCP *server* (`serve` /
 every browser `apex_*` wrap it refuses `playwright_live` while a `playwright
 test` suite or the host Playwright MCP's *launched* Chromium is up; the idle
 `@playwright/mcp` server that Cloud attaches for the whole session is
-reported (`apex_status` → `playwright.hostMcp`) and no longer blocks.
+reported (`apex_status` → `playwright.hostMcp`) and does not block.
 
 ### Output
 
