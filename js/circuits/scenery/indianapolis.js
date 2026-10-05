@@ -138,30 +138,31 @@
         const a = rot(anchor(K(0.005), IN, 62));
         const b = [a.r, a.u, a.t];
         modelGroup("indy-pagoda", {
-          center: vadd(a.c, a.u, 26), size: [24, 58, 28], basis: b,
+          center: vadd(a.c, a.u, 26), size: [26, 58, 30], basis: b,
         }, (stage) => {
-          const CORE = [0.78, 0.79, 0.81], CLAD = [0.84, 0.84, 0.86];
-          const GLASS = [0.22, 0.36, 0.50], EAVE = [0.90, 0.90, 0.92];
+          const CORE = [0.80, 0.80, 0.82], CLAD = [0.86, 0.86, 0.88];
+          const GLASS = [0.28, 0.42, 0.56], EAVE = [0.92, 0.92, 0.94];
           // Podium / base housing — solid block.
-          addBox(stage, vadd(a.c, a.u, 5), [18, 10, 22], CLAD, b);
-          // Continuous solid core through all five tiers (closes the open-slab gap).
-          addBox(stage, vadd(a.c, a.u, 26), [11.5, 32, 13.5], CORE, b);
+          addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 24], CLAD, b);
+          // Fat continuous core — narrower than every storey so storey faces
+          // are not coplanar with the core (flatCoplanar).
+          addBox(stage, vadd(a.c, a.u, 27), [12.5, 34, 14], CORE, b);
           for (let t = 0; t < 5; t++) {
-            const w = 14.5 - t * 1.8, d = 17 - t * 1.9;
-            const y = 11.5 + t * 6.4;
-            // Storey cladding wrapped on the core (not a hollow shelf).
-            addBox(stage, vadd(a.c, a.u, y + 2.6), [w, 5.2, d], CLAD, b);
-            // Track-facing glass band flush on the cladding face.
-            addBox(stage, vadd(vadd(a.c, a.r, w * 0.5 + 0.15), a.u, y + 2.4),
-              [0.4, 2.4, d - 2.2], GLASS, b);
-            // Modest diminishing eave — overhang only, not an open floor plate.
-            addBox(stage, vadd(a.c, a.u, y + 5.35), [w + 1.6, 0.55, d + 1.8], EAVE, b);
+            const w = 16.5 - t * 1.5, d = 19 - t * 1.6;
+            // Contiguous storeys (pitch = height) — solid mass, no air gap.
+            const y = 11.0 + t * 6.0;
+            addBox(stage, vadd(a.c, a.u, y + 3.0), [w, 6.0, d], CLAD, b);
+            // Glass proud of the cladding face (not sharing its plane).
+            addBox(stage, vadd(vadd(a.c, a.r, w * 0.5 + 0.28), a.u, y + 2.9),
+              [0.4, 2.4, d - 3.5], GLASS, b);
+            // Thin eave lip only — does not dominate the mass.
+            addBox(stage, vadd(a.c, a.u, y + 5.85), [w + 1.0, 0.35, d + 1.0], EAVE, b);
           }
           // Crown cap + mast.
-          addBox(stage, vadd(a.c, a.u, 43.6), [9.5, 1.2, 11], EAVE, b);
-          addCyl(stage, vadd(a.c, a.u, 44.2), 0.45, 9, [0.90, 0.90, 0.92], 8, b);
+          addBox(stage, vadd(a.c, a.u, 42.0), [11, 1.4, 13], EAVE, b);
+          addCyl(stage, vadd(a.c, a.u, 42.7), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
           // IMS red accent ring under the crown.
-          addBox(stage, vadd(a.c, a.u, 42.9), [10.2, 0.35, 11.8], IMS_RED, b);
+          addBox(stage, vadd(a.c, a.u, 41.2), [11.8, 0.4, 13.6], IMS_RED, b);
         }, { required: true });
       }
 
@@ -246,14 +247,14 @@
         const fullWidth = hw[lineK] * 2;
         const brickCount = Math.ceil(fullWidth * 1.2);
         const brickWidth = fullWidth / brickCount;
-        for (let row = 0; row < 2; row++) {
-          const alongT = (row - 0.5) * 0.85;
+        for (let row = 0; row < 3; row++) {
+          const alongT = (row - 1) * 0.7;
           for (let i = 0; i < brickCount; i++) {
             const off = -fullWidth * 0.5 + brickWidth * (i + 0.5);
             const warm = (i + row) & 1;
-            addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, alongT), a.u, 0.04),
-              [brickWidth + 0.02, 0.09, 0.9],
-              warm ? [0.58, 0.30, 0.20] : [0.46, 0.24, 0.16], [a.r, a.u, a.t]);
+            addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, alongT), a.u, 0.05),
+              [brickWidth + 0.03, 0.12, 0.85],
+              warm ? [0.62, 0.32, 0.20] : [0.42, 0.20, 0.14], [a.r, a.u, a.t]);
           }
         }
       }
@@ -464,11 +465,12 @@
             }, { required: true });
           }
         }
-        // Parking lots near the museum only (south infield). Back-stretch
-        // lots were coplanar with golf fairways — keep those as fairways.
+        // Parking lots: museum campus + a front-stretch infield pad so the
+        // SF/overview cameras see asphalt (not only bare green).
         for (const [id, s, gap, sz] of [
           ["a", 0.780, 70, [34, 0.14, 44]],
           ["b", 0.835, 88, [28, 0.16, 36]],
+          ["sf", 0.040, 55, [30, 0.14, 40]],
         ]) {
           groundPatch(K(s), IN, gap, sz, ASPHALT,
             { id: `indy-parking-${id}`, samples: 8 });
@@ -484,6 +486,18 @@
             addBox(out, vadd(p, a.u, 0.55), [2.0, 1.1, 4.2],
               h < 0.5 ? [0.15, 0.18, 0.35] : (h < 0.75 ? [0.72, 0.72, 0.74] : IMS_RED), b);
           }
+        }
+        // Low tech / plaza boxes inside the front stretch (overview silhouette).
+        for (const [s, gap, w, h, len] of [
+          [0.055, 72, 14, 6, 22], [0.075, 80, 12, 5, 18], [0.095, 68, 16, 7, 20],
+        ]) {
+          const a = rot(anchor(K(s), IN, gap));
+          const b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 18)) continue;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len],
+            [0.78, 0.78, 0.76], b);
+          addBox(out, vadd(a.c, a.u, h + 0.2), [w + 0.8, 0.35, len + 0.8],
+            IMS_NAVY, b);
         }
         // Golf fairway ribbons on the back-stretch infield — gaps clear of
         // existing greens (gap 40–48) and bunkers (gap+26.5); 2 cm lift slots
