@@ -889,6 +889,34 @@ test("the host leaving the ROOM forgets every guest it relayed, not just the hos
   } finally { h.lobby.cancel(); }
 });
 
+test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)", async () => {
+  // The waiting-room leave path cleared relayed "g2" profiles; the
+  // friendQualifying branch only said "Keep racing" and left them in place.
+  // QualiNet.waiting() falls back to roomState().peers while NetPlay is not
+  // yet active, so TO THE GRID waited forever for a lap no host can relay.
+  // 2p never saw it: there is no relayed roster there.
+  const { h, made, closers } = closableHarness();
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1);
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "relayed guest is in the roster");
+    made[0].deliver("go", {});
+    assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
+    assert.equal(closers.length, 1);
+    closers[0]("transport");
+    assert.equal(h.lobby.qualifying(), true, "still in the quali phase");
+    assert.match(h.status.textContent, /rivals are now AI/i);
+    assert.equal(h.lobby.roomState().peers.length, 0,
+      "relayed guest must die with the host — otherwise QualiNet.waiting() stays locked");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a transport that never connected closes silently: the watcher's diagnosis is not overwritten", async () => {
   // waitForOpen() said WHICH failure it was, then dropPending() closed the
   // transport, whose close event ran the peer-leave handler synchronously and

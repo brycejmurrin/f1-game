@@ -205,12 +205,16 @@ const NetLobby = (function () {
           clearInterval(pumpTimer); pumpTimer = null;
           // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
           const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
+          // Relayed profiles ("g2", "g3"…) are keyed by the host's ids, not
+          // this transport's, so the delete above missed them. Clear them in
+          // BOTH branches: during friend quali QualiNet.waiting() reads
+          // roomState().peers and would wait forever for a lap the gone host
+          // can no longer relay (2p never saw it — no relayed roster).
+          _peers.clear(); _ready.clear(); clashClear();
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else {
-            // The room is over: relayed profiles ("g2", "g3"…) are keyed by the
-            // host's ids, not this transport's, so the delete above missed them.
-            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
+            myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
             // …and stop ADVERTISING it: the code onConnected reopened (and its
             // pending transport) would answer the old code and pull us back in.
