@@ -734,6 +734,22 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const css = read("css/editor.css");
   assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
   assert.doesNotMatch(css, /^\s*\.td-hint \{ display: none/m, "no rule hides every .td-hint");
+  // Narrow+short landscape (734×343): drop the 200px stage floor and undo the
+  // 3-up foot grid — stacking ALL short heights (incl. 852×344 safari) made
+  // clipped findings worse (layout-audit 2026-10-05).
+  assert.match(css,
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*62%\)\s*minmax\(0,\s*1fr\)/,
+    "narrow+short landscape drops the stage floor so stage+rail fit the body");
+  assert.match(css,
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?\.td-foot \{ display: flex/,
+    "narrow+short landscape restores a single-row foot");
+  assert.match(css,
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?min-height:\s*72px/,
+    "narrow+short landscape floors the main canvas above WCAG 24");
+  const shortOnly = css.match(/@media \(max-height: 500px\) \{([\s\S]*?)\n\}/);
+  assert.ok(shortOnly, "short-height media query present");
+  assert.doesNotMatch(shortOnly[1], /\.td-body\s*\{/,
+    "max-height:500 alone must not restack .td-body (safari 2-col stays)");
   for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^SELECT: /]]) {
     b.D.setTool(tool);
     assert.match(hint.textContent, re, tool);
