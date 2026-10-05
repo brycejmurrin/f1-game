@@ -124,9 +124,11 @@ const CarGeometry = (function () {
       if (ct < 1) { zR = zF + (zR - zF) * ct; yR = yF + (yR - yF) * ct; }
       const tw = (spec.twist || 0) * edge;
       if (tw) {
+        // +Z forward, TE aft (dzc < 0). Positive twist is more outboard
+        // incidence: rotate the TE up (+Y), not down toward the main plane.
         const dzc = zR - zF, dyc = yR - yF, c = Math.cos(tw), s = Math.sin(tw);
-        zR = zF + dzc * c - dyc * s;
-        yR = yF + dzc * s + dyc * c;
+        zR = zF + dzc * c + dyc * s;
+        yR = yF - dzc * s + dyc * c;
       }
       return {
         x: xF + (xR - xF) * t,

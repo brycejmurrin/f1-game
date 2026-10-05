@@ -62,10 +62,25 @@ test("twist and teCurve reshape a flap without adding triangles", () => {
     taper: 0.96, sweep: 0.04, rise: 0.04, attachHalf: 0.75, y: 0, z: 0,
   };
   const flat = Car3D.buildFlapGeom(spec, C1);
-  const bent = Car3D.buildFlapGeom({ ...spec, twist: 0.10, teCurve: 0.04, chordTaper: 0.18 }, C1);
+  const bent = Car3D.buildFlapGeom({ ...spec, twist: 0.22, teCurve: 0.10, chordTaper: 0.32 }, C1);
   assert.equal(tris(bent), tris(flat));
   const moved = bent.pos.some((v, i) => Math.abs(v - flat.pos[i]) > 1e-4);
   assert.ok(moved, "twist/teCurve should move vertices");
+  // Most-aft vertex at the tip sits forward of mid-span (planform arc) and
+  // above it (outboard twist) so a garage 3/4 does not read as stacked planks.
+  const teAt = (mesh, xMin, xMax) => {
+    let best = null;
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      const x = Math.abs(mesh.pos[i]), y = mesh.pos[i + 1], z = mesh.pos[i + 2];
+      if (x < xMin || x > xMax) continue;
+      if (!best || z < best.z) best = { y, z };
+    }
+    return best;
+  };
+  const mid = teAt(bent, 0.20, 0.52), tip = teAt(bent, 0.73, 0.77);
+  assert.ok(mid && tip, "need mid-span and tip TE samples");
+  assert.ok(tip.z > mid.z + 0.012, `tip TE should bow forward: mid ${mid.z.toFixed(3)} tip ${tip.z.toFixed(3)}`);
+  assert.ok(tip.y > mid.y + 0.006, `tip TE should twist up: mid ${mid.y.toFixed(3)} tip ${tip.y.toFixed(3)}`);
 });
 
 test("TEAM_STYLE carries a per-team wingStyle", () => {
