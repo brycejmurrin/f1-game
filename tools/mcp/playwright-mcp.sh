@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Official `@playwright/mcp@0.0.79` wrapper (`help`/`status`/`run`); the stdio server behind `playwright-official`, on the repo-discovered Chromium.
+# @doc Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server.
 # @skill survey-ui-matrix / css-play / mcp-probe
 # playwright-mcp.sh — shell wrapper for official @playwright/mcp.
 # MCP-ATTACHED AGAIN since 2026-10-05: .mcp.json / .cursor/mcp.json /

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @doc Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees?
-// @skill webgpu-debug
+// @skill renderer-debug
 /**
  * road-lut-census.mjs — the headless repro for "WebGPU road markings are drawn
  * in the wrong places".

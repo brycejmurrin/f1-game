@@ -56,6 +56,7 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 - Pit boxes are open stalls under one flat roof, not enclosed garage bays. Every road course has the latter; this one never did.
 - Keep the ground plane dead level. Nothing grows inside the oval and there are no hills anywhere on the horizon — resist adding either.
 - The yard of bricks is a tiny detail and the one every broadcast opens with. Lay it across the full width at the line.
+- Ring the oval with tall lattice flood masts outside the stand bank — without them the Speedway reads as a grey terrace, not a stadium (restored after the #928 side rewrite dropped the ring).
 
 ## Research pass — sourced vs uncertain (wave 6)
 

@@ -20,6 +20,7 @@ import sharp from "sharp";
 const TRACK_TOOL = "tools/shot/track-session.mjs";
 const ID_RE = /^[a-z0-9_]{2,40}$/;
 const LIST_RE = /^[a-z0-9*_,.-]{1,200}$/i;
+const REF_RE = /^[A-Za-z0-9._\/~^@{}-]{1,200}$/;
 
 /** A process and every descendant, read BEFORE anything is killed: Playwright
  *  starts Chromium in its own process group, so killing the CLI's group left
@@ -162,10 +163,9 @@ export function createExtras(ctx) {
       if (!sessClose("close")) return toolResult({ ok: true, op, closed: false, reason: "not open" });
       return toolResult({ ok: true, op, ...(await s.closing), lockFree: true });
     }
-    if (!sess) return refuse("track_not_open", "no track session", 'Call apex_track {"op":"open","track":"spa"} first.');
     const cmd = {};
     if (op === "shot") {
-      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, side: args.side, tod: args.tod, hud: args.hud });
+      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, h: args.h, side: args.side, tod: args.tod, hud: args.hud });
     } else if (op === "eval") {
       if (typeof args.expr !== "string" || !args.expr) return refuse("bad_args", "eval needs expr", 'Pass {"op":"eval","expr":"a.corners()"}.');
       cmd.eval = args.expr;
@@ -177,7 +177,9 @@ export function createExtras(ctx) {
       cmd.diff = args.diff.map(String);
     } else if (op === "status") cmd.status = true;
     else return refuse("bad_args", `unknown op ${op}`, "open | shot | eval | track | sheet | diff | status | close");
+    // dryRun previews the JSON line without a session; a real op needs one.
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, op, command: cmd });
+    if (!sess) return refuse("track_not_open", "no track session", 'Call apex_track {"op":"open","track":"spa"} first.');
     try {
       const reply = await sessSend(cmd);
       delete reply.id;
@@ -224,6 +226,13 @@ export function createExtras(ctx) {
       }
       case "verify_all": return { browser: false, argv: nodeArgv("track/verify-track.cjs", "--all", "--quiet") };
       case "float_all": return { browser: false, argv: nodeArgv("track/float-audit.cjs", "--all") };
+      // Every circuit built twice (~4 s each): 52 outran apex_graph_parity's
+      // 180 s cap at ~46 (2026-10-05). BASE goes by env, never argv.
+      case "graph_parity_all": {
+        const base = String(a.base || "");
+        if (!REF_RE.test(base) || base.startsWith("-")) throw Object.assign(new Error("base"), { refuse: refuse("bad_args", "graph_parity_all needs base: a git ref", 'e.g. {"kind":"graph_parity_all","base":"HEAD~1"} — never omit it (a clean tree passes vacuously).') });
+        return { browser: false, argv: nodeArgv("track/graph-parity.cjs", "--all"), env: { BASE: base } };
+      }
       default: throw Object.assign(new Error("kind"), { refuse: refuse("bad_args", `unknown job kind ${kind}`, `One of: ${JOB_KINDS.join(", ")}.`) });
     }
   }
@@ -231,12 +240,14 @@ export function createExtras(ctx) {
     try { const t = fs.readFileSync(file, "utf8").split("\n"); return t.slice(-n - 1).join("\n").trim(); } catch { return ""; }
   };
   const jobView = (j, full = false) => {
-    const v = { jobId: j.id, kind: j.kind, state: j.state, exit: j.exit, elapsedMs: (j.ended || Date.now()) - j.started, log: path.relative(ROOT, j.log), argv: j.argv };
+    // log = the CLI's stdout, where every job CLI reports; stderr beside it.
+    // (Until 2026-10-05 log named the stderr file, which stayed 0 bytes for
+    // verify_all / float_all while the output sat in an unreported .out.)
+    const v = { jobId: j.id, kind: j.kind, state: j.state, exit: j.exit, elapsedMs: (j.ended || Date.now()) - j.started,
+      log: path.relative(ROOT, j.log), stderr: path.relative(ROOT, j.err), argv: j.argv };
     if (full) {
-      // stdout and stderr each — a CLI that reports on stdout (verify-track)
-      // left the stderr-only tail empty.
-      v.tail = [tail(j.out, 30), tail(j.log, 20)].filter(Boolean).join("\n--- stderr ---\n");
-      if (j.state !== "running") { const o = ctx.splitOut(fs.readFileSync(j.out, "utf8")); if (o.out != null) v.out = o.out; }
+      v.tail = [tail(j.log, 30), tail(j.err, 20)].filter(Boolean).join("\n--- stderr ---\n");
+      if (j.state !== "running") { try { const o = ctx.splitOut(fs.readFileSync(j.log, "utf8")); if (o.out != null) v.out = o.out; } catch { /* no log */ } }
     }
     return v;
   };
@@ -244,18 +255,19 @@ export function createExtras(ctx) {
     const kind = String(args.kind || "");
     let plan;
     try { plan = jobPlan(kind, args); } catch (e) { if (e.refuse) return e.refuse; throw e; }
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, browser: plan.browser });
-    if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv });
+    if (args.dryRun) return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser });
+    if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env });
     const running = [...jobs.values()].filter((j) => j.state === "running");
     if (running.length >= 2) return refuse("jobs_busy", `${running.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
     fs.mkdirSync(JOB_DIR, { recursive: true });
     const id = `${kind}-${Date.now().toString(36)}-${++jobSeq}`;
-    const log = path.join(JOB_DIR, `${id}.log`), out = path.join(JOB_DIR, `${id}.out`);
-    const logFd = fs.openSync(log, "w"), outFd = fs.openSync(out, "w");
-    const child = spawn(plan.argv[0], plan.argv.slice(1), { cwd: ROOT, detached: true, stdio: ["ignore", outFd, logFd] });
-    fs.closeSync(logFd); fs.closeSync(outFd);
-    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, state: "running", exit: null, started: Date.now(), ended: null, log, out };
+    const log = path.join(JOB_DIR, `${id}.log`), err = path.join(JOB_DIR, `${id}.err`);
+    const logFd = fs.openSync(log, "w"), errFd = fs.openSync(err, "w");
+    const env = plan.env ? { ...process.env, ...plan.env } : process.env;
+    const child = spawn(plan.argv[0], plan.argv.slice(1), { cwd: ROOT, detached: true, env, stdio: ["ignore", logFd, errFd] });
+    fs.closeSync(logFd); fs.closeSync(errFd);
+    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, state: "running", exit: null, started: Date.now(), ended: null, log, err };
     jobs.set(id, j);
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
@@ -350,8 +362,23 @@ export function createExtras(ctx) {
     // Exit 1 = the check found rows to look at — a verdict, not a crash.
     return runSpawn(argv, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal });
   }
+  const AUDIT_CHECKS = ["verify", "float", "clip", "coplanar", "props", "ground"];
   async function trackAudit(args, { signal }) {
     let track; try { track = needTrack(args.track); } catch (e) { return e.refuse; }
+    // `checks` → tools/track/audit-circuit.cjs: every per-circuit audit against
+    // its baseline in one call (~16 s for all six on monza, 2026-10-05). The
+    // bare call keeps the original verify + float pair.
+    if (args.checks !== undefined) {
+      const checks = Array.isArray(args.checks) ? args.checks.map(String) : [];
+      if (!checks.length || checks.some((c) => !AUDIT_CHECKS.includes(c))) return refuse("bad_args", `checks must be a non-empty list of ${AUDIT_CHECKS.join(" | ")}`, 'e.g. {"track":"monza","checks":["clip","coplanar"]}');
+      const argv = nodeArgv("track/audit-circuit.cjs", track, "--json", "--checks", [...new Set(checks)].join(","));
+      if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
+      if (mockMode()) return toolResult({ ok: true, mock: true, argv });
+      // Exit 1 = a check over its baseline — a verdict, not a crash.
+      const r = bodyOf(await runSpawn(argv, { timeoutMs: 180000, allowExit: new Set([0, 1]), signal }));
+      return toolResult({ ok: r.ok, track, audit: r.out, stderr: r.ok ? undefined : String(r.stderr || "").slice(-800),
+        hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !r.ok });
+    }
     const va = nodeArgv("track/verify-track.cjs", track, "--quiet"), fa = nodeArgv("track/float-audit.cjs", track, "--json");
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: [va, fa] });
     if (mockMode()) return toolResult({ ok: true, mock: true, argv: [va, fa] });
@@ -378,4 +405,4 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all"];
+export const JOB_KINDS = ["survey_track", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];

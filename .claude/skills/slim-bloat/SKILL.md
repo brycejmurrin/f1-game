@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Claude-simplify analog for Apex 26. Not for physics tune, circuit accuracy, CSS restructure (css-play), or pre-push verify (check-changes)."
+description: "Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Claude-simplify analog. Not for physics tune, circuit accuracy, CSS restructure (css-play), or pre-push verify (check-changes)."
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -14,7 +14,7 @@ quirk — the measured list is [references/do-not.md](references/do-not.md).
 ```sh
 node tools/check/bloat-scan.mjs --json              # size + ratchet slack (evidence, NOT candidates)
 node tools/check/ratchets.mjs --json                # per-metric lines/codeLines/gMembers/topLets slack
-node tools/check/extract-module.mjs js/game.js 186 207   # analyse free refs (= ensureDataHub, one whole function)
+node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
 ```
 
 Slack 0 on every row = saturated: the scan names no block. Candidates come

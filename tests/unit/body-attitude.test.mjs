@@ -16,7 +16,7 @@
  *   - OFF IS OFF. Disabled returns zeros and settles state, and the switch
  *     persists under the `apex26.` prefix.
  *   - THE PITCH SIGN. c.baPitch > 0 is a DIVE: game.js's axEstSm is NEGATIVE
- *     under braking (updateCar: `braking ? -surfaceBrake * brakeLvl`) and the
+ *     under braking (updateCar: `braking ? -brakeDecel`) and the
  *     module negates it, which is what js/camera/vantage.js reads ("baPitch > 0
  *     = nose-down = braking"). game.js's BODY rotation took +pitch as nose-UP
  *     until 2026-10-02 — every car lifted its nose on the brakes — and this
