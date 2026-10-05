@@ -128,6 +128,13 @@
         place(K(s - 0.0016), 1, gap, [0.35, 2.3, 1.6], AC_RED);  // fin
       };
 
+      // A windsock hangs at the TOP of its mast. It was a second place()d box
+      // 1.0 m tall, so after the 0.8 m sink it showed as a 20 cm orange stub on
+      // the grass beside the mast. `mastH` is the mast's place() height, so
+      // the sock sits 0.5 m under the mast's visible top.
+      const windsock = (k, side, gap, mastH, len) =>
+        seatBox(k, side, gap, [0.9, 0.9, len], ORANGE, mastH - 0.8 - 1.4);
+
       // Distance boards on the approach to a braking zone: three white
       // boards stepping back from the corner, the way a marshal post does.
       const boards = (s0, side, gap, step) => {
@@ -352,9 +359,9 @@
       marshalPost(K(0.068), -1, 20);
       cameraTower(K(0.070), -1, 24);
       building(K(0.058), -1, 26, 5, 3.6, 6, { col: FALU });   // marshal hut
-      place(K(0.043), -1, 23, [2.4, 1.3, 5.2], ORANGE);        // recovery truck
-      for (let i = 0; i < 4; i++) {
-        place(K(0.066 + i * 0.0030), -1, 22, [1.8, 1.4, 1.8], TYRE_K);
+      place(K(0.043), -1, 23, [2.4, 3.0, 5.2], ORANGE);        // recovery truck (2.2 m showing)
+      for (let i = 0; i < 3; i++) {   // clear of the camera tower's legs at 0.070
+        place(K(0.076 + i * 0.0030), -1, 22, [1.8, 2.0, 1.8], TYRE_K);
       }
       boards(0.045, -1, 12, 0.0124);
       forestEdge(0.030, 0.095, -1, 22, { col: PINE, spacing: 12 });
@@ -380,9 +387,9 @@
       // the paddock hardstanding slope (ground-audit). Corrugated sheds +
       // broadcast already carry the working-paddock mass (estoril pattern).
       place(K(0.104), 1, 40, [2.6, 2.6, 6.0], STEEL);        // fuel bowser
-      place(K(0.118), 1, 42, [2.2, 1.1, 4.4], DRUM);
+      place(K(0.118), 1, 42, [2.2, 1.9, 4.4], DRUM);
       for (let i = 0; i < 6; i++) {
-        place(K(0.094 + i * 0.0080), 1, 37, [1.2, 1.0, 1.2], i % 2 ? DRUM : ORANGE);
+        place(K(0.094 + i * 0.0080), 1, 37, [1.2, 1.7, 1.2], i % 2 ? DRUM : ORANGE);
       }
       place(K(0.136), 1, 66, [4.6, 11, 4.6], ALU);           // fuel silo
       place(K(0.136), 1, 74, [3.0, 7.5, 3.0], STEEL);
@@ -448,8 +455,8 @@
       forestEdge(0.225, 0.300, -1, 16, { col: PINE, spacing: 12 });
       building(K(0.245), -1, 16, 5, 4.0, 7, { col: TIMBER });
       building(K(0.268), -1, 18, 4, 3.2, 5, { col: FALU });
-      place(K(0.256), -1, 17, [2.0, 1.6, 6.0], TIMBER);        // stacked cordwood
-      place(K(0.262), -1, 17, [2.0, 1.4, 5.0], TIMBER);
+      place(K(0.256), -1, 17, [2.0, 2.2, 6.0], TIMBER);        // stacked cordwood
+      place(K(0.262), -1, 17, [2.0, 2.0, 5.0], TIMBER);
       groundPatch(K(0.252), -1, 13, [7, 0.18, 34], HARDSTAND); // access track
       groundPatch(K(0.272), -1, 13, [7, 0.16, 34], HARDSTAND);
       marshalPost(K(0.252), -1, 12);
@@ -482,7 +489,7 @@
       building(K(0.356), -1, 38, 7, 5.5, 9, { col: CORR_BLUE });  // scoreboard
       building(K(0.310), -1, 40, 5, 3.6, 7, { col: FALU });       // marshal hut
       for (let i = 0; i < 3; i++) {
-        place(K(0.352 + i * 0.0028), -1, 24, [1.8, 1.4, 1.8], TYRE_K);
+        place(K(0.352 + i * 0.0028), -1, 24, [1.8, 2.0, 1.8], TYRE_K);
       }
       billboard(K(0.366), -1, 18, 8, 3.2, [0.82, 0.76, 0.34]);
       boards(0.328, -1, 14, 0.0124);
@@ -530,7 +537,7 @@
       groundPatch(K(0.506), -1, 12, [12, 0.20, 30], SAND_D);
       fence(0.450, 0.538, -1, 18, 1.6, [0.58, 0.60, 0.58]);
       for (let i = 0; i < 3; i++) {
-        place(K(0.522 + i * 0.0026), -1, 19, [1.8, 1.4, 1.8], TYRE_K);
+        place(K(0.522 + i * 0.0026), -1, 19, [1.8, 2.0, 1.8], TYRE_K);
       }
       sponsorHoarding(0.452, 0.472, -1, 16, {});
       for (let i = 0; i < 18; i++) {
@@ -611,7 +618,7 @@
         place(K(t), -1, 36, [0.36, 0.9, 0.36], TRIM);
       }
       place(K(0.574), 1, 36, [0.30, 8.5, 0.30], TRIM);     // windsock mast
-      place(K(0.574), 1, 36, [1.0, 1.0, 3.6], ORANGE);     // sock, low on the mast
+      windsock(K(0.574), 1, 36, 8.5, 3.6);
 
       // --------------------------------------------------------------- 13.
       // 0.640 +1 — AIRFIELD APRON PROPER. Two large corrugated hangars (doors
@@ -674,10 +681,10 @@
       }
       // Hangar-front clutter: drums, crates, a fuel bowser, a tug.
       for (let i = 0; i < 8; i++) {
-        place(K(0.604 + i * 0.0130), 1, 48, [1.2, 1.0, 1.2], i % 3 ? DRUM : ORANGE);
+        place(K(0.604 + i * 0.0130), 1, 48, [1.2, 1.7, 1.2], i % 3 ? DRUM : ORANGE);
       }
       place(K(0.622), 1, 48, [2.4, 2.2, 5.4], STEEL);   // fuel bowser
-      place(K(0.682), 1, 48, [1.8, 1.4, 3.0], ORANGE);  // tug
+      place(K(0.682), 1, 48, [1.8, 2.4, 3.0], ORANGE);  // tug
       place(K(0.694), 1, 66, [4.2, 9.0, 4.2], ALU);     // avgas tank
       // Pine closes the airfield off at the back — far enough that the
       // corridor still reads open, near enough that it is not sky behind.
@@ -725,7 +732,7 @@
       building(K(0.780), -1, 124, 8, 5, 12, { col: FALU_D });
       place(K(0.772), -1, 118, [4.0, 10, 4.0], ALU);            // silo
       place(K(0.700), -1, 44, [0.30, 8.0, 0.30], TRIM);         // windsock mast
-      place(K(0.700), -1, 44, [1.0, 1.0, 3.4], ORANGE);
+      windsock(K(0.700), -1, 44, 8.0, 3.4);
       for (let i = 0; i < 14; i++) {   // grass-strip edge markers
         const s = RW0 + 0.014 + (i / 13) * (RW1 - RW0 - 0.028);
         seatBox(K(s), -1, 50, [0.7, 0.55, 0.7], PAINT, 0.08);   // strip marker on grass
@@ -733,7 +740,7 @@
       building(K(0.712), -1, 78, 8, 4.0, 12, { col: CORR_RUST });  // strip hut
       building(K(0.828), -1, 74, 7, 3.6, 10, { col: TIMBER });
       place(K(0.820), -1, 44, [0.30, 7.5, 0.30], TRIM);            // second sock
-      place(K(0.820), -1, 44, [1.0, 1.0, 3.2], ORANGE);
+      windsock(K(0.820), -1, 44, 7.5, 3.2);
       marshalPost(K(0.740), -1, 30);
       marshalPost(K(0.680), -1, 30);
       marshalPost(K(0.800), -1, 30);
@@ -756,7 +763,7 @@
       groundPatch(K(0.858), 1, 12, [16, 0.16, 26], GRASS);
       groundPatch(K(0.866), 1, 16, [14, 0.20, 22], GRASS_S);
       for (let i = 0; i < 4; i++) {
-        place(K(0.806 + i * 0.0060), 1, 33, [1.2, 1.0, 1.2], i % 2 ? DRUM : STEEL);
+        place(K(0.806 + i * 0.0060), 1, 33, [1.2, 1.7, 1.2], i % 2 ? DRUM : STEEL);
       }
       billboard(K(0.856), 1, 20, 9, 3.6, [0.78, 0.30, 0.22]);
       marshalPost(K(0.830), 1, 24);
@@ -786,7 +793,7 @@
         if (h > 0.70) farPine(k, -1, 50 + h * 16, 15 + h * 9, PINE_B);
       }
       for (let i = 0; i < 3; i++) {
-        place(K(0.900 + i * 0.0026), -1, 20, [1.8, 1.4, 1.8], TYRE_K);
+        place(K(0.900 + i * 0.0026), -1, 20, [1.8, 2.0, 1.8], TYRE_K);
       }
 
       // --------------------------------------------------------------- 17.
