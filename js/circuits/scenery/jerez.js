@@ -498,15 +498,22 @@
       // 14. CURVA ANGEL NIETO  (0.7123, -1, 26)
       //     Terrace returns as the stadium section opens up, with hoarding
       //     and a camera tower; guardrail and tyre wall at the edge.
-      // Terrace returns as the stadium opens. Was gap 25 with a 3.2 m
-      // unsupported span over a dip — spectatorHill only here (no terrace
-      // flight) keeps the bank without a floating slab.
+      // Terrace slab still skips the unsupported dip (was gap 25 / 3.2 m
+      // float) — the packed ochre spectatorHill is the MotoGP amphitheatre
+      // bank (was HILL_BARE density 0.06 = empty earth). Satellite / OSM:
+      // continuous tan hillside seating into Peluqui.
+      // https://www.openstreetmap.org/#map=16/36.7085/-6.0341
+      // https://www.google.com/maps/@36.7085,-6.0341,16z/data=!3m1!1e3
       sponsorHoarding(0.6920, 0.7420, -1, 14);
       cameraTower(K(0.7060), -1, 23);
       guardrail(0.6860, 0.7500, -1, 10, ARMCO);
       tyreWall(0.7000, 0.7280, -1, 11, TYRE_CAP);
       marshalPost(K(0.7180), -1, 16);
-      spectatorHill(0.6940, 0.7400, -1, 48, HILL_BARE);
+      // MotoGP amphitheatre bank — was HILL_BARE density 0.06 (empty earth).
+      // density 0.18 packs the ochre hillside within the props-tris +0.5 %
+      // ratchet (full HILL 0.45 overruns after Ovni+tower return).
+      spectatorHill(0.6940, 0.7400, -1, 48,
+        { grass: OCHRE, riser: DUST, rows: 5, rise: 1.2, density: 0.18 });
       groundPatch(K(0.7123), -1, 54, slab(36, 150), DUST);
       kiosks(0.6980, -1, 58, 6, 31);
       carPark(0.7000, -1, 84, 14, 2, 37);
@@ -609,17 +616,21 @@
       // Official circuit site + Box Repsol: the 2002 VIP viewing platform over
       // the finish line, 530 m² / ~120 guests, nicknamed "UFO". Relocated via
       // sl() onto the pit-side finish without touching startFrac /
-      // sceneryStartFrac. Low-seg solids keep the props-tris ratchet.
+      // sceneryStartFrac. Gap 28 (was 18): modelGroup preflight treats the
+      // engine pit-complex band as superseded, so the required group at gap 18
+      // never emitted (measured: suppressed "superseded by the pit complex").
+      // R=10 keeps the declared footprint clear at that seat (R=11 needs gap 30).
+      // Low-seg solids keep the props-tris ratchet.
       // https://circuitodejerez.com/en/circuito/
       // https://www.boxrepsol.com/en/motogp-en/jerez-much-more-than-the-motorcycle-capital-of-the-world/
       {
-        const a = anchor(K(sl(0.002)), 1, 18);
+        const a = anchor(K(sl(0.002)), 1, 28);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
-          const R = 11, STEM = 10;
+          const R = 10, STEM = 10;
           const OVNI_W = [0.93, 0.93, 0.91], OVNI_S = [0.80, 0.80, 0.78];
           const OVNI_G = [0.16, 0.22, 0.28];
-          const base = vadd(a.c, a.r, -3);
+          const base = vadd(a.c, a.r, -2);
           modelGroup("jerez-ovni", {
             center: vadd(base, a.u, STEM * 0.62),
             size: [R * 2 + 3, STEM + 8, R * 2 + 3], basis: b,
@@ -642,10 +653,11 @@
 
       // ── CONTROL TOWER + TÍO PEPE ─────────────────────────────────────────
       // Box Repsol: 30 m race-control tower crowned by the ~8 m Tío Pepe
-      // bottle-figure mascot, at the pit control box's spot (gap ~14). Exact
-      // bottle art UNCERTAIN — silhouette only.
+      // bottle-figure mascot. Gap 24 (was 14): gap 14 sat onTrack and the
+      // whole modelGroup was skipped with no diagnostics — required landmark
+      // silently absent. Exact bottle art UNCERTAIN — silhouette only.
       {
-        const a = anchor(K(sl(0.012)), 1, 14);
+        const a = anchor(K(sl(0.012)), 1, 24);
         if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const H = 28, R = 3.6;

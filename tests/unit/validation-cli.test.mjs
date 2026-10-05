@@ -243,7 +243,7 @@ test("importer does not claim success when source has no requested circuit cover
 });
 
 test("lighting snapshots share exact profile/knob/range/grid validation", () => {
-  assert.deepEqual(validatePresets({ "monza|night|wet": { keyMul: 1.005 }, "*|dusk": { keyMul: 1 }, "custom-1234abcd|day|dry": { keyMul: 1 } }), []);
+  assert.deepEqual(validatePresets({ "monza|night|wet": { keyMul: 1.005 }, "*|dusk": { keyMul: 1 }, "*|dawn|dry": { ambientMul: 0.5 }, "custom-1234abcd|day|dry": { keyMul: 1 } }), []);
   for (const obj of [{ invalid: { keyMul: 1 } }, { "monza|night|wet": { typo: 1 } }, { "monza|day|dry": { keyMul: 100 } }, { "monza|day|dry": { keyMul: 1.0001 } }])
     assert.ok(validatePresets(obj).length > 0);
   assert.deepEqual(presetChanges({ z: { keyMul: 1 }, a: { keyMul: 1 } }, { a: { keyMul: 2 }, b: {} }), { added: ["b"], deleted: ["z"], changed: ["a"] });

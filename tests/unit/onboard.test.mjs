@@ -253,3 +253,20 @@ test("the race budget survives a reload: two races in one session, a third start
   next.on.reset();
   assert.equal(next.stored.get("onboardRaces"), 0, "reset() gives the marks their two races back");
 });
+
+// UI-04 (hunt2): announce() drops "coach" lines on the TV cameras and on a
+// full queue (returns false). The mark was saved as seen BEFORE that answer,
+// so a first race on a TV camera spent BRAKE / OVERTAKE / ACTIVE AERO unseen.
+test("a mark the banner refuses stays unseen and fires once the banner accepts it", () => {
+  const a = load({ urgency: 0.9 });
+  let accept = false;
+  a.G.announce = (m, d) => { if (!accept) return false; a.said.push([m, d]); return true; };
+  step(a.on, 60);
+  assert.deepEqual(a.said, [], "nothing shown on a TV camera");
+  assert.equal(a.stored.get("onboarded") || 0, 0, "and nothing saved as seen");
+  accept = true;
+  step(a.on, 1, 1.1);
+  assert.equal(a.said.length, 1, "the retry lands once the banner takes coach lines again");
+  assert.match(a.said[0][0], /^BRAKE/);
+  assert.equal(a.stored.get("onboarded") & 1, 1, "saved only now");
+});

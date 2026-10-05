@@ -201,6 +201,23 @@ test("a foreign season save conflicts before standings mutate or stale data writ
   assert.equal(stored.get("season"), winner);
 });
 
+test("a refused award clears last round's fastest-lap recipient, so the sheet paints no stale +FL", () => {
+  // award() returned on the save conflict BEFORE `delete season.lastFl`, and the
+  // results sheet still showed +FL (+1 pt) for last round's holder (bug hunt 2026-10-05 G9).
+  const { S, stored, foreign } = load({
+    seasonCfg: { trackIds: ["monza", "monaco"], flPoint: true },
+    season: { round: 1, pts: { d0: 26 }, teamPts: {}, driverCodes: {}, lastFl: "d0" },
+  });
+  S.engage("season");
+  const local = S.load();
+  assert.equal(local.lastFl, "d0", "precondition: last round's recipient is on the season");
+  stored.set("season", { round: 2, pts: {}, teamPts: {}, driverCodes: {}, config: local.config });
+  foreign("season");
+  assert.equal(S.award(local, field(2), "d0"), null, "the conflict refuses the award");
+  assert.equal(local.lastFl, undefined, "…and no +FL survives it");
+  assert.equal(local.pts.d0, 26, "standings untouched");
+});
+
 test("setup apply refuses a foreign season before changing active rules", () => {
   const { S, stored, foreign } = load({ seasonCfg: { trackIds: ["monza"], points: "modern" },
     season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
@@ -569,6 +586,39 @@ test("a retired fastest-lap setter earns nothing, and a career never pays the po
   assert.equal(c.pts.d0, 25, "career pays the plain table whatever the season format says");
 });
 
+test("a race nobody took the flag in pays the shortened-race scale by the leader's laps (FIA SR Art. 6.5/6.6)", () => {
+  // The only human retiring ends the session 2.2 s later (RaceControl.finishDelay):
+  // the AI field was paid the FULL table from a lap-1 snapshot (bug hunt 2026-10-05 G1).
+  const { S } = load({ seasonCfg: { flPoint: true } });
+  S.engage("season");
+  const pay = (laps, of, fl) => { const s = S.blank(); S.award(s, field(11), fl, laps == null ? null : { laps, of }); return s; };
+  assert.equal(pay(1, 10).pts.d0 || 0, 0, "under two laps: no points");
+  assert.deepEqual([0, 4, 5].map((i) => pay(2, 10).pts["d" + i] || 0), [6, 1, 0], "2 laps to 25 %: column 1, top five");
+  assert.deepEqual([0, 8, 9].map((i) => pay(4, 10).pts["d" + i] || 0), [13, 1, 0], "25-50 %: column 2, top nine");
+  assert.deepEqual([0, 3, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 10, 1], "50-75 %: column 3");
+  assert.equal(pay(8, 10).pts.d0, 25, "75 % or more: the full table");
+  assert.equal(pay(null).pts.d0, 25, "a race that saw the flag is never shortened");
+  assert.equal(pay(4, 10, "d0").lastFl, undefined, "no fastest-lap point below 50 %");
+  assert.equal(pay(5, 10, "d0").pts.d0, 19 + 1, "the point is back from 50 %");
+  assert.deepEqual(Array.from(S.payTable(S.SPRINT_POINTS, "sprint", { laps: 2, of: 5 })), [], "a sprint pays nothing below 50 %");
+  assert.equal(S.payTable(S.SPRINT_POINTS, "sprint", { laps: 3, of: 5 }), S.SPRINT_POINTS, "and the full sprint table from 50 %");
+  assert.deepEqual(Array.from(S.payTable(S.CLASSIC_POINTS, "race", { laps: 5, of: 10 })), [5, 3, 2, 1.5, 1, 0.5], "the classic table pays half below 75 %");
+});
+
+test("roundLaps: NEXT ROUND's distance is the format's laps clamped to the circuit's FULL; a sprint weekend's GP keeps its own", () => {
+  const { S } = load({ seasonCfg: { laps: 57 } });
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.roundLaps(57, season, 52), 52, "clamped to a shorter FULL");
+  assert.equal(S.roundLaps(52, season, 66), 57, "a value clamped at a short circuit does not stick: back to the format's 57");
+  assert.equal(S.roundLaps(57, season, null), 57, "no FULL known: the format distance");
+  const sp = load({ seasonCfg: { laps: 57, sprint: true } });
+  sp.S.engage("season");
+  const wk = sp.S.blank();
+  sp.S.award(wk, field(3));                               // the sprint pays; the GP is next, same circuit
+  assert.equal(sp.S.roundLaps(25, wk, 66), 25, "mid-weekend: the Grand Prix keeps the weekend's distance");
+});
+
 test("DROP WORST 2 ranks on the best rounds — countback and the gross total are both kept", () => {
   const { S } = load({ seasonCfg: { drop: 2 } });        // 8 rounds → the best 6 count
   S.engage("season");
@@ -802,6 +852,22 @@ test("a season with an unknown circuit races the stored round's circuit and is n
   assert.equal(whole.S.save(w).ok, true);
 });
 
+test("a calendar shrunk by an unknown circuit keeps roundPts aligned with the remapped round", () => {
+  // resume() re-read `round` as the known circuits raced but left roundPts on
+  // the stored indexes: netPts (dropped scores) read the wrong rounds, and the
+  // next award landed in a slot already used (bug hunt 2026-10-05 G10).
+  const raw = { round: 3, pts: { d0: 25 + 1 + 18 }, teamPts: {}, driverCodes: {},
+    roundPts: { d0: [25, 1, 18] },   // monza 25, the unknown circuit 1, monaco 18
+    config: { trackIds: ["monza", "nosuch", "monaco", "imola"], drop: 2 } };
+  const a = load({ season: raw });
+  a.S.engage("season");
+  const season = a.S.load();
+  assert.equal(season.round, 2, "monza and monaco raced");
+  assert.deepEqual(Array.from(season.roundPts.d0), [25, 18], "round 0 monza, round 1 monaco; the dropped circuit's round leaves");
+  a.S.award(season, field(2));                                     // imola: d0 wins
+  assert.deepEqual(Array.from(season.roundPts.d0), [25, 18, 25], "imola lands in its own slot, not on top of monaco's");
+});
+
 test("rankTeams: points, then the team's tier, then the id — one order for every constructors' table", () => {
   const { S } = load();
   const season = { teamPts: { b: 10, a: 10, c: 12, z: 10 } };
@@ -906,6 +972,39 @@ test("a standalone season stamps its own luck seed once, saves it, and a reload 
   assert.match(readFileSync(join(ROOT, "js/race/quali-model.js"), "utf8"), /SeasonCal\.luckSeed\(G\.season, G\.simSeed\(\)\)/);
 });
 
+// UI-02 (hunt2): the champion banner and the results sheet's DRIVERS list
+// ranked G.cars — this race's grid — while points are keyed by SEAT. A Season
+// raced partly as MY TEAM (custom:0) then switched to McLaren kept custom:0's
+// points in season.pts, off the grid: the banner crowned NOR while STANDINGS
+// (season.pts) showed the custom seat P1. Both now rank the season table.
+test("the champion is the season.pts leader even when that seat is no longer on the grid", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.blank();
+  Object.assign(season, { round: 3, pts: { "custom:0": 60, "mclaren:0": 40, "ferrari:0": 30 }, driverCodes: { "custom:0": "YOU" } });
+  const mk = (tag) => ({ tagName: tag, children: [], style: {}, className: "", textContent: "",
+    append(...c) { this.children.push(...c); }, appendChild(c) { this.children.push(c); return c; } });
+  const els = { resultsTitle: mk("h2"), resultsTable: mk("div"), resNext: mk("button") };
+  const said = [];
+  const G = {
+    els, season, soundOn: false, cssCol: () => "#f00", announce: (m) => said.push(m),
+    cars: [
+      { driverId: "mclaren:0", code: "NOR", name: "Norris", team: { name: "McLaren", color: [1, 0.5, 0] }, isPlayer: true },
+      { driverId: "ferrari:0", code: "LEC", name: "Leclerc", team: { name: "Ferrari", color: [1, 0, 0] } },
+    ],
+  };
+  const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
+  seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx);
+  ctx.GameResults.create(G).buildChampion();
+  assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
+  const rows = els.resultsTable.children.filter((r) => /res-row/.test(r.className));
+  assert.deepEqual(rows.map((r) => r.children[2].textContent), ["YOU", "NOR", "LEC"], "FINAL STANDINGS is every seat that scored");
+  assert.deepEqual(rows.map((r) => / you$/.test(r.className)), [false, true, false], "the player's row is marked, as on every other table");
+  assert.doesNotMatch(els.resultsTable.children[1].style.cssText, /#aaa/, "the team line reads theme tokens");
+  const sheet = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.match(sheet, /const all = seasonTable\(cars, season\)\.slice\(0, 10\);/, "the results DRIVERS list ranks the same table");
+});
 
 test("repeated menu loads preserve unknown calendar ids and keep every lossy view unsavable", () => {
   const raw = { round: 2, pts: { d0: 25 }, teamPts: {}, driverCodes: {},
