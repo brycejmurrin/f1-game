@@ -551,23 +551,40 @@ body:has(dialog[open]) #save-warning { display: none; }
    escape action in the title band. This matters most at UI SIZE 200%, where a
    landscape phone has only ~170 local vertical pixels. */
 #vsfriend-inner[data-density="compact"] { position: relative; }
+/* Absolute CLOSE is --tap-paint tall; the title band must clear it
+   (ui-redesign closeInHead). Flex-centre the title so a short h2 does not
+   leave CLOSE hanging past the head bottom. */
 #vsfriend-inner[data-density="compact"] > #vs-head {
   padding-right: calc(var(--pad) + var(--tap));
+  min-height: var(--tap-paint);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
 }
+/* top:0 (not pad*0.18): that inset pushed a --tap-paint CLOSE past a
+   title-sized head on 852×393 (Selected specs 2026-10-05). */
 #vsfriend-inner[data-density="compact"] > .sheet-foot {
-  position: absolute; top: calc(var(--pad) * 0.18); right: var(--pad); z-index: 3;
-  display: block; padding: 0; background: none;
+  position: absolute; top: 0; right: var(--pad); z-index: 3;
+  display: flex; align-items: center;
+  min-height: var(--tap-paint);
+  padding: 0; background: none;
 }
 #vsfriend-inner[data-density="compact"] > .sheet-foot::before { display: none; }
+/* --tap-paint, not --tap-min: layout-audit 2026-10-05 ios-iphone-landscape
+   734×343 measured #vs-close at 62×26 (soft under the 52 touch floor) and
+   HOST / JOIN at 285×44. Compact cannot afford --tap's local 52 (paints
+   56.7–104); --tap-paint holds 52 painted on touch and stays --tap-min
+   with a mouse (css/tokens.css). */
 #vsfriend-inner[data-density="compact"] #vs-close {
-  min-width: var(--tap); min-height: var(--tap-min); padding: 0 var(--gap);
+  min-width: var(--tap); min-height: var(--tap-paint); padding: 0 var(--gap);
   font-size: var(--fs-micro); line-height: 1;
+  box-sizing: border-box;
 }
 #vsfriend-inner[data-density="compact"] #vs-pick {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
 }
 #vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn {
-  min-height: var(--tap-min); padding: var(--gap); font-size: var(--fs-2);
+  min-height: var(--tap-paint); padding: var(--gap); font-size: var(--fs-2);
 }
 #vsfriend-inner[data-density="compact"] #vs-pick > .vs-hint,
 #vsfriend-inner[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
