@@ -203,6 +203,16 @@
         }
       }
 
+      // THE START-STRAIGHT FRONTAGE IS RE-KEYED THROUGH sl() (the brands_hatch
+      // idiom). This file's s = 0 is the scenery origin (sceneryStartFrac
+      // 0.495), not the start line: K(0.90..0.07) stood the pit blocks, the
+      // Racetrack Tower, the paddock gate, the pit wall and the Partenza
+      // stands at engine frac ~0.40-0.57, 2.4 km from the engine pit lane.
+      // sl(f) lands at engine frac f. The engine pit complex is on the LEFT
+      // (imola.js `pit.side: -1`, docs/tracks/imola.md), so pit-side stands
+      // and the tower stand behind its ~30 m keep-out (gap 34 / 36).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
       // The pit complex, as SIX blocks behind the pit wall rather than one
       // 130 m slab at gap 1. The single call emitted NOTHING — verified by
       // vertex count, which is identical with the line deleted — because it
@@ -218,29 +228,29 @@
       // This is why the roofline wordmark below floated: there was never any
       // roof under it.
       for (let i = 0; i < 6; i++) {
-        building(K(0.9825 + i * 0.0070), -1, 20, 16, 11, 20,
+        building(K(sl(0.9825 + i * 0.0070)), -1, 20, 16, 11, 20,
                  { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
       }
-      prop(K(0.01), -1, 7, [2.5, 1.6, 120], RED);
+      prop(K(sl(0.01)), -1, 7, [2.5, 1.6, 120], RED);
       // Pit-side stands (Tilke 2006–07 complex). Rows rise away from the track
       // via grandstandEx; legacy grandstand() already delegated, but the opts
       // keep crimson / concrete liveries on the Ferrari-home palette.
       // Sources: wikipedia.org/wiki/Imola_Circuit (pit rebuild); autodromoimola.it
       // WEC 2024 grandstand map (Partenza opposite the pits).
-      grandstandEx(0.965, -1, 10, 90, null, null,
+      grandstandEx(sl(0.965), -1, 34, 90, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(0.93, -1, 10, 70, null, null,
+      grandstandEx(sl(0.93), -1, 34, 70, null, null,
         { livery: "concrete", roof: "flat" });
       // Partenza rank — opposite the pit building (+1). Long covered main stand
       // plus a shorter neighbour toward Tamburello.
-      grandstandEx(0.02,  1, 22, 80, null, null,
+      grandstandEx(sl(0.02),  1, 22, 80, null, null,
         { livery: "crimson", roof: "cantilever" });
-      grandstandEx(0.05,  1, 20, 70, null, null,
+      grandstandEx(sl(0.05),  1, 20, 70, null, null,
         { livery: "sandstone", roof: "cantilever" });
       // Wave-6 hero: Partenza fascia marker facing the Tilke pit building.
       // Compact identity only — live seating is grandstandEx above.
       {
-        const a = anchor(K(0.025), 1, 28);
+        const a = anchor(K(sl(0.025)), 1, 28);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
           const SHELL = [0.54, 0.56, 0.60];
@@ -327,15 +337,13 @@
       });
 
       {
-        const a = anchor(K(0.00), -1, 12);
+        const a = anchor(K(sl(0.00)), -1, 12);
         addBox(out, vadd(a.c, a.u, 12), [18, 0.7, 120], [0.66, 0.68, 0.70], [a.r, a.u, a.t]);
       }
 
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
       // alone put the gantry — and the start lamps it carries — 2.4 km away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       gantry(sl(0.00), 7.5, [0.14, 0.14, 0.17]);
       gantry(0.965, 7.0, [0.18, 0.18, 0.20]);
 
@@ -354,12 +362,12 @@
           t += w + ((i % 7 === 6) ? 2.6 : 0.75);   // wider break = word break
         }
       };
-      wordmark(anchor(K(0.005), -1, 19.5), 11.3, 88, 2.6, [0.95, 0.94, 0.90]);
+      wordmark(anchor(K(sl(0.005)), -1, 19.5), 11.3, 88, 2.6, [0.95, 0.94, 0.90]);
 
       // Paddock gate portal — two crimson piers carrying the same wordmark, set
       // well behind the pit block so the footprint never reaches the road.
       {
-        const g = anchor(K(0.928), -1, 34), gb = [g.r, g.u, g.t];
+        const g = anchor(K(sl(0.928)), -1, 34), gb = [g.r, g.u, g.t];
         modelGroup("imola-paddock-gate", {
           center: vadd(g.c, g.u, 5.5), size: [4, 12, 26], basis: gb,
         }, (stage) => {
@@ -376,13 +384,13 @@
         });
       }
 
-      building(K(0.97), -1, 18, 14, 7, 90, { kind: "hall", wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
-      building(K(0.90), -1, 20, 22, 9, 40, { kind: "chevron", wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, lit: true });
-      building(K(0.94), -1, 46, 30, 12, 34, { kind: "podium", wall: STONE, window: WIN_LIT, floor: 4, lit: true });
+      building(K(sl(0.97)), -1, 18, 14, 7, 90, { kind: "hall", wall: PITWALL, window: WIN_LIT, floor: 4, lit: true });
+      building(K(sl(0.90)), -1, 20, 22, 9, 40, { kind: "chevron", wall: [0.66, 0.67, 0.70], window: WIN_LIT, floor: 4, lit: true });
+      building(K(sl(0.94)), -1, 46, 30, 12, 34, { kind: "podium", wall: STONE, window: WIN_LIT, floor: 4, lit: true });
       {
-        const aA = anchor(K(0.92), -1, 56);
+        const aA = anchor(K(sl(0.92)), -1, 56);
         addCyl(out, aA.c, 2.0, 13, [0.60, 0.56, 0.48], 8, [aA.r, aA.u, aA.t]);
-        const aB = anchor(K(0.92), -1, 63);
+        const aB = anchor(K(sl(0.92)), -1, 63);
         addCyl(out, aB.c, 1.6, 11, [0.78, 0.74, 0.60], 8, [aB.r, aB.u, aB.t]);
       }
       (function racetrackTower() {
@@ -393,7 +401,7 @@
         // 22–33 m (gaps between floor slabs tripped ground-audit's unsupported
         // BFS). One continuous shaft + flush glass + roof cabin that touch.
         const rcSide = -1;
-        const a = anchor(K(0.99), rcSide, 18);
+        const a = anchor(K(sl(0.99)), rcSide, 48);
         if (onTrack(a.c[0], a.c[2], 8)) return;
         const b = [a.r, a.u, a.t];
         // Seat the pad on sampled terrain — anchor raycast can sit slightly
@@ -444,7 +452,7 @@
           stage._mat = 0;
         }, { required: true });
       })();
-      wall(0.95, 0.06, -1, 2, 1.0, PITWALL, 0.5);
+      wall(sl(0.95), sl(0.06), -1, 2, 1.0, PITWALL, 0.5);
 
       {
         const at = anchor(K(0.02), -1, 110);

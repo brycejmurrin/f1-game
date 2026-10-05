@@ -20,8 +20,9 @@ const F1Transport = (function () {
     const MINUTE = 60 * 1000;
     const CACHE_SWEEP_MS = 5 * MINUTE;     // a response batch must not rescan localStorage per item
 
-    let queue = Promise.resolve();        // promise chain serializing network hits
-    let lastNetAt = 0;                    // time of last actual fetch start
+    // OpenF1's minute budget must not block an unrelated Jolpica request.
+    const openF1Lane = { queue: Promise.resolve(), lastNetAt: 0 };
+    const otherLane = { queue: Promise.resolve(), lastNetAt: 0 };
     // OPENF1'S FREE TIER IS 30 REQUESTS A MINUTE (and 3/s — https://openf1.org/).
     // MIN_GAP_MS alone allowed ~150/min: a 4-lane TELEMETRY compare is ~18
     // requests, two in a minute tripped 429s whose +10 s/+20 s retries landed in
@@ -30,6 +31,7 @@ const F1Transport = (function () {
     const OPENF1_PER_MIN = 28, _of1Recent = [];
     let netGen = 0;                       // bumped by cancelAll(); a request born before it is stale
     const liveControllers = new Set();    // AbortControllers of fetches on the wire
+    const pendingWaits = new Set();       // cancellation hooks for pacing / retry sleeps
     const inFlight = new Map();           // generation + cache policy + URL -> shared request Promise
     const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
     const FAIL_WARN_MS = 30 * 1000;
@@ -166,7 +168,7 @@ const F1Transport = (function () {
 
     // Own the entire attempt, including reading/parsing the body. fetch() itself
     // resolves at headers; timing only that Promise leaves a stalled response
-    // body holding the one global queue slot forever.
+    // body holding its provider's queue slot forever.
     function fetchTimed(url, consume) {
       const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (controller) liveControllers.add(controller);
@@ -186,7 +188,7 @@ const F1Transport = (function () {
       try { network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(consume); }
       catch (e) { network = Promise.reject(e); }
       // Promise.race is intentional even with AbortController: a broken fetch
-      // or body implementation that ignores abort must release the global queue.
+      // or body implementation that ignores abort must release its provider queue.
       return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).finally(function () {
         clearTimeout(timer);
         if (controller) {
@@ -197,11 +199,13 @@ const F1Transport = (function () {
     }
 
     // Single attempt: status/error handling only. Retries live in request(), where
-    // the backoff sleep happens OUTSIDE the serialized queue slot — inside it, one
+    // the backoff sleep happens OUTSIDE the provider's queue slot — inside it, one
     // 429 stalled every other endpoint behind up to ~75 s of pure sleeping
     // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
-    function fetchOnce(url) {
-      lastNetAt = Date.now();
+    function fetchOnce(url, lane) {
+      lane.lastNetAt = Date.now();
+      // Count actual attempts, never a reservation cancelled during pacing.
+      if (lane === openF1Lane) _of1Recent.push(lane.lastNetAt);
       return fetchTimed(url, function (res) {
         if (!res.ok) {
           // Retry-After is NOT a CORS-safelisted response header, so on a
@@ -263,8 +267,20 @@ const F1Transport = (function () {
       return e;
     }
 
+    function waitForRequest(ms, url) {
+      return new Promise(function (resolve, reject) {
+        const cancel = function () {
+          clearTimeout(timer); pendingWaits.delete(cancel);
+          reject(cancelledError(url));
+        };
+        const timer = setTimeout(function () { pendingWaits.delete(cancel); resolve(); }, ms);
+        pendingWaits.add(cancel);
+      });
+    }
+
     function request(url, ttl, options) {
       const myGen = netGen;
+      const lane = url.indexOf(OPENF1) === 0 ? openF1Lane : otherLane;
       const cache = !options || options.cache !== false;
       const quiet = ttl <= 0 || (options && options.cache === false);
       const name = endpointName(url);
@@ -289,24 +305,23 @@ const F1Transport = (function () {
       // queued one never waits or fetches, an aborted one never retries or
       // sleeps, a late completion never reaches the caller.
       function attempt(n) {
-        const slot = queue
+        const slot = lane.queue
           .then(function () {
             if (myGen !== netGen) throw cancelledError(url);
-            let wait = lastNetAt + MIN_GAP_MS - Date.now();
-            if (url.indexOf(OPENF1) === 0) {
+            let wait = lane.lastNetAt + MIN_GAP_MS - Date.now();
+            if (lane === openF1Lane) {
               const now = Date.now();
               while (_of1Recent.length && now - _of1Recent[0] >= 60000) _of1Recent.shift();
               if (_of1Recent.length >= OPENF1_PER_MIN) wait = Math.max(wait, _of1Recent[0] + 60000 - now + 50);
-              _of1Recent.push(now + Math.max(0, wait));
             }
-            if (wait > 0) return new Promise(function (res) { setTimeout(res, wait); });
+            if (wait > 0) return waitForRequest(wait, url);
             return null;
           })
           .then(function () {
             if (myGen !== netGen) throw cancelledError(url);
-            return fetchOnce(url);
+            return fetchOnce(url, lane);
           });
-        queue = slot.then(function () {}, function () {});
+        lane.queue = slot.then(function () {}, function () {});
         return slot.catch(function (err) {
           if (myGen !== netGen) throw cancelledError(url);
           const status = err && err.status;
@@ -314,7 +329,7 @@ const F1Transport = (function () {
             const ra = (err && err.retryAfterMs) || 0;
             if (ra > RETRY_AFTER_MAX_MS) throw err;   // server wants longer than a tab will wait: fail fast, same error shape
             const back = ra || Math.min(RETRY_BASE_MS * Math.pow(2, n), RETRY_CAP_MS);
-            return new Promise(function (r) { setTimeout(r, back); }).then(function () { return attempt(n + 1); });
+            return waitForRequest(back, url).then(function () { return attempt(n + 1); });
           }
           throw err;
         });
@@ -349,15 +364,15 @@ const F1Transport = (function () {
       return job;
     }
 
-    // Drop every request born before now: abort the fetches on the wire, and let
-    // queued / backing-off / late-completing ones fall out at their next
-    // generation check. DataHub.close() calls this so a reopened tab is not
-    // queued behind 15 s timeouts and 60 s 429 backoffs nobody will ever render.
+    // Drop every request born before now: cancel pacing/backoff waits and
+    // abort fetches. Queued / late-completing work fails its generation check.
+    // Keep actual attempt timestamps: reopening never resets server quotas.
     function cancelAll() {
       netGen++;
       // A reopen must create fresh work immediately, even while the aborted
       // Promise is still unwinding through fetch/queue cleanup.
       inFlight.clear();
+      pendingWaits.forEach(function (cancel) { cancel(); });
       let aborted = 0;
       liveControllers.forEach(function (c) {
         try { c.abort(); aborted++; } catch (e) { /* already settled */ }

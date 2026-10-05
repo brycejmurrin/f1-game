@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// @doc Shoot every menu/popup plus the Display survey into one preview HTML page.
+// @doc Every menu and popup, then the Display survey, into one HTML preview.
 // show-menus.mjs — every menu and popup, then the Display survey, into the preview.
-// @doc Every menu and popup, then Display and its panels, into one HTML preview: `show-menus.mjs`.
+// @doc Shoot every menu/popup plus the Display survey into one preview HTML page.
 // @skill playwright-probe
 //
 //   node tools/shot/show-menus.mjs
@@ -106,7 +106,7 @@ async function resetToTitle(page, base) {
   });
   if (!ok) {
     await page.goto(base, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 90000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { timeout: 90000 });
     await page.waitForTimeout(400);
   }
 }
@@ -155,7 +155,7 @@ try {
       await page.click("#mb-settings");
       await page.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await page.evaluate(() => document.getElementById("pm-open-appearance")?.click());
-      await page.waitForFunction(() => !document.getElementById("pm-panel-appearance").hidden, null, { polling: 100, timeout: 15000 });
+      await page.waitForFunction(() => !document.getElementById("pm-panel-appearance").hidden, null, { timeout: 15000 });
       await save(page, "appearance", "Appearance");
     } catch (err) {
       console.error("fail appearance", err.message);
@@ -167,7 +167,7 @@ try {
   if (!only.size || only.has("hud")) {
     try {
     await page.evaluate(async () => { await window.__apex.race("monza"); });
-    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 90000 });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 90000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); window.__apex.snapCam(); });
     await page.waitForTimeout(600);
     await save(page, "hud", "In-race HUD");
@@ -177,9 +177,9 @@ try {
     await save(page, "pause", "Pause");
 
     await page.evaluate(() => document.getElementById("pm-settings")?.click());
-    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 15000 });
     await page.evaluate(() => document.getElementById("pm-open-display")?.click());
-    await page.waitForFunction(() => !document.getElementById("pm-panel-display").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("pm-panel-display").hidden, null, { timeout: 15000 });
     await save(page, "display-race", "Display during a race");
 
     await page.evaluate(() => {
@@ -190,7 +190,7 @@ try {
     await page.waitForTimeout(200);
 
     await page.evaluate(() => document.getElementById("pm-lighting")?.click());
-    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { timeout: 15000 });
     await page.waitForTimeout(400);
     await save(page, "lighting", "Lighting tuner");
     await page.evaluate(() => document.getElementById("lt-close")?.click());
@@ -198,14 +198,14 @@ try {
 
     await page.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
     await page.evaluate(() => document.getElementById("pm-settings")?.click());
-    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 15000 });
     await page.evaluate(() => {
       if (!document.getElementById("pm-visual-tuners")?.open) {
         document.querySelector("#pm-visual-tuners > summary")?.click();
       }
     });
     await page.evaluate(() => document.getElementById("pm-camtune")?.click());
-    await page.waitForFunction(() => !document.getElementById("camtune").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("camtune").hidden, null, { timeout: 15000 });
     await page.waitForTimeout(400);
     await save(page, "cameratuner", "Camera tuner");
     await page.evaluate(() => document.getElementById("ct-close")?.click());
@@ -213,14 +213,14 @@ try {
 
     await page.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
     await page.evaluate(() => document.getElementById("pm-settings")?.click());
-    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 15000 });
     await page.evaluate(() => {
       if (!document.getElementById("pm-visual-tuners")?.open) {
         document.querySelector("#pm-visual-tuners > summary")?.click();
       }
     });
     await page.evaluate(() => document.getElementById("pm-flyby")?.click());
-    await page.waitForFunction(() => !document.getElementById("flyby").hidden, null, { polling: 100, timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("flyby").hidden, null, { timeout: 15000 });
     await page.waitForTimeout(400);
     await save(page, "flyby", "Flyby editor");
   } catch (err) {

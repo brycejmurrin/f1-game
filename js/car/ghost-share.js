@@ -11,13 +11,32 @@ const GhostShare = (function () {
   let guestSlot = null;
   const atOut = { s: 0, x: 0, done: false };
 
+  // THE CLAIMED TIME IS THE TRACE'S OWN. validGhost checked `time > 0` and
+  // nothing else, so an edited link could show any "best time" against an
+  // ordinary trace. A recorded ghost ends within one sample (1/HZ) of its lap
+  // time (js/car/ghost.js), and thinning keeps both ends, so the last sample
+  // must sit within TIME_SLACK of the claim. The envelope also carries `h`, a
+  // hash of the time AND the trace together: a link edited by hand (time or
+  // samples) no longer matches it. Old links without `h` still load when
+  // their time binds to the trace. Not a signature — a casual-edit guard for
+  // an in-memory guest rival with no leaderboard behind it.
+  const TIME_SLACK = 0.25;
   function validGhost(g) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
     const t = g.t, s = g.s, x = g.x;
     if (!Array.isArray(t) || !Array.isArray(s) || !Array.isArray(x) ||
         s.length < MIN_SAMPLES || t.length !== s.length || x.length !== s.length) return false;
+    if (!(Math.abs(g.time - t[t.length - 1]) <= TIME_SLACK)) return false;
     return t.every((v, i) => Number.isFinite(v) && Number.isFinite(s[i]) && Number.isFinite(x[i]) &&
       v >= 0 && (i === 0 || (v >= t[i - 1] && s[i] >= s[i - 1])));
+  }
+  // FNV-1a (32-bit) over the JSON of [time, t, s, x]: JSON numbers round-trip
+  // exactly, so the receiver hashes the same text the sender did.
+  function traceHash(g) {
+    const text = JSON.stringify([g.time, g.t, g.s, g.x]);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(36);
   }
 
   function envelope(ghost, opts) {
@@ -34,6 +53,7 @@ const GhostShare = (function () {
       t: ghost.t,
       s: ghost.s,
       x: ghost.x,
+      h: traceHash(ghost),
     };
   }
 
@@ -179,6 +199,7 @@ const GhostShare = (function () {
   function fromBody(body) {
     if (!body || body.v !== 1 || body.kind !== "ghost" || !validGhost(body) ||
         typeof body.track !== "string" || !body.track) return CORRUPT;
+    if (body.h !== undefined && body.h !== traceHash(body)) return CORRUPT;   // time or trace edited after export
     if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
     return {
       ok: true,

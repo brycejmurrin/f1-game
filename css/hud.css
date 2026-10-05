@@ -100,6 +100,15 @@
   color: var(--dim);
 }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* A STABLE TOWER. .hud-top is a centred flex row, so any box that changes width
+   re-centres all of them: POS going 9/22 -> 10/22, LAP 9/58 -> 10/58, a lap
+   clock gaining its minute. Each slot holds its widest spelling (tabular
+   figures, so `ch` is a digit) and DELTA keeps its place while it waits for a
+   reference (js/ui/hud.js paintHudDelta: data-pending), instead of unhiding
+   half a box wide after lap 1. */
+#hud-pos, #hud-lap { min-width: 5ch; }
+#hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
+#hud-delta[data-pending] { visibility: hidden; }
 /* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
@@ -239,14 +248,25 @@
   width: 132px; height: 16px; border-radius: var(--r-md);
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff))); border: 1px solid rgba(255, 255, 255, 0.4);
   overflow: hidden; position: relative;
+  /* The fill's width is written at frame rate (js/ui/hud.js paintInstruments).
+     Every rule sizing this box gives it a fixed width AND height (here,
+     responsive.css, touch-controls.css), so size containment is free, and
+     strict keeps that per-frame write from dirtying layout/paint outside it. */
+  contain: strict;
 }
 #hud-tach::after {           /* redline zone marker */
   content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 12%;
   background: color-mix(in srgb, var(--red) 55%, transparent);
 }
+/* THE COLOURS ARE ON THE DIAL, NOT ON THE NEEDLE. The gradient used to span
+   the FILL's own box, whose width was the RPM, so the stops slid with it: at
+   half revs the bar was already yellow at its tip. Now the fill is the whole
+   tach, clipped at --rpm (js/ui/hud.js paintInstruments), so green is always
+   65 % and yellow 88 % of the range — and the redline zone above agrees. */
 #hud-rpm-fill {
-  height: 100%; width: 0%; position: relative; z-index: 1;
+  height: 100%; width: 100%; position: relative; z-index: 1;
   background: linear-gradient(90deg in oklab, #2ad1ff, #aeea00 65%, #ffd600 88%);
+  clip-path: inset(0 calc((1 - var(--rpm, 0)) * 100%) 0 0);
 }
 :root { --hud-pulse: 0.8s; }
 @keyframes pulse { 50% { opacity: 0.55; } }
@@ -610,10 +630,14 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 }
 #hud-pit[data-phase="near-box"]::after,
 #hud-pit[data-phase="stop"]::after { background: var(--you); }
-body.hud-met-timing #hud-pit,
-body.hud-met-compact #hud-pit { display: none !important; }
+/* TIMING and COMPACT drop the tyre chip, but never a PIT cue: #hud-pit is
+   hidden unless a cue is live (and is the only thing that makes the hold-to-pit
+   gesture discoverable, index.html), and the chip's data-pit states are the
+   only feedback that the dwell is registering. So the layouts reach the chip's
+   idle readout only; the player's own TYRE toggle still hides it outright. */
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
+body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyre[data-pit]:not([hidden]) { display: flex !important; }
 /* LAPS LEFT on the set (js/ui/hud.js sets data-laps from the tyre model):
    over the bar, in the code chip's ink, so it reads on fill and plate alike. */
 #hud-tyre-bar::after {
@@ -702,7 +726,7 @@ body.hud-met-compact #hud-tyre { display: none !important; }
    no height term) filled a quarter of a landscape phone under a HUD SIZE
    zoom. ~140x40 CSS px on an 844x390 phone, ~230x66 on 1280x720. */
 #hud-mirror {
-  --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px);
+  --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px);
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   left: 50%; transform: translateX(-50%);
@@ -741,7 +765,7 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
    mirror past its shipped box, and the max() follows it down, never up. */
 body.hud-mirror-on :is(#announce, #hud-flag) {
   --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
-  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36vh / var(--hud-z))), 300px) * 2 / 7),
+  --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px) * 2 / 7),
     calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
@@ -805,7 +829,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
 #hud-flag.flag-vsc { background: #ffb300; color: #201400;
   animation: pulse var(--hud-pulse) ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
-#hud-flag.flag-red { background: var(--slower); color: var(--text); }   /* the red flag: the session is stopped */
+/* THE RED FLAG: the session is stopped. A FIXED flag red, like the yellow and
+   the VSC amber above — not --slower, which COLOUR VISION remaps to an orange
+   and which put light ink at 3.29:1 (2.66:1 deutan) on a weight-800 word that
+   is not large text. --flag-red under --hud-ink-light is 5.6:1 in every
+   palette, and the light inset keyline is a second channel that does not
+   depend on seeing red. */
+#hud-flag.flag-red { background: var(--flag-red); color: var(--hud-ink-light);
+  outline: 2px solid var(--hud-ink-light); outline-offset: -2px; }
 /* BLUE FLAG (js/ui/hud-readouts.js blueFlag): a car a lap up is on your gearbox.
    A plate with a blue edge rather than a blue field: light ink on the palette's
    blue misses AA, and the word does the work. */
@@ -1289,7 +1320,7 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    `translate`/`scale` compose with the translateX(-50%) the centred pieces
    already carry; --hl-o keeps a corner piece growing away from its corner. */
 [data-hl] {
-  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1vh / var(--hud-z, 1));
+  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
 }
@@ -1720,7 +1751,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-rel {
   right: calc(10px + var(--sar) / var(--hud-z));
-  top: calc(38vh / var(--hud-z));
+  top: calc(38svh / var(--hud-z));
   border-left: 3px solid var(--dim);
 }
 #hud-rel > div {
@@ -1740,7 +1771,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
 #hud-strat {
   left: calc(10px + var(--sal) / var(--hud-z));
-  top: calc(40vh / var(--hud-z));
+  top: calc(40svh / var(--hud-z));
   border-left: 3px solid var(--dim);
   min-width: 15ch;
 }
@@ -1750,7 +1781,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 #hud-strat [data-k="uc"] > span { color: inherit; }
 #hud-inputs {
   left: calc(10px + var(--sal) / var(--hud-z));
-  bottom: calc(22vh / var(--hud-z));
+  bottom: calc(22svh / var(--hud-z));
   display: flex;
   align-items: center;
   column-gap: calc(var(--gap) / 2);

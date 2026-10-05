@@ -20,6 +20,7 @@ const { clamp, satAdjust, isFloodActiveSession,
 const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain";
 const wxRain = () => G.raceWeather === "rain";
 const { LT, buildTrackLights } = LightTune;
+const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
 
@@ -35,12 +36,28 @@ const CLEAR_FOG_SCALE = 0.45;
 // values so a strike restores to the look in flight, not the target.
 // Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
 // strength, ambient and fog stepped (the second graphics-detail survey, item 11).
+//
+// THE KNOBS FADE TOO (2026-10-04). A stage flip changes the LightStore key
+// (track|tod|WEATHER), and LightStore.apply() used to land every LT knob of the
+// new preset in one frame: keyMul 0.115 -> 0.76, bloomMul x13, fogDensityMul x4
+// mid-race, under a sky that was fading (review-wgx-lighting item 2). Now the
+// blended re-apply snapshots LT on both sides and tick() walks every knob on the
+// same smoothstep, rounded to the knob's grid where the grid is whole numbers
+// (counts, toggles). Two exceptions keep a flip from costing a frame:
+//  - the lamp REBUILD knobs and bake inputs are HELD (LightStore.apply
+//    holdRebuild), so the flip never nulls track._lights or re-bakes the pools;
+//  - sunElev/sunAzim are keyed by track x tod (profiles.js keyFor), so the sun
+//    never moves with the weather and needs no slerp.
+// A knob someone else writes mid-fade (a tuner slider, __apex.lightTune) leaves
+// the fade at once rather than being dragged back each frame.
 const WX_BLEND_S = 25;
-const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure"];
+const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure", "groundMist"];
 const WX_SKY = ["sunColor", "cloud", "zenith", "horizon"];
-let _wx = null;   // { from, to, t, dur } while a fade is in flight
+let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
+let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
-const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY) });
+const _snapLt = () => { const r = {}; for (const d of TUNE_DEFS) if (typeof LT[d.id] === "number") r[d.id] = LT[d.id]; return r; };
+const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() });
 const _mixv = (a, b, s) => {
   if (b == null) return a; if (a == null) return b;
   if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
@@ -51,8 +68,20 @@ function _writeWx(s) {
   for (const k of WX_FRAME) { const v = _mixv(from.frame[k], to.frame[k], s); if (v != null) G.frame[k] = v; }
   for (const k of WX_SKY) { const v = _mixv(from.sky[k], to.sky[k], s); if (v != null) G.frameSky[k] = v; }
   G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+  _writeLt(s);
   if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),
                                exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
+}
+function _writeLt(s) {
+  const { from, to, last } = _wx;
+  for (const d of TUNE_DEFS) {
+    const id = d.id, a = from.lt[id], b = to.lt[id];
+    if (a === undefined || b === undefined || a === b) continue;
+    if (id in last && LT[id] !== last[id]) { delete from.lt[id]; continue; }   // written by someone else: theirs now
+    let v = s >= 1 ? b : s <= 0 ? a : a + (b - a) * s;
+    if (d.step >= 1 && s > 0 && s < 1) v = Math.min(Math.max(a, b), Math.max(Math.min(a, b), d.min + Math.round((v - d.min) / d.step) * d.step));
+    LT[id] = v; last[id] = v;
+  }
 }
 function tick(dt) {
   if (!_wx) return;
@@ -66,14 +95,15 @@ function wxBlend() { return _wx ? { t: _wx.t, dur: _wx.dur } : null; }
 function applyRaceSettings(blendS) {
   if (blendS === true) blendS = WX_BLEND_S;
   const from = (blendS > 0 && G.frame && G.frame.sunColor && G.frameSky) ? _snapWx() : null;
-  _applyRaceBody();
-  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS } : null;
+  _hold = !!from;
+  try { _applyRaceBody(); } finally { _hold = false; }
+  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS, last: {} } : null;
   if (_wx) _writeWx(0);   // start the fade on the look the frame had
 }
 
 function _applyRaceBody() {
   Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
-  if (typeof applyLightTune === "function") applyLightTune(true);
+  if (typeof applyLightTune === "function") applyLightTune(true, _hold ? { holdRebuild: true } : undefined);
   const isNightSession = G.raceTimeOfDay === "night" ||
     (G.raceTimeOfDay === "default" && G.track && G.track.def && G.track.def.night);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
@@ -349,6 +379,20 @@ function _applyRaceBody() {
     G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(_storm ? 0.65 : 0.80));
     G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
     G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * (_storm ? 1.08 : 1.06)));
+    // The distance fades to the SKY the sky shader paints, not the clear one.
+    // Every lit backend greys its horizon under cloud (wgsl-chunks.js SKY:
+    // horizonO = mix(horizon, greyH, smoothstep(0.5, 1, cloud) * 0.60), greyH a
+    // daylight grey or, at night, the night lid); until 2026-10-04 this branch
+    // left fogColor at the TOD's clear value, so wet/rain terrain faded to a
+    // blue (or dusk-orange) haze that met a grey horizon in a seam. Same grey,
+    // same weight, same cloud value the sky uploads.
+    if (G.frame.fogColor) {
+      const _ov = _smooth(0.5, 1.0, clamp(G.frameSky.cloud + (LT.cloudCover || 0), 0, 1)) * 0.60;   // + the CLOUD COVER offset applied below
+      const _gH = isNightSession && G.frameSky.zenith && G.frameSky.horizon
+        ? G.frameSky.zenith.map((v, i) => (v + G.frameSky.horizon[i]) * 1.25)
+        : [0.58, 0.58, 0.60];
+      G.frame.fogColor = G.frame.fogColor.map((v, i) => v + (_gH[i] - v) * _ov);
+    }
     // Wet + overcast: lift exposure to keep the scene moody but readable — BUT a
     // wet NIGHT must stay dark (lifting it to 1.10 greys out the night and kills
     // the lamp-pool contrast), so dark sessions only get a whisker of lift.
@@ -364,7 +408,14 @@ function _applyRaceBody() {
     G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.06));
     G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.06));
     G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * (LT.overcastFogMul != null ? LT.overcastFogMul : 1.7);
-    if (G.raceTimeOfDay === "default") { G.frameSky.horizon = [0.74, 0.73, 0.74]; G.frame.skyHorizon = G.frameSky.horizon; }
+    // Flatten the palette horizon to the grey deck — but a NIGHT overcast keeps
+    // a night horizon (the fog branch's guard, below): the seven night-default
+    // circuits run "default" too, and the 0.74 daylight grey under the sky's
+    // night lid painted a ~0.85 grey band round a night race.
+    if (G.raceTimeOfDay === "default") {
+      G.frameSky.horizon = isNightSession ? [0.05, 0.05, 0.07] : [0.74, 0.73, 0.74];
+      G.frame.skyHorizon = G.frameSky.horizon;
+    }
     // A night session must stay dark under overcast too — same guard the wet/fog
     // branches use. Without it the 0.86/0.90 night exposure was forced up to 1.0,
     // greying out the night and killing lamp-pool contrast.
@@ -384,7 +435,16 @@ function _applyRaceBody() {
     // fog and catches the lamp glow, nowhere near daylight. Density is untouched:
     // a night fog is every bit as THICK, it just is not bright. The default-mode
     // horizon flatten below reads the same `fc`, so it follows automatically.
-    const fc = isNightSession ? [0.09, 0.10, 0.13] : [0.74, 0.76, 0.78];
+    //
+    // Dusk and dawn are the same mistake in colour: the midday grey at x3
+    // density laid a pale daylight wall against an orange or pink horizon. A
+    // twilight fog is the horizon's own light, desaturated: its luminance with
+    // the slight cool lift of the day grey, keeping 35 % of the horizon's hue.
+    const _twl = G.raceTimeOfDay === "dusk" || G.raceTimeOfDay === "dawn";
+    const _hz = G.frameSky.horizon;
+    const fc = isNightSession ? [0.09, 0.10, 0.13]
+      : _twl && _hz ? _twilightFog(_hz)
+      : [0.74, 0.76, 0.78];
     G.frame.fogColor = fc;
     if (G.raceTimeOfDay === "default") { G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon; }
     G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.6));
@@ -394,7 +454,9 @@ function _applyRaceBody() {
     // Lift for visibility in the murk — but a NIGHT fog must stay night: forcing
     // 1.08 over the 0.86-0.90 night base (+25%) grey-washed the dark and killed
     // the lamp-glow-in-fog mood. Dark sessions get a smaller floor.
-    const _fogFloor = isNightSession ? 0.95 : 1.08;
+    // Twilight keeps its own exposure (dusk 1.03, dawn 1.08): the 1.08 day floor
+    // lifted a dusk fog brighter than a clear dusk.
+    const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
   } else {
     G.frameSky.cloud = G._cloudBase;
@@ -475,6 +537,40 @@ function _applyRaceBody() {
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+  // Resolve the prop-emissive ramp NOW, not only on the next rendered frame:
+  // stars/moon/ambient above land synchronously, and a read between a night→day
+  // rebuild and the first day frame used to pair the day sky with the night's
+  // floodEmit (qatar-foundation.spec, 2026-10-05: day 0.0858 == night 0.0858).
+  G._lastFloodEmit = floodEmit(G.frame && G.frame.sunDir ? G.frame.sunDir[1] : null);
+}
+
+// Prop emissive (lit windows / signage / neon) — how strongly the buildings
+// glow after dark. A full night session goes to full emissive REGARDLESS of the
+// palette's sun elevation: many night palettes keep the sun above the horizon
+// for the sky glow (sunY≈0.25), which would pin an elevation ramp near 0.10 and
+// leave the glowing-glass towers reading as dark boxes. Dusk/dawn ramp by the
+// (genuinely low) sun elevation; day stays dark. min(1): glsl-lit.js mix()
+// EXTRAPOLATES past 1. The ONE formula: game.js's frame and the resolve above.
+function floodEmit(sunY) {
+  const tod = G.raceTimeOfDay;
+  const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));
+  if (sunY == null) sunY = night ? -1 : 1;
+  return Math.min(1, LT.floodEmitMul * (night ? 0.78
+    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - sunY * 6, 0, 1)))
+    : 0));
+}
+
+// The sky shader's smoothstep, for the overcast horizon weight above.
+function _smooth(a, b, x) {
+  const t = Math.min(1, Math.max(0, ((x != null ? x : 0) - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+// Twilight fog colour from the horizon: luminance with the day grey's cool
+// lift ([0.74,0.76,0.78] is 1 : 1.03 : 1.05), mixed 35 % back toward the hue.
+function _twilightFog(h) {
+  const y = 0.2126 * h[0] + 0.7152 * h[1] + 0.0722 * h[2];
+  const g = [y, y * 1.02, y * 1.05];
+  return g.map((v, i) => v + (h[i] - v) * 0.35);
 }
 
 // Per-track sun AZIMUTH bias
@@ -549,7 +645,7 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-return { applyRaceSettings, prebakeLamps, tick, wxBlend, WX_BLEND_S };
+return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S };
 }
 
 return { create };

@@ -99,3 +99,29 @@ test("the reporter keys a test on its SPEC, not on the file that declared it", a
   assert.equal(at(["chromium", "odd"], "/repo/tests/helpers/track-helpers.js").spec,
     "tests/helpers/track-helpers.js");
 });
+
+test("the verdict line counts skips apart, and a run that executed nothing is RED", async () => {
+  // `= run passed (N/N done, 0 failed)` counted skips as done, so an all-skip
+  // run — a file-level test.skip on a missing baseline, a null hook routed to
+  // test.skip — read exactly like a pass (2026-10-04).
+  const { default: LiveReporter } = await import("../helpers/live-reporter.js");
+  const run = (statuses) => {
+    const r = new LiveReporter();
+    const lines = [];
+    r.write = (l) => lines.push(l);
+    r.startHeartbeat = () => {};
+    const tests = statuses.map((st, i) => ({ retries: 0, results: [{}], titlePath: () => ["headless", "x.spec.js", `t${i}`],
+      location: { file: "/repo/tests/specs/x.spec.js" }, outcome: () => (st === "skipped" ? "skipped" : "expected") }));
+    r.onBegin({ workers: 1 }, { allTests: () => tests });
+    tests.forEach((t, i) => r.onTestEnd(t, { status: statuses[i], duration: 10 }));
+    const override = r.onEnd({ status: "passed" });
+    return { lines, override, verdict: lines.find((l) => /= run (passed|failed)/.test(l)) };
+  };
+  const allSkip = run(["skipped", "skipped", "skipped"]);
+  assert.match(allSkip.verdict, /= run failed {2}\(3\/3 done, 0 failed, 3 skipped\)/);
+  assert.deepEqual(allSkip.override, { status: "failed" }, "the exit code follows the verdict");
+  assert.ok(allSkip.lines.some((l) => /ALL 3 TEST\(S\) SKIPPED/.test(l)));
+  const mixed = run(["passed", "skipped"]);
+  assert.match(mixed.verdict, /= run passed {2}\(2\/2 done, 0 failed, 1 skipped\)/);
+  assert.equal(mixed.override, undefined);
+});

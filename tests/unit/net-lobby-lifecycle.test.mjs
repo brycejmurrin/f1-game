@@ -19,10 +19,10 @@ function deferred() {
 }
 
 function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
-                   href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
+                   rendezvous, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
-    const el = { id, hidden: true, value: "", textContent: "", focus() {} };
+    const el = { id, hidden: true, value: "", textContent: "", focus() {}, setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; } };
     elements.set(id, el);
     return el;
   };
@@ -32,7 +32,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
-                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join"]) element(id);
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -93,7 +93,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       supported: () => true,
       create: () => scanFactory(),
     },
-    NetRendezvous: {},
+    NetRendezvous: rendezvous || { usingPrivateRelay: () => false },
     NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
     NetPlay: null,
     // isReal mirrors js/data/teams.js (pinned by the Legends test below).
@@ -117,7 +117,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     return { status: transportStatus || "new", onClose() {}, close() {} };
   });
   return {
-    lobby, elements, scan, video, transports, replacements, location, G, room, status,
+    lobby, elements, scan, video, transports, replacements, location, G, room, status, context,
     click(id) { const el = elements.get(id); return el && el.onclick ? el.onclick() : undefined; },
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
     emitWindow(type) { for (const fn of winListeners.get(type) || []) fn(); },
@@ -737,6 +737,72 @@ test("an invalid seed or round rejects the whole payload, as every other field d
   } finally { h.lobby.cancel(); }
 });
 
+// ── dirty air and AI pace are race rules; a guest's own rules come back ───────
+// Both change every AI car's grip / vmax, and each peer simulated its own saved
+// choice. And applySettings overwrote the guest's laps/difficulty/tyres/… in
+// memory with nothing to put them back after the room or the race.
+test("the host publishes dirty air and AI pace with its settings", () => {
+  assert.match(SOURCE, /dirtyAir: G\.raceDirtyAir, aiPace: G\.aiPace,/);
+});
+
+function ruleGuestStubs(h) {
+  const stored = new Map([["dirtyAir", "classic"]]);
+  const sets = [];
+  h.G.store = {
+    get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+    set: (k, v) => { sets.push([k, v]); stored.set(k, v); },
+    rawDel: (k) => stored.delete(k),
+  };
+  h.context.PhysicsConsts = { DirtyAir: { isLevel: (v) => ["off", "classic", "cfd"].includes(v) } };
+  h.context.AiBand = { isMode: (v) => v === "scripted" || v === "catchup" };
+  let dirty = "classic", pace = "scripted";
+  Object.defineProperty(h.G, "raceDirtyAir", { get: () => dirty, set: (v) => { dirty = v; h.G.store.set("dirtyAir", v); }, configurable: true });
+  Object.defineProperty(h.G, "aiPace", { get: () => pace, set: (v) => { pace = v; h.G.store.set("aiPace", v); }, configurable: true });
+  return stored;
+}
+
+test("a guest applies dirty air and AI pace in memory, and rejects bad values", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    const stored = ruleGuestStubs(h);
+    s.deliver("settings", { laps: 5, dirtyAir: "cfd", aiPace: "catchup" });
+    assert.equal(h.G.raceDirtyAir, "cfd");
+    assert.equal(h.G.aiPace, "catchup");
+    assert.equal(stored.get("dirtyAir"), "classic", "the guest's saved choice is put back");
+    assert.equal(stored.has("aiPace"), false, "unset stays unset");
+    for (const bad of [{ dirtyAir: "max" }, { dirtyAir: 1 }, { aiPace: "rubber" }, { aiPace: true }]) {
+      s.deliver("settings", Object.assign({ laps: 9 }, bad));
+      assert.equal(h.G.raceLaps, 5, `${JSON.stringify(bad)} must reject the payload whole`);
+    }
+    assert.equal(h.G.raceDirtyAir, "cfd");
+    assert.equal(h.G.aiPace, "catchup");
+  } finally { h.lobby.cancel(); }
+});
+
+test("leaving the room gives the guest back its own rules", async () => {
+  const { h, s } = await connectedGuest();
+  ruleGuestStubs(h);
+  h.G.raceLaps = 3; h.G.difficulty = "normal"; h.G.seed = 77; h.G.raceRound = 1;
+  try {
+    s.deliver("settings", { laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" });
+    s.deliver("settings", { laps: 15 });   // a second payload must not re-snapshot the host's values
+    assert.equal(h.G.raceLaps, 15);
+  } finally { h.lobby.cancel(); }
+  assert.equal(h.G.raceLaps, 3);
+  assert.equal(h.G.difficulty, "normal");
+  assert.equal(h.G.seed, 77);
+  assert.equal(h.G.raceRound, 1);
+  assert.equal(h.G.raceDirtyAir, "classic");
+  assert.equal(h.G.aiPace, "scripted");
+  assert.equal(h.G.store.get("aiPace", undefined), undefined, "restoring did not persist the guest's in-memory value");
+});
+
+test("the race end (a LOCAL NetPlay stop) restores the guest's rules, a mid-race drop does not", () => {
+  assert.match(SOURCE, /onStop: restoreOwnRules,/);
+  assert.match(NETPLAY, /if \(!active\) \{ lastReason = null; runOnStop\(reason\); return false; \}/);
+  assert.match(NETPLAY, /if \(reason != null && reason !== "local"\) return;/);
+});
+
 // ── a typo is refused as a typo, even before the transport exists ─────────────
 // join() awaits the ICE prefetch (up to ICE_WAIT_MS) before it creates the
 // transport, and the player can paste in that window. makeAnswer checked
@@ -872,4 +938,81 @@ test("join()'s late prompt does not wipe an error said during its ICE wait", asy
       assert.match(q.status.textContent, /Paste the invite code they sent you/);
     } finally { q.lobby.cancel(); }
   } finally { h.lobby.cancel(); }
+});
+
+// ── L8-a: the verification code on both screens, and the host's REMOVE ──────
+// The room code's PBKDF2 table is precomputable once for every room, so a
+// middleman can answer a sealed offer. The 4-letter code from both DTLS
+// fingerprints is what the two players compare; the host removes a guest whose
+// screen shows a different one.
+test("a connection shows its verification code, and only the HOST can remove that guest", async () => {
+  const pcs = [];
+  const rendezvous = { usingPrivateRelay: () => false, verifyFor: async (pc) => (pc && pc.remoteDescription ? "K7QZ" : null) };
+  const made = [], closers = [];
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open", rendezvous });
+  let closed = 0;
+  h.lobby.setTransportFactory(() => {
+    const pc = { localDescription: { sdp: "l" }, remoteDescription: { sdp: "r" } };
+    pcs.push(pc);
+    const mine = [];
+    const t = { status: "open", pc, onClose(fn) { mine.push(fn); closers.push(fn); },
+      close() {   // idempotent and self-emitting, as transport.js shutdown()
+        if (t.status === "closed") return;
+        closed++; t.status = "closed"; for (const fn of mine) fn("local");
+      } };
+    return t;
+  });
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1, "the host's session was bound");
+    for (let i = 0; i < 20 && !Object.keys(h.lobby.verifyCodes()).length; i++) await new Promise((r) => setTimeout(r, 10));
+    const codes = h.lobby.verifyCodes();
+    assert.deepEqual(Object.values(codes), ["K7QZ"], "one code per direct connection");
+    assert.match(h.status.textContent, /K7QZ/, "and the status line names it");
+    const [id] = Object.keys(codes);
+    assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
+    assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
+    assert.equal(closed, 1, "by closing that guest's transport");
+    assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest cannot remove anybody, and a transport with no pc shows no code", async () => {
+  const { h } = await connectedGuest();
+  try {
+    assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "the loopback-style fake has no descriptions: no code");
+    assert.equal(h.lobby.removeGuest("peer"), false, "REMOVE is the host's");
+  } finally { h.lobby.cancel(); }
+});
+
+test("HOST A RACE (link) closes a room code left open by a code join", () => {
+  // INVITE ANOTHER -> HOST A RACE after a guest joined by code: the reopened
+  // room kept advertising a dead offer for up to JOIN_TIMEOUT_MS, and a friend
+  // told the code waited on Connecting… for a NAT error. host() must stop it,
+  // exactly as codeHost() does before its own generation.
+  const at = SOURCE.indexOf("async function host()");
+  assert.ok(at > 0, "host() present");
+  const body = SOURCE.slice(at, SOURCE.indexOf("await readyIce()", at));
+  assert.match(body, /stopCodeWait\(\)/);
+  assert.match(body, /codeReopen = null/);
+  assert.match(body, /clearTimeout\(codeReopenTimer\)/);
+});
+
+test("private room entry accepts a full shared token and public entry still asks for six characters", () => {
+  for (const privateRelay of [true, false]) {
+    const h = harness({ rendezvous: { usingPrivateRelay: () => privateRelay } });
+    h.lobby.wire();
+    try {
+      h.click("vs-code-join");
+      const input = h.elements.get("vs-code-in");
+      assert.equal(input.maxLength, privateRelay ? 64 : 8);
+      assert.equal(input["aria-label"], privateRelay ? "Private room token" : "Room code");
+      assert.match(h.elements.get("vs-code-hint").textContent, privateRelay ? /32 characters/ : /Six letters/);
+      assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABC234/);
+    } finally { h.lobby.cancel(); }
+  }
 });

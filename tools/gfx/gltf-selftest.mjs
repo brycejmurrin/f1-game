@@ -262,6 +262,43 @@ console.log("TEST 4: node translation applied to positions");
   check("translation [10,20,30] applied", okX && okY && okZ, Array.from(m.pos).join(","));
 }
 
+// ===== TEST 5: mirrored node (negative determinant) keeps CCW front faces =====
+// glTF 2.0 §3.7.4: a negative global determinant makes the authored triangles
+// CLOCKWISE-front. The loader emits CCW-front for every backend's cull state,
+// so it must swap the winding — and derive normals from the corrected order.
+console.log("TEST 5: mirrored node (scale -1 on x) flips winding, normals stay outward");
+{
+  const pos = [0, 0, 0, 1, 0, 0, 0, 1, 0];       // CCW about +Z
+  const idx = [0, 1, 2];
+  const faceNormal = (m) => {
+    const [a, b, c] = [m.idx[0], m.idx[1], m.idx[2]].map((i) => [m.pos[i * 3], m.pos[i * 3 + 1], m.pos[i * 3 + 2]]);
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  };
+  for (const withNormals of [false, true]) {
+    const parsed = GLTF.parseGLB(makeTriangleGLB(pos, idx, [1, 1, 1], withNormals));
+    parsed.json.nodes[0].scale = [-1, 1, 1];      // det = -1: a mirrored part
+    const m = GLTF.toMesh(buildGLB(parsed.json, parsed.bin));
+    const tag = withNormals ? " (supplied normals)" : " (computed normals)";
+    check("mirrored positions" + tag, approx(m.pos[3], -1) && approx(m.pos[0], 0), Array.from(m.pos).join(","));
+    check("winding swapped to [0,2,1]" + tag, m.idx[0] === 0 && m.idx[1] === 2 && m.idx[2] === 1, Array.from(m.idx).join(","));
+    // The mirrored triangle still faces +Z; its CCW (front) winding must say so.
+    const fn = faceNormal(m);
+    check("geometric front face = +Z" + tag, fn[2] > 0, fn.join(","));
+    check("vertex normal = +Z" + tag, approx(m.nrm[2], 1) && approx(m.nrm[5], 1), Array.from(m.nrm).join(","));
+  }
+  // Two mirrors cancel (det = +1): no swap.
+  const parsed2 = GLTF.parseGLB(makeTriangleGLB(pos, idx, [1, 1, 1], false));
+  parsed2.json.nodes[0].scale = [-1, -1, 1];
+  const m2 = GLTF.toMesh(buildGLB(parsed2.json, parsed2.bin));
+  check("two negative axes (det +1) keep [0,1,2]", m2.idx[0] === 0 && m2.idx[1] === 1 && m2.idx[2] === 2, Array.from(m2.idx).join(","));
+  // A negative uniform opts.scale is a point reflection (det < 0): swap, and
+  // supplied normals turn round with the surface.
+  const m3 = GLTF.toMesh(makeTriangleGLB(pos, idx, [1, 1, 1], true), { scale: -1 });
+  check("negative opts.scale swaps winding", m3.idx[1] === 2 && m3.idx[2] === 1, Array.from(m3.idx).join(","));
+  check("negative opts.scale: front face and normals agree", faceNormal(m3)[2] < 0 && approx(m3.nrm[2], -1), Array.from(m3.nrm).join(","));
+}
+
 // --- summary ---
 console.log("");
 if (failures === 0) {

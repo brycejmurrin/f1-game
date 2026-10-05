@@ -199,6 +199,54 @@ test("overtake is earned on the car ahead on the road at the detection line: a b
   a.clearInput();
 });
 
+// verify-physics #2 (2026-10-04): an AI car advanced its arc at speed·dt
+// whatever its lateral offset, so the outside of a bend was free distance and
+// the inside bought nothing; the player's trackFrom charges ground ÷ h, the
+// Frenet stretch. Now the AI pays it too (an AI-only geometry read). h is
+// recomputed here from Tracks.sample exactly as game.js frenetH does (±H_D).
+test("an AI car advances its arc at speed·dt ÷ the Frenet stretch: no free distance round the outside", async () => {
+  await startRace();
+  const a = g.apex, G = g.G, T = g.sandbox.Tracks;
+  const H_D = Number(readFileSync(join(ROOT, "js/game.js"), "utf8").match(/const H_D = ([0-9.]+);/)[1]);
+  const A = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] }, B = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
+  const fH = (s, x) => {
+    const L = G.track.total, w = (v) => ((v % L) + L) % L;
+    T.sample(G.track, w(s - H_D), A); T.sample(G.track, w(s + H_D), B);
+    const cx = B.p[0] - A.p[0], cz = B.p[2] - A.p[2];
+    return Math.hypot(cx + (B.r[0] - A.r[0]) * x, cz + (B.r[2] - A.r[2]) * x) / Math.hypot(cx, cz);
+  };
+  a.go(); a.jump(0.5, 0, 0);   // the player well away from T1
+  const ai = G.cars.find((c) => !c.human);
+  for (const c of G.cars) if (!c.human && c !== ai) c.retired = true;
+  const rows = [];
+  for (const x of [-4, 4]) {   // monza T1 is a right-hander: -x is the OUTSIDE
+    ai.s = 539.8; ai.prog = 5000 + ai.s; ai.x = x; ai.speed = 25; ai._prevS = ai.s;
+    const p0 = ai.prog, s0 = ai.s;
+    a.step(1 / 60, 1);
+    const h = fH(s0, ai.x);
+    rows.push({ x, h, ds: ai.prog - p0, ratio: (ai.prog - p0) * h / (ai.speed / 60) });
+  }
+  retireReset();
+  const [outside, inside] = rows;
+  assert.ok(outside.h > 1.02 && inside.h < 0.98, `anti-vacuity: a bend (h ${outside.h.toFixed(4)} / ${inside.h.toFixed(4)})`);
+  for (const r of rows) assert.ok(Math.abs(r.ratio - 1) < 1e-6, `x ${r.x}: arc·h / ground = ${r.ratio}`);
+  assert.ok(outside.ds < inside.ds, `the outside line covers less arc per metre (${outside.ds.toFixed(4)} vs ${inside.ds.toFixed(4)})`);
+  function retireReset() { for (const c of G.cars) c.retired = false; }
+});
+
+// verify-physics #15: a car in the PIT LANE (or retired) is not the car ahead
+// ON THE ROAD. The default detection line (0.9 of the lap) is often where pit
+// entry is, so diving into the pits within 1 s of a rival handed them the
+// allowance. A source pin: the pit state is owned by PitLane.update, which
+// clears a hand-set pitState outside the lane window, so a VM pose cannot hold a
+// car "in the lane" at monza's detection line without driving the whole stop.
+test("the overtake scan skips pit-lane and retired cars", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const scan = src.slice(src.indexOf("let ahead = null, gapAhead = Infinity"), src.indexOf("gapAhead = ahead && c.speed > 1"));
+  assert.ok(scan.length > 50 && scan.length < 1200, "anti-vacuity: found the detection scan");
+  assert.match(scan, /if \(o === c \|\| o\.finished \|\| o\.retired \|\| pits\.inLane\(o\)\) continue;/);
+});
+
 // ---------------------------------------------------------------------------
 // Row 5 — js/game.js slip angles in reverse: slip is measured against |vx|.
 // atan2(vLat, -4) put both axles on the tanh plateau with a sign that flipped
@@ -318,11 +366,16 @@ test("a descent does not confiscate existing overspeed; flat throttle bleeds it"
   g.apex.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
   const a = g.apex;
   let dnAt = 0, dn = 0;
+  // Steepest descent on a near-STRAIGHT stretch: the probe drives steer 0 for
+  // 0.75 s, so a descent inside a bend (Spa's real profile drops into Eau
+  // Rouge and Pouhon on curves) measures the car leaving the road, not the
+  // downhill-overspeed rule this row pins.
   for (let i = 0; i < 300; i++) {
     const f = i / 300;
     a.jump(f, 40, 0); a.step(1 / 60, 1);
     const s = a.physState().slope;
-    if (s < dn) { dn = s; dnAt = f; }
+    const bend = Math.max(...a.scan([0, 20, 40, 60]).map((p) => Math.abs(p.k)));
+    if (bend < 0.003 && s < dn) { dn = s; dnAt = f; }
   }
   a.jump(dnAt, 40, 0);
   const vmax = a.physState().vmaxNow || 72;

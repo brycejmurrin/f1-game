@@ -79,7 +79,7 @@ const Director = (function () {
   function create(G, eligible = () => true) {
     Log.info("game", "Director.create");
     let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
-    let ownCamera = null, autoSpectate = true, forcedTv = false;
+    let ownCamera = null, autoSpectate = true, forcedTv = false, prevMode = -1;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
 
     function camIdx(id) {
@@ -106,14 +106,33 @@ const Director = (function () {
       if (ownCamera && G.dbgCam === ownCamera) G.dbgCam = null;
       ownCamera = null;
     }
-    function applyShot(car, shot) {
+    /* A CUT SOLVES ONE-SHOT; HOLDING A SHOT SOLVES WITH THE FRAME'S dt.
+       vantage.js eases the corner side of heli/side/cinematic through
+       CamFeel.follow ("a hard sign flip teleported the eye ~36 m") — but only
+       when the solve carries a dt, and this one never did, so mid-shot every
+       curvature sign flip jumped the HELI eye ~24-36 m and TV SIDE ~28-50 m in
+       one frame. dt 0 on a cut keeps the cut whole (every follow lands on its
+       target); `snap` lets the speed-open terms start where they belong.
+       The subject pose is the INTERPOLATED one the car body is drawn at
+       (G.camPoseOf, read after the physics step — game.js ticks this after it):
+       the raw 60 Hz car.s/px/head held-then-jumped on a 90/120 Hz display.
+       The follows run under CamFeel.scoped("tv:"): the player's own rig keeps
+       solving (TV falls to the chase branch) and shared keys like "chaseBend"
+       would otherwise be damped toward two different cars on alternate calls. */
+    function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
-      const extra = {};
-      if (car.px != null && car.pz != null) {
+      const extra = { att: car, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };
+      const pose = G.camPoseOf ? G.camPoseOf(car) : null;
+      let s = car.s || 0, x = car.x || 0;
+      if (pose) {
+        s = pose.s; x = pose.x;
+        if (pose.carPos) { extra.carPos = [pose.carPos[0], pose.carPos[1]]; extra.carHead = pose.carHead; }
+      } else if (car.px != null && car.pz != null) {
         extra.carPos = [car.px, car.pz];
         extra.carHead = car.head || 0;
       }
-      const v = G.camVantage(shot, car.s || 0, car.x || 0, car.speed || 0, 0, extra);
+      const solve = () => G.camVantage(shot, s, x, car.speed || 0, 0, extra);
+      const v = typeof CamFeel !== "undefined" && CamFeel.scoped ? CamFeel.scoped("tv:", solve) : solve();
       if (!v || !v.eye || !v.tgt) return false;
       scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
       scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
@@ -126,6 +145,7 @@ const Director = (function () {
       if (modeId() === "tv") return;
       const i = camIdx("tv");
       if (i < 0 || !G.setCamMode) return;
+      prevMode = G.camMode;   // reset() hands the player's own camera back
       G.setCamMode(i, { persist: false });
       forcedTv = true;
     }
@@ -154,6 +174,10 @@ const Director = (function () {
 
       wall += dt > 0 ? dt : 0;
       const running = runningList();
+      // A subject that retired or took the flag leaves the shot now, not after SHOT_MAX_S.
+      if (subject && (subject.retired || subject.finished) && running.length) {
+        subject = null; onAirShot = null; lastCut = -1e9;
+      }
       // After the player is done, include them as a spectate subject via follow
       // of the field only — still no force path.
       const decision = decideCut({
@@ -162,19 +186,21 @@ const Director = (function () {
       });
       if (decision) {
         lastCut = wall; cuts++;
-        applyShot(decision.subject, decision.shot);
+        applyShot(decision.subject, decision.shot, dt, true);
         Log.debug("game", "Director.cut kind=" + (decision.kind || "-") + " shot=" + decision.shot
           + " car=" + (decision.subject && decision.subject.code ? decision.subject.code : "-"));
       } else if (subject && onAirShot) {
-        applyShot(subject, onAirShot);   // keep dbgCam fresh as the car moves
+        applyShot(subject, onAirShot, dt, false);   // keep dbgCam fresh as the car moves
       } else if (running[0]) {
         lastCut = wall; cuts++;
-        applyShot(running[0].key, shotFor(null, null, 0));
+        applyShot(running[0].key, shotFor(null, null, 0), dt, true);
       }
     }
     function reset() {
       wall = 0; lastCut = -1e9; cuts = 0; onAirShot = null; subject = null;
-      forcedTv = false; clearDbg();
+      // Auto-spectate forced "tv" non-persistently; the next race starts on the player's mode.
+      if (forcedTv && prevMode >= 0 && modeId() === "tv" && G.setCamMode) G.setCamMode(prevMode, { persist: false });
+      forcedTv = false; prevMode = -1; clearDbg();
     }
     function status() {
       return {

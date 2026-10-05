@@ -30,7 +30,7 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
-let _flagSaid = "", _flagLiveT = 0;   // the caution text last sent to #announce-live, and its pending write
+let _flagSaid = "";   // the caution text last sent to #announce-live
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _teamSkinRev = -1;        // …and the store rev it was written at (a CUSTOM team's colour is editable)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
@@ -73,7 +73,7 @@ const teamCss = (c) => {
 let _secRows = null;
 let _secFlash = [0, 0, 0];
 let _limitsDots = null;
-let _hudCamKey = "";
+let _hudCamMode = null, _hudCamProf = null;   // compared field by field: no key string per frame
 // The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
 // race DELTA's best-lap trace, the spoken HUD). Optional: the node HUD harness
 // boots hud.js without it, and every use below is guarded on _ro.
@@ -84,7 +84,7 @@ const _doc = typeof document !== "undefined" ? document : null;
 const _rx = _doc ? { delta: _doc.getElementById("hud-delta"), deltaN: _doc.getElementById("hud-delta-n"),
   energyBox: _doc.getElementById("hud-energy"), energyN: _doc.getElementById("hud-energy-n"),
   bb: _doc.getElementById("hud-bb") } : {};
-let _ePrev = NaN, _blue = false, _blueSaid = null;
+let _ePrev = NaN, _blue = false, _blueSaid = null, _blueLaps = 0;
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1, rival: 1, pitwall: 1, drone: 1 };
 const ONBOARD_IDS = typeof CamGroups !== "undefined" ? CamGroups.ONBOARD : {};   // js/camera/cam-groups.js
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
@@ -110,7 +110,9 @@ function resolveHudVis(want, autoHide) {
   if (want === "off") return true;
   return !!autoHide;
 }
-let _hudVisKey = "";
+// The last inputs and outcomes, compared field by field — the same test the
+// 7-part key string made, without building that string every frame.
+const _hudVis = { map: null, gaps: null, mode: null, prof: null, hideMap: null, hideGaps: null, mapLow: null };
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const prof = G.hudProfile || "standard";
@@ -121,9 +123,10 @@ function syncHudVisClasses(modeId) {
   const hideGaps = resolveHudVis(G.hudGapsVis, prof === "minimal");
   const mapLow = !hideMap && prof === "broadcast";
   const gapsLow = !hideGaps && prof === "broadcast";
-  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + prof + "|" + hideMap + "|" + hideGaps + "|" + mapLow;
-  if (key === _hudVisKey) return;
-  _hudVisKey = key;
+  const v = _hudVis, mapVis = G.hudMapVis || "auto", gapsVis = G.hudGapsVis || "auto";
+  if (v.map === mapVis && v.gaps === gapsVis && v.mode === modeId && v.prof === prof
+    && v.hideMap === hideMap && v.hideGaps === hideGaps && v.mapLow === mapLow) return;
+  v.map = mapVis; v.gaps = gapsVis; v.mode = modeId; v.prof = prof; v.hideMap = hideMap; v.hideGaps = hideGaps; v.mapLow = mapLow;
   _fitKey = ""; _cssRootKey = "";
   const body = document.body;
   body.classList.toggle("hud-hide-map", hideMap);
@@ -147,9 +150,8 @@ function syncHudCamClasses() {
   const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
   const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
   const prof = G.hudProfile || "standard";
-  const key = modeId + "|" + prof;
-  if (key !== _hudCamKey) {
-    _hudCamKey = key;
+  if (modeId !== _hudCamMode || prof !== _hudCamProf) {
+    _hudCamMode = modeId; _hudCamProf = prof;
     const body = document.body;
     // No hud-onboard class here: the per-widget MAP/GAPS settings own that.
     // ONBOARD_IDS is still live — syncHudVisClasses() reads it for MAP-AUTO.
@@ -164,6 +166,12 @@ function syncHudCamClasses() {
   syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
+// "tt" | "quali" | "practice" | "race". PRACTICE is G.practice (armed on a race
+// session from the pause menu), never a G.session value.
+function sessionOf(timeTrial) {
+  return timeTrial ? "tt" : G.session === "quali" ? "quali" : G.practice ? "practice" : "race";
+}
+
 function paintHudDelta(player, timeTrial) {
   const box = _rx.delta;   // static in index.html (.hud-top) — no injected markup
   if (!box) return;
@@ -176,16 +184,17 @@ function paintHudDelta(player, timeTrial) {
     : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
   const ref = ghost || (_trace && _trace.has() && (player.lap | 0) >= 1 ? _trace : null);
   hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
-  if (!ref) {
-    hHidden(box, true);
-    return;
-  }
-  const ghostT = ref.timeAt(player.s);
-  if (ghostT == null || !(player.lapTime >= 0)) {
-    hHidden(box, true);
-    return;
-  }
+  // THE SLOT IS RESERVED, NOT REMOVED. A hidden DELTA that unhid after lap 1
+  // widened the centred tower by half a box mid-race, so every other readout
+  // jumped sideways. With no number yet the box keeps its place, invisible
+  // (data-pending -> visibility: hidden, css/hud.css).
   hHidden(box, false);
+  const ghostT = ref ? ref.timeAt(player.s) : null;
+  if (ghostT == null || !(player.lapTime >= 0)) {
+    hData(box, "pending", "");
+    return;
+  }
+  hData(box, "pending", null);
   const delta = player.lapTime - ghostT;
   const sign = delta >= 0 ? "+" : "";
   hText(n, sign + delta.toFixed(3));
@@ -329,7 +338,11 @@ function gapText(slot, gap, arrow, o, dist, vFloor) {
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
 const _gapFormShort = (arrow, code, t) => arrow + " " + t;
-const _gapFormLong = (arrow, code, t) => arrow + " " + code + " +" + t + "s";
+// NO SIGN: the arrow IS the direction. A "+" on the AHEAD chip contradicted
+// RELATIVE (js/ui/hud-relative.js), where ahead is "-" — the same car read
+// "+1.2s" in one box and "-1.2" in the other. Whole laps keep RELATIVE's own
+// spelling ("+1L" = a lap up), so the two never disagree.
+const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
 //
@@ -673,7 +686,30 @@ function fitHud() {
   const capNo = capFor(leftN);
   _gapTight = capLong < scale;
   _gapDrop = _gapTight && capShort < scale;
-  const capTop = Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo));
+  // THE TOP-RIGHT BUTTONS SHARE THE TOWER'S ROW. `right` above budgets the
+  // sector box, but on touch CHASE and PAUSE sit at the top edge further in
+  // than it (640x360 @130: CHASE at x 489.6, sectors at 577.6), so the centred
+  // tower grew under the camera button — BEST over a tap target (hud-survey,
+  // 2026-10-04). They size by BUTTON SIZE in screen px, not by this zoom, so
+  // the limit is their left edge. But that edge MOVES WITH THE CAP: the buttons
+  // ride --hud-btn-z = max(1, --hud-z-top) (css/hud.css), so capping from where
+  // they stand now shrank both and overshot (z 0.979 where 1.09 fits, the gap
+  // 39 px). Their span is taken back to zoom 1 (k) and solved WITH the tower:
+  // the answer does not depend on the zoom painted now, so it cannot hunt.
+  // The centred layout only: broadcast anchors the tower left, far from them.
+  let capChrome = Infinity;
+  if (!bcast && top) {
+    const tR = layoutRect(_hudTop), room = window.innerWidth - FIT_AIR - half;
+    const bzNow = Math.max(1, +root.style.getPropertyValue("--hud-z-top") || scale);
+    for (const el of [els.btnCam, els.pausebtn]) {
+      const r = el && !el.hidden ? layoutRect(el) : null;
+      if (!(r && r.width && r.left > half && r.top < tR.bottom + FIT_AIR)) continue;
+      const k = (window.innerWidth - r.left) / bzNow;
+      const z = room / (top / 2 + k);
+      capChrome = Math.min(capChrome, z >= 1 ? z : (room - k) / (top / 2));
+    }
+  }
+  const capTop = Math.min(capChrome, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -937,6 +973,7 @@ function skinAccent(t) {
   const canTell = typeof Teams !== "undefined" && Teams && typeof Teams.isReal === "function";
   // APPEARANCE › HUD ACCENT owns --accent when not TEAM (js/ui/appearance-opts.js).
   if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && !AppearanceOpts.hudUsesTeam()) {
+    if (AppearanceOpts.menuAccent() === "team") AppearanceOpts.applyMenuAccent();
     AppearanceOpts.applyHudAccent();
     return;
   }
@@ -961,15 +998,26 @@ function skinAccent(t) {
 }
 
 // Gear, tachometer and speed — every frame (updateHud, above its 10 Hz gate).
+// The gearbox chip (gear + tach) is display:none under body.cockpit-cam
+// (css/track-detail.css — no breakpoint brings it back): its writes wait,
+// and the cockpit-cam toggle's own refreshHud(true) repaints it on the way out.
+// The bar width is compared as a whole percent: Math.round IS toFixed(0) for
+// 0..100 (both round half up), so the string is built only when it moves.
+let _rpmPct = -1;
 function paintInstruments(player) {
-  hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
   // pulse animation) every tick the needle hovered on the line, which is
   // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
   _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
-  hToggle(els.tach, "redline", _redline);
+  if (!document.body.classList.contains("cockpit-cam")) {
+    hText(els.gear, "" + player.gear);
+    const pct = Math.round(rpmFrac * 100);
+    // --rpm (0..1, 1 % steps), not width: the fill spans the whole tach and is
+    // clipped, so its colour stops sit on fixed RPM (css/hud.css #hud-rpm-fill).
+    if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "--rpm", (pct / 100).toFixed(2)); }
+    hToggle(els.tach, "redline", _redline);
+  }
   const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
   hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
 }
@@ -1005,9 +1053,15 @@ function updateHud(force, dtMs) {
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
-  hText(els.pos, timeTrial ? "TT" : player.retired ? "DNF" : (player.rank || "-") + "/" + cars.length);
+  // POS IS A RACE READOUT. In qualifying `cars` is the player alone (game.js
+  // trims the field to one flying lap, and the model grids the rest only when
+  // it ends), so it read "1/1"; in PRACTICE the rank is road order with
+  // nothing at stake. Both say what the session is instead, like TT.
+  const sess = sessionOf(timeTrial);
+  hText(els.pos, sess === "tt" ? "TT" : player.retired ? "DNF" : sess === "quali" ? "Q"
+    : sess === "practice" ? "PRAC" : (player.rank || "-") + "/" + cars.length);
   // Position change: acknowledge an overtake (either way) for ~0.6 s.
-  const rank = timeTrial || player.retired ? 0 : (player.rank || 0);
+  const rank = sess !== "race" || player.retired ? 0 : (player.rank || 0);
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
@@ -1032,7 +1086,9 @@ function updateHud(force, dtMs) {
       hAttr(_rx.bb, "aria-label", "Brake bias " + bb.slice(3) + " front");
     }
     // Positions mean nothing in practice or qualifying (rank is road order there).
-    if (_speak && !timeTrial && G.state === "race" && G.session !== "practice" && G.session !== "quali") {
+    // G.practice, not G.session: PRACTICE is a flag on a race session, so the
+    // old `session !== "practice"` test was always true and practice spoke.
+    if (_speak && G.state === "race" && sessionOf(timeTrial) === "race") {
       _speak.tick(typeof performance !== "undefined" ? performance.now() : Date.now(),
         { rank: player.retired ? 0 : player.rank, of: cars.length, best: player.best }, G.fmtTime);
     }
@@ -1099,7 +1155,7 @@ function updateHud(force, dtMs) {
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     // Practice / TT / quali: hide the race strategy line.
-    const practice = !!(timeTrial || G.session === "practice" || G.session === "quali");
+    const practice = sessionOf(timeTrial) !== "race";
     const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player) : null;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     hData(els.tyre, "plan", pl && pl.state || null);
@@ -1328,8 +1384,15 @@ function updateHud(force, dtMs) {
     if (blueCar) {
       hText(els.flag, "BLUE FLAG " + (blueCar.code || ""));
       hClass(els.flag, "");
-      // Once per lapping car: a gap breathing across the 1.2 s window must not re-speak it.
-      if (blueCar !== _blueSaid) { _blueSaid = blueCar; sayFlag(null, "BLUE FLAG, LET " + (blueCar.code || "THE LEADER") + " THROUGH"); }
+      // Once per lapping car PER LAP IT GAINS: a gap breathing across the 1.2 s
+      // window must not re-speak it, but the same car coming round to lap the
+      // player AGAIN is a new flag (it used to stay silent: _blueSaid held the
+      // car for the rest of the race). Laps up is stable inside one encounter.
+      const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
+      if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {
+        _blueSaid = blueCar; _blueLaps = lapsUp;
+        sayFlag(null, "BLUE FLAG, LET " + (blueCar.code || "THE LEADER") + " THROUGH");
+      }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
@@ -1341,18 +1404,17 @@ function updateHud(force, dtMs) {
 // polite region (js/game.js showAnnounce), and ONLY there: #hud-flag carries no
 // live role. It used to be a role="alert" filled and unhidden in the same step
 // — the pattern NVDA, JAWS and macOS VoiceOver miss (index.html, above
-// #announce-live) — so a safety car reached a screen-reader user as nothing. Same beat as showAnnounce:
-// clear, then write a moment later, so a repeated flag is still a change. Once
-// per change of the chip's text, never per HUD tick; spelled out in full words
-// because "VSC" and "S2" are glyphs to the eye and noise to a voice.
+// #announce-live) — so a safety car reached a screen-reader user as nothing.
+// Through LiveRegion (js/ui/live-region.js), the region's one writer, at FLAG
+// priority: a radio call or a HUD line in the same tick waits behind it instead
+// of overwriting it. Once per change of the chip's text, never per HUD tick;
+// spelled out in full words because "VSC" and "S2" are glyphs to the eye and
+// noise to a voice.
 function sayFlag(cn, words) {
-  const live = els.announceLive;
-  if (!live) return;
   const said = "RACE CONTROL: " + (words ? words : cn.level === 1 ? "YELLOW FLAG" + (cn.sector >= 0 ? ", SECTOR " + (cn.sector + 1) : "")
     : cn.level === 2 ? "VIRTUAL SAFETY CAR" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR");
-  live.textContent = "";
-  clearTimeout(_flagLiveT);
-  _flagLiveT = setTimeout(() => { live.textContent = said; }, 60);
+  if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "flag");
+  else if (els.announceLive) els.announceLive.textContent = said;
 }
 
 function drawMinimap() {
@@ -1446,7 +1508,8 @@ function drawMinimap() {
     if (zones && zones.length) {
       mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
       for (const z of zones) {
-        const from2 = Math.floor(z.a * n), to2 = Math.min(n - 1, Math.floor(z.b * n));
+        // z.b > 1 for a zone across the line: walk on past n and wrap.
+        const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
         mc.beginPath();
         for (let i = from2; i <= to2; i++) {
           const p = map[i % n];
@@ -1595,9 +1658,19 @@ function invalidateMap() { minimapBg = null; }
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
-  _ePrev = NaN; _blueSaid = null;
+  _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
+  // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
+  // delta's colour inline, a race the neighbour's team bar, the tow halo and
+  // the pit-window suffix — and neither branch clears the other's. The write
+  // cache then kept the stale tint/bar until something rewrote it.
+  for (const el of [els.gapA, els.gapB]) {
+    if (!el) continue;
+    hStyle(el, "color", ""); hStyle(el, "--gap-team", ""); hData(el, "tow", null);
+    if (el.dataset && el.dataset.pit != null) delete el.dataset.pit;
+  }
   if (_trace) _trace.reset();
   if (_speak) _speak.reset();
+  if (typeof LiveRegion !== "undefined") LiveRegion.reset();   // nothing from the last session is read into this one
 }
 // RE-FIT ON THE NEXT TICK. The fit key reads body.className, but MOVE & SIZE
 // (data-hl on the element) and HUD ELEMENTS (body[data-hud-hide]) change

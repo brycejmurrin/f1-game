@@ -100,22 +100,35 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed > 0",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    why: "sign test — brake held at a standstill is reverse (REVERSE_ACCEL), not a stop; REVERSE_MAX is the flat reverse crawl",
+  },
+  {
+    file: "js/physics/collide.js", expr: "c.speed < 0",
+    code: "function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }",
+    why: "sign test — a human already reversing keeps its sign through a contact",
+  },
+  {
+    file: "js/physics/player-forces.js", expr: "c.speed > 0",
+    code: "c.wheelLock = braking && c.speed > 0 && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code",
+    why: "sign test — wheels lock only while rolling forwards; brake-held reverse is not a lock-up",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 0",
+    code: "if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);",
+    why: "sign test — reversing sits below every gear band; hold the 1st-gear bog floor so throttle drives forward again",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);",
     why: "sign test — uphill slope bleed applies only while moving forwards",
   },
   // player-forces.js dirS was `c.speed < 0 ? -1 : 1` (sign test, approved here);
   // soft-blended to clamp(c.speed / DIR_BLEND, -1, 1) — a division, not a
   // speed-literal comparison, so no ALLOWED row.
-  {
-    file: "js/physics/incident-sim.js", expr: "c.speed < 0",
-    code: "const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;",
-    // The magnitude beside it is clamped into [inV*RETAIN_FLOOR, inV*RETAIN_MAX],
-    // both fractions of the car's own entry speed and so already pace-relative.
-    // This line reads nothing but the sign: the handback used to run the whole
-    // value through Math.abs, which turned a car the incident left rolling
-    // backwards into one accelerating forwards.
-    why: "sign test — the direction the incident sim ended on, restored to a magnitude clamped relative to entry speed",
-  },
+  // incident-sim.js handback `dir = c.speed < 0 ? -1 : 1` removed 2026-10-04
+  // (verify-physics #5): the handback no longer keeps a settled roll's sign;
+  // its tests compare a local `v` against 0 and REVERSE_MAX, no speed literal.
   {
     file: "js/physics/wall-clamp.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);",

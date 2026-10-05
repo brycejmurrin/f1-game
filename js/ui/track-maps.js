@@ -150,7 +150,12 @@ const TrackMaps = (function () {
       // curvature, elevation) but NOT the 3D road/terrain/props meshes or any GPU
       // upload. Using the full build here meant the select screen ran 24 complete
       // 3D circuit builds on first open (~16 s stall).
-      const tr = Tracks.buildCenterline(def);
+      // { line: false }: nothing here reads the racing line, and baking it was
+      // ~15x the centreline's cost per circuit (52 maps: 3.1 s vs 0.2 s, Node)
+      // on the picker's UI thread. It warmed nothing the race uses either: the
+      // menu builds the SELECTED world at once (loadTrackStepped), which bakes
+      // and memoises its own line, and RACE! adopts that world.
+      const tr = Tracks.buildCenterline(def, { line: false });
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map((p) => [p[0], p[1]]);
         let crns;
@@ -356,7 +361,11 @@ const TrackMaps = (function () {
     }
     const total = tr.total;
     if (!total) return [];
-    return AeroZones.zonesFor(tr).map((z) => ({ a: z.start / total, b: Math.min(1, z.end / total) }));
+    // `b` is NOT clamped to 1: zonesFor starts its scan at a corner, so the
+    // zone down the main straight runs past the line (end > total). Clamping
+    // cut it off at the line on 46 of 52 circuits (Suzuka drew 80 of 704 m).
+    // Drawers walk floor(a*n)..floor(b*n) and index `% n`.
+    return AeroZones.zonesFor(tr).map((z) => ({ a: z.start / total, b: z.end / total }));
   }
 
   // Local maxima of |curvature| above a threshold, merged when close together,
@@ -477,11 +486,11 @@ const TrackMaps = (function () {
       for (let z = 0; z < data.drsZones.length; z++) {
         const zone = data.drsZones[z];
         const from = Math.floor(zone.a * m);
-        const to = Math.min(m - 1, Math.floor(zone.b * m));
+        const to = Math.floor(zone.b * m);   // past m when the zone crosses the line
         g.strokeStyle = "rgba(0,220,180,0.85)";
         g.beginPath();
         for (let i = from; i <= to; i++) {
-          const p = pts[i];
+          const p = pts[i % m];
           i === from ? g.moveTo(PX(p[0]), PY(p[1])) : g.lineTo(PX(p[0]), PY(p[1]));
         }
         g.stroke();

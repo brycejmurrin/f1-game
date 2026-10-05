@@ -156,7 +156,7 @@ const Car3D = (function () {
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
   // Side-on endplate height: aero level + rearSweep + fin (tier0 ≤ tyre crown).
-  const REAR_TYRE_CROWN = AXLES.wheelY + 0.34;
+  const REAR_TYRE_CROWN = AXLES.wheelY + 0.34, REAR_WING_TOP = 1.00;
   function endplateGeom(aLvl, style) {
     const aN = Math.max(0, Math.min(1, (aLvl || 0) / 4));
     const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
@@ -165,10 +165,10 @@ const Car3D = (function () {
     const lift = Math.pow(aN, 0.85), topLift = Math.pow(lift, 1.15);
     const sweepN = Math.max(0, (sweep + 0.02) / 0.14);
     const finN = Math.max(0, (fin - 0.55) / 0.90);
-    // Grow UP from a low plank so high/extreme still step apart side-on.
-    const topY = (REAR_TYRE_CROWN - 0.02) + 0.48 * topLift
-      + 0.18 * sweepN * topLift + 0.16 * finN * topLift;
-    const sy = 0.22 + 0.52 * topLift + 0.12 * sweepN * topLift + 0.10 * finN * topLift;
+    // Grow UP from a low plank, capped at REAR_WING_TOP = a real wing's ~1.0 m (lvl 1-4 0.79/0.85/0.91/0.95; the #784 rise reached 1.58 m).
+    const rise = Math.min(REAR_WING_TOP - (REAR_TYRE_CROWN - 0.02),
+      Math.pow(topLift, 0.6) * (0.29 + 0.03 * sweepN + 0.03 * finN));
+    const topY = (REAR_TYRE_CROWN - 0.02) + rise, sy = 0.22 + 0.80 * rise;   // bottom = topY - sy stays ≈ 0.44–0.53
     const cy = topY - 0.015 - sy * 0.5;
     const chord = 0.48 + 0.24 * topLift, rearZ = -2.69, frontZ = rearZ + chord;
     const profile = (z, sectionCy, sectionSy) => ({
@@ -501,22 +501,21 @@ const Car3D = (function () {
     }
     return sig;
   }
-  // One-entry last-args cache in front of the Map: drawAeroFlaps asks twice
-  // per car per frame with the same (level, style), and the key concat was
-  // the only allocation left on that path.
-  let _flapLastLvl = null, _flapLastSt = null, _flapLastHit = null;
+  // Per-STYLE-object front cache (style -> Map(level -> records)): a one-entry
+  // last-args cache missed on every car change (each car has its own recipe).
+  const _flapByStyle = new WeakMap();
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
-    if (aLvl === _flapLastLvl && st0 === _flapLastSt) return _flapLastHit;
+    let byLvl = _flapByStyle.get(st0), hit = byLvl && byLvl.get(aLvl); if (hit) return hit;
     const key = aLvl + "|" + flapSig(st0);
-    let hit = _flapSpecs.get(key);
+    hit = _flapSpecs.get(key);
     if (!hit) {
       hit = solveFlapsGeom(aLvl, st0);
       for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
       _flapSpecs.set(key, hit);
     }
-    _flapLastLvl = aLvl; _flapLastSt = st0; _flapLastHit = hit;
-    return hit;
+    if (!byLvl) _flapByStyle.set(st0, byLvl = new Map());
+    byLvl.set(aLvl, hit); return hit;
   }
   function solveFlapsGeom(aLvl, style) {
     // A style must be a RECIPE OBJECT (see aeroStyleOf). Anything else — most
@@ -919,34 +918,35 @@ const Car3D = (function () {
   // stalk carries the lamp with it. Cached per (team, scale): game.js asks
   // once per drawn car per frame, and a fresh pair of objects there is garbage
   // in the hot loop.
-  const _mirrorAnchorCache = new Map();
+  const _mirrorAnchorCache = new Map(), _mirrorAnchorLast = new Map();   // last: teamId -> [raw scale, anchors], no key string on a hit
   function mirrorLightAnchors(teamId, mirrorScale) {
+    const last = _mirrorAnchorLast.get(teamId); if (last && last[0] === mirrorScale) return last[1];
     const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1));
     const k = teamId + "|" + mScale.toFixed(3);
     let a = _mirrorAnchorCache.get(k);
-    if (a) return a;
+    if (a) { _mirrorAnchorLast.set(teamId, [mirrorScale, a]); return a; }
     const mSty = teamStyleOf(teamId).mirror;
     const mx = (0.34 + (mSty === 1 ? 0.035 : 0)) * mScale;
     const mW = mSty === 1 ? 0.235 : 0.215;
     const y = 0.735 + (mSty === 2 ? -0.032 : 0);
     a = Object.freeze([{ x: -(mx + mW / 2 + 0.004), y, z: 0.26 }, { x: mx + mW / 2 + 0.004, y, z: 0.26 }]);
-    _mirrorAnchorCache.set(k, a);
-    return a;
+    _mirrorAnchorCache.set(k, a); _mirrorAnchorLast.set(teamId, [mirrorScale, a]); return a;
   }
   // The COCKPIT build's mirror GLASS faces (the driver-facing side of the
   // face(0.012, mz-0.038) block in build()'s ckpt branch), 1 mm toward the eye:
   // car-draw.js lays a sky-tint fallback there while the HUD mirror pass is not
   // drawing. Per side [a,b,c,d] (inboard-low, outboard-low, outboard-high, inboard-high).
   const _ckMirrorCache = new Map();
+  let _ckLastIn = {}, _ckLastQ = null;   // last raw scale -> quads: the per-frame call builds no toFixed key
   function cockpitMirrorGlass(mirrorScale) {
+    if (mirrorScale === _ckLastIn) return _ckLastQ;
     const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1)), k = mScale.toFixed(3);
-    if (_ckMirrorCache.has(k)) return _ckMirrorCache.get(k);
+    if (_ckMirrorCache.has(k)) { _ckLastIn = mirrorScale; return (_ckLastQ = _ckMirrorCache.get(k)); }
     const mx = 0.60 * mScale, mW = 0.215, mH = 0.075, mY = 0.780, toe = 0.030, ins = 0.012, z = 0.92 - 0.038 - 0.001;
     const y0 = mY - mH / 2 + ins, y1 = mY + mH / 2 - ins, zi = z + toe * ins / mW, zo = z + toe * (1 - ins / mW);
     const q = [-1, 1].map((s) => { const xi = s * (mx - mW / 2 + ins), xo = s * (mx + mW / 2 - ins);
       return [[xi, y0, zi], [xo, y0, zo], [xo, y1, zo], [xi, y1, zi]]; });
-    _ckMirrorCache.set(k, q);
-    return q;
+    _ckMirrorCache.set(k, q); _ckLastIn = mirrorScale; return (_ckLastQ = q);
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
@@ -1871,62 +1871,69 @@ const Car3D = (function () {
       const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
       for (const lx of [-0.06, 0, 0.06])
         addBox(out, lx, 0.868, -0.30, 0.02, 0.014, 0.02, engLed, SURFACES.metal);
-      // FUEL: per-option filler cap colour.
+      // FUEL: per-option filler cap colour. Rooted on the cover skin the same
+      // way the tank breather is — literals at y 0.795/0.828/0.85 left the
+      // collar floating ~13 cm over a short cover and buried under a tall one.
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
-      addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
+      const fuelX = 0.12, fuelZ = -0.50;
+      const fy = coverSurfaceY(anchors.coverAt(fuelZ), fuelX);
+      addBox(out, fuelX, fy - 0.018, fuelZ, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing
       const fuelSurface = SURFACES.metal;
-      addBox(out, 0.12, 0.828, -0.50, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
-      addBox(out, 0.12, 0.85,  -0.50, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
+      addBox(out, fuelX, fy + 0.015, fuelZ, 0.10,  0.02, 0.15, fuelDisplay, fuelSurface);            // collar ring (proud)
+      addBox(out, fuelX, fy + 0.037, fuelZ, 0.035, 0.03, 0.05, fuelDisplay, fuelSurface);            // cap dot
       const fuelFiller = Math.max(0, Math.min(2, Math.round(fuelStyle.filler || 0)));
       if (fuelFiller >= 1) {
-        const fuelPorts = [{ x: 0.12, z: -0.50, s: 1 }];
-        if (fuelFiller >= 2) fuelPorts.push({ x: 0.12, z: -0.66, s: 0.85 });
+        const fuelPorts = [{ x: fuelX, z: fuelZ, s: 1 }];
+        if (fuelFiller >= 2) fuelPorts.push({ x: fuelX, z: -0.66, s: 0.85 });
         for (const p of fuelPorts) {
           const s = p.s;
+          const py = coverSurfaceY(anchors.coverAt(p.z), p.x);
           addBeveledSpan(out,
-            { z: p.z + 0.082 * s, x: p.x, y: 0.812, w: 0.108 * s, h: 0.036 * s, t: 0.88 },
-            { z: p.z - 0.086 * s, x: p.x, y: 0.798, w: 0.060 * s, h: 0.022 * s, t: 0.70 },
+            { z: p.z + 0.082 * s, x: p.x, y: py - 0.001, w: 0.108 * s, h: 0.036 * s, t: 0.88 },
+            { z: p.z - 0.086 * s, x: p.x, y: py - 0.015, w: 0.060 * s, h: 0.022 * s, t: 0.70 },
             0.007 * s, [0.10, 0.10, 0.12], null, SURFACES.carbon);
-          addBox(out, p.x, 0.868, p.z, 0.042 * s, 0.028 * s, 0.042 * s,
+          addBox(out, p.x, py + 0.055, p.z, 0.042 * s, 0.028 * s, 0.042 * s,
                  [0.22, 0.22, 0.24], fuelSurface);
-          addBox(out, p.x, 0.886, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
+          addBox(out, p.x, py + 0.073, p.z, 0.050 * s, 0.010 * s, 0.050 * s,
                  fuelDisplay, fuelSurface);
-          const r = 0.016 * s, fy = 0.894, n = 6;
-          const ctr = [p.x, fy, p.z];
+          const r = 0.016 * s, capY = py + 0.081, n = 6;
+          const ctr = [p.x, capY, p.z];
           for (let i = 0; i < n; i++) {
             const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
             addTri(out, ctr,
-              [p.x + Math.cos(a1) * r, fy, p.z + Math.sin(a1) * r],
-              [p.x + Math.cos(a0) * r, fy, p.z + Math.sin(a0) * r],
+              [p.x + Math.cos(a1) * r, capY, p.z + Math.sin(a1) * r],
+              [p.x + Math.cos(a0) * r, capY, p.z + Math.sin(a0) * r],
               [0.06, 0.06, 0.07], SURFACES.carbon);
           }
         }
         if (fuelFiller >= 2) {
           addSpan(out,
-            { z: -0.50, x: 0.02, y: 0.845, w: 0.018, h: 0.018 },
-            { z: -0.50, x: 0.02, y: 0.945, w: 0.014, h: 0.014 },
+            { z: fuelZ, x: 0.02, y: fy + 0.032, w: 0.018, h: 0.018 },
+            { z: fuelZ, x: 0.02, y: fy + 0.132, w: 0.014, h: 0.014 },
             fuelDisplay, null, fuelSurface);
-          addBox(out, 0.02, 0.956, -0.50, 0.016, 0.012, 0.016, fuelDisplay, fuelSurface);
+          addBox(out, 0.02, fy + 0.143, fuelZ, 0.016, 0.012, 0.016, fuelDisplay, fuelSurface);
         }
       }
       const fuelHatch = Math.max(0, Math.min(1, Math.round(fuelStyle.hatch || 0)));
       if (fuelHatch) {
         const lift = fuelFiller >= 1 ? 0.055 : 0.028;
+        const hy0 = coverSurfaceY(anchors.coverAt(-0.40), fuelX);
+        const hy1 = coverSurfaceY(anchors.coverAt(-0.58), fuelX);
         addSpan(out,
-          { z: -0.40, x: 0.12, y: 0.872, w: 0.108, h: 0.012, t: 0.92 },
-          { z: -0.58, x: 0.12, y: 0.872 + lift, w: 0.096, h: 0.010, t: 0.88 },
+          { z: -0.40, x: fuelX, y: hy0 + 0.059, w: 0.108, h: 0.012, t: 0.92 },
+          { z: -0.58, x: fuelX, y: hy1 + 0.059 + lift, w: 0.096, h: 0.010, t: 0.88 },
           [0.08, 0.08, 0.09], null, SURFACES.carbon);
-        addBox(out, 0.12, 0.870, -0.405, 0.092, 0.010, 0.016,
+        addBox(out, fuelX, hy0 + 0.057, -0.405, 0.092, 0.010, 0.016,
                [0.24, 0.24, 0.26], SURFACES.metal);
       }
       const fuelVent = Math.max(0, Math.min(1, Math.round(fuelStyle.vent || 0)));
       if (fuelVent) {
         addSpan(out,
-          { z: -0.50, x: 0.205, y: 0.845, w: 0.016, h: 0.016 },
-          { z: -0.50, x: 0.205, y: 0.930, w: 0.012, h: 0.012 },
+          { z: fuelZ, x: 0.205, y: fy + 0.032, w: 0.016, h: 0.016 },
+          { z: fuelZ, x: 0.205, y: fy + 0.117, w: 0.012, h: 0.012 },
           fuelDisplay, null, fuelSurface);
-        addBox(out, 0.205, 0.940, -0.50, 0.014, 0.012, 0.014,
+        addBox(out, 0.205, fy + 0.127, fuelZ, 0.014, 0.012, 0.014,
                [0.10, 0.10, 0.12], SURFACES.carbon);
       }
       // Tank breather across the spine from the filler (filler x +0.12, vent
@@ -1947,9 +1954,11 @@ const Car3D = (function () {
         }
       }
       if (fuelStyle.line) {
+        const lineFront = anchors.coverAt(-0.56);
         const lineRear = anchors.coverAt(-1.30);
+        const ly = coverSurfaceY(lineFront, fuelX);
         addSpan(out,
-          { z: -0.56, x: 0.12, y: 0.80, w: 0.018 * fuelStyle.line, h: 0.018 },
+          { z: -0.56, x: fuelX, y: ly - 0.011, w: 0.018 * fuelStyle.line, h: 0.018 },
           { z: -1.30, x: coverFlankX(lineRear, lineRear.top - 0.15) + 0.006, y: lineRear.top - 0.15,
             w: 0.015 * fuelStyle.line, h: 0.015 },
           fuelDisplay, null, fuelSurface);

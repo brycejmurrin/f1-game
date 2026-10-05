@@ -100,16 +100,14 @@ const ResultsCam = (function () {
       }
       return best || cars[0] || null;
     }
-    function cheqPose() {
-      const p = subject();
+    function cheqPose(p = subject()) {
       if (!p || !G.camVantage) return null;
       const mode = "side";
       const v = G.camVantage(mode, p.s || 0, p.x || 0, p.speed || 0, 0, chequeredExtra(p));
       if (!v || !v.eye) return null;
       return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
     }
-    function doOrbit() {
-      const p = subject();
+    function doOrbit(p = subject()) {
       if (!p) return null;
       return orbitPose(p.px || 0, p.py || 0, p.pz || 0, orbitYaw);
     }
@@ -139,7 +137,7 @@ const ResultsCam = (function () {
       reel = highlightsReel(tags, w.t0, w.t1, HIGHLIGHT_MAX_S);
       if (!reel.length && w.frames > 2) {
         const dur = Math.min(HIGHLIGHT_CLIP_S, Math.max(1, w.t1 - w.t0));
-        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: 0 }];
+        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: -1 }];   // no tagged car: film the winner
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
@@ -152,7 +150,10 @@ const ResultsCam = (function () {
       if (!buf || !clip) return;
       const t = clip.t0 + Math.min(clip.t1 - clip.t0, clipAge);
       buf.apply(t);
-      const pose = cheqPose() || doOrbit();
+      // A retirement remains the subject of its clip; winner selection is
+      // only for the flag/orbit and tags whose car is no longer available.
+      const p = (G.cars || [])[clip.car] || subject();
+      const pose = cheqPose(p) || doOrbit(p);
       if (pose) publish(pose);
     }
     function tick(dt) {

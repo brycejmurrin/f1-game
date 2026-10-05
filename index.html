@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- @gen-shell:csp -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
@@ -630,6 +633,16 @@
      A region filled while hidden and unhidden in one step is not announced by
      NVDA, JAWS or macOS VoiceOver
      (tetralogical.com/blog/2024/05/01/why-are-my-live-regions-not-working/). -->
+<!-- SESSION ONLY — SAVING UNAVAILABLE (js/ui/select-screen.js). Shown only when
+     a WRITE to localStorage failed (store.writeFailed(): quota, or storage
+     blocked) — never because one corrupt key failed to parse. Static here, like
+     all shell DOM (it used to be injected by insertAdjacentHTML). Not a live
+     region: a region unhidden and filled in one step is the pattern NVDA, JAWS
+     and VoiceOver miss (see #announce-live below), so the warning is SPOKEN
+     once through #announce-live instead. DISMISS collapses it to its own toggle
+     (aria-expanded); it stands down during a race and under any open dialog
+     (css/overlays.css), where it would sit inert over the HUD or the sheet. -->
+<aside id="save-warning" aria-labelledby="save-warning-title" hidden><strong id="save-warning-title">SESSION ONLY — SAVING UNAVAILABLE</strong><span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span><button id="save-retry" type="button">RETRY SAVE</button><button id="save-export" type="button">EXPORT RECOVERY</button><button id="save-dismiss" type="button" aria-expanded="true">DISMISS</button></aside>
 <div id="announce-live" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="announce" aria-hidden="true" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
@@ -644,6 +657,9 @@
   <span>Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
   <button id="ios-install-x" type="button" aria-label="Dismiss">&times;</button>
 </div>
+<!-- Android / desktop Chromium: the browser's own install offer, behind one tap
+     (beforeinstallprompt, js/ui/platform-session.js installChip). -->
+<button id="install-chip" type="button" hidden>INSTALL APP</button>
 
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
@@ -807,9 +823,9 @@
             <p id="pm-phonepad-status" class="adv-help" role="status"></p>
             <div id="pm-phonepad-pair" hidden>
               <div id="pm-phonepad-text">
-                <p class="adv-help" data-help="keep">ROOM CODE</p>
+                <p class="adv-help" data-help="keep">ROOM CODE / PRIVATE TOKEN</p>
                 <output id="pm-phonepad-code" aria-live="polite"></output>
-                <p class="adv-help" data-help="keep">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
+                <p class="adv-help" data-help="keep">On the phone: scan the code with the camera, or open <span id="pm-phonepad-url"></span> and type the room code or paste the private token. Both devices need internet to pair; the same Wi&#8209;Fi gives the quickest steering.</p>
               </div>
               <figure class="vs-qr-wrap" id="pm-phonepad-qr-wrap" hidden>
                 <canvas id="pm-phonepad-qr" width="320" height="320" role="img"
@@ -2287,7 +2303,7 @@
              everything else in this game is static files that cannot break,
              while this one depends on a service somebody keeps alive. -->
         <div id="vs-code-entry">
-          <p class="vs-hint">…or use a short room code.</p>
+          <p class="vs-hint">…or use a room code.</p>
           <div class="vs-actions">
             <button id="vs-code-host" class="bigbtn minibtn">NEW CODE</button>
             <button id="vs-code-join" class="bigbtn alt minibtn">ENTER CODE</button>
@@ -3080,7 +3096,7 @@
         <dd>After the flag: the finishing order and points (+FL marks a season&rsquo;s fastest-lap point), YOUR RACE, any new badges and, with the coach on, a COACH INSIGHT that opens the DRIVING page. With tyre wear on, each car shows its tyre stints. MENU leaves; NEXT reads RACE AGAIN, NEXT ROUND in a season, or TRY AGAIN in a time trial.
           <br>A time trial shows your best against your ghost, a MEDAL (gold beats the reference pole time, silver is within 3%, bronze within 7%) and a leaderboard for the same setup and conditions. COPY LINK, COPY CODE or DOWNLOAD shares your ghost lap; a friend who opens the link races it in a time trial as a RIVAL GHOST. COPY DAILY RESULT shares a daily challenge.</dd>
         <dt id="htp-friends">RACE A FRIEND</dt>
-        <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Everyone needs the same game version.
+        <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Private relays use a longer token: copy or share it, then paste it to join. Everyone needs the same game version.
           <br>On a phone, USE AS CONTROLLER on the title menu steers a game on another screen: type the room code it shows.</dd>
       </dl>
     </div>
@@ -3406,6 +3422,10 @@
 }
 </script>
 
+<!-- UPDATE READY (js/ui/update-check.js): a newer build is live. Shown outside
+     races only; a tap flushes saves and reloads into the new build. -->
+<button id="update-chip" type="button" hidden>UPDATE READY · RELOAD</button>
+
 <!-- @gen-shell:scripts -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/mat4.js?v=dev"></script>
@@ -3603,6 +3623,7 @@
 <script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-sight.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-avoid.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
@@ -3670,6 +3691,7 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/live-region.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
@@ -3718,6 +3740,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/shadow-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/update-check.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

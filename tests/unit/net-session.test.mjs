@@ -545,3 +545,51 @@ test("session.close() reports 'local' to its own handlers and 'transport' to the
   a.close();
   assert.deepEqual(whysA, ["local"], "a second close() fires nothing");
 });
+
+// L8-e: a HIDDEN tab pumps on purpose at the platform's slow cadence
+// (platform-session.js 500 ms, ~1 s in Chrome; the lobby's 25 ms interval at
+// 1 Hz). Every such pump read as a stall and was forgiven, so a peer who had
+// quit was never timed out while hidden. Hidden, silence is real silence.
+test("a hidden tab still times out a gone peer; a visible stall is still forgiven", () => {
+  const prior = globalThis.document;
+  try {
+    globalThis.document = { hidden: true };
+    const p = pair({ latency: 20 });
+    p.advance(600);
+    assert.equal(p.a.alive(), true);
+    p.b.close();
+    const t = p.now();
+    for (let i = 1; i <= 8; i++) p.a.pump(t + i * 1000);   // eight hidden 1 Hz pumps
+    assert.equal(p.a.alive(), false, "hidden: a silent peer is gone after ~timeoutMs, not after the tab returns");
+
+    // A hidden tab whose peer is ALIVE keeps the link: arrivals still count.
+    const q = pair({ latency: 20 });
+    q.advance(600);
+    const u = q.now();
+    for (let i = 1; i <= 12; i++) { q.b.pump(u + i * 1000); q.a.pump(u + i * 1000); }
+    assert.equal(q.a.alive(), true, "hidden 1 Hz pumping with a live peer is not a timeout");
+
+    globalThis.document = { hidden: false };
+    const v = pair({ latency: 20 });
+    v.advance(600);
+    const w = v.now() + 10000;
+    v.a.pump(w); v.b.pump(w);
+    assert.equal(v.a.alive(), true, "visible: a 10 s local stall is still forgiven");
+  } finally {
+    if (prior === undefined) delete globalThis.document; else globalThis.document = prior;
+  }
+});
+
+// L8-f: a race raises the silence that ends a session (NetPlay's 25 s grace);
+// the lobby keeps the 6 s default.
+test("setTimeoutMs raises the silence that ends the session", () => {
+  const p = pair({ latency: 20 });
+  p.advance(600);
+  assert.equal(p.a.setTimeoutMs(25_000), 25_000);
+  assert.equal(p.a.setTimeoutMs(-1), 25_000, "nonsense is ignored");
+  const t = p.now();   // B stops pumping: silent, its transport still open
+  for (let i = 1; i <= 200; i++) p.a.pump(t + i * 100);   // 20 s of silence
+  assert.equal(p.a.alive(), true, "inside the grace");
+  for (let i = 201; i <= 300; i++) p.a.pump(t + i * 100);  // 30 s
+  assert.equal(p.a.alive(), false, "past it");
+});

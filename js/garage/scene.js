@@ -1670,13 +1670,18 @@ function recentre(proj, view, vp, panelFrac, on, hull) {
 // (the paint is baked into the vertex colours) while the silhouette it was
 // computed from has not moved.
 const PREVIEW_SLOTS = 6;
+// dropPreviewMeshes keeps the hulls, so the mesh LRU alone never evicts the
+// hulls it orphaned: every repaint-then-new-part left one behind for the page.
+const HULL_SLOTS = PREVIEW_SLOTS * 2;
 const previewMeshes = new Map(), previewHulls = new Map();
 function previewMesh(key, hullKey, build) {
   let ent = previewMeshes.get(key);
   if (ent) { previewMeshes.delete(key); previewMeshes.set(key, ent); return ent; }
   const data = build();
   let hull = previewHulls.get(hullKey);
-  if (!hull) { hull = framingHull(data); previewHulls.set(hullKey, hull); }
+  if (hull) previewHulls.delete(hullKey);   // re-inserted below: least-recently-used first
+  else hull = framingHull(data);
+  previewHulls.set(hullKey, hull);
   ent = { mesh: _gfx.createMesh(data), hull, hullKey };
   previewMeshes.set(key, ent);
   while (previewMeshes.size > PREVIEW_SLOTS) {
@@ -1692,11 +1697,18 @@ function previewMesh(key, hullKey, build) {
       if (!used) previewHulls.delete(victim.hullKey);
     }
   }
+  if (previewHulls.size > HULL_SLOTS) {   // oldest first, never one a cached mesh still frames with
+    const live = new Set([...previewMeshes.values()].map((e) => e.hullKey));
+    for (const k of [...previewHulls.keys()]) {
+      if (previewHulls.size <= HULL_SLOTS) break;
+      if (!live.has(k)) previewHulls.delete(k);
+    }
+  }
   return ent;
 }
 // Every cached car is on the old paint after a livery edit — drop them all.
 // The hulls stay: presence-keyed, and a hue never moves a vertex
-// (tests/unit/setup-preview-hull.test.mjs).
+// (tests/unit/setup-preview-hull.test.mjs); HULL_SLOTS bounds them.
 function dropPreviewMeshes() {
   for (const ent of previewMeshes.values()) _gfx.freeMesh(ent.mesh);
   previewMeshes.clear();

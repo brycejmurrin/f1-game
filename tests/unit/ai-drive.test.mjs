@@ -161,7 +161,12 @@ test("wantBoost catches and defends; banks when aware and rich-not-needed", () =
   }), true);
 });
 
-test("brakeDecision soft-pedals small excess and full-pedals big excess", () => {
+// verify-physics #3 (2026-10-04): the pedal is FEED-FORWARD + a P trim. The
+// planner budgets 0.85·brake of deceleration over each sample's distance, so a
+// car riding its own envelope needs pedal 0.85 there — a pure P band (0.2 at
+// 1 m/s over, 1.0 at 7) reached that only at ~6 m/s of standing overspeed and
+// the AI arrived 12-41 % above its planned corner speed (VM, monza).
+test("brakeDecision: no pedal under the envelope, the planner's 0.85 budget on it, full pedal far over it", () => {
   const samples = [
     { d: 40, k: 0.02, bank: 0 },
     { d: 80, k: 0.01, bank: 0 },
@@ -170,29 +175,52 @@ test("brakeDecision soft-pedals small excess and full-pedals big excess", () => 
   const lim = A.brakeTarget(base);
   // brakeDecision returns a reused scratch (pairContact/_ct contract) — copy
   // fields before the next call.
-  const soft = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 2 }));
+  const on = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 1.05 }));
   const hard = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 10 }));
   const ok = Object.assign({}, A.brakeDecision({ ...base, speed: lim - 1 }));
   assert.equal(ok.braking, false);
-  assert.equal(soft.braking, true);
-  assert.ok(soft.brakeLvl < hard.brakeLvl);
+  assert.equal(ok.ff, 0);
+  assert.equal(on.braking, true);
+  assert.ok(on.ff > 0.85 && on.ff < 0.95, `on the envelope the feed-forward is the planner's budget (ff ${on.ff})`);
+  assert.ok(on.brakeLvl >= on.ff && on.brakeLvl < 0.96, `and the P trim only trims (pedal ${on.brakeLvl})`);
+  assert.ok(on.brakeLvl <= hard.brakeLvl);
   assert.equal(hard.brakeLvl, 1);
 });
 
-test("brakeDecision gives the same pedal for the same pace-normalised overspeed", () => {
-  const samples = [
-    { d: 40, k: 0.02, bank: 0 },
-    { d: 80, k: 0.01, bank: 0 },
-  ];
+test("brakeDecision's P trim compares the overspeed on the standard (pace) scale", () => {
+  const samples = [{ d: 160, k: 0.004, bank: 0 }];
   const decisions = [1, 0.84, 0.5].map((pace) => {
     const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1, pace, vmax: 72 };
     const lim = A.brakeTarget(base);
-    return Object.assign({}, A.brakeDecision({ ...base, speed: lim + 2 * pace }));
+    return Object.assign({}, A.brakeDecision({ ...base, speed: lim + 1.3 * pace }));
   });
   for (const d of decisions) {
     assert.equal(d.braking, true);
-    assert.equal(d.brakeLvl, decisions[0].brakeLvl);
+    assert.ok(d.brakeLvl < 1, `anti-vacuity: unclamped (${d.brakeLvl})`);
+    assert.ok(Math.abs((d.brakeLvl - d.ff) - (decisions[0].brakeLvl - decisions[0].ff)) < 1e-12,
+      `same trim at every pace (${d.brakeLvl - d.ff} vs ${decisions[0].brakeLvl - decisions[0].ff})`);
   }
+});
+
+test("closed loop: braking into one corner arrives within 1 m/s of the planned corner speed", () => {
+  // The executor game.js runs: v -= brake·brakeLvl·dt while braking. One
+  // corner 300 m ahead (k 0.02, vC ~33 m/s) approached at 70 m/s.
+  const k = 0.02, dt = 1 / 60, brake = 22;
+  let v = 70, s = 0, vAtCorner = null;
+  const vC = A.cornerSpeed(k, 22, 1, 72);
+  for (let i = 0; i < 60 * 20 && vAtCorner === null; i++) {
+    const d = 300 - s;
+    if (d <= 1) { vAtCorner = v; break; }
+    const samples = [];
+    for (let x = 4; x <= Math.min(d, 160); x += 4) samples.push({ d: x, k: x >= d - 2 ? k : 0.0001, bank: 0 });
+    if (d < 160) samples.push({ d, k, bank: 0 });
+    const br = A.brakeDecision({ traits: mid, samples, latMax: 22, brake, grip: 1, speed: v, pace: 1, vmax: 72 });
+    if (br.braking) v = Math.max(0, v - brake * br.brakeLvl * dt);
+    s += v * dt;
+  }
+  assert.ok(vAtCorner !== null, "reached the corner");
+  assert.ok(vAtCorner - vC < 1.0, `arrived at ${vAtCorner.toFixed(2)} m/s for a planned ${vC.toFixed(2)} (old P band: +5.9 m/s)`);
+  assert.ok(vAtCorner > vC - 2, `and did not stop short (${vAtCorner.toFixed(2)})`);
 });
 
 test("craft late-brake raises the limit when attacking with room", () => {
@@ -624,15 +652,20 @@ test("consistency widens the brake band without moving the mid default", () => {
   const samples = [{ d: 40, k: 0.02, bank: 0 }];
   const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
   const lim = A.brakeTarget(base);
-  const midDec = Object.assign({}, A.brakeDecision({ ...base, speed: lim + 4 }));
+  // With the feed-forward (verify-physics #3) the pedal sits near the planner's
+  // 0.85 budget the moment braking starts, so consistency acts where the band
+  // still decides: the ONSET (soft) and the size of the trim.
+  const at = lim + 1.2;
+  const midDec = Object.assign({}, A.brakeDecision({ ...base, speed: at }));
   const rookDec = Object.assign({}, A.brakeDecision({
-    ...base, traits: { ...mid, consistency: 0.2 }, speed: lim + 4,
+    ...base, traits: { ...mid, consistency: 0.2 }, speed: at,
   }));
   const aceDec = Object.assign({}, A.brakeDecision({
-    ...base, traits: { ...mid, consistency: 1 }, speed: lim + 4,
+    ...base, traits: { ...mid, consistency: 1 }, speed: at,
   }));
   assert.equal(midDec.braking, true);
-  assert.ok(rookDec.brakeLvl < midDec.brakeLvl, "rookie eases in later");
+  assert.ok(midDec.brakeLvl < 1, `anti-vacuity: mid is unclamped (${midDec.brakeLvl})`);
+  assert.equal(rookDec.braking, false, "rookie eases in later");
   assert.ok(aceDec.brakeLvl > midDec.brakeLvl, "ace commits sooner");
 });
 
@@ -931,6 +964,15 @@ test("tyres: sprints start on softs, long races mix; a soft is up and fades, a h
   assert.equal(A.tyrePace("nonsense", 0), 1, "an unknown class is a medium");
   // The three fresh offsets are zero-mean over a mixed field.
   assert.ok(Math.abs(A.tyrePace("soft", 0) + A.tyrePace("hard", 0) - 2 * A.tyrePace("medium", 0)) < 1e-9);
+});
+
+// verify-physics #14: tyrePace takes laps DONE, and c.lap counts line
+// crossings (1 on the opening lap — TyreModel's lapsDone fixed the same
+// off-by-one). Fed c.lap, the wear-off AI carried one lap of deg from the start.
+test("game.js feeds tyrePace laps done (c.lap - 1), not the crossing count", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /AiDrive\.tyrePace\(c\.tyreClass, Math\.max\(0, c\.lap - 1\)\)/);
+  assert.doesNotMatch(game, /AiDrive\.tyrePace\(c\.tyreClass, c\.lap\)/);
 });
 
 /* ── a straight is defendable ──────────────────────────────────────────────
@@ -1324,12 +1366,15 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
   const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
   const b = src.indexOf(endMark, a);
   assert.ok(a > 0 && b > a, "the scan is where this test expects it");
-  const scan = new Function("c", "ranked", "track", "OT_GAP",
+  const scan = new Function("c", "ranked", "track", "OT_GAP", "pits",
     src.slice(a, b + endMark.length) + "\nreturn { ahead, gapAhead };");
+  // A car in the pit lane or retired is not the car ahead ON THE ROAD
+  // (verify-physics #15); the reference applies the same skip.
+  const pits = { inLane: (o) => !!o.inLane };
   const ref = (c, ranked, track, OT_GAP) => {   // the unfiltered scan, as it was
     let ahead = null, gapAhead = Infinity;
     for (const o of ranked) {
-      if (o === c || o.finished) continue;
+      if (o === c || o.finished || o.retired || pits.inLane(o)) continue;
       const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
     }
@@ -1348,10 +1393,10 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
       const r = rnd();
       const prog = r < 0.02 ? NaN
         : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;   // 0-2 laps up
-      return { prog, _snapProg: prog, finished: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
+      return { prog, _snapProg: prog, finished: rnd() < 0.05, retired: rnd() < 0.03, inLane: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
     });
     for (const c of cars) {
-      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP);
+      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP, pits);
       const wantArmed = want.gapAhead < OT_GAP, gotArmed = got.gapAhead < OT_GAP;
       assert.equal(gotArmed, wantArmed, `trial ${trial}: armed differs`);
       if (wantArmed) {
@@ -1430,7 +1475,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
   const damp = (a, b, rate, dt) => a + (b - a) * (1 - Math.exp(-rate * dt));
   const control = new Function("v", "deps", `
     const { c, desiredX, tanT, unstuckActive, rubClamp, dt, PACE, inputSteer } = v;
-    const { AiDrive, gripMult, tyres, dirtyAirMul, clamp, damp, K, aiT } = deps;
+    const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
     ${decl[1]}
@@ -1446,7 +1491,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const speed = (mode === "stopped" ? 0 : mode === "crawl" ? 3 : 12 + 90 * rnd()) * PACE * (i % 9 ? 1 : -1);
     const c = { human: mode === "human", x: rnd() * 8 - 4, speed, aeroLoad: rnd(),
       wake: i % 3 ? rnd() : 0, aiHead: rnd() * 0.6 - 0.3, steerSm: i % 4 ? rnd() - 0.5 : undefined,
-      contactT: mode === "contact" ? 0.3 : 0 };
+      contactT: mode === "contact" ? 0.3 : 0, aeroX: i % 5 ? 0 : rnd() };
     const original = { ...c };
     const weatherGrip = [1, 0.72, 0.45][i % 3], tyreGrip = 0.4 + rnd() * 0.6;
     const air = (wake, velocity) => 1 - 0.2 * wake * Math.min(1, Math.abs(velocity) / (K.VMAX * Math.max(PACE, 0.05))) ** 2;
@@ -1459,10 +1504,12 @@ test("AI heading reuses current grip without changing normal or recovery steerin
         lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
       gripMult() { calls.weather++; return weatherGrip; },
       tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
+      // X-mode's downforce cost reaches the AI's lateral envelope (verify-physics #11), never the yaw budget.
+      aeroDfMult(car) { return 1 - 0.3 * (car.aeroX || 0); },
       dirtyAirMul(wake, velocity) { calls.air++; return air(wake, velocity); } };
     const got = control(v, deps);
     const grip = weatherGrip * tyreGrip * air(original.wake, original.speed);
-    const lateral = A.lateralScale(speed, original.aeroLoad, grip, PACE, K.VMAX);
+    const lateral = A.lateralScale(speed, original.aeroLoad, grip, PACE, K.VMAX, 1 - 0.3 * (original.aeroX || 0));
     const vStd = speed * K.VMAX / (K.VMAX * Math.max(PACE, 0.05));
     const latFac = clamp(Math.abs(vStd) / 18, 0, 1), err = v.desiredX - original.x, vAbs = Math.abs(speed);
     let head = original.aiHead, sm = original.steerSm, steer = v.inputSteer;

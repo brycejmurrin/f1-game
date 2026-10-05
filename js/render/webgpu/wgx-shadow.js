@@ -72,12 +72,13 @@ const WGXShadow = (function () {
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
       carShadowView = carShadowTex.createView();
-      // Blocker map (PCSS-lite downsampled sun shadow map). Isolated: Safari
-      // may refuse r16float as a color target; LIT still needs a float view
-      // at binding 7, so a 1×1 placeholder keeps the frame group valid.
+      // Blocker map (PCSS-lite downsampled sun shadow map), r32float: renderable
+      // in core WebGPU, not filterable — LIT textureLoads it (binding 7 is
+      // unfilterable-float). Isolated: a refusal leaves a 1×1 placeholder so
+      // the frame group stays valid.
       try {
         blockerTex = core.device.createTexture({
-          size: [512, 512], format: "r16float",
+          size: [512, 512], format: "r32float",
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         });
         blockerView = blockerTex.createView();
@@ -156,7 +157,7 @@ const WGXShadow = (function () {
         blockerPipeline = core.device.createRenderPipeline({
           layout: core.device.createPipelineLayout({ bindGroupLayouts: [blockerG0Layout] }),
           vertex: { module: blockerModule, entryPoint: "vs_main" },
-          fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r16float" }] },
+          fragment: { module: blockerModule, entryPoint: "fs_main", targets: [{ format: "r32float" }] },
           primitive: { topology: "triangle-list" },
         });
         blockerBG = core.device.createBindGroup({

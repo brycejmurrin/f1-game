@@ -1056,7 +1056,16 @@ const WGX = (function () {
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
     // allocator (WeakMap chunks-array -> {base, table} + append cursor).
     let framePerChunk = 0, frameAllLights = null, frameRoadChunkLamps = 0, frameAllLightsGen = -1;
-    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1;
+    let _tlSrc = null, _tlCapPrev = -1, _tlGen = -1, _tlUpT = -1;
+    // A VALUES-only change of the baked track set (allLightsGen: lamp flicker,
+    // the warm-up ramp, a LAMPS slider) re-uploads at most this often. The
+    // shipped flicker (lampFlicker 0.011-0.10, def 0.10) moves the gen EVERY
+    // frame, so the whole tn × 64 B SBO (spa 869 lamps = 55 KB) went up every
+    // frame — 144 times a second on a 144 Hz display — for a ≤ 2.4 Hz shimmer.
+    // 30 Hz samples it at > 12× its fastest term. A new set, a re-bake or a cap
+    // change still uploads at once. The full fix moves flicker into the lit
+    // shaders of all three backends (a static SBO per bake).
+    const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
     let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
     // Which source array _tlScratch's STATIC lanes were packed from.
@@ -1356,7 +1365,7 @@ const WGX = (function () {
           { binding: 6, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "float" } },                          // SSR result
           { binding: 7, visibility: GPUShaderStage.FRAGMENT,
-            texture: { sampleType: "float" } },                          // blocker map (PCSS-lite)
+            texture: { sampleType: "unfilterable-float" } },             // blocker map (PCSS-lite, r32float, textureLoad)
           { binding: 8, visibility: GPUShaderStage.FRAGMENT,
             texture: { sampleType: "depth" } },                          // per-frame car shadow map
           { binding: 9, visibility: GPUShaderStage.FRAGMENT,
@@ -1571,6 +1580,12 @@ const WGX = (function () {
       color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
       alpha: { srcFactor: "one",       dstFactor: "one-minus-src-alpha", operation: "add" },
     };
+    // Car decals: the atlas is uploaded premultiplied (createTexture), so the
+    // colour is already coverage-weighted (GLX ONE / ONE_MINUS_SRC_ALPHA).
+    const PREMUL_BLEND = {
+      color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+      alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+    };
     const ADD_BLEND = {
       color: { srcFactor: "one", dstFactor: "one", operation: "add" },
       alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
@@ -1706,8 +1721,10 @@ const WGX = (function () {
           ],
         });
         const decalMod = device.createShaderModule({ code: _Fx.DECAL });
+        // Group 1 = the lit pass's frame group (g0Layout): the decal's sun-map
+        // shadow and lamp-pool terms read the same FrameU and textures.
         pDecal = device.createRenderPipeline({
-          layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout] }),
+          layout: device.createPipelineLayout({ bindGroupLayouts: [fxDecalLayout, g0Layout] }),
           vertex: { module: decalMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.DECAL_VERTEX_BYTES,
             attributes: [
               { shaderLocation: 0, offset: 0,  format: "float32x3" },
@@ -1715,7 +1732,7 @@ const WGX = (function () {
               { shaderLocation: 2, offset: 24, format: "float32x2" },
             ] }] },
           fragment: { module: decalMod, entryPoint: "fs_main", targets: [{
-            format: SCENE_FORMAT, blend: ALPHA_BLEND,
+            format: SCENE_FORMAT, blend: PREMUL_BLEND,
             writeMask: GPUColorWrite.RED | GPUColorWrite.GREEN | GPUColorWrite.BLUE,
           }] },
           primitive: { topology: "triangle-list", cullMode: "none" },
@@ -1841,6 +1858,9 @@ const WGX = (function () {
       get _blurSlots() { return _blurSlots; }, set _blurSlots(v) { _blurSlots = v; },
       get _sgsrTried() { return _sgsrTried; }, set _sgsrTried(v) { _sgsrTried = v; },
       get _sgsrGather() { return _sgsrGather; }, set _sgsrGather(v) { _sgsrGather = v; },
+      // An SGSR variant passed its error scope after setSpatialUpscale already
+      // sized the canvas without it: re-split render/present size now.
+      onSpatialReady() { if (!_lost && spatialUpscale) { resize(); _syncSpatialAa(); } },
     });
 
     if (!WGX_MINIMAL) {
@@ -2368,8 +2388,42 @@ const WGX = (function () {
       }
     }
 
+    // A RESIZE's target set is built inside error scopes and swapped in only
+    // when both pop clean. createTexture / createBindGroup never THROW on an
+    // out-of-memory or validation error — they return an invalid object and
+    // report a GPUError (W3C WebGPU §22 "Errors & Debugging",
+    // https://www.w3.org/TR/webgpu/#errors-and-debugging; pushErrorScope
+    // filters "validation" / "out-of-memory" / "internal", popErrorScope
+    // resolves null when the scope caught nothing:
+    // https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/pushErrorScope).
+    // So the try/catch below never saw memory pressure: the invalid set was
+    // swapped in, every pass errored, and the GPU-error ladder reloaded the tab
+    // a rung down. Now the old set keeps rendering until the verdict lands
+    // (the _texW/_texH mismatch path present() already handles), a clean set
+    // swaps in at the next frame, and a failed one is destroyed and the size
+    // waits out the same cooldown a thrown failure does. The FIRST build has no
+    // set to keep, so it is not deferred (its errors still reach the ladder).
+    let _pendingTargets = null;   // { next, w, h, state: "wait" | "ok" | "bad" }
+    function _scopedTargets(next) {
+      const p = { next, w: width, h: height, state: "wait" };
+      _pendingTargets = p;
+      const vPop = device.popErrorScope(), oPop = device.popErrorScope();   // LIFO: validation, then OOM
+      Promise.all([vPop, oPop]).then(([vErr, oErr]) => {
+        const err = vErr || oErr;
+        p.state = err ? "bad" : "ok";
+        if (err) Log.warn("gfx", "WGX target realloc " + p.w + "x" + p.h + " failed (" + (oErr ? "out-of-memory" : "validation") + "): " + (err.message || err) + " — keeping the previous set");
+      }, () => { p.state = "bad"; });
+    }
     function ensureTargets() {
       if (width < 1 || height < 1) return;
+      if (_pendingTargets) {
+        const p = _pendingTargets;
+        if (p.state === "wait") return;   // keep rendering through the current set
+        _pendingTargets = null;
+        if (p.state === "ok" && p.w === width && p.h === height) { _swapTargets(p.next); return; }
+        _destroyTargetSet(p.next);        // failed, or the size moved on while it was checked
+        if (p.state === "bad") { _targetRetryW = p.w; _targetRetryH = p.h; _targetRetryAt = Date.now() + 1000; }
+      }
       if (sceneTex && _texW === width && _texH === height) {
         _syncSpatialAa();
         return;
@@ -2382,6 +2436,9 @@ const WGX = (function () {
       const halfW = Math.max(1, width >> 1), halfH = Math.max(1, height >> 1);
       const next = { bloomLv: [], bloomDownUBO: [], bloomUpUBO: [],
         bloomDownBG: [], bloomUpBG: [], postReady: false, ssrReady: false };
+      const scoped = !!sceneTex && typeof device.pushErrorScope === "function" &&
+                     typeof device.popErrorScope === "function";
+      if (scoped) { device.pushErrorScope("out-of-memory"); device.pushErrorScope("validation"); }
       try {
         next.sceneTex = device.createTexture({
           size: [width, height], format: SCENE_FORMAT,
@@ -2591,12 +2648,17 @@ const WGX = (function () {
       } catch (_) {
         // Alloc/bind of the new size failed: keep the previous target set
         // and retry after a cooldown (same-size) or immediately (new size).
+        if (scoped) { device.popErrorScope().catch(() => {}); device.popErrorScope().catch(() => {}); }
         _destroyTargetSet(next);
         _targetRetryW = width; _targetRetryH = height;
         _targetRetryAt = Date.now() + 1000;
         return;
       }
+      if (scoped) { _scopedTargets(next); return; }
+      _swapTargets(next);
+    }
 
+    function _swapTargets(next) {
       const old = { sceneTex, depthTex, ssaoTex, godrayTex, ldrTex, ssrTex,
         ssaoBlurTex, godrayBlurTex, bloomLv, bloomDownUBO, bloomUpUBO, sceneMSTex, depthMSTex };
       sceneTex = next.sceneTex; depthTex = next.depthTex;
@@ -3060,10 +3122,20 @@ const WGX = (function () {
           size: [w, h], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
+        // PREMULTIPLIED (every createTexture handle is a drawDecal atlas, blended
+        // PREMUL_BLEND): mips then average coverage-weighted colour, so the
+        // transparent surround no longer bleeds dark fringes into logo edges.
         if (src instanceof Uint8Array || src instanceof Uint8ClampedArray) {
-          device.queue.writeTexture({ texture: tex }, src, { bytesPerRow: w * 4, rowsPerImage: h }, [w, h]);
+          const pm = new Uint8Array(src.length);
+          for (let i = 0; i < src.length; i += 4) {
+            const a = src[i + 3];
+            pm[i] = (src[i] * a + 127) / 255; pm[i + 1] = (src[i + 1] * a + 127) / 255;
+            pm[i + 2] = (src[i + 2] * a + 127) / 255; pm[i + 3] = a;
+          }
+          device.queue.writeTexture({ texture: tex }, pm, { bytesPerRow: w * 4, rowsPerImage: h }, [w, h]);
         } else {
-          device.queue.copyExternalImageToTexture({ source: src, flipY: true }, { texture: tex }, [w, h]);
+          device.queue.copyExternalImageToTexture({ source: src, flipY: true },
+            { texture: tex, premultipliedAlpha: true }, [w, h]);
         }
         _generateMips(tex, 1);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
@@ -3175,8 +3247,12 @@ const WGX = (function () {
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       d[48]=fogDensity; d[49]=fogHeight; d[50]=f.time != null ? f.time : 0; d[51]=nL;
       // The particle pass reads the same frame light and fog (drawParticles).
-      _particleFrame.sun = sc; _particleFrame.ambSky = [as[0]*ambM, as[1]*ambM, as[2]*ambM];
-      _particleFrame.ambGround = [ag[0]*ambM, ag[1]*ambM, ag[2]*ambM]; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
+      // In place: _writeFrame runs on the main pass, the mirror and an env face —
+      // two fresh arrays a call was GC churn on the hottest WGX function.
+      const _pAS = _particleFrame.ambSky, _pAG = _particleFrame.ambGround;
+      _pAS[0] = as[0]*ambM; _pAS[1] = as[1]*ambM; _pAS[2] = as[2]*ambM;
+      _pAG[0] = ag[0]*ambM; _pAG[1] = ag[1]*ambM; _pAG[2] = ag[2]*ambM;
+      _particleFrame.sun = sc; _particleFrame.fogColor = fc; _particleFrame.fogDensity = fogDensity;
       d[52]=T && T.keyMul != null ? T.keyMul : 1;
       d[53]=T && T.glowAmp != null ? T.glowAmp : 2.3;
       d[54]=f.wetness != null ? f.wetness : 0;
@@ -3393,7 +3469,13 @@ const WGX = (function () {
       const _tlCap = (typeof LampChunks !== "undefined") ? LampChunks.capFor(framePerChunk) : 0;
       const _tlSetMoved = _tlSrc !== frameAllLights;
       const _lbGen = f.lampBake ? f.lampBake.gen | 0 : 0;
-      if (framePerChunk > 0 && frameAllLights &&
+      // Values-only: the same set and bake, only rgb moved — paced by TL_VALUES_DT
+      // on the frame clock (frame.time, game.js's render clock). A clock that went
+      // BACK (a new session) or stands still (__apex.renderClock hold, no
+      // frame.time) is never paced: a slider move there must still land.
+      const _tlValuesOnly = !_tlSetMoved && _tlLoGen === _lbGen;
+      const _tlPaced = _tlValuesOnly && frameTime > _tlUpT && frameTime - _tlUpT < TL_VALUES_DT;
+      if (framePerChunk > 0 && frameAllLights && !_tlPaced &&
           (_tlSetMoved || _tlGen !== frameAllLightsGen || _tlLoGen !== _lbGen)) {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
@@ -3422,7 +3504,7 @@ const WGX = (function () {
         // contiguous range and the upload itself cannot shrink. Only the CPU
         // pack does — which is the half that scales with lamp count.
         if (tn > 0) device.queue.writeBuffer(trackLightSBO, 0, td, 0, tn * 16);
-        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen;
+        _tlSrc = frameAllLights; _tlGen = frameAllLightsGen; _tlUpT = frameTime;
       }
       // Allocator tracks the TABLES: reset on a set or CAP change, never on a
       // colour-only gen bump (tables key on positions, which flicker leaves
@@ -3760,9 +3842,11 @@ const WGX = (function () {
 
     // BlitU = params (exposure, flip, mip, _) + tone (aces a,b,c,d | e, whitePoint)
     // from T: _TONE_STANDIN, or a frame's tune (the mirror; null = knob defaults).
+    const _ONE3W = [1, 1, 1];
     function _blitParams(dst, exposure, T) {
-      dst[0] = exposure; dst[1] = 0; dst[2] = 0; dst[3] = 0;
+      dst[0] = exposure; dst[1] = 0; dst[2] = 0; dst[3] = 0;   // w 0: no grade (the plain tonemap blit)
       for (let i = 0; i < 6; i++) dst[4 + i] = PostCommon.knob(T, _TONE_IDS[i]);
+      for (let i = 10; i < dst.length; i++) dst[i] = 0;
       return dst;
     }
 
@@ -4001,7 +4085,9 @@ const WGX = (function () {
     // queue-written by the fallback blit in this same submit. T = the frame's
     // tune when the composite ran — its white point + ACES knobs, as GLX
     // MIRROR_FS / TLX mirror — or _TONE_STANDIN when the frame took the blit.
-    function _mirrorComposite(exposure, T) {
+    // `o` (the present opts) only when the post chain graded the frame: the
+    // inset then takes the same colour grade + dither (BLIT params.w).
+    function _mirrorComposite(exposure, T, o) {
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
       const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
       const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
@@ -4015,6 +4101,14 @@ const WGX = (function () {
       const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
       _blitParams(_mirData, exposure, T);
       _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
+      if (o) {
+        const g = o.grade || null, gsh = g && g.shadow ? g.shadow : _ONE3W, ghi = g && g.hi ? g.hi : _ONE3W;
+        _mirData[3] = 1; _mirData[10] = frameTime;
+        _mirData[12] = PostCommon.knob(T, "contrast"); _mirData[13] = PostCommon.knob(T, "vibrance");
+        _mirData[14] = PostCommon.knob(T, "saturation"); _mirData[15] = PostCommon.knob(T, "tint");
+        _mirData[16] = gsh[0]; _mirData[17] = gsh[1]; _mirData[18] = gsh[2]; _mirData[19] = g && g.str != null ? g.str : 0;
+        _mirData[20] = ghi[0]; _mirData[21] = ghi[1]; _mirData[22] = ghi[2]; _mirData[23] = PostCommon.knob(T, "blackLift");
+      }
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
       const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
@@ -4478,6 +4572,7 @@ const WGX = (function () {
           const src = i === 0 ? { w: tw, h: th } : bloomLv[i - 1];
           const s = postScratch;
           s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = i === 0 ? 2 : i === 1 ? 1 : 0;
+          s[4] = o.exposure != null ? o.exposure : 1.0; s[5] = s[6] = s[7] = 0;
           device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
@@ -4638,7 +4733,7 @@ const WGX = (function () {
           timerRead = _gpuReadBuf;
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
-      _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN);   // !_postReady: the catch took the blit
+      _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN, _postReady ? o : null);   // !_postReady: the catch took the blit
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
@@ -4684,21 +4779,20 @@ const WGX = (function () {
     // into rgba8unorm converts sRGB → linear, so a mean-normalised 128-grey
     // asphalt scan lands at ~0.22 and `albedo * tex * 2.0` crushes or — on
     // implementations that encode the other way — washes the road vs WebGL2.
-    function _matLayerBytes(img, size) {
-      if (!img) return null;
-      if (img instanceof Uint8Array || img instanceof Uint8ClampedArray) return img;
-      if (typeof ImageData !== "undefined" && img instanceof ImageData) return img.data;
-      try {
-        const cv = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const c2d = cv.getContext("2d", { alpha: true, colorSpace: "srgb" })
-          || cv.getContext("2d", { alpha: true })
-          || cv.getContext("2d");
-        if (!c2d) return null;
-        c2d.drawImage(img, 0, 0, size, size);
-        return c2d.getImageData(0, 0, size, size).data;
-      } catch (_) { return null; }
+    // The bytes come from Assets.readLayerBytes (scratch WebGL2, every unpack
+    // conversion off), NOT a 2D canvas: drawImage()+getImageData() goes through
+    // a premultiplied backing store, and the albedo alpha is roughness, so the
+    // metal/low-alpha layers came back RGB-quantised on every engine.
+    // Returns per-layer byte views (null where the readback could not run).
+    function _matLayerBytes(size, images, n) {
+      const out = new Array(n).fill(null);
+      if (typeof Assets === "undefined" || !Assets.readLayerBytes) return out;
+      const page = size * size * 4;
+      const data = new Uint8Array(page * n);
+      let done = [];
+      try { done = Assets.readLayerBytes(size, images, n, data); } catch (_) { done = []; }
+      for (const i of done) out[i] = data.subarray(i * page, (i + 1) * page);
+      return out;
     }
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
@@ -4712,18 +4806,21 @@ const WGX = (function () {
         });
         let filled = 0;
         const bpr = size * 4;
+        const layerBytes = _matLayerBytes(size, images, n);
         for (let i = 0; i < n; i++) {
           const img = images[i];
           if (!img) continue;
           try {
-            const bytes = _matLayerBytes(img, size);
+            const bytes = layerBytes[i];
             if (bytes && bytes.length >= bpr * size) {
               device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, bytes,
                 { bytesPerRow: bpr, rowsPerImage: size }, [size, size, 1]);
             } else {
+              // No WebGL2 for the readback: still straight alpha (the strip
+              // decodes with premultiplyAlpha "none"; the destination says so).
               device.queue.copyExternalImageToTexture(
                 { source: img, flipY: false },
-                { texture: tex, origin: [0, 0, i] },
+                { texture: tex, origin: [0, 0, i], premultipliedAlpha: false },
                 [size, size]);
             }
             filled++;
@@ -5179,9 +5276,13 @@ const WGX = (function () {
         ] });
         tex._wgxDecalBG = bg;
       }
+      if (!_activeFrameBG) return;
       _setPipe(litPass, pDecal);
       _fxDecalDynOff[0] = slot * FX_STRIDE;
       _setBG0(litPass, bg, _fxDecalDynOff);
+      // The lit frame group as group 1 (shadow + pools). Not cached: every lit
+      // draw re-sets group 1 to its own dynamic draw group.
+      litPass.setBindGroup(1, _activeFrameBG);
       _setVB0(litPass, mesh.vbuf);
       // Through the helper, not raw: a bare setIndexBuffer beside the cache
       // desyncs it and the next _drawGeom would skip a bind it still needs.

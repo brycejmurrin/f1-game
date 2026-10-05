@@ -93,7 +93,8 @@
         if (openArea(s)) return;
         const h = hash(k * 97 + 23);
         if (h < 0.56) return;
-        bush(k, h < 0.75 ? -1 : 1, 7 + h * 5, h < 0.68 ? [0.66, 0.28, 0.12] : [0.24, 0.32, 0.16]);
+        // Centre 9 m+ out: the clump's ~2 m lobes stay behind the 5.5 m Armco.
+        bush(k, h < 0.75 ? -1 : 1, 9 + h * 5, h < 0.68 ? [0.66, 0.28, 0.12] : [0.24, 0.32, 0.16]);
       });
 
       {
@@ -343,12 +344,34 @@
       marshalPost(K(0.894), 1, 9);
 
       spectatorHill(0.50, 0.60, -1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
+      // Outer Loop: the ~180-degree right at the end of the back straight
+      // (0.42-0.45) — fans line the bank on its outside behind the Armco.
+      spectatorHill(0.420, 0.458, -1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.34, step: 10 });
       spectatorHill(0.72, 0.80, 1, 16, { rows: 3, rise: 1.0, depth: 1.8, density: 0.38, step: 9 });
 
-      for (const [s0, s1] of [[0.12, 0.22], [0.27, 0.42], [0.48, 0.58], [0.63, 0.88]]) {
-        guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
-      }
+      // The Glen's Armco is painted BLUE and runs close to the verge round
+      // most of the lap (1970s photos show bare galvanised rail; blue is the
+      // modern circuit's look, matching the 2005/2006 Pit Terrace and tower
+      // dressed above). Was grey at 7 m in four short runs; now continuous
+      // runs at 5.5 m, broken only where a gravel trap or tyre wall owns the
+      // outside (T1 outside, Esses left 0.22-0.27, Boot toe 0.58-0.63, the
+      // Anvil 0.88-0.94) and on the pit straight (its own rail/fence below).
+      // Stacked two rails high from T1 through the Esses and down the back
+      // straight, the fast run where the Glen's rail is famously doubled;
+      // single elsewhere (double everywhere was +23 k props-tris). Style
+      // seams sit one node apart so two posts never share a spot.
+      const GLEN_BLUE = [0.13, 0.30, 0.64], RAIL_POST = [0.46, 0.48, 0.52];
+      const DOUBLE = { style: "doubleArmco", postCol: RAIL_POST };
+      const SINGLE = { style: "armco", postCol: RAIL_POST };
+      for (const [s0, s1, side, st] of [
+        [0.06, 0.22, -1, DOUBLE],     // T1 inside, up through the Esses (left)
+        [0.12, 0.42,  1, DOUBLE],     // Esses and the back straight (right)
+        [0.27, 0.42, -1, DOUBLE],     // back straight (left)
+        [0.4215, 0.58,  1, SINGLE],   // Outer Loop inside, Boot entry
+        [0.4215, 0.58, -1, SINGLE],   // Outer Loop outside, Boot entry
+        [0.63, 0.88, -1, SINGLE],     // climb out of the Boot to the Anvil
+        [0.63, 0.88,  1, SINGLE],
+      ]) guardrail(s0, s1, side, 5.5, GLEN_BLUE, st);
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.16, 0.36, 0.45, 0.55, 0.68, 0.82]) {
@@ -356,8 +379,13 @@
       }
 
       const { cx, cz, radius: rad } = lapBounds();
-      waterBand(0.30, 0.46, -1, 250, 560, 20, [0.15, 0.28, 0.38], { id: "glen-seneca-lake" });
-      const lakeC = anchor(K(0.38), -1, 380).c;
+      // Seneca Lake lies NORTH-EAST of the circuit: the track sits on the hill
+      // south-west of the village, and the lake runs north from the village.
+      // The path is OSM-projected (+x = WEST, +z = NORTH; import-circuit-path),
+      // so north-east is -x/+z — the LEFT of the T1-to-Esses run (heading SE).
+      // It was off the back straight's left (due east, over the southern half).
+      waterBand(0.11, 0.23, -1, 280, 480, 20, [0.15, 0.28, 0.38], { id: "glen-seneca-lake" });
+      const lakeC = anchor(K(0.17), -1, 380).c;
       const lakeAng = Math.atan2(lakeC[2] - cz, lakeC[0] - cx);
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [120, 50, 120, 32, 16, 8, [0.20, 0.36, 0.18]],
@@ -366,7 +394,7 @@
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
-          if (extra < 200) {
+          if (extra < 300) {   // rings 1-2 would rise out of the water
             let d = Math.abs(a - lakeAng) % 6.2832;
             if (d > 3.1416) d = 6.2832 - d;
             if (d < 0.85) continue;
@@ -515,15 +543,89 @@
           stage._mat = 0;
         });
       }
+      // RV camping: race weekend at the Glen is motorhomes, fifth-wheels and
+      // travel trailers parked in the open fields around the course, flags up.
+      // This lot sits in the open ground inside the back straight, past the
+      // Esses maple rank (13-24 m) and well short of the dairy farm (0.28,
+      // 92 m out, ~190 m up the lap). Each rig is seated on the LOWEST of its
+      // four corners and sunk 0.3 m, on a LEVEL basis — the road basis tilts
+      // with the Esses dip and a 10 m body would hang off one end.
+      {
+        const sf = 0.315, side = 1, dist = 62;
+        const a = anchor(K(sf), side, dist);
+        const hz = (v) => { const l = Math.hypot(v[0], v[2]) || 1; return [v[0] / l, 0, v[2] / l]; };
+        const r = hz(a.r), t = hz(a.t), b = [r, [0, 1, 0], t];
+        indexSolid(sf - 0.008, sf + 0.008, side, dist - 22, 44);
+        const BODY = [[0.90, 0.89, 0.85], [0.84, 0.82, 0.76], [0.78, 0.79, 0.80], [0.92, 0.90, 0.84]];
+        const STRIPE = [[0.56, 0.20, 0.14], [0.18, 0.30, 0.54], [0.44, 0.30, 0.16], [0.22, 0.38, 0.28]];
+        // [across, along, length] — two loose rows, nose-in, uneven pitches.
+        const RIGS = [[-11, -30, 10.5], [-12, -16, 8.0], [-10, -3, 11.0], [-12, 11, 7.5],
+                      [-11, 25, 10.0], [9, -24, 9.5], [10, -10, 7.0], [9, 5, 11.0], [10, 20, 8.5]];
+        modelGroup("glen-rv-camp", {
+          center: vadd(a.c, [0, 1, 0], 2), size: [40, 16, 74], basis: b,
+        }, (stage) => {
+          const lowest = (p, hw2, hl) => {
+            let y = Infinity;
+            for (const dr of [-hw2, hw2]) for (const dt of [-hl, 0, hl]) {
+              const q = vadd(vadd(p, r, dr), t, dt), g = terrainYAt(q[0], q[2]);
+              if (g != null && g < y) y = g;
+            }
+            return y;
+          };
+          for (let i = 0; i < RIGS.length; i++) {
+            const [dr, dt, len] = RIGS[i], h = hash(i * 29 + 7);
+            const p0 = vadd(vadd(a.c, r, dr), t, dt);
+            const gy = lowest(p0, 1.3, len / 2);
+            if (!Number.isFinite(gy)) continue;
+            const foot = [p0[0], gy - 0.3, p0[2]];
+            const tall = len > 9 ? 3.6 : 3.1;          // class-A coach vs trailer
+            stage._mat = MAT.METAL;
+            seat.box(stage, foot, [2.5, tall, len], BODY[i % BODY.length], b);
+            // Livery sweep and window band, 3 cm proud of both long faces.
+            stage._mat = MAT.METAL;
+            seat.box(stage, vadd(foot, [0, 1, 0], 1.05), [2.56, 0.32, len * 0.94],
+              STRIPE[Math.floor(h * 4) % 4], b);
+            stage._mat = MAT.GLASS;
+            seat.box(stage, vadd(foot, [0, 1, 0], tall - 1.25), [2.56, 0.55, len * 0.70],
+              [0.20, 0.24, 0.28], b);
+            if (len > 9) {                              // coach windscreen on the nose
+              seat.box(stage, vadd(vadd(foot, t, (dr < 0 ? 1 : -1) * (len / 2 - 0.02)), [0, 1, 0], 1.9),
+                [2.3, 1.1, 0.08], [0.16, 0.19, 0.22], b);
+            }
+            stage._mat = MAT.METAL;
+            if (h > 0.3)                                // rooftop A/C unit
+              seat.box(stage, vadd(foot, [0, 1, 0], tall - 0.02), [1.0, 0.36, 1.2], [0.70, 0.71, 0.72], b);
+          }
+          // Two flagpoles between the rows — stars-and-stripes reduced to
+          // a red/white field and a blue canton, both touching the pole.
+          for (const [dr, dt] of [[-1, -9], [0, 16]]) {
+            const p0 = vadd(vadd(a.c, r, dr), t, dt), gy = terrainYAt(p0[0], p0[2]);
+            if (gy == null) continue;
+            const foot = [p0[0], gy - 0.4, p0[2]];
+            stage._mat = MAT.METAL;
+            seat.cyl(stage, foot, 0.06, 8.4, [0.80, 0.80, 0.78], 5, b);
+            stage._mat = MAT.FABRIC;
+            const fly = vadd(vadd(foot, [0, 1, 0], 7.3), t, 0.78);
+            addBox(stage, fly, [0.04, 0.9, 1.5], [0.80, 0.40, 0.38], b);
+            addBox(stage, vadd(vadd(fly, t, -0.42), [0, 1, 0], 0.2), [0.07, 0.48, 0.62],
+              [0.16, 0.22, 0.46], b);
+          }
+          stage._mat = 0;
+        });
+      }
       // Camera masts.
       for (const [s, side, gap] of [[0.030, -1, 26], [0.090, -1, 34], [0.900, 1, 30]]) {
         const a = anchor(K(s), side, gap);
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      for (const [s0, s1] of [[0.1, 0.22], [0.36, 0.91]]) {
+      // Mixed northern hardwood in mid-October: oak-brown on the north slopes,
+      // sugar-maple scarlet through the Boot woods, beech/hickory amber on the
+      // climb back out. Same ranges and density as before — colour only.
+      for (const [s0, s1, col2] of [[0.1, 0.22, MAPLE], [0.36, 0.50, OAK],
+                                    [0.50, 0.70, SCARLET], [0.70, 0.91, AMBER]]) {
         for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 10, { density: 0.74, hMin: 12, hMax: 22, pineFrac: 0.22, col: FIR, col2: OAK });
+          forestEdge(s0, s1, side, 10, { density: 0.74, hMin: 12, hMax: 22, pineFrac: 0.22, col: FIR, col2 });
       }
       for (const side of [-1, 1])
         forestEdge(0.50, 0.66, side, 24, { density: 0.25, hMin: 16, hMax: 27, pineFrac: 0.42, col: FIR, col2: SCARLET });

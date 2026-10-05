@@ -3,9 +3,18 @@
 
 const NetSnapshot = (function () {
   const TYPE_SNAPSHOT = 1;
+  // A MULTI-ENTRY packet whose cars were posed at DIFFERENT moments: the host's
+  // relay (every other guest's car in one datagram instead of one each) and,
+  // later, its AI. Each entry is the 13-byte car plus a u16 AGE — milliseconds
+  // it is older than the header tick — so every pose keeps its own stamp.
+  // Type 2 is free (session.js: 3/4 are PING/PONG); a build that does not know
+  // it drops it as an unknown type, and the handshake refuses mixed builds.
+  const TYPE_AGED = 2;
 
   const CAR_BYTES = 13;
+  const AGED_BYTES = CAR_BYTES + 2;
   const SNAP_HEADER = 6;             // type u8 + tick u32 + count u8
+  const MAX_AGE_MS = 65535;
 
   const TAU = Math.PI * 2;
   const MAX_AHEAD_MS = 3000;         // createInterp().push refuses a tick further ahead than this
@@ -77,6 +86,33 @@ const NetSnapshot = (function () {
     return new Uint8Array(buf);
   }
 
+  // entries: [{ id, car, at }] — `at` the moment that pose was true, in the
+  // sender's clock. The header tick is the NEWEST at; each age is tick − at.
+  function encodeAged(entries) {
+    const list = [];
+    const src = entries || [];
+    let tick = -Infinity;
+    for (let i = 0; i < src.length && list.length < 255; i++) {
+      const e = src[i];
+      if (!e || !(e.id >= 0) || !Number.isFinite(e.at)) continue;
+      list.push(e);
+      if (e.at > tick) tick = e.at;
+    }
+    const n = list.length;
+    const buf = new ArrayBuffer(SNAP_HEADER + n * AGED_BYTES);
+    const dv = new DataView(buf);
+    const t = n ? Math.round(tick) : 0;
+    dv.setUint8(0, TYPE_AGED);
+    dv.setUint32(1, t >>> 0);
+    dv.setUint8(5, n);
+    let off = SNAP_HEADER;
+    for (let i = 0; i < n; i++) {
+      off = writeCar(dv, off, list[i].id, list[i].car);
+      dv.setUint16(off, clamp(Math.round(t - list[i].at), 0, MAX_AGE_MS)); off += 2;
+    }
+    return new Uint8Array(buf);
+  }
+
   // Packets arrive at the publish rate, so a bad peer would flood: log the
   // first drop per reason, then every 256th.
   const dropCounts = Object.create(null);
@@ -89,13 +125,20 @@ const NetSnapshot = (function () {
   function decodeSnapshot(bytes) {
     const dv = toView(bytes);
     if (!dv || dv.byteLength < SNAP_HEADER) return dropped("short or non-binary");
-    if (dv.getUint8(0) !== TYPE_SNAPSHOT) return dropped("type " + dv.getUint8(0));
+    const type = dv.getUint8(0);
+    if (type !== TYPE_SNAPSHOT && type !== TYPE_AGED) return dropped("type " + type);
+    const aged = type === TYPE_AGED;
     const n = dv.getUint8(5);
-    if (dv.byteLength < SNAP_HEADER + n * CAR_BYTES) return dropped("truncated car list");
+    const per = aged ? AGED_BYTES : CAR_BYTES;
+    if (dv.byteLength < SNAP_HEADER + n * per) return dropped("truncated car list");
     const cars = [];
     let off = SNAP_HEADER;
-    for (let i = 0; i < n; i++) { cars.push(readCar(dv, off)); off += CAR_BYTES; }
-    return { type: TYPE_SNAPSHOT, tick: dv.getUint32(1), cars };
+    for (let i = 0; i < n; i++) {
+      const car = readCar(dv, off);
+      car.age = aged ? dv.getUint16(off + CAR_BYTES) : 0;   // ms older than the header tick
+      cars.push(car); off += per;
+    }
+    return { type, tick: dv.getUint32(1), cars };
   }
 
   function toView(bytes) {
@@ -307,7 +350,7 @@ const NetSnapshot = (function () {
   }
 
   return {
-    TYPE_SNAPSHOT, CAR_BYTES, MAX_AHEAD_MS,
+    TYPE_SNAPSHOT, TYPE_AGED, CAR_BYTES, AGED_BYTES, MAX_AHEAD_MS, encodeAged,
     encodeSnapshot, decodeSnapshot,
     // Shared with session.js, which decodes off the same channel.
     toView,

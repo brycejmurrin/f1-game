@@ -1,7 +1,7 @@
 /* model-pack-format.test.mjs — the AX26 v2 packed model layout.
  *
- * Every model in assets/pack/models is fetched at boot (Assets.loadModels(),
- * called from js/game.js), so their total IS first-load latency. v2 packs a
+ * A circuit's baked models are fetched before its first build (ensureScenery ->
+ * Assets.modelsReady), so their size IS first-race latency. v2 packs a
  * vertex into 22 bytes against v1's 40 and an index into 2 against 4, taking
  * the shipped catalogue from 2.95 MB to 1.60 MB.
  *

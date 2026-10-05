@@ -10,8 +10,8 @@
         bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         cameraTower, sponsorHoarding,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
-        addBox, addCyl, forestEdge } = api;
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        addBox, addCyl, forestEdge, plane } = api;
 
       const PLANE_D = [0.24, 0.42, 0.20];
       const EUC = [0.26, 0.40, 0.26];
@@ -235,6 +235,20 @@
         addBox(out, vadd(vadd(a.c, a.u, 7.6), a.t, 1.0), [0.12, 1.4, 2.2],
           i % 2 ? CELESTE : [0.95, 0.94, 0.92], b);
       }
+      // Plátano avenues (brief §6: disciplined, evenly spaced) on the open
+      // outer side: behind the main terraces (s 0.94–0.065, skipping the
+      // portico at 0.928) and along the back straight's perimeter road
+      // (s 0.775–0.885, skipping the talud gate at 0.835). every() takes METRES (22 m ≈ 5 nodes).
+      const PLANE_L = [0.30, 0.50, 0.24];
+      every(22, (k) => {
+        const s = k / n, h = hash(k * 53 + 7);
+        if (s >= 0.94 || s <= 0.065) plane(k, -1, 44, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
+        else if (s >= 0.775 && s <= 0.885 && (s < 0.822 || s > 0.848))
+          plane(k, -1, 62, 12 + h * 5, h < 0.5 ? PLANE_L : PLANE_D, { spread: 0.85 });
+      });
+      // Standing crowd on the grass outside the s≈0.56 hairpin (name — Horquilla
+      // or otherwise — UNCERTAIN against the classic No.6 corner list).
+      spectatorHill(0.548, 0.572, -1, 20, { rows: 3, rise: 1.1, depth: 1.9, density: 0.30, step: 14 });
       cameraTower(K(0.030), -1, 24, { h: 13 });
       cameraTower(K(0.380), 1, 40, { h: 16 });
       cameraTower(K(0.850), 1, 26, { h: 13 });
@@ -326,8 +340,35 @@
         }, { required: true });
       }
 
-      groundPatch(K(0.655), 1, 74, [40, 0.16, 90], [0.30, 0.42, 0.26],
-        { id: "baires-lake-shore", samples: 8 });
-      waterSurface(K(0.655), 1, 96, [30, 0.18, 74], [0.24, 0.40, 0.44],
-        { id: "baires-park-lake" });
+      // PARK LAKE. The old waterSurface(K(0.655), 1, 96) was never visible:
+      // waterSurface sits at pyMin - 0.82 (-3.0 m here) and its footprint,
+      // centred ~(-330, 54), lies inside the terrain ribbon (terrain -0.2..-1.2
+      // m, measured) — every infield point is < 125 m from some part of the lap,
+      // so no reflective sheet can show inside it without an engine terrain
+      // carve. Instead: a terrain-following sheet of thin cells in the widest
+      // open infield (~94 m clearance at (160,-245); this one centred
+      // (120,-285), inside the back straight s≈0.78–0.83). Exact real-world
+      // lake position is UNCERTAIN (no source pinned it to the OSM trace).
+      {
+        const { terrainYAt, indexSolid } = api;
+        const LAKE = [0.22, 0.34, 0.36], LCX = 120, LCZ = -285, RA = 42, RB = 24, C = 6;
+        indexSolid(0.775, 0.825, 1, 15, 55);
+        for (let x = LCX - RA; x < LCX + RA; x += C) {
+          for (let z = LCZ - RB; z < LCZ + RB; z += C) {
+            const mx = x + C / 2, mz = z + C / 2;
+            const e = ((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2;
+            if (e > 1 - hash(mx * 0.31 + mz * 0.17) * 0.18) continue;
+            if (onTrack(mx, mz, 20)) continue;
+            let lo = 1e9, hi = -1e9;
+            for (const fx of [0, 0.5, 1]) for (const fz of [0, 0.5, 1]) {
+              const y = terrainYAt(x + fx * C, z + fz * C);
+              if (y === null || !isFinite(y)) { lo = 1e9; break; }
+              if (y < lo) lo = y; if (y > hi) hi = y;
+            }
+            if (!(lo < 1e8)) continue;
+            const top = hi + 0.09, bot = lo - 0.14;
+            addBox(out, [mx, (top + bot) / 2, mz], [C, top - bot, C], LAKE, null);
+          }
+        }
+      }
     };

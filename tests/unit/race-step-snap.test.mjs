@@ -46,3 +46,20 @@ test("a red-flag restart is a standing start in first, and the coast estimate ma
   // carries no PACE term, so 7 m/s means crawling at every OVERALL SPEED.
   assert.match(src, /c\.speed < 7 && boxed/);
 });
+
+// verify-physics #12 (2026-10-04): the scans found the neighbours through the
+// snapshot, then updateCar read the SAME neighbours' live x/speed — blocker
+// speed for the queue brake and OT fire, towCar.x for the wake, alongO for
+// commit-or-yield and the side squeeze, passOf.x for the closed pass side — so
+// a car later in cars[] saw them one step fresher than one earlier: a
+// systematic per-index bias. Every neighbour read in updateCar is the snapshot.
+test("updateCar reads neighbours only through the snapshot", () => {
+  const start = src.indexOf("function updateCar(");
+  const end = src.indexOf("\nfunction ", start + 10);
+  const fn = src.slice(start, end > start ? end : src.length);
+  assert.ok(fn.length > 10000, "anti-vacuity: found the updateCar body");
+  const live = fn.match(/\b(?:blocker|towCar|alongO|po|chaser|ahead|o)\.(?:x|speed|prog)\b/g) || [];
+  assert.deepEqual(live, [], "live neighbour reads in updateCar: " + live.join(", "));
+  assert.match(fn, /blocker\._snapSpeed/);
+  assert.match(fn, /alongO\._snapX/);
+});

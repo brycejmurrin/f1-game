@@ -18,7 +18,8 @@
  *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
  *                                                   #   run it as a background task; exit 1 = a red)
  *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
- *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next
+ *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next (waits ≤ 10 min for
+ *                                                   #   loadavg < 3 between groups; exit 3 if it never settles)
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *
@@ -87,7 +88,29 @@ const mergeByPid = (disk, mine) => {
   const seen = new Set(mine.map((r) => r.pid));
   return [...disk.filter((r) => !seen.has(r.pid)), ...mine];
 };
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (_) { return false; } };
+/* LIVENESS IS PID + START TIME (2026-10-04). `kill(pid, 0)` alone read any
+ * process that later took a recorded pid as this run: after a container
+ * restart (artifacts/ survives, pids restart low) or a pid wrap, a stale entry
+ * stayed "running" forever, the one-group cap refused every start, and
+ * --stop / a supersede sent SIGTERM then SIGKILL to the process GROUP of an
+ * unrelated process. A run now records its /proc/<pid>/stat starttime (field
+ * 22 — the identity .claude/hooks/live-run.py prints) and the kernel boot id,
+ * and is alive only while both still match. An old record without them falls
+ * back to the pid test. */
+export function procStart(pid) {
+  try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/)[19] || null; }
+  catch (_) { return null; }
+}
+const BOOT_ID = (() => { try { return fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim(); } catch (_) { return null; } })();
+export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, boot = BOOT_ID } = {}) {
+  const pid = run && +run.pid;
+  if (!(pid > 0)) return false;
+  try { kill(pid); } catch (_) { return false; }
+  if (run.bootId && boot && run.bootId !== boot) return false;
+  if (run.starttime && start(pid) !== String(run.starttime)) return false;
+  return true;
+}
+const alive = (run) => aliveRun(run);
 const loadavgLine = () => {
   try {
     const [a, b, c] = os.loadavg().map((n) => n.toFixed(2));
@@ -120,8 +143,8 @@ const sleepSync = (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)
    Playwright groups end with live-reporter's "= run <status>" line, and
    node --test groups end with a TAP summary. A group whose log matches neither
    really did die early. */
-function outcome(run) {
-  if (alive(run.pid)) return "running";
+export function outcome(run) {
+  if (alive(run)) return "running";
   let text = "";
   try { text = fs.readFileSync(run.log, "utf8"); } catch (_) { return "gone (no log)"; }
   return outcomeOf(text);
@@ -167,7 +190,7 @@ function status() {
   say(`status ${loadavgLine()} mode=${s.mode || "?"}`);
   for (const r of s.runs) {
     const started = r.started ? Date.parse(r.started) : NaN;
-    const dur = alive(r.pid) ? `elapsed=${fmtDur(Date.now() - started)}`
+    const dur = alive(r) ? `elapsed=${fmtDur(Date.now() - started)}`
       : (r.ended ? `duration=${fmtDur(Date.parse(r.ended) - started)}` : "");
     say(`${r.group.padEnd(16)} pid=${String(r.pid).padEnd(8)} ${outcome(r).padEnd(34)} ${dur} ${path.relative(ROOT, r.log)}`);
   }
@@ -176,7 +199,7 @@ function status() {
 async function waitForRunning() {
   // Re-read the registry every poll: a group another shell starts while this
   // waits is part of "everything still running" (it used to be read once).
-  const running = () => readState().runs.filter((r) => alive(r.pid));
+  const running = () => readState().runs.filter((r) => alive(r));
   const deadline = waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
   while (running().length) {
     if (Date.now() > deadline) {
@@ -196,7 +219,7 @@ async function waitForRunning() {
   // a group another shell started while this one waited is not clobbered.
   const stamped = new Map();
   for (const r of readState().runs) {
-    if (!alive(r.pid) && !r.ended) {
+    if (!alive(r) && !r.ended) {
       const ended = new Date().toISOString();
       stamped.set(r.pid, ended);
       const started = r.started ? Date.parse(r.started) : NaN;
@@ -264,7 +287,7 @@ function sweep() {
 
 function stop({ graceMs = 4000, doSweep = false } = {}) {
   const s = readState();
-  const live = s.runs.filter((r) => alive(r.pid));
+  const live = s.runs.filter((r) => alive(r));
   let n = 0;
   for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
   say(`sent SIGTERM to ${n} run group(s)`);
@@ -272,7 +295,7 @@ function stop({ graceMs = 4000, doSweep = false } = {}) {
   if (doSweep) setTimeout(sweep, graceMs + 500);
   const deadline = Date.now() + graceMs;
   const spin = () => {
-    const still = live.filter((r) => alive(r.pid));
+    const still = live.filter((r) => alive(r));
     if (!still.length) return say("all stopped");
     if (Date.now() < deadline) return setTimeout(spin, 250);
     for (const r of still) { signal(r.pid, "SIGKILL"); say(`SIGKILL ${r.group} (pgid ${r.pid})`); }
@@ -290,7 +313,7 @@ function stop({ graceMs = 4000, doSweep = false } = {}) {
 // door. Same SIGTERM-then-SIGKILL ladder as --stop, but synchronous, because it
 // has to be finished before the replacement is spawned.
 function supersede(groups, { graceMs = 4000 } = {}) {
-  const doomed = readState().runs.filter((r) => alive(r.pid) && groups.includes(r.group));
+  const doomed = readState().runs.filter((r) => alive(r) && groups.includes(r.group));
   if (!doomed.length) return;
   for (const r of doomed) {
     const ok = signal(r.pid, "SIGTERM");
@@ -299,10 +322,10 @@ function supersede(groups, { graceMs = 4000 } = {}) {
       : `WARNING: could not signal the running test:${r.group} (pid ${r.pid}); it may still be writing to ${path.relative(ROOT, r.log)}`);
   }
   const deadline = Date.now() + graceMs;
-  let still = doomed.filter((r) => alive(r.pid));
+  let still = doomed.filter((r) => alive(r));
   while (still.length && Date.now() < deadline) {
     sleepSync(250);
-    still = still.filter((r) => alive(r.pid));
+    still = still.filter((r) => alive(r));
   }
   for (const r of still) {
     signal(r.pid, "SIGKILL");
@@ -372,7 +395,7 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   // Persist whether this group actually owns Chromium. Consumers that guard
   // browser automation must not mistake Node-only groups (tooling-fast,
   // sweeps) for Playwright merely because test-bg launched them.
-  return { group, pid: child.pid, log, started, browser: forward.length > 0 };
+  return { group, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: forward.length > 0 };
 }
 
 function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
@@ -392,7 +415,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // refuse to start a browser group above loadavg 3 unless --force. Every false
   // red in tiny.log on 2026-09-01 was a start at loadavg > 3.
   const load1 = os.loadavg()[0];
-  if (!force && load1 >= 3) {
+  if (!force && load1 >= LOAD_LIMIT) {
     console.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
     console.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
     process.exit(3);
@@ -407,7 +430,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // is: counting it would refuse the ordinary "re-run the group I am already
   // running" on a box that has room. The cap check runs FIRST so that a refusal
   // never kills a live run and then declines to replace it.
-  const running = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  const running = readState().runs.filter((r) => alive(r) && !groups.includes(r.group));
 
   if (!parallel && !force && groups.length > 1) {
     // Sequential multi-group start without --wait: launch ONLY the first, and
@@ -464,7 +487,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // between our earlier read and this write keeps its stamp.
   let prior = [];
   updateState((s) => {
-    prior = s.runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+    prior = s.runs.filter((r) => alive(r) && !groups.includes(r.group));
     return { runs: mergeByPid(prior, runs), started: new Date().toISOString(), workers: WORKERS, mode };
   });
   if (prior.length) say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
@@ -483,6 +506,22 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   say(`block:      node tools/ci/test-bg.mjs --wait`);
 }
 
+const LOAD_LIMIT = 3;                  // start()'s refusal threshold (1-min loadavg)
+const CHAIN_SETTLE_MS = 10 * 60_000;   // how long a chain waits for it between groups
+
+/** Resolve true once the 1-min loadavg is under LOAD_LIMIT, false after maxMs. */
+async function settleLoad(maxMs, pollMs = 15_000) {
+  const until = Date.now() + maxMs;
+  let told = false;
+  for (;;) {
+    const load1 = os.loadavg()[0];
+    if (load1 < LOAD_LIMIT) return true;
+    if (Date.now() >= until) return false;
+    if (!told) { say(`loadavg ${load1.toFixed(2)} >= ${LOAD_LIMIT}: waiting up to ${maxMs / 60000} min for it to settle before the next group`); told = true; }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
 /** Start each group, wait for it to finish, then start the next. */
 async function waitChain(groups, { force = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -496,6 +535,15 @@ async function waitChain(groups, { force = false } = {}) {
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
     say(`── chain ${i + 1}/${groups.length}: ${g}`);
+    // start() REFUSES at loadavg >= 3 with process.exit(3) — right for a lone
+    // start, but in a chain the previous group's own teardown keeps the 1-min
+    // average up, so group 2 was refused and every later group died with it.
+    // Wait (bounded) for the load to settle; give up cleanly, naming the rest.
+    if (!force && !(await settleLoad(CHAIN_SETTLE_MS))) {
+      say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} after ${CHAIN_SETTLE_MS / 60000} min — not started: ${groups.slice(i).join(" ")}`);
+      process.exitCode = 3;
+      return;
+    }
     // Cap is 1 in sequential; force still allows starting when something else is live.
     start([g], { force, parallel: false });
     await waitForRunning();

@@ -497,7 +497,6 @@ test.describe("Apex 26 — steering", () => {
     await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     const { frac, k } = await firstCorner(page);
     expect(Math.abs(k)).toBeGreaterThan(0.02);
-    const inside = -Math.sign(k);   // apex is on the -sign(k) side
 
     await page.evaluate(() => window.__apex.freeze(true));
     let off, pull, push;
@@ -525,10 +524,18 @@ test.describe("Apex 26 — steering", () => {
     const dxOff = off.after.x - off.before.x;
     const dxPull = pull.after.x - pull.before.x;
     const dxPush = push.after.x - push.before.x;
-    // PULL ends up clearly more toward the inside than no assist...
-    expect((dxPull - dxOff) * inside).toBeGreaterThan(0.5);
-    // ...and PUSH clearly more toward the outside.
-    expect((dxPush - dxOff) * inside).toBeLessThan(-0.2);
+    // TOWARD THE LINE, not toward -sign(k): the assist pursues the AI line
+    // 25-90 m ahead, and at a curvature peak that is already the track-out
+    // when the corner is short. #878 moved Bahrain's start line (startFrac
+    // 0.225 -> 0), so corners() now leads with the T1 hairpin apex, where the
+    // target sits 4 m OUTSIDE and PULL correctly moved the car out (-1.395).
+    const gap = off.before.lineAhead - off.before.x;
+    expect(Math.abs(gap)).toBeGreaterThan(1);   // premise: the line is off the car
+    const toward = Math.sign(gap);
+    // PULL ends up clearly nearer the line than no assist...
+    expect((dxPull - dxOff) * toward).toBeGreaterThan(0.5);
+    // ...and PUSH clearly further from it.
+    expect((dxPush - dxOff) * toward).toBeLessThan(-0.2);
   });
 });
 

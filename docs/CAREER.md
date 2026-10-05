@@ -87,9 +87,9 @@ is exactly when that would be lost.
 `exportRecovery` only appears when localStorage is already failing. The deliberate
 backup path is `js/career/career-backup.js` (`CareerBackup`):
 
-- **Format** `apex26-career-backup-v1` — `{ format, exportedAt, build, slots[{flavour,i,data}], season?, badges?, daily?, records? }`. Ghosts are refused on import and never written on export.
+- **Format** `apex26-career-backup-v1` — `{ format, exportedAt, build, slots[{flavour,i,data}], season?, badges?, daily?, records?, myTeam? }`. Ghosts are refused on import and never written on export. `myTeam` (additive, still v1) is the MY TEAM identity a myteam save only points at (`team: "custom"`): the global keys `customTeam`, `customLogo`, `livery.custom.custom` (painted liveries) and `livery.custom` (chosen livery), exported whenever a MY TEAM slot has data. On import it is written only when a MY TEAM slot was written and `includeExtras !== false`, each key through the GARAGE file's shape gate (`SettingsExport.garageValue`); a key the backup lacks or carries malformed leaves the local value alone. One identity covers all three MY TEAM slots — a per-slot identity snapshot is a known follow-up.
 - **Export** dumps all six slots (empty ones as `data: null`) through `NativeDownload` so Capacitor Share works on Android/iOS.
-- **Import** validates (wrong format, NaN money, array-where-object, >5 MB blob → reject, change nothing) → runs `SaveMigrate.migrateCareer` per slot → writes through `store.write` (IndexedDB mirror included). Only the backup's SAVED slots are written: an empty row (`data: null`) leaves that local slot alone, never deletes it. Badges merge as a union (earliest unlock kept); a local standalone season further along than the backup's (later round, or more points at the same round) is kept. A newer live revision is refused the same way `Career.save()` refuses a stale tab. Importing from a DRIVER card does not touch MY TEAM slots until the player confirms **ALL MODES?** (and the reverse).
+- **Import** validates (wrong format, NaN money, array-where-object, >5 MB blob → reject, change nothing) → runs `SaveMigrate.migrateCareer` per slot → writes through `store.write` (IndexedDB mirror included). Only the backup's SAVED slots are written: an empty row (`data: null`) leaves that local slot alone, never deletes it. Badges merge as a union (earliest unlock kept); a local standalone season further along than the backup's (later round, or more points at the same round) is kept; the daily challenge merges per day (the faster best, each class too, the larger lap count) and keeps the streak with the later `last` day; `records` (a pass-through key with no writer yet) only gains the entries this device lacks. A newer live revision is refused the same way `Career.save()` refuses a stale tab: `liveConflict` compares the store's current revision with `Career.armedRevision()`, the one Career armed at load or its own last save. Importing from a DRIVER card does not touch MY TEAM slots until the player confirms **ALL MODES?** (and the reverse).
 - **UI** — EXPORT / IMPORT on each slot card in the CAREER MODES picker (`career-ui.js`); no new screen.
 
 ### The durable mirror (IndexedDB)
@@ -567,9 +567,12 @@ the stream position after them is a hard contract (see the rule in Driver rating
 above). So reliability draws from **nothing**: `Reliability.arm()` hashes
 `(seed, "dnf", round, driverId)` through `Career.hash` — the stateless draw `rnd`
 is built on, with the seed passed in, because a Grand Prix has no career seed.
-Inside a career the seed is `career.seed` and the round is `career.season.round`;
-outside one they are `simSeed()` and a per-session race counter, so two Grands
-Prix in a row are not handed the same casualties.
+Inside a career the seed is `Career.seasonSeed()` and the round is `career.season.round`;
+in a standalone Season it is the season's OWN seed (`SeasonCal.luckSeed`, stamped
+from the session seed at the season's first draw and saved with it, so a reload
+cannot re-roll a planned retirement or the qualifying draw — game.js `luckSeed()`
+routes every `(seed, round, driver)` draw through it); otherwise `simSeed()` and a
+per-session race counter, so two Grands Prix in a row are not handed the same casualties.
 
 Arming happens once, at the green light (`armReliability` in game.js), and writes
 a plan: `dnfAt`, a fraction of RACE DISTANCE, and `dnfWhy`. `checkRetirements()`
@@ -707,6 +710,19 @@ includes `legalityKey()` — without it every AI would keep racing its pre-era
 build, which is exactly the asymmetry above. `Career._budgetCap` is recomputed
 when the era changes and skips banned options, or the cap would license a top
 shelf nobody may fit.
+
+**The AI's development bag is never confiscated either.** `career.aiParts[team]`
+(`js/career/ai-dev.js`) is seeded from the team's WORKS build read outside the
+era (`CareerAiDev.worksSetup`, the same move `acceptOffer` makes for the player),
+and `scrubFitted` never writes the era-resolved factory row into `fitted` nor
+drops a part from `owned` — `Career.aiSetup` → `Parts.resolveSetup` already
+enforces the ban every race. Where a fitted id is banned, the best-scoring legal
+part the bag owns in that category is fitted and the banned one SHELVED
+(`bag.shelved[cat]`); a winter step that replaces a banned id shelves it too. The
+winter its era lapses, the shelved (or works) part returns. Before 2026-10-04 the
+scrub replaced a banned works engine or floor with the DEFAULT for good;
+`scrubFitted` heals such a save (a works id missing from `owned`) at the next
+rollover where it is legal. No ban and no shelf: the scrub is a no-op.
 
 `seasonsElapsed()` is `career.year - career.year0`, **not** `history.length` —
 `HISTORY_MAX` caps the archive at 10, so a long career would stop advancing its

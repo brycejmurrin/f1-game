@@ -244,3 +244,43 @@ test("an IPv4-mapped IPv6 address is packed as the IPv4 candidate it is", () => 
   const out = NetSdp.unpack(NetSdp.pack(withMapped));
   assert.match(out, /203\.0\.113\.9 40000 typ srflx/);
 });
+
+// ── identity: what binds an answer to its offer (NetHandshake.offerId) ──────
+// The host hashes its OWN verbatim SDP; the guest hashes the one it REBUILT
+// from the packed bytes. Both must read the same ufrag and fingerprint, or
+// every packed answer would be refused as "for an older invite".
+test("identity() reads the same ufrag + fingerprint off the verbatim and the rebuilt SDP", () => {
+  const verbatim = NetSdp.identity(REAL);
+  const rebuilt = NetSdp.identity(NetSdp.unpack(NetSdp.pack(REAL)));
+  assert.ok(verbatim && verbatim.ufrag === "0BnP", "ufrag read");
+  assert.match(verbatim.fp, /^[0-9a-f]{64}$/, "lower-case hex, no colons");
+  assert.deepEqual(rebuilt, verbatim, "pack/unpack does not change the identity");
+  assert.equal(NetSdp.fingerprint(REAL), verbatim.fp);
+  // sha-256 is preferred even when another algorithm is listed first — pack() carries only sha-256.
+  const both = REAL.replace("a=fingerprint:sha-256", "a=fingerprint:sha-384 " + "11:".repeat(47) + "11\r\na=fingerprint:sha-256");
+  assert.equal(NetSdp.fingerprint(both), verbatim.fp);
+  assert.equal(NetSdp.identity("v=0\r\n"), null, "no ufrag/fingerprint, no identity");
+});
+
+// L8-e: candidates no other device can reach, and ports that are not ports,
+// never take one of the MAX_CANDS slots (and a NaN port was packed as 0).
+test("link-local IPv6, loopback and non-numeric ports are not packed", () => {
+  const withCands = (lines) => REAL.replace(/^a=candidate:.*\r\n/m, lines.map((l) => "a=candidate:" + l + "\r\n").join(""));
+  const sdp = withCands([
+    "1 1 udp 2113937151 fe80::1%eth0 50000 typ host generation 0",
+    "2 1 udp 2113937151 ::1 50001 typ host generation 0",
+    "3 1 udp 2113937151 127.0.0.1 50002 typ host generation 0",
+    "4 1 udp 2113937151 192.168.1.10 abc typ host generation 0",
+    "5 1 udp 2113937151 192.168.1.11 0 typ host generation 0",
+    "6 1 udp 2113937151 192.168.1.12 54321 typ host generation 0",
+    "7 1 udp 2113937151 2001:db8::5 54322 typ host generation 0",
+  ]);
+  const out = NetSdp.unpack(NetSdp.pack(sdp));
+  const cands = out.match(/^a=candidate:.*$/gm);
+  assert.equal(cands.length, 2, "only the two reachable candidates: " + cands.join(" | "));
+  assert.match(out, /192\.168\.1\.12 54321 typ host/);
+  assert.match(out, /2001:db8::5 54322 typ host/);
+  assert.doesNotMatch(cands.join("\n"), /fe80|::1 |127\.0\.0\.1| 0 typ /);
+  // Nothing reachable at all: nothing to pack, as before.
+  assert.equal(NetSdp.pack(withCands(["1 1 udp 2113937151 fe80::2 5 typ host generation 0"])), null);
+});

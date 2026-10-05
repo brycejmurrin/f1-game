@@ -15,12 +15,24 @@
  *   - HUMAN DNF: the only human retiring ends the race 2.2 s later
  *     (RaceControl.finishDelay, by design); an AI whose reliability failure was
  *     already drawn used to be classified — and scored — from that snapshot.
+ *   - LIGHTS (review 2026-10-04): RECOVER or a shift tapped on the grid stayed
+ *     latched and fired on the first green frame — a free re-place at rescue
+ *     speed, or 2nd gear with no drive. Input.clearDriveEdges() at lights-out.
+ *   - SENTINEL: the race arms the crash sentinel and enters "count"; a track
+ *     build finishing during the countdown disarmed it (gated on "race" only).
+ *   - FIELD SECTORS: a car that reversed over a sector line and drove on timed
+ *     the fragment as a sector — the player path's sectorValid, per car.
+ *   - DROPPED SIM: a 5-step frame reported its whole leftover physAcc as
+ *     dropped, sub-step remainder included — which carries, not drops.
+ *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
+ *     its shared start, and each re-show was a fresh squelch and voice line.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -123,5 +135,97 @@ test("AI auto-rescue: a car crawling in the run-off builds its rescue timer; one
     let fast = 0;
     for (let i = 0; i < 60 * 2; i++) { a.step(1 / 60, 1); fast = Math.max(fast, c.rescueT || 0); }
     assert.ok(fast < 0.5, `a car rejoining at pace is not beached (peak ${fast.toFixed(2)} s)`);
+  } finally { g.close(); }
+});
+
+test("a RECOVER or shift-up tapped during the start lights never fires at green", async () => {
+  const g = await createGame({ track: "monza", storage: { manual: true } });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);   // not g.race(): that presses go() and skips the lights
+    assert.equal(G.state, "count", "on the grid");
+    const P = G.player, x0 = P.x;
+    g.step(90);   // a lamp or two in
+    vm.runInContext('Input.remoteEvent("recover"); Input.remoteEvent("shiftUp")', g.ctx);   // keyboard R / paddle, same latch
+    for (let i = 0; i < 60 * 10 && G.state === "count"; i++) g.step(1);
+    assert.equal(G.state, "race", "lights out");
+    g.step(2);
+    assert.ok(P.speed < 1, `no free launch from a grid RECOVER (speed ${P.speed.toFixed(2)})`);
+    assert.ok(Math.abs(P.x - x0) < 0.01, `the car is still on its grid box (x ${P.x.toFixed(3)}, was ${x0.toFixed(3)}; a rescue sets 0)`);
+    assert.equal(P.gear, 1, "a shift tapped on the grid does not start the car in 2nd");
+  } finally { g.close(); }
+});
+
+test("a track build that ends during the countdown leaves the race's crash sentinel armed", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.gfx.isMobile = true;   // the sentinel is mobile-only (PerfGov.sentinelArm)
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);
+    assert.equal(G.state, "count");
+    const flag = () => g.sandbox.localStorage.getItem("apex26.raceActive");
+    assert.equal(flag(), "1", "the race armed it");
+    G.loadTrack(G.trackIdx);   // its finally ran with state "count" and disarmed the race's flag
+    assert.equal(flag(), "1", "a build during the lights must not clear the race's own flag");
+  } finally { g.close(); }
+});
+
+test("a car that reverses over a sector line never records the fragment as a field sector best", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    g.step(60);
+    const ai = G.cars.filter((c) => !c.human);
+    const c = ai[0];
+    for (const o of ai.slice(1)) a.retire(G.cars.indexOf(o));
+    const L = G.track.total, sec = G.track.def.sectors;
+    const b1 = (sec && sec.length === 2 ? sec[0] : 1 / 3) * L;   // the S1/S2 line (game.js sectorAt)
+    c.lap = 2; c.s = b1 + 2; c.x = 0; c.pitState = null; c.incidentInvalidLap = false;
+    g.step(1);
+    assert.equal(c._secIdx, 1, "in S2");
+    for (let i = 0; i < 60 && c._secIdx !== 0; i++) { c.speed = -15; g.step(1); }
+    assert.equal(c._secIdx, 0, "backed over the line into S1");
+    c.s = b1 - 60; c.speed = 0;   // still S1: a few seconds from rest to the line
+    for (let i = 0; i < 60 * 10 && c._secIdx !== 1; i++) g.step(1);
+    assert.equal(c._secIdx, 1, "drove forward into S2 again");
+    assert.ok(!(G.fieldSectorBests[0] < 10), `the fragment is not an S1 best (${G.fieldSectorBests[0]})`);
+  } finally { g.close(); }
+});
+
+test("a backlogged frame reports only the whole steps it drops, never the remainder it carries", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    g.apex.headless(true);
+    const Perf = vm.runInContext("PerfGov", g.ctx), DT = vm.runInContext("PhysicsConsts.FIXED_DT", g.ctx);
+    const t0 = g.sandbox.performance.now() + 1000;
+    g.pumpFrame(t0);
+    g.pumpFrame(t0 + 500 * DT);    // half a step: physAcc now carries a remainder
+    Perf.resetFrameStats();
+    g.pumpFrame(t0 + 500 * DT + 250);   // the 0.25 s clamp: 5 steps run, the rest is backlog
+    const dropped = Perf.frameStats().droppedSimS, k = dropped / DT;
+    assert.equal(Perf.frameStats().physicsSteps, 5);
+    assert.ok(k > 0.5, `a 0.25 s frame drops backlog (${dropped})`);
+    assert.ok(Math.abs(k - Math.round(k)) < 1e-6, `dropped is whole steps, not the carried remainder (${k.toFixed(4)} steps)`);
+  } finally { g.close(); }
+});
+
+test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3 s refresh", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);
+    assert.equal(G.state, "count");
+    G.netPlay.awaitingStart = () => true;   // a room still waiting for its shared start
+    vm.runInContext("globalThis.__stings = 0; GameAudio.radioSting = ((f) => function (...a) { globalThis.__stings++; return f.apply(this, a); })(GameAudio.radioSting);", g.ctx);
+    let t = g.sandbox.performance.now() + 1000;
+    g.pumpFrame(t);
+    for (let i = 0; i < 60 * 20; i++) g.pumpFrame(t += 1000 / 60);   // the card expires and re-shows in one frame, every ANN_MIN_S
+    assert.equal(G.state, "count", "still waiting");
+    assert.equal(g.sandbox.document.getElementById("announce").hidden, false, "the card is still up");
+    assert.match(g.sandbox.document.getElementById("announce-text").textContent, /WAITING FOR PLAYERS/);
+    assert.equal(g.sandbox.__stings, 1, "one squelch for the wait, not one per refresh");
   } finally { g.close(); }
 });

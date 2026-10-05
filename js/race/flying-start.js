@@ -33,8 +33,10 @@ const FlyingStart = (function () {
 
     function count(v) { if (G.handoverCount) G.handoverCount(v); }
 
+    // G.practice is DERIVED (game.js isPractice): every time trial reads true,
+    // so it only excludes a qualifying session with practice tools armed.
     function wanted() {
-      return (G.session === "quali" || G.timeTrial) && !G.practice && !realRace()
+      return (G.timeTrial || (G.session === "quali" && !G.practice)) && !realRace()
         && G.player && G.track && G.track.total > 0;
     }
 

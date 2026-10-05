@@ -79,31 +79,38 @@ function create(G, deps) {
     const b = mk("button", { type: "button", textContent: label, id: id || "" });
     b.addEventListener("click", run); return b;
   };
-  const select = (label, list, value, run, id) => {
-    const input = mk("select", { id, attrs: { "aria-label": label } }, list.map(([v, name]) => mk("option", { value: v, textContent: name })));
-    input.value = value; input.addEventListener("change", () => run(input.value));
-    return mk("label", { className: "tune-row" }, [mk("span", { textContent: label }), input]);
+  const select = (label, list, read, run, id) => {
+    const row = SettingRow.build(id + "-row", label, list);
+    row.sel.id = id; E[id] = row.sel;
+    SettingRow.wire(row.row, { read, write: run }); return row.row;
   };
   const shots = mk("div", { id: "ps-shots", className: "balanced-row", attrs: { role: "group", "aria-label": "Shot presets" } });
   const guide = mk("div", { id: "ps-guide", attrs: { "aria-hidden": "true" } }, [mk("div", { id: "ps-grid" })]);
-  const postcard = mk("input", { id: "ps-postcard", type: "checkbox" });
-  postcard.addEventListener("change", () => { st.postcard = postcard.checked; });
   const importFile = mk("input", { id: "ps-import", type: "file", accept: "image/png,image/jpeg,image/webp", attrs: { "aria-label": "Import a personal photo" } });
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
+  const group = (title, kids) => mk("section", { attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
+  const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
+  captureButton.className = "bigbtn"; done.className = "bigbtn alt";
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
-    mk("div", { className: "balanced-row" }, [mk("h2", { textContent: "PHOTO STUDIO" }), button("DONE", () => close(true), "ps-close")]),
-    mk("p", { id: "ps-context", className: "adv-help" }),
-    select("Frame", [["scene", "Full scene"], ["wide", "16:9 landscape"], ["square", "1:1 square"], ["portrait", "4:5 portrait"]], st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
-    select("Guide", [["off", "Off"], ["thirds", "Rule of thirds"], ["centre", "Centre cross"]], st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
-    shots,
-    mk("label", { className: "tune-row" }, [mk("span", { textContent: "Postcard caption" }), postcard]),
-    mk("p", { id: "ps-help", className: "adv-help" }),
-    mk("div", { className: "balanced-row" }, [button("CAPTURE", capture, "ps-capture"), button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
-    mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
-    mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
-    mk("label", { className: "tune-row" }, [mk("span", { textContent: "Import your photo" }), importFile]),
-    mk("details", {}, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
-    mk("p", { id: "ps-message", attrs: { "aria-live": "polite", role: "status" } }),
+    mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
+    mk("div", { id: "ps-body", className: "sheet-body pane" }, [
+      mk("p", { id: "ps-context", className: "adv-help" }),
+      group("COMPOSITION", [
+        select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
+        select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
+        shots, mk("p", { id: "ps-help", className: "adv-help" }),
+        select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; }, "ps-postcard"),
+      ]),
+      group("YOUR PHOTO", [
+        mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
+        mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
+        mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
+        mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Import your photo" }), importFile]),
+      ]),
+      mk("details", {}, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
+      mk("p", { id: "ps-message", attrs: { "aria-live": "polite", role: "status" } }),
+    ]),
+    mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(panel);
   root.setAttribute("aria-label", "Photo Studio");
@@ -141,6 +148,7 @@ function create(G, deps) {
       if (!fc || !fc.enterFrom || !fc.enterFrom({})) return false;
       if (opts.view && fc.cmd) fc.cmd({ eye: opts.view.eye, target: opts.view.tgt, fov: opts.view.fov });
       const p = fc.panel ? fc.panel() : G.$("freecam-inner"); if (p) p.hidden = true;
+      if (fc.setOverlaysVisible) fc.setOverlaysVisible(false);
     }
     st.open = true; st.generation++; root.hidden = false;
     document.body.classList.add("photo-studio-open");
@@ -160,7 +168,7 @@ function create(G, deps) {
     else {
       const fc = camera(), prior = st.borrowed;
       if (back && prior && prior.open && fc && fc.cmd) {
-        fc.cmd(prior.state); const p = fc.panel ? fc.panel() : G.$("freecam-inner"); if (p) p.hidden = false;
+        fc.cmd(prior.state); if (fc.setOverlaysVisible) fc.setOverlaysVisible(true); const p = fc.panel ? fc.panel() : G.$("freecam-inner"); if (p) p.hidden = false;
       } else {
         if (fc && fc.close) fc.close(false, !!(back && prior && prior.photo)); else if (fc && fc.cmd) fc.cmd(false);
         if (back && prior && prior.photo && prior.pose && G.photoCam) {
@@ -272,7 +280,13 @@ function create(G, deps) {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list"); } catch (_) { photos = []; }
     if (!st.open || gen !== st.generation || paint !== libraryPaint) return;
-    const box = E["ps-library"]; box.replaceChildren();
+    const box = E["ps-library"];
+    // DELETE repaints the list under the focused button; keepFocus lands on the
+    // same slot in the new list instead of dropping focus to <body>.
+    const render = () => { box.replaceChildren(); paintPhotos(box, photos); };
+    if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(box, render); else render();
+  }
+  function paintPhotos(box, photos) {
     photos = photos.concat(session).sort((a, b) => b.at - a.at).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     for (const p of photos) {

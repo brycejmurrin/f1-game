@@ -69,6 +69,17 @@
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
+  /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
+     above), but menus.css still places it in grid row 3, an implicit ~235 px
+     row on a 390x844 phone, so the button column stopped two-thirds down with
+     WATCH / PRACTICE behind a fade over empty carbon. Once the drawing is
+     hidden, drop it from the grid. The same pass moves the ANIMATE BACKGROUND
+     toggle off the wordmark, which it covered top-left, to the bottom as wide
+     shapes do, and ends the column above it so it covers no button. */
+  :where(body[data-shape="tall"]) #overlay[data-home-scene][data-home-ready="1"]:not([data-home-scene="static"], [data-home-scene="photo"]) #title-car { display: none; }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene="photo"][style*="data:image"] #title-car { display: none; }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * 0.5); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }
   :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); }
@@ -79,6 +90,6 @@
      rendered scene's buttons. The shared compact size scales; this only trims
      the height. */
   :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); padding-block: calc(var(--gap) / 2); }
-  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#tagline, #blurb, #disclaimer, #audiostate) { display: none; }
+  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#disclaimer, #audiostate) { display: none; }
   :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
 }

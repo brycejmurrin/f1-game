@@ -244,16 +244,19 @@ body.desktop #pm-calib { display: none !important; }
    help sheet, and let syncRotateBlocker (which reads computed display) report
    inactive so focus is not sent behind the dialog. Closing help restores the
    blocker/focus if the phone is still portrait. */
-body.rotate-help-open #rotate-device { display: none !important; }
+body.rotate-help-open #rotate-device,
+body.photo-studio-open #rotate-device { display: none !important; }
 /* Pause and the rotate gate never share paint. #pausemenu is a top-layer
    <dialog>, but gate labels (RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE)
    ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
    Match both the hidden seam and the native `open` flag showModal sets.
-   Also beat the portrait media rule's `display: flex` with !important. */
-body:has(#pausemenu:not([hidden])) #rotate-device,
-body:has(#pausemenu[open]) #rotate-device,
-html:has(#pausemenu:not([hidden])) #rotate-device,
-html:has(#pausemenu[open]) #rotate-device {
+   Also beat the portrait media rule's `display: flex` with !important.
+   body.rotate-measure lifts it for one getComputedStyle: syncRotateBlocker
+   asks "does the gate want the screen?" BEFORE it decides the pause card
+   yields — reading through this rule, the card's own presence answered "no"
+   and the gate never came back after OPEN CONTROLS › CLOSE. */
+body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -296,10 +299,13 @@ html:has(#pausemenu[open]) #ios-install {
    so a one-shot reveal still lands on its end state — but keyed on the
    player's choice, and scoped to the menus: the title screen and every
    dialog sheet. !important for the backstop's reason: it has to beat every
-   per-element animation shorthand without matching their specificity. */
-:root[data-motion="reduce"] :is(#overlay, .screen) *,
-:root[data-motion="reduce"] :is(#overlay, .screen) *::before,
-:root[data-motion="reduce"] :is(#overlay, .screen) *::after {
+   per-element animation shorthand without matching their specificity.
+   #rotate-device is named on its own: it is neither #overlay nor a .screen,
+   so its .rotate-icon swung `infinite alternate` for a player who had asked
+   for less motion, and only the OS query stopped it. */
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *,
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::before,
+:root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;

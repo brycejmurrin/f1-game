@@ -203,7 +203,11 @@ const Quali = (function () {
       // (reliability, launch, AI mistakes and weather already draw this way).
       const round = inCareer ? Career.round()
         : (G.seasonMode ? (typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season ? SeasonCal.drawRound(G.season) : G.seasonRound) : 0);
-      const seed = inCareer ? Career.seasonSeed() : G.simSeed();   // the year too — see Career.seasonSeed
+      // The year too — see Career.seasonSeed; a standalone Season's own stamped
+      // seed (SeasonCal.luckSeed), so a reload cannot re-roll qualifying luck.
+      const seed = inCareer ? Career.seasonSeed()
+        : G.flow === "season" && G.season && typeof SeasonCal !== "undefined" && SeasonCal.luckSeed
+          ? SeasonCal.luckSeed(G.season, G.simSeed()) : G.simSeed();
       const real = drivenMap(driven);
 
       const rows = G.cars.map((c) => ({

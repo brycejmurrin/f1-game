@@ -774,3 +774,56 @@ test("a handler that closes the endpoint mid-pump stops the rest of that batch",
   assert.equal(seen, 1, "nothing after the close is delivered");
   assert.equal(b.status, "closed");
 });
+
+// ── an answer names the offer it answers (L8-a) ─────────────────────────────
+// An SDP answer carries only the answerer's credentials, so an answer to invite
+// A used to be accepted onto a newer pending invite B and spin "Connecting…"
+// for 60 s. The answer now carries `o` = hash of the offer's ufrag +
+// fingerprint, and acceptAnswer refuses a mismatch as wrong_offer.
+test("acceptAnswer refuses an answer built for an older offer, and still takes an id-less one", async () => {
+  const fp = (n) => Array.from({ length: 32 }, (_, i) => ((i * n + 1) & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const sdp = (ufrag, f, setup) => ["v=0", "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+    "a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host", "a=ice-ufrag:" + ufrag,
+    "a=ice-pwd:abcdefghijklmnopqrstuvwx", "a=fingerprint:sha-256 " + f, "a=setup:" + setup].join("\r\n") + "\r\n";
+  const offerA = sdp("aaaa", fp(3), "actpass"), offerB = sdp("bbbb", fp(5), "actpass");
+  const hostPc = (offer) => ({ signalingState: "have-local-offer", iceGatheringState: "complete",
+    localDescription: { type: "offer", sdp: offer }, took: null,
+    async setRemoteDescription(d) { this.took = d; this.signalingState = "stable"; } });
+  const guestPc = () => ({ iceGatheringState: "complete", localDescription: null,
+    async setRemoteDescription(d) { this.remote = d; },
+    async createAnswer() { return { type: "answer", sdp: sdp("gggg", fp(7), "active") }; },
+    async setLocalDescription(d) { this.localDescription = d; } });
+  global.document = { querySelector: (sel) => (sel === 'meta[name="apex-build"]' ? { content: "817" } : null) };
+  const priorSdp = globalThis.NetSdp, priorHash = globalThis.Hash32;
+  globalThis.NetSdp = load("js/net/sdp.js", "NetSdp");
+  globalThis.Hash32 = load("js/core/hash32.js", "Hash32");
+  try {
+    const hs = load("js/net/handshake.js", "NetHandshake");
+    assert.match(hs.offerId(offerA), /^[0-9a-f]{8}$/);
+    assert.notEqual(hs.offerId(offerA), hs.offerId(offerB), "fresh ufrag+fingerprint, fresh id");
+    const inviteA = await hs.encodeCode({ b: 817, k: "offer", p: null, s: offerA });
+    const answer = await hs.acceptInvite({ pc: guestPc() }, inviteA, { team: 1 });
+    assert.equal(answer.ok, true);
+    const decoded = await hs.decodeCode(answer.code);
+    assert.equal(decoded.payload.o, hs.offerId(offerA), "the answer names offer A");
+
+    const stale = await hs.acceptAnswer({ pc: hostPc(offerB) }, answer.code);
+    assert.equal(stale.ok, false);
+    assert.equal(stale.error, "wrong_offer");
+    assert.match(stale.message, /older invite/i);
+
+    const pcA = hostPc(offerA);
+    assert.equal((await hs.acceptAnswer({ pc: pcA }, answer.code)).ok, true, "the right offer takes it");
+    assert.equal(pcA.took.type, "answer");
+    // A repost of the same answer against the same, now-answered offer is "already used", not "older invite".
+    assert.equal((await hs.acceptAnswer({ pc: pcA }, answer.code)).error, "already_answered");
+
+    // The OLD format (no `o`) still decodes and is judged as before.
+    const legacy = await hs.encodeCode({ b: 817, k: "answer", p: null, s: sdp("gggg", fp(7), "active") });
+    assert.equal((await hs.acceptAnswer({ pc: hostPc(offerB) }, legacy)).ok, true, "an id-less answer is accepted");
+  } finally {
+    delete global.document;
+    globalThis.NetSdp = priorSdp; globalThis.Hash32 = priorHash;
+    if (priorHash === undefined) delete globalThis.Hash32;
+  }
+});

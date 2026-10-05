@@ -289,7 +289,7 @@ test("persistOrder skips a conflicted career save", () => {
 // what is pinned is the row shape the sheet consumes and what it draws from it.
 const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/ui/quali-sheet.js"), "utf8");
 
-function loadSheet() {
+function loadSheet({ dom = false } = {}) {
   class El {
     constructor(tag) { this.tag = tag; this.className = ""; this.style = {}; this.children = []; this.hidden = true; this._t = ""; }
     get textContent() { return this._t; }
@@ -308,6 +308,7 @@ function loadSheet() {
   };
   vm.createContext(ctx);
   seedLog(ctx);
+  if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/dom.js" });
   vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/quali-sheet.js" });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
@@ -482,4 +483,18 @@ test("a career slot's order is refused by another slot, the championship and the
   assert.equal(q.results(), null, "nor a one-off GP");
   delete G.season.qualiMode;
   assert.ok(q.results(), "an unstamped (older) persist is still accepted");
+});
+
+// POLE TO THE THOUSANDTH. The gaps under it are +0.123, so a pole painted with
+// the two-decimal HUD clock (1:21.16) could not be told from a lap 0.004 s
+// slower. With Dom loaded (as in the shell) the sheet uses Dom.fmtLap.
+test("the quali sheet prints pole with three decimals, like its gaps", () => {
+  const { sheet, els } = loadSheet({ dom: true });
+  sheet.open([
+    { pos: 1, t: 81.1634, gap: 0, code: "VER", name: "Verstappen", team: "rb", isPlayer: false },
+    { pos: 2, t: 81.1674, gap: 0.004, code: "YOU", name: "You", team: "me", isPlayer: true },
+  ]);
+  const table = els.get("q-table");
+  assert.equal(table.children[0].children[3].textContent, "1:21.163");
+  assert.equal(table.children[1].children[3].textContent, "+0.004");
 });

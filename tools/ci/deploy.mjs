@@ -126,19 +126,41 @@ export function touchedCircuits(base, cwd) {
     .filter(Boolean).map((m) => m[1]))];
 }
 
+/* A SHALLOW clone whose depth stops short of the merge base cannot merge:
+   git sees no shared history, so the deploy tip reads as unrelated (merge
+   refuses) or as conflicting everywhere. Cloud sessions clone shallow (depth
+   50) and usually DO reach the base, so shallow alone is fine; shallow with no
+   merge base is named up front instead of failing mid-merge. */
+export function assertMergeable(a, b, cwd) {
+  const o = cwd ? { cwd } : {};
+  if (git(["merge-base", a, b], o).code === 0) return;
+  if (git(["rev-parse", "--is-shallow-repository"], o).out === "true") {
+    throw new Error(`this clone is SHALLOW and its history stops before the merge base of ${a} and ${b}, so git would read the merge as unrelated or conflicted. Unshallow first: \`git fetch --unshallow ${REMOTE}\` (or \`git fetch --deepen=500 ${REMOTE}\`), then re-run`);
+  }
+  throw new Error(`${a} and ${b} share no history (no merge base) — not a branch of the deploy branch?`);
+}
+
+/* `git merge-tree --write-tree` exits 0 clean, 1 with conflicts, anything else
+   on an error (unrelated histories, a missing object). Exit 1 with no CONFLICT
+   line, or any other non-zero, is an ERROR — it used to read as "clean". */
+export function mergeTreeConflicts(mt) {
+  const conflicts = (mt.err + "\n" + mt.out).split("\n").filter((l) => l.startsWith("CONFLICT")).map((l) => l.replace(/^CONFLICT \([^)]*\): /, ""));
+  if (mt.code === 0) return [];
+  if (mt.code === 1 && conflicts.length) return conflicts;
+  throw new Error(`git merge-tree could not compute the merge with the deploy tip (exit ${mt.code}, ${conflicts.length} CONFLICT lines): ${(mt.err || mt.out || "no output").split("\n")[0]}`);
+}
+
 export function plan() {
   must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
   const tip = must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse");
   const head = must(git(["rev-parse", "HEAD"]), "rev-parse HEAD");
+  assertMergeable(head, tip);
   const branch = git(["branch", "--show-current"]).out;
   const ancestor = git(["merge-base", "--is-ancestor", tip, head]).code === 0;
   const theirs = git(["log", "--oneline", `${head}..${tip}`]).out.split("\n").filter(Boolean);
   const ours = git(["log", "--oneline", `${tip}..${head}`]).out.split("\n").filter(Boolean);
   const stat = git(["diff", "--stat", `${head}...${tip}`]).out;
-  const conflicts = ancestor ? [] : (() => {
-    const mt = git(["merge-tree", "--write-tree", head, tip]);
-    return (mt.err + "\n" + mt.out).split("\n").filter((l) => l.startsWith("CONFLICT")).map((l) => l.replace(/^CONFLICT \([^)]*\): /, ""));
-  })();
+  const conflicts = ancestor ? [] : mergeTreeConflicts(git(["merge-tree", "--write-tree", head, tip]));
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
@@ -420,6 +442,7 @@ export function regenerateDerived(cwd = ROOT) {
 }
 
 export function mergeDeployTip() {
+  assertMergeable("HEAD", `${REMOTE}/${DEPLOY_BRANCH}`);
   const before = git(["rev-parse", "HEAD"]).out.trim();
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) {
@@ -427,7 +450,17 @@ export function mergeDeployTip() {
     const regen = regenerateDerived();
     return regen ? `merged (clean; regenerated ${regen.join(", ")})` : "merged";
   }
+  // A REFUSAL (unrelated histories, a dirty file the merge would overwrite)
+  // starts no merge: there is nothing to abort, and an empty conflict list
+  // must not read as "every conflict is cureable".
+  if (git(["rev-parse", "-q", "--verify", "MERGE_HEAD"]).code !== 0) {
+    throw new Error(`git merge refused to start (exit ${r.code}), nothing to abort: ${(r.err || r.out || "no output").split("\n")[0]}`);
+  }
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
+  if (!conflicted.length) {
+    git(["merge", "--abort"]);
+    throw new Error(`git merge stopped (exit ${r.code}) with no conflicted file — aborted: ${(r.err || r.out || "no output").split("\n")[0]}`);
+  }
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.

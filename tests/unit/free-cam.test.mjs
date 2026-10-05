@@ -50,7 +50,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/clipboard.js", "js/camera/photo-kit.js", "js/camera/free-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const FC = vm.runInContext("FreeCam", ctx);
   const G = {
     $: (id) => dom.byId(id), photoCam: { pos: [0, 0, 0], yaw: 0, pitch: 0, fov: 60 },
@@ -280,4 +280,24 @@ test("the flyby editor's sub-mode: starts at the previewed frame on the flyby le
   api.enterFrom({ back: () => { back++; } });
   G.photoMode && api.close(false);                          // resume / quit
   assert.equal(back, 1, "resume does not bounce back into the editor");
+});
+
+test("wheel over Studio scroll controls or browser zoom cannot change FreeCam speed", () => {
+  const { dom, api, sb } = boot(); api.open();
+  const panel = dom.byId("ps-panel"), child = dom.document.createElement("button"); panel.appendChild(child);
+  const before = api.state().speed;
+  for (const event of [{ target: child }, { ctrlKey: true }, { defaultPrevented: true }]) sb._wl.wheel({ deltaY: 120, ...event });
+  assert.equal(api.state().speed, before);
+  sb._wl.wheel({ deltaY: 120, target: dom.byId("game") }); assert.ok(api.state().speed < before);
+});
+test("suspended PhotoKit effects stay hidden across frame updates and restore their prior preferences", () => {
+  const { dom, api } = boot(); api.open();
+  dom.byId("fc-grid").click(); dom.byId("fc-dof-blur").value = "50";
+  dom.dispatch(dom.byId("fc-dof-blur"), { type: "input", target: dom.byId("fc-dof-blur") });
+  const grid = dom.byId("fc-comp-grid"), dof = dom.byId("fc-dof");
+  assert.equal(grid.hidden, false); assert.equal(dof.hidden, false);
+  api.setOverlaysVisible(false); api.decorate({}, 0.1);
+  assert.equal(grid.hidden, true); assert.equal(dof.hidden, true);
+  api.setOverlaysVisible(true); assert.equal(grid.hidden, false); assert.equal(dof.hidden, false);
+  assert.equal(api.state().grid, "thirds"); assert.equal(api.state().dofBlur, 0.5);
 });

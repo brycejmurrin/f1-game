@@ -10,11 +10,34 @@
    the real backend (TrackBuildClient.replay) — packing and upload stay on the
    main thread, where the GPU context is. Everything the page cannot receive is
    stripped before the post: the gfx handle, the surface sampler (rebuilt by
-   the page from the def) and the lazy node grid. */
+   the page from the def) and the lazy node grid.
+
+   It also imports TRACK_WORKER_EXTRA (assets.js): the build waits for the
+   baked model pack as the page's does (Assets.modelsReady, 4 s cap), and
+   reports how many it holds so the page can refuse a poorer world. The page's
+   MY TEAM row arrives with each build and replaces the worker's default. */
 "use strict";
 self.window = self;
 let _loaded = false;
 const _scenery = new Set();
+
+// Relative URLs resolve against the PAGE (init's `base`), not this script:
+// assets.js fetches "assets/pack/…", which from js/track/ would 404.
+function pageRelativeFetch(base) {
+  const f = self.fetch;
+  if (!base || typeof f !== "function") return;
+  self.fetch = (u, o) => f.call(self, typeof u === "string" ? new URL(u, base).href : u, o);
+}
+
+// The page's MY TEAM entry in place of this worker's default (or none).
+function adoptTeam(team) {
+  if (!team || typeof Teams === "undefined" || !Array.isArray(Teams.LIST)) return;
+  const i = Teams.LIST.findIndex((t) => t && t.id === team.id);
+  if (i >= 0) Teams.LIST.splice(i, 1, team); else Teams.LIST.push(team);
+}
+
+const residentModels = () => (typeof Assets === "undefined" || !Assets.models ? 0
+  : Assets.models().filter((id) => Assets.modelSync(id)).length);
 
 // Every ArrayBuffer under `root`, once each: transferred, not copied.
 function transferables(root) {
@@ -30,7 +53,7 @@ function transferables(root) {
   return [...out];
 }
 
-function build(m) {
+async function build(m) {
   const recs = [];
   const rec = (op) => (...args) => {
     const n = recs.length;
@@ -46,22 +69,34 @@ function build(m) {
   if (m.scenery && !_scenery.has(m.scenery)) { importScripts(m.scenery); _scenery.add(m.scenery); }
   const def = Tracks.LIST[m.idx];
   if (!def || def.id !== m.id) throw new Error("worker track list differs at " + m.idx + " (" + (def && def.id) + " != " + m.id + ")");
+  adoptTeam(m.team);
+  if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady();
   const t0 = performance.now();
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx }));
   const ms = performance.now() - t0;
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
-  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms };
+  // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
+  // (tracks.js); the main-thread def never sees it, so every later reader there
+  // (scenery reloads, frac-keyed tables, agent hooks) read 0. Send it back,
+  // with _startFrac (same story, tracks.js).
+  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels() };
   self.postMessage(msg, transferables(msg));
 }
 
-self.onmessage = (e) => {
+self.onmessage = async (e) => {
   const m = e.data || {};
   try {
     if (m.type === "init") {
-      if (!_loaded) { importScripts(...m.files); _loaded = true; }
+      if (!_loaded) {
+        pageRelativeFetch(m.base);
+        importScripts(...m.files);
+        _loaded = true;
+        // Prefetch now, as the page does at boot: a build awaits the same run.
+        if (typeof Assets !== "undefined" && Assets.loadModels) Assets.loadModels().catch(() => 0);
+      }
       self.postMessage({ type: "ready" });
     } else if (m.type === "build") {
-      build(m);
+      await build(m);
     }
   } catch (err) {
     self.postMessage({ type: "error", seq: m.seq, message: String((err && err.message) || err) });

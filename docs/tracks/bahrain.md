@@ -25,6 +25,18 @@ Fog: thin warm dust haze low to the ground, mild — preserves long-straight vis
 Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone into Turn 8** (~s 0.42) and a short **rise into the Turn 9–10 complex** (~s 0.50). Everything else effectively level.
 
 ## 4. Landmarks & surroundings by lap position
+**Frame:** the `s` column below is the SCENERY frame (`sceneryStartFrac: 0.2250`),
+not the racing lap. Since 2026-10-04 the start line is the real pit straight
+(`startFrac: 0`), which sits at s ≈ 0.730 in this frame (real T1 apex 0.8335).
+The pit buildings, pit wall, start gantry, main and Victory-approach grandstands,
+paddock hospitality/broadcast compound, Sakhir Tower, T1 grandstand and Schumacher
+marker are keyed off `SF`/`T1F` in `js/circuits/scenery/bahrain.js` and now dress
+that straight (pits RIGHT, main grandstand LEFT); rows below still at s 0.00–0.07
+describe where they stood before. The drag strip (SF − 0.065 … SF + 0.055, LEFT,
+178 m — outside the lap beyond the main grandstand) and the paddock palm grove
+(SF + 0.004 … + 0.028, RIGHT, 121–136 m — behind the hospitality kit, short of
+the inner loop) followed on 2026-10-05; both had stayed on the old diagonal.
+
 | s (0–1) | Side | Dist | Box-model description |
 |--------|------|------|------------------------|
 | 0.00 | L | close | Pit/control building: long low white box, ~12 m, glass-grey top stripe |
@@ -42,7 +54,7 @@ Near-flat overall (only a few metres). Notable: a gentle **downhill braking zone
 | 0.62 | L | far | Marshal/timing huts: small white cubes, ~4 m |
 | 0.80 | R | mid | Back-straight catch-fence + tall flood ring |
 | 0.95 | L | close | Pit entry wall + garage roofline returning to start |
-| 0.015 | L | very far (~180 m) | **Drag strip**: twin prepped lanes parallel to the pit straight, darkening toward the start line; guard walls, centre stripe, launch-end bleachers, starter box, and the **Christmas tree** light stack (2 pre-stage + 3 staged ambers, green, red — per lane). Its own 28 m flood masts |
+| 0.665–0.785 | L | very far (~180 m) | **Drag strip**: twin prepped lanes parallel to the pit straight, darkening toward the start line; guard walls, centre stripe, launch-end bleachers, starter box, and the **Christmas tree** light stack (2 pre-stage + 3 staged ambers, green, red — per lane). Its own 28 m flood masts |
 | 0.135 / 0.225 / 0.345 / 0.475 / 0.605 / 0.705 / 0.845 | alternating | far (74–96 m) | **Limestone shelves**: low stepped flat-topped ledges, bright sunlit cap over a darker face, scree skirt at the foot — the rocky pavement the circuit was blasted out of. Sparse, so the dune bands keep the skyline |
 
 ## 5. Track features

@@ -135,6 +135,28 @@ test("a retained highlights control cannot acquire an online session", () => {
   assert.equal(replay.isScrubbing(), false);
 });
 
+test("highlights frame the tagged car after posing, including a retirement, then return to the winner", () => {
+  const R = boot(), winner = { finPos: 1, s: 10, px: 10, pz: 0 }, retired = { finPos: 2, retired: true, s: 800, px: 800, pz: 0 };
+  const G = { player: winner, cars: [winner, retired], gfx: {},
+    camVantage: (_mode, s) => ({ eye: [s, 5, -10], tgt: [s, 0, 0], fov: 58 }) };
+  const camera = R.create(G);
+  camera.attachReplay({ window: () => ({ t0: 0, t1: 20, frames: 600 }),
+    tags: () => [{ kind: "retirement", t: 10, car: 1 }, { kind: "contact", t: 15, car: 99 }],
+    beginScrub: () => true, apply: () => { retired.s = retired.px = 700; },
+    endScrub: () => { retired.s = retired.px = 800; } });
+  camera.onFlag();
+  assert.equal(G.dbgCam.target[0], 10, "flag frames the winner");
+  assert.equal(camera.startHighlights(), true);
+  assert.equal(G.dbgCam.target[0], 700, "retirement clip uses its newly posed subject, even though retired");
+  assert.equal(G.player, winner, "presentation never changes player ownership");
+  camera.tick(4.1);
+  assert.equal(G.dbgCam.target[0], 10, "a missing tag subject falls back to the winner");
+  camera.tick(4.1);
+  assert.equal(camera.status().phase, "orbit");
+  assert.equal(G.dbgCam.target[0], 10);
+  assert.equal(retired.px, 800, "ending the montage restores the live pose");
+});
+
 
 test("losing results eligibility during a montage restores the finish and releases replay", () => {
   const { R, G, car, finish, replay } = recordedFinish();

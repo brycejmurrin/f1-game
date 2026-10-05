@@ -23,21 +23,52 @@ const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
 // Surface that distinction globally: the in-memory cache preserves this
 // session, but the player must know a reload will discard it and must have a
 // recovery path that never exports credentials or unrelated preferences.
-document.body.insertAdjacentHTML("afterbegin",
-  '<aside id="save-warning" role="alert" hidden><strong>SESSION ONLY — SAVING UNAVAILABLE</strong>' +
-  '<span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span>' +
-  '<button id="save-retry" type="button">RETRY SAVE</button>' +
-  '<button id="save-export" type="button">EXPORT RECOVERY</button></aside>');
+// The banner is static shell DOM (index.html #save-warning). It answers ONE
+// question — did a WRITE fail? — through store.writeFailed(): a corrupt key
+// that fails to parse also sets store.broken, and that used to raise a
+// session-long SESSION ONLY banner over a save that was writing fine.
 const saveWarning = $("save-warning");
 const saveWarningDetail = $("save-warning-detail");
+const saveDismiss = $("save-dismiss");
+// store.writeFailed() (js/core/store.js, lane L3): the latest failed write whose
+// key has not since been written durably, or null. Before it exists, the old
+// `broken` flag is the only signal there is.
+const writeFailed = () => (store.writeFailed ? store.writeFailed() : store.broken);
+// Spoken ONCE per failure through #announce-live, the always-present polite
+// region — via LiveRegion (js/ui/live-region.js), its ONE writer, at SAVE
+// priority: a radio call or a flag in the same tick queues behind or ahead of
+// it instead of overwriting it. A bare write only where that module is absent.
+let saveSpoken = false;
+const sayOnce = (text) => {
+  const live = $("announce-live");
+  if (saveSpoken || !live) return;
+  saveSpoken = true;
+  if (typeof LiveRegion !== "undefined") LiveRegion.say(text, "save");
+  else live.textContent = text;
+};
+const setSaveCollapsed = (on) => {
+  if (!saveWarning) return;
+  if (on) saveWarning.dataset.collapsed = ""; else delete saveWarning.dataset.collapsed;
+  if (saveDismiss) {
+    saveDismiss.setAttribute("aria-expanded", on ? "false" : "true");
+    saveDismiss.textContent = on ? "NOT SAVING" : "DISMISS";
+  }
+};
 const showSaveWarning = (reason) => {
   if (!saveWarning) return;
   saveWarning.hidden = false;
   saveWarningDetail.textContent = "Progress will be lost when this page closes or reloads"
     + (reason ? " (" + reason + ")." : ".");
+  sayOnce("Saving unavailable. Progress will be lost when this page closes or reloads.");
 };
-const hideSaveWarning = () => { if (saveWarning) saveWarning.hidden = true; };
-if (store.broken) showSaveWarning(store.broken);
+const hideSaveWarning = () => {
+  if (!saveWarning) return;
+  saveWarning.hidden = true;
+  setSaveCollapsed(false);   // a LATER failure is new news: it opens in full
+  saveSpoken = false;
+};
+if (saveDismiss) saveDismiss.onclick = () => setSaveCollapsed(saveDismiss.getAttribute("aria-expanded") === "true");
+if (writeFailed()) showSaveWarning(writeFailed());
 store.subscribe((change) => {
   if (change && change.local && change.durable === false) showSaveWarning(change.reason);
 });
@@ -52,7 +83,12 @@ const retrySave = () => {
   if (!results.length) results.push(store.write("saveProbe", { at: Date.now() }));
   const durable = results.every((r) => r && r.durable);
   if (durable) {
+    // RETRY clears BOTH records: `broken`, and the failed-write state — the
+    // career / season / probe keys just landed durably, so their entries in
+    // store.writeFailed() are gone already; a store that also offers an explicit
+    // clear (for a stale key nobody will rewrite) gets it called too.
     store.broken = null;
+    if (store.clearWriteFailed) store.clearWriteFailed();
     hideSaveWarning();
     if (G.announce) G.announce("SAVE RESTORED");
   } else showSaveWarning((results.find((r) => r && r.reason) || {}).reason || store.broken);
@@ -64,7 +100,7 @@ const exportRecovery = () => {
     build: (window.__APEX_BUILD || null),
     career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
     season: G.season || null,
-    persistence: { durable: false, reason: store.broken || "unknown" },
+    persistence: { durable: false, reason: writeFailed() || store.broken || "unknown" },
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -812,7 +848,7 @@ function updateTrackPreview() {
       e.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
       e.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
-        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id) }); });
+        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id), originId: t.id }); });
       };
       factsEl.appendChild(e);
     }
@@ -949,8 +985,11 @@ function openTrackDetail() {
   if (drsWrap && drsList) {
     if (dz && dz.length) {
       const trackLen = (t.lengthKm || 5) * 1000;
+      // A zone across the line ends past 1 lap (z.b > 1): print its end in
+      // the next lap's metres, so it reads "5480 m – 320 m", not past the length.
+      const lapM = function (f) { const m = Math.round(f * trackLen); return m > trackLen ? m - trackLen : m; };
       drsList.innerHTML = dz.map(function (z, i) {
-        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + Math.round(z.a * trackLen) + ' m &ndash; ' + Math.round(z.b * trackLen) + ' m</div>';
+        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + lapM(z.a) + ' m &ndash; ' + lapM(z.b) + ' m</div>';
       }).join("");
       drsWrap.hidden = false;
     } else {

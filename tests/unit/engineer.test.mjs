@@ -504,3 +504,66 @@ test("senseOf reads the cars around the player: the threat, the car ahead, and t
   behind.prog = 0;   // nobody inside the loss window: clear air
   assert.equal(eng.senseOf(c).rejoin, "");
 });
+
+// update() fills one scratch per instance (senseInto) instead of a ~30-field
+// literal per step; senseOf, the public read, still hands out a fresh object
+// with the same fields, so the two cannot disagree on what callFor sees.
+test("senseOf stays a fresh snapshot; update's scratch sense is the same state", () => {
+  const { eng, tyres } = sessionFor();
+  const c = carOn(tyres, { wear: 0.8 });
+  const a = eng.senseOf(c), b = eng.senseOf(c);
+  assert.notEqual(a, b, "a fresh object per call");
+  assert.deepEqual(a, b);
+  assert.equal(Object.keys(a).length, 28, "every field the literal had");
+  c.local = true;
+  assert.equal(eng.update(c, 1 / 60), eng.callFor(a)[0], "update says what callFor reads off the snapshot");
+});
+
+// review-race-career-data #13: every line was re-said each REPEAT_S (45 s)
+// while its condition held — "CAUTION — CHEAPER STOP" for a whole safety car,
+// "MANAGE THE TYRES" twice a lap — and the cheap stop was offered with no stop
+// left to make.
+test("a steady state is said once; the same line returns only when what it reports changed", () => {
+  const { eng, tyres, said, G } = sessionFor({ cautionLevel: 3 });
+  const c = carOn(tyres, { wear: 0.4 });
+  c.pitPlan = { lapsAt: [c.lap + 6], seq: ["M", "H"] };
+  G.pits = { estimate: () => ({ lossS: 18, marginS: 2 }), lastCue: () => null };
+  for (let i = 0; i < 300; i++) eng.update(c, 1);      // five minutes of one caution
+  const cheap = () => said.filter((m) => /CHEAPER STOP/.test(m)).length;
+  assert.equal(cheap(), 1, `one caution, one cheap-stop call: ${said.join(" | ")}`);
+  let lvl = 0;
+  G.cautionLevel = () => lvl;                           // green…
+  for (let i = 0; i < 30; i++) eng.update(c, 1);
+  lvl = 3;                                              // …and a NEW caution is news again
+  for (let i = 0; i < 30; i++) eng.update(c, 1);
+  assert.equal(cheap(), 2, "a second caution earns the call again");
+
+  // A line keyed on a lap count: same lap, said once; next lap, said again.
+  const s = sessionFor({ arc: { to: "rain", dur: 600, t: 300 } });
+  const r = carOn(s.tyres, { wear: 0 });
+  for (let i = 0; i < 120; i++) s.eng.update(r, 1);
+  const rain = () => s.said.filter((m) => /^RAIN IN/.test(m));
+  assert.equal(rain().length, 1, `the same rain call twice: ${s.said.join(" | ")}`);
+  s.G.weatherArc.t += 90;                               // a lap later: one lap closer
+  for (let i = 0; i < 20; i++) s.eng.update(r, 1);
+  assert.equal(rain().length, 2);
+  assert.notEqual(rain()[0], rain()[1], "the repeat carries the new count");
+});
+
+test("the cheap stop under caution is offered only when a stop is still due", () => {
+  // No plan and a set that reaches the flag: nothing to box for.
+  const short = sessionFor({ cautionLevel: 3, laps: 9 });
+  const a = carOn(short.tyres, { wear: 0.4 });
+  short.G.pits = { estimate: () => ({ lossS: 18, marginS: 2 }), lastCue: () => null };
+  const sa = short.eng.senseOf(a);
+  assert.ok(sa.setLaps != null && sa.setLaps + 0.5 >= 9 - a.lap + 1, `the set reaches the flag (setLaps ${sa.setLaps}, lap ${a.lap})`);
+  assert.equal(sa.cheapStop, false);
+  // A planned stop still to make: offered.
+  a.pitPlan = { lapsAt: [a.lap + 1], seq: ["M", "H"] };
+  assert.equal(short.eng.senseOf(a).cheapStop, true);
+  // No plan, but a set that cannot reach the flag: offered.
+  const long = sessionFor({ cautionLevel: 3, laps: 80 });
+  const b = carOn(long.tyres, { wear: 0.4 });
+  long.G.pits = { estimate: () => ({ lossS: 18, marginS: 2 }), lastCue: () => null };
+  assert.equal(long.eng.senseOf(b).cheapStop, true);
+});

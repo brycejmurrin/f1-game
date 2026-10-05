@@ -1505,6 +1505,39 @@ function bakeAtlas(args) {
 
 // ────────────────────────────── verify / credits ─────────────────────────────
 
+// An AX26 body as js/render/shared/assets.js _parseModel reads it (both
+// layouts, see writeAX26), checked for what that reader does not: the exact
+// length, triangle-sized index count, every index < nv, every per-vertex
+// material a layer of the array (0..MAT_LAYERS-1, whole), and the manifest's
+// verts/tris agreeing with the header. Returns problem strings ([] = good).
+function checkAX26(buf, rec) {
+  const out = [];
+  if (buf.length < 20 || buf.toString("ascii", 0, 4) !== "AX26") return ["not an AX26 file"];
+  const ver = buf.readUInt32LE(4), nv = buf.readUInt32LE(8), ni = buf.readUInt32LE(12);
+  if (ver !== 1 && ver !== 2) return [`AX26 version ${ver} is not 1 or 2`];
+  if (!nv || !ni) return [`empty mesh (${nv} verts, ${ni} indices)`];
+  if (ni % 3) out.push(`${ni} indices is not whole triangles`);
+  const need = ver === 1 ? 20 + nv * 40 + ni * 4 : 20 + nv * 22 + ni * 2;
+  if (buf.length !== need) return [...out, `AX26 v${ver} is ${buf.length} bytes, header says ${need}`];
+  const matAt = ver === 1 ? 20 + nv * 36 : 20 + nv * 21;
+  let badMat = 0, firstMat = 0;
+  for (let i = 0; i < nv; i++) {
+    const m = ver === 1 ? buf.readFloatLE(matAt + i * 4) : buf[matAt + i];
+    if (!(m >= 0 && m < MAT_LAYERS && m === Math.floor(m))) { if (!badMat++) firstMat = m; }
+  }
+  if (badMat) out.push(`${badMat} vertices name material layer ${firstMat}, outside 0..${MAT_LAYERS - 1}`);
+  const idxAt = ver === 1 ? 20 + nv * 40 : 20 + nv * 22;
+  let badIdx = 0, maxIdx = 0;
+  for (let i = 0; i < ni; i++) {
+    const k = ver === 1 ? buf.readUInt32LE(idxAt + i * 4) : buf.readUInt16LE(idxAt + i * 2);
+    if (k >= nv) { badIdx++; if (k > maxIdx) maxIdx = k; }
+  }
+  if (badIdx) out.push(`${badIdx} indices reach past the ${nv} vertices (max ${maxIdx})`);
+  if (rec && rec.verts !== undefined && rec.verts !== nv) out.push(`manifest says ${rec.verts} verts, file has ${nv}`);
+  if (rec && rec.tris !== undefined && rec.tris * 3 !== ni) out.push(`manifest says ${rec.tris} tris, file has ${ni / 3}`);
+  return out;
+}
+
 function verify() {
   const problems = [];
   if (!fs.existsSync(MANIFEST)) {
@@ -1565,16 +1598,28 @@ function verify() {
     }
   }
 
+  // Models are held to what the materials already were: the file must resolve
+  // INSIDE the pack (path.join let "../" walk out of it), the md5 is required
+  // (absent was silently accepted, so an edited bin passed), and the AX26 body
+  // must be one the runtime reader can draw — every index inside the vertex
+  // count, every per-vertex material a real layer of the TEXTURE_2D_ARRAY.
+  // The manifest is committed, so this is hardening: verify should say so
+  // before a pack ships, not a player's GPU.
   for (const [id, rec] of Object.entries(m.models || {})) {
+    if (!rec || typeof rec !== "object") { problems.push(`model ${id}: invalid record`); continue; }
     checkEntry(`model ${id}`, rec);
-    const p = path.join(PACK, rec.file || "");
-    if (!rec.file || !fs.existsSync(p)) { problems.push(`model ${id}: missing file ${rec.file}`); continue; }
+    if (typeof rec.file !== "string" || !rec.file) { problems.push(`model ${id}: missing file`); continue; }
+    const p = path.resolve(PACK, rec.file);
+    if (!p.startsWith(PACK + path.sep)) { problems.push(`model ${id}: file outside pack ${rec.file}`); continue; }
+    if (!fs.existsSync(p)) { problems.push(`model ${id}: missing file ${rec.file}`); continue; }
     const buf = fs.readFileSync(p);
     bytes += buf.length;
-    if (rec.md5) {
-      const md5 = crypto.createHash("md5").update(buf).digest("hex");
-      if (md5 !== rec.md5) problems.push(`model ${id}: md5 mismatch (file changed since bake)`);
-    }
+    if (typeof rec.md5 !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5)) problems.push(`model ${id}: md5 missing — every baked file is hashed`);
+    else if (crypto.createHash("md5").update(buf).digest("hex") !== rec.md5)
+      problems.push(`model ${id}: md5 mismatch (file changed since bake)`);
+    if (rec.mat !== undefined && !Object.prototype.hasOwnProperty.call(MAT, rec.mat))
+      problems.push(`model ${id}: material "${rec.mat}" is not a MAT id`);
+    for (const msg of checkAX26(buf, rec)) problems.push(`model ${id}: ${msg}`);
   }
   for (const [k, rec] of Object.entries(m.env || {})) checkEntry(`env ${k}`, rec);
 
@@ -1784,8 +1829,8 @@ async function main() {
   }
 }
 
-// Only when RUN, not when imported: other tools may import decodePNG /
-// encodePNG rather than adding a third copy of each to the tree (there is
-// already a second decoder in import-models.mjs).
+// Only when RUN, not when imported. tools/car/trace-logo.mjs reuses decodePNG and
+// tools/car/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
+// each to the tree (there is already a second decoder in import-models.mjs).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main().catch((e) => fail(e && e.stack ? e.stack : String(e)));

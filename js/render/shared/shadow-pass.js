@@ -160,6 +160,11 @@ const ShadowPass = (function () {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
       _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
+      // The caster list is "last frame's field": without this the first frame
+      // after loadTrack casts the PREVIOUS track's cars (and keeps them alive).
+      // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
+      _shadowCount = 0;
+      _shadowCars.length = 0; _shadowTeams.length = 0; _shadowCast.length = 0;
     }
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.

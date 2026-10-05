@@ -280,6 +280,7 @@ const FULL = [
   "js/race/race-radio.js",
   "js/camera/offsets.js",
   "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
+  "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -347,6 +348,7 @@ const FULL = [
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
+  "js/ui/live-region.js",    // LiveRegion: the one writer of #announce-live (flag > penalty > save > radio > HUD queue)
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
@@ -400,6 +402,7 @@ const FULL = [
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
   "js/ui/platform-session.js", // PlatformSession: platform, phone pairing and tab lifecycle wiring
+  "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/game.js",
 ];
 
@@ -980,11 +983,23 @@ const LAZY_WORKER = [
   "js/track/build-worker.js",
 ];
 
+// THE BUILD WORKER'S OWN EXTRAS, imported after TRACK_VM. NOT TRACK_VM itself:
+// every Node VM build (verify-track, the audits, the VM tests) reads TRACK_VM
+// and runs `assets: false` by design, so adding assets.js there would change
+// what every one of them builds. The worker is a browser build and must match
+// the page's: without assets.js, bakedModel() returned false in the worker and
+// a background build shipped none of the baked pack models (procedural boxes
+// where the main-thread build stamps the real ones).
+const TRACK_WORKER_EXTRA = [
+  "js/render/shared/assets.js",
+];
+
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
 // <script> subset, in order: the signalling + transport half of js/net, the
 // shared roll math, and the pad module. No game, no renderer, no store.
 const CONTROLLER = [
   "js/core/log.js",
+  "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers
   "js/net/bytes.js",
   "js/net/nostr.js",
   "js/net/rendezvous.js",
@@ -1146,6 +1161,7 @@ const MOVED = {
   "tools/parts-ladder.mjs": "tools/car/parts-ladder.mjs",
   "tools/crest-sweep.mjs": "tools/car/crest-sweep.mjs",
   "tools/logo-authored-sweep.mjs": "tools/car/logo-authored-sweep.mjs",
+  "tools/trace-logo.mjs": "tools/car/trace-logo.mjs",
   "tools/cockpit-pale-sweep.mjs": "tools/car/cockpit-pale-sweep.mjs",
   "tools/career-economy.mjs": "tools/car/career-economy.mjs",
   "tools/layout-audit.mjs": "tools/ui/layout-audit.mjs",
@@ -1324,7 +1340,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, LAZY_EDITOR, LAZY_EDITOR_EDGES,
+  LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

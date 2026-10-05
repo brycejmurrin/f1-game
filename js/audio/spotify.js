@@ -181,10 +181,14 @@ window.SpotifyMusic = (function () {
     } catch (e) { return false; }
   }
 
-  function validToken() {
+  // `stale`: an access token the Web API just refused (401). It is refreshed even
+  // though its local expires_at says it is good — unless the stored token has
+  // already moved on (a concurrent caller refreshed it), which is then returned.
+  function validToken(stale) {
     const t = readToken();
     if (!t) return Promise.resolve(null);
-    if (t.expires_at && Date.now() < t.expires_at - 60000) return Promise.resolve(t.access_token);
+    const refused = !!stale && t.access_token === stale;
+    if (!refused && t.expires_at && Date.now() < t.expires_at - 60000) return Promise.resolve(t.access_token);
     if (!t.refresh_token) { clearToken(); return Promise.resolve(null); }
     if (refreshInFlight && refreshTokenInFlight === t.refresh_token) return refreshInFlight;
     const token = t.refresh_token;
@@ -516,9 +520,16 @@ window.SpotifyMusic = (function () {
   }
 
   let apiFailing = false;
-  function api(path, opts) {
+  // A 401 FROM THE WEB API MEANS THE TOKEN, NOT THE CLOCK. Refresh used to run
+  // only on local expiry, so a token revoked or invalidated early stayed dead
+  // until its expires_at while the 10 s poll repeated the 401. Now one 401 buys
+  // one forced refresh and one retry; a second 401 is the caller's to see.
+  // (401 = "authorization has been refused for those credentials":
+  // https://developer.spotify.com/documentation/web-api/concepts/api-calls)
+  function api(path, opts) { return apiWith(path, opts, null); }
+  function apiWith(path, opts, refused) {
     const gen = sessionGen;
-    return validToken().then((t) => {
+    return validToken(refused).then((t) => {
       if (!t || gen !== sessionGen) return null;
       const o = Object.assign({}, opts || {});
       o.headers = Object.assign(
@@ -533,7 +544,11 @@ window.SpotifyMusic = (function () {
       return fetch(API + path, o).then((r) => { apiFailing = false; return r; }, (e) => {
         if (!apiFailing) { apiFailing = true; Log.warn("audio", "Spotify API " + path.split("?")[0] + " failed:", e && (e.name + ": " + e.message)); }
         return null;
-      }).then((r) => { if (timer) clearTimeout(timer); return r; });
+      }).then((r) => {
+        if (timer) clearTimeout(timer);
+        if (r && r.status === 401 && !refused && gen === sessionGen) return apiWith(path, opts, t);
+        return r;
+      });
     });
   }
 
@@ -673,11 +688,26 @@ window.SpotifyMusic = (function () {
   }
 
   let pollBusy = false;
+  // RATE LIMITED: a 429 carries Retry-After in seconds, and the client is to
+  // wait that long before calling again
+  // (https://developer.spotify.com/documentation/web-api/concepts/rate-limits).
+  // The poll ignored it and asked again every 10 s under a quota this file
+  // itself calls modest. Missing or unreadable: 30 s. Clamped to 1 s..10 min.
+  let pollHoldUntil = 0;
+  function retryAfterMs(r) {
+    const h = r && r.headers && typeof r.headers.get === "function" ? r.headers.get("Retry-After") : null;
+    let ms = NaN;
+    if (h != null && /^\s*\d+(\.\d+)?\s*$/.test(h)) ms = parseFloat(h) * 1000;
+    else if (h) { const at = Date.parse(h); if (Number.isFinite(at)) ms = at - Date.now(); }
+    if (!Number.isFinite(ms)) ms = 30000;
+    return Math.max(1000, Math.min(600000, ms));
+  }
   function pollNowPlaying() {
     if (mode() !== "remote" || state !== "connected") return Promise.resolve();
     // One flight at a time, none while hidden — a slow /me/player otherwise
     // stacks against the 10 s interval into a request pile-up.
     if (pollBusy || document.hidden) return Promise.resolve();
+    if (Date.now() < pollHoldUntil) return Promise.resolve();
     pollBusy = true;
     const gen = sessionGen;
     const done = () => { if (gen === sessionGen) pollBusy = false; };
@@ -685,6 +715,7 @@ window.SpotifyMusic = (function () {
       if (gen !== sessionGen) return;
       if (!r) return;
       if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
+      if (r.status === 429) { pollHoldUntil = Date.now() + retryAfterMs(r); return; }
       if (!r.ok) return;
       return r.json().then((j) => {
         if (gen !== sessionGen) return;

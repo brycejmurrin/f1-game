@@ -82,3 +82,77 @@ for (const id of TRACKS) {
       `${id}: only ${(100 * s.tilted / s.n).toFixed(1)}% of terrain verts tilt past 3deg — shaded flat`);
   });
 }
+
+// THE ROAD, TOO, ON A BANK. buildRoad offset every banked vertex along u by
+// bankOffsetAt (a linear tilt across the tarmac, ramping in and out along the
+// lap) but pushed the unbanked u as its normal, so Zandvoort's 19° bowl,
+// Madrid's 13.5° and Indianapolis' 15° lit like flat road.
+// The measure: each running-surface vertex normal against the area-weighted
+// normal of the two faces either side of it along its column, MINUS the same
+// angle on the same circuit built without its bank — the mesh's own faceting
+// (Spa reads 10.6° flat at its sharpest kink) is not the bank's to fix. Before
+// the fix the bank added 19° / 13.5° / 14.7°; after it 1.0° / 0.7° / 3.2°, the
+// last on Indianapolis T1's inner rail, where the bank ramps 0.4 m a node over
+// a 0.55 m sliver of road.
+const BANKED = ["zandvoort", "madrid", "indianapolis"];
+function surfaceNormalErrors(tr) {
+  const Tracks = _ctx;
+  const g = Tracks._vmContext.TrackMesh.buildRoad(tr), V = 14, P = g.pos, N = g.nrm, out = [];
+  const face = (k, v) => {                  // un-normalised: the cross product's length is the area
+    const a = k * V + v, b = a + 1, c = (k + 1) * V + v;
+    const e1 = [0, 1, 2].map((i) => P[b * 3 + i] - P[a * 3 + i]), e2 = [0, 1, 2].map((i) => P[c * 3 + i] - P[a * 3 + i]);
+    const f = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    return f[1] < 0 ? f.map((x) => -x) : f;
+  };
+  for (let k = 1; k < tr.n - 1; k++) for (let v = 3; v < 10; v++) {   // running surface, off the edge line
+    const f1 = face(k - 1, v), f2 = face(k, v), f = [f1[0] + f2[0], f1[1] + f2[1], f1[2] + f2[2]];
+    const a = k * V + v, vn = [N[a * 3], N[a * 3 + 1], N[a * 3 + 2]];
+    const cos = (f[0] * vn[0] + f[1] * vn[1] + f[2] * vn[2]) / (Math.hypot(...f) * Math.hypot(...vn));
+    out.push(Math.acos(Math.min(1, cos)) * 180 / Math.PI);
+  }
+  return out;
+}
+function bankShadingExcess(id) {
+  const Tracks = _ctx || (_ctx = buildContext());
+  const def = Tracks.LIST.find((d) => d.id === id);
+  const banked = Tracks.buildCenterline(def, { line: false });
+  const flat = Tracks.buildCenterline(def, { line: false });
+  flat.bankP = null;
+  const eb = surfaceNormalErrors(banked), ef = surfaceNormalErrors(flat);
+  let worst = 0, at = 0, sum = 0, cnt = 0;
+  for (let i = 0; i < eb.length; i++) {
+    const k = 1 + Math.floor(i / 7);
+    if (!(banked.bankP.lift[k] > 0)) continue;
+    const d = eb[i] - ef[i];
+    sum += d; cnt++;
+    if (d > worst) { worst = d; at = k / banked.n; }
+  }
+  return { worst, at, mean: cnt ? sum / cnt : 0, cnt };
+}
+
+for (const id of BANKED) {
+  test(`${id}: banked road vertex normals follow the bank`, () => {
+    const r = bankShadingExcess(id);
+    assert.ok(r.cnt > 100, `premise: ${id} carries a bank profile (${r.cnt} banked vertices)`);
+    assert.ok(r.worst < 4, `${id}: the bank adds ${r.worst.toFixed(2)}° of normal error at lap ${r.at.toFixed(3)}`);
+    assert.ok(r.mean < 0.5, `${id}: mean added normal error ${r.mean.toFixed(2)}° over banked vertices`);
+  });
+}
+
+// The AI brake planner reads Tracks.bankAngle; the executor reads banking().
+// They must be one channel: on Zandvoort the planner saw 0 while the executor
+// applied a 19° bowl's grip.
+test("Tracks.bankAngle is banking()'s roll at every node (zandvoort)", () => {
+  const Tracks = _ctx || (_ctx = buildContext());
+  const tr = Tracks.buildCenterline(Tracks.LIST.find((d) => d.id === "zandvoort"), { line: false });
+  let maxDeg = 0, off = 0;
+  for (let k = 0; k < tr.n; k++) {
+    const s = (k + 0.37) * tr.total / tr.n;               // between nodes: the lerp must match too
+    const b = Tracks.banking(tr, s, 0, {});
+    const want = b ? b.roll : 0, got = Tracks.bankAngle(tr, s);
+    if (got !== want) off++;
+    maxDeg = Math.max(maxDeg, Math.abs(got) * 180 / Math.PI);
+  }
+  assert.equal(off, 0, "bankAngle and banking().roll disagree");
+  assert.ok(maxDeg > 15, `the planner sees Zandvoort's bowl (max ${maxDeg.toFixed(1)}°)`);
+});

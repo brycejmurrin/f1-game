@@ -45,27 +45,37 @@ const CarDraw = (function () {
         if (order) {
           const i = order.indexOf(key);
           if (i >= 0) order.splice(i, 1);
+          const st = _lruStamp.get(order); if (st) st.delete(key);
         }
       });
     }
     // Bound a key→mesh cache to `max` most-recent entries. Evicted meshes are freed
     // via gfx.freeMesh exactly once (deleted from the map before free). `freeOne`
     // optional — defaults to freeMesh(mesh); wheel pairs pass a custom freer.
+    // A hit promotes, the least recently used evicts — by STAMP: a hit writes one
+    // number (it was an indexOf + splice + push per drawn car per pass), and only
+    // an eviction, a miss past `max`, scans `order` for the oldest stamp.
+    // `order` stays the key list every clear (length = 0) and invalidation edits.
+    const _lruStamp = new WeakMap();   // order array -> Map(key -> last-use tick)
+    let _lruTick = 0;
     function putBoundedMesh(cache, order, key, create, max, freeOne) {
-      if (cache[key]) {
-        if (order[order.length - 1] !== key) {
-          const i = order.indexOf(key);
-          if (i >= 0) order.splice(i, 1);
-          order.push(key);
-        }
-        return cache[key];
-      }
+      let st = _lruStamp.get(order);
+      if (!st) { st = new Map(); _lruStamp.set(order, st); }
+      if (cache[key]) { st.set(key, ++_lruTick); return cache[key]; }
       const mesh = create();
       cache[key] = mesh;
       order.push(key);
+      st.set(key, ++_lruTick);
       const free = freeOne || ((m) => { if (m && G.gfx.freeMesh) G.gfx.freeMesh(m); });
       while (order.length > max) {
-        const old = order.shift();
+        let oi = 0, ot = Infinity;
+        for (let i = 0; i < order.length; i++) {
+          const t = st.get(order[i]);
+          if (t === undefined) { oi = i; break; }   // a key with no stamp is older than any stamped one
+          if (t < ot) { ot = t; oi = i; }
+        }
+        const old = order.splice(oi, 1)[0];
+        st.delete(old);
         const victim = cache[old];
         delete cache[old];
         free(victim);
@@ -86,7 +96,13 @@ const CarDraw = (function () {
     // teamBodies: 21-23 rivals in a race (the prep's keys: carVisual), 24 for LEGENDS.
     // A hit promotes, so no live key is evicted (car-presentation-canary pins
     // both counts). Was 48 while seat-keyed :sh doubled casters.
-    const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;
+    // Decal atlases: the live set is the rivals' half-tier keys (21-23, 24 for
+    // LEGENDS) plus the player's full one. 48 FIFO sat above everything a
+    // session could reach (~45 with photo mode's), so nothing was ever evicted
+    // and every browsed livery stayed resident (~7 MB each). 36 with a hit
+    // promoting (LRU, like the team caches) keeps the live set plus photo mode's
+    // PHOTO_ATLAS_MAX and evicts the rest.
+    const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 36;
     // ── player-parts ────────────────────────────────────────────────
     // Resolved tyre/brake visual tiers for the PLAYER's wheel meshes (drawPlayerWheels
     // reads these directly — cheap per-frame variable reads, not a per-frame
@@ -196,35 +212,122 @@ const CarDraw = (function () {
 
     // ── decals ──────────────────────────────────────────────────────
     const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
+    const _decalTexUse = new Map();   // key -> last-use tick (LRU; the putBoundedMesh idiom)
+    let _decalTexTick = 0;
+    // Free one cached atlas and forget every record of it. The ONE place a decal
+    // texture leaves the cache: invalidation, LRU eviction and photo release.
+    function dropDecalTexture(key) {
+      const tex = _decalTexCache[key];
+      if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
+      delete _decalTexCache[key]; delete _decalTexFail[key];
+      _decalTexUse.delete(key); _photoKeys.delete(key);
+      const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
+    }
     function invalidateDecalTextures(teamId) {
       const prefix = teamId + ":";
       Object.keys(_decalTexCache).forEach(function (key) {
-        if (key.indexOf(prefix) !== 0) return;
-        const tex = _decalTexCache[key];
-        if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
-        delete _decalTexCache[key]; delete _decalTexFail[key];
-        const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
+        if (key.indexOf(prefix) === 0) dropDecalTexture(key);
       });
+    }
+
+    // PHOTO MODE ATLASES. A close-up is what photo mode is for, so a rival
+    // drawn there asks for the full-resolution atlas (":P", the player's tier)
+    // instead of its half-size one. It used to ask on EVERY drawn car: entering
+    // photo mode on a grid built ~21 full atlases (1024x1280 paint + upload +
+    // mips each) in one frame, and the ~147 MB they cost stayed resident after
+    // the mode closed. Now, per rendered frame: at most ONE new full atlas,
+    // for the uncached car nearest the photo camera; at most PHOTO_ATLAS_MAX
+    // of them at once (a full one is evicted only when it was not drawn this
+    // frame, or when the newcomer is clearly nearer than the farthest); a car
+    // waiting its turn draws its half-tier atlas; and all of them are freed on
+    // the first frame after photo mode closes. Never the player's own ":P".
+    const PHOTO_ATLAS_MAX = 6;
+    const _photoKeys = new Map();   // photo-minted ":P" key -> { f: frame last drawn, d2: camera distance² then }
+    let _photoFrame = 0, _photoMint = null, _photoOn = false;
+    function releasePhotoAtlases() {
+      for (const key of [..._photoKeys.keys()]) dropDecalTexture(key);
+    }
+    // Once per frame, before the decal queue is drawn: mark which full atlases
+    // this frame draws, and pick the one car allowed to mint.
+    function planPhotoAtlases() {
+      _photoMint = null;
+      if (!G.photoMode) {
+        if (_photoOn) releasePhotoAtlases();
+        _photoOn = false;
+        return;
+      }
+      _photoOn = true;
+      _photoFrame++;
+      const eye = G.camEye;
+      let best = null, bestD2 = Infinity;
+      for (let i = 0; i < _decalCount; i++) {
+        if (_decalSetup[i]) continue;                    // the player's car: its own tier already
+        const key = decalKeyFor(_decalTeams[i], _decalNums[i], true);
+        const m = _decalMats[i];
+        const dx = m[12] - eye[0], dy = m[13] - eye[1], dz = m[14] - eye[2], d2 = dx * dx + dy * dy + dz * dz;
+        const rec = _photoKeys.get(key);
+        if (rec) { rec.f = _photoFrame; rec.d2 = d2; continue; }
+        if (key in _decalTexCache) continue;              // cached for another reason (a failed build's null)
+        if (d2 < bestD2) { bestD2 = d2; best = key; }
+      }
+      if (best === null) return;
+      if (_photoKeys.size < PHOTO_ATLAS_MAX) { _photoMint = best; return; }
+      // Full: evict one not drawn this frame, else the farthest drawn one if the
+      // newcomer is nearer by a margin (10 % in distance, so two cars at nearly
+      // the same range do not trade the slot every frame).
+      let victim = null, vf = Infinity, far = null, farD2 = -1;
+      for (const [k, r] of _photoKeys) {
+        if (r.f < _photoFrame) { if (r.f < vf) { vf = r.f; victim = k; } }
+        else if (r.d2 > farD2) { farD2 = r.d2; far = k; }
+      }
+      if (victim === null && far !== null && bestD2 < farD2 * 0.81) victim = far;
+      if (victim === null) return;
+      dropDecalTexture(victim);
+      _photoMint = best;
+    }
+    // The atlas a car draws with. Photo mode upgrades a rival only when its full
+    // atlas exists or this frame's plan picked it; otherwise the half tier.
+    function decalTextureFor(team, num, usePlayerSetup) {
+      if (usePlayerSetup || !G.photoMode) return getCarDecalTexture(team, num, usePlayerSetup);
+      const key = decalKeyFor(team, num, true);
+      if (_photoKeys.has(key) || key === _photoMint) {
+        const minting = key === _photoMint;
+        if (minting) _photoMint = null;                   // one per frame, whatever happens next
+        const tex = getCarDecalTexture(team, num, true);
+        if (minting && tex) _photoKeys.set(key, { f: _photoFrame, d2: 0 });
+        if (tex) return tex;
+      }
+      return getCarDecalTexture(team, num, false);
     }
     // The livery half of the atlas key, memoised on G.store.rev like teamMeshKey:
     // G.getLiveryId() is a store read (two string concats + a JSON decode) and this
     // ran once per drawn car per FRAME — ~22 times — for a value that only moves
     // when something is written to the store.
+    // The entry also memoises each FULL key (prefix + num [+ ":P"]) like
+    // teamMeshKeyFor, so a per-car-per-frame hit concatenates nothing.
     const _decalPrefixCache = new Map();
-    function decalKeyPrefix(team) {
+    function decalKeyEntry(team) {
       const c = _decalPrefixCache.get(team.id);
-      if (c && c.rev === G.store.rev) return c.val;
+      if (c && c.rev === G.store.rev) return c;
       const val = team.id + ":" + G.getLiveryId(team.id) + ":";
-      _decalPrefixCache.set(team.id, { val, rev: G.store.rev });
-      return val;
+      const e = { val, rev: G.store.rev, full: new Map(), fullP: new Map() };
+      _decalPrefixCache.set(team.id, e);
+      return e;
+    }
+    function decalKeyFor(team, num, isPlayer) {
+      const e = decalKeyEntry(team), m = isPlayer ? e.fullP : e.full;
+      let k = m.get(num);
+      if (k === undefined) { k = e.val + (num == null ? "_" : num) + (isPlayer ? ":P" : ""); m.set(num, k); }
+      return k;
     }
     function getCarDecalTexture(team, num, isPlayer) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
-      const key = decalKeyPrefix(team) + (num == null ? "_" : num) + (isPlayer ? ":P" : "");
-      if (!(key in _decalTexCache)) {
+      const key = decalKeyFor(team, num, isPlayer);
+      if (key in _decalTexCache) _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
+      else {
         let t = null;
         try { t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer)); }
         catch (e) {
@@ -235,11 +338,17 @@ const CarDraw = (function () {
           if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
           if (n < 3) return null;
         }
-        _decalTexCache[key] = t; _decalTexOrder.push(key);
-        while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {   // FIFO: browsing liveries minted page-lifetime ~5 MB atlases
-          const old = _decalTexOrder.shift(), ot = _decalTexCache[old];
-          if (ot && G.gfx.freeTexture) G.gfx.freeTexture(ot);
-          delete _decalTexCache[old]; delete _decalTexFail[old];
+        _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick);
+        // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
+        // recently drawn goes, never one the field drew this frame.
+        while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {
+          let oi = 0, ot = Infinity;
+          for (let i = 0; i < _decalTexOrder.length; i++) {
+            const u = _decalTexUse.get(_decalTexOrder[i]);
+            if (u === undefined) { oi = i; break; }
+            if (u < ot) { ot = u; oi = i; }
+          }
+          dropDecalTexture(_decalTexOrder[oi]);
         }
       }
       return _decalTexCache[key];
@@ -405,20 +514,15 @@ const CarDraw = (function () {
       const rl = cockpit ? null : deps.resolveLivery(team);
       const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
         getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
-      // PHOTO MODE takes the full-resolution tier for EVERY car, not just the
-      // player's. Desktop AI atlases upload at half size (liverytex atlasDiv) —
-      // ample at racing distance, and the one place that would show is a
-      // close-up, which is exactly what photo mode is for.
-      //
-      // Demand-driven, and that is the whole reason this is affordable: the
-      // tier is part of the decal cache key and this runs per DRAWN car, so
-      // flying the photo camera to one car mints ONE full atlas rather than
-      // rebuilding the grid on entry. Leaving the mode falls back to the
-      // cached AI atlases.
+      // PHOTO MODE upgrades rivals to the full-resolution tier, lazily: one new
+      // full atlas per frame, nearest the photo camera first, a bounded set,
+      // all freed when the mode closes (decalTextureFor / planPhotoAtlases).
+      // Desktop AI atlases upload at half size (liverytex atlasDiv) — ample at
+      // racing distance; a close-up is the one place that would show.
       //
       // NOT folded into usePlayerSetup: that argument selects the player's
       // SETUP for teamDecalState above and means something else entirely.
-      const tex = getCarDecalTexture(team, num, usePlayerSetup || !!G.photoMode);
+      const tex = decalTextureFor(team, num, usePlayerSetup);
       if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; G.gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
     }
     // Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
@@ -488,17 +592,26 @@ const CarDraw = (function () {
     // the driver helmet the camera sits inside. Cached per team like playerBodies.
     const cockpitBodies = {};
     const cockpitBodyOrder = [];
+    // The last key's inputs, so the per-frame call (default camera) builds no
+    // string and no closure on a hit — the hoisted factory reads _cb*.
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+    function buildPendingCockpitBody() {
+      const team = _cbTeam, liv = deps.resolveLivery(team);
+      return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+        { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
+          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
+    }
     function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
-      const key = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
-      return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
-        const liv = deps.resolveLivery(team);
-        return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-          { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: haloSz, num,
-            parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
-      }, COCKPIT_BODY_CACHE_MAX);
+      const body = CockpitOpts.body();
+      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
+        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
+      }
+      _cbTeam = team;
+      return putBoundedMesh(cockpitBodies, cockpitBodyOrder, _cbKey, buildPendingCockpitBody, COCKPIT_BODY_CACHE_MAX);
     }
     // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
     // deps.cockpitCaster): in cockpit, helmet and visor, the mesh and matrix the
@@ -634,7 +747,8 @@ const CarDraw = (function () {
       M4.mulTo(_rigA, base, _rigT);
       M4.mulTo(_rigB, _rigA, _rigR);
       G.gfx.draw(getCockpitWheel(deps.resolveLivery(c.team), wheelStyle), _rigB, opt);   // style + livery keyed: team grips/marker/gloves
-      CarMesh.drawForearms(_rigB, base, lay, deps.resolveLivery(c.team), opt);   // suit sleeves: cuff (rolls) to elbow (car-fixed)
+      // No forearm sleeves (CarMesh.drawForearms): the tubes from the cuffs to
+      // the bottom of the frame read as pipes on the wheel (user, 2026-10-04).
       // A wheel with no screen (CLASSIC) has nowhere to show the readouts: the
       // HUD shows gear and speed instead (js/camera/mode-switch.js).
       if (wheelStyle === "retro") {
@@ -841,9 +955,10 @@ const CarDraw = (function () {
         const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
         camD2 = dx * dx + dy * dy + dz * dz;
       }
-      // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M a rival keeps its 4 rotating
-      // wheels only — no fixed layers, compound stripes or spin discs.
-      const lite = bare || (!c.isPlayer && FieldLod.wheelsLite(camD2));
+      // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M (reference-lens metres: a
+      // long lens keeps them further out) a rival keeps its 4 rotating wheels
+      // only — no fixed layers, compound stripes or spin discs.
+      const lite = bare || (!c.isPlayer && FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY));
       const tyreCol = !lite && camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
       // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
       // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so
@@ -1065,6 +1180,7 @@ const CarDraw = (function () {
     // The render loop drains the decal queue once per frame, after the bodies.
     function beginDecals() { _decalCount = 0; }
     function flushDecals(night) {
+      planPhotoAtlases();
       for (let i = 0; i < _decalCount; i++)
         drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
     }

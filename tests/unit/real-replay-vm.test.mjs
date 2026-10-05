@@ -550,6 +550,44 @@ test("WATCH paused seek repaints the timing tower and race clock without advanci
   replay.stop();
 });
 
+test("WATCH manual and automatic reel cuts release radio and reset timeline presentation before snapping", () => {
+  for (const automatic of [false, true]) for (const locked of [false, true]) {
+    const clips = [];
+    const { replay, G, cars, options } = transportReplay({ Audio: class {
+      constructor() { this.paused = true; clips.push(this); }
+      play() { this.paused = false; return Promise.resolve(); }
+      pause() { this.paused = true; }
+    } });
+    options.reel = true;
+    options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 50, by: 2, over: 1 }];
+    options.script.radio = [{ t: 11, num: 1, url: "https://example.test/radio.mp3" }];
+    options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
+    G.soundOn = true;
+    const snaps = [], pip = [], hud = [];
+    G.snapGameCam = (paint) => snaps.push({ paint, prog: G.player.prog, clock: G.raceT });
+    G.setPip = (c) => pip.push(c);
+    G.refreshHud = () => hud.push(G.raceT);
+    replay.start(options);
+    replay.setLocked(locked);
+    replay.tick(9); // Opening lead-in starts at T=2: the first radio fires at 11.
+    assert.equal(clips[0].paused, false);
+    snaps.length = pip.length = hud.length = 0;
+    if (automatic) replay.tick(5); else { replay.setPaused(true); replay.skip(); }
+    assert.equal(replay.status().T, 42);
+    assert.equal(clips[0].paused, true, "the previous segment's audio cannot cross a reel cut");
+    assert.equal(G.raceT, 42, "HUD clock changes on the same cut");
+    assert.equal(replay.status().follow, locked ? "AAA" : "BBB", "a cut respects a locked subject");
+    assert.equal(snaps.at(-1).paint, false, "the cut snaps without forcing headless playback to render");
+    assert.equal(snaps.at(-1).prog, locked ? 2100 : 1890);
+    assert.equal(snaps.at(-1).clock, 42);
+    assert.equal(hud.at(-1), 42);
+    assert.ok(pip.includes(null), "the cut drops old broadcast/PiP history");
+    for (const car of cars) assert.equal(car.rPrevPx, car.px, "interpolation starts at the new pose");
+    assert.equal(replay.status().paused, !automatic, "a paused skip remains paused");
+    replay.stop();
+  }
+});
+
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
   const { replay, G, cars, drivers, options } = transportReplay();
   drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;
@@ -671,4 +709,49 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   find("auto").dispatch("click"); assert.equal(state.broadcast.locked, false);
   find("photo").dispatch("click"); assert.deepEqual(calls.at(-1), ["photo", false], "photo owner receives the original playing state");
   ui.stop(); assert.equal(body.children.length, 0, "session exit removes the controls");
+});
+
+// THE TIMELINE IS NOT A TICKER. paint() runs every 0.1 s and rewrote the range's
+// aria-valuetext every time, so a screen reader parked on it re-read the clock
+// each second of playback; the PLAY button said aria-pressed=paused ("Play
+// replay, pressed") and painted red while paused. Write on change, hold the
+// spoken value while the focused timeline plays, and no pressed state on PLAY.
+test("WATCH transport: no aria-pressed on PLAY, and a focused, playing timeline is not re-announced", () => {
+  function element(tag) {
+    const attrs = {}, listeners = {};
+    let writes = 0;
+    return { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {}, hidden: false,
+      classList: { add() {}, remove() {} },
+      appendChild(n) { this.children.push(n); n.parentNode = this; return n; },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
+      setAttribute(k, v) { attrs[k] = v; writes++; }, getAttribute(k) { return k in attrs ? attrs[k] : null },
+      get writes() { return writes; },
+      addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); } };
+  }
+  const body = element("body"), doc = { body, createElement: element, activeElement: null };
+  const ctx = vm.createContext({ document: doc, RealReplay: { LEAD_S: 8 } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  const W = vm.runInContext("WatchTransport", ctx);
+  const state = { T: 10, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
+  const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [], speeds: [1] }), status: () => state,
+    setPaused: (v) => { state.paused = v; }, setSpeed() {}, follow() {}, setLocked() {}, setAuto() {}, seek: (v) => { state.T = v; }, eventStep() {} };
+  const ui = W.create({ camMode: 0 }, api); ui.start();
+  const find = (key, parent = body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
+  const play = find("play"), seek = find("seek");
+  assert.equal(play.getAttribute("aria-pressed"), null, "PLAY is an action whose label says what it does, not a toggle");
+  assert.equal(play.getAttribute("aria-label"), "Play replay");
+  const w0 = play.writes;
+  ui.paint(); ui.paint();
+  assert.equal(play.writes, w0, "an unchanged label is not rewritten every paint");
+  play.dispatch("click");
+  assert.equal(play.getAttribute("aria-label"), "Pause replay");
+  doc.activeElement = seek;                     // a reader sits on the timeline while it plays
+  const spoken = seek.getAttribute("aria-valuetext");
+  state.T = 11; ui.paint(); state.T = 12; ui.paint();
+  assert.equal(seek.getAttribute("aria-valuetext"), spoken, "the focused, playing timeline is not re-announced every second");
+  play.dispatch("click");                       // paused: the value is live again
+  assert.equal(seek.getAttribute("aria-valuetext"), "0:12 of 1:40");
+  doc.activeElement = null; play.dispatch("click"); state.T = 13; ui.paint();
+  assert.equal(seek.getAttribute("aria-valuetext"), "0:13 of 1:40", "focus elsewhere: it follows the clock");
+  ui.stop();
 });

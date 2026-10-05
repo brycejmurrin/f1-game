@@ -66,3 +66,28 @@ test(`a failed ${failedFile} never evaluates hub; retry reuses evaluated sibling
   }
 });
 }
+
+// L8-d: NEVER MIX BUILDS. A lazy file is requested as ?v=<booted build>; once a
+// newer deploy's worker controls the tab it has swept that generation, and
+// Pages (query-blind) would answer with the NEW file for the OLD code. The
+// loader refuses (a missing global is every caller's fallback) and UpdateCheck
+// shows UPDATE READY instead.
+test("the script loader injects nothing while UpdateCheck reports a newer active build", async () => {
+  let appended = 0, blocked = true;
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] },
+    window: { __APEX_BUILD: 100 },
+    Log: { warn() {} },
+    UpdateCheck: { blocksLazyLoad: () => blocked },
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) { appended++; assert.match(node.src, /\?v=100$/, "the booted build, always"); queueMicrotask(() => node.onload()); } },
+    },
+  });
+  vm.runInContext(loader + "\nglobalThis.__load = ScriptLoader.create().load;", ctx);
+  assert.equal(await ctx.__load(["js/net/lobby.js"], []), false, "refused, resolved — never hung");
+  assert.equal(appended, 0, "no <script> for the old build's URL");
+  blocked = false;
+  assert.equal(await ctx.__load(["js/net/lobby.js"], []), true);
+  assert.equal(appended, 1);
+});

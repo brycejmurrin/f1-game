@@ -66,6 +66,37 @@ test("the fit takes the magnitude; the lens shift and recentre keep the sign", (
     "recentre must stay symmetric in the sign (target -panelFrac)");
 });
 
+test("a Home photo uses manual distance and aim while the background retains automatic framing", () => {
+  const src = read("js/garage/setup-camera.js");
+  const start = src.indexOf('  const canvasEl = $("game"), panelEl =');
+  const end = src.indexOf('  const context = garageCtx(), sceneTime', start);
+  assert.ok(start > 0 && end > start, 'the real camera framing segment must be available');
+  const frame = src.slice(start, end);
+  for (const aspect of [1440 / 900, 900 / 1440]) {
+    const photo = { hidden: false }, game = { clientWidth: 0, clientHeight: 0 };
+    let recentre = null, fitCalls = 0;
+    const sandbox = { $: id => id === 'photo-studio' ? photo : id === 'game' ? game : null,
+      home: { active: true, panel: null, lens: {} }, gfx: { aspect }, setupPreviewSpin: false,
+      setupPreviewDist: 4.6, setupPreviewAz: 1, setupPreviewEl: .4, spCe: Math.cos(.4), spSe: Math.sin(.4),
+      setupPreviewOrbit: [0, .45, .245], setupPreviewTgt: [0, .45, .245], setupPreviewPan: [.5, 0, -.4],
+      arriving: null, _spHull: [], getSetupPreviewMesh() {}, SP_FIT_DIST_MAX: 11, SP_FIT_HALF_W: 3.10, SP_DIST_MIN: 4.6, SP_DIST_MAX: 15,
+      clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), _spAim: [], _spProj: [], _spView: [], _spVP: [], _spInvProj: [],
+      M4: { perspectiveTo() {}, lookAtTo() {}, mulTo() {}, invertTo() {} },
+      GarageExperience: { fitHome() { fitCalls++; return { dist: 11, shiftX: .5, shiftY: 0 }; } },
+      GarageScene: { recentre(_p, _v, _vp, _frac, enabled) { recentre = enabled; } } };
+    const context = vm.createContext(sandbox);
+    const render = () => vm.runInContext('(function () {' + frame + ';return { distance: spDist, aim: _spAim.slice() }; })()', context);
+    const manual = render();
+    assert.equal(manual.distance, 4.6, `manual zoom at aspect ${aspect}`);
+    assert.deepEqual(Array.from(manual.aim), [.5, .45, -.15500000000000003]);
+    assert.equal(recentre, false, 'manual aim cannot be shifted by silhouette fitting');
+    assert.equal(fitCalls, 0);
+    photo.hidden = true;
+    assert.ok(render().distance > 4.6, 'the regular Home background still fits the car');
+    assert.equal(recentre, true);
+  }
+});
+
 test("the GARAGE look rules keep the car's floor and stay out of portrait", () => {
   const css = read("css/carsetup.css");
   // PANEL WIDTH scales the cap only — both variants keep the 410 floor and the car reserve.

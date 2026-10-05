@@ -68,6 +68,7 @@ let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
+let csLivTeamId = null;    // the team the draft belongs to: a team change discards it
 
 const PSEUDO_CATS = ["team", "tune", "livery"];
 const SECONDARY_CATS = new Set(["floor", "cockpit", "wheels", "tune", "livery"]);
@@ -362,6 +363,8 @@ function buildTeamOptions(optsEl, team) {
 
 function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
+  // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
+  if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
   const parts = getTeamParts(team.id);
 
   // Remap any saved exclusive option this team can't use onto its universal
@@ -566,7 +569,9 @@ function buildSetup() {
         if (G.soundOn) { GameAudio.uiSelect(); _blipped = true; }
       }
       const p = getTeamParts(team.id);
-      const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
+      // The RESOLVED part's cost — what Parts.getCost counted — not the stored id's
+      // (a locked signature costs as its fitted equivalent).
+      const co = resolveOpt(activeCat);
       const cc = co ? (co.cost || 0) : 0;
       if (!unlimited && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > cap) {
         if (locked) { buildSetup(); return; }
@@ -748,7 +753,7 @@ function buildLiveryOptions(container, team) {
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
       csLivDraft = livDraftFrom(Object.assign({ c1: team.color, c2: team.color2 }, shape), "");
       csLivEditId = null;
-      csLivCreating = true;
+      csLivCreating = true; csLivTeamId = team.id;
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
     };
@@ -789,7 +794,7 @@ function buildLiveryOptions(container, team) {
       edit.onclick = () => {
         csLivDraft = livDraftFrom(liv, liv.name || "");
         csLivEditId = liv.id;
-        csLivCreating = true;
+        csLivCreating = true; csLivTeamId = team.id;
         if (G.soundOn) GameAudio.uiSelect();
         buildSetup();
       };
@@ -823,7 +828,7 @@ function buildLiveryOptions(container, team) {
       dup.onclick = () => {
         csLivDraft = livDraftFrom(liv, (liv.name || "Custom").slice(0, 14) + " MK2");
         csLivEditId = null;   // create-new: never overwrites the stock scheme
-        csLivCreating = true;
+        csLivCreating = true; csLivTeamId = team.id;
         if (G.soundOn) GameAudio.uiSelect();
         buildSetup();
       };
@@ -1120,6 +1125,8 @@ function buildLiveryCreator(container, team) {
   cancel.onclick = () => { csLivCreating = false; csLivDraft = null; csLivEditId = null; endLivPreview(team); if (G.soundOn) GameAudio.uiTick(); buildSetup(); };
   const save = document.createElement("button"); save.type = "button"; save.className = "cs-liv-ed-save"; save.textContent = "SAVE & FIT";
   save.onclick = () => {
+    const now = Teams.LIST[G.teamIdx];
+    if (team.id !== csLivTeamId || !now || now.id !== csLivTeamId) { discardLivDraft(); buildSetup(); return; }   // the team changed under the editor
     // ALWAYS a fresh id, edits included: every body-mesh and decal-atlas
     // cache keys on the livery id, so reusing it on edit served the pre-edit
     // meshes with the new atlas — a mismatched car with no error. A new id
@@ -1213,7 +1220,10 @@ function openSetup() {
 function discardLivDraft() {
   if (!csLivCreating) return;
   csLivCreating = false; csLivDraft = null; csLivEditId = null;
-  const team = Teams.LIST[G.teamIdx];
+  // The DRAFT's team, not the current one: after a team pick the current one
+  // is the new team, and the old team's draft atlas stayed cached (car-draw).
+  const team = Teams.LIST.find((t) => t.id === csLivTeamId) || Teams.LIST[G.teamIdx];
+  csLivTeamId = null;
   if (team) endLivPreview(team);
 }
 if (typeof MutationObserver === "function") {

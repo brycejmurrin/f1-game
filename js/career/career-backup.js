@@ -1,5 +1,6 @@
 /* Apex 26 — CAREER BACKUP: versioned export/import of all six career slots
-   (plus optional standalone season / badges / daily). Ghosts stay out.
+   (plus optional standalone season / badges / daily and the MY TEAM
+   identity). Ghosts stay out.
    SettingsExport deliberately excludes saves; the only other career dump is
    exportRecovery on the broken-storage banner. This is the deliberate backup
    path for origin / app-id moves (docs/PACKAGING.md, CAREER-BRAINSTORM §4 #3). */
@@ -94,6 +95,36 @@ const CareerBackup = (function () {
     return extras;
   }
 
+  // MY TEAM IDENTITY. A myteam save stores only `team: "custom"`; the team's
+  // name, colours, roster, logo and paint jobs live in GLOBAL garage keys. A
+  // backup restored on a new origin / device without them brought back the
+  // money and seasons under the default "custom" team. These ride along as an
+  // optional `myTeam` block (store key -> value) whenever a MY TEAM slot has
+  // data. One identity for all three slots — a per-slot snapshot is a follow-up.
+  const IDENTITY_KEYS = Object.freeze(["customTeam", "customLogo", "livery.custom.custom", "livery.custom"]);
+  function hasMyTeamData(slots) {
+    for (const row of slots || []) if (row && row.data != null && flavourIn(row.flavour) === "myteam") return true;
+    return false;
+  }
+  function collectIdentity() {
+    const s = store();
+    const out = {};
+    if (!s) return out;
+    for (const k of IDENTITY_KEYS) {
+      const v = s.get(k, null);
+      if (v != null) out[k] = JSON.parse(JSON.stringify(v));
+    }
+    return out;
+  }
+  // Same per-key shape gate as the GARAGE file (SettingsExport.garageValue:
+  // Teams.sanitizeCustom, data:image logo cap, livery rows needing id/c1/c2).
+  // Without it nothing is written — never an unchecked value.
+  function identityValue(k, v) {
+    if (IDENTITY_KEYS.indexOf(k) === -1 || v == null) return undefined;
+    if (typeof SettingsExport === "undefined" || !SettingsExport.garageValue) return undefined;
+    try { return SettingsExport.garageValue(k, v); } catch (e) { return undefined; }
+  }
+
   function build() {
     const envelope = {
       format: FORMAT,
@@ -102,6 +133,10 @@ const CareerBackup = (function () {
       slots: collectSlots(),
     };
     Object.assign(envelope, optionalExtras());
+    if (hasMyTeamData(envelope.slots)) {
+      const id = collectIdentity();
+      if (Object.keys(id).length) envelope.myTeam = id;
+    }
     return envelope;
   }
 
@@ -180,6 +215,8 @@ const CareerBackup = (function () {
     if (raw.badges != null && !isObj(raw.badges)) return { ok: false, reason: "badges-not-object" };
     if (raw.daily != null && !isObj(raw.daily)) return { ok: false, reason: "daily-not-object" };
     if (raw.records != null && !isObj(raw.records)) return { ok: false, reason: "records-not-object" };
+    // Malformed VALUES inside myTeam are dropped per key at apply, not fatal.
+    if (raw.myTeam != null && !isObj(raw.myTeam)) return { ok: false, reason: "myteam-not-object" };
     // Ghosts must never ride along — refuse a file that smuggles them in.
     if (raw.ghost != null || raw.ghosts != null || raw["ghost.v1"] != null) {
       return { ok: false, reason: "ghosts-forbidden" };
@@ -198,8 +235,11 @@ const CareerBackup = (function () {
     const live = Career.slot && Career.slot();
     if (!live || live.flavour !== f || live.i !== i) return false;
     if (Career.conflicted && Career.conflicted()) return true;
-    if (Career.slotRevision) {
-      const seen = Career.slotRevision(f, i);
+    // The ARMED revision, not slotRevision(): that is the store's current
+    // revision of this same key, so `seen !== now` compared a value with itself
+    // and never fired — only conflicted() guarded the live slot.
+    if (Career.armedRevision) {
+      const seen = Career.armedRevision();
       const now = revisionOf(f, i);
       if (seen != null && now != null && seen !== now) return true;
     }
@@ -275,6 +315,52 @@ const CareerBackup = (function () {
     return out;
   }
 
+  // THE DAILY CHALLENGE MERGES PER DAY, like badges: a day's best is the
+  // faster of the two (each class too), laps the larger count, and the streak
+  // is the one with the later `last` day (the longer one on the same day).
+  // Writing the backup wholesale reset today's streak and bests to last week's.
+  function betterBest(a, b) {
+    const fa = Number.isFinite(a) && a > 0, fb = Number.isFinite(b) && b > 0;
+    if (fa && fb) return Math.min(a, b);
+    return fa ? a : (fb ? b : null);
+  }
+  function mergeDayEntry(mine, theirs) {
+    if (!isObj(mine)) return theirs;
+    if (!isObj(theirs)) return mine;
+    const out = Object.assign({}, theirs, mine);
+    out.best = betterBest(mine.best, theirs.best);
+    out.laps = Math.max(mine.laps | 0, theirs.laps | 0);
+    if (isObj(mine.classes) || isObj(theirs.classes)) {
+      const a = isObj(mine.classes) ? mine.classes : {}, b = isObj(theirs.classes) ? theirs.classes : {};
+      out.classes = {};
+      for (const k of Object.keys(Object.assign({}, b, a))) out.classes[k] = mergeDayEntry(a[k], b[k]);
+    }
+    return out;
+  }
+  function mergeDaily(local, incoming) {
+    if (!isObj(local)) return incoming;
+    const out = Object.assign({}, incoming, local);
+    const a = isObj(local.days) ? local.days : {}, b = isObj(incoming.days) ? incoming.days : {};
+    if (isObj(local.days) || isObj(incoming.days)) {
+      out.days = {};
+      for (const day of Object.keys(Object.assign({}, b, a)).sort()) out.days[day] = mergeDayEntry(a[day], b[day]);
+    }
+    const sa = isObj(local.streak) ? local.streak : null, sb = isObj(incoming.streak) ? incoming.streak : null;
+    if (sa || sb) {
+      const la = sa && typeof sa.last === "string" ? sa.last : "", lb = sb && typeof sb.last === "string" ? sb.last : "";
+      out.streak = !sb ? sa : !sa ? sb
+        : lb > la ? sb : la > lb ? sa
+        : ((sb.count | 0) > (sa.count | 0) ? sb : sa);
+    }
+    return out;
+  }
+  // The records book has no first-class writer yet (a pass-through key), so
+  // there is no "better" to compute: the import fills only the entries this
+  // device lacks and never replaces one it has.
+  function mergeRecords(local, incoming) {
+    return isObj(local) ? Object.assign({}, incoming, local) : incoming;
+  }
+
   function apply(envelope, opts) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
@@ -305,13 +391,13 @@ const CareerBackup = (function () {
       const id = f + ":" + idx;
       const chk = slotPayloadOk(row.data);
       if (!chk.ok) return chk;
+      // An empty row is "nothing to restore", never "delete": build() exports
+      // all six slots, so writing its nulls wiped saves the backup never had.
+      if (row.data == null) { skipped.push(id); continue; }
       if (Object.prototype.hasOwnProperty.call(expected, id)) {
         const now = revisionOf(f, idx);
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
-      // An empty row is "nothing to restore", never "delete": build() exports
-      // all six slots, so writing its nulls wiped saves the backup never had.
-      if (row.data == null) { skipped.push(id); continue; }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
       plan.push({ f: f, i: idx, data: row.data, id: id });
     }
@@ -335,28 +421,52 @@ const CareerBackup = (function () {
     }
 
     const s = store();
+    const identity = [];
+    // The second mode confirmation must not replay already-restored global progress.
+    // MY TEAM identity still accompanies its slot on that confirmation.
+    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false;
     if (s && typeof s.write === "function") {
-      if (envelope.season != null && isObj(envelope.season) && o.includeExtras !== false
+      if (envelope.season != null && isObj(envelope.season) && progressExtras
           && !seasonAhead(s.get("season", null), envelope.season)) {
         s.write("season", envelope.season);
       }
-      if (envelope.badges != null && isObj(envelope.badges) && o.includeExtras !== false) {
+      if (envelope.badges != null && isObj(envelope.badges) && progressExtras) {
         s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
       }
-      if (envelope.daily != null && isObj(envelope.daily) && o.includeExtras !== false) {
-        s.write("daily.v1", envelope.daily);
+      if (envelope.daily != null && isObj(envelope.daily) && progressExtras) {
+        s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
       }
-      if (envelope.records != null && isObj(envelope.records) && o.includeExtras !== false) {
-        s.write("records", envelope.records);
+      if (envelope.records != null && isObj(envelope.records) && progressExtras) {
+        s.write("records", mergeRecords(s.get("records", null), envelope.records));
+      }
+      // Identity only with a MY TEAM slot actually written; a key the backup
+      // lacks (or carries malformed) leaves the local value alone.
+      if (isObj(envelope.myTeam) && o.includeExtras !== false
+          && written.some(function (id) { return id.indexOf("myteam:") === 0; })) {
+        for (const k of IDENTITY_KEYS) {
+          if (!Object.prototype.hasOwnProperty.call(envelope.myTeam, k)) continue;
+          const v = identityValue(k, envelope.myTeam[k]);
+          // An all-garbage livery list cleans to [] — that is not a restore.
+          if (v === undefined || (Array.isArray(v) && !v.length)) continue;
+          s.write(k, v);
+          identity.push(k);
+        }
+        // custom-team.js re-syncs Teams.LIST / the logo only on a foreign
+        // change (its own saves sync directly); this restore is one, announced
+        // like the durable mirror's (store.js: foreign + restored).
+        if (typeof s._notify === "function") {
+          for (const k of identity) s._notify({ key: k, foreign: true, clear: false, restored: true });
+        }
       }
     }
 
-    if (typeof Career !== "undefined" && Career && Career.load) Career.load();
+    if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     log("info", "career backup imported " + written.length + " slot(s)");
     return {
       ok: true,
       written: written,
       skipped: skipped,
+      identity: identity,
       reason: null,
       needsConfirm: pendingOther,
     };
@@ -391,6 +501,7 @@ const CareerBackup = (function () {
     wipeAllSlots: wipeAllSlots,
     revisionOf: revisionOf,
     slotKey: slotKey,
+    IDENTITY_KEYS: IDENTITY_KEYS,
   };
 })();
 Object.freeze(CareerBackup);

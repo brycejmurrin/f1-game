@@ -17,8 +17,8 @@
 //   [ci-watch] CI › Smoke (page boots, __apex responds) (2) → failure — step "Run smoke shard": <annotation> <url>
 //   [ci-watch] = ci failed (19 jobs, 1 failed, 4 skipped) sha=e3bd067 …   terminal; the process exits
 //
-//   node tools/ci/ci-watch.mjs                       # HEAD, poll every 30 s, until every run completes
-//   node tools/ci/ci-watch.mjs --sha e3bd067 --timeout 30
+//   node tools/ci/ci-watch.mjs                       # HEAD, poll every 30 s, until every run completes (or 120 min)
+//   node tools/ci/ci-watch.mjs --sha e3bd067 --timeout 30   # minutes; default 120 for CI and --pages together
 //   node tools/ci/ci-watch.mjs --pages               # …then follow pages.yml until a run containing the SHA ends
 //   node tools/ci/ci-watch.mjs --once                # print the current state and exit (no waiting)
 //
@@ -26,7 +26,9 @@
 // 30-min expiry — it resumes from the API, nothing is lost) or as ONE
 // run_in_background task when only the verdict matters. Exit: 0 green (or no
 // run started — a docs-only push), 1 red, 2 cancelled with no live sibling,
-// 3 no token / API unreachable, 124 --timeout.
+// 3 no token / API unreachable, 4 superseded (a pending run replaced by a newer
+// push in the same concurrency group — ci.yml's `ship-fast` — before it ran a
+// step; re-arm on the `--sha` it names), 124 --timeout (default 120 min).
 //
 // Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token` (Cloud boxes often have
 // gh logged in with no env token). Sent via curl's stdin config so it never
@@ -40,6 +42,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
+export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the Pages train (≤ ~25 min), with room
 const say = (...a) => console.log("[ci-watch]", ...a);
 
 export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
@@ -87,6 +90,23 @@ export function verdict(runs, jobsByRun) {
   if (runs.some((r) => r.conclusion === "cancelled")) return { done: true, state: "cancelled", line: `cancelled ${tail} — a timeout until proven otherwise (AGENTS.md rule 8)` };
   if (runs.every((r) => ["success", "skipped", "neutral"].includes(r.conclusion))) return { done: true, state: "passed", line: `passed ${tail}` };
   return { done: true, state: "failed", line: `failed ${tail} — run conclusion ${runs.map((r) => r.conclusion).join(",")}` };
+}
+
+/** A cancelled run that a NEWER run of the same workflow, branch and event
+ *  replaced before it ran a single step: GitHub keeps one PENDING run per
+ *  concurrency group, so a deploy-branch push waiting in ci.yml's shared
+ *  `ship-fast` group is cancelled when the next push arrives. That is
+ *  superseded, not a timeout — but only when the run never started work (a
+ *  run killed mid-way that happens to have a successor is still rule 8's
+ *  "timeout until proven otherwise"). Returns the newer run or null. Pure. */
+export function supersededBy(run, jobs, siblings) {
+  if (run.conclusion !== "cancelled") return null;
+  const startedWork = (jobs || []).some((j) => (j.steps || []).some((s) => s.started_at || s.conclusion));
+  if (startedWork) return null;
+  return siblings
+    .filter((s) => s.id > run.id && s.workflow_id === run.workflow_id && s.head_branch === run.head_branch
+      && s.event === run.event && s.head_sha !== run.head_sha)
+    .sort((a, b) => a.id - b.id)[0] || null;
 }
 
 /** Lines for jobs that reached a conclusion since the last poll. */
@@ -202,6 +222,23 @@ export async function watchSha(sha, { interval, deadline, once, request = api, n
       }
     }
     const v = verdict(runs, jobsByRun);
+    // A cancelled run replaced while pending (ci.yml's `ship-fast` group) is
+    // superseded, not a timeout: say so, and name the run that has the tree.
+    if (v.state === "cancelled") {
+      const cancelled = runs.filter((x) => x.conclusion === "cancelled");
+      const newer = [];
+      for (const c of cancelled) {
+        const s = request(`actions/workflows/${c.workflow_id}/runs?branch=${encodeURIComponent(c.head_branch || "")}&event=${encodeURIComponent(c.event || "")}&per_page=20`);
+        const by = Array.isArray(s?.json?.workflow_runs) ? supersededBy(c, jobsByRun[c.id], s.json.workflow_runs) : null;
+        if (!by) break;
+        newer.push([c, by]);
+      }
+      if (newer.length && newer.length === cancelled.length) {
+        for (const [c, by] of newer) report(`${c.name} #${c.id} was replaced while pending by #${by.id} (head ${String(by.head_sha).slice(0, 7)}, ${by.status}) ${by.html_url}`);
+        report(`= ci superseded ${v.line.replace(/^cancelled /, "").replace(/ — .*/, "")} — a newer ${newer[0][1].event} run in the same concurrency group replaced it before it started; watch it: --sha ${newer[0][1].head_sha} sha=${sha.slice(0, 7)}`);
+        return 4;
+      }
+    }
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
     // run at all; after 3 min of nothing that is the answer, not "queued".
     if (v.state === "none" && now() - start > 180_000) {
@@ -241,7 +278,13 @@ async function watchPages(sha, { interval, deadline }) {
     // an older red read as the verdict while a newer run was about to ship the
     // SHA (2026-09-24).
     const run = pagesVerdictRun(r.json.workflow_runs || [], (h) => {
-      if (!contains.has(h)) contains.set(h, ["ahead", "identical"].includes(api(`compare/${sha}...${h}`).json?.status));
+      if (contains.has(h)) return contains.get(h);
+      // Cache only an ANSWER: a failed compare (rate limit, 5xx, timeout) read
+      // as "not contained" forever, so the run that ships the SHA was never
+      // recognised and the watch ran out its clock. Ask again next tick.
+      const c = api(`compare/${sha}...${h}`);
+      if (c.error || typeof c.json?.status !== "string") return false;
+      contains.set(h, ["ahead", "identical"].includes(c.json.status));
       return contains.get(h);
     });
     if (run) {
@@ -267,8 +310,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   let sha = (g.stdout || "").trim();
   if (!/^[0-9a-f]{40}$/.test(sha)) sha = (/^[0-9a-f]{4,39}$/.test(ref) && api(`commits/${ref}`).json?.sha) || ref;
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
-  const tmin = +opt("--timeout", 0);
-  const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
+  // No --timeout = DEFAULT_TIMEOUT_MIN, not forever: a `--pages` watch whose
+  // train never contains the SHA (or a CI that never reports) used to poll
+  // until the task was killed, and a killed task leaves no verdict line.
+  const tmin = +opt("--timeout", DEFAULT_TIMEOUT_MIN);
+  const deadline = Date.now() + (tmin > 0 ? tmin : DEFAULT_TIMEOUT_MIN) * 60_000;
   let code = await watchSha(sha, { interval, deadline, once: argv.includes("--once") });
   if (code === 0 && argv.includes("--pages") && !argv.includes("--once")) code = await watchPages(sha, { interval, deadline });
   process.exit(code);
