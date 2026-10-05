@@ -430,10 +430,17 @@ const CSS_PRELOAD = [
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
+// Experience / studio sheets (appearance, watch, career/garage/photo
+// experience, cockpit preview) are title-hidden screens — defer them with
+// the rest of the non-critical set (chrome-devtools Resource Timing
+// renderBlockingStatus, 2026-10-05: 7 sheets / ~39 KB still blocked paint).
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
+  "css/appearance-studio.css", "css/watch-transport.css",
+  "css/career-experience.css", "css/garage-experience.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
