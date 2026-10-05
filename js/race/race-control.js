@@ -161,6 +161,16 @@ const RaceControl = (function () {
       .concat(run.concat(out).filter((c) => !c.classified && !c.dsq).sort((a, b) => (b.prog || 0) - (a.prog || 0)));
   }
 
+  // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):
+  // `{ laps, of }` — laps the leader completed of the scheduled distance — for
+  // the shortened-race points scale (SeasonCal.payTable); null once any car
+  // took the chequered flag, which is a completed race whatever came after.
+  function shortRun(cars, lapsTarget) {
+    if (!(lapsTarget > 0) || !cars || cars.some((c) => c.finished && !c.retired)) return null;
+    const live = cars.filter((c) => !c.retired);
+    return { laps: live.length ? Math.max(0, Math.max(...live.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
+  }
+
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
   const VSC_MIN = 6;       // total settled hazards on the surface -> VSC
@@ -564,6 +574,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

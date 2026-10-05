@@ -396,16 +396,34 @@ function pointsTable() {
   return fmtActive() && rulesConfig().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
 }
 
-function award(season, order, fastestId) {
+// A SHORTENED RACE (FIA F1 SR 2024 Art. 6.5 / 6.6; the 2019–2024 point, 6.4).
+// `run` = RaceControl.shortRun: { laps the leader completed, of the scheduled
+// laps }, null for a race that saw the flag. The game ends a session when its
+// only human retires, so without this a lap-1 snapshot paid a full Grand Prix.
+// Under 2 laps nothing; a Grand Prix pays column 1/2/3 below 25/50/75 %, a
+// sprint nothing below 50 %; the CLASSIC (1991–2002) table pays half below 75 %,
+// the rule of its era. The fastest-lap point needs 50 % (Art. 6.4).
+const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 10, 8, 6, 4, 3, 2, 1]];
+function shortFrac(run) { return run ? run.laps / Math.max(1, run.of) : 1; }
+function payTable(table, scoring, run) {
+  if (!run) return table;
+  const f = shortFrac(run);
+  if (run.laps < 2) return [];
+  if (scoring === "sprint") return f < 0.5 ? [] : table;
+  if (f >= 0.75) return table;
+  return table === CLASSIC_POINTS ? table.map((p) => p / 2) : SHORT_POINTS[f < 0.25 ? 0 : f < 0.5 ? 1 : 2];
+}
+
+function award(season, order, fastestId, run) {
   if (fmtActive() && seasonConflict) return null;
   if (!canRace(season)) return null;
   const scoring = stage(season);
-  const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
+  const table = payTable(scoring === "sprint" ? SPRINT_POINTS : pointsTable(), scoring, run);
   // The 2019–2024 fastest-lap point: one point, Grand Prix leg only, and only
   // to a driver classified inside the top ten. Season format only (fmtActive):
   // a career keeps the table it always paid. `lastFl` names this round's
   // recipient for the results sheet and is cleared on the next scoring.
-  const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null;
+  const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null && shortFrac(run) >= 0.5;
   delete season.lastFl;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
@@ -633,7 +651,7 @@ function shuffled(ids, seed) {
 }
 
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
+  SPRINT_POINTS, CLASSIC_POINTS, SHORT_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,

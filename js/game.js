@@ -2994,8 +2994,8 @@ function endRace(forcedOrder) {
     for (const c of cars) if (!c.retired && !c.dsq && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const careerScoring = isCareer();
     const scored = careerScoring
-      ? Career.scoreRound(order, player, fastest)
-      : SeasonCal.award(season, order, fastest);
+      ? Career.scoreRound(order, player, fastest, RaceControl.shortRun(cars, lapsTarget))
+      : SeasonCal.award(season, order, fastest, RaceControl.shortRun(cars, lapsTarget));   // no flag: the shortened-race scale
     const settles = careerScoring ? !!scored : scored === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it keeps

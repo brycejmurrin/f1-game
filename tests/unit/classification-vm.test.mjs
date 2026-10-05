@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
+const vm = require("node:vm");
 let g = null;
 after(() => { if (g) g.close(); });
 
@@ -121,6 +122,35 @@ test("a car still RUNNING below 90 % of the winner's laps is not classified, and
     assert.ok(near.finPos < early.finPos && early.finPos < slow.finPos,
       `classified first, then the unclassified by distance: near P${near.finPos}, early P${early.finPos}, slow P${slow.finPos}`);
   } finally { g4.close(); }
+});
+
+test("a championship round ended by the human's retirement pays the shortened-race scale, not the full table", async () => {
+  // FIA SR Art. 6.5: the only human retiring ends the race (finishDelay), and
+  // SeasonCal.award paid 25-18-15 from a lap-1 snapshot (bug hunt 2026-10-05 G1).
+  const g5 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g5.apex, G = g5.G;
+    a.headless(true);
+    const SeasonCal = vm.runInContext("SeasonCal", g5.ctx);
+    G.flow = "season"; G.session = "race";
+    const r = SeasonCal.applyConfig(Object.assign(SeasonCal.fresh(), { quali: false, trackIds: ["monza", "spa"] }));
+    G.season = r.season; G.trackIdx = SeasonCal.trackIndex(0); G.raceLaps = 10;
+    const before = G.cars; G.startRace();
+    await settle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    a.go(); g5.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    for (const c of ai) c.dnfAt = null;
+    const place = (c, s, lap) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.x = 0; };
+    ai.forEach((c, i) => place(c, L * 0.5 - i * 30, 5));               // the leader on lap 5: 4 of 10 done (25-50 %)
+    a.jump(0.3, 0, 0); P.lap = 5; P.prog = 4 * L + 0.3 * L; a.retire(null);
+    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g5.step(1);
+    assert.equal(G.state, "results");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody took the flag");
+    const win = G.cars.find((c) => c.finPos === 1);
+    assert.equal(G.season.pts[win.driverId], 13, "40 % distance pays column 2 (13 to the winner), not 25");
+    assert.equal(G.cars.filter((c) => (G.season.pts[c.driverId] || 0) > 0).length, 9, "column 2 pays nine places");
+  } finally { g5.close(); }
 });
 
 test("the live loop flags a lapped human on the same step as the winner in either roster order", async () => {

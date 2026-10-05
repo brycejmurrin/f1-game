@@ -569,6 +569,25 @@ test("a retired fastest-lap setter earns nothing, and a career never pays the po
   assert.equal(c.pts.d0, 25, "career pays the plain table whatever the season format says");
 });
 
+test("a race nobody took the flag in pays the shortened-race scale by the leader's laps (FIA SR Art. 6.5/6.6)", () => {
+  // The only human retiring ends the session 2.2 s later (RaceControl.finishDelay):
+  // the AI field was paid the FULL table from a lap-1 snapshot (bug hunt 2026-10-05 G1).
+  const { S } = load({ seasonCfg: { flPoint: true } });
+  S.engage("season");
+  const pay = (laps, of, fl) => { const s = S.blank(); S.award(s, field(11), fl, laps == null ? null : { laps, of }); return s; };
+  assert.equal(pay(1, 10).pts.d0 || 0, 0, "under two laps: no points");
+  assert.deepEqual([0, 4, 5].map((i) => pay(2, 10).pts["d" + i] || 0), [6, 1, 0], "2 laps to 25 %: column 1, top five");
+  assert.deepEqual([0, 8, 9].map((i) => pay(4, 10).pts["d" + i] || 0), [13, 1, 0], "25-50 %: column 2, top nine");
+  assert.deepEqual([0, 3, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 10, 1], "50-75 %: column 3");
+  assert.equal(pay(8, 10).pts.d0, 25, "75 % or more: the full table");
+  assert.equal(pay(null).pts.d0, 25, "a race that saw the flag is never shortened");
+  assert.equal(pay(4, 10, "d0").lastFl, undefined, "no fastest-lap point below 50 %");
+  assert.equal(pay(5, 10, "d0").pts.d0, 19 + 1, "the point is back from 50 %");
+  assert.deepEqual(Array.from(S.payTable(S.SPRINT_POINTS, "sprint", { laps: 2, of: 5 })), [], "a sprint pays nothing below 50 %");
+  assert.equal(S.payTable(S.SPRINT_POINTS, "sprint", { laps: 3, of: 5 }), S.SPRINT_POINTS, "and the full sprint table from 50 %");
+  assert.deepEqual(Array.from(S.payTable(S.CLASSIC_POINTS, "race", { laps: 5, of: 10 })), [5, 3, 2, 1.5, 1, 0.5], "the classic table pays half below 75 %");
+});
+
 test("DROP WORST 2 ranks on the best rounds — countback and the gross total are both kept", () => {
   const { S } = load({ seasonCfg: { drop: 2 } });        // 8 rounds → the best 6 count
   S.engage("season");
