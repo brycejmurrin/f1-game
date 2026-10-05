@@ -930,6 +930,9 @@ function updateTrackPreview() {
     width: lw * br, pad: Math.round(lw * 1.5) * br,
     corners: false, sectors: false, drs: false
   });
+  // Shown from the first draw on (css/select.css hides the shell's 520x300
+  // default box until now, so the first open never flashes an empty canvas).
+  map.dataset.drawn = "";
 }
 function openTrackDetail() {
   const t = Tracks.LIST[G.trackIdx];

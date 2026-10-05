@@ -34,7 +34,7 @@
 //
 // --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
 // only when /proc/loadavg first field is under ~3.
-import { menuReady } from "./menu-readiness.mjs";
+import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
 import fs from "node:fs";
@@ -498,6 +498,17 @@ const PROBE = (rootSel) => {
   out.maps = [];
   for (const sel of ["#sel-preview-map", "#track-detail-canvas"]) {
     const cv = root.querySelector(sel);
+    // NEVER DRAWN is a finding, not an absence. css/select.css keeps the
+    // preview zero-sized and hidden until js/ui/select-screen.js stamps
+    // data-drawn, so visible() alone would turn a canvas that never got its
+    // draw into "no map here". If its slot (the map button) is on screen, the
+    // map was owed: record it BLANK at the buffer it still holds.
+    if (cv && sel === "#sel-preview-map" && !cv.hasAttribute("data-drawn") &&
+        cv.parentElement && visible(cv.parentElement)) {
+      out.maps.push({ el: desc(cv), buffer: { w: cv.width, h: cv.height }, css: { w: 0, h: 0 },
+        aspectSkewPct: 0, blank: true, undrawn: true });
+      continue;
+    }
     if (!cv || !visible(cv)) continue;
     const r = cv.getBoundingClientRect();
     // Local (pre-zoom) px: everything here lives inside `zoom: var(--ui-scale)`
@@ -815,19 +826,16 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // path. Under parallel SwiftShader load the audit could sample between
       // the placeholder draw and that refit, recording a transient 1x1 canvas
       // as a permanent product failure. Wait for a non-placeholder, aspect-
-      // matched buffer; a real failure still falls through after the bound and
-      // is reported by PROBE unchanged.
+      // matched buffer — and, since 2026-10-05, for the canvas to leave the
+      // shell's 520x300 default (drawn, or inked): that default matched its own
+      // box, so the old check passed at once and both iPad cells reported
+      // `map 520x300 BLANK` seconds before the draw. previewMapSettled
+      // (menu-readiness.mjs) is unit-tested; the 5 s bound is the one this
+      // wait always had (the empty box was measured holding 3.5 s under load).
+      // A real failure still falls through after the bound and PROBE reports
+      // it — an undrawn canvas as BLANK.
       if (screen.id.split("#")[0] === "select") {
-        await page.waitForFunction(() => {
-          const cv = document.getElementById("sel-preview-map");
-          if (!(cv instanceof HTMLCanvasElement) || cv.width <= 8 || cv.height <= 8) return false;
-          const r = cv.getBoundingClientRect();
-          const z = cv.currentCSSZoom || 1;
-          const bufferAspect = cv.width / cv.height;
-          const boxAspect = (r.width / z) / Math.max(1, r.height / z);
-          return Math.abs(bufferAspect - boxAspect) /
-            Math.max(bufferAspect, boxAspect, 0.001) < 0.03;
-        }, null, { polling: 50, timeout: 5000 }).catch(() => {});
+        await page.waitForFunction(previewMapSettled, null, { polling: 100, timeout: 5000 }).catch(() => {});
       }
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
       if (wantShots) {

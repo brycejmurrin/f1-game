@@ -73,6 +73,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // scale stretches a 12 m reference mesh. Silverstone stayed 0 (the Y-only
 // scale attempt that floated it was not this remesh).
 //
+// mexico 1 → 2 (2026-10-05): the airliner used to sit ~12 m off the centreline
+// where the lap folds under the Esses, so half of it counted as supported by
+// whatever was on the ground there. Slid 1000 m out along the same heading it
+// is one aircraft in two clusters (fuselage/tail), same shape as madrid's
+// Barajas airliner, and nothing else on the circuit floats.
+//
 // jerez 2 → 0 (2026-09-16, evening): LOWERED, and the stale-entry test is what
 // caught it. `TrackPit.window` now leaves MOUTH_RUN of straight before the
 // entry road's mouth, so Jerez's complex opens later and the two floaters it
