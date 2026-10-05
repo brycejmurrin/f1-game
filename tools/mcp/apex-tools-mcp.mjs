@@ -435,6 +435,7 @@ const CATALOG = [
         speed: { type: "number" },
         lateral: { type: "number" },
         what: { type: "string" },
+        id: { type: "string" },   // describe: prop:12 | corner:T3 | car:4 | span:2 (agent.mjs --id)
         radius: { type: "number" },
         limit: { type: "number" },
         seconds: { type: "number" },
@@ -1234,6 +1235,7 @@ function buildArgv(name, args) {
         ["speed", args.speed],
         ["lateral", args.lateral],
         ["what", args.what],
+        ["id", args.id],
         ["radius", args.radius],
         ["limit", args.limit],
         ["seconds", args.seconds],

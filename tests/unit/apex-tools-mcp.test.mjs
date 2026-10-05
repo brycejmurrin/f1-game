@@ -372,6 +372,14 @@ test("apex_select_specs dryRun pins --since --json, never --bg", () => {
   assert.ok(!body.argv.includes("--bg"), body.argv);
 });
 
+test("apex_agent describe passes its id as --id (agent.mjs describe needs one)", () => {
+  const r = callCli("apex_agent", { dryRun: true, track: "suzuka", command: "describe", id: "corner:T1" });
+  assert.equal(r.status, 0, r.stderr);
+  const argv = JSON.parse(r.stdout).argv;
+  assert.equal(argv[argv.indexOf("--id") + 1], "corner:T1", argv);
+  assert.equal(callCli("apex_agent", { dryRun: true, command: "describe", id: "--url" }).status, 1, "id is flag-guarded");
+});
+
 test("apex_select_specs without since → bad_args", () => {
   const r = callCli("apex_select_specs", { dryRun: true });
   assert.equal(r.status, 1, r.stderr);
