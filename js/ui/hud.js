@@ -1508,7 +1508,8 @@ function drawMinimap() {
     if (zones && zones.length) {
       mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
       for (const z of zones) {
-        const from2 = Math.floor(z.a * n), to2 = Math.min(n - 1, Math.floor(z.b * n));
+        // z.b > 1 for a zone across the line: walk on past n and wrap.
+        const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
         mc.beginPath();
         for (let i = from2; i <= to2; i++) {
           const p = map[i % n];
