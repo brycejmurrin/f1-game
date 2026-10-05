@@ -168,12 +168,19 @@
         });
       };
 
+      // RACING-frame helper. File s = 0 is the scenery origin
+      // (sceneryStartFrac), not the start line — see gantry comment below.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (((f + SL) % 1) + 1) % 1;
+
       fence(0.0, 0.07, 1, 1.4, 3.6, [0.55, 0.56, 0.60]);             // pit/paddock straight
       fence(0.83, 0.91, -1, 1.4, 3.6, [0.55, 0.56, 0.60]);          // neon final straight
       guardrail(0.16, 0.21, 1, 1.0, [0.80, 0.80, 0.84]);            // T3 hard-right armco
       guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
-      tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
-      tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
+      // Tyre walls use sceneryRange (authored + _sceneryShift). Pass sl() so
+      // the Sphere chicane stack sits at racing T7/T8, not mid-Koval.
+      tyreWall(sl(0.305), sl(0.345), -1, 1.2, MAGENTA);             // Sphere chicane apex
+      tyreWall(sl(0.955), sl(0.985), 1, 1.2, CYAN);                // Harmon chicane apex
       // The -1 (pit side) fence and hoarding stop at the pit complex's
       // window (.1210-.1923) and resume after it: the 2.4 m hoarding's 0.35 m
       // thickness straddled the keep-out's 2.5 m edge and stood in the
@@ -197,13 +204,15 @@
       }
       // Start/finish + DRS gantries spanning the track. The start one stands
       // over the REAL line, re-keyed through sl() (the brands_hatch idiom):
-      // this file's s = 0 is the scenery origin, and RS() alone put it — and
-      // the start lamps it carries — 936 m away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
+      // this file's s = 0 is the scenery origin (sceneryStartFrac 0.8575), not
+      // the racing start line — bare K(0.30) put the Sphere on Koval (~racing
+      // 0.14) and the Strip canyon densify on Sands Ave. sl(r) maps a racing
+      // fraction r onto the authored frame. Measured 2026-10-05 (apex-eval
+      // overhead frac + orbit shots): strip-gateway authored 0.66 → racing
+      // 0.503; Sphere at authored 0.30 visible from racing 0.143, not 0.30.
       gantry(sl(0.005), 9.5, [0.12, 0.12, 0.16]);
-      gantry(0.50, 8.5, [0.12, 0.12, 0.16]);                       // DRS detection on Strip
-      gantry(0.80, 8.5, [0.12, 0.12, 0.16]);
+      gantry(sl(0.50), 8.5, [0.12, 0.12, 0.16]);                      // DRS detection on Strip
+      gantry(sl(0.80), 8.5, [0.12, 0.12, 0.16]);
 
       const { cx, cz, radius: trad } = lapBounds();
       const ring = trad + 520;
@@ -273,15 +282,15 @@
       for (let s = 0.10; s <= 0.27; s += 0.022) {
         lampPost(K(s), (s < 0.18 ? 1 : -1), 12);
       }
-      // Lamp posts along the full Strip (s 0.48–0.82) — both sides, denser
+      // Lamp posts along the full Strip (racing 0.48–0.82) — both sides, denser
       for (let s = 0.48; s <= 0.82; s += 0.016) {
-        lampPost(K(s), -1, 13);
-        lampPost(K(s + 0.008), 1, 13);
+        lampPost(K(sl(s)), -1, 13);
+        lampPost(K(sl(s + 0.008)), 1, 13);
       }
-      // Lamp posts on the final straight / Harmon approach (s 0.83–0.97)
+      // Lamp posts on the final straight / Harmon approach (racing 0.83–0.97)
       for (let s = 0.83; s <= 0.97; s += 0.020) {
-        lampPost(K(s), 1, 12);
-        lampPost(K(s + 0.010), -1, 12);
+        lampPost(K(sl(s)), 1, 12);
+        lampPost(K(sl(s + 0.010)), -1, 12);
       }
 
       {
@@ -296,9 +305,22 @@
             addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.18, 14], dimN, [a.r, a.u, a.t]);
           }
         };
-        stripNeon(0.01, 0.08, 0.028, 3.2);   // pit/paddock verge
-        stripNeon(0.485, 0.815, 0.022, 3.0); // Strip canyon verge
-        stripNeon(0.83, 0.96, 0.028, 3.2);   // Harmon / final straight verge
+        stripNeon(0.01, 0.08, 0.028, 3.2);   // pit/paddock verge (scenery-local; plaza uses sl)
+        // Strip + Harmon verges: racing fracs via sl() so neon follows the Blvd.
+        for (let s = 0.485; s <= 0.815; s += 0.022) {
+          const side = (Math.round(s * 50) % 2) ? 1 : -1;
+          const a = anchor(K(sl(s)), side, 3.0);
+          const poolNeon = NEON[Math.round(s * 40) % NEON.length];
+          const dimN = [poolNeon[0] * 0.55, poolNeon[1] * 0.55, poolNeon[2] * 0.55];
+          addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.18, 14], dimN, [a.r, a.u, a.t]);
+        }
+        for (let s = 0.83; s <= 0.96; s += 0.028) {
+          const side = (Math.round(s * 40) % 2) ? 1 : -1;
+          const a = anchor(K(sl(s)), side, 3.2);
+          const poolNeon = NEON[Math.round(s * 37) % NEON.length];
+          const dimN = [poolNeon[0] * 0.55, poolNeon[1] * 0.55, poolNeon[2] * 0.55];
+          addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.18, 14], dimN, [a.r, a.u, a.t]);
+        }
       }
 
       const grandPrixPlaza = (k, side, gap) => {
@@ -400,8 +422,12 @@
       building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       {
-        // MSG Sphere — dominant single-hue cyan LED orb (few frustum bands).
-        const a = anchor(K(0.30), -1, 132);
+        // MSG Sphere — inside the T5–T9 loop (Wikipedia circuit map; RaceFans
+        // track walk). Re-keyed 2026-10-05: bare K(0.30)/side -1 sat on Koval
+        // (~racing 0.14). Loop centroid is ~racing 0.28, RIGHT, ~125 m past
+        // the edge (track-build node scan); side -1 / dist 132 there rejected
+        // the footprint against the far side of the loop.
+        const a = anchor(K(sl(0.28)), 1, 125);
         const rad = 88;
         const baseY = a.c[1];
         const SPHERE = [0.16, 0.72, 0.98];
@@ -427,37 +453,38 @@
           addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.92, 7.0, SPHERE_HI, 28, null);
         }, { required: true });
         // Cyan / lime runoff stripe near the Sphere.
-        groundPatch(K(0.292), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
+        groundPatch(K(sl(0.292)), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
           { id: "vegas-sphere-runoff-cyan", samples: 5 });
-        groundPatch(K(0.318), -1, 5.0, [9, 0.15, 36], [0.18, 0.62, 0.32],
+        groundPatch(K(sl(0.318)), -1, 5.0, [9, 0.15, 36], [0.18, 0.62, 0.32],
           { id: "vegas-sphere-runoff-lime", samples: 5 });
         // Painted decals, not solids: place() seats a box at ground + h/2 - 0.8,
         // so these 0.22/0.18 m slabs sat wholly underground while still
         // moving the driving limit in to 5-6.5 m. Same footprint (inner edge
         // = old centre dist - width/2), now grounded and non-colliding.
-        groundPatch(K(0.305), -1, 5, [6, 0.22, 28], [0.15, 0.70, 0.75],
+        groundPatch(K(sl(0.305)), -1, 5, [6, 0.22, 28], [0.15, 0.70, 0.75],
           { id: "vegas-sphere-runoff-cyan-inner", samples: 3 });
-        groundPatch(K(0.325), -1, 6.5, [5, 0.18, 22], [0.25, 0.75, 0.35],
+        groundPatch(K(sl(0.325)), -1, 6.5, [5, 0.18, 22], [0.25, 0.75, 0.35],
           { id: "vegas-sphere-runoff-lime-inner", samples: 3 });
       }
 
-      backdrop(K(0.45), 1, 240, [180, 30, 120], DARKROCK);
+      backdrop(K(sl(0.45)), 1, 240, [180, 30, 120], DARKROCK);
 
-      // Venetian / Palazzo — warm-cream tower cluster + campanile (NOT Luxor pyramid).
-      building(K(0.49), -1, 24, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
-      building(K(0.505), -1, 48, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
-      tower(K(0.492), -1, 72, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
-      place(K(0.49), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]);
+      // Venetian / Palazzo — warm-cream tower cluster + campanile at Strip entry
+      // (racing ~0.49 / T12). Re-keyed 2026-10-05; bare 0.49 sat on Sands Ave.
+      building(K(sl(0.49)), -1, 24, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
+      building(K(sl(0.505)), -1, 48, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
+      tower(K(sl(0.492)), -1, 72, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      place(K(sl(0.49)), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]);
 
-      ferrisWheel(K(0.55), -1, 85, 65);
-      billboard(K(0.56), -1, 18, 16, 10, CYAN);
-      building(K(0.55), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
-      place(K(0.55), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
-      place(K(0.55), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
+      ferrisWheel(K(sl(0.55)), -1, 85, 65);
+      billboard(K(sl(0.56)), -1, 18, 16, 10, CYAN);
+      building(K(sl(0.55)), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      place(K(sl(0.55)), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
+      place(K(sl(0.55)), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
 
-      // Caesars Palace — wide ivory box, gold up-lights.
+      // Caesars Palace — wide ivory box, gold up-lights (racing ~0.62, RIGHT).
       {
-        const a = anchor(K(0.62), 1, 44);
+        const a = anchor(K(sl(0.62)), 1, 44);
         const b = [a.r, a.u, a.t];
         const IVORY = [0.78, 0.74, 0.64];
         const IVORY_D = [0.62, 0.58, 0.48];
@@ -477,13 +504,13 @@
           for (const off of [-24, 0, 24])
             seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -18), 1.1, 16, IVORY, 8, b);
         }, { required: true });
-        place(K(0.62), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
-        place(K(0.62), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+        place(K(sl(0.62)), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
+        place(K(sl(0.62)), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
       }
 
       // Bellagio + fountain lake — long elegant box + blue reflective pool.
       {
-        const a = anchor(K(0.68), 1, 38);
+        const a = anchor(K(sl(0.68)), 1, 38);
         const b = [a.r, a.u, a.t];
         const BEL = [0.52, 0.48, 0.44];
         const BEL_WIN = [1.0, 0.88, 0.42];
@@ -500,39 +527,39 @@
           seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.42, 0.40, 0.38], b);
           addBox(stage, vadd(a.c, a.u, 72), [20, 2.5, 60], [1.0, 0.78, 0.28], b);
         }, { required: true });
-        place(K(0.68), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+        place(K(sl(0.68)), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);
       }
       const bellagioJets = 18;
       const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
       for (let i = 0; i < bellagioJets; i++) {
         const s = 0.663 + (i / (bellagioJets - 1)) * 0.046;
-        const a = anchor(K(s), 1, 26 + hash(i * 4.7) * 10);
+        const a = anchor(K(sl(s)), 1, 26 + hash(i * 4.7) * 10);
         const jetH = 8 + hash(i * 9.3 + 2) * 16;
         addBox(out, vadd(a.c, a.u, jetH / 2), [0.8, jetH, 0.8], jetCols[i % jetCols.length], [a.r, a.u, a.t]);
       }
-      waterSurface(K(0.672), 1, 18, [118, 1.4, 160], [0.04, 0.18, 0.32],
+      waterSurface(K(sl(0.672)), 1, 18, [118, 1.4, 160], [0.04, 0.18, 0.32],
         { id: "vegas-bellagio-lake-east", required: true });
-      waterSurface(K(0.702), 1, 18, [110, 1.4, 145], [0.04, 0.16, 0.30],
+      waterSurface(K(sl(0.702)), 1, 18, [110, 1.4, 145], [0.04, 0.16, 0.30],
         { id: "vegas-bellagio-lake-west" });
-      groundPatch(K(0.685), 1, 14, [22, 0.14, 96], [0.08, 0.28, 0.48],
+      groundPatch(K(sl(0.685)), 1, 14, [22, 0.14, 96], [0.08, 0.28, 0.48],
         { id: "vegas-bellagio-pool-strip", samples: 6 });
       // Pool apron decal (was a 0.35 m place(), buried 0.3 m below ground).
-      groundPatch(K(0.690), 1, 7, [18, 0.35, 70], [0.12, 0.42, 0.72],
+      groundPatch(K(sl(0.690)), 1, 7, [18, 0.35, 70], [0.12, 0.42, 0.72],
         { id: "vegas-bellagio-pool-apron", samples: 4 });
 
-      // Paris / Eiffel + Montgolfier balloon.
-      tower(K(0.74), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
-      place(K(0.74), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
+      // Paris / Eiffel + Montgolfier balloon (racing ~0.74, LEFT).
+      tower(K(sl(0.74)), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
+      place(K(sl(0.74)), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
       {
         // Gold plaza plinth 0.7 m proud. As a place() its top sat 0.1 m under
         // the ground (0.8 m sink): invisible. Raw box from 0.3 m under grade,
         // no blockAt — the pylon base above already bounds the car at 15 m.
-        const a = anchor(K(0.74), -1, 22);
+        const a = anchor(K(sl(0.74)), -1, 22);
         addBox(out, vadd(a.c, a.u, 0.65), [14, 1.3, 14], [0.95, 0.75, 0.20], [a.r, a.u, a.t]);
       }
-      building(K(0.73), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
+      building(K(sl(0.73)), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
       {
-        const a = anchor(K(0.748), -1, 26), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.748)), -1, 26), b = [a.r, a.u, a.t];
         const RED   = [0.72, 0.12, 0.14], RED_D = [0.56, 0.09, 0.11];
         const GOLD  = [0.94, 0.74, 0.24], BLUE_RIB = [0.16, 0.22, 0.52];
         modelGroup("vegas-paris-balloon", {
@@ -568,36 +595,39 @@
                    0.07, 2.6, [0.62, 0.55, 0.34], 4, b);
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       for (const [side, col1, col2] of [[-1, MAGENTA, CYAN], [1, CYAN, MAGENTA]]) {
-        billboard(K(0.85), side, 26, 20, 12, col1);
-        billboard(K(0.87), side, 26, 18, 11, col2);
-        billboard(K(0.89), side, 26, 16, 10, [col1[2], col1[0], col1[1]]); // rotated hue
-        place(K(0.86), side, 16, [10, 1.4, 10], col1);
-        place(K(0.88), side, 20, [12, 1.0, 8], col2);
+        billboard(K(sl(0.85)), side, 26, 20, 12, col1);
+        billboard(K(sl(0.87)), side, 26, 18, 11, col2);
+        billboard(K(sl(0.89)), side, 26, 16, 10, [col1[2], col1[0], col1[1]]); // rotated hue
+        place(K(sl(0.86)), side, 16, [10, 1.4, 10], col1);
+        place(K(sl(0.88)), side, 20, [12, 1.0, 8], col2);
       }
 
-      grandstandEx(0.965, 1, 16, 70, null, null,
+      grandstandEx(sl(0.965), 1, 16, 70, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      lotBleacher("vegas-lot-bleacher-harmon", 0.90, -1, 16, 9, { rows: 8, ribbon: CYAN });
-      grandstandEx(0.945, 1, 20, 40, null, null,
+      lotBleacher("vegas-lot-bleacher-harmon", sl(0.90), -1, 16, 9, { rows: 8, ribbon: CYAN });
+      grandstandEx(sl(0.945), 1, 20, 40, null, null,
         { livery: "alu", tiers: 1, roof: "none" });
-      building(K(0.93), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
-      building(K(0.97), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
-      billboard(K(0.94), -1, 18, 18, 11, CYAN);
-      billboard(K(0.96), 1, 17, 16, 10, MAGENTA);
+      building(K(sl(0.93)), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
+      building(K(sl(0.97)), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
+      billboard(K(sl(0.94)), -1, 18, 18, 11, CYAN);
+      billboard(K(sl(0.96)), 1, 17, 16, 10, MAGENTA);
 
       {
-        const s0 = 0.485, s1 = 0.815;
-        const span = s1 - s0;
+        // Strip canyon densify — racing 0.485..0.815 (Blvd southbound). Bare
+        // authored 0.485..0.815 landed on Sands→mid-Strip and left the real
+        // Strip straight thin (PR #928 follow-up / Shanghai-style frac drift).
+        const s0 = sl(0.485), s1 = sl(0.815);
+        const span = ((s1 - s0) + 1) % 1 || (s1 - s0);
 
         const STEP = 0.009;
         const backdropCols = [[0.20, 0.18, 0.24], [0.18, 0.16, 0.22], [0.22, 0.20, 0.20]];
         let idx = 0;
-        for (let s = s0; s <= s1; s += STEP, idx++) {
-          const k = K(s);
+        for (let s = 0.485; s <= 0.815; s += STEP, idx++) {
+          const k = K(sl(s));
           for (const side of [-1, 1]) {
             const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
             const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
@@ -621,29 +651,29 @@
 
         // Tall signature casino towers punched along the canyon (prominent landmarks)
         for (let j = 0; j < 8; j++) {
-          const s = s0 + (j + 0.5) / 8 * span, side = (j % 2) ? -1 : 1;
+          const s = 0.485 + (j + 0.5) / 8 * 0.33, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
-          building(K(s), side, 17, 28, 120 + hash(j * 17) * 65, 36,
+          building(K(sl(s)), side, 17, 28, 120 + hash(j * 17) * 65, 36,
             { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
         }
 
         // Strip-side neon billboards (spaced, not every step — avoids overdraw)
         for (let j = 0; j < 8; j++) {
-          const s = s0 + (j + 0.3) / 8 * span, side = (j % 2) ? 1 : -1;
-          billboard(K(s), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
+          const s = 0.485 + (j + 0.3) / 8 * 0.33, side = (j % 2) ? 1 : -1;
+          billboard(K(sl(s)), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
         }
         for (let j = 0; j < 34; j++) {
-          const s = s0 + (j + 0.2) / 34 * span, side = (j % 2) ? 1 : -1;
-          palm(K(s), side, 15, 11 + hash(j * 23) * 4, LIME);
-          palm(K(s + 0.004), -side, 15, 10 + hash(j * 29) * 3, LIME);
+          const s = 0.485 + (j + 0.2) / 34 * 0.33, side = (j % 2) ? 1 : -1;
+          palm(K(sl(s)), side, 15, 11 + hash(j * 23) * 4, LIME);
+          palm(K(sl(s + 0.004)), -side, 15, 10 + hash(j * 29) * 3, LIME);
         }
         for (let j = 0; j < 40; j++) {
-          const s = s0 + (j + 0.6) / 40 * span, side = (j % 2) ? -1 : 1;
-          billboard(K(s), side, 9, 11 + hash(j * 7.3) * 5, 4.6, NEON[j % NEON.length]);
+          const s = 0.485 + (j + 0.6) / 40 * 0.33, side = (j % 2) ? -1 : 1;
+          billboard(K(sl(s)), side, 9, 11 + hash(j * 7.3) * 5, 4.6, NEON[j % NEON.length]);
         }
         const vegasStandLiveries = ["scaffold", "alu", "crimson"];
         for (let j = 0; j < 10; j++) {
-          const s = s0 + (j + 0.35) / 10 * span, side = (j % 2) ? 1 : -1;
+          const s = sl(0.485 + (j + 0.35) / 10 * 0.33), side = (j % 2) ? 1 : -1;
           if (j % 3 === 1) {
             lotBleacher(`vegas-lot-bleacher-${j}`, s, side, 15, 8,
               { rows: j > 5 ? 8 : 6 });
@@ -680,12 +710,13 @@
         addFrustum(out, [mx, pyMin, mz], mw * 0.5, mw * 0.3, mh, DARKROCK, 5, null);
       }
       overheadSpan({
-        id: "vegas-finish-halo", frac: 0.98, clearance: 7.2,
+        id: "vegas-finish-halo", frac: sl(0.98), clearance: 7.2,
         thickness: 0.8, depth: 1.4, color: MAGENTA, required: true,
       });
 
       {
-        const k = K(0.66);
+        // Strip mid-gateway — racing 0.66 (was bare 0.66 → racing 0.503).
+        const k = K(sl(0.66));
         const aL = anchor(k, -1, 3.5), aR = anchor(k, 1, 3.5);
         // Width from the two ANCHORED piers, not hw[k]: k is an authored-frame
         // node (K() is unshifted; anchor() applies the 0.8575 origin shift), so
@@ -702,7 +733,7 @@
           addBox(out, vadd(a.c, a.u, 6), [2.8, 10, 0.8], sd > 0 ? CYAN : MAGENTA, b);   // neon strip
         }
         overheadSpan({
-          id: "vegas-strip-gateway", frac: 0.66, clearance: 12.5,
+          id: "vegas-strip-gateway", frac: sl(0.66), clearance: 12.5,
           thickness: 1.4, depth: 1.8, span: span * 0.96,
           color: MAGENTA, required: true,
         });
