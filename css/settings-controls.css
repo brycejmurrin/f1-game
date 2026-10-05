@@ -141,6 +141,16 @@
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
+/* Pair TILT help with RECALIBRATE: the copy is aria-describedby of
+   #pm-calib. When the plate is disabled (non-tilt) or hidden, do not
+   leave "TILT steering only…" under RESET DOCK LAYOUT. body.desktop
+   still CSS-hides both (css/responsive.css) for a tilt-saved desktop. */
+#pm-calib[hidden] + #pm-calib-help,
+#pm-calib:disabled + #pm-calib-help { display: none; }
+/* RESET KEYS is the last reachable control when CONTROLLER is hidden.
+   Sheet-body padding alone left the plate flush against .sheet-foot
+   and the bottom of the button clipped at max scroll. */
+#pm-panel-controls { padding-bottom: var(--tap); }
 /* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
    greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
 #pm-hudlayout .tune-row:has(input:disabled),
@@ -564,7 +574,8 @@ button:has(> [data-fold]) {
    The section headings inside the ADVANCED disclosure span the full width so
    the list still reads as grouped rather than as one undifferentiated field. */
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #audioset-inner {
+#pmsettings-inner[data-shape="wide"] #audioset-inner,
+#pmsettings-inner[data-shape="wide"] #audioset .as-sec {
   grid-column: 1 / -1;
   min-width: 0;
 }

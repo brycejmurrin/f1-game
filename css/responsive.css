@@ -9,7 +9,10 @@
    two places, not here. */
 
 /* ---------- DESKTOP / MOUSE (pointer: fine) ---------- */
-/* Hide phone-only controls that make no sense with a keyboard */
+/* Hide phone-only controls that make no sense with a keyboard.
+   #pm-calib-help is the described-by of #pm-calib — hide both, or the
+   TILT copy sits orphaned under RESET DOCK LAYOUT (desktop CSS-hides
+   the plate; settings-controls.css also pairs :disabled / [hidden]). */
 body.desktop #pm-steer-item,
 body.desktop #pm-calib,
 body.desktop #pm-calib-help { display: none !important; }

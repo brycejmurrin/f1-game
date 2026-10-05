@@ -1477,12 +1477,18 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "MUSIC fold chevron sits on the left");
   assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "color"), "var(--text)",
     "MUSIC fold names use --text, not steel italic");
-  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "border-bottom"), "1px solid var(--card-line)",
-    "MUSIC & SOUND rules span the full content width, not a fading --grad-rule");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec$/, "border-bottom"), "1px solid var(--card-line)",
+    "MUSIC & SOUND rules sit on the fold at full width, not a fading --grad-rule");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset-inner,/, "width"), "100%",
+    "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
   assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
   assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
     "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.match(read("css/settings-controls.css"), /#pm-calib:disabled \+ #pm-calib-help/,
+    "TILT help also hides when RECALIBRATE is disabled or hidden");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
+    "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
