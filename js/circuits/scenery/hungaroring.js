@@ -34,9 +34,8 @@
       };
 
       {
-        const POP    = [0.34, 0.50, 0.24];
-        const POP_L  = [0.42, 0.57, 0.28];
-        const POP_BK = [0.46, 0.44, 0.38];
+        const POP    = [0.24, 0.40, 0.17];
+        const POP_L  = [0.30, 0.46, 0.20];
         const AKAC   = [0.44, 0.54, 0.30];
         const AKAC_D = [0.36, 0.47, 0.26];
         const BARK   = [0.34, 0.29, 0.23];
@@ -55,18 +54,10 @@
             const kk = K(sf), hv = hash(kk * 19 + i * 7);
             const a = anchor(kk, side, gap);
             if (onTrack(a.c[0], a.c[2], 18)) continue;
-            const b = [a.r, a.u, a.t];
-            const h = 17 + hv * 6;
-            out._mat = MAT.WOOD;
-            addCyl(out, a.c, 0.30, h * 0.30, POP_BK, 5, b);
-            out._mat = MAT.FOLIAGE;
-            addCone(out, vadd(a.c, a.u, h * 0.16), 1.75 + hv * 0.35, h * 0.42,
-                    hv < 0.5 ? POP : POP_L, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.50), 1.45 + hv * 0.30, h * 0.36,
-                    hv < 0.5 ? POP_L : POP, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.78), 1.00 + hv * 0.22, h * 0.28,
-                    POP_L, 6, b);
-            out._mat = 0;
+            // Broadleaf (oak / poplar / ash) — the stacked-cone "poplars" read as
+            // conifers from the cockpit; Pest County woodland is deciduous.
+            tree(kk, side, gap, 13 + hv * 6, hv < 0.5 ? POP : POP_L,
+                 { crown: hv < 0.3 ? "vase" : "round" });
           }
         }
 
@@ -82,7 +73,7 @@
             const hv = hash(kk * 31 + j * 13 + gap);
             const a = anchor(kk + Math.round((hv - 0.5) * 8),
                              side, gap + (hash(kk + j * 5) - 0.5) * 14);
-            if (onTrack(a.c[0], a.c[2], 16)) continue;
+            if (onTrack(a.c[0], a.c[2], 26)) continue;
             const b = [a.r, a.u, a.t];
             const h = 11 + hv * 5;
             out._mat = MAT.WOOD;
@@ -106,17 +97,23 @@
         }
       }
 
-      // 1. Dry dusty Hungarian bowl — straw-olive grass/runoff, warm haze.
+      // 1. Summer haze over a GREEN valley. The dustyBowl atmosphere keeps its
+      //    warm sky and haze, but its straw-khaki grass/runoff read as desert:
+      //    the Hungaroring sits in rolling Mogyoród farmland and woodland (Pest
+      //    County), grass green going yellow-green by late July. Ground colours
+      //    are re-asserted from the def after the preset.
       if (ATM && ATM.dustyBowl) Object.assign(pal, ATM.dustyBowl);
+      Object.assign(pal, { grass: [0.34, 0.46, 0.20], runoff: [0.44, 0.48, 0.28],
+                           ambientGround: [0.32, 0.38, 0.24], fog: [0.70, 0.71, 0.62] });
 
-      const GRASS  = [0.46, 0.50, 0.26];    // sun-baked straw-olive grass
-      const AMPH   = [0.48, 0.54, 0.28];    // amphitheatre banking — G-dom → rounded mound
-      const AMPH2  = [0.54, 0.58, 0.32];    // sun-bleached terrace variant
-      const TREE   = [0.28, 0.36, 0.18];    // dry oak / olive tree masses
-      const TREE2  = [0.34, 0.42, 0.20];    // mid dusty canopy
-      const SCRUB  = [0.52, 0.48, 0.28];    // dry scrub bush
-      const HAZE   = [0.68, 0.64, 0.48];    // far haze-tinted hills (dustyBowl fog)
-      const HAZE2  = [0.74, 0.70, 0.56];    // furthest hazed ridge
+      const GRASS  = [0.38, 0.50, 0.22];    // summer meadow grass, yellow-green
+      const AMPH   = [0.30, 0.44, 0.19];    // grassed hillside banking
+      const AMPH2  = [0.38, 0.50, 0.23];    // sunlit bank variant
+      const TREE   = [0.20, 0.34, 0.15];    // oak / hornbeam woodland mass
+      const TREE2  = [0.27, 0.40, 0.17];    // black locust (akác) lighter canopy
+      const SCRUB  = [0.34, 0.44, 0.22];    // hedgerow scrub
+      const HAZE   = [0.50, 0.58, 0.50];    // far wooded hills through summer haze
+      const HAZE2  = [0.60, 0.66, 0.62];    // furthest hazed ridge (Gödöllő hills)
       const SHELL  = [0.46, 0.47, 0.50];    // grandstand back shell
       const SHELL2 = [0.40, 0.42, 0.46];    // darker shell
       const WHITE  = [0.90, 0.91, 0.93];
@@ -207,6 +204,19 @@
                    { livery: "alu", tiers: 1, roof: "truss" });
       grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // Main Grandstand (Főlelátó) — the long covered stand on the OUTSIDE of
+      // the pit straight, facing the garages, just past the real start line.
+      // This file's frame is the pre-rotation one: the line is at authored
+      // ~0.097 (sceneryShift 0.9029), so 0.112 sits ~65 m beyond the grid.
+      // Behind it the natural valley side rises as grass spectator banking.
+      grandstandEx(0.112, 1, 14, 90, SHELL, CROWD[1],
+                   { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      spectatorHill(0.100, 0.126, 1, 46,
+                    { rows: 4, density: 0.4, step: 8, crowd: CROWD, grass: [0.38, 0.50, 0.23] });
+      // The bowl's hillside overlooking the T1 braking zone (outside of the
+      // downhill right-hander; T1 apex = racing 0.0899 = authored ~0.187).
+      spectatorHill(0.158, 0.180, -1, 34,
+                    { rows: 4, density: 0.4, step: 8, crowd: CROWD, grass: [0.38, 0.50, 0.23] });
 
       const FASCIA  = [0.94, 0.92, 0.84];
       const FASCIA2 = [0.78, 0.80, 0.82];
@@ -244,28 +254,34 @@
         addBox(out, vadd(a.c, a.u, 8.6), [0.22, 0.8, g.len - 6], WIN_COOL, [a.r, a.u, a.t]);
       }
 
-      forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
-      forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
-                                      col: TREE2, col2: TREE, pineFrac: 0.32 });
-      forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
+      forestEdge(0.0,  0.18, 1, 18, { density: 0.58, hMin: 9, hMax: 15,
+                                      col: TREE, col2: TREE2, pineFrac: 0 });
+      forestEdge(0.18, 0.50, 1, 18, { density: 0.46, hMin: 7, hMax: 13,
+                                      col: TREE2, col2: TREE, pineFrac: 0 });
+      // Inside the T11-T12 kink (authored 0.80-0.89) the road folds back on
+      // itself: an 18 m gap still lands crowns ~6-9 m off the other leg's kerb.
+      forestEdge(0.50, 0.80, 1, 18, { density: 0.50, hMin: 8, hMax: 14,
+                                      col: TREE, col2: TREE2, pineFrac: 0 });
+      forestEdge(0.80, 0.89, 1, 40, { density: 0.50, hMin: 8, hMax: 14,
+                                      col: TREE, col2: TREE2, pineFrac: 0 });
+      forestEdge(0.89, 1.00, 1, 18, { density: 0.50, hMin: 8, hMax: 14,
+                                      col: TREE, col2: TREE2, pineFrac: 0 });
       // Inside: tighter valley wall
-      forestEdge(0.0,  0.12, -1, 8, { density: 0.52, hMin: 7, hMax: 13,
-                                       col: TREE, col2: TREE2, pineFrac: 0.55 });
-      forestEdge(0.14, 0.35, -1, 8, { density: 0.44, hMin: 8, hMax: 13,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
-      forestEdge(0.35, 0.55, -1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                       col: TREE, col2: TREE2, pineFrac: 0.42 });
-      forestEdge(0.55, 1.00, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
+      forestEdge(0.0,  0.12, -1, 18, { spacing: 8, density: 0.52, hMin: 7, hMax: 13,
+                                       col: TREE, col2: TREE2, pineFrac: 0 });
+      forestEdge(0.14, 0.35, -1, 18, { spacing: 8, density: 0.44, hMin: 8, hMax: 13,
+                                       col: TREE2, col2: TREE, pineFrac: 0 });
+      forestEdge(0.35, 0.55, -1, 18, { spacing: 8, density: 0.50, hMin: 8, hMax: 14,
+                                       col: TREE, col2: TREE2, pineFrac: 0 });
+      forestEdge(0.55, 1.00, -1, 18, { spacing: 8, density: 0.46, hMin: 7, hMax: 12,
+                                       col: TREE2, col2: TREE, pineFrac: 0 });
 
       // Dry scrub spots at the edge (gap=9, sparse)
       every(44, (kk) => {
         for (const side of [-1, 1]) {
           const s = hash(kk * 37 + side * 11);
           if (s < 0.62) continue;
-          bush(kk, side, 9 + s * 10, SCRUB);
+          bush(kk, side, 18 + s * 10, SCRUB);
         }
       });
 
@@ -712,7 +728,7 @@
       ]) {
         const k = K(s), h = hash(k * 53 + side * 7);
         tree(k, side, dist, 10 + h * 5, h < 0.5 ? TREE : TREE2);
-        pine(k, side, dist + 9, 12 + h * 5, TREE);
+        tree(k, side, dist + 10, 12 + h * 5, TREE, { crown: "vase" });
       }
 
       if (circuitKit) {
