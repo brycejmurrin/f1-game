@@ -444,7 +444,9 @@
         const k = KRACE(0.215 + i * 0.0035);
         place(k, racingSide(-1), 3, [3, 1.2, 4], [0.55, 0.55, 0.58]);
         prop(k, racingSide(-1), 3, [2, 0.5, 2], PALMGRN);
-        palm(k, racingSide(i % 2 ? 1 : -1), 7, 9, PALMGRN);   // dist 7: palm() guards onTrack(c, 4), so dist 4 sat exactly on the margin and every odd (side 1) palm was dropped
+        // Palms stay on the square (LEFT). RIGHT-side trunks sat in the
+        // Casino-corner hillside after the 2026-10-05 re-key (ground-audit bury).
+        palm(k, racingSide(-1), 7, 9, PALMGRN);
       }
       {
         // The fountain in front of the Casino: racing 0.258, LEFT.
@@ -463,11 +465,17 @@
           // Casino Square is not inside the pit complex, so wrapping it would
           // trade a silent-failure RISK for an actual silent failure. Left raw
           // deliberately; the engine question belongs in js/track/, not here.
-          addCyl(out, vadd(a.c, a.u, 0.5), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);
-          addCyl(out, vadd(a.c, a.u, 1.6), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);
-          addCyl(out, vadd(a.c, a.u, 3.4), 1.2, 0.4, [0.85, 0.90, 0.96], 8, b);
+          // addCyl's `c` is the BASE (geom.js), not the centre. After the re-key
+          // the square is at the +40 m crest; a road-height basin hung 0.39 m
+          // over the plaza (ground-audit). Embed the basin and stack the
+          // column/bowl so they chain to it.
+          const g = terrainYAt(a.c[0], a.c[2]);
+          const base = g == null ? -0.6 : (g - a.c[1] - 0.08);
+          addCyl(out, vadd(a.c, a.u, base), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);
+          addCyl(out, vadd(a.c, a.u, base + 0.75), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);
+          addCyl(out, vadd(a.c, a.u, base + 2.75), 1.2, 0.5, [0.85, 0.90, 0.96], 8, b);
         }
-        for (let j = 0; j < 6; j++) bush(KRACE(0.213 + j * 0.007), racingSide(-1), 9 + (j % 2) * 3, [0.24, 0.44, 0.22]);
+        for (let j = 0; j < 6; j++) bush(KRACE(0.213 + j * 0.007), racingSide(-1), 12 + (j % 2) * 3, [0.24, 0.44, 0.22]);
       }
 
       for (let i = 0; i < 4; i++) {
@@ -483,19 +491,19 @@
         // racing line. Apex planter/palms on the inside (L) of the bend.
         // Was K(0.385..0.415) -> racing 0.774-0.805: the whole wrap stood at
         // the swimming pool, 1.35 km from the hairpin (r 9.5 m at 0.3811).
+        // One hotel + two wings. Five 14–24 m masses at ±0.005/±0.015 on a
+        // 9.5 m hairpin occupied the same world cell (clip-audit 4.5 m, frac
+        // 0.40–0.44). 0.022 lap (~73 m) between wings, smaller along-track
+        // depth, slightly further out.
         const FAIRMONT = [0.91, 0.89, 0.84];
         const HP = 0.3811;
         const k = KRACE(HP);
-        building(k, racingSide(1), 9, 24, 54, 32,
+        building(k, racingSide(1), 11, 20, 50, 22,
           { kind: "notch", wall: FAIRMONT, window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
-        building(KRACE(HP - 0.015), racingSide(1), 10, 22, 46, 20,
+        building(KRACE(HP - 0.022), racingSide(1), 12, 16, 40, 14,
           { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(KRACE(HP + 0.015), racingSide(1), 10, 22, 48, 20,
+        building(KRACE(HP + 0.022), racingSide(1), 12, 16, 42, 14,
           { kind: "podium", wall: [0.90, 0.87, 0.80], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(KRACE(HP - 0.005), racingSide(1), 10.5, 14, 42, 14,
-          { kind: "slab", wall: FAIRMONT, window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
-        building(KRACE(HP + 0.005), racingSide(1), 10.5, 14, 44, 14,
-          { kind: "slab", wall: [0.93, 0.90, 0.85], window: WIN, floor: 5.5, lit: true, windowCol: WINLIT });
         for (let i = 0; i < 5; i++) {
           const pk = KRACE(HP - 0.012 + i * 0.006);
           // place() seats a box at ground + h/2 - 0.8, so height = 0.8 + the
@@ -950,17 +958,16 @@
         width: 0.8, height: 0.8, color: [0.88, 0.86, 0.80],
       });
 
-      cityFront(0.87, 0.95, 1, 9, {
-        minH: 10, maxH: 16, depth: 15, step: 18,   // depth = ALONG-track frontage; 7 m on an 18 m step built 7 m slivers 11 m apart
-        palette: [CREAM, STONE, DUSTY, OCHRE],
-        lit: true, windowCol: WINLIT,
-      });
+      // Hairpin/Mirabeau hillside is the Fairmont wrap + Mirabeau apartments.
+      // A cityFront(0.87, 0.95) row here (racing 0.30-0.38) buried plinths in
+      // the slope and clipped the re-seated landmarks. Harbour already has
+      // pastelStreetRow(0.595, 0.655); no replacement row.
       {
         const houses = [
-          ["kenney_sub_building-type-a", 0.88, 1, 22],
-          ["kenney_sub_building-type-c", 0.91, 1, 24],
-          ["kenney_sub_building-type-h", 0.94, 1, 23],
-          ["kenney_sub_building-type-k", 0.89, -1, 16],
+          ["kenney_sub_building-type-a", 0.605, 1, 28],
+          ["kenney_sub_building-type-c", 0.635, 1, 30],
+          ["kenney_sub_building-type-h", 0.665, 1, 29],
+          ["kenney_sub_building-type-k", 0.620, -1, 22],
         ];
         for (const [id, s, side, dist] of houses) {
           if (!bakedModel(id, K(s), side, dist, { scale: 1.15 }))

@@ -97,7 +97,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   //   0.5516-0.9616 side-1 -> 0.2280-0.6380 R
   //   0.1116-0.2516 side-1 -> 0.9380-0.0780 R
   //   0.1116-0.2016 side+1 -> Beau Rivage climb (f822738c9 landmark wave)
-  //   0.8217-0.8864 side+1 -> Fairmont hairpin wrap
+  //   0.8217-0.96   side+1 -> Fairmont + Mirabeau climb (R)
   expect(result.definition.dressingExclusions).toEqual([
     { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
     { kind: "city", s0: 0.0116, s1: 0.0816 },
@@ -105,7 +105,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
     { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
     { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
     { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2016, side: 1 },
-    { kinds: ["city"], s0: 0.8217, s1: 0.8864, side: 1 },
+    { kinds: ["city", "foliage"], s0: 0.8217, s1: 0.96, side: 1 },
   ]);
 
   for (const session of [result.day, result.night]) {

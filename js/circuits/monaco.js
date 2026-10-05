@@ -44,8 +44,11 @@
       { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
       // Beau Rivage climb (R) — sparse cream/ochre canyon, not auto cityFront.
       { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2016, side: 1 },
-      // Fairmont hairpin wrap — hotel mass owns the outside; no generic city.
-      { kinds: ["city"], s0: 0.8217, s1: 0.8864, side: 1 },
+      // Fairmont + Mirabeau climb (R): hotel / apartments own the hillside.
+      // Explicit cityFront(0.87, 0.95) used to keep emitting here (exclusions
+      // skip the GENERIC kit only); s1 0.96 covers that row too. Racing
+      // 0.302-0.430, the steep outside of Mirabeau through the hairpin.
+      { kinds: ["city", "foliage"], s0: 0.8217, s1: 0.96, side: 1 },
     ],
     reverse: true,
     // Rotate the start/finish line onto the main pit/harbour straight so the lap

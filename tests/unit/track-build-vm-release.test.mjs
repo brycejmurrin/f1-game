@@ -180,10 +180,9 @@ const STRIP = {
   //   enclosed now survive the strip, +573 kept)
   // → coplanar z-fight cleanup tip 280119/259008 (2026-10-05): casino box
   //   0.2 m wider + yacht glow band; then landmark re-key on this PR.
-  // → sync #966 onto tip (landmark re-key ∪ coplanar): 278991/259401
-  //   (2026-10-05: measured on merge — emission matches re-key alone;
-  //   strip −2 vs re-key-only 259403 from coplanar wideners on the union)
-  monaco: { before: 278991, after: 259401 },
+  // → post-rekey hairpin cityFront removed + Fairmont thinned (CI sweeps):
+  //   273417/254782 (2026-10-05)
+  monaco: { before: 273417, after: 254782 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
