@@ -13,7 +13,8 @@ const TrackThemes = (function () {
   // Picker / share-code order. The share code (TrackCodec, PR2) stores the INDEX
   // into this list, so append only — never reorder or remove.
   const ORDER = ["parkland", "alpine", "oasis", "desertnight", "harbour", "marina", "tilke", "autumn",
-    "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight"];
+    "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
+    "jungle", "lakeside", "moorland", "metropolis"];
 
   const pal = (base, extra) => Object.assign({}, base || {}, extra || {});
   const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
@@ -176,6 +177,46 @@ const TrackThemes = (function () {
       terrainOuter: 120, flatTerrain: true, elevStyle: "flat",
       furniture: { tree: "palm", fol: [0.20, 0.36, 0.18], lamp: "post", lc: [0.95, 0.90, 1.0] },
       standSet: ["navy", "teal", "alu"],
+    },
+    jungle: {
+      label: "RAINFOREST", blurb: "Steaming green hills, palm walls, emerald peaks in the haze.",
+      swatch: ["#1b5e20", "#a5d6a7"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: { grass: [0.16, 0.42, 0.16], zenith: [0.30, 0.50, 0.74], horizon: [0.74, 0.82, 0.78], fog: [0.70, 0.80, 0.74], fogDensity: 0.0016,
+        sunColor: [1.0, 0.96, 0.84], ambientSky: [0.58, 0.68, 0.62], ambientGround: [0.30, 0.36, 0.26] },
+      terrainOuter: 150, flatTerrain: false, elevStyle: "hilly",
+      furniture: { tree: "palm", fol: [0.16, 0.40, 0.16], lamp: "none" },
+      standSet: ["teal", "steel", "concrete"],
+    },
+    lakeside: {
+      label: "NORDIC LAKES", blurb: "Fir forest down to a cold blue lake, red timber houses on the shore.",
+      swatch: ["#1565c0", "#2e5d3a"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: pal(ATM.alpineGreen, { grass: [0.24, 0.42, 0.20] }),
+      terrainOuter: 140, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "fir", fol: [0.16, 0.32, 0.18], lamp: "none" },
+      standSet: ["crimson", "steel", "alu"],
+    },
+    moorland: {
+      label: "HIGHLAND MOOR", blurb: "Heather ridges, grey stone cottages, low cloud over open moor.",
+      swatch: ["#6d5a7a", "#7b8a5a"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: pal(ATM.britishOvercast, { grass: [0.34, 0.38, 0.20] }),
+      terrainOuter: 150, flatTerrain: false, elevStyle: "hilly",
+      furniture: { tree: "broad", fol: [0.24, 0.34, 0.18], lamp: "none", sparse: true },
+      standSet: ["steel", "concrete", "navy"],
+    },
+    metropolis: {
+      label: "METROPOLIS", blurb: "Glass towers, concrete walls, a downtown street circuit at noon.",
+      swatch: ["#455a64", "#80d8ff"],
+      theme: "street_day", sceneryTheme: "street", night: false, street: true,
+      pal: { grass: [0.26, 0.40, 0.22], zenith: [0.28, 0.48, 0.80], horizon: [0.78, 0.82, 0.86], fog: [0.76, 0.80, 0.84] },
+      terrainOuter: 28, flatTerrain: false, elevStyle: "flat", baseHW: 6.0,
+      furniture: { tree: "plane", fol: [0.26, 0.42, 0.20], lamp: "post", lc: [0.95, 0.95, 1.0] },
+      standSet: ["steel", "alu", "scaffold"],
+      pit: { mode: "street" },
+      cityStyle: { neon: ["white", "cyan", "blue"], dayPal: ["steel", "bluglass", "concrete", "greyblue", "paleblue"], bias: 0.2 },
+      cityM: 3600,   // the harbour preset's street budget (see there)
     },
   };
 
@@ -441,6 +482,64 @@ const TrackThemes = (function () {
     api.waterSurface(sv.far, inside, 60, [140, 0.3, 90], opts.col || [0.16, 0.42, 0.48], { id: "custom-oasis" });
   }
 
+  /** THE TRACKSIDE KIT every theme shares — what a broadcast circuit has that
+   *  the generic passes do not plant: TV camera towers on the outside of the two
+   *  slowest corners, a sponsor board in each slow corner's braking zone, a run
+   *  of hoardings along the second straight and the TV compound behind the pits.
+   *  Each emitter is the api's own, with its own onTrack / solid guards. */
+  const BOARD_COLS = [[0.86, 0.12, 0.10], [0.10, 0.28, 0.66], [0.96, 0.78, 0.10], [0.10, 0.52, 0.30], [0.92, 0.92, 0.92]];
+  function trackside(api, sv, h, opts) {
+    opts = opts || {};
+    const { cameraTower, billboard, sponsorHoarding, broadcastCompound, K } = api;
+    sv.slow.slice(0, 2).forEach((p, i) => {
+      if (cameraTower) cameraTower(p.k, p.left ? 1 : -1, 22 + Math.round(h("camGap", i) * 6), { h: 14 + Math.round(h("camH", i) * 4) });
+    });
+    if (billboard) sv.slow.forEach((p, i) => {
+      const kb = (p.k - Math.round(120 / sv.ds) + sv.n) % sv.n;   // ~120 m before the apex: the braking zone
+      billboard(kb, p.left ? 1 : -1, 9, 12, 4.5, BOARD_COLS[Math.floor(h("board", i) * BOARD_COLS.length) % BOARD_COLS.length]);
+    });
+    const st = sv.straights[1];
+    if (sponsorHoarding && st && !opts.street && st.s1 > st.s0) {
+      const s1 = Math.min(st.s1 - 0.004, st.s0 + 0.004 + 220 / sv.total);
+      if (s1 > st.s0 + 0.01) sponsorHoarding(st.s0 + 0.004, s1, sv.outward(st.k0), 9, {});
+    }
+    if (broadcastCompound && K) broadcastCompound(K(0.935), sv.pitSide, 76, { vans: 2 + Math.round(h("vans", 0)), dishes: 2, mastH: 9 });
+  }
+  /** A VILLAGE (or a cluster of chalets): two staggered rows of houses on the
+   *  outside of a mid straight, set back past the forest belts (gap ≥ 95 m). */
+  function village(api, sv, h, opts) {
+    opts = opts || {};
+    const { house, K } = api;
+    const st = sv.straights[2] || sv.straights[1];
+    if (!house || !K || !st) return;
+    const span = (st.s1 - st.s0 + 1) % 1, side = sv.outward(st.k0), n = opts.count || 8;
+    for (let i = 0; i < n; i++) {
+      const f = (st.s0 + span * (0.15 + 0.7 * i / Math.max(1, n - 1))) % 1;
+      house(K(f), side, (opts.gap || 95) + (i % 2) * 20 + h("vGap", i) * 8,
+        (opts.w || 8) + h("vW", i) * 4, (opts.h || 5) + h("vH", i) * 3, (opts.d || 9) + h("vD", i) * 4,
+        { wall: opts.walls ? opts.walls[i % opts.walls.length] : undefined, roof: opts.roof, roofType: opts.roofType });
+    }
+  }
+  /** THE PADDOCK: a row of team motorhomes behind the pit building. */
+  function paddock(api, sv, h, opts) {
+    opts = opts || {};
+    const { motorhome, K } = api;
+    if (!motorhome || !K) return;
+    const n = opts.count || 6;
+    const wall = [[0.86, 0.87, 0.90], [0.18, 0.20, 0.24], [0.78, 0.10, 0.10], [0.10, 0.24, 0.56]];
+    for (let i = 0; i < n; i++) {
+      motorhome(K((0.975 + i * 0.006) % 1), sv.pitSide, 70 + (i % 2) * 20, 12, 7 + h("mhH", i) * 2, 14,
+        { wall: wall[Math.floor(h("mhC", i) * wall.length) % wall.length], window: [0.18, 0.22, 0.28] });
+    }
+  }
+  /** A FUNFAIR wheel on the outside of the second straight, well back. */
+  function funfair(api, sv, h, opts) {
+    const st = sv.straights[1] || sv.straights[0];
+    if (!api.ferrisWheel || !api.K || !st) return;
+    const span = (st.s1 - st.s0 + 1) % 1;
+    api.ferrisWheel(api.K((st.s0 + span * 0.5) % 1), sv.outward(st.k0), (opts && opts.dist) || 130, (opts && opts.r) || 26);
+  }
+
   // Each preset is a list of independent DRESSERS: one that throws is logged
   // and skipped, and the rest still stand (sceneryFor).
   const DRESS = {
@@ -448,11 +547,14 @@ const TrackThemes = (function () {
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.35, gap: 40, col: [0.20, 0.40, 0.18], col2: [0.26, 0.42, 0.20], pineFrac: 0.2, hMin: 9, hMax: 16 })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 13 })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, h0: 10, h1: 6, cols: [[0.22, 0.42, 0.20], [0.20, 0.38, 0.18]] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 8 })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h)],
     ],
     alpine: [
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.5, gap: 30, col: [0.12, 0.28, 0.14], col2: [0.16, 0.32, 0.18], pineFrac: 0.85, hMin: 14, hMax: 24, density: 0.3, second: true })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, second: false })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 260, h1: 160, rough: 0.3, snowline: 0.55, snow: [0.95, 0.96, 1.0], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20] })],
+      ["chalets", (api, sv, h) => village(api, sv, h, { count: 7, walls: [[0.46, 0.32, 0.20], [0.40, 0.28, 0.18]], roof: [0.30, 0.30, 0.34], roofType: "gable", h: 6 })],
     ],
     oasis: [
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 28, rMin: 180, rMax: 320, len: 200, wid: 46, h0: 14, h1: 14, cols: [[0.74, 0.60, 0.40], [0.70, 0.56, 0.38]] })],
@@ -479,22 +581,26 @@ const TrackThemes = (function () {
       // The hotel over the pit straight, set back behind the stands.
       ["hotel", (api, sv) => { if (api.building) api.building(api.K(0.03), -sv.pitSide, 120, 30, 60, 30, { kind: "slab" }); }],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 20, h0: 6, h1: 5, cols: [[0.24, 0.44, 0.22]] })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h, { count: 8 })],
     ],
     autumn: [
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.4, gap: 34, col: [0.66, 0.36, 0.12], col2: [0.52, 0.28, 0.10], pineFrac: 0.1, hMin: 9, hMax: 16 })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta" })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, rMin: 160, rMax: 300, h0: 12, h1: 10, cols: [[0.36, 0.40, 0.18], [0.44, 0.38, 0.16]] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 8, walls: [[0.78, 0.70, 0.58], [0.70, 0.52, 0.40]] })],
     ],
     tuscany: [
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.25, gap: 36, col: [0.18, 0.28, 0.12], col2: [0.30, 0.34, 0.14], pineFrac: 0.7, hMin: 10, hMax: 18, density: 0.3 })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "terracotta", livery2: "sandstone", grass: [0.46, 0.44, 0.20] })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 26, rMin: 160, rMax: 320, h0: 16, h1: 14, cols: [[0.52, 0.46, 0.22], [0.38, 0.40, 0.18], [0.60, 0.50, 0.28]] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 9, walls: [[0.86, 0.72, 0.52], [0.82, 0.62, 0.42]], roof: [0.70, 0.36, 0.22], roofType: "hip" })],
     ],
     coast: [
       ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.12, 0.34, 0.52], second: false, size: [900, 0.2, 1100] })],
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.2, gap: 34, col: [0.18, 0.34, 0.16], col2: [0.22, 0.38, 0.18], pineFrac: 0.6, hMin: 10, hMax: 16 })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 2, livery: "sandstone", livery2: "alu" })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 18, rMin: 200, rMax: 360, h0: 18, h1: 16, cols: [[0.40, 0.42, 0.26], [0.50, 0.46, 0.34]] })],
+      ["funfair", (api, sv, h) => funfair(api, sv, h, { dist: 140, r: 24 })],
     ],
     savanna: [
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.15, gap: 40, col: [0.36, 0.40, 0.16], col2: [0.42, 0.42, 0.18], pineFrac: 0, hMin: 7, hMax: 11, density: 0.2 })],
@@ -505,12 +611,14 @@ const TrackThemes = (function () {
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.5, gap: 28, col: [0.10, 0.22, 0.12], col2: [0.16, 0.30, 0.16], pineFrac: 0.6, hMin: 14, hMax: 24, density: 0.32, second: true })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson" })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 700, rMax: 1200, w0: 700, w1: 400, h0: 160, h1: 120, rough: 0.25, snowline: 1.6, rock: [0.30, 0.32, 0.30], forest: [0.12, 0.22, 0.14] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 7, walls: [[0.62, 0.60, 0.56], [0.70, 0.66, 0.60]], roof: [0.26, 0.28, 0.30] })],
     ],
     airfield: [
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 3, livery: "steel", livery2: "scaffold" })],
       ["hangars", (api, sv, h) => hangars(api, sv, h)],
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.15, gap: 60, col: [0.20, 0.34, 0.16], col2: [0.24, 0.38, 0.18], pineFrac: 0.1, hMin: 8, hMax: 13, density: 0.3 })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 18, h0: 5, h1: 4, cols: [[0.22, 0.38, 0.20], [0.26, 0.40, 0.22]] })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h)],
     ],
     canyon: [
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 2, livery: "terracotta", livery2: "orange", grass: [0.58, 0.34, 0.20] })],
@@ -520,12 +628,37 @@ const TrackThemes = (function () {
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.45, gap: 30, col: [0.10, 0.22, 0.14], col2: [0.14, 0.26, 0.18], pineFrac: 0.95, hMin: 12, hMax: 22, density: 0.3, second: true })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson", grass: [0.84, 0.86, 0.90], riser: [0.72, 0.74, 0.78] })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 280, h1: 180, rough: 0.3, snowline: 0.2, snow: [0.96, 0.97, 1.0], rock: [0.40, 0.42, 0.46], forest: [0.12, 0.22, 0.16] })],
+      ["chalets", (api, sv, h) => village(api, sv, h, { count: 7, walls: [[0.42, 0.28, 0.18], [0.50, 0.34, 0.22]], roof: [0.88, 0.90, 0.94], roofType: "gable", h: 6 })],
     ],
     twilight: [
       ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.04, 0.10, 0.16], second: false, size: [500, 0.2, 600] })],
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 14, hills: 2, stand: true, livery: "navy", livery2: "teal" })],
       ["hotel", (api, sv) => { if (api.building) api.building(api.K(0.03), -sv.pitSide, 110, 40, 34, 40, { kind: "slab" }); }],
       ["floods", (api, sv, h) => floods(api, sv, h, { cool: false })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h)],
+      ["funfair", (api, sv, h) => funfair(api, sv, h, { dist: 150, r: 30 })],
+    ],
+    jungle: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.55, gap: 30, col: [0.12, 0.36, 0.14], col2: [0.18, 0.44, 0.16], pineFrac: 0, hMin: 12, hMax: 22, density: 0.32, second: true })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "teal", livery2: "steel" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 800, rMax: 1300, w0: 600, w1: 360, h0: 220, h1: 160, rough: 0.35, snowline: 1.6, rock: [0.26, 0.34, 0.24], forest: [0.10, 0.30, 0.12] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 6, walls: [[0.86, 0.80, 0.62], [0.60, 0.74, 0.62]], roof: [0.48, 0.36, 0.20], roofType: "hip" })],
+    ],
+    lakeside: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.10, 0.28, 0.46], second: false, size: [800, 0.2, 1000] })],
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.45, gap: 30, col: [0.12, 0.28, 0.14], col2: [0.16, 0.32, 0.18], pineFrac: 0.85, hMin: 12, hMax: 22, density: 0.3 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "crimson", livery2: "steel" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 24, rMin: 180, rMax: 320, h0: 14, h1: 10, cols: [[0.14, 0.28, 0.16], [0.18, 0.32, 0.18]] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 8, walls: [[0.62, 0.14, 0.10], [0.66, 0.18, 0.12], [0.90, 0.86, 0.72]], roof: [0.20, 0.20, 0.22], roofType: "gable" })],
+    ],
+    moorland: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.12, gap: 50, col: [0.22, 0.32, 0.18], col2: [0.26, 0.34, 0.20], pineFrac: 0.3, hMin: 7, hMax: 12, density: 0.2 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 10, hills: 3, livery: "steel", livery2: "navy", grass: [0.36, 0.38, 0.22] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 14, rMin: 700, rMax: 1200, w0: 800, w1: 500, h0: 150, h1: 110, rough: 0.2, snowline: 1.6, rock: [0.40, 0.36, 0.40], forest: [0.38, 0.28, 0.40] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 7, walls: [[0.56, 0.54, 0.50], [0.48, 0.46, 0.44]], roof: [0.22, 0.24, 0.26], roofType: "gable", h: 4 })],
+    ],
+    metropolis: [
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 0, livery: "steel", livery2: "alu" })],
     ],
   };
   /** Three hangars (corrugated-metal box, gable roof, dark door facing the
@@ -587,6 +720,7 @@ const TrackThemes = (function () {
    *  none (not on a street, where the city fills the ground). */
   function dressersFor(themeId, look) {
     const list = DRESS[themeId].slice(), p = get(themeId), has = (n) => list.some((d) => d[0] === n);
+    list.push(["trackside", (api, sv, h) => trackside(api, sv, h, { street: !!p.street })]);
     if (look.time === "night" && !p.night && !has("floods")) list.push(["floods", (api, sv, h) => floods(api, sv, h, { cool: p.theme !== "desert" })]);
     if (look.trees === "many" && !p.street && !has("belts")) {
       const fol = (p.furniture && p.furniture.fol) || [0.22, 0.40, 0.20];
