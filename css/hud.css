@@ -1504,6 +1504,12 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
      (2026-08-21 sweep). WCAG floor, inert at >=100%. */
   min-height: var(--tap-min);
 }
+/* Compact flyby: house --tap painted floor. Lives in @layer hud because this
+   file loads after @layer components and would otherwise keep --tap-min. */
+#flyby-inner[data-density="compact"] #fb-freecam {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
+}
 /* Tuner panel tucked away (body.pc-nopanel) → the right half of the screen is
    free, so switch to a classic dual-stick layout: LOOK stick under the right
    thumb in the bottom-right corner, up/down column just inboard of it. */
