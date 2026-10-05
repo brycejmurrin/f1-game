@@ -1365,6 +1365,9 @@ what it covers.
 | `car-multi-shot-tools.test.mjs` | one Chromium multi-angle car/garage capture: `render-car --preset=spine` / repeatable `--shot`, soft `#game-soft` path in `screenshotGameCanvas`, `garage-angles` `--team=` flags + numeric `store.team` pin, batched `settleGarage` |
 | `harness-display.test.mjs` | headless shot tools: `clearDeadDisplay` drops a stale local `DISPLAY=:N` with no `/tmp/.X11-unix/XN` so SwiftShader WebGL can start; `chromiumArgsForBackend` pins `--enable-unsafe-swiftshader`; `gotoGame` names WebGL/DISPLAY on boot timeout |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
+| `lobed-trees.test.mjs` | Opt-in crown recipes: desktop/mobile geometry budgets, canonical/fused normals and sway, atomic primitive rejection and planting reservation fallback |
+| `terrain-falloff.test.mjs` | Optional terrain descent: unchanged road shelf/rails, pit flattening, smooth floor joins, invalid-option fallback and actual banked near-road vertices |
+| `circuit-corner-anchors.test.mjs` | FIA 2025 physical Imola/Hungaroring corner topology and Imola's measured timing offsets on the built centreline |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 114-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
 | `scenery-guards.test.mjs` | the on-track guards drop what is ON the road, not everything with a normal gap: Monaco's armco keeps its posts (guardrail margin below the gap), Qatar/Monaco billboards build (panel ENDS guarded, not the along-track length as a radius), and `bakedModel` rides the scenery transform like the fallback it replaces — counts from `modelDiagnostics.suppressedCounts` on the real build |

@@ -76,6 +76,21 @@ test("InputGhost records fixed-timestep inputs with seed and version", () => {
   assert.equal(IG.compatible(env), true);
 });
 
+// A lap left open (parked, stuck, AFK) grew two arrays per physics step with no
+// bound, and with no best yet an hour-long lap became the ghost: past MAX_LAP_S
+// the lap is dropped, as an invalid one is.
+test("InputGhost drops a lap left open past MAX_LAP_S; a lap under it still records", () => {
+  const { InputGhost: IG } = createHarness();
+  IG.setTrack("monza");
+  const cap = IG.MAX_LAP_S * 60;
+  assert.equal(IG.MAX_LAP_S, 600);
+  assert.equal(driveLap(IG, cap + 1, IG.MAX_LAP_S + 1 / 60), false, "one step past the cap: no ghost");
+  assert.equal(IG.hasGhost(), false);
+  assert.equal(driveLap(IG, cap, IG.MAX_LAP_S), true, "exactly at the cap still records");
+  assert.equal(IG.steps(), cap);
+  assert.equal(driveLap(IG, 60, 12.3), true, "the next lap records as usual");
+});
+
 test("InputGhost atStep / next replay the quantized open-loop inputs", () => {
   const { InputGhost: IG } = createHarness();
   IG.setTrack("monza");

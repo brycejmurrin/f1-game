@@ -1732,12 +1732,33 @@ function prepared(team, liv, getParts, driverIdx, ctx) {
   return !!shellMesh && roomKeys(team, liv, boardInfo(team, getParts, driverIdx), ctx).key === cacheKey;
 }
 
+// THE RACE DOES NOT CARRY THE GARAGE: the bay, both atlases, the moving props and
+// the cached preview cars (~12.5 MB GPU, 54 k verts, plus ~5 MB of canvases) stayed
+// resident through every race after the first garage visit. Freed at race start
+// (GaragePrebuild.release); draw() and prepare() rebuild all of it lazily, and the
+// cleared keys make the next idle title pre-build it again. Returns the handles freed.
+function release() {
+  if (!_gfx) return 0;
+  let n = 0;
+  const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
+  const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
+  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh);
+  for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
+  fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh);
+  dressTex = ft(dressTex); liveTex = ft(liveTex);
+  for (const ent of previewMeshes.values()) fm(ent.mesh);
+  previewMeshes.clear(); previewHulls.clear();
+  dressCanvas = null; liveCanvas = null; lastSpec = null;
+  cacheKey = ""; geomKey = ""; dressFail = 0; dressRetryAt = 0; traceFail = 0; lastTrace = -1e9;
+  return n;
+}
+
 function debug() {
   return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey,
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared };
+           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;
