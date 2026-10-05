@@ -563,7 +563,12 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  // AERO's label is the one chip whose WIDTH moves mid-lap ("AERO 95m" ->
+  // "CORNER MODE"), and the cockpit layout carries it +30vw toward the right
+  // edge: at 1280x720 the longer spelling ran 17 px off-screen until the 3 s
+  // re-measure. Its length is in the key, so the clamp follows at once.
+  const aeroLen = els.aero ? (els.aero.textContent || "").length : 0;
+  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "a" + aeroLen + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) return;
   _hlEls = document.querySelectorAll ? document.querySelectorAll("[data-hl]") : [];
