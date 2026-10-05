@@ -279,36 +279,30 @@
       }
 
       // ── King Fahd's Fountain — offshore landmark ──────────────────────────
-      // Survey sheet-03: plume under-reads from overview. Thicker jet, taller
-      // spray cone, mid-shaft LED rings + base flood ring so it reads at dusk/night.
+      // Survey sheet-03: plume under-reads from overview. Brought closer
+      // (gap 260, was 380) and thickened so it registers at overview cameras;
+      // mid-shaft LED rings + base flood ring for dusk/night.
       {
-        const a = anchor(K(0.20), 1, 380);
+        const a = anchor(K(0.20), 1, 260);
         const b = [a.r, a.u, a.t];
         modelGroup("jeddah-fountain", {
-          center: [a.c[0], pyMin + 168, a.c[2]], size: [28, 340, 28], basis: b,
+          center: [a.c[0], pyMin + 175, a.c[2]], size: [40, 360, 40], basis: b,
         }, (stage) => {
-          const PLUME = [0.96, 0.98, 1.15];
-          const SPRAY = [0.90, 0.94, 1.20];
-          // Cone base must sit at the jet cylinder's top (base -0.8 + height 255
-          // = 254.2), not at a bare +255 — that 0.8m gap read as unsupported and
-          // the cone floated the full 256m down to the sea (float-audit cause:
-          // mis-derived height, not base/centroid — both prims are already
-          // correctly base-anchored). Small overlap avoids an exact flush seam.
-          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 1.55, 268, PLUME, 8, b);
-          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 2.4, 40, [0.88, 0.92, 1.10], 8, b);
-          addCone(stage, [a.c[0], pyMin + 266.5, a.c[2]], 11, 68, SPRAY, 8, b);
-          addCone(stage, [a.c[0], pyMin + 290, a.c[2]], 6.5, 32, [0.98, 0.99, 1.20], 8, b);
-          // Base plinth + flood ring (evening-only landmark identity).
-          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 8.5, 2.4, [0.16, 0.18, 0.22], 8, b);
-          addCyl(stage, [a.c[0], pyMin + 1.6, a.c[2]], 9.2, 0.55, LED, 10, b);
-          for (let r = 0; r < 6; r++) {
-            const ang = (r / 6) * Math.PI * 2;
-            const ox = Math.cos(ang) * 7.2, oz = Math.sin(ang) * 7.2;
-            addBox(stage, [a.c[0] + ox, pyMin + 2.4, a.c[2] + oz], [1.4, 0.7, 1.4], SPANGLE, b);
+          const PLUME = [0.96, 0.98, 1.20];
+          const SPRAY = [0.92, 0.96, 1.25];
+          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 2.4, 280, PLUME, 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 3.6, 55, [0.90, 0.94, 1.15], 8, b);
+          addCone(stage, [a.c[0], pyMin + 278.5, a.c[2]], 16, 78, SPRAY, 8, b);
+          addCone(stage, [a.c[0], pyMin + 310, a.c[2]], 9, 40, [0.98, 0.99, 1.25], 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 12, 3.0, [0.16, 0.18, 0.22], 8, b);
+          addCyl(stage, [a.c[0], pyMin + 2.2, a.c[2]], 13.5, 0.7, LED, 10, b);
+          for (let r = 0; r < 8; r++) {
+            const ang = (r / 8) * Math.PI * 2;
+            const ox = Math.cos(ang) * 10.5, oz = Math.sin(ang) * 10.5;
+            addBox(stage, [a.c[0] + ox, pyMin + 3.0, a.c[2] + oz], [1.8, 0.9, 1.8], SPANGLE, b);
           }
-          // Mid-plume LED rings so the jet reads against dusk sky.
-          for (const yh of [60, 120, 180, 230]) {
-            addCyl(stage, [a.c[0], pyMin + yh, a.c[2]], 2.0, 1.2, LED, 8, b);
+          for (const yh of [50, 100, 150, 200, 245]) {
+            addCyl(stage, [a.c[0], pyMin + yh, a.c[2]], 3.0, 1.6, LED, 8, b);
           }
         }, { required: true });
       }
@@ -410,25 +404,18 @@
           put(vadd(a.c, a.r, -side * (w * 0.5 + 0.06)), [0.14, h * 0.70, d * 0.70], neonCol);
           put(vadd(a.c, a.u, h), [w * 1.02, 0.9, d * 1.02], neonCol);
         };
-        // Thin closed fascia — 1.0 m radial depth at gap 5.6 (canyon is at 4.35;
-        // neonTower bodies start further out). Keeps SF reading solid without
-        // the 4–8 m³ clip volumes of a deep tower.
+        // Closed fascia — 1.5 m radial depth at gap 5.9 (canyon at 4.35;
+        // neonTower centres ≥13). SF pocket only: the T1 wrap (s≈0.00–0.07)
+        // clipped the generic street retail place() at gap 9 (severe 1.5 m).
         for (let i = 0; i < 14; i++) {
           const sf = 0.875 + i * 0.0085;
           const hv = hash(i * 41 + 3);
-          closedMass(sf, -1, 5.6,
-            1.0, 9 + hv * 6, 7.5 + hv * 2,
+          closedMass(sf, -1, 5.9,
+            1.5, 12 + hv * 8, 8.5 + hv * 2.5,
             WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
-          closedMass(sf + 0.004, 1, 5.7,
-            1.0, 8 + hv * 5, 7 + hv * 2,
+          closedMass(sf + 0.004, 1, 6.0,
+            1.5, 11 + hv * 7, 8 + hv * 2.5,
             WALL_INL[(i + 2) % WALL_INL.length], NEON_ROW[(i + 2) % NEON_ROW.length]);
-        }
-        for (let i = 0; i < 7; i++) {
-          const sf = 0.004 + i * 0.010;
-          const hv = hash(i * 53 + 7);
-          closedMass(sf, -1, 5.6,
-            1.0, 9 + hv * 5, 7.5 + hv * 2,
-            WALL_INL[i % WALL_INL.length], NEON_ROW[(i + 1) % NEON_ROW.length]);
         }
         // Tall closed skyline well behind neonTower back row (gap ≥105).
         for (let i = 0; i < 7; i++) {
@@ -641,15 +628,20 @@
       {
         const NEON_COLS = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, [0.20, 0.75, 1.15], [1.10, 0.35, 0.55]];
         // Neon fascia strips seated ON the canyon top (~1.35 m), not floating
-        // at 2.4 m (ground-audit unsupported).
-        for (let i = 0; i < 14; i++) {
-          const s = i / 14;
+        // at 2.4 m (ground-audit unsupported). Brighter / taller for night read.
+        for (let i = 0; i < 20; i++) {
+          const s = i / 20;
           const col = NEON_COLS[i % NEON_COLS.length];
           const side = (i % 2) ? 1 : -1;
           const a = anchor(K(s), side, 4.55), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 2)) continue;
-          addBox(out, vadd(a.c, a.u, 1.28), [0.20, 0.42, 5.5], col, b);
-          addBox(out, vadd(a.c, a.u, 0.95), [0.14, 0.28, 5.5], LED, b);
+          addBox(out, vadd(a.c, a.u, 1.35), [0.28, 0.55, 7.0], col, b);
+          addBox(out, vadd(a.c, a.u, 1.00), [0.18, 0.35, 7.0], LED, b);
+          // Vertical neon blade every other strip — canyon night identity.
+          if (i % 2 === 0) {
+            addBox(out, vadd(vadd(a.c, a.r, -side * 0.35), a.u, 3.2),
+              [0.22, 4.5, 0.55], col, b);
+          }
         }
         // Extra night-race boards on SF, T13 approach, technical sector, DRS.
         const boards = [
