@@ -20,6 +20,7 @@ stayed separate in the 2026-09-03 pass.
 
 | Skill | Use it when |
 |---|---|
+| **agent-tooling-research** | Web research for the tooling around the game — Claude Code, Codex, Cursor, MCP, AGENTS.md, SKILL.md: before changing a skill, subagent, hook, MCP server, `apex_*` tool or CI step, or when a flag, limit, default or file location is unverified. Cited, dated sources; a verified registry in `references/sources.md`; a note template in `references/note-template.md`. Live Pages is deploy-research. |
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`). |
 | **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck, `js/physics/ai-drive.js`. |
 | **asset-pack** | Missing/wrong/garbled baked PBR materials in `assets/pack`, MAT-layer mismatches, `js/render/shared/assets.js` / `tools/gen/assets.mjs`, `matTexMix` / `__apex.assets()` / `matTex()`. |
