@@ -1,0 +1,704 @@
+{
+  "teams": [
+    "redbull"
+  ],
+  "liveries": [
+    "default"
+  ],
+  "base": null,
+  "axes": [],
+  "designs": null,
+  "against": null,
+  "preset": null,
+  "fast": true,
+  "rollupOnly": false,
+  "rollupView": "wingRear",
+  "multiTeam": false,
+  "useStoreTeam": true,
+  "withOracle": false,
+  "live": false,
+  "liveBuild": 14034,
+  "liverySettle": 6,
+  "viewSettle": 2,
+  "gateRetries": 1,
+  "zoom": [
+    0
+  ],
+  "pan": [
+    [
+      0,
+      0
+    ]
+  ],
+  "cams": [
+    {
+      "view": "hero",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "hero_az45"
+    },
+    {
+      "view": "hero",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "hero_az135"
+    },
+    {
+      "view": "front",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "front_az45"
+    },
+    {
+      "view": "front",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "front_az135"
+    },
+    {
+      "view": "side",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "side_az45"
+    },
+    {
+      "view": "side",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "side_az135"
+    },
+    {
+      "view": "rear",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "rear_az45"
+    },
+    {
+      "view": "rear",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "rear_az135"
+    },
+    {
+      "view": "top",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "top_az45"
+    },
+    {
+      "view": "top",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "top_az135"
+    },
+    {
+      "view": "wingFront",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "wingFront_az45"
+    },
+    {
+      "view": "wingFront",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "wingFront_az135"
+    },
+    {
+      "view": "wingRear",
+      "alias": null,
+      "station": null,
+      "az": 0.7853981633974483,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "wingRear_az45"
+    },
+    {
+      "view": "wingRear",
+      "alias": null,
+      "station": null,
+      "az": 2.356194490192345,
+      "el": null,
+      "dist": null,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": null,
+      "lamp": null,
+      "crop": null,
+      "key": "wingRear_az135"
+    }
+  ],
+  "crop": null,
+  "name": null,
+  "logos": null,
+  "site": true,
+  "inert": [],
+  "dprs": [
+    1
+  ],
+  "bases": [],
+  "lamps": [],
+  "targets": [],
+  "baseline": null,
+  "budget": 720,
+  "sheetHead": "GARAGE\n        RED BULL RACING\n      \n      \n        \n        \n          BUDGET:",
+  "viewport": [
+    1280,
+    720
+  ],
+  "viewports": [
+    [
+      1280,
+      720
+    ]
+  ],
+  "views": [
+    "hero",
+    "front",
+    "side",
+    "rear",
+    "top",
+    "wingFront",
+    "wingRear"
+  ],
+  "loadavg1": 0.27,
+  "phase": {
+    "after": {
+      "boot": 6885,
+      "open": 961
+    },
+    "before": null
+  },
+  "sheets": [],
+  "shots": [
+    {
+      "view": "hero",
+      "cam": "hero_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-hero_az45.png",
+      "vp": "1280x720",
+      "spread": 51.52,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.3,
+      "dist": 8.35,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 13776,
+        "capture": 16548,
+        "gate": 132,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "hero",
+      "cam": "hero_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-hero_az135.png",
+      "vp": "1280x720",
+      "spread": 50.05,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.3,
+      "dist": 8.35,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 22169,
+        "capture": 4940,
+        "gate": 148,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "front_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-front_az45.png",
+      "vp": "1280x720",
+      "spread": 52.72,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.2,
+      "dist": 8.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 23483,
+        "capture": 4487,
+        "gate": 77,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "front_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-front_az135.png",
+      "vp": "1280x720",
+      "spread": 50.31,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.2,
+      "dist": 8.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 22168,
+        "capture": 9609,
+        "gate": 146,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "side_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-side_az45.png",
+      "vp": "1280x720",
+      "spread": 44.06,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.1,
+      "dist": 11.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 16546,
+        "capture": 6721,
+        "gate": 78,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "side_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-side_az135.png",
+      "vp": "1280x720",
+      "spread": 48.19,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.1,
+      "dist": 11.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 16680,
+        "capture": 3763,
+        "gate": 130,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "rear_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-rear_az45.png",
+      "vp": "1280x720",
+      "spread": 52.07,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.22,
+      "dist": 8.4,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 15007,
+        "capture": 4072,
+        "gate": 112,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "rear_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-rear_az135.png",
+      "vp": "1280x720",
+      "spread": 51.27,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.22,
+      "dist": 8.4,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 16309,
+        "capture": 4369,
+        "gate": 80,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "top",
+      "cam": "top_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-top_az45.png",
+      "vp": "1280x720",
+      "spread": 44.37,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 1.2,
+      "dist": 11.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 17158,
+        "capture": 4324,
+        "gate": 113,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "top",
+      "cam": "top_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-top_az135.png",
+      "vp": "1280x720",
+      "spread": 45.82,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 1.2,
+      "dist": 11.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 16609,
+        "capture": 4160,
+        "gate": 125,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "wingFront_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-wingFront_az45.png",
+      "vp": "1280x720",
+      "spread": 47.93,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.34,
+      "dist": 3.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 17534,
+        "capture": 5628,
+        "gate": 130,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "wingFront_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-wingFront_az135.png",
+      "vp": "1280x720",
+      "spread": 51.51,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.34,
+      "dist": 3.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 23891,
+        "capture": 6873,
+        "gate": 144,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "wingRear_az45",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-wingRear_az45.png",
+      "vp": "1280x720",
+      "spread": 54.84,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.785,
+      "el": 0.36,
+      "dist": 2.8,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 25750,
+        "capture": 8976,
+        "gate": 125,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "wingRear_az135",
+      "tag": "default",
+      "png": "artifacts/shots/garage-angles/redbull-default-wingRear_az135.png",
+      "vp": "1280x720",
+      "spread": 52.44,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.356,
+      "el": 0.36,
+      "dist": 2.8,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 18038,
+        "capture": 5657,
+        "gate": 82,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    }
+  ],
+  "rollupEntries": null,
+  "teamRollup": null,
+  "pairs": [],
+  "pairAxis": null,
+  "path": null,
+  "eyes": null,
+  "clamp": true,
+  "resumed": null,
+  "seconds": 400.5
+}
