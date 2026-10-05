@@ -33,6 +33,7 @@ where the parkland, the woods and most of the spectator banking live.
 | 0.4552 | +1 | 10 | **Starkey's Bridge**, on the climb back out. `guardrail` both sides, `sponsorHoarding` on the crossing embankment, a `marshalPost` just past it, and a `ridge` carrying the ground up to the bridge abutment. Required `circuitKit.pedestrianBridge`. |
 | 0.5162 | -1 | 22 | **Schwantz Curve**, the far end of the park — continuous `forestEdge` on the outside, no structures at all, just trees and a single `marshalPost`. |
 | 0.5713 | +1 | 18 | **McLeans.** `tyreWall` on the inside, a small `spectatorHill` with a `marshalPost`, and scattered parkland `tree` beyond it. |
+| 0.640 | -1 | 480 | **East Midlands Airport departure** — one low-poly airliner on climb-out (`donington-ema-airliner`). EMA runway west end is ~365 m from the track's east end ([Wikipedia — Donington Park](https://en.wikipedia.org/wiki/Donington_Park)); McLeans/Coppice sit under the departure path. Sky cue only — not a trackside prop. |
 | 0.6803 | -1 | 14 | **Coppice** — named for the woodland it runs into. `forestEdge` tight to the outside of the uphill right, `tyreWall` at the apex, and a `guardrail` run through the exit. |
 | 0.7592 | -1 | 12 | **Fogarty Esses.** `guardrail` and `tyreWall` through the flick, a small `grandstandEx` and a `billboard` on the outside, with `sponsorHoarding` on the fencing either side of the spectator tunnel. |
 | 0.7887 | +1 | 20 | **Melbourne Hairpin**, the bottom of the GP loop (added 1985): sparse and rural. `tyreWall` on the inside, a `hedge` boundary beyond it, a `marshalPost`, and a shallow `ridge` closing the loop off from the infield. |
@@ -64,3 +65,6 @@ where the parkland, the woods and most of the spectator banking live.
 | Exact Hollywood stand seat count / bay length | **UNCERTAIN** — silhouette approximate |
 | Exact Garage 39 footprint / metres from verge | **UNCERTAIN** — modest block behind the bank |
 | Whether any Collection building fabric remains on site today | **UNCERTAIN** — modelled as a closed hall for continuity with the brief |
+| East Midlands Airport runway ~365 m east of track | **Sourced** | [Wikipedia — Donington Park](https://en.wikipedia.org/wiki/Donington_Park); OSM adjacency ([map](https://www.openstreetmap.org/#map=14/52.8305/-1.3700)) |
+| McLeans / Coppice under EMA departure path | **Sourced** | Spotter / forum reports (PPRuNe thread on EMA + Donington); airport CTR wraps the estate ([Donington airport guidelines](https://www.donington-park.co.uk/airport-guidelines)) |
+| Dunlop Bridge | **Removed** — Adroit 2010 rebuild left it out (MSA/FIA regs); do not re-add | Wikipedia — Donington Park |
