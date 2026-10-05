@@ -1417,7 +1417,14 @@ const TrackDesigner = (function () {
     ensureHeights(design);
     const next = design.heights.slice();
     const v = typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4;
-    if (next[i] === v) { if (ui.elevNode) ui.elevNode._refresh(); return false; }
+    // Keep the screen selection on this node so POINT m / strip stay in sync.
+    sel = i; span = -1;
+    if (next[i] === v) {
+      if (cv) cv.setSelection(sel, span);
+      if (prof) prof.select(i);
+      refreshControls();
+      return false;
+    }
     next[i] = v;
     // Clear legacy cosine hills so they do not stack on node heights.
     commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:node");

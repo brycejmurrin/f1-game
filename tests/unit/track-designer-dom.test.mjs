@@ -1466,6 +1466,7 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
 test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
+  b.D.setMode("scenery");
   const T = b.ctx.TrackThemes;
   assert.equal(T.ORDER.length, 20);
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);

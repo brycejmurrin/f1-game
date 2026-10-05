@@ -288,7 +288,8 @@ const DesignerProfile = (function () {
         render();
       },
       selected() { return sel; },
-      select(i) { sel = Number.isInteger(i) && i >= 0 && i < ticks.length ? i : -1; render(); },
+      // Same path as a grip tap: update sel and tell the screen (POINT m stepper).
+      select(i) { choose(i); render(); },
       resize, render, reset,
       destroy() { if (ro) ro.disconnect(); reset(); },
     };
