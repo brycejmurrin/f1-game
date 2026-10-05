@@ -349,7 +349,7 @@
             const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
             addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
             seat.prism(stage, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                    [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
           }
         }, { required: true });
@@ -362,7 +362,7 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
           seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                  [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
         }
       })();
@@ -577,7 +577,7 @@
           frustum(swC, 10, 7, 114, [0.58, 0.66, 0.74], 6);
           box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
           box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
-          box(vadd(swC, u, 149), [14, 3, 11], STEEL);
+          box(vadd(swC, u, 149), [14.4, 3, 11.4], STEEL);
         }, { required: true });
       })();
 
@@ -817,10 +817,10 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
             const off = (i - 2) * 12;
-            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.45), a.r, 2),
-                   [9, 4.9, 5], [0.42, 0.43, 0.47], b);
+            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.55), a.r, 2),
+                   [9, 4.8, 5], [0.42, 0.43, 0.47], b);
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
-                   [9, 2.2, 5], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
+                   [9, 2.2, 5.4], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
           }
         }
       })();

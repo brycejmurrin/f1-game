@@ -238,7 +238,7 @@
           }
           // Roof plane oversailing the glass on both faces.
           addBox(stage, vadd(a.c, a.u, 16.6), [23, 0.7, 46], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -11.2), a.u, 16.0), [0.6, 0.8, 46],
+          addBox(stage, vadd(vadd(a.c, a.r, -11.3), a.u, 16.0), [0.6, 0.8, 46.4],
             [0.20, 0.36, 0.62], b);
           for (let c = 0; c < 5; c++) {
             addCyl(stage, vadd(vadd(vadd(a.c, a.t, (c - 2) * 8.8), a.r, -10.4), a.u, 8),

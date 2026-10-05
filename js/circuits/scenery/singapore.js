@@ -176,14 +176,15 @@
             tT = a.t;
           }
           const b = [rT, uT, tT];
+          const dz = (t + 1) * 1.4;   // per-tower depth: faces stop sharing a plane
           stage._mat = MAT.CONCRETE;
-          seat.box(stage, base,                         [TOWERW, H, 28],               wall,               b);
+          seat.box(stage, base,                         [TOWERW, H, 28 + dz],               wall,               b);
           stage._mat = MAT.GLASS;
-          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6], winC,               b);
+          seat.box(stage, vadd(base, uT, H * 0.14),    [TOWERW + 0.6, H * 0.76, 28.6 + dz], winC,               b);
           stage._mat = MAT.METAL;
           const finCol = t === 0 ? [0.90, 0.75, 0.30] : [0.40, 0.65, 1.00];
-          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2],         finCol,             b);
-          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29],    [0.92, 0.95, 1.00], b);
+          seat.box(stage, vadd(base, uT, H * 0.20),    [2.0, H * 0.60, 29.2 + dz],         finCol,             b);
+          seat.box(stage, vadd(base, uT, H * 0.87),    [TOWERW + 1, H * 0.10, 29 + dz],    [0.92, 0.95, 1.00], b);
           tops.push(vadd(base, uT, H));
         }
 
@@ -749,7 +750,7 @@
             seat.box(stage, vadd(vadd(a.c, a.r, 11.1), a.u, 2), [0.4, 8, 48], GLASS, b);
             for (let i = 0; i < 5; i++) {
               const rc = vadd(vadd(a.c, a.t, (i - 2) * 10), a.u, 12 + Math.sin(i * 1.1) * 1.8);
-              seat.box(stage, rc, [24, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
+              seat.box(stage, rc, [24 + i * 0.2, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
             }
             seat.box(stage, vadd(a.c, a.u, 0.2), [24, 0.6, 58], [0.22, 0.28, 0.24], b);
           }, { required: true });
@@ -1040,7 +1041,7 @@
           addBox(out, vadd(a.c, a.u, 16.5), [5.6, 5, 4.6], WHITE, b);
           // Lion head block + snout jutting toward the bay
           const head = vadd(a.c, a.u, 20.5);
-          addBox(out, head, [5.2, 4.4, 4.6], WHITE, b);
+          addBox(out, head, [5.2, 4.4, 4.9], WHITE, b);
           addBox(out, vadd(head, a.r, 3.0), [2.6, 2.4, 2.6], SHADE, b);   // snout
           // Mane — a ring of short cones around the head
           for (let m = 0; m < 8; m++) {
