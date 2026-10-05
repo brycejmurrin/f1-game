@@ -38,11 +38,14 @@
 
      node tools/gen/settings-defaults.mjs <that-file.json>
 
-   which rewrites the block below from the export's own CHANGED list. Do not
-   hand-edit the block; the tool prints every edit it makes and refuses keys
-   that are not in SPEC. Device-adaptive defaults (uiScale, resMode, gfxPreset —
-   the ones SPEC declares as null or as a function of the device) are refused on
-   purpose: pinning one device's number here makes every other device wrong. */
+   which rewrites the block below from the export's own CHANGED list. The
+   provenance export for the current shipped set is
+   tests/data/settings-defaults-export.json. Do not hand-edit the block; the
+   tool prints every edit it makes and refuses keys that are not in SPEC.
+   Device-adaptive defaults (uiScale, resMode, gfxPreset — the ones SPEC
+   declares as null or as a function of the device) are refused on purpose:
+   pinning one device's number here makes every other device wrong. Subsystem
+   keys (sound, unlimitedBudget, steering) need an explicit --include. */
 const SettingsDefaults = (function () {
   "use strict";
 
@@ -51,15 +54,36 @@ const SettingsDefaults = (function () {
     // DRIVING (js/game.js, js/race/*)
     "difficulty": "hard",
     "tyreWear": "real",
-    "raceGrid": "random",
-    "drivingCoach": true,
+    "raceGrid": "tier",
+    "drivingCoach": false,
     "caution": false,
     // AUDIO (js/audio/panel.js)
-    "volMusic": 0.6,
-    "volSfx": 0.2,
+    "volMusic": 0.3,
+    "volSfx": 0.1,
+    "menuSfx": false,
+    "music": false,
+    "volRadio": 0.7,
+    "radioFx": 0.4,
+    "radioChat": "key",
+    "spotter": false,
     // DISPLAY / METRICS (raw lane — bare strings, not JSON)
     "debris": "0",
+    "buildWorker": "1",
     "metricsPos": "left",
+    // HUD
+    "hudMirror": "on",
+    // CAMERA
+    "camMode": 19,
+    "cockpitHalo": "fairing",
+    "cockpitBody": "sculpted",
+    "cockpitInterior": "team",
+    // APPEARANCE
+    "menuAccent": "ember",
+    "textSize": "large",
+    "uiContrast": "high",
+    "homeScene": "photo",
+    "backgroundMotion": "ambient",
+    "homeCamera": "side",
   };
   // @gen-settings-defaults end
 

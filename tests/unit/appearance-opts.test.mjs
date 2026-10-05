@@ -245,15 +245,15 @@ test("shell carries Appearance door, panel, preview, swatches and hex fields", (
   assert.ok(COMPONENTS.includes(".pm-accent-preview"));
 });
 
-test("defaults apply at eval: dark / brand / team data attrs", () => {
+test("defaults apply at eval: dark / ember / team data attrs", () => {
   const { M, dataset, rows } = load({ readyState: "loading" });
   assert.equal(rows.size, 0, "UI not wired while loading");
   assert.equal(M.theme(), "dark");
-  assert.equal(M.menuAccent(), "brand");
+  assert.equal(M.menuAccent(), "ember");
   assert.equal(M.hudAccent(), "team");
   assert.equal(M.hudUsesTeam(), true);
   assert.equal(dataset.uiTheme, "dark");
-  assert.equal(dataset.menuAccent, "brand");
+  assert.equal(dataset.menuAccent, "ember");
   assert.equal(dataset.hudAccent, "team");
 });
 
@@ -361,7 +361,7 @@ test("garbage theme / accent / hex values fall back or keep prior", () => {
   const { M, dataset, style } = load();
   assert.equal(M.setTheme("nope"), "dark");
   assert.equal(dataset.uiTheme, "dark");
-  assert.equal(M.setMenuAccent("neon"), "brand");
+  assert.equal(M.setMenuAccent("neon"), "ember");
   M.setMenuHex("#112233");
   assert.equal(M.setMenuHex("#abc"), "#112233", "short hex rejected");
   assert.equal(M.setMenuHex("zz"), "#112233");
@@ -373,7 +373,7 @@ test("bad store values at load fall to shipped defaults", () => {
     stored: { uiTheme: "neon", menuAccent: "x", hudAccent: "", menuAccentHex: "#gg", hudAccentHex: "1" },
   });
   assert.equal(M.theme(), "dark");
-  assert.equal(M.menuAccent(), "brand");
+  assert.equal(M.menuAccent(), "ember");
   assert.equal(M.hudAccent(), "team");
   assert.equal(M.menuHex(), "#e10600");
   assert.equal(dataset.uiTheme, "dark");
@@ -386,7 +386,7 @@ test("DOM ready wires SettingRows and builds both swatch rows", () => {
   const hudChips = byId("pm-hudaccent-swatches").children;
   assert.equal(menuChips.length, 8);
   assert.equal(hudChips.length, 8);
-  assert.equal(menuChips.filter((c) => c.getAttribute("aria-selected") === "true").map((c) => c.dataset.accent).join(), "brand");
+  assert.equal(menuChips.filter((c) => c.getAttribute("aria-selected") === "true").map((c) => c.dataset.accent).join(), "ember");
   assert.equal(hudChips.filter((c) => c.getAttribute("aria-selected") === "true").map((c) => c.dataset.accent).join(), "team");
 });
 
@@ -404,7 +404,8 @@ test("each accent list has one tab stop and keyboard focus selects only that lis
   const { M, byId, written, document } = load();
   const menu = byId("pm-menuaccent-swatches").children, hud = byId("pm-hudaccent-swatches").children;
   const current = chips => chips.filter(chip => chip.tabIndex === 0);
-  assert.deepEqual(current(menu).map(chip => chip.dataset.accent), ["brand"]);
+  // Shipped menu accent is ember (index 2); HUD stays team (index 1).
+  assert.deepEqual(current(menu).map(chip => chip.dataset.accent), ["ember"]);
   assert.deepEqual(current(hud).map(chip => chip.dataset.accent), ["team"]);
   const key = (name, expected, chips) => {
     let prevented = false, stopped = false;
@@ -414,10 +415,10 @@ test("each accent list has one tab stop and keyboard focus selects only that lis
     assert.deepEqual(current(chips), [document.activeElement]);
     assert.deepEqual(chips.filter(chip => chip.getAttribute("aria-selected") === "true"), [document.activeElement]);
   };
-  menu[0].focus();
-  key("ArrowRight", "team", menu); key("ArrowDown", "ember", menu);
-  key("ArrowLeft", "team", menu); key("ArrowUp", "brand", menu);
-  key("ArrowUp", "brand", menu); key("End", "custom", menu); key("ArrowDown", "custom", menu);
+  menu[2].focus();
+  key("ArrowRight", "amber", menu); key("ArrowDown", "cyan", menu);
+  key("ArrowLeft", "amber", menu); key("ArrowUp", "ember", menu);
+  key("ArrowUp", "team", menu); key("End", "custom", menu); key("ArrowDown", "custom", menu);
   key("Home", "brand", menu);
   assert.equal(M.hudAccent(), "team"); assert.equal(written.hudAccent, undefined);
   hud[1].focus(); key("End", "custom", hud); key("Home", "brand", hud);
@@ -427,15 +428,16 @@ test("each accent list has one tab stop and keyboard focus selects only that lis
 test("swatches leave Tab and modified shortcuts alone; pointer choice and restoration maintain focus ownership", () => {
   const { M, byId, document } = load();
   const menu = byId("pm-menuaccent-swatches").children, hud = byId("pm-hudaccent-swatches").children;
-  menu[0].focus();
+  const ember = menu[2];
+  ember.focus();
   for (const event of [{ key: "Tab" }, { key: "ArrowUp", isTrusted: false }, { key: "ArrowDown", isTrusted: false },
     { key: "ArrowRight", ctrlKey: true }, { key: "End", altKey: true },
     { key: "Home", metaKey: true }, { key: "ArrowDown", defaultPrevented: true }]) {
-    menu[0]._emit("keydown", { ...event, preventDefault() { assert.fail("unowned key was consumed"); }, stopPropagation() { assert.fail("unowned key was stopped"); } });
-    assert.equal(document.activeElement, menu[0]); assert.equal(M.menuAccent(), "brand");
+    ember._emit("keydown", { ...event, preventDefault() { assert.fail("unowned key was consumed"); }, stopPropagation() { assert.fail("unowned key was stopped"); } });
+    assert.equal(document.activeElement, ember); assert.equal(M.menuAccent(), "ember");
   }
-  menu[0]._emit("keydown", { key: "ArrowRight", isTrusted: false, preventDefault() {}, stopPropagation() {} });
-  assert.equal(document.activeElement, menu[1]); assert.equal(M.menuAccent(), "team", "pad Right selects the next accent");
+  ember._emit("keydown", { key: "ArrowRight", isTrusted: false, preventDefault() {}, stopPropagation() {} });
+  assert.equal(document.activeElement, menu[3]); assert.equal(M.menuAccent(), "amber", "pad Right selects the next accent");
   menu[4].click(); assert.equal(document.activeElement, menu[4]); assert.equal(M.menuAccent(), "cyan");
   M.restore({ menuAccent: "violet", hudAccent: "lime", menuAccentHex: "#abcdef", hudAccentHex: "#123456" });
   assert.equal(document.activeElement, menu[5]); assert.equal(menu[5].tabIndex, 0); assert.equal(hud[6].tabIndex, 0);
@@ -488,18 +490,19 @@ test("forced-colors opts the appearance chips out with the swatch family", () =>
 
 test("READABILITY: text size, high contrast and speed units persist and apply", () => {
   const { M, dataset, written } = load();
-  assert.equal(M.textSize(), "normal");
-  assert.equal(dataset.textSize, undefined, "NORMAL leaves the ladder alone");
+  assert.equal(M.textSize(), "large");
+  assert.equal(dataset.textSize, "large", "shipped LARGE stamps the ladder");
+  assert.equal(dataset.uiContrast, "high", "shipped HIGH CONTRAST is on");
   M.setTextSize("larger");
   assert.equal(written.textSize, "larger");
   assert.equal(dataset.textSize, "larger");
   M.setTextSize("huge");
-  assert.equal(M.textSize(), "normal", "an unknown size falls back");
-  M.setContrast("high");
-  assert.equal(written.uiContrast, "high");
-  assert.equal(dataset.uiContrast, "high");
+  assert.equal(M.textSize(), "large", "an unknown size falls back to shipped");
   M.setContrast("off");
+  assert.equal(written.uiContrast, "off");
   assert.equal(dataset.uiContrast, undefined);
+  M.setContrast("high");
+  assert.equal(dataset.uiContrast, "high");
 });
 
 test("SPEED UNITS is display-only: km/h by default, mph converts and rounds", () => {

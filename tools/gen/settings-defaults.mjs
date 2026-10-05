@@ -116,6 +116,9 @@ function render(pairs, spec) {
     ["audio", "AUDIO (js/audio/panel.js)"],
     ["display", "DISPLAY / METRICS (raw lane — bare strings, not JSON)"],
     ["metrics", null],
+    ["hud", "HUD"],
+    ["camera", "CAMERA"],
+    ["appearance", "APPEARANCE"],
   ];
   const out = ["  const DEF = {"];
   const seen = new Set();

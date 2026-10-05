@@ -1107,7 +1107,7 @@ const TLX = (function () {
       function wantMirrorWarm() {
         if (!_warmFx || !post || !post.enabled() || _mirDead || !lit || vizMat) return false;
         let mode = "auto", pip = "auto";
-        try { mode = GameStore.store.get("hudMirror", "auto"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
+        try { mode = GameStore.store.get("hudMirror", "on"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
         return mode === "on" || pip === "on" || ((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL);
       }
       function prepareMirrorTarget(w, h) {

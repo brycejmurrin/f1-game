@@ -130,10 +130,19 @@ test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackSte
   const mem = new Map();
   main.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
   const C = main.TrackBuildClient;
-  assert.equal(C.enabled(), false, "unset reads OFF");
+  // Without GameStore, enabled() falls back to localStorage — unset is OFF.
+  // With GameStore + SettingsDefaults (the live page), unset ships ON.
+  assert.equal(C.enabled(), false, "unset without GameStore reads OFF");
   C.set(false); assert.equal(mem.get("apex26.buildWorker"), "0"); assert.equal(C.enabled(), false);
   mem.set("apex26.buildWorker", "1"); assert.equal(C.enabled(), true, "\"1\" is on");
   mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);
+  main.GameStore = { store: {
+    raw(k) { const v = mem.get(k.startsWith("apex26.") ? k : "apex26." + k); return v == null ? "1" : v; },
+    rawSet(k, v) { mem.set(k.startsWith("apex26.") ? k : "apex26." + k, String(v)); return true; },
+  } };
+  mem.delete("apex26.buildWorker");
+  assert.equal(C.enabled(), true, "SettingsDefaults-backed unset ships ON");
+  delete main.GameStore;
   delete main.localStorage;
 });
 

@@ -85,7 +85,7 @@ const Spotter = (() => {
 
   function create(G) {
     let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0;
-    const on = () => G.store.get("spotter", true) !== false;
+    const on = () => G.store.get("spotter", false) !== false;
 
     function update(dt) {
       if (!Number.isFinite(dt) || dt <= 0) return "";
