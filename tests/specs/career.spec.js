@@ -783,8 +783,10 @@ test.describe("Career — MY TEAM", () => {
     const r = await page.evaluate(() => window.__apex.careerSim(1));
     expect(r[0].wages).toBe(wages);
     const after = await page.evaluate(() => window.__apex.careerState().money);
-    // Prize + salary in, wages out — the wage bill is genuinely deducted.
-    expect(after).toBe(before + r[0].prize + r[0].salary + r[0].bonus
+    // Both cars' prize money in (an owner draws no salary or points bonus, so
+    // those are 0 here), wages out — the wage bill is genuinely deducted.
+    expect(r[0].salary).toBe(0);
+    expect(after).toBe(before + r[0].prize + r[0].matePrize + r[0].salary + r[0].bonus
                        + (r[0].obj && r[0].obj.done ? await page.evaluate(() => Career.OBJ_BONUS) : 0)
                        - wages);
   });
