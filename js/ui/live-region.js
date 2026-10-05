@@ -35,7 +35,11 @@ const LiveRegion = (function () {
 
   function enqueue(item) {
     // A newer FLAG or HUD line supersedes a queued one of its kind (it is state,
-    // not news); the same text twice is one line.
+    // not news); the same text twice is one line. NEWER, by seq: a line pushed
+    // BACK by a preempting flag is the older reading, and it used to delete the
+    // newer one queued behind it — the reader then heard the stale position.
+    const superseding = item.kind === "flag" || item.kind === "hud";
+    if (superseding && queue.some((q) => q.kind === item.kind && q.seq > item.seq)) return;
     for (let i = queue.length - 1; i >= 0; i--) {
       const q = queue[i];
       if (q.text === item.text || ((item.kind === "flag" || item.kind === "hud") && q.kind === item.kind)) queue.splice(i, 1);

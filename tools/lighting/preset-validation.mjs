@@ -20,7 +20,9 @@ export function badProfileKey(key) {
   if (key === "*") return null;
   const parts = key.split("|");
   if (parts.length === 2 && parts[0] === "*" && TODS.has(parts[1])) return null;
-  if (parts.length !== 3 || !(TRACKS.has(parts[0]) || /^custom-[a-f0-9]{8}$/.test(parts[0])) || !TODS.has(parts[1]) || !WXS.has(parts[2])) return `bad key "${key}" (expected track|tod|weather, *, or *|tod)`;
+  // Shared condition stamp: "*|dawn|dry" — fleet look under every track key.
+  if (parts.length === 3 && parts[0] === "*" && TODS.has(parts[1]) && WXS.has(parts[2])) return null;
+  if (parts.length !== 3 || !(TRACKS.has(parts[0]) || /^custom-[a-f0-9]{8}$/.test(parts[0])) || !TODS.has(parts[1]) || !WXS.has(parts[2])) return `bad key "${key}" (expected track|tod|weather, *, *|tod, or *|tod|weather)`;
   return null;
 }
 

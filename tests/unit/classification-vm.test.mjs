@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 let g = null;
 after(() => { if (g) g.close(); });
 
@@ -97,7 +97,10 @@ test("flagged finishers need 90 percent distance, rounded down, before scoring",
       assert.equal(winner.classified, true);
       assert.equal(boundary.classified, true, `${distance} laps: the rounded-down boundary qualifies`);
       assert.equal(retired.classified, true, "a retirement at the distance floor still qualifies");
-      assert.equal(runner.classified, true, "unfinished cars retain the provisional-results policy");
+      // G4: the 90 % line applies to runners too (FIA B2.5.5(b) "retired or not").
+      // On 1/2-lap races the lap-1 runner still meets the floor; on 3/10 it does not.
+      assert.equal(runner.classified, minimum <= 1,
+        minimum > 1 ? "a runner below the floor is not classified" : "a runner at/above the floor stays classified");
       if (minimum > 1) {
         assert.equal(short.finished, true, "the under-distance car really took the flag");
         assert.equal(short.classified, false, `${distance} laps: below the floor is not classified`);
@@ -113,11 +116,13 @@ test("flagged finishers need 90 percent distance, rounded down, before scoring",
       S.award(season, order, short.driverId);
       assert.ok(season.pts[boundary.driverId] > 0, "eligible finisher receives points");
       assert.ok(season.pts[retired.driverId] > 0, "eligible retirement receives points");
-      assert.ok(season.pts[runner.driverId] > 0, "provisional runner still receives points");
       if (minimum > 1) {
+        assert.equal(season.pts[runner.driverId] || 0, 0, "a runner below the floor earns no points");
         assert.equal(season.pts[short.driverId], 0, "taking the flag below the floor earns no points");
         assert.equal(season.finishes[short.driverId], undefined, "no countback finish for an unclassified car");
         assert.equal(season.lastFl, undefined, "an unclassified fastest lap earns no bonus");
+      } else {
+        assert.ok(season.pts[runner.driverId] > 0, "a runner at/above the floor still receives points");
       }
       if (distance === 10) assert.equal(season.pts[dsq.driverId], 0);
       S.engage("gp");
@@ -153,6 +158,63 @@ test("with no finisher, the 90 % rule measures the leader still running", async 
     assert.equal(P.classified, true, "the human, out on the leader's lap, is classified too");
     assert.ok(late.finPos < early.finPos, "the classified retirement ranks above the unclassified one");
   } finally { g3.close(); }
+});
+
+test("a car still RUNNING below 90 % of the winner's laps is not classified, and follows by distance", async () => {
+  // B2.5.5(b) says "retired or not": endRace tested retirements only, so a stuck
+  // AI five laps down was paid P2 (bug hunt 2026-10-05 G4).
+  const g4 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g4.apex, G = g4.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g4.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    const [slow, early, near] = ai;
+    for (const c of ai.slice(3)) a.retire(G.cars.indexOf(c));
+    const place = (c, s, lap, v) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.speed = v; c.x = 0; };
+    a.jump((L - 40) / L, 80, 0); P.lap = 10; P.prog = 10 * L - 40;   // the player takes the flag: 10 laps
+    place(slow, L - 1500, 5, 60);                                       // running on lap 5: 5 at its flag
+    place(early, L - 1000, 9, 0); a.retire(G.cars.indexOf(early));     // retired with 8 done
+    place(near, L - 3000, 9, 70);                                       // running on lap 9: 9 at its flag = floor(0.9 * 10)
+    a.setInput({ throttle: true, steer: 0 });
+    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g4.step(1);
+    assert.equal(G.state, "results");
+    assert.equal(slow.classified, false, "5 of 10 laps, running or not, is not classified");
+    assert.equal(near.classified, true, "a runner at exactly 90 % is");
+    assert.ok(near.finPos < early.finPos && early.finPos < slow.finPos,
+      `classified first, then the unclassified by distance: near P${near.finPos}, early P${early.finPos}, slow P${slow.finPos}`);
+  } finally { g4.close(); }
+});
+
+test("a championship round ended by the human's retirement pays the shortened-race scale, not the full table", async () => {
+  // FIA SR Art. 6.5: the only human retiring ends the race (finishDelay), and
+  // SeasonCal.award paid 25-18-15 from a lap-1 snapshot (bug hunt 2026-10-05 G1).
+  const g5 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g5.apex, G = g5.G;
+    a.headless(true);
+    const SeasonCal = vm.runInContext("SeasonCal", g5.ctx);
+    G.flow = "season"; G.session = "race";
+    const r = SeasonCal.applyConfig(Object.assign(SeasonCal.fresh(), { quali: false, trackIds: ["monza", "spa"] }));
+    G.season = r.season; G.trackIdx = SeasonCal.trackIndex(0); G.raceLaps = 10;
+    const before = G.cars; G.startRace();
+    await settle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    a.go(); g5.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    for (const c of ai) c.dnfAt = null;
+    const place = (c, s, lap) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.x = 0; };
+    ai.forEach((c, i) => place(c, L * 0.5 - i * 30, 5));               // the leader on lap 5: 4 of 10 done (25-50 %)
+    a.jump(0.3, 0, 0); P.lap = 5; P.prog = 4 * L + 0.3 * L; a.retire(null);
+    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g5.step(1);
+    assert.equal(G.state, "results");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody took the flag");
+    const win = G.cars.find((c) => c.finPos === 1);
+    assert.equal(G.season.pts[win.driverId], 13, "40 % distance pays column 2 (13 to the winner), not 25");
+    assert.equal(G.cars.filter((c) => (G.season.pts[c.driverId] || 0) > 0).length, 9, "column 2 pays nine places");
+  } finally { g5.close(); }
 });
 
 test("the live loop flags a lapped human on the same step as the winner in either roster order", async () => {

@@ -21,8 +21,11 @@ function lapClock(G, t) {
   return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t);
 }
 
+// The ELAPSED race time: hours past the hour (a FULL-distance race read
+// "92:14.53"), and thousandths like the gaps it is measured against.
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
+  if (typeof Dom !== "undefined" && Dom.fmtRaceClock) return Dom.fmtRaceClock(seconds);
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
   const cs = Math.round(seconds * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;   // round first (see game.js fmtTime)
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
@@ -58,6 +61,27 @@ function teamOrder(season) {
   const tp = season.teamPts || {};
   return Object.keys(tp).sort((a, b) => SeasonCal.rankTeams(season, a, b)).map((id) => [id, tp[id]]);
 }
+// THE CHAMPIONSHIP TABLE, NOT THE GRID. Season points are keyed by seat
+// (team:index) and the grid holds only THIS race's teams, so a Season raced
+// partly as MY TEAM / LEGENDS kept that seat's points after a team switch while
+// the results list and the champion banner, sorted from G.cars, dropped it —
+// and crowned the wrong driver while STANDINGS (season.pts) disagreed. Every
+// seat in season.pts plus every grid car, in SeasonCal.rank order (points,
+// then countback); an off-grid seat takes its code from driverCodes and its
+// team from the id prefix, as buildStandings does.
+function seasonTable(cars, season) {
+  const ids = new Set(Object.keys(season.pts || {}));
+  for (const c of cars) ids.add(c.driverId);
+  return Array.from(ids).sort((a, b) => SeasonCal.rank(season, a, b)).map((id) => {
+    const c = cars.find((x) => x.driverId === id);
+    if (c) return c;
+    const teamId = String(id).split(":")[0];
+    const team = (typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((t) => t.id === teamId)) || { id: teamId, name: teamId };
+    return { driverId: id, code: (season.driverCodes && season.driverCodes[id]) || id, name: "", team, isPlayer: false };
+  });
+}
+function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
+
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -161,6 +185,10 @@ function buildResults(order, race) {
   // A WATCHED real race (REAL REPLAY / HIGHLIGHTS, js/race/real-race.js) ends here too, with the
   // followed car as G.player (G.followCar) — nobody drove it: no badge, no YOUR RACE card.
   const watched = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+  // The table SeasonCal.award / Career.scoreRound paid: a race nobody took the
+  // flag in (the only human retired) pays the shortened-race scale.
+  const table = SeasonCal.payTable(sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+    sprint ? "sprint" : "race", RaceControl.shortRun(order, G.lapsTarget));
   const badges = sprint || watched ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
@@ -212,7 +240,7 @@ function buildResults(order, race) {
   }
   if (typeof ResultsStory !== "undefined") {
     const story = ResultsStory.render(G, order, { dnfOf, watched, duel: race && race.duel,
-      points: sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+      points: table,
       fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
     if (story) els.resultsTable.appendChild(story);
   }
@@ -239,7 +267,7 @@ function buildResults(order, race) {
   }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
-    const nc = c.classified === false && !dnf;
+    const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
     const row = document.createElement("div");
     const podium = nc ? "" : PODIUM[i] || "";
     const other = c.human && !c.local ? " q-real" : "";
@@ -270,15 +298,14 @@ function buildResults(order, race) {
       nm.appendChild(tag);
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
-    const table = sprint ? SeasonCal.SPRINT_POINTS
-      : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
     // A CLASSIFIED retirement (past 90 % of the winner's laps, endRace sets
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
-    const paid = c.classified !== false && (!dnf || (c.classified && !c.dsq));
+    // NOT CLASSIFIED: still running below 90 % of the winner's laps (RaceControl.classify).
+    const paid = c.classified !== false && ((!dnf && !nc) || (c.classified && !c.dsq));
     pt.textContent = G.practice && !watched ? "Unscored"
       : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "0 pts" : outLabel(dnf);
     row.append(pos, sw, nm);
@@ -371,9 +398,9 @@ function buildResults(order, race) {
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
-    const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
+    const all = seasonTable(cars, season).slice(0, 10);
     all.forEach((c, i) => {
-      rankRow(els.resultsTable, i, G.cssCol(c.team.color), `${c.code}  ${c.name}`,
+      rankRow(els.resultsTable, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
         ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
@@ -638,25 +665,26 @@ function buildChampion() {
   const season = G.season;
   // Countback decides a tie for the title (SeasonCal.rank); a points-only sort
   // crowned whichever tied driver came first in the field order.
-  const sorted = G.cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId));
+  const sorted = seasonTable(G.cars, season);
   const champ = sorted[0];
-  const champColor = G.cssCol(champ.team.color);
+  const champColor = seatColor(G, champ);
   els.resultsTitle.textContent = "WORLD CHAMPION";
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");
   banner.style.cssText = `text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:${champColor}`;
-  banner.textContent = `${champ.code}  ${champ.name}`;
+  banner.textContent = champ.name ? `${champ.code}  ${champ.name}` : champ.code;
   const teamBanner = document.createElement("div");
-  teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
-  teamBanner.textContent = champ.team.name.toUpperCase();
+  // Theme tokens, not a hard-coded #aaa: the LIGHT theme drew grey on a light sheet.
+  teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:var(--dim);margin-bottom:14px;letter-spacing:var(--ls-5)";
+  teamBanner.textContent = String(champ.team.name || "").toUpperCase();
   els.resultsTable.append(banner, teamBanner);
   const head = document.createElement("div");
   head.className = "sel-label";
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {
-    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, ptsLabel(season, c.driverId));
+    rankRow(els.resultsTable, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
