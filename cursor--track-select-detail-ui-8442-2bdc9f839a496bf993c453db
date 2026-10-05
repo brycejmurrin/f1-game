@@ -1,0 +1,1 @@
+1791223959	Cursor Agent	track select + Circuit Detail UI: contrast, token scrollbars, sheet layout, legend, DRS wrap; OWNED css/select.css css/track-detail.css js/ui/select-screen.js js/ui/track-maps.js index.html track-detail block; NOT tokens.css (claimed), NOT cars/tracks/perf/CI  [cursor/track-select-detail-ui-8442; session 2bdc9f839a496bf993c453db]
