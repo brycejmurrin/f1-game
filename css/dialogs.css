@@ -236,19 +236,25 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    spanning HOW TO full-width (layout-audit 2026-10-04). Drop the pit lines
    and music/build chrome, shrink the primary row, and let the body scroll
    so every tray tile stays fully on-card and tappable. max-height keeps
-   desktop alone (desktop sheets sit well above 500px). */
+   desktop alone (desktop sheets sit well above 500px).
+   The floors take --tap-paint, not --tap-min (css/tokens.css): on a
+   landscape iPhone (734x343, layout-audit 2026-10-05) RESUME painted 39 tall
+   and RESTART / SETTINGS / QUIT 36 — the in-race exits under the 52 touch
+   floor. --tap-paint is 52 painted on touch and --tap-min with a mouse, so
+   the 30/34 arms still decide a short desktop window. The body already
+   scrolls, so the taller doors scroll; RESUME stays the first button. */
 @media (orientation: landscape) and (max-height: 500px) {
   #pausemenu .sheet-body.stack { gap: 2px; }
   #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
-    min-height: max(30px, var(--tap-min));
+    min-height: max(30px, var(--tap-paint));
     padding-block: 3px;
   }
-  #pausemenu #pm-resume { min-height: max(34px, var(--tap-min)); }
+  #pausemenu #pm-resume { min-height: max(34px, var(--tap-paint)); }
   #pm-race-context { padding-block: 1px; }
   #pm-race-context :is(span, small) { display: none; }
   #pm-quick-doors { gap: 2px; }
   #pm-quick-doors button,
-  #pm-checkpoint summary { min-height: max(34px, var(--tap-min)); padding-block: 2px; }
+  #pm-checkpoint summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
   #pm-now-card, #pm-build { display: none; }
   #pausemenu .sheet-body {
     overflow-y: auto;
