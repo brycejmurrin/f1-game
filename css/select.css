@@ -226,6 +226,7 @@
 #sel-tracks[data-mode="season"] {
   padding-inline: var(--pad);
   scroll-padding-inline: var(--pad);
+  scroll-snap-type: x mandatory;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }

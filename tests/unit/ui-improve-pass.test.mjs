@@ -610,6 +610,8 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "padding-inline"), "var(--pad)");
   assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scrollbar-color"),
     "var(--scroll-thumb) var(--scroll-track)");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scroll-snap-type"), "x mandatory",
+    "season end-of-pan settles on a tile start, so R14 is not mid-cut");
   assert.equal(decl(sel, '#sel-tracks[data-mode="season"] .track-row', "scroll-snap-align"), "start");
   assert.equal(decl(sel, "#sel-tracks .track-row", "scroll-snap-align"), "start",
     "snap-start so the last flag is not centre-clipped at the strip end");
