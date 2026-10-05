@@ -251,7 +251,9 @@ const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSli
 // then said LOW while AIDS · OFF painted red for the same notch.
 const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
-const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
+// "STEER OFF" (not "LINE OFF"): the setting is STEER ASSIST — Race Settings owns
+// the visual DRIVING LINE. Fold tokens must match the live help/line bands.
+const LINE_FOLD = { off: "STEER OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
 // The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
 // but unpickable option: the state the ADVANCED sliders leave behind.
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);

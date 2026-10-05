@@ -228,6 +228,12 @@ test("AIDS fold and DRIVING HELP row share OFF/MEDIUM/HIGH labels", () => {
   assert.doesNotMatch(SRC, /low: "LOW"/);
 });
 
+test("STEER ASSIST fold token is STEER OFF, not LINE OFF", () => {
+  // Race Settings owns the visual DRIVING LINE; the AIDS row is STEER ASSIST.
+  assert.match(SRC, /const LINE_FOLD = \{ off: "STEER OFF"/);
+  assert.doesNotMatch(SRC, /off: "LINE OFF"/);
+});
+
 test("refreshPresetButtons reconciles a stale preset chip against live values", () => {
   // preset:"rookie" survived a steerSchema assist reset, so the chip stayed
   // lit while drivingHelp/raceLine were OFF. matchPreset() is the value check;

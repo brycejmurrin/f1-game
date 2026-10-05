@@ -171,6 +171,6 @@ test("braking cues share one Driving fold and distinguish steering from the visu
   assert.match(cues, /LINE-SPEED CUE/);
   assert.match(cues, /takes priority/);
   assert.match(cues, /both cues OFF/);
-  assert.match(SHELL, /id="pm-linemode-label">LINE STEERING ASSIST/);
+  assert.match(SHELL, /id="pm-linemode-label">STEER ASSIST/);
   assert.match(SHELL, /visual DRIVING LINE is separate/);
 });
