@@ -730,7 +730,7 @@ const TrackDesigner = (function () {
     if (ui.code) ui.code.value = url;
     let copied = false;
     try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
-    message(copied ? "Share link copied (" + url.length + " characters)" : "Share link is in the SHARE CODE field — copy it from there", !copied);
+    message(copied ? "Share link copied" : "Share link is in the SHARE CODE field — copy it from there", !copied);
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
   }
@@ -1523,13 +1523,41 @@ const TrackDesigner = (function () {
     g.strokeStyle = color; g.lineWidth = 5; g.stroke();
     g.fillStyle = DesignerCanvas.COL.start; g.beginPath(); g.arc(ox + px[0] * sc, oz + pz[0] * sc, 6, 0, Math.PI * 2); g.fill();
   }
-  /** Greedy character wrap (a URL has no spaces to break on) to lines ≤ w px. */
-  function wrapChars(g, s, w) {
-    const width = (t) => { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; };
-    const lines = []; let cur = "";
-    for (const ch of s) { if (cur && width(cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
-    if (cur) lines.push(cur);
-    return lines;
+  /** Measure text width (mono fallback when the VM's canvas has no metrics). */
+  function textW(g, t) { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; }
+  /** Wrap a share URL for the 640×360 card: keep `#track=` intact (never
+   *  `…#trac` / `k=…`), put the host on its own line when the path is long,
+   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars. */
+  function wrapUrl(g, url, w) {
+    const at = url.indexOf("#track=");
+    if (at < 0) {
+      const lines = []; let cur = "";
+      for (const ch of url) { if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
+      if (cur) lines.push(cur);
+      return lines.slice(0, 3);
+    }
+    let head = url.slice(0, at);
+    const code = url.slice(at + 7);                       // after "#track="
+    if (textW(g, head) > w) {
+      const origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [head])[0];
+      head = origin + "…";
+    }
+    const lines = [head];
+    // Prefer a single `#track=<code>` line; if that is too long, break only
+    // after `=` or in the opaque code (never inside the "#track" token).
+    const marker = "#track=";
+    if (textW(g, marker + code) <= w) {
+      lines.push(marker + code);
+    } else {
+      lines.push(marker);
+      let cur = "";
+      for (const ch of code) {
+        if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; }
+        cur += ch;
+      }
+      if (cur) lines.push(cur);
+    }
+    return lines.slice(0, 3);
   }
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
@@ -1555,11 +1583,7 @@ const TrackDesigner = (function () {
     g.fillText((T && T.label) || design.theme, X, 102, W);
     g.fillStyle = COL.sel; g.font = "bold 12px system-ui, sans-serif"; g.fillText("APEX 26 · TRACK DESIGNER", X, 140, W);
     g.fillStyle = COL.text; g.font = "11px ui-monospace, monospace";
-    let lines = wrapChars(g, url, W);
-    if (lines.length > 3) {
-      const at = url.indexOf("#track="), origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [""])[0];
-      lines = wrapChars(g, origin + "…#track=" + url.slice(at + 7, at + 27), W).slice(0, 3);
-    }
+    const lines = wrapUrl(g, url, W);
     lines.forEach((l, k) => g.fillText(l, X, CARD_H - 24 - (lines.length - k) * 15));
     return { canvas: c, url, name: fileStem() + "-card.png" };
   }

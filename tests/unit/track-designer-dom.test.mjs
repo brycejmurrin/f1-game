@@ -165,6 +165,7 @@ test("share out / in: a code, a link and an exported file all load back as the s
   const url = await b.D.share();
   assert.equal(url, b.CD.shareUrl(code));
   assert.deepEqual(plain(written), [url]);
+  assert.equal(msgText(b), "Share link copied", "no character-count noise in the status");
   // Three ways in, each a different design first so the load is visible.
   for (const text of [code, url, JSON.stringify(env)]) {
     b.D.randomise(99); b.D.preview();
@@ -1312,8 +1313,11 @@ test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, els
   assert.deepEqual([shared[0].title, shared[0].text], [name, url], "the full link always rides the share text");
   assert.ok(texts.includes(name) && texts.includes("APEX 26 · TRACK DESIGNER"), "name and mark drawn: " + texts.join(" | "));
   assert.ok(texts.some((t) => /km · \d+ corners · est lap \d+:\d\d\.\d$/.test(t)), "the facts line");
-  const urlLines = texts.filter((t) => /#track=|^https?:|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
+  const urlLines = texts.filter((t) => /#track=|^https?:|^\.\.\.|…|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
   assert.ok(urlLines.length >= 1 && urlLines.length <= 3, "the link in at most three lines: " + urlLines.join(" | "));
+  // apex8: greedy wrapChars split "…#track=" into "…#trac" / "k=…" — never break inside #track=
+  assert.equal(urlLines.some((t) => /#trac$/i.test(t) || /^k=/i.test(t)), false, "no mid-word #track wrap: " + urlLines.join(" | "));
+  assert.ok(urlLines.some((t) => /#track=/.test(t) || t === "#track="), "#track= token stays whole: " + urlLines.join(" | "));
   assert.equal(msgText(b), "Card shared");
   // No file sharing here: the native bridge where the shell has one…
   canShare = false;
