@@ -1214,7 +1214,15 @@ function buildArgv(name, args) {
         String(args.frac ?? 0.1),
         String(args.cam || "orbit"),
       ];
-      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.out) {
+        // shot.mjs's 4th positional is a FILE (`[out.png]`); a directory here
+        // made it write a path with no extension and die 84 s later with
+        // "unsupported mime type null" (measured 2026-10-05). Keep the CLI's
+        // own default name inside the directory instead.
+        const out = assertSafeOut(args.out);
+        const track = String(args.track || "monza"), cam = String(args.cam || "orbit");
+        argv.push(/\.png$/i.test(out) ? out : path.join(out, `${track}-${Math.round(Number(args.frac ?? 0.1) * 100)}-${cam}.png`));
+      }
       if (args.az != null) argv.push("--az", String(args.az));
       if (args.el != null) argv.push("--el", String(args.el));
       if (args.dist != null) argv.push("--dist", String(args.dist));
