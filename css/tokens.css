@@ -1068,24 +1068,6 @@ body:not(.desktop) {
     --gold: #7a5600;
   }
 }
-/* LIGHT sheet footers: .sheet-foot (css/components.css) paints a dark
-   gradient so the action bar reads as the plate the sheet stands on. Under
-   LIGHT / SYSTEM-light that strip must follow the surface ladder or Settings
-   BACK stays a night bar under Sunlight. Keep it a shade darker than the
-   body, not a near-black plate. */
-:root[data-ui-theme="light"] .sheet-foot {
-  background: linear-gradient(180deg in oklab,
-    color-mix(in oklab, var(--red) 5%, var(--surf-1)),
-    var(--surf-3) 70%);
-}
-@media (prefers-color-scheme: light) {
-  :root[data-ui-theme="system"] .sheet-foot {
-    background: linear-gradient(180deg in oklab,
-      color-mix(in oklab, var(--red) 5%, var(--surf-1)),
-      var(--surf-3) 70%);
-  }
-}
-
 /* ---- APPEARANCE: text size + high contrast (js/ui/appearance-opts.js) ----
    TEXT SIZE re-states the --fs-* ladder, so every token consumer grows and the
    bare-px HUD (its own HUD SIZE) does not. --fs-micro stays the floor the
