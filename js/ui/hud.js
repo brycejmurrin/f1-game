@@ -461,8 +461,29 @@ function layoutRect(el) {
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
 const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
+// THE CENTRE LANE: where neither slot fits, the card hangs centred under the
+// tower (or the mirror, or the flag), and a long message at max-width reached
+// the dock column there too. --announce-lane-w is twice the distance from the
+// screen's centre to the nearest dock group in the band the centred card can
+// occupy (the tower's bottom down LANE_ROWS), less the gap — SCREEN px, and
+// css/hud.css caps a touch card's width by it over its own zoom. No group in
+// the band (desktop: both docks empty) removes it, so the cap falls away.
+const LANE_ROWS = 200;
+function announceLane(root) {
+  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
+  const cx = window.innerWidth / 2, y0 = t ? t.bottom : 0;
+  let half = Infinity;
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) {
+    const r = g.getBoundingClientRect();
+    if (!r || !r.width || !r.height || r.top >= y0 + LANE_ROWS || r.bottom <= y0) continue;
+    if (r.left >= cx) half = Math.min(half, r.left - cx - RADIO_TOP_GAP);
+    else if (r.right <= cx) half = Math.min(half, cx - r.right - RADIO_TOP_GAP);
+  }
+  hStyle(root, "--announce-lane-w", half === Infinity ? "" : (2 * Math.max(0, half)).toFixed(1) + "px");   // "" removes it
+}
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  announceLane(root);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   const bound = (r, needPast) => {
