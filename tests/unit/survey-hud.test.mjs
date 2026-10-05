@@ -179,6 +179,36 @@ test("showUnavailable survey early-return keeps HUD (#1033 ctxLost)", () => {
     "survey early-return sits before the normal hud hide");
 });
 
+test("boot: applies when armed; wires pause + webglcontextlost rehold", () => {
+  const fx = fakeDom();
+  const listeners = [];
+  const canvas = {
+    addEventListener(type, fn) { listeners.push({ type, fn }); },
+  };
+  const loc = { search: "?APEX_SURVEY_HUD=1", hash: "" };
+  assert.equal(SH.boot({
+    ...fx, loadingScreen: { stop() {} }, canvas, location: loc, localStorage: memStore(),
+  }), true);
+  assert.equal(fx.els.hud.hidden, false);
+  assert.equal(typeof fx.els.pausebtn.onclick, "function");
+  assert.equal(listeners.length, 1);
+  assert.equal(listeners[0].type, "webglcontextlost");
+  // Simulate ctxLost → holdChrome path.
+  fx.els.hud.hidden = true;
+  fx.nodes.get("nogl").hidden = false;
+  listeners[0].fn();
+  assert.equal(fx.els.hud.hidden, false);
+  assert.equal(fx.nodes.get("nogl").hidden, true);
+});
+
+test("boot: off when flag unset", () => {
+  const fx = fakeDom();
+  assert.equal(SH.boot({
+    ...fx, location: { search: "", hash: "" }, localStorage: memStore(),
+  }), false);
+  assert.equal(fx.els.hud.hidden, true);
+});
+
 test("manifest + game.js boot hook + css-play screen are wired", () => {
   const man = require("../../tools/manifest.cjs");
   const iSurvey = man.FULL.indexOf("js/ui/survey-hud.js");
@@ -188,11 +218,15 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   assert.ok(iSurvey < iGame, "SurveyHud loads before game.js");
   assert.ok(iSurvey < iPicker, "SurveyHud loads before renderer-picker (showUnavailable)");
   const game = read("js/game.js");
-  assert.match(game, /SurveyHud\.enabled/);
-  assert.match(game, /SurveyHud\.apply/);
-  assert.match(game, /SurveyHud\.openPause/);
-  assert.match(game, /SurveyHud\.holdChrome/);
-  assert.match(game, /webglcontextlost/);
+  // One-line call site only — body lives in SurveyHud.boot (codeLines ratchet).
+  assert.match(game, /SurveyHud\.boot\(\{ \$, els, document, loadingScreen, canvas \}\)/);
+  assert.doesNotMatch(game, /SurveyHud\.apply\(/);
+  assert.doesNotMatch(game, /SurveyHud\.holdChrome\(/);
+  assert.doesNotMatch(game, /SurveyHud\.openPause\(/);
+  const mod = read("js/ui/survey-hud.js");
+  assert.match(mod, /function boot\(/);
+  assert.match(mod, /webglcontextlost/);
+  assert.match(mod, /holdChrome/);
   const play = read("tools/ui/css-play.mjs");
   assert.match(play, /surveyHud:\s*true/);
   assert.match(play, /APEX_SURVEY_HUD=1/);

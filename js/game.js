@@ -8988,15 +8988,7 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
 if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
 
-// APEX_SURVEY_HUD=1 — cockpit HUD fixture without startRace / scenery warm (UI Survey).
-// #1033: ctxLost → showUnavailable; re-hold chrome so surveys never wait on race HUD.
-if (typeof SurveyHud !== "undefined" && SurveyHud.enabled(location, typeof localStorage !== "undefined" ? localStorage : null)) {
-  const surveyHooks = { $, els, document, loadingScreen };
-  SurveyHud.apply(surveyHooks);
-  els.pausebtn.onclick = () => SurveyHud.openPause(surveyHooks);
-  // #1033: ctxLost → showUnavailable; re-hold so survey never waits on race HUD.
-  const rehold = () => { try { SurveyHud.holdChrome(surveyHooks); } catch (_) { /* hold best-effort */ } };
-  try { canvas.addEventListener("webglcontextlost", rehold, false); } catch (_) { /* no canvas */ }
-}
+// APEX_SURVEY_HUD=1 — UI Survey fixture (apply/pause/ctxLost rehold live in SurveyHud.boot).
+if (typeof SurveyHud !== "undefined") SurveyHud.boot({ $, els, document, loadingScreen, canvas });
 
 })();

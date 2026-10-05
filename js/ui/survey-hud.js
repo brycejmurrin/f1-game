@@ -164,6 +164,34 @@ const SurveyHud = (function () {
     return !!(doc && doc.body && doc.body.dataset && doc.body.dataset.surveyHud === "1");
   }
 
-  return { KEY, enabled, armed, apply, holdChrome, openPause, active };
+  /**
+   * game.js boot entry — keeps the call site to one codeLine (ratchet).
+   * When armed: apply chrome, wire pausebtn, re-hold on webglcontextlost (#1033).
+   * hooks: { $, els, document, loadingScreen?, canvas?, location?, localStorage? }
+   */
+  function boot(hooks) {
+    hooks = hooks || {};
+    const loc = hooks.location || (typeof location !== "undefined" ? location : null);
+    const store = ("localStorage" in hooks)
+      ? hooks.localStorage
+      : (typeof localStorage !== "undefined" ? localStorage : null);
+    if (!enabled(loc, store)) return false;
+    const surveyHooks = {
+      $: hooks.$, els: hooks.els, document: hooks.document,
+      loadingScreen: hooks.loadingScreen,
+    };
+    const ok = apply(surveyHooks);
+    if (hooks.els && hooks.els.pausebtn) {
+      hooks.els.pausebtn.onclick = () => openPause(surveyHooks);
+    }
+    const canvas = hooks.canvas;
+    if (canvas && typeof canvas.addEventListener === "function") {
+      const rehold = () => { try { holdChrome(surveyHooks); } catch (_) { /* hold best-effort */ } };
+      try { canvas.addEventListener("webglcontextlost", rehold, false); } catch (_) { /* no canvas */ }
+    }
+    return ok;
+  }
+
+  return { KEY, enabled, armed, apply, holdChrome, openPause, active, boot };
 })();
 Object.freeze(SurveyHud);
