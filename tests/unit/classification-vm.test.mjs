@@ -14,7 +14,6 @@ import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
-const vm = require("node:vm");
 let g = null;
 after(() => { if (g) g.close(); });
 
@@ -98,7 +97,10 @@ test("flagged finishers need 90 percent distance, rounded down, before scoring",
       assert.equal(winner.classified, true);
       assert.equal(boundary.classified, true, `${distance} laps: the rounded-down boundary qualifies`);
       assert.equal(retired.classified, true, "a retirement at the distance floor still qualifies");
-      assert.equal(runner.classified, true, "unfinished cars retain the provisional-results policy");
+      // G4: the 90 % line applies to runners too (FIA B2.5.5(b) "retired or not").
+      // On 1/2-lap races the lap-1 runner still meets the floor; on 3/10 it does not.
+      assert.equal(runner.classified, minimum <= 1,
+        minimum > 1 ? "a runner below the floor is not classified" : "a runner at/above the floor stays classified");
       if (minimum > 1) {
         assert.equal(short.finished, true, "the under-distance car really took the flag");
         assert.equal(short.classified, false, `${distance} laps: below the floor is not classified`);
@@ -114,11 +116,13 @@ test("flagged finishers need 90 percent distance, rounded down, before scoring",
       S.award(season, order, short.driverId);
       assert.ok(season.pts[boundary.driverId] > 0, "eligible finisher receives points");
       assert.ok(season.pts[retired.driverId] > 0, "eligible retirement receives points");
-      assert.ok(season.pts[runner.driverId] > 0, "provisional runner still receives points");
       if (minimum > 1) {
+        assert.equal(season.pts[runner.driverId] || 0, 0, "a runner below the floor earns no points");
         assert.equal(season.pts[short.driverId], 0, "taking the flag below the floor earns no points");
         assert.equal(season.finishes[short.driverId], undefined, "no countback finish for an unclassified car");
         assert.equal(season.lastFl, undefined, "an unclassified fastest lap earns no bonus");
+      } else {
+        assert.ok(season.pts[runner.driverId] > 0, "a runner at/above the floor still receives points");
       }
       if (distance === 10) assert.equal(season.pts[dsq.driverId], 0);
       S.engage("gp");
