@@ -157,6 +157,11 @@ const FULL = [
   // header), and ahead of everything that reads a preference for the same
   // reason. Pure data with no dependencies of its own.
   "js/data/settings-defaults.js",
+  // Shipped GARAGE defaults (parts / liveries / setups / team / driver). Same
+  // miss-path as settings-defaults: GameStore.get consults GarageDefaults
+  // after SettingsDefaults, so a stored player garage still wins. Generated
+  // from an apex26-garage-v1 export via tools/gen/garage-defaults.mjs.
+  "js/data/garage-defaults.js",
   "js/core/store.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)

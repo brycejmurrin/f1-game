@@ -160,7 +160,7 @@ export async function openGarage(page, { team = "mercedes", waitMs = 60000, trie
 }
 
 /** Peel back to the title, pin team/driver, click in. Returns the route taken.
- * store.team is the NUMERIC INDEX (game.js `let teamIdx = store.get("team", 2)`).
+ * store.team is the NUMERIC INDEX (game.js `let teamIdx = store.get("team", 0)`).
  * Writing a team id string used to leave the boot default (McLaren) in place.
  * `G` is NOT a window global — `#mb-garage` does not re-read the store, so the
  * reliable pin is installProbeInit({ team: idx }) before first goto (or the
