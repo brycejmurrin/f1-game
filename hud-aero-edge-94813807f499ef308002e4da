@@ -1,0 +1,1 @@
+1791177359	Claude	cockpit HUD: AERO chip overruns the right edge ~21px at 1280x720 (js/ui/hud-layout.js fit + shipped cockpit offsets). Small, local; bug-hunt-fixes-2 also edits fit() — will merge around it  [claude/hud-aero-edge]  [claude/hud-aero-edge; session 94813807f499ef308002e4da]
