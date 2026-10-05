@@ -43,9 +43,25 @@
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 2; grid-row: 1; background: none; }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
+/* NO WRAP IN THE TITLE ROW. MEASURED on 42cb42fbf (layout-audit, 734x343,
+   2026-10-05): the table box SHRANK, 194 -> 161 own. The bar sat in an `auto`
+   column, whose width comes from the bar's max-content — and the buttons'
+   `min-width: min(100%, 110px)` is a cyclic percentage there, so it counted as
+   0 and the column came out narrower than two 110px buttons. The bar wrapped
+   to two rows (~120 own) and took the head row with it. A plain length floor
+   and no wrap: the row is one button tall, and the table gets ~222. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { flex-wrap: nowrap; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn { flex: 0 0 auto; min-width: calc(var(--tap) * 2); }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name { white-space: normal; overflow-wrap: anywhere; }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name > .q-time { display: inline; margin-left: 0.6em; }
+/* AND THE ROWS LOSE THEIR SPARE PIXELS. Same run: 880 own of content after
+   the gap went inline, ~4 screens even in the full 222. The 20px swatch, not
+   the 14px name, set every row's height; at the type's own height, with the
+   block padding at a fifth of a gap, a row is ~21 own instead of ~26 —
+   ~110 own over 22 cars, nothing hidden. Expected ~3.4 screens. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-row { padding-block: calc(var(--gap) * 0.2); }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-swatch { height: 1.1em; }
 
 /* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
    SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core

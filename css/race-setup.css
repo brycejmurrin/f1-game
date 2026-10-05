@@ -100,6 +100,23 @@
 #ss-inner[data-pair="on"][data-density="compact"] > .sheet-foot::before { display: none; }
 #ss-inner[data-pair="on"][data-density="compact"] .pair-side,
 #ss-inner[data-pair="on"][data-density="compact"] .pair-main { grid-row: 2; }
+/* THE CIRCUIT SHELF RUNS TWO ROWS A LINE in a compact pair. MEASURED on
+   42cb42fbf (layout-audit, 734x343, 2026-10-05): #ss-pool 10.2 screens in a
+   221 own px box, and its ADD A CIRCUIT rows already sit on the --tap floor,
+   so no padding trim shortens them — only fewer lines do. Two columns halve
+   the shelf; each row stacks the name over the country so a ~125 own px
+   column still holds it, at the same 52 floor. The labels, chip groups and
+   the note span both columns. #ss-cal stays one column: three 46-wide chips
+   and a name do not fit half of a 270 px pane. */
+#ss-inner[data-pair="on"][data-density="compact"] #ss-pool {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start; column-gap: calc(var(--gap) * 0.5);
+}
+#ss-inner[data-pair="on"][data-density="compact"] #ss-pool > :not(.track-row) { grid-column: 1 / -1; }
+#ss-inner[data-pair="on"][data-density="compact"] #ss-pool > .track-row {
+  flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
+  padding-inline: calc(var(--gap) * 0.75);
+}
 #ss-note { display: block; margin-block: calc(var(--gap) * 0.5); line-height: 1.4; }
 /* Armed APPLY on a live season — the career DELETE? treatment: the second
    press is the one that wipes up to 23 raced rounds, so the first must
