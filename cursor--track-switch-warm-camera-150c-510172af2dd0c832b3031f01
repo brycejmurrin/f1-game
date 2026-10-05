@@ -1,0 +1,1 @@
+1791220639	Cursor Agent	PR #971 obsolete: close only. Ship already has warmProgress (424ad6969 via #951) + waitUntilDrawn (#1003). Do not merge #971 (would revert later flyby + census wait). Not touching #1006.  [cursor/track-switch-warm-camera-150c; session 510172af2dd0c832b3031f01]
