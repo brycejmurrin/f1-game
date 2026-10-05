@@ -197,8 +197,9 @@ const KNOBS = [
     find: "def: 2.3,  u: \"uGlowAmp\"", b: "def: 3.4,  u: \"uGlowAmp\"",
     expect: { region: "frame", metric: "bloomPct", dir: "+", minRel: 0.0 },
     note: "emissive HDR push (windows/lenses/neon) — B is the old too-bright budget" },
-  { id: "night.floodEmit", file: "js/game.js", scene: "vegasNight",
-    find: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.78", b: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.40",
+  // The ramp lives in Atmosphere.floodEmit() since the session resolve sets it too.
+  { id: "night.floodEmit", file: "js/lighting/atmosphere.js", scene: "vegasNight",
+    find: "LT.floodEmitMul * (night ? 0.78", b: "LT.floodEmitMul * (night ? 0.40",
     expect: { region: "frame", metric: "mean", dir: "-", minRel: 0.02 },
     note: "prop emissive ramp at night (lit windows / lens glow level)" },
   // applyRaceSettings moved to js/lighting/atmosphere.js; this is its EXPLICIT-night
