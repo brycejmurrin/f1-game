@@ -215,7 +215,16 @@ const GaragePrebuild = (function () {
       if (on === true) { gate.garageReady = false; gate.garageKey = ""; last = null; }
       return enabled;
     }
-    _instance = { run, start, stop, markOpen, timed, state, setEnabled };
+    // RACE START frees the garage (GarageScene.release via setupCam.release) and
+    // forgets readiness, so the next idle title builds it again. Refused while a
+    // garage is on screen (the drive-out studio, a pit visit).
+    function release() {
+      if (!cam.release || !cam.release()) return false;
+      gate.garageReady = false; gate.garageKey = ""; gate.garageWarm = 0;
+      Log.info("game", "garage released for the race");
+      return true;
+    }
+    _instance = { run, start, stop, markOpen, timed, state, setEnabled, release };
     return _instance;
   }
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
