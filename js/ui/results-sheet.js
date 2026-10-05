@@ -269,17 +269,19 @@ function buildResults(order, race) {
       nm.appendChild(tag);
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
-    const table = sprint ? SeasonCal.SPRINT_POINTS
-      : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
     // A CLASSIFIED retirement (past 90 % of the winner's laps, endRace sets
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
-    const paid = !dnf || (c.classified && !c.dsq);
+    const table = sprint ? SeasonCal.SPRINT_POINTS
+      : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
+    // NOT CLASSIFIED: still running below 90 % of the winner's laps (RaceControl.classify).
+    const nc = !dnf && c.classified === false && !hostRow.has(c.driverId);   // a guest reads the host verdict
+    const paid = (!dnf && !nc) || (c.classified && !c.dsq);
     pt.textContent = G.practice && !watched ? "Unscored"
-      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : outLabel(dnf);
+      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "NC" : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {

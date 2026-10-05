@@ -95,6 +95,34 @@ test("with no finisher, the 90 % rule measures the leader still running", async 
   } finally { g3.close(); }
 });
 
+test("a car still RUNNING below 90 % of the winner's laps is not classified, and follows by distance", async () => {
+  // B2.5.5(b) says "retired or not": endRace tested retirements only, so a stuck
+  // AI five laps down was paid P2 (bug hunt 2026-10-05 G4).
+  const g4 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g4.apex, G = g4.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g4.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    const [slow, early, near] = ai;
+    for (const c of ai.slice(3)) a.retire(G.cars.indexOf(c));
+    const place = (c, s, lap, v) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.speed = v; c.x = 0; };
+    a.jump((L - 40) / L, 80, 0); P.lap = 10; P.prog = 10 * L - 40;   // the player takes the flag: 10 laps
+    place(slow, L - 1500, 5, 60);                                       // running on lap 5: 5 at its flag
+    place(early, L - 1000, 9, 0); a.retire(G.cars.indexOf(early));     // retired with 8 done
+    place(near, L - 3000, 9, 70);                                       // running on lap 9: 9 at its flag = floor(0.9 * 10)
+    a.setInput({ throttle: true, steer: 0 });
+    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g4.step(1);
+    assert.equal(G.state, "results");
+    assert.equal(slow.classified, false, "5 of 10 laps, running or not, is not classified");
+    assert.equal(near.classified, true, "a runner at exactly 90 % is");
+    assert.ok(near.finPos < early.finPos && early.finPos < slow.finPos,
+      `classified first, then the unclassified by distance: near P${near.finPos}, early P${early.finPos}, slow P${slow.finPos}`);
+  } finally { g4.close(); }
+});
+
 test("the live loop flags a lapped human on the same step as the winner in either roster order", async () => {
   const game = await createGame({ track: "monza", carMeshes: false });
   try {

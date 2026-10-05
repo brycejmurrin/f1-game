@@ -2975,26 +2975,9 @@ function endRace(forcedOrder) {
   const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
   run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-  // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
-  // ends takes the flag on its next crossing, so it counts one more lap. A
-  // lapped car that crossed was put ahead of every lead-lap car still on its
-  // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
-  // lap count, finishers keep the clock order and runners their progress.
-  const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
-  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA 2026 SR B2.5.5(b)), retired or not: a
-  // car that failed on the last lap scores where it stopped, not behind the
-  // field with nothing. Below that it is not classified. c.classified carries
-  // the verdict to the points tables (SeasonCal.award, career settlement).
-  // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
-  // laps COMPLETED is c.lap - 1 for every car. With no finisher (the only human
-  // retired, finishDelay ended it early) the leader on the road is the reference.
-  const ref = fin.length ? fin : run;
-  const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
-  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
-  for (const c of cars) c.classified = (!c.retired && !c.dsq) || lateOut.includes(c);
-  const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
+  // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
-  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
+  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out).concat(dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
