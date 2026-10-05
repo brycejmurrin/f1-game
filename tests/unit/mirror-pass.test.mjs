@@ -27,7 +27,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, bc = false, pipMode, clock = { t: 0 } } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 } } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -50,7 +50,8 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: {
       getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl
-        : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
+        : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] }
+        : docks[id] ? { children: docks[id].map((r) => ({ getBoundingClientRect: () => r })) } : null),
       body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => { writes.cls++; return on ? classes.add(c) : classes.delete(c); } },
         style: { setProperty: (k, v) => { writes.prop++; props[k] = v; } } },
     },
@@ -312,6 +313,25 @@ test("the radio card goes BESIDE the mirror when the row has room, and stacks un
   wide.press(); wide.render();
   assert.equal(wide.mp.state().shown, false);
   assert.ok(!wide.classes.has("hud-mirror-side"));
+});
+
+test("the side slot stops at a touch dock group in the card's rows (cockpit BOOST at 844x390), and drops when one covers its start", () => {
+  // Frame 440..840 at y 70..184, as above; the pause column at 1226.
+  const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const pause = { pausebtn: box(1226, 8, 44, 44) };
+  // A tap column reaching the mirror's rows ends the strip at its left edge.
+  const taps = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(1100, 76, 88, 200)] } });
+  taps.render();
+  assert.ok(taps.classes.has("hud-mirror-side"), "1100 - 8 - 848 = 244px still fits");
+  assert.equal(taps.props["--mir-side-w"], "244.0px", "ends at the dock group, not the pause column");
+  // A group below the card's rows (the pedals) leaves the strip alone.
+  const low = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(1000, 400, 150, 150)] } });
+  low.render();
+  assert.equal(low.props["--mir-side-w"], "358.0px");
+  // The survey's shape: the group starts 95px past the slot - no room, stack under the mirror.
+  const tight = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(943, 72, 88, 88)] } });
+  tight.render();
+  assert.ok(!tight.classes.has("hud-mirror-side"), "87px is no room: the card stacks, never over BOOST");
 });
 
 test("a WATCH: the mirror stands down; the PiP draws its subject on the TV shot, unflipped, into #bc-pip, with ITS neighbours", () => {

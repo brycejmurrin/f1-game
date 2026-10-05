@@ -232,6 +232,34 @@ test("a circuit Home gets the car and the room on the CPU, no frames over the ci
   assert.equal(h.warms(), 0);
 });
 
+// The frameless title plans (a circuit or garage Home) build on the CPU only:
+// the programs are compiled by the hidden frames, so race settings must still
+// draw them — a title-ready that short-circuited RACE SETTINGS left the
+// drive-out's first garage frame compiling on the tap (the freeze #930 targets).
+test("a frameless title prebuild never stands in for race settings' hidden frames", async () => {
+  for (const kind of ["track", "garage"]) {
+    const h = page({ kind });
+    const title = h.pre.run(owned(h), "title");
+    await h.flush(2);
+    assert.equal(await title, true, kind);
+    assert.equal(h.pre.state().ready, true, kind + ": the title poll stops");
+    assert.equal(h.gate.garageReady, false, kind + ": nothing was drawn, so nothing is marked drawn");
+    assert.equal(h.gate.garageWarm, 0);
+    // RACE SETTINGS opens on the same circuit/weather/time: same key.
+    h.els["race-settings"].hidden = false; h.els.overlay.hidden = true;
+    const settings = h.pre.run(owned(h), "settings");
+    await h.flush(2);
+    assert.equal(h.gate.garageWarm, 2, kind + ": settings arms the hidden frames instead of returning early");
+    assert.equal(h.warms(), 1);
+    assert.deepEqual(h.built, ["car", "room"], kind + ": the prepped car is not rebuilt; only a missing room is built");
+    h.gate.garageWarm = 0; h.gate.garageReady = true;   // render()'s hidden branch drew
+    await h.flush();
+    assert.equal(await settings, true);
+    assert.equal(h.pre.state().last.want, "settings");
+    assert.equal(await h.pre.run(owned(h), "settings"), false, kind + ": drawn — now settings is ready");
+  }
+});
+
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {
   const h = page();
   h.ctx.navigator = { connection: { saveData: true } };

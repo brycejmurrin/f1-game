@@ -1,5 +1,5 @@
 // mem-census.mjs — the page half of the memory census, shared by
-// @doc Page-side memory census (WeakRef track census, decoded-audio bytes, three render objects, forced-GC read) for mem-census.mjs and its spec.
+// @doc Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec.
 // tools/gfx/mem-census.mjs (the CLI) and tests/specs/track-switch-memory.spec.js
 // (the gate), so a number the spec asserts is the number the CLI prints.
 //
@@ -94,6 +94,28 @@ export async function waitFrames(page, n = 15, timeoutMs = 120000) {
   await page.waitForFunction(([f, k]) => window.__memCensus && window.__memCensus.frames >= f + k, [f0, n], { polling: 100, timeout: timeoutMs });
 }
 
+/** Wait until the picker's hidden warm frames have drawn circuit `id`: the
+ *  "menu warm drawn <id>" Log record game.js writes when the last of them
+ *  renders, newer than the "build done <id>" record pickTrack returned on.
+ *  pickTrack returns at "build done"; the picker then prepares car assets
+ *  (~5 s on software GL), waits MENU_IDLE_MS of quiet and only then arms two
+ *  hidden warm frames. A fixed settle after the build log races that work —
+ *  CI run 37274796306 censused visit 1 to monza at 10 RenderObjects — and a
+ *  wait on the render-object count passes on the previous scene's objects
+ *  before the new world drew (run 37330132243, 10 again with that wait in
+ *  place). Reads the Log ring directly: no __apex call (lazyTrackEnsure). */
+export async function waitUntilDrawn(page, id, timeoutMs = 180000) {
+  await page.waitForFunction((tid) => {
+    try {
+      const recs = Log.records();
+      let built = -1;
+      for (let i = recs.length - 1; i >= 0; i--) if (String(recs[i].msg).startsWith("build done " + tid + " ")) { built = recs[i].id; break; }
+      if (built < 0) return false;
+      return recs.some((r) => r.id > built && r.msg === "menu warm drawn " + tid);
+    } catch (_) { return false; }
+  }, id, { polling: 100, timeout: timeoutMs });
+}
+
 /** Let the page run for `ms` of its own clock (the picker draws the world in
  *  warm frames over time, not in a fixed number of them). A condition wait on
  *  performance.now(), not a Node-side sleep, so a stalled page cannot pass it. */
@@ -125,7 +147,7 @@ export async function pickTrack(page, id, timeoutMs = 240000) {
   // build lands — so polling __apex.info()/logs() in that gap built a BARE
   // circuit ("no scenery closure … building bare") on top of the picker's own
   // build. Read the Log ring directly: the stepped loader installs the world in
-  // the same task that logs "build done", and waitFrames() follows anyway.
+  // the same task that logs "build done", and waitUntilDrawn() follows anyway.
   await page.waitForFunction((tid) => {
     try {
       const done = Log.records().filter((r) => String(r.msg).startsWith("build done "));

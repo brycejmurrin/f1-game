@@ -91,7 +91,11 @@ function shapeOf(v, d = 0) {
   }
   return t === "number" ? +v.toFixed(3) : v;
 }
-const SHAPE = "window.__shape = " + shapeOf.toString() + "; window.__shape.shapeOf = window.__shape;";
+// A NAMED function expression: its recursive `shapeOf(` calls bind to itself,
+// so no source rewrite is needed. A global /shapeOf\(/ → "window.__shape("
+// replace also hit the declaration and produced `function window.__shape(` —
+// a SyntaxError that failed every browser apex-eval (2026-10-05).
+const SHAPE = "window.__shape = (" + shapeOf.toString() + "); window.__shape.shapeOf = window.__shape;";
 
 // THE VM ROUTE. The same expr, `a` the VM's __apex, `g` the handle; the track
 // is built by createGame({ track }) before the expr runs, as race() does in
@@ -139,7 +143,7 @@ const BOOT_MS = 45000;
     // idle container (2026-10-02) and later on a fresh Chromium, so the first
     // apex_eval of a session timed out and the retry passed.
     await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
-    await page.evaluate(SHAPE.replace(/shapeOf\(/g, "window.__shape("));
+    await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
     // TRACK_MS, not 15 s. A TLX build of monza on this container's SwiftShader
     // measures 16.6 s (2026-09-21, idle box), so the old budget was simply

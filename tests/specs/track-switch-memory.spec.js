@@ -26,7 +26,7 @@
 // TLX on purpose: the shared fixtures pin GLX (cheaper under SwiftShader), but
 // the leak lived in TLX and TLX is what players run.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { censusInitScript, censusAfterGc, pickTrack, settle, waitFrames } from "../../tools/lib/mem-census.mjs";
+import { censusInitScript, censusAfterGc, pickTrack, settle, waitFrames, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 // Three CLI runs of the fixed tree (tools/gfx/mem-census.mjs, picker path, TLX,
@@ -45,13 +45,12 @@ test.use({ viewport: { width: 960, height: 540 } });
 // least this many render objects. Measured 54–312 on monza/monaco here: a
 // revisit draws less than the first visit (monza 109–145, then 54 every run),
 // so this floor only rules out an undrawn world; assertion 2 is the leak's.
-// 2026-10-05: the deploy tip's gfx group (llvmpipe, 4 shards, run
-// 37273020922) drew 39 on monza's second visit, twice (retry too), with the
-// world built and lit (apex-state carried the full lightState) — 40 was the
-// SwiftShader revisit's number with no margin under it, and a floor that
-// trips on a drawn world is not the undrawn-world guard it claims to be. An
-// undrawn world reads 0; 20 keeps the guard and the measured margin.
-const MIN_RENDER_OBJECTS = 20;
+// The floor is NOT lowered when the opening flyby `wide` shot is levelled at
+// the horizon (39 ROs on llvmpipe at u=0): picker warm frames sit on
+// turn-first (FlybySeq.warmProgress) so the leak path still draws.
+// waitUntilDrawn waits for the "menu warm drawn <id>" Log record (not the
+// render-object count — that can read the previous scene; run 37330132243).
+const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
@@ -74,6 +73,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
+      await waitUntilDrawn(page, id);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
