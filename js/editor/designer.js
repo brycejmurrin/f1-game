@@ -986,13 +986,23 @@ const TrackDesigner = (function () {
       corners: ins.map((c) => ({ n: c.n, dir: c.dir, angDeg: Math.round(c.angDeg), R: Math.round(c.R), kmh: Math.round(c.vApex * 3.6), lenM: Math.round(c.lenM), i0: c.i0, i1: c.i1, fit: c.fit ? copy(c.fit) : null })),
       heat: heatOn,
       candidates: cands.map((c) => ({ seed: c.seed >>> 0, score: +c.score.toFixed(3) })),
+      thumbs: { cached: thumbTr.size, maxPts: Math.max(0, ...[...thumbTr.values()].map((t) => t.n)) },
     };
   }
 
   // ── insight: TURNS, SPEED, TRACK OF THE DAY, START FROM (TrackInsight) ──
   // ins: the TURNS rows of the last preview; heatV: its per-node speeds (m/s).
   let ins = [], heatOn = false, heatV = null, fromJob = 0;
-  const thumbTr = new Map();           // START FROM: def id → its line-less centreline, built once
+  // START FROM: def id → the OUTLINE DesignerCanvas.thumb strokes ({ px, pz, n }, at most
+  // THUMB_PTS points), built once. It held each whole line-less centreline: 52 circuits,
+  // ~4 MB pinned for the page after the panel opened once, for a 160×110 card.
+  const thumbTr = new Map(), THUMB_PTS = 256;
+  function thumbOutline(tr) {
+    const step = Math.max(1, Math.ceil(tr.n / THUMB_PTS)), n = Math.ceil(tr.n / step);
+    const px = new Float32Array(n), pz = new Float32Array(n);
+    for (let k = 0; k < n; k++) { px[k] = tr.px[k * step]; pz[k] = tr.pz[k * step]; }
+    return { px, pz, n };
+  }
   const insight = () => (typeof TrackInsight !== "undefined" ? TrackInsight : null);
   /** The 4 DETAILS rows become [RANDOMISE][TRACK OF THE DAY][START FROM…] over
    *  [REVERSE]…[FIT VIEW][SPEED]; the START FROM cards and a TURNS group after 5 CHECKS. */
@@ -1110,7 +1120,7 @@ const TrackDesigner = (function () {
       const [c, def] = queue.shift();
       try {
         let tr = thumbTr.get(def.id);
-        if (!tr) { tr = Tracks.buildCenterline(def, { line: false }); thumbTr.set(def.id, tr); }
+        if (!tr) { tr = thumbOutline(Tracks.buildCenterline(def, { line: false })); thumbTr.set(def.id, tr); }
         DesignerCanvas.thumb(c, tr, { color: "#f6f6f9", width: 2 });
       } catch (e) { Log.warn("track", "start-from thumbnail " + def.id + " failed: " + (e && e.message)); }
       requestAnimationFrame(next);
