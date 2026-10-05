@@ -5,7 +5,17 @@
    answer; replay() turns its recorded uploads into real gfx calls on the
    main thread and rebuilds what could not cross (the surface sampler, the
    def, the gfx handle). Any failure answers null and the caller builds in
-   steps instead (loadTrackStepped) — the worker only ever saves time. */
+   steps instead (loadTrackStepped) — the worker only ever saves time; a replay
+   that throws is caught there and falls back the same way.
+
+   THE SAME WORLD AS THE MAIN THREAD (2026-10-04). The worker imports TRACK_VM
+   plus its own extras (ApexRoster.TRACK_WORKER_EXTRA: assets.js, so the baked
+   pack models are stamped, not their procedural fallbacks); the page posts its
+   MY TEAM row (a worker has no localStorage, so custom-team.js could not rebuild
+   it there); replay() uploads the pit signs the worker cannot paint; and a
+   worker that holds fewer models than the page answers null rather than a
+   poorer world. A custom circuit never goes to the worker: its list holds only
+   the shipped circuits. */
 const TrackBuildClient = (function () {
   "use strict";
   const KEY = "apex26.buildWorker";
@@ -55,7 +65,8 @@ const TrackBuildClient = (function () {
   // Idempotent. Resolves true once every build module has loaded in the worker.
   function spawn() {
     if (_ready) return _ready;
-    const files = typeof ApexRoster !== "undefined" && ApexRoster.TRACK_VM;
+    const R = typeof ApexRoster !== "undefined" ? ApexRoster : null;
+    const files = R && R.TRACK_VM && R.TRACK_VM.concat(R.TRACK_WORKER_EXTRA || []);
     if (!enabled() || typeof Worker === "undefined" || !files) return null;
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
@@ -66,11 +77,16 @@ const TrackBuildClient = (function () {
       const p = _pending.get(m.seq);
       if (!p) return;
       _pending.delete(m.seq);
-      if (m.type === "built") p.resolve(m);
+      if (m.type === "built" && (m.models | 0) < p.models) {
+        Log.warn("track", `build worker: ${m.id} built with ${m.models | 0} of the page's ${p.models} baked models — building in steps instead`);
+        p.resolve(null);
+      } else if (m.type === "built") p.resolve(m);
       else { Log.warn("track", "build worker failed: " + m.message); p.resolve(null); }
     };
     _w.onerror = (e) => { ok(false); drop("error " + ((e && e.message) || "")); };
-    _w.postMessage({ type: "init", files: pageUrls(files) });
+    // `base`: the PAGE's URL. The worker resolves relative fetches (assets.js's
+    // "assets/pack/…") against it, not against js/track/build-worker.js.
+    _w.postMessage({ type: "init", files: pageUrls(files), base: location.href });
     return _ready;
   }
 
@@ -83,7 +99,9 @@ const TrackBuildClient = (function () {
   // the same world share one request instead of queueing a second behind it.
   let _graphNoted = false, _inflight = 0, _last = null;
   async function build(idx, def, opts, gfx, sceneryFile) {
-    if (!enabled()) return null;
+    // A custom circuit is not in the worker's list (it would only answer
+    // "worker track list differs" after a round-trip): build it in steps.
+    if (!enabled() || (def && def.custom)) return null;
     const key = [def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
     if (!_last || _last.key !== key) _last = { key, p: post(idx, def, opts, gfx, sceneryFile) };
     const mine = _last;
@@ -96,14 +114,32 @@ const TrackBuildClient = (function () {
     if (!r || !(await r) || !_w) return null;
     const seq = ++_seq;
     return new Promise((resolve) => {
-      _pending.set(seq, { resolve });
+      _pending.set(seq, { resolve, models: pageModels() });
       _w.postMessage({
         type: "build", seq, idx, id: def.id,
         opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
         scenery: sceneryFile ? url(sceneryFile) : null,
+        team: myTeam(),
       });
     });
+  }
+  // The MY TEAM entry of the PAGE's Teams.LIST (custom-team.js splices the
+  // player's saved team in from localStorage), as plain data: the garage row
+  // (TrackPit.row) and the bay signs read it. null = the page has none, and
+  // the worker's row falls back to Teams.DEFAULT_CUSTOM exactly as the page's.
+  function myTeam() {
+    try {
+      const L = typeof Teams !== "undefined" && Array.isArray(Teams.LIST) ? Teams.LIST : [];
+      const custom = (Teams.DEFAULT_CUSTOM && Teams.DEFAULT_CUSTOM.id) || "custom";
+      const t = L.find((x) => x && x.id === custom);
+      return t ? JSON.parse(JSON.stringify(t)) : null;
+    } catch (_) { return null; }
+  }
+  // Baked models resident on the page — what a main-thread build would stamp.
+  function pageModels() {
+    if (typeof Assets === "undefined" || !Assets.models || !Assets.modelSync) return 0;
+    return Assets.models().filter((id) => Assets.modelSync(id)).length;
   }
 
   // The worker's track, made real: every recorded upload runs against `gfx` in
@@ -160,6 +196,10 @@ const TrackBuildClient = (function () {
     track.def = def;
     track._gfx = gfx;
     track.surface = TrackSurface.profile(def, track);
+    // The bay signs: the worker has no canvas or livery painter, so the build
+    // there skipped PitSigns.upload (tracks.js) — paint and upload them here,
+    // exactly where the main-thread build does, from the geometry it posted.
+    if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
     track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
     Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
     return track;

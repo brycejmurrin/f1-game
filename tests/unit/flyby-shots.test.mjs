@@ -1469,3 +1469,99 @@ test("menu planning rechecks ownership after its final warm rendering opportunit
   assert.equal(h.yields(), 1);
   assert.equal(h.c._menuFly, null, "the old plan is not published after a new request takes ownership");
 });
+
+// ---- the FRAMING judge (js/camera/flyby-sight.js) ---------------------------
+//
+// The planner kept the eye OUT of scenery but never asked what stood between
+// the eye and the subject: the node frame report (tools/shot/frame-report.mjs,
+// 2026-10-04) found Monza's turn-first framing a grandstand across the whole
+// left third at 7 m (score 9), the grid walk keeping 20-26 % of the field in
+// frame, and corner shots panning 34-40 deg/s. FlybySight is the one box model
+// the report and the planner share; these pin it and what the planner does with it.
+
+test("FlybySight: a box between the eye and a point hides it; a box the point sits in hides only the DRAWN share", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight;
+    const fake = { total: 100, props: { list: [
+      { kind: "building", x: 0, y: 5, z: 20, w: 10, h: 10, d: 2 },
+      { kind: "bush", x: 50, y: 1, z: 0, w: 4, h: 2, d: 4 },
+    ], spans: [] } };
+    const hidden = S.transmit(fake, [0, 5, 0], [0, 5, 40]);
+    assert.equal(hidden.T, 0, "an opaque building between eye and point leaves nothing");
+    assert.ok(hidden.near > 0.99, "and it stands within NEAR_M of the eye, so the loss is a NEAR one");
+    assert.equal(S.transmit(fake, [0, 5, 0], [30, 5, 0]).T, 1, "a clear sightline keeps everything");
+    const inBush = S.transmit(fake, [0, 1, 0], [50, 1, 0]);
+    assert.equal(inBush.T, 1, "a point inside a box is not hidden by it (a car on a kerb box)…");
+    assert.ok(Math.abs(inBush.Tdrawn - 0.4) < 1e-9, "…but a frame draws the 60 %-opaque bush over it");
+    // The near-thirds raster: a wall filling the left of the frame at 5 m.
+    const cam = S.camera([0, 5, 0], [0, 5, 100], 40, 16 / 9);
+    const th = S.nearThirds(fake, cam, null);
+    assert.ok(th[1] > 0.3 && th[0] < th[1], `the building ahead fills the centre third (${th.map((v) => v.toFixed(2))})`);
+    return null;
+  });
+});
+
+test("frame-report casts the planner's own box model (FlybySight), not a copy", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/shot/frame-report.mjs"), "utf8");
+  assert.ok(/FlybySight\.propBoxes\(T\)/.test(src) && /FlybySight\.spanBoxes\(T\)/.test(src), "frame-report builds its boxes through FlybySight");
+  assert.ok(/FlybySight\.offRoad\(/.test(src), "frame-report clears the road through FlybySight.offRoad, as the planner's sceneOf does");
+  assert.ok(!/function offRoad/.test(src), "no second copy of the road-clear filter in frame-report");
+  assert.ok(!/function propBoxes|function spanBoxes/.test(src), "no second copy of the box model in frame-report");
+});
+
+test("FlybySight.offRoad: a box across the road at running height is dropped, a bridge-height one and a tree part kept; the planner's scene applies it", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight, Tr = g.sandbox.Tracks;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    Tr.sample(track, track.total * 0.3, smp);
+    const [x, y, z] = smp.p;
+    const low = { kind: "building", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1 };
+    const high = { kind: "building", x, y: y + 10, z, w: 10, h: 4, d: 10, op: 1 };
+    const trunk = { kind: "tree", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1, part: "trunk" };
+    const kept = S.offRoad([low, high, trunk], track);
+    assert.deepEqual(kept.map((b) => b === low ? "low" : b === high ? "high" : "trunk"), ["high", "trunk"],
+      "the road-level box goes, the one floating 8 m over the road and the tree part stay");
+    assert.equal(kept.droppedOverRoad, 1);
+    const props = S.propBoxes(track), clear = S.offRoad(props, track);
+    assert.ok(clear.droppedOverRoad > 0, "Monza's registry has boxes over the road to drop");
+    assert.equal(S.sceneOf(track).boxes.length, clear.length + S.spanBoxes(track).length,
+      "sceneOf (the planner) holds exactly the report's boxes: offRoad(propBoxes) + spanBoxes");
+    return null;
+  });
+});
+
+test("the planner frames its subject: Monza's turn-first clears the grandstand, the grid walk holds the field", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, S = g.sandbox.FlybySight, Tr = g.sandbox.Tracks;
+    const list = F.bindCorners(track, F.DEFAULT);
+    let total = 0; for (const s of list) total += s.dur;
+    F.reset();
+    const at = (id, t) => {
+      let acc = 0;
+      for (const s of list) { if (s.id === id) return F.solve(track, (acc + s.dur * t) / total); acc += s.dur; }
+      throw new Error(id);
+    };
+    for (const t of [0.03, 0.5, 0.97]) {
+      const v = at("turn-first", t);
+      const th = S.nearThirds(track, S.camera(v.eye.slice(), v.tgt.slice(), v.fov, 16 / 9), null);
+      assert.ok(Math.max(...th) <= 0.4, `turn-first t=${t}: nearest 30 m fills ${(Math.max(...th) * 100).toFixed(0)} % of a third (was 100 %)`);
+    }
+    // Every slot's car centre: >= 60 % of the 22 in frame through the walk.
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    for (const t of [0.03, 0.5, 0.97]) {
+      const v = at("grid-walk", t), cam = S.camera(v.eye.slice(), v.tgt.slice(), v.fov, 16 / 9);
+      let inF = 0;
+      for (let k = 0; k < 22; k++) {
+        const s = F.anchorS(track, { at: "slot", n: k, off: 0 });
+        Tr.sample(track, s, smp);
+        const p = F.posePoint(track, { at: "slot", n: k, off: 0, x: 0, y: 0.8 }, [0, 0, 0]);
+        const q = S.project(cam, p);
+        if (q && Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1) inF++;
+      }
+      assert.ok(inF / 22 >= 0.6, `grid-walk t=${t}: ${inF} of 22 cars in frame (was 5-6)`);
+    }
+    assert.ok(Math.abs(F.PAN_MAX * 180 / Math.PI - 25) < 1e-9 && Math.abs(F.PARA_MAX * 180 / Math.PI - 30) < 1e-9,
+      "pan and parallax budgets are the frame report's FAST_PAN 25 / FAST_MOVE 30 deg/s");
+    return null;
+  });
+});
