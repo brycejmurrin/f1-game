@@ -1621,6 +1621,44 @@ test("clean and vintage radio presets change the recorded band and cue, but pres
   h.stop(); for (const fn of pendingTimers.splice(0)) fn();
 });
 
+test("M8: radio voice chains prune on preset switch and never outgrow the live set", async () => {
+  const { GameAudio: A, release, liveNodes } = boot();
+  A.init(); await release();
+  const clip = { duration: 0.5, sampleRate: SR, length: SR / 2, numberOfChannels: 1, getChannelData: () => new Float32Array(1) };
+  const flush = () => { while (pendingTimers.length) pendingTimers.shift()(); };
+  const fireEnded = () => {
+    for (const n of [...live]) if (n.kind === "src" && n.onended) { const fn = n.onended; n.onended = null; try { fn(); } catch (_) { /* torn */ } }
+  };
+  const play = (o) => { const h = A.radioVoice([clip], 0, o); if (h) { h.stop(); flush(); } fireEnded(); };
+  const all = [
+    { channel: "radio" },
+    { channel: "spotter", fx: "spotter" },
+    { channel: "control", fx: "control" },
+    { channel: "coach", fx: "coach" },
+    { fx: "announcer" },
+  ];
+  const base = liveNodes();
+  for (const p of ["modern", "clean", "vintage"]) {
+    A.setRadioPreset(p);
+    for (const o of all) play(o);
+    // A preset switch drops the previous radio/spotter pair; the live set is
+    // this preset's radio+spotter plus the three broadcast chains.
+    assert.equal(A.voiceChainsLive(), 5, `after ${p}: only the live preset's chains`);
+    assert.equal(liveNodes() - base, 20, `after ${p}: 5 × 4 chain nodes`);
+  }
+  for (let i = 0; i < 30; i++) {
+    A.setRadioPreset(["modern", "clean", "vintage"][i % 3]);
+    play({ channel: "radio" });
+    play({ channel: "spotter", fx: "spotter" });
+  }
+  assert.ok(A.voiceChainsLive() <= 9, "VOICE_CHAIN_MAX is a hard ceiling");
+  assert.equal(A.voiceChainsLive(), 5, "cycles settle on the current preset only");
+  const held = liveNodes();
+  play({ channel: "radio" });
+  play({ channel: "spotter", fx: "spotter" });
+  assert.equal(liveNodes(), held, "a repeat line on the live preset reuses the chain");
+});
+
 test("the pit limiter only ever CUTS the engine: base down by the depth, never louder, never negative", async () => {
   const A = await sampleEngine();
   const run = () => { for (let i = 0; i < 4; i++) A.setEngine(0.4, 0, false, 0.15, 2, {}); return A.engineLevel(); };

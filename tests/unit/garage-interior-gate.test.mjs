@@ -68,21 +68,56 @@ it("garage tabs split performance and finishing work into named rows", () => {
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \.cs-tab-row\s*\{[^}]*display:\s*contents/s,
     "the split-pane rail remains one vertical keyboard list");
   assert.doesNotMatch(sheet, /--cs-tab-cols/, "the old count-derived packing is gone");
-  // ACCEPTANCE (garage tabs tap-floor PR): compact #cs-tabs .cs-tab keep the
-  // painted --tap floor, and the play-shape strip snaps so a category is not
-  // half-clipped beside BACK / CLOSE (ios-iphone-landscape-safari 852×344).
-  assert.match(css,
+});
+
+/* ACCEPTANCE (garage category tabs tap-floor): Pages live measure 852×344
+ * compact wide painted fifteen #cs-tabs .cs-tab at h=30.5 with computed
+ * min-height:0, caused by
+ *   grid-template-rows: repeat(2, calc(var(--tap-min) + 4px))
+ * plus `.cs-tab { min-height: 0 }` overriding components.css --tap.
+ * Compact must keep the painted --tap / --tap-paint floor (logical +
+ * physical), pan/snap instead of a 2-row tap-min grid, and leave livery
+ * ⧉ chips on --chip-h / --tap-min. Folded #973's snap/width pins here. */
+it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)", () => {
+  const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
+  // Strip comments so a historical note cannot trip the crush-pattern ban.
+  const css = rd("css/carsetup.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const fade = rd("js/ui/scroll-fade.js");
+  assert.doesNotMatch(
+    css,
+    /#cs-tabs[^{]*\{[^}]*grid-template-rows:\s*repeat\(\s*2\s*,\s*calc\(\s*var\(--tap-min\)/s,
+    "compact short must not size #cs-tabs rows from --tap-min");
+  assert.doesNotMatch(
+    css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\][^{]*#cs-tabs[^{]*\.cs-tab\s*\{[^}]*min-height:\s*0\s*;/s,
+    "compact .cs-tab must not zero min-height over the components.css floor");
+  assert.match(
+    css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-block-size:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
+    "compact category tabs floor block size at --tap-paint / --tap");
+  assert.match(
+    css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
-    "compact category tabs floor at --tap-paint / --tap");
-  assert.match(css,
+    "compact category tabs also keep physical min-height at the tap rung");
+  assert.match(
+    css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
     "compact category tabs also floor width at the tap rung");
-  assert.match(css,
+  assert.match(
+    css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*\{[^}]*scroll-snap-type:\s*x\s+mandatory/s,
-    "compact strip snaps on the inline axis");
-  assert.match(css,
+    "compact strip snaps so a category is not half-clipped beside BACK");
+  assert.match(
+    css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*scroll-snap-align:\s*start/s,
-    "each compact category tab is a snap target");
+    "each compact category tab is a snap stop");
+  // Livery ⧉ chips stay on the chip / WCAG-min rung — do not hoist them to --tap.
+  assert.match(
+    css,
+    /\.cs-liv-del,\s*\.cs-liv-edit\s*\{[^}]*min-height:\s*var\(--chip-h\)/s,
+    "livery edit chips keep --chip-h, not the category-tab --tap floor");
+  assert.match(fade, /"#cs-tabs"/,
+    "ScrollFade watches #cs-tabs so the compact pan strip gets sf-l / sf-r");
 });
 
 /* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).
