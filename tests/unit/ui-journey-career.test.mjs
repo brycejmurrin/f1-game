@@ -91,3 +91,12 @@ test("compact qualifying foot keeps BACK except the existing .q-done rules", () 
   assert.doesNotMatch(compactFoot, /#q-back[^{]{0,80}\{\s*display:\s*none/,
     "compact CSS must not hide BACK; only .q-done does");
 });
+
+/* Soft-tap polish (UI Fit): hub objective briefs painted 32px on phone
+ * landscape (layout-audit 2026-10-05). Floor them on --tap-paint. */
+test("career hub objective picks floor at --tap-paint", () => {
+  const css = read("css/career.css");
+  assert.match(css,
+    /\.cr-obj-pick\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "objective brief buttons must hit the painted tap floor on touch");
+});

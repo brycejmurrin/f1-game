@@ -1573,7 +1573,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
     "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
   assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
+  // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
+  // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
+  // painted on touch; --tap-min was the 26px soft floor.
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-close', "min-height"), "var(--tap-paint)",
+    "compact VS Friend CLOSE floors at --tap-paint");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
+    "compact HOST / JOIN floor at --tap-paint");
+  // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
+    "compact VS Friend head clears --tap-paint CLOSE");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > .sheet-foot', "top"), "0",
+    "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
+
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
@@ -1680,6 +1693,22 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
+  // Flyby had --compact-at / #fb-rail but no compact rules (layout-audit 2026-10-05:
+  // sticky foot covered shot tabs; #fb-rows underHW). Pin the short-panel strip.
+  const tuner = css("css/tuner.css");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"]', "overflow"), "hidden");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-rail', "max-height"), "52%",
+    "compact flyby caps furniture so the foot stays in the dock");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] > .sheet-foot', "position"), "static",
+    "compact flyby foot must not stick over the shot strip");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overflow-x"), "auto");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "pan-x");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overscroll-behavior-x"), "contain");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots .lt-tab', "min-height"), "var(--tap-paint)");
+  assert.equal(decl(css("css/hud.css"), '#flyby-inner[data-density="compact"] #fb-freecam', "min-height"), "var(--tap-paint)",
+    "freecam floor lives in @layer hud (beats components)");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rail', "display"), "flex");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rows', "grid-column"), "2");
   const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>
     r.context.includes("@container sheet (max-width: 480px)"));
   assert.ok(narrowTabs, "narrow lighting tabs become a pan strip without waiting for compact");
