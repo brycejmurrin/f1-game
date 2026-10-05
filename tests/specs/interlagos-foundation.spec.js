@@ -42,7 +42,7 @@ test.describe("Interlagos track-owned foundation migration", () => {
     expect(result.climbHome).toBeGreaterThan(20);
   });
 
-  test("emits required hero models and reflective reservoir water", async ({ page }) => {
+  test("emits required hero models and Guarapiranga lake", async ({ page }) => {
     await loadInterlagos(page);
     const result = await page.evaluate(() => {
       const models = window.__apex.modelDiagnostics();
@@ -50,18 +50,21 @@ test.describe("Interlagos track-owned foundation migration", () => {
       const required = models.emitted.filter((entry) => entry.required);
       const hard = [...models.suppressed, ...models.invalid, ...models.unsafe]
         .filter((entry) => entry.required);
+      const lake = models.emitted.find((entry) => entry.id === "interlagos-guarapiranga");
       return {
         requiredIds: required.map((entry) => entry.id),
         hard,
         geometry,
+        lakeVerts: lake ? lake.vertices : 0,
       };
     });
 
     // ONE reservoir, not two. The lake was deliberately consolidated — the
     // circuit's own comment says a single continuous shoreline reads better
     // than "two detached rectangular water tiles floating at different
-    // setbacks" — and this list kept naming the tiles that consolidation
-    // removed. The water assertion below is what actually pins the lake.
+    // setbacks". waterSurface sits at pyMin-0.82 under the terrain ribbon, so
+    // Guarapiranga is now a terrain-following modelGroup (Buenos Aires park-
+    // lake pattern) — pin verts on that id, not the reflective water buffer.
     expect(result.requiredIds).toEqual(expect.arrayContaining([
       "interlagos-pit-tower",
       "interlagos-favela-13",
@@ -69,7 +72,7 @@ test.describe("Interlagos track-owned foundation migration", () => {
     ]));
     expect(result.hard).toEqual([]);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
-    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
+    expect(result.lakeVerts).toBeGreaterThan(0);
   });
 
   test("keeps track-owned dressing within a focused geometry budget", async ({ page }) => {
