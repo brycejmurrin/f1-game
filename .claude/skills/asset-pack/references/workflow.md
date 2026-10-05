@@ -82,7 +82,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
    npm run test:tooling-fast
    node tools/ci/test-bg.mjs hooks   # whole browser group (10-40 min); a lone `npm test -- tests/specs/assets-api.spec.js` is the pack's own spec
    ```
-   Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
+   Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.
 
 7. **Ship** — commit `assets/pack/` when regenerated. Nothing to bump

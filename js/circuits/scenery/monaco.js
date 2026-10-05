@@ -288,7 +288,7 @@
             center: vadd(a.c, a.u, 24), size: [52, 52, 38], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
-            addBox(stage, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
+            addBox(stage, vadd(a.c, a.u, 13), [44.2, 26, 30], CREAM, b);
             addBox(stage, vadd(a.c, a.u, 28), [18, 12, 16], [0.93, 0.88, 0.76], b);
             for (const o of [-14, 14]) {
               addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 30), [9.5, 18, 9.5], [0.90, 0.85, 0.74], b);
@@ -1242,7 +1242,7 @@
         }
         out._mat = 0;
         // Warm lit interior glow band (evening party lights)
-        addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.92, 0.4 * sc, L * 0.5], WINLIT, b);
+        addBox(out, vadd(sup, a.u, 6.0 * sc), [W * 0.935, 0.4 * sc, L * 0.51], WINLIT, b);
       };
       // Flagship yachts — lead berth at ~0.65 L is the Port Hercule white stack.
       {

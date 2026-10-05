@@ -26,7 +26,7 @@ const TrackDesigner = (function () {
       { n: 2, title: "Shape", text: "Drag the white points to bend the road; tap the road to add a point, and double-tap a point (or DELETE POINT) to remove it. Pinch or wheel to zoom, drag empty space to pan, and FIT VIEW recentres the circuit." },
       { n: 3, title: "Corners", text: "Choose CORNER, HAIRPIN, CHICANE or S-BEND, set its radius, angle and LEFT or RIGHT, then tap the point where it should begin (STRAIGHT works the same way with a length). To reshape a corner already there, tap its row under TURNS and press REPLACE THE SELECTED SPAN — UNDO takes either back." },
       { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
-      { n: 5, title: "Look", text: "Pick one of sixteen themes and tune it with TIME OF DAY (AUTO keeps the theme's own sky; NIGHT adds floodlights), TREES and CROWD. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
+      { n: 5, title: "Look", text: "Pick one of twenty themes and tune it with TIME OF DAY (AUTO keeps the theme's own sky; NIGHT adds floodlights), TREES and CROWD. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
       { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings (FIA lines are Grade 1 advice). Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
     ]),
@@ -661,6 +661,14 @@ const TrackDesigner = (function () {
     ui.name.addEventListener("input", () => { design.name = CustomTracks.sanitizeName(ui.name.value); scheduleDraft(); });
     ui.name.addEventListener("blur", () => { ui.name.value = design.name; });
     circuit.appendChild(ui.name);
+    // COUNTRY: the picker's flag and LOCATION row. One entry per flag the game
+    // draws (Flags lists aliases too: the first name per flag is the label).
+    ui.country = el("select", "td-input"); ui.country.setAttribute("aria-label", "Country");
+    const seenFlag = new Set(), names = [];
+    for (const n of (typeof Flags !== "undefined" ? Flags.countries() : [])) { const c = Flags.code(n); if (c && !seenFlag.has(c)) { seenFlag.add(c); names.push(n); } }
+    for (const n of [""].concat(names.sort())) { const o = el("option", "", n ? n.toUpperCase() : "NO COUNTRY"); o.value = n; ui.country.appendChild(o); }
+    ui.country.addEventListener("change", () => { design.country = CustomTracks.sanitizeCountry(ui.country.value); if (!design.country) delete design.country; scheduleDraft(); });
+    circuit.appendChild(ui.country);
     // build() runs before the first design is loaded: read through the null.
     ui.width = stepper("HALF-WIDTH m", () => (design ? design.baseHW : 7), (v) => setWidth(v), 0.5, (v) => v.toFixed(1));
     circuit.appendChild(ui.width);
@@ -802,6 +810,7 @@ const TrackDesigner = (function () {
       const on = b.dataset.look === key + ":" + look[key]; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
     }
     if (document.activeElement !== ui.name) ui.name.value = design.name;
+    if (ui.country) ui.country.value = design.country || "";
     ui.width._refresh();
     ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);

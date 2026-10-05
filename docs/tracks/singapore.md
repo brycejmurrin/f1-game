@@ -41,6 +41,7 @@ Essentially flat (sea-level reclaimed land). Only gentle ramps: a slight rise/di
 | 0.34 | L | mid | Mixed mid-rise hotel boxes, bright billboard panels (emissive quads) |
 | 0.45 | R | far | Open bay water gap; distant skyline box band on horizon |
 | 0.55 | L | near | **Fullerton Hotel**: wide low classical block, warm uplit `[1.0,0.85,0.55]` |
+| 0.58 | R | near | **Merlion Park**: white lion-fish statue on a pool plinth, cyan spout over bay water |
 | 0.62 | both | near | **Anderson Bridge**: pale arched truss boxes flanking road over river |
 | 0.66 | L | mid | **Esplanade theatre**: two spiky dome boxes (faceted/low-poly) |
 | 0.70 | L | mid | The Padang: dark flat open box (field) behind low rail |
@@ -64,21 +65,20 @@ Tight 90-degree street corners and slow left-right-left complexes (Sheares T1-3)
 
 F1.com's own landmark list for Marina Bay is: the Singapore Flyer, **the
 Supreme Court**, **Parliament**, the Fullerton Hotel, the Anderson Bridge and
-the Merlion. The circuit models the Flyer, Fullerton, Anderson, Merlion, the
-Padang, the Float, Marina Bay Sands, the Helix and the **old** Supreme Court /
+the Merlion. The circuit models the Flyer, Fullerton, Anderson, Merlion (as a
+required `singapore-merlion` group on a bay-side waterBand), the Padang,
+Marina Bay Sands, the Helix, Parliament House, and the **old** Supreme Court /
 City Hall (now the National Gallery, at s≈0.714 L — colonnade, pediment, low
-rotunda dome).
-
-Still missing, and worth a pass:
-
-- **Parliament House** — modern block near the river.
+rotunda dome). The Float at Marina Bay / NS Square is off the 2023+ racing
+line (Raffles Avenue straight bypass) — do not put race-side Float grandstands
+back; a far bay silhouette is enough if densified later.
 
 ## Outcome
 
 The new Supreme Court (Foster, 2005 — the stone-fin block with the
 cantilevered flying-saucer Court of Appeal disc) and St Andrew's Cathedral
-(the white Gothic spire on the Padang) are both now built —
+(the white Gothic spire on the Padang) are both built —
 `modelGroup("singapore-supreme-court", ...)` and
-`modelGroup("singapore-st-andrews", ...)` in `js/circuits/singapore.js`.
-Parliament House remains the one item from the original research pass not
-yet modelled.
+`modelGroup("singapore-st-andrews", ...)` in `js/circuits/scenery/singapore.js`.
+Parliament House and Merlion Park are required assemblies
+(`singapore-parliament-house`, `singapore-merlion`).
