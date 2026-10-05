@@ -197,7 +197,7 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
   for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
-    ["cockpitInterior", "carbon", '"carbon", "team", "suede", "ribbed", "classic"']])
+    ["cockpitInterior", "team", '"carbon", "team", "suede", "ribbed", "classic"']])
     assert.ok(exp.includes(`k: "${k}", lane: "raw", group: "camera", def: "${def}"`) && exp.includes(`oneOf: [${one}]`), `${k} is exported and imported`);
   assert.ok(exp.includes('oneOf: ["0", "slim", "1", "thick", "fairing"]'), "cockpitHalo accepts the sizes and faired style");
 });

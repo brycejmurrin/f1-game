@@ -506,7 +506,9 @@ test("grid colours: a black car is lifted to be visible, junk falls back to the 
  *  records its draws, and radio/announcer stubs. */
 function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = true, stored = {} } = {}) {
   let now = 5000, seq = 0;
-  const q = [], listeners = {}, saved = new Map(Object.entries(stored));
+  // radioChat ships as "key" (no pre-race radio check). This harness tests the
+  // check itself, so pin "normal" unless a case overrides.
+  const q = [], listeners = {}, saved = new Map(Object.entries(Object.assign({ radioChat: "normal" }, stored)));
   const said = [], stops = [], stings = [], ops = [], plays = [], annStops = [], draws = [];
   const elem = () => ({
     dataset: {}, style: { props: {}, setProperty(k, v) { this.props[k] = v; } },
