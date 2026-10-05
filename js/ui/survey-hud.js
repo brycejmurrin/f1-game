@@ -12,6 +12,10 @@
  * startRace / ensureScenery / track warm. Pause is a cheap #pausemenu unhide
  * (TopModal mirrors hidden → showModal). Prefer LoadingScreen.busy when the
  * #1012 plate exists; otherwise stop() any leftover card and show HUD.
+ *
+ * ctxLost / Graphics unavailable (#1033): treat backendState().ctxLost as dead —
+ * do not wait for an in-race HUD. holdChrome() re-asserts survey chrome after
+ * showUnavailable (which would otherwise hide #hud and cover with #nogl).
  */
 const SurveyHud = (function () {
   const KEY = "APEX_SURVEY_HUD";
@@ -30,6 +34,13 @@ const SurveyHud = (function () {
         return true;
     } catch (_) { /* blocked storage / odd location → off */ }
     return false;
+  }
+
+  /** Live enabled() against the page's location + localStorage (showUnavailable). */
+  function armed() {
+    return enabled(
+      typeof location !== "undefined" ? location : null,
+      typeof localStorage !== "undefined" ? localStorage : null);
   }
 
   /** Place touch groups into the docks so layout is measurable without Input. */
@@ -66,6 +77,43 @@ const SurveyHud = (function () {
   }
 
   /**
+   * Re-assert survey chrome after Graphics unavailable / ctxLost.
+   * Safe to call repeatedly; does not touch loading / race warm.
+   * Only string-literal DOM lookups (shell-ids dynamicIdReads ratchet).
+   */
+  function holdChrome(hooks) {
+    hooks = hooks || {};
+    const doc = hooks.document || (typeof document !== "undefined" ? document : null);
+    if (!doc) return false;
+    const $ = typeof hooks.$ === "function" ? hooks.$ : null;
+
+    // Each call site must pass a string literal into $ / getElementById.
+    const overlay = (hooks.els && hooks.els.overlay)
+      || ($ && $("overlay")) || (doc.getElementById && doc.getElementById("overlay")) || null;
+    if (overlay) { overlay.hidden = true; if ("inert" in overlay) overlay.inert = false; }
+    // #nogl is z-99 and covers the viewport — keep it down for survey shots.
+    const nogl = (hooks.els && hooks.els.nogl)
+      || ($ && $("nogl")) || (doc.getElementById && doc.getElementById("nogl")) || null;
+    if (nogl) nogl.hidden = true;
+
+    const hud = (hooks.els && hooks.els.hud)
+      || ($ && $("hud")) || (doc.getElementById && doc.getElementById("hud")) || null;
+    if (hud) { hud.hidden = false; if ("inert" in hud) hud.inert = false; }
+    const pausebtn = (hooks.els && hooks.els.pausebtn)
+      || ($ && $("pausebtn")) || (doc.getElementById && doc.getElementById("pausebtn")) || null;
+    if (pausebtn) pausebtn.hidden = false;
+    const btnCam = (hooks.els && hooks.els.btnCam)
+      || ($ && $("btn-cam")) || (doc.getElementById && doc.getElementById("btn-cam")) || null;
+    if (btnCam) btnCam.hidden = false;
+
+    if (doc.body) {
+      doc.body.classList.add("in-race");
+      if (doc.body.dataset) doc.body.dataset.surveyHud = "1";
+    }
+    return !!hud && !hud.hidden;
+  }
+
+  /**
    * Boot into a layoutable cockpit HUD without race / scenery warm.
    * hooks: { document, $, els?, loadingScreen? }
    */
@@ -83,33 +131,17 @@ const SurveyHud = (function () {
       try { ls.stop(); } catch (_) { /* already down */ }
     }
 
-    const overlay = (hooks.els && hooks.els.overlay) || $("overlay");
-    if (overlay) { overlay.hidden = true; if ("inert" in overlay) overlay.inert = false; }
     for (const node of doc.querySelectorAll(".screen")) {
       if (node.id === "pausemenu") continue;
       node.hidden = true;
     }
-    // Graphics-unavailable covers the viewport (z-99); hide it so HUD is the survey target.
-    const nogl = $("nogl");
-    if (nogl) nogl.hidden = true;
-
-    const hud = (hooks.els && hooks.els.hud) || $("hud");
-    if (hud) { hud.hidden = false; if ("inert" in hud) hud.inert = false; }
-    const pausebtn = (hooks.els && hooks.els.pausebtn) || $("pausebtn");
-    if (pausebtn) pausebtn.hidden = false;
-    const btnCam = (hooks.els && hooks.els.btnCam) || $("btn-cam");
-    if (btnCam) btnCam.hidden = false;
-
-    if (doc.body) {
-      doc.body.classList.add("in-race");
-      if (doc.body.dataset) doc.body.dataset.surveyHud = "1";
-    }
+    const ok = holdChrome(hooks);
     showTouchStub($, doc.body);
 
     if (ls && typeof ls.stop === "function") {
       try { ls.stop(); } catch (_) { /* card already down */ }
     }
-    return !!hud && !hud.hidden;
+    return ok;
   }
 
   /** Open #pausemenu over the survey HUD (no race state). TopModal mirrors hidden. */
@@ -132,6 +164,6 @@ const SurveyHud = (function () {
     return !!(doc && doc.body && doc.body.dataset && doc.body.dataset.surveyHud === "1");
   }
 
-  return { KEY, enabled, apply, openPause, active };
+  return { KEY, enabled, armed, apply, holdChrome, openPause, active };
 })();
 Object.freeze(SurveyHud);

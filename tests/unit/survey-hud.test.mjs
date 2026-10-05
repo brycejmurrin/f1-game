@@ -138,16 +138,61 @@ test("openPause: unhides #pausemenu without race state", () => {
   assert.equal(fx.nodes.get("loading").hidden, true);
 });
 
+test("holdChrome: restores #hud after Graphics unavailable / ctxLost hide", () => {
+  const fx = fakeDom();
+  SH.apply({ ...fx, loadingScreen: { stop() {} } });
+  // Simulate showUnavailable's normal path: hide HUD, show #nogl.
+  fx.els.hud.hidden = true;
+  fx.els.hud.inert = true;
+  fx.nodes.get("nogl").hidden = false;
+  fx.els.pausebtn.hidden = true;
+  assert.equal(SH.holdChrome(fx), true);
+  assert.equal(fx.els.hud.hidden, false);
+  assert.equal(fx.els.hud.inert, false);
+  assert.equal(fx.nodes.get("nogl").hidden, true);
+  assert.equal(fx.els.pausebtn.hidden, false);
+  assert.equal(fx.body.dataset.surveyHud, "1");
+});
+
+test("holdChrome: works from document.getElementById alone (no $)", () => {
+  const fx = fakeDom();
+  fx.els.hud.hidden = true;
+  fx.nodes.get("nogl").hidden = false;
+  assert.equal(SH.holdChrome({ document: fx.document }), true);
+  assert.equal(fx.els.hud.hidden, false);
+  assert.equal(fx.nodes.get("nogl").hidden, true);
+});
+
+test("showUnavailable survey early-return keeps HUD (#1033 ctxLost)", () => {
+  // Pin the picker contract: when SurveyHud.armed(), do not hide #hud / cover with #nogl.
+  const picker = read("js/perf/renderer-picker.js");
+  const start = picker.indexOf("function showUnavailable(");
+  assert.ok(start >= 0);
+  const body = picker.slice(start, start + 1200);
+  assert.match(body, /SurveyHud\.armed/);
+  assert.match(body, /SurveyHud\.holdChrome/);
+  assert.match(body, /return;/);
+  // Survey path must NOT execute the normal hud.hidden = true before returning.
+  const surveyReturn = body.indexOf("if (survey)");
+  const hideHud = body.indexOf("opts.hud.hidden = true");
+  assert.ok(surveyReturn >= 0 && hideHud > surveyReturn,
+    "survey early-return sits before the normal hud hide");
+});
+
 test("manifest + game.js boot hook + css-play screen are wired", () => {
   const man = require("../../tools/manifest.cjs");
   const iSurvey = man.FULL.indexOf("js/ui/survey-hud.js");
   const iGame = man.FULL.indexOf("js/game.js");
+  const iPicker = man.FULL.indexOf("js/perf/renderer-picker.js");
   assert.ok(iSurvey >= 0, "survey-hud.js is in FULL");
   assert.ok(iSurvey < iGame, "SurveyHud loads before game.js");
+  assert.ok(iSurvey < iPicker, "SurveyHud loads before renderer-picker (showUnavailable)");
   const game = read("js/game.js");
   assert.match(game, /SurveyHud\.enabled/);
   assert.match(game, /SurveyHud\.apply/);
   assert.match(game, /SurveyHud\.openPause/);
+  assert.match(game, /SurveyHud\.holdChrome/);
+  assert.match(game, /webglcontextlost/);
   const play = read("tools/ui/css-play.mjs");
   assert.match(play, /surveyHud:\s*true/);
   assert.match(play, /APEX_SURVEY_HUD=1/);
