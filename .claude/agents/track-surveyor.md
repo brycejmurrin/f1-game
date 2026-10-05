@@ -3,7 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
-tools: Bash, Read, Grep, Glob, Edit
+tools: Bash, Read, Grep, Glob, Edit, mcp__apex-tools__apex_track_audit, mcp__apex-tools__apex_graph_parity, mcp__apex-tools__apex_frame_report, mcp__apex-tools__apex_doctor, mcp__apex-tools__apex_status
 is_background: true
 background: true
 ---
