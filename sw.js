@@ -170,6 +170,24 @@ async function matchPreferCurrent(req) {
   try { return await caches.match(req); } catch (_) { return undefined; }
 }
 
+// THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`. The shell a plain
+// offline navigation would get (the first generation in cacheOrder() holding
+// index.html) — a shell is only ever written into its own build's cache, so
+// the cache name IS its build. Older (or an unnumbered cache) → undefined: a
+// `?b=` bust newer than anything cached must never be answered by a stale
+// shell, because the boot guard's one-shot sessionStorage key blocks a retry.
+async function shellAtLeast(b) {
+  const want = Number(b);
+  if (!Number.isFinite(want)) return undefined;
+  let ordered;
+  try { ordered = await cacheOrder(); } catch (_) { return undefined; }
+  for (const name of ordered) {
+    const hit = await caches.match("index.html", { cacheName: name });
+    if (hit) return cacheBuild(name) >= want ? hit : undefined;
+  }
+  return undefined;
+}
+
 // OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
 // that outlives a deploy — or a fetch that opened a newer build's cache before
 // that build's worker installed — leaves stale apex26-* caches behind until
@@ -696,7 +714,13 @@ self.addEventListener("fetch", (event) => {
       // "online" says only that a link exists, not that the host answers. The
       // precached shell is the right answer there: its own version guard
       // refreshes it the moment version.json does come through.
-      const failFast = online && (isVersion || isShellBust);
+      // A SPENT BUST IS NOT A BUST: a `b` no newer than the shell this cache
+      // would serve already landed (the page strips it, but a tab restored or
+      // bookmarked on `?b=<n>` still carries it), so it falls back like any
+      // query navigation — failing it left that URL on the browser's error
+      // page offline and on a slow link, for good.
+      const bustShell = isShellBust ? await shellAtLeast(url.searchParams.get("b")) : undefined;
+      const failFast = online && (isVersion || (isShellBust && !bustShell));
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
@@ -709,7 +733,7 @@ self.addEventListener("fetch", (event) => {
       // request with the shell's HTML (survivable only because the version
       // guard swallows the parse error).
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
-      if (isShellBust) return (await matchPreferCurrent(req)) || Response.error();
+      if (isShellBust) return bustShell || Response.error();
       return (await matchPreferCurrent(req)) || (await matchPreferCurrent("index.html")) || Response.error();
     })());
     return;

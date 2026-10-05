@@ -117,6 +117,17 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
 });
 
+test("a lap on an OLDER day's plan never resets or rewinds the streak", () => {
+  // A tab left on yesterday's plan past UTC midnight, today already played in
+  // another tab: the stale lap set count 1 and moved `last` back a day (bug hunt 2026-10-05 G8).
+  const { d } = load();
+  for (const day of ["2026-10-03", "2026-10-04", "2026-10-05"]) { d.open(day); d.record(70); }
+  assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-10-05" });
+  d.open("2026-10-04"); d.record(69);
+  assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-10-05" }, "the streak stands");
+  assert.equal(d.data().days["2026-10-04"].best, 69, "the older day's lap still counts for that day");
+});
+
 test("liveStreak() is the streak as it stands today: a chain whose last lap is older than yesterday reads 0", () => {
   const { d } = load();
   const today = d.dayKey(), y = new Date(today + "T00:00:00Z");
