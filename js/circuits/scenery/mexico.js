@@ -767,20 +767,25 @@
       // anchor crossed the infield and hung the airliner 12 m off the T6 leg
       // (racing frac 0.523), 206 m straight over the road — an overhead
       // prop, not the distant shape this block promises (float-audit's one
-      // mexico cluster). Walk out along the same bearing until EVERY leg of
-      // the lap is >= 400 m away (measured: ~1.3 km out, beyond T4-T6). It is
-      // still airborne by design: float-audit counts it, capped at 1 in
+      // mexico cluster). Walking out along that bearing until the lap was
+      // 400 m clear put it ~1.3 km out: past the race camera's 900 m far
+      // plane, so never drawn from the Esses. The LEFT of the Esses is
+      // outside the lap: ~700 m out there (+210 m up ≈ 730 m slant) it is
+      // inside the far plane, and the walk only guarantees every leg is
+      // >= 250 m away. Fog thins with height (fogHeight), so at 210 m up it is
+      // barely hazed. Still airborne by design: float-audit counts it (wing +
+      // fuselage, and the tail as its own cluster), capped at 2 in
       // tools/track/float-baseline.json.
       {
         const clearOfLap = (x, z) => {
           for (let k = 0; k < n; k++) {
-            if (Math.hypot(px[k] - x, pz[k] - z) < 400) return false;
+            if (Math.hypot(px[k] - x, pz[k] - z) < 250) return false;
           }
           return true;
         };
-        let a = anchor(K(0.20), 1, 820);
-        for (let d = 820; d <= 2400 && !clearOfLap(a.c[0], a.c[2]); d += 40) {
-          a = anchor(K(0.20), 1, d);
+        let a = anchor(K(0.20), -1, 700);
+        for (let d = 700; d <= 860 && !clearOfLap(a.c[0], a.c[2]); d += 20) {
+          a = anchor(K(0.20), -1, d);
         }
         const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude
         const bn = [a.r, a.u, a.t];                   // normal box basis
