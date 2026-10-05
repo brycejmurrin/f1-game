@@ -1316,9 +1316,18 @@ function yawVisInterp(c) {
 // shortest-path delta since head crosses ±π every lap.
 // The TV director's subject (js/camera/director.js): the interpolated pose the body is drawn at. Pooled.
 const _dirPos = [0, 0], _dirPose = { s: 0, x: 0, carPos: null, carHead: 0 };
+const _dirSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 function camPoseOf(c) {
   const pa = playerAnchor(c), rp = renderPosOf(c);
   _dirPose.s = pa.cS; _dirPose.x = pa.cX; _dirPose.carHead = headInterp(c);
+  // Ordinary AI never advances c.head. Match its drawn, interpolated basis;
+  // human/network/incident owners retain their authoritative world heading.
+  if (!c.human && !netPlay.owns(c) && !incidentSim.owns(c)) {
+    Tracks.sample(track, pa.cS, _dirSmp);
+    const t = _dirSmp.t, r = _dirSmp.r, yv = yawVisInterp(c);
+    const cy = Math.cos(yv) / (Math.hypot(...t) || 1), sy = Math.sin(yv) / (Math.hypot(...r) || 1);
+    _dirPose.carHead = Math.atan2(t[0] * cy + r[0] * sy, t[2] * cy + r[2] * sy);
+  }
   _dirPose.carPos = rp.world ? (_dirPos[0] = rp.x, _dirPos[1] = rp.z, _dirPos) : null; return _dirPose;
 }
 function headInterp(c) {
@@ -2860,7 +2869,7 @@ function netOrder(order) {
     netPlay.reportResult(order.map((c) => ({
       // `r`: the DNF reason (0 = not retired) — each peer draws its reliability
       // plan off its own seed, so a guest's labels must be the host's verdict.
-      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, r: c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : 0,
+      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, classified: c.classified, r: c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : 0,
     })));
     return order;
   }
@@ -2882,7 +2891,9 @@ function netOrder(order) {
   for (const e of verdict) {
     if (!e || !byId.has(e.d) || seen.has(e.d) ||
         (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
-        (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return order;
+        (e.p != null && (!Number.isFinite(e.p) || e.p < 0)) ||
+        (e.lap != null && (!Number.isInteger(e.lap) || e.lap < 0 || e.lap > 255)) ||
+        (e.classified != null && typeof e.classified !== "boolean")) return order;
     seen.add(e.d);
   }
   const sorted = verdict.map((e) => byId.get(e.d));
@@ -2891,6 +2902,8 @@ function netOrder(order) {
     if (!c) return;
     if (e.t != null) c.finishT = e.t;
     if (e.p != null) c.penalty = e.p;
+    if (e.lap != null) c.lap = e.lap;
+    if (typeof e.classified === "boolean") c.classified = e.classified;
   });
   return sorted;
 }
@@ -2991,8 +3004,11 @@ function endRace(forcedOrder) {
   // retired, finishDelay ended it early) the leader on the road is the reference.
   const ref = fin.length ? fin : run;
   const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
-  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= Math.floor(0.9 * winDone)) : [];
-  for (const c of cars) c.classified = (!c.retired && !c.dsq) || lateOut.includes(c);
+  const minDone = Math.floor(0.9 * winDone);
+  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= minDone) : [];
+  // A flagged backmarker must meet the same distance floor. Still-running cars
+  // keep the provisional classification used by the short results countdown.
+  for (const c of cars) c.classified = !c.dsq && ((!c.retired && (!c.finished || (c.lap || 0) - 1 >= minDone)) || lateOut.includes(c));
   const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
   const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
@@ -6197,7 +6213,7 @@ function retireCar(c, reason) {
   c.dnfAt = null;
   // The owner's word, on the reliable channel: nothing else carries it and a
   // rival left "running" holds the other screen's result to the hard cap.
-  if (c.local && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, retired: c.dnf, invalid: true });
+  if (netPlay.active() && (c.local || (!c.human && netPlay.role() === "host"))) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
   Tracks.sample(track, c.s, smp);
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);

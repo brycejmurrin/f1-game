@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import sharp from 'sharp';
 import { screenshotPresentedCanvas } from '../../tools/shot/probe-page.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
-import { menuReady } from '../../tools/ui/menu-readiness.mjs';
+import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
 import { parseSurveyTrackArgs } from '../../tools/track/survey-track.mjs';
 import { parseCaptureArgs, pixelEvidence, rendererEvidence, ROOT } from '../../tools/shot/capture-contract.mjs';
 import { pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
@@ -81,6 +81,33 @@ test('infinite decorative animation does not block while a finite transition doe
     animations.push({ playState: 'running', effect: { getComputedTiming: () => ({ endTime: 300, iterations: 1 }) } });
     assert.equal(menuReady('#menu'), false);
   } finally { globalThis.document = originalDoc; globalThis.getComputedStyle = originalStyle; }
+});
+
+// THE PREVIEW WAIT MUST NOT ACCEPT THE SHELL DEFAULT. The 2026-10-05 iPad
+// audit read `map 520x300 BLANK` on both cells: the old predicate checked only
+// buffer > 8 and buffer/box aspect, and an undrawn 520x300 canvas in its own
+// 520x300 box passes both. Fake canvas: attributes, a buffer, a box, and the
+// alpha channel getImageData would return.
+test('preview-map wait holds on the undrawn 520x300 default, releases on a draw or ink', () => {
+  const originalDoc = globalThis.document;
+  const canvas = (o) => ({
+    width: o.w, height: o.h, currentCSSZoom: 1,
+    getContext: () => ({ getImageData: () => ({ data: o.alpha }) }),
+    getBoundingClientRect: () => ({ width: o.bw, height: o.bh }),
+    hasAttribute: (a) => a === 'data-drawn' && !!o.drawn,
+  });
+  const blank = new Uint8ClampedArray(520 * 300 * 4);
+  const inked = new Uint8ClampedArray(520 * 300 * 4); inked[4 * 1000 + 3] = 255;
+  const at = (cv) => { globalThis.document = { getElementById: () => cv }; return previewMapSettled(); };
+  try {
+    assert.equal(at(canvas({ w: 520, h: 300, bw: 520, bh: 300, alpha: blank })), false, 'shell default, no ink, aspect-matched: keep waiting');
+    assert.equal(at(canvas({ w: 520, h: 300, bw: 0, bh: 0, alpha: blank })), false, 'hidden zero box (css/select.css) before the draw');
+    assert.equal(at(canvas({ w: 520, h: 300, bw: 520, bh: 300, alpha: inked })), true, 'a 520x300 that carries ink was drawn');
+    assert.equal(at(canvas({ w: 362, h: 534, bw: 181, bh: 267, alpha: blank, drawn: true })), true, 'fitted and stamped');
+    assert.equal(at(canvas({ w: 362, h: 534, bw: 520, bh: 300, alpha: blank, drawn: true })), false, 'buffer refit, box not yet');
+    assert.equal(at(canvas({ w: 1, h: 1, bw: 1, bh: 1, alpha: blank, drawn: true })), false, 'placeholder buffer');
+    assert.equal(at(null), true, 'no canvas: nothing to wait for');
+  } finally { globalThis.document = originalDoc; }
 });
 
 test('single-screen layout dispatch actually forwards 130 percent and rejects scale matrix', async () => {
