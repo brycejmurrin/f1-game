@@ -335,4 +335,13 @@ test("the A/B switch: apex26.garagePrewarm=\"off\" at boot, or setEnabled(false)
   assert.equal(h.pre.setEnabled(true), true);
   const p = h.pre.run(owned(h), "title"); await h.flush(2); h.gate.garageReady = true; await h.flush();
   assert.equal(await p, true);
+  assert.equal(h.pre.state().ready, true);
+  // setEnabled(true) re-arms: a shared page's earlier garage visit can never stand in for a fresh cycle.
+  assert.equal(h.pre.setEnabled(true), true);
+  assert.equal(h.pre.state().ready, false);
+  assert.equal(h.pre.state().last, null);
+  assert.equal(h.gate.garageKey, "");
+  const again = h.pre.run(owned(h), "title"); await h.flush(2); h.gate.garageReady = true; await h.flush();
+  assert.equal(await again, true);
+  assert.equal(h.pre.state().last.result, "ready");
 });

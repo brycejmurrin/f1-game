@@ -15,15 +15,21 @@ test.describe("garage prebuild on the title", () => {
 
   test("the idle title pre-builds the garage and GARAGE opens on it", async ({ page }) => {
     await toMenu(page);
+    // HERMETIC on a shared page: an earlier spec (garage-aero) may have opened
+    // the garage mid-prewarm, leaving a superseded run and a readiness that
+    // predates this test. garagePrewarm(true) re-arms — readiness and `last`
+    // are forgotten — so everything below is THIS test's own cycle.
+    await page.evaluate(() => window.__apex.garagePrewarm(true));
     // Wall-clock polling: rAF polling never fires under SwiftShader (docs/TESTING.md).
     await page.waitForFunction(() => {
       const s = window.__apex.garagePrebuild();
-      return !!(s && s.ready);
+      return !!(s && s.ready && s.last && s.last.result === "ready");
     }, null, { polling: 100, timeout: 90_000 });
     const before = await page.evaluate(() => window.__apex.garagePrebuild());
+    expect(before.enabled).toBe(true);
     expect(before.previewMeshes, "the preview LRU never grows past its six slots").toBeLessThanOrEqual(6);
     expect(before.garageReady).toBe(true);
-    if (before.last) expect(before.last.result).toBe("ready");
+    expect(before.last.result).toBe("ready");
     const visit = before.firstFrame ? before.firstFrame.visit : 0;
 
     await page.evaluate(() => {

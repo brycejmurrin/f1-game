@@ -1806,7 +1806,9 @@ same numbers: `garage prewarm …` and `garage first frame …` (channel `game`)
 ### `garagePrewarm(on?) → boolean | null`
 The TITLE garage pre-build's A/B switch (js/garage/prebuild.js): no argument
 reads it, `false` turns the title prebuild off for this session (the behaviour
-before it existed), `true` back on. `localStorage["apex26.garagePrewarm"] = "off"`
+before it existed), `true` back on AND re-armed (readiness and `last` are
+forgotten, so the next idle title runs a fresh cycle — what a spec on a shared
+page calls first). `localStorage["apex26.garagePrewarm"] = "off"`
 turns it off from boot. Race settings' own prewarm (RACE!'s drive-out) is not
 switched. `tools/shot/garage-tap.mjs` boots the title both ways and prints the
 GARAGE tap's `firstFrame` for each.

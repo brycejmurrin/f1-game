@@ -208,7 +208,13 @@ const GaragePrebuild = (function () {
         running, kind: kind(), blockers: blockers(env("title")), programsWarm: warmed, room: !!cam.roomReady(),
         previewMeshes: dbg ? dbg.previewMeshes : null, last, firstFrame };
     }
-    function setEnabled(on) { if (on !== undefined) enabled = !!on; return enabled; }
+    // true also RE-ARMS: readiness and the last run are forgotten, so the next idle
+    // title runs a fresh cycle (a spec on a shared page never reads a stale one).
+    function setEnabled(on) {
+      if (on !== undefined) enabled = !!on;
+      if (on === true) { gate.garageReady = false; gate.garageKey = ""; last = null; }
+      return enabled;
+    }
     _instance = { run, start, stop, markOpen, timed, state, setEnabled };
     return _instance;
   }
