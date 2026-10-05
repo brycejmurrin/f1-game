@@ -22,8 +22,14 @@ export function classifyPlaywrightLine(line) {
     return { kind: "suite", pid };
   }
   // Chromium with a playwright-mcp profile is the host *browser*, not the
-  // MCP server. Check before the generic playwright-mcp token.
-  if (/chrom(?:e|ium)/i.test(text) && /[./]playwright-mcp/.test(text)) {
+  // MCP server. Check before the generic playwright-mcp token. The EXECUTABLE
+  // must be Chromium: the idle server itself is `node …/.bin/playwright-mcp
+  // --executable-path …/chrome-linux/chrome --output-dir …/playwright-mcp`,
+  // which carries both tokens as arguments, and read as a live browser it
+  // refused every apex_* browser tool for the whole session (2026-10-05).
+  const exe = (text.trim().split(/\s+/)[1] || "").split("/").pop();
+  if (/^(?:chrome|chromium|chromium-browser|chrome-headless-shell|headless_shell)$/i.test(exe) &&
+      /[./]playwright-mcp/.test(text)) {
     return { kind: "hostBrowser", pid };
   }
   if (/@playwright\/mcp/.test(text) || /\bplaywright-mcp\b/.test(text)) {
