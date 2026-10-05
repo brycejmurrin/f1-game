@@ -20,7 +20,7 @@ const CustomTracks = (function () {
   // A STORED DESIGN IS PLAYER INPUT (and, via a share code, someone else's):
   // every field is rebuilt to these limits on load, never trusted off disk.
   const LIMITS = Object.freeze({
-    items: 24, name: 24, ptsMin: 8, ptsMax: 200, coord: 10000,
+    items: 24, name: 24, country: 32, ptsMin: 8, ptsMax: 200, coord: 10000,
     hwMin: 5, hwMax: 8, zones: 24, halfM: 2000, rise: 60, angleDeg: 30,
     // A stored loop must be one the engine can build: no two consecutive
     // control points closer than the editor's spacing (8 coincident points
@@ -46,6 +46,14 @@ const CustomTracks = (function () {
     return t || "MY CIRCUIT";
   }
 
+  /** The circuit's country: a LABEL (the picker's flag and LOCATION row), like
+   *  the name kept out of the content id. A display name the flag table knows
+   *  ("Italy", "UK"); the designer offers only those, and an unknown name still
+   *  shows the chequered fallback flag. "" when unset. */
+  function sanitizeCountry(s) {
+    if (typeof s !== "string") return "";
+    return s.normalize("NFC").replace(/[^\p{L}\p{N} .'-]/gu, "").replace(/\s+/g, " ").trim().slice(0, LIMITS.country);
+  }
   function sanitizePts(pts) {
     if (!Array.isArray(pts) || pts.length < LIMITS.ptsMin || pts.length > LIMITS.ptsMax) return null;
     const out = [];
@@ -149,6 +157,8 @@ const CustomTracks = (function () {
     };
     const look = TrackThemes.sanitizeLook(raw.look);
     if (look) it.look = look;
+    const country = sanitizeCountry(raw.country);
+    if (country) it.country = country;
     if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
@@ -193,7 +203,7 @@ const CustomTracks = (function () {
   function toRaw(it) {
     const theme = TrackThemes.defFields(it.theme, it);   // the design: the street presets thin their city past cityM of lap
     const raw = Object.assign({
-      id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: "",
+      id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: it.country || "",
       lengthKm: Math.round(it.lengthM / 100) / 10 || 0.1, classic: false,
       sceneryCoordinates: "racing", startFrac: 0, undulate: true,
       baseHW: it.baseHW,
@@ -360,6 +370,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, sanitizeCountry, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();
 Object.freeze(CustomTracks);

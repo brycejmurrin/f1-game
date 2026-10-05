@@ -145,7 +145,23 @@ async function race(page, steer, manual, ins, opts) {
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
       return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
     }, o.cam === "heli", { polling: 100, timeout: 5_000 });
-  } else await page.waitForTimeout(300);
+  } else {
+    // EVERY OTHER CELL waits for the same published input, not 300 ms: on the
+    // first cell after a cold server boot (2026-10-05, 32-cell run, 1 worker)
+    // the two notched-landscape tilt cells measured #hud-sectors on the pause
+    // button and the map and sectors outside the notch's safe box, and both
+    // passed on replay on the same tree and on the base — the clusters were
+    // read before fitHud had published --hud-top-h for the booted fonts.
+    // Same wait as the broadcast branch minus the hud-bcam expectation.
+    await page.waitForFunction(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const tower = document.querySelector(".hud-top");
+      if (!tower) return false;
+      const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+      const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+    }, null, { polling: 100, timeout: 5_000 });
+  }
 }
 
 const measure = async (page, ctrl, hud, W, H, ins) => {

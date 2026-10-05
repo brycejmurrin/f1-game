@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
+import { ADAPTED } from "./twinned-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -222,6 +223,10 @@ export function pick(files, opts = {}) {
       hit = true;
       for (const g of gs) add(g, why || f);
     }
+    // An ADAPTED spec runs as itself on the vm-page slice, and select-specs
+    // counts it as VM-covered, so its edit must schedule `page` or it runs
+    // nowhere on the pull request (2026-10-05; node-plan forces the script).
+    if (Object.hasOwn(ADAPTED, f)) { hit = true; add("page", `ADAPTED spec, vm-page runs it as itself: ${f}`); }
 
     if (GEOMETRY_PATHS.test(f)) {
       hit = true;

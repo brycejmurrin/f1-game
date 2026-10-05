@@ -18,8 +18,13 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { installProbeInit } from "./probe-page.mjs";
+
+// The checkout this file sits in, not one host's path: it served /workspace/f1-game,
+// which exists on no other box, so the page it recorded was a 404.
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 const CAMS = [
   ["chase", "Chase", "Pulls back with speed, tucks in on the brakes, swings outside the turn."],
@@ -60,7 +65,7 @@ const FULL_FRAMES = 36;
 const SIM_PER_FRAME = 4;
 const PLAY_FPS = 12;
 const outIdx = args.indexOf("--out");
-const OUT = resolve(outIdx >= 0 && args[outIdx + 1] ? args[outIdx + 1] : "scratch/captures/cam-videos");
+const OUT = resolve(ROOT, outIdx >= 0 && args[outIdx + 1] ? args[outIdx + 1] : "scratch/captures/cam-videos");
 mkdirSync(OUT, { recursive: true });
 const framesDir = join(OUT, ".frames");
 rmSync(framesDir, { recursive: true, force: true });
@@ -113,7 +118,7 @@ function writePage(id, title) {
   writeFileSync(join(OUT, `${id}.html`), html);
 }
 
-const srv = await startStaticServer("/workspace/f1-game");
+const srv = await startStaticServer(ROOT);
 const clips = [];
 try {
   const browser = await launchChromium({

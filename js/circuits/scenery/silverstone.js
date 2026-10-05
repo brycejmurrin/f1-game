@@ -738,10 +738,10 @@
         out._mat = MAT.CONCRETE;
         addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.84, 0.85, 0.86], b);   // re-clad hall
         out._mat = MAT.RUST;
-        addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
+        addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2 - 0.2), w / 2, ln,
                [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
         out._mat = MAT.METAL;
-        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln], [0.10, 0.20, 0.44], b);
+        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln + 0.8], [0.10, 0.20, 0.44], b);
         // Glazed entrance gable + canopy at the trackside end.
         const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
         out._mat = MAT.GLASS;

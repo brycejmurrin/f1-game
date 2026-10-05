@@ -5,6 +5,6 @@
 {"query":"I want to edit js/render/shared/assets.js so the loader picks the 128px arrays when tier is low and 256 when high, and add a decode-error fallback that logs through Log. Then run the licence and size verify on assets/pack.","expect":"asset-pack"},
 {"query":"I want to add a new CC0 scan layer (wet asphalt) to the pack alongside the synthetic ones, check the licence allow-list and the 8 MB budget, update CREDITS.md, and A/B it against the procedural tarmac with matTexMix at 0 and 1.","expect":"asset-pack"},
 {"query":"Night scenes look washed out and the floodlights are not firing at dusk. Ambient and exposure seem too high in the race settings. Help me tune lightTune values and check lightState so the night gate works properly.","expect":"lighting-tuner"},
-{"query":"On WebGPU the road turns NaN-white and I get a WGSL validation error about a texture_2d_array binding in the shader. Device lost after a few seconds. Help me debug the WGX pipeline and validate the WGSL.","expect":"webgpu-debug"},
+{"query":"On WebGPU the road turns NaN-white and I get a WGSL validation error about a texture_2d_array binding in the shader. Device lost after a few seconds. Help me debug the WGX pipeline and validate the WGSL.","expect":"renderer-debug"},
 {"query":"The sponsor logo and race number on the car's sidepod are unreadable against the livery paint colour. Adjust the livery contrast and the FACTORY_PRESETS so the number and crest stay legible on every finish.","expect":"garage-parts-livery"}
 ]

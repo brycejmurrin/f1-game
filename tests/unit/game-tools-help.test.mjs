@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const CASES = [
+  ["tools/track/audit-circuit.cjs", /audit-circuit/],
   ["tools/check/ai-pace.mjs", /ai-pace/],
   ["tools/check/ai-field.mjs", /ai-field/],
   ["tools/check/ai-line.mjs", /ai-line/],
