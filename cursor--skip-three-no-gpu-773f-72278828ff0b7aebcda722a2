@@ -1,1 +1,1 @@
-1791239760	Cursor Agent	PR #985 empty-commit retrigger CI on 2bd71e32e; prior d25840a had cancelled required guards; NO merge  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
+1791242845	Cursor Agent	PR #985 tip DIRTY again: sync onto db92113e9; skip-three only; NO merge  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
