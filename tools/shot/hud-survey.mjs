@@ -407,10 +407,21 @@ async function runGroup(browser, group, plan, log) {
         // cell's caps against the previous cell's (2026-10-04: --radio-top-*
         // identical before and after the slot fix).
         await cdpShot(page, null);
+        // TWICE. The first jump's refreshHud rewrites the chips' WORDS (the AERO
+        // chip goes AERO ZONE -> CORNER MODE, 100px -> 121px) AFTER the fit it
+        // came with, and a frozen sim never ticks again, so the measured frame
+        // kept the old clamp: aero right edge 1286 of 1280 in the 1280x720
+        // cockpit cell, a position no player holds (the live 10 Hz tick re-fits
+        // it within a frame; with the clamp re-run it reads 1278). The second
+        // pass fits against the words as they now stand.
         await page.evaluate((frac) => {
-          try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
           const a = window.__apex;
-          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+          a.freeze(false);
+          for (let pass = 0; pass < 2; pass++) {
+            try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+            a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2);
+          }
+          a.freeze(true);
         }, plan.frac);
         await cdpShot(page, null);
         if (plan.shots) {
