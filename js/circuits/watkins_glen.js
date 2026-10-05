@@ -61,6 +61,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.334, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0645, 0.5055, 0.5255, 0.5970, 0.6245, 0.7335, 0.7920, 0.8035, 0.8665, 0.9255, 0.9320],
     furniture: { tree: "broadleafFall", fol: [0.56, 0.30, 0.13], lamp: "none" },  // turning scarlet-brown — the fall reads or it doesn't
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },

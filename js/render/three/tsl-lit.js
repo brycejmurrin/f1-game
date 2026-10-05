@@ -2420,6 +2420,63 @@
       if (U.matTexScale.needsUpdate !== undefined) U.matTexScale.needsUpdate = true;
     }
 
+    /* DECAL LIGHT (glsl-fx.js DECAL_FS decalShadow / decalPool): what the car
+     * decals in tsl-fx.js need from this pass, built on the SAME uniforms and
+     * texture nodes so a decal under a bridge or in a floodlight pool tracks
+     * the bodywork under it. Sun: a 4-tap box PCF on the static map with
+     * sampleShadow's fade, slope bias and box compensation. Pools: the baked
+     * lamp atlas at the decal's ground position, sampled at level 0 outside
+     * any branch (the WGSL uniformity rule), weighted toward up-facing marks. */
+    const decalShadow = !shadowOn ? null : Fn(([wpIn, nrmIn]) => {
+      const wp = vec3(wpIn).toVar();
+      const nrm = vec3(nrmIn).toVar();
+      const res = float(1.0).toVar();
+      If(U.shadowStr.greaterThan(0.0), () => {
+        const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
+        const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
+        If(sc.z.lessThan(1.0), () => {
+          const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), length(wp.sub(fadeCtr)))
+            .oneMinus().toVar();
+          const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
+            .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
+          edgeFade.mulAssign(ef.x.mul(ef.y));
+          If(edgeFade.greaterThan(0.0), () => {
+            const t = float(U.shadowTexel).toVar();
+            const c = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
+            const biasTerm = clamp(t.mul(1.5).mul(sqrt(c.mul(c).oneMinus()).div(c)), 0.0005, 0.004)
+              .add(U.shadowBias.mul(0.5));
+            const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
+            const o = t.mul(1.5).mul(min(1.0, float(80.0).div(U.shadowRange))).toVar();
+            const sunT = shadowMapNode(SHD.sunTex);
+            const tap = (px, py) => sunT.sample(flipUV(sc.xy.add(vec2(px, py).mul(o)))).compare(z);
+            const sh = tap(-1.0, -1.0).add(tap(1.0, -1.0)).add(tap(-1.0, 1.0)).add(tap(1.0, 1.0)).mul(0.25);
+            res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+          });
+        });
+      });
+      return res;
+    });
+    const decalPool = Fn(([wpIn, nIn]) => {
+      const wp = vec3(wpIn).toVar();
+      const n = vec3(nIn).toVar();
+      const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
+      const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
+        .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
+      const bG = bUv.mul(U.bakeGrid.xy).toVar();
+      const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
+      const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
+      const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
+      const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
+      const res = vec3(0.0).toVar();
+      If(U.bakeOn.greaterThan(0.5).and(bIn).and(bSlot.x.greaterThanEqual(0.0)), () => {
+        // alpha = the baked height: a car's marks (0-1.5 m up) share the road's pool
+        const hW = smoothstep(1.5, 3.0, abs(wp.y.sub(bT.a))).oneMinus();
+        res.assign(bT.rgb.mul(U.bakeScale).mul(hW).mul(n.y.mul(0.5).add(0.5)));
+      });
+      return res;
+    });
+
     // Drop a material from the setSsrMrt registry so an evicted cache entry
     // can actually be released (JS-side; dispose() waits on the r186 upgrade
     // per the eviction comment in tlx.js).
@@ -2429,6 +2486,7 @@
     }
 
     return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake,
+             decalLight: { shadow: decalShadow, pool: decalPool },
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 

@@ -15,7 +15,13 @@ Clear, bright midday sun, sharp shadows, warm Riviera glow. Minimal fog — just
 - Armco/barriers: galvanized grey `[0.70, 0.72, 0.74]`
 
 ## 3. Elevation
-~42 m total change. Lowest at the harbour/start. Strong climb from Sainte Devote up Beau Rivage to the high point at Casino Square (s≈0.05→0.22). Sustained descent down Mirabeau to the Fairmont hairpin (s≈0.30→0.40), continuing down through Portier into the tunnel (s≈0.50→0.60). Track returns to harbour level for the flat back section (s≈0.62→1.0).
+~42 m total change. Racing-lap fractions of THIS centreline (`def.turns`): the
+line and **Sainte Devote** (T1, 0.067) sit at harbour level; a strong climb up
+**Beau Rivage** to the crest at **Massenet / Casino Square** (T3–T6, 0.21–0.27,
+~+41 m); the descent down **Mirabeau** and the **Fairmont hairpin** (0.34–0.41)
+to **Portier** (T11, 0.434, ~+5 m); the tunnel at harbour level; the low point at
+the **harbour chicane** (T12, 0.641, ~-4 m) and Tabac; flat harbour level round
+the pool and Rascasse back to the line.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Dist | Landmark — box-modelling note |

@@ -53,6 +53,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.318, 0.69],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0610, 0.1875, 0.1985, 0.2175, 0.4635, 0.5625, 0.6220, 0.6570, 0.7535, 0.7655, 0.8265, 0.8335, 0.8415, 0.8675, 0.8830, 0.9075, 0.9360],
     furniture: { tree: "fir",   fol: [0.11, 0.30, 0.15], lamp: "none" },  // Hardtwald pine corridor
     kit: { marshal: "bunker",    rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },

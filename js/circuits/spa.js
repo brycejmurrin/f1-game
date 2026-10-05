@@ -37,7 +37,10 @@
     // (≈0.36, +51 m, the summit) → down through Bruxelles/Pouhon to Stavelot
     // (≈0.71, −49 m) → back up via Blanchimont to the Bus Stop. Relief ≈101 m.
     // Refit: scratch tooling, not shipped — re-derive from SRTM, keep 64 knots.
-    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -11, 3, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
+    // Knots 12/13 eased by 1-2 m (-11/3 → -10/1) so the steepest 20 m of
+    // Raidillon reads 17.7 %, under the 18 % the real climb tops out at
+    // (circuit-def-fields pins it).
+    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -10, 1, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
       5, 1, -2, -5, -10, -15, -18, -20, -20, -19, -19, -20, -21, -21, -23, -25, -25, -23, -22, -20, -17, -16, -15, -13, -11, -10, -7, -5, -5, -2, -3, -5]
       .map((rise, j) => ({ s: j / 64, halfM: 217, rise })),
     bankZones: [

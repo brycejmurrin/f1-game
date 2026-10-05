@@ -13,7 +13,8 @@
  * `--check` form, so a hand edit inside a generated block cannot land.
  *
  * Owned blocks (markers must already exist; the tool never guesses):
- *   index.html         <!-- @gen-shell:preload --> … <!-- /@gen-shell:preload -->
+ *   index.html         <!-- @gen-shell:csp --> … <!-- /@gen-shell:csp -->
+ *                      <!-- @gen-shell:preload --> … <!-- /@gen-shell:preload -->
  *                      <!-- @gen-shell:css --> … <!-- /@gen-shell:css -->
  *                      <!-- @gen-shell:scripts --> … <!-- /@gen-shell:scripts -->
  *   tools/carview.html <!-- @gen-shell:carview --> … <!-- /@gen-shell:carview -->
@@ -66,6 +67,45 @@ export function replaceMarked(text, open, close, body) {
 
 // ---------------------------------------------------------------------------
 // Block bodies.
+
+// CONTENT-SECURITY-POLICY, the strictest this shell boots under. Defence in
+// depth: the 2026-10-04 DOM-sink sweep found nothing to exploit; this contains
+// the NEXT regression or a compromised dependency.
+//   script-src keeps 'unsafe-inline': the shell's inline guards, the importmap
+//     and the deferred-stylesheet onload= attributes are inline, and hashes
+//     would churn on every shell edit (and cannot cover attribute handlers
+//     without 'unsafe-hashes'). 'strict-dynamic' needs nonces/hashes, so it is
+//     out. What it buys: no script from any origin but ours and the Spotify
+//     Web Playback SDK. 'wasm-unsafe-eval' is Rapier (vendor/rapier, the
+//     optional debris world, which degrades if refused). No 'unsafe-eval'.
+//   connect-src stays https:/wss: wide on purpose: the TURN credential URL
+//     (apex26.turnApi), the room-code Worker (apex26.rendezvous) and the Nostr
+//     relays are player-configurable, so an allow-list would break overrides.
+//   object-src 'none' and base-uri 'self' close plugin and <base> injection.
+// frame-ancestors / report-to are header-only and cannot be set from a meta.
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
+export const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.scdn.co",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  // + loopback ws/http: tools/net/nostr-local.cjs and rtc-e2e-room.mjs point
+  //   apex26.nostrRelays at ws://127.0.0.1:7448; `wrangler dev` serves the
+  //   room-code Worker on http://localhost.
+  "connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*",
+  "worker-src 'self' blob:",
+  "frame-src https://sdk.scdn.co",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+function cspBlock() {
+  return `<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`;
+}
 
 function preloadBlock() {
   return (MANIFEST.CSS_PRELOAD || []).map((f) =>
@@ -184,6 +224,7 @@ function rosterSource() {
 export function generate() {
   const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
   let html = read("index.html");
+  html = replaceMarked(html, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock());
   html = replaceMarked(html, "<!-- @gen-shell:preload -->", "<!-- /@gen-shell:preload -->", preloadBlock());
   html = replaceMarked(html, "<!-- @gen-shell:css -->", "<!-- /@gen-shell:css -->", cssBlock());
   html = replaceMarked(html, "<!-- @gen-shell:scripts -->", "<!-- /@gen-shell:scripts -->", scriptsBlock());

@@ -11,7 +11,7 @@ default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
 TLX/WGX failed to init — confirm with `__apex.diag()` (`backendState`) before
 debugging it. It uses WebGL2 with
 interleaved point lights, a 2048² sun shadow map (1024² on mobile; its PCSS blocker pass is a
-desktop-only 512² R16F blocker target; 512² is also the separate LAMP spot map),
+desktop-only 512² R32F blocker target; 512² is also the separate LAMP spot map),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.
 

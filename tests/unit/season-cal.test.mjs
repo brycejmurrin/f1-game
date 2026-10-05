@@ -804,3 +804,60 @@ test("title-menu STANDINGS ranks on counting points: the season's own drop rule 
   assert.equal(S.netPts(season, "d1"), 25 + 25 + 18 * 4, "d1's two 18s still drop");
   assert.equal(S.rank(season, "d0", "d1") < 0, true, "d0 still leads on counting points");
 });
+
+// review-race-career-data #9: the results sheet sorted constructors by points
+// alone (insertion order on a tie) and Career.teamStandings by points then
+// tier, so two screens could name different P5s. One comparator now,
+// SeasonCal.rankTeams: points, then the team's countback, then tier, then id.
+test("constructors rank by points, then the team's countback, then tier, then id — one rule everywhere", () => {
+  const { S } = load();
+  const season = {
+    teamPts: { ferrari: 30, haas: 30, alpine: 30, williams: 0, audi: 0 },
+    // "team:seat" ids: haas's two cars hold a win; ferrari two seconds; alpine one second.
+    finishes: { "haas:1": [1], "ferrari:0": [0, 1], "ferrari:1": [0, 1], "alpine:0": [0, 1], "williams:0": [0, 0, 0, 1] },
+  };
+  const order = ["alpine", "audi", "ferrari", "williams", "haas"].sort((a, b) => S.rankTeams(season, a, b));
+  assert.equal(order.join(","), "haas,ferrari,alpine,williams,audi",
+    "a win beats two seconds; two seconds beat one; any finish beats none; then the id");
+  assert.equal(S.rankTeams(season, "haas", "haas"), 0);
+  assert.equal(["b", "a"].sort((x, y) => S.rankTeams({ teamPts: { b: 5, a: 5 } }, x, y)).join(","), "a,b", "no finishes, no tiers: the id, stably");
+  // Both tables that print constructors use it.
+  const sheet = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.doesNotMatch(sheet, /Object\.entries\(season\.teamPts\)/, "no private constructors sort left in the results sheet");
+  assert.match(sheet, /SeasonCal\.rankTeams\(/);
+  const career = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
+  const ts = career.slice(career.indexOf("function teamStandings"), career.indexOf("function expectedConstructor"));
+  assert.match(ts, /SeasonCal\.rankTeams\(/);
+});
+
+// review-race-career-data #10: outside a career the luck seed was the SESSION's
+// (fresh per page load), so reloading re-rolled a planned retirement and the
+// qualifying draw. A standalone season now stamps and saves its own.
+test("a standalone season stamps its own luck seed once, saves it, and a reload keeps it", () => {
+  const { S, stored } = load();
+  S.engage("season");
+  const season = S.restart();
+  assert.equal(season.seed, undefined, "nothing stamped before the first draw");
+  assert.equal(S.luckSeed(season, 1234), 1234, "the first stamp of a page load IS the session seed");
+  assert.equal(S.luckSeed(season, 999), 1234, "later draws read the stamp, whatever the session seed now is");
+  assert.equal(stored.get("season").seed, 1234, "saved with the season at once — not at the next award");
+  // A reload: a fresh module over the same disk, a different session seed.
+  const again = load(Object.fromEntries(stored));
+  again.S.engage("season");
+  const back = again.S.load();
+  assert.equal(again.S.luckSeed(back, 777), 1234, "the reload replays the same luck");
+  // A NEW championship in the same page load is not the last one's luck again.
+  const next = S.restart();
+  const n = S.luckSeed(next, 1234);
+  assert.notEqual(n, 1234);
+  assert.ok(Number.isInteger(n) && n > 0);
+  // Junk on disk is dropped, then stamped fresh.
+  const junk = load({ season: { round: 0, pts: {}, teamPts: {}, driverCodes: {}, seed: -5 } });
+  junk.S.engage("season");
+  assert.equal(junk.S.load().seed, undefined);
+  // game.js and quali-model route every (seed, round, driver) draw through it.
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const luckSeed = \(\) =>[^\n]*SeasonCal\.luckSeed\(season, simSeed\(\)\)/);
+  assert.equal((game.match(/Career\.seasonSeed\(\)/g) || []).length, 1, "one career-or-season seed site in game.js");
+  assert.match(readFileSync(join(ROOT, "js/race/quali-model.js"), "utf8"), /SeasonCal\.luckSeed\(G\.season, G\.simSeed\(\)\)/);
+});

@@ -470,7 +470,7 @@ test("TLX frame uniforms share one render-group buffer (setGroup loop after the 
   const fxLast = fx.indexOf("ambGround: uniform(");
   const fxLoop = fx.indexOf("if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);");
   assert.ok(fxLast > 0 && fxLoop > fxLast, "the decal setGroup loop follows the last U member");
-  assert.match(tlx, /TLXShaders\.fx\(THREE, TSL, \{ chunks, sharedUniforms: _sharedUniforms \}\)/, "the pin reaches the fx factory too");
+  assert.match(tlx, /TLXShaders\.fx\(THREE, TSL, \{ chunks, sharedUniforms: _sharedUniforms, lit \}\)/, "the pin reaches the fx factory too");
 });
 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
@@ -5805,4 +5805,86 @@ test("TLX abort path disposes three without losing #game's WebGL2 context", () =
   assert.match(tlx, /disposeKeepingContext\(_abortRenderer\)/, "the create() catch uses the context-keeping dispose");
   assert.match(tlx, /disposeKeepingContext\(renderer\);[^\n]*\n\s*throw e;/, "the init() failure path uses it too");
   assert.doesNotMatch(tlx, /_abortRenderer\.dispose\(\)/, "no raw dispose on the abort path");
+});
+
+// L4-c (2026-10-04): car decals. The atlas uploads PREMULTIPLIED and blends
+// ONE / ONE_MINUS_SRC_ALPHA (a straight upload let generateMipmap average the
+// transparent black surround into logo edges), and DECAL_FS reads the sun map
+// already on unit 0 plus the lamp bake on 12/13. Driven on the recording mock.
+test("GLX decals: premultiplied upload, premultiplied blend restored after, shadow + lamp-pool uniforms", () => {
+  const h = bootGlx();
+  const gl = h.gl;
+  h.reset();
+  const tex = h.GLX.createTexture({ width: 2, height: 2 });
+  const store = h.calls.filter((c) => c[0] === "pixelStorei" && c[1][0] === gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL).map((c) => c[1][1]);
+  assert.deepEqual(store, [true, false], "premultiplied for the atlas, then back to false (texSubImage3D from a buffer rejects it)");
+  const iUp = h.calls.findIndex((c) => c[0] === "texImage2D");
+  const iOn = h.calls.findIndex((c) => c[0] === "pixelStorei" && c[1][0] === gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL && c[1][1] === true);
+  assert.ok(iOn >= 0 && iOn < iUp, "the flag is set before the upload");
+  const mesh = h.GLX.createTexMesh({ pos: [0, 0, 0, 1, 0, 0, 1, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], uv: [0, 0, 1, 0, 1, 1], idx: [0, 1, 2] });
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const lampBake = { data: new Uint16Array(4 * 4 * 2 * 4), indir: new Uint16Array(4), x0: -50, z0: -40, tilesX: 1, tilesY: 1, T: 4, cell: 2, atlasW: 4, atlasH: 4 };
+  h.GLX.begin(h.frame({ lampBake, lampBakeScale: [1, 1, 1] }));
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, {});
+  const blends = h.calls.filter((c) => c[0] === "blendFunc").map((c) => c[1]);
+  assert.deepEqual(blends[0], [gl.ONE, gl.ONE_MINUS_SRC_ALPHA], "premultiplied blend for the decal");
+  assert.deepEqual(blends.at(-1), [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA], "the frame's blend invariant comes back");
+  const named = (fn, name) => h.calls.filter((c) => c[0] === fn && c[1][0] && c[1][0].name === name).map((c) => c[1].slice(1));
+  assert.deepEqual(named("uniform1i", "uShadowMap"), [[0]], "the sun map stays on unit 0");
+  assert.deepEqual(named("uniform1i", "uLampBake"), [[12]]);
+  assert.deepEqual(named("uniform1i", "uLampBakeIdx"), [[13]]);
+  assert.equal(named("uniform4fv", "uShadowP").length, 1, "shadow strength / texel / bias / range");
+  assert.deepEqual(named("uniform1f", "uBakeOn"), [[1]], "a live bake lights the decal's pool");
+  assert.deepEqual(named("uniform4f", "uBakeA"), [[-50, -40, 1 * 4 * 2, 1 * 4 * 2]], "origin + size in metres (lit.js uBakeOrigin/uBakeSize)");
+  // A second decal in the same frame re-sends none of the frame block.
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, {});
+  assert.equal(named("uniform4fv", "uShadowP").length, 0, "frame-constant: once per frame token");
+});
+
+test("decal shaders: sun-map PCF + lamp pools in GLSL, TSL and WGSL; TLX premultiplied", () => {
+  const glsl = read("js/render/glx/shaders/glsl-fx.js");
+  const fs = /const DECAL_FS = `([\s\S]*?)`;/.exec(glsl)[1];
+  assert.match(fs, /uniform sampler2DShadow uShadowMap;/);
+  assert.match(fs, /float sh = ndl > 0\.0 \? decalShadow\(vWorldPos, N\) : 1\.0;/);
+  assert.equal((fs.match(/texture\(uShadowMap,/g) || []).length, 4, "a 4-tap box PCF");
+  assert.match(fs, /texelFetch\(uLampBakeIdx, ivec2\(bTile\), 0\)/, "the bake indirection (lit.js parity)");
+  assert.match(fs, /vec3 lit = t\.rgb \* \(amb \+ uSunColor \* \(ndl \* sh\) \+ decalPool\(vWorldPos, N\)\) \+ t\.rgb \* uGlow;/);
+  const lit = read("js/render/three/tsl-lit.js");
+  assert.match(lit, /decalLight: \{ shadow: decalShadow, pool: decalPool \}/, "tsl-lit hands the decal terms to tsl-fx");
+  const fx = read("js/render/three/tsl-fx.js");
+  assert.match(fx, /const sh = DL && DL\.shadow \? DL\.shadow\(wp, N\) : float\(1\.0\);/);
+  assert.match(fx, /const pool = DL && DL\.pool \? DL\.pool\(wp, N\) : vec3\(0\.0\);/);
+  assert.match(fx, /m\.blendSrc = THREE\.OneFactor;\s*\/\/ premultiplied atlas/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /t\.premultiplyAlpha = true;/, "TLX createTexture uploads premultiplied");
+});
+
+// L4-d (2026-10-04): the PCSS blocker map. R16F stepped 2^-11 in [0.5,1) (a
+// ~0.28 m receiver-blocker error at a 570 m span) and the 4 taps at +/-1 source
+// texel read texels {1,3} of each 4-texel axis — 12 of 16 never seen.
+test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint (GLX + TLX)", () => {
+  const post = read("js/render/glx/shaders/glsl-post.js");
+  const blk = /const BLOCKER_FS = `([\s\S]*?)`;/.exec(post)[1];
+  assert.match(blk, /ivec2 k = max\(textureSize\(uDepthTex, 0\) \/ 512, ivec2\(1\)\);/);
+  assert.match(blk, /for \(int y = 0; y < 4; y\+\+\) \{\s*for \(int x = 0; x < 4; x\+\+\) \{/);
+  assert.match(blk, /texelFetch\(uDepthTex, base \+ ivec2\(x, y\), 0\)\.r/);
+  const sh = read("js/render/glx/shadow.js");
+  assert.match(sh, /gl\.texImage2D\(gl\.TEXTURE_2D, 0, gl\.R32F, 512, 512, 0, gl\.RED, gl\.FLOAT, null\);/);
+  assert.doesNotMatch(sh, /gl\.R16F, 512, 512/);
+  const tsh = read("js/render/three/tlx-shadow.js");
+  assert.match(tsh, /format: THREE\.RedFormat, type: THREE\.FloatType,\s*depthBuffer: false/, "TLX blocker target is R32F");
+  assert.match(tsh, /opts\.type = THREE\.FloatType;\s*opts\.format = THREE\.RedFormat;/, "and so is the colour copy of the sun depth it reads");
+  // The tap loop is JS: execute it to count the taps it emits.
+  const loop = /let d = tap\(0, 0\);\s*(for \(let y = 0; y < k; y\+\+\) for \(let x = 0; x < k; x\+\+\) if \(x \|\| y\) d = TSL\.min\(d, tap\(x, y\)\);)/.exec(tsh);
+  assert.ok(loop, "the k x k min loop");
+  const seen = [];
+  const TSL = { min: (a, b) => a + b };
+  const tap = (x, y) => { seen.push(x + "," + y); return 1; };
+  const k = 2048 / 512;
+  let d = tap(0, 0);
+  eval(loop[1]);
+  assert.equal(new Set(seen).size, 16, "16 distinct source texels at 2048 -> 512");
+  assert.equal(d, 16);
 });

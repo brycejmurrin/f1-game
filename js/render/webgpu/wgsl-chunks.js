@@ -458,6 +458,39 @@ fn acesTonemap(x0: vec3<f32>, a: f32, b: f32, c: f32, d: f32, e: f32) -> vec3<f3
 
   //    gl_VertexID trick, js/render/glx/shaders/glsl-sky.js / post.js). draw(3) with no vertex buffers; WGSL
   //    generates the NDC positions from @builtin(vertex_index).
+  // The post-ACES COLOUR GRADE (GLX glsl-post.js COLOUR_GRADE) and the output
+  // DITHER (DITHER_LSB), as parameterised leaves: WGSLPost.COMPOSITE and the
+  // BLIT that draws the rear-view mirror / broadcast PiP call the same code.
+  //   grade = (contrast, vibrance, saturation, tint)
+  //   shadowStr = (split-tone shadow tint xyz, gradeStr), hiLift = (highlight tint xyz, blackLift)
+  const colourGradeLeaf = `
+fn colourGradeP(c_in : vec3<f32>, grade : vec4<f32>, shadowStr : vec4<f32>, hiLift : vec4<f32>) -> vec3<f32> {
+  var c : vec3<f32> = c_in;
+  let LUMA = vec3<f32>(0.299, 0.587, 0.114);
+  c = c * vec3<f32>(1.015, 1.008, 0.992);                 // gain
+  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);            // soft S-curve
+  c = pow(max(c, vec3<f32>(1e-6)), vec3<f32>(grade.x));   // midtone contrast; pow(0, n) NaNs on mobile GPUs, black stays black
+  // Vibrance: pull dull pixels toward colour more than vivid ones.
+  let luma = dot(c, LUMA);
+  let sat = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b);
+  c = mix(vec3<f32>(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * grade.y);
+  c = mix(vec3<f32>(dot(c, LUMA)), c, grade.z);           // global saturation
+  c = c * vec3<f32>(1.0 + 0.07 * grade.w, 1.0, 1.0 - 0.07 * grade.w);   // white-balance tint
+  // Cinematic split-tone (shadows vs highlights); gradeStr 0 = neutral.
+  let toneTint = mix(shadowStr.xyz, hiLift.xyz, smoothstep(0.0, 0.85, dot(c, LUMA)));
+  c = mix(c, c * toneTint, shadowStr.w);
+  // Raised (slightly warm) black floor.
+  return max(c, vec3<f32>(hiLift.w, hiLift.w * 0.8, hiLift.w * 0.6));
+}
+// Triangular-PDF dither (~1 LSB) on pixel coords, stepped per frame by the
+// golden-ratio IGN offset — breaks 8-bit banding, never a frozen speckle.
+fn ditherLSB(c : vec3<f32>, px : vec2<f32>, time : f32) -> vec3<f32> {
+  let dhc = px + 5.588238 * (floor(time * 60.0) % 64.0);
+  let dh0 = fract(52.9829189 * fract(dot(dhc, vec2<f32>(0.06711056, 0.00583715))));
+  let dh1 = fract(52.9829189 * fract(dot(dhc + 17.31, vec2<f32>(0.00583715, 0.06711056))));
+  return c + vec3<f32>((dh0 + dh1 - 1.0) / 255.0);
+}`;
+
   const fullscreenTri = `
 fn fsTriNDC(vi: u32) -> vec2<f32> {
   // p = vec2((vi<<1)&2, vi&2) * 2 - 1  — the exact GLX SKY_VS derivation.
@@ -489,8 +522,10 @@ fn F_Schlick(VoH: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
   return f0 + (vec3<f32>(f90) - f0) * (v2 * v2 * v);
 }`;
 
-  // LIT: WGSL port of js/render/glx/shaders/glsl-lit.js (LIT_VS/LIT_FS). Uniform layout must match wgx.js _writeFrame/_writeDraw.
-  const LIT = `
+  // FrameU — the lit pass's frame block (wgx.js _writeFrame). Its own string so
+  // the car-decal module (wgsl-fx.js DECAL, group 1 = the lit frame group) reads
+  // the very same layout instead of a copy that could drift.
+  const FRAME_U = `
 struct FrameU {
   viewProj   : mat4x4<f32>,   // off   0
   eye        : vec4<f32>,     // off  64  (xyz eye)
@@ -526,7 +561,9 @@ struct FrameU {
   bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, T texels per tile)
   bakeD      : vec4<f32>,     // off 656  (tilesX, tilesY, atlas texture w, atlas texture h = 2 atlasH)
 };                            // size 672
-struct Light {
+`;
+  // LIT: WGSL port of js/render/glx/shaders/glsl-lit.js (LIT_VS/LIT_FS). Uniform layout must match wgx.js _writeFrame/_writeDraw.
+  const LIT = `${FRAME_U}struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
   dirVol   : vec4<f32>,       // xyz beam aim, w volW (godray — unused here)
@@ -560,7 +597,7 @@ struct MatScaleU { s : array<vec4<f32>, 5> };
 @group(0) @binding(4) var envCube : texture_cube<f32>;
 @group(0) @binding(5) var envSamp : sampler;
 @group(0) @binding(6) var ssrTex  : texture_2d<f32>;
-@group(0) @binding(7) var blockerTex : texture_2d<f32>;      // PCSS-lite min-depth blocker map (512², r16float)
+@group(0) @binding(7) var blockerTex : texture_2d<f32>;      // PCSS-lite min-depth blocker map (512², r32float, textureLoad)
 @group(0) @binding(8) var carShadowTex : texture_depth_2d;   // per-frame car-only shadow map (shares shadowSamp)
 @group(0) @binding(9) var matAlbedoTex : texture_2d_array<f32>;
 @group(0) @binding(10) var matNormalTex : texture_2d_array<f32>;
@@ -710,11 +747,17 @@ fn cloudShadow(wp: vec3<f32>) -> f32 {
   return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
 }
 
+// NEAREST reads (GLX's blocker sampler): the map is r32float, unfilterable.
+fn blockerAt(uv : vec2<f32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(blockerTex));
+  let px = clamp(vec2<i32>(uv * vec2<f32>(dims)), vec2<i32>(0), max(dims - vec2<i32>(1), vec2<i32>(0)));
+  return textureLoad(blockerTex, px, 0).r;
+}
 fn findBlocker(suv : vec2<f32>, bt : f32) -> f32 {
-  let d0 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>(-bt,  bt), 0.0).r;
-  let d1 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>( bt,  bt), 0.0).r;
-  let d2 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>(-bt, -bt), 0.0).r;
-  let d3 = textureSampleLevel(blockerTex, envSamp, suv + vec2<f32>( bt, -bt), 0.0).r;
+  let d0 = blockerAt(suv + vec2<f32>(-bt,  bt));
+  let d1 = blockerAt(suv + vec2<f32>( bt,  bt));
+  let d2 = blockerAt(suv + vec2<f32>(-bt, -bt));
+  let d3 = blockerAt(suv + vec2<f32>( bt, -bt));
   return min(min(d0, d1), min(d2, d3));
 }
 
@@ -1794,15 +1837,18 @@ fn vs_main(@location(0) aPos : vec3<f32>,
   //    flare/FXAA). Fullscreen triangle; uv flips Y into texture space.
   const BLIT = `
 // params: x = exposure, y > 0.5 = flip left-right, z = mip level (both the rear-view
-// mirror; 0 elsewhere). aces = TONE CURVE a,b,c,d; tone = (e, whitePoint, _, _): the
-// mirror packs the frame's knobs (GLX MIRROR_FS), the fallback blit + smoke tests the
-// stand-in (wgx.js _blitParams).
-struct BlitU { params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32> };
+// mirror; 0 elsewhere), w > 0.5 = colour grade + dither (the mirror / PiP: the
+// frame's own look, GLX MIRROR_FS). aces = TONE CURVE a,b,c,d; tone = (e, whitePoint,
+// time, _): the mirror packs the frame's knobs, the fallback blit + smoke tests the
+// stand-in (wgx.js _blitParams). grade / shadowStr / hiLift: colourGradeP's inputs.
+struct BlitU { params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32>,
+               grade : vec4<f32>, shadowStr : vec4<f32>, hiLift : vec4<f32> };
 @group(0) @binding(0) var srcTex  : texture_2d<f32>;
 @group(0) @binding(1) var srcSamp : sampler;
 @group(0) @binding(2) var<uniform> B : BlitU;
 ${fullscreenTri}
 ${tonemap}
+${colourGradeLeaf}
 struct VOut {
   @builtin(position) pos : vec4<f32>,
   @location(0)       uv  : vec2<f32>,
@@ -1819,7 +1865,9 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let uv = vec2<f32>(select(in.uv.x, 1.0 - in.uv.x, B.params.y > 0.5), in.uv.y);
   let hdr = textureSampleLevel(srcTex, srcSamp, uv, B.params.z).rgb * B.params.x;
-  return vec4<f32>(acesTonemap(hdr / max(B.tone.y, 1e-3), B.aces.x, B.aces.y, B.aces.z, B.aces.w, B.tone.x), 1.0);
+  let c = acesTonemap(hdr / max(B.tone.y, 1e-3), B.aces.x, B.aces.y, B.aces.z, B.aces.w, B.tone.x);
+  let graded = ditherLSB(colourGradeP(c, B.grade, B.shadowStr, B.hiLift), in.pos.xy, B.tone.z);
+  return vec4<f32>(select(c, graded, B.params.w > 0.5), 1.0);
 }`;
 
   //    r16float blocker map (PCSS-lite blocker-search source; GLX BLOCKER_FS
@@ -1852,14 +1900,23 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
   o.uv = vec2<f32>((p.x + 1.0) * 0.5, (1.0 - p.y) * 0.5);
   return o;
 }
+// The MIN over this dest texel's WHOLE source footprint (k = SHADOW_SIZE / 512:
+// all 16 texels at 2048; GLX BLOCKER_FS). The old 4 taps at +/-1 source texel
+// missed a thin caster on the other 12.
 @fragment
 fn fs_main(in : VOut) -> @location(0) vec4<f32> {
-  let t = B.srcTexel.xy;
-  let d0 = loadDepth(in.uv + t * vec2<f32>(-1.0, -1.0));
-  let d1 = loadDepth(in.uv + t * vec2<f32>( 1.0, -1.0));
-  let d2 = loadDepth(in.uv + t * vec2<f32>(-1.0,  1.0));
-  let d3 = loadDepth(in.uv + t * vec2<f32>( 1.0,  1.0));
-  return vec4<f32>(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+  let dims = vec2<i32>(textureDimensions(depthTex));
+  let foot = max(dims / vec2<i32>(512), vec2<i32>(1));   // source texels per blocker texel
+  let base = vec2<i32>(in.pos.xy) * foot;
+  var m = 1.0;
+  for (var y = 0; y < 4; y++) {
+    for (var x = 0; x < 4; x++) {
+      if (x < foot.x && y < foot.y) {
+        m = min(m, textureLoad(depthTex, min(base + vec2<i32>(x, y), dims - vec2<i32>(1)), 0));
+      }
+    }
+  }
+  return vec4<f32>(m, 0.0, 0.0, 1.0);
 }`;
 
   //    (js/render/glx/shaders/glsl-sky.js) — gradient (zenith/horizon) with overcast
@@ -2159,10 +2216,12 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     vnoise,
     tonemap,
     fullscreenTri,
+    colourGradeLeaf,
     brdf,
     // real shaders, pre-composed from the leaves above
     SKY,
     LIT,
+    FRAME_U,
     BLIT,
     BLOCKER,
     SHADOW,
@@ -2176,7 +2235,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     LIGHT_STRIDE_BYTES: 64,     // one Light
     MAX_LIGHTS: 48,
     DRAW_UNIFORM_BYTES: 144,    // DrawU used bytes: mat3 lamp masks at 112 + lampRange at 128 (dynamic-offset stride is 256)
-    BLIT_UNIFORM_BYTES: 48,     // BlitU
+    BLIT_UNIFORM_BYTES: 96,     // BlitU
     DEPTH_RESOLVE: `
 @group(0) @binding(0) var src : texture_depth_multisampled_2d;
 struct DROut { @builtin(position) clip : vec4<f32> };

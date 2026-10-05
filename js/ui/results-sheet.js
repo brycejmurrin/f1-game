@@ -14,6 +14,13 @@ function correctedFinish(c) {
   return c.finishT + c.penalty;
 }
 
+// A CLASSIFICATION reads to the thousandth. G.fmtTime is the HUD clock (two
+// decimals by design, js/game.js), and on these sheets two laps 0.004 s apart
+// printed identically. Dom.fmtLap is the timing-sheet formatter (1:21.163).
+function lapClock(G, t) {
+  return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t);
+}
+
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
@@ -43,13 +50,13 @@ function ptsLabel(season, driverId) {
   const net = SeasonCal.netPts(season, driverId);
   return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
 }
-// CONSTRUCTORS ORDER, the same as Career.teamStandings: points, then the
-// lower (stronger) tier, then id. A points-only sort left ties in teamPts
-// insertion order, so on equal points this sheet could show the player's team
-// P8 while Career settled the teamPos goal and history as P9.
-function byConstructor(a, b) {
-  const tier = (id) => { const t = Teams.LIST.find((x) => x.id === id); return t && Number.isFinite(t.tier) ? t.tier : 99; };
-  return b[1] - a[1] || tier(a[0]) - tier(b[0]) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+// [teamId, pts] in SeasonCal.rankTeams order — the one constructors' rule
+// Career.teamStandings uses too (points, countback, tier, id). A points-only
+// sort left ties in teamPts insertion order, so on equal points this sheet
+// could show the player's team P8 while Career settled the teamPos goal as P9.
+function teamOrder(season) {
+  const tp = season.teamPts || {};
+  return Object.keys(tp).sort((a, b) => SeasonCal.rankTeams(season, a, b)).map((id) => [id, tp[id]]);
 }
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
@@ -372,7 +379,7 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
-    const tmList = Object.entries(season.teamPts).sort(byConstructor).slice(0, 5);
+    const tmList = teamOrder(season).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
       rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
@@ -401,7 +408,7 @@ function buildTTResults() {
   const hl = document.createElement("span"); hl.className = "res-name";
   hl.textContent = G.ttNewRecord ? "★ NEW RECORD" : "YOUR BEST";
   const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
-  hv.textContent = isFinite(best) ? G.fmtTime(best) : "-";
+  hv.textContent = isFinite(best) ? lapClock(G, best) : "-";
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
@@ -439,7 +446,7 @@ function buildTTResults() {
     if (held) ml.style.color = `var(--${held})`;
     const mv = document.createElement("span"); mv.className = "res-pts"; mv.style.width = "auto";
     const next = Quali.MEDALS.slice().reverse().find(([m]) => !held || Quali.MEDAL_RANK[m] > Quali.MEDAL_RANK[held]);
-    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${G.fmtTime(pole * next[1])}` : `POLE ${G.fmtTime(pole)}`;
+    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${lapClock(G, pole * next[1])}` : `POLE ${lapClock(G, pole)}`;
     mr.append(ml, mv);
     els.resultsTable.appendChild(mr);
   }
@@ -456,7 +463,7 @@ function buildTTResults() {
     const team = G.teamById(e.teamId);
     const name = `${e.code}  ${e.name}${team ? `  · ${team.short}` : ""}`;
     const row = rankRow(els.resultsTable, i, G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name,
-      G.fmtTime(e.t), e.ts >= G.ttSessionTs ? " you" : "");
+      lapClock(G, e.t), e.ts >= G.ttSessionTs ? " you" : "");
     row.querySelector(".res-pts").style.width = "auto";
   });
 
@@ -605,8 +612,7 @@ function buildStandings() {
   tmHead.textContent = "CONSTRUCTORS";
   body.appendChild(tmHead);
 
-  const tmList = Object.entries(season.teamPts)
-    .sort(byConstructor);
+  const tmList = teamOrder(season);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
     rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);

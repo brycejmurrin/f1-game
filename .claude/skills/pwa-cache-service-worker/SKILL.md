@@ -39,6 +39,11 @@ Everything else = cache-first (network-first on a dev host, where every tag read
 stay `?v=dev`. Check with `node tools/gen/gen-shell.mjs --check`. Never bump `version.json`
 during a Playwright run.
 
+**CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
+(`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
+script, frame or non-https endpoint must be added THERE, or the browser
+refuses it. `load-order.test.mjs` pins its shape.
+
 ## When to Use
 
 - Editing `sw.js`, install/activate/fetch, or precache lists.
