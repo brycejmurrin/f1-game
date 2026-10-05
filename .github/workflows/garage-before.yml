@@ -94,7 +94,7 @@ jobs:
           OUT: scratch/garage-before
           VIEWS: ${{ needs.plan.outputs.views }}
         run: |
-          # Flags from env (plan outputs), never ${{ inputs }} in the script.
+          # Flags from env (plan outputs), never an inputs.* expression in run:.
           # garage-angles.mjs starts its own static server — no :3456 serve.
           echo "garage-angles --team=$TEAMS --views=$VIEWS --out=$OUT"
           node tools/shot/garage-angles.mjs \
