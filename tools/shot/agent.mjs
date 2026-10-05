@@ -37,6 +37,7 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -150,13 +151,14 @@ if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { c
 const BOOT_MS = 45000, TRACK_MS = 45000;
 
 const RASTERS = new Set(["render", "frame", "plan", "car", "visible"]);
-if (has("vm")) {
+// No top-level await here: tests/unit/capture-tools-regressions.test.mjs
+// compiles this file as a classic script in a VM.
+async function runVm() {
   if (RASTERS.has(cmd)) {
     console.error(`agent: "${cmd}" reads the last drawn frame — there is none in the Node VM; drop --vm for it`);
     process.exit(2);
   }
-  const { createRequire } = await import("node:module");
-  const { createGame } = createRequire(import.meta.url)("../lib/game-vm.cjs");
+  const { createGame } = createRequire(ROOT + "/package.json")("./tools/lib/game-vm.cjs");
   console.error(`agent: vm route track=${track} cmd=${cmd}`);
   let g = null;
   try {
@@ -174,7 +176,7 @@ if (has("vm")) {
   process.exit(process.exitCode || 0);
 }
 
-(async () => {
+if (has("vm")) runVm(); else (async () => {
   const srv = await startStaticServer(ROOT);
   try {
     const browser = await launchChromium({
