@@ -306,6 +306,13 @@
     min-height: 0;
     overflow-y: auto; overscroll-behavior-y: contain;
     padding-right: calc(var(--gap) * 0.4);
+    scrollbar-width: thin;
+    scrollbar-color: var(--plate-line) transparent;
+  }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar { width: 8px; }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar-track { background: transparent; }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar-thumb {
+    background: var(--plate-line); border-radius: var(--r-md);
   }
   /* The door spans its column so that ArrowDown from a flag tile above the
      numbers lands on it (MenuNav scores a candidate whose box spans your
@@ -482,10 +489,11 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #sel-preview-gp {
-  font-size: var(--fs-micro); color: var(--red); font-weight: 700;
+  font-size: var(--fs-micro); font-weight: 700;
+  color: color-mix(in oklab, var(--red) 40%, var(--text));
   letter-spacing: var(--ls-3); text-transform: uppercase;
   margin-top: calc(var(--gap) * 0.15);
-  text-shadow: 0 1px 2px var(--carbon);
+  text-shadow: 0 1px 3px var(--carbon), 0 0 8px var(--carbon);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #sel-preview-facts {

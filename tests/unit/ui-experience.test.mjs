@@ -29,6 +29,10 @@ test('Home solo practice stays in sync with the coach and does not offer goals r
   goal.value = 'corner'; goal.onchange(); assert.equal(selected, 'corner');
   coach.setPracticeGoal('sector'); button.onclick(); assert.equal(goal.value, 'sector');
   coach.setPracticeGoal('overtake'); button.onclick(); assert.equal(goal.value, 'free'); assert.equal(selected, 'free');
+  assert.equal(dom.byId('practice-brief').hidden, false);
+  local.api.leavePracticePick();
+  assert.equal(local.api.isPracticePick(), false);
+  assert.equal(dom.byId('practice-brief').hidden, true, 'Daily or another door must drop the Practice Session plate');
 });
 test('pause context reads live classification and distinguishes online practice', () => {
   const p = {lap: 2}, G = { player:p, ranked:[{},p], track:{def:{name:'Monza'}}, session:'race', lapsTarget:12, practice:true, netPlay:{active:()=>true} };

@@ -121,7 +121,8 @@ test("select track filter persists via store", () => {
   // check, and skips tiles beside the season/classic/daily-open rules.
   assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
   assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
-  assert.match(js, /filter\s*===\s*"fav"\s*&&\s*!favs\.includes\(t\.id\)\)\s*return/);
+  assert.match(js, /filter\s*===\s*"fav"\s*&&\s*!favs\.includes\(t\.id\)/);
+  assert.match(js, /snapTrackToFilter/);
   assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
   assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
     "only a favourited tile is positioned — the shipped strip paints unchanged");
@@ -149,7 +150,13 @@ function bootMenus(disk = {}, o = {}) {
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
-  if (o.practicePick) sb.UiExperience = { isPracticePick: () => true };
+  if (o.practicePick || o.practicePickApi) {
+    const api = o.practicePickApi || {};
+    sb.UiExperience = {
+      isPracticePick: api.isPracticePick || (() => true),
+      leavePracticePick: api.leavePracticePick || (() => {}),
+    };
+  }
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
   // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
@@ -180,6 +187,66 @@ test("select titles and CTAs name Practice, Time Trial, and Race", () => {
   const practice = bootMenus({}, { timeTrial: true, practicePick: true });
   assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
   assert.equal(practice.G.els.selGo.textContent, "PRACTICE SETUP");
+});
+
+function fakeDaily(extra = {}) {
+  let armed = extra.armed || null;
+  return {
+    plan: () => ({ day: "2026-10-05", trackName: "Montreal", weather: "dry", tod: "default", trackId: "monza" }),
+    today: () => null,
+    current: () => armed,
+    isActive: () => !!armed,
+    select() { armed = { day: "2026-10-05", class: "standard", trackId: "monza" }; },
+    stop() { armed = null; },
+  };
+}
+
+test("Practice pick hides Time Trial Daily chrome", () => {
+  const tt = bootMenus({}, { timeTrial: true, daily: fakeDaily() });
+  assert.ok(tt.dom.has("sel-daily"), "Time Trial keeps Today's Challenge");
+  assert.ok(tt.chips().includes("daily-open"));
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true, daily: fakeDaily() });
+  assert.ok(!practice.dom.has("sel-daily"), "Practice does not wear the Daily chip");
+  assert.ok(!practice.chips().includes("daily-open"));
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+});
+
+test("leaving the Practice pick rebuilds Time Trial chrome", () => {
+  let pick = true;
+  const h = bootMenus({}, {
+    timeTrial: true,
+    daily: fakeDaily(),
+    practicePickApi: {
+      isPracticePick: () => pick,
+      leavePracticePick: () => { pick = false; },
+    },
+  });
+  assert.equal(h.G.els.selTitle.textContent, "PRACTICE");
+  assert.ok(!h.dom.has("sel-daily"));
+  pick = false;
+  h.menus.buildSelect();
+  assert.equal(h.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(h.G.els.selGo.textContent, "SESSION SETUP");
+  assert.ok(h.dom.has("sel-daily"));
+  assert.match(code("js/ui/select-screen.js"), /leavePracticePick\(\)/);
+});
+
+test("CLASSICS filter snaps the preview off a season circuit that is not in the list", () => {
+  const h = bootMenus({}, { trackIdx: 1 });
+  assert.equal(h.G.trackIdx, 1, "starts on Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic").onclick({ stopPropagation() {} });
+  assert.equal(h.G.trackIdx, 2, "Imola is the only classic in the stub list");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"]);
+  assert.equal(JSON.parse(h.data.get("trackId")), "imola");
+});
+
+test("select preview uses a dark token scrollbar and a readable GP subtitle", () => {
+  const rules = css("css/select.css");
+  assert.equal(decl(rules, "#sel-preview-gp", "color"), "color-mix(in oklab, var(--red) 40%, var(--text))");
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "scrollbar-color"),
+    "var(--plate-line) transparent",
+  );
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {

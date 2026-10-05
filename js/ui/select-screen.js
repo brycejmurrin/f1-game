@@ -306,8 +306,32 @@ if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classi
 const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["custom", "MY CIRCUITS"], ["fav", "♥ FAVOURITES"], ["daily-open", "DAILY OPEN"]];
 let trackQuery = "";
 const hasCustom = () => Tracks.LIST.some((t) => t.custom);
+const practicePick = () => typeof UiExperience !== "undefined" && UiExperience.isPracticePick && UiExperience.isPracticePick();
+const leavePracticePick = () => {
+  if (typeof UiExperience !== "undefined" && UiExperience.leavePracticePick) UiExperience.leavePracticePick();
+};
+const ttChrome = () => G.timeTrial && !practicePick();
+const trackMatchesFilter = (t) => {
+  const filter = visibleTrackFilter();
+  const favs = favList();
+  if (filter === "season" && (t.classic || t.custom)) return false;
+  if (filter === "classic" && !t.classic) return false;
+  if (filter === "custom" && !t.custom) return false;
+  if (filter === "fav" && !favs.includes(t.id)) return false;
+  if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return false;
+  return true;
+};
+const snapTrackToFilter = () => {
+  const cur = Tracks.LIST[G.trackIdx];
+  if (cur && trackMatchesFilter(cur)) return;
+  const i = Tracks.LIST.findIndex(trackMatchesFilter);
+  if (i < 0) return;
+  G.trackIdx = i;
+  store.set("trackId", Tracks.LIST[i].id);
+  store.set("track", i);
+};
 const visibleTrackFilter = () => {
-  if ((!G.timeTrial && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) || (trackFilter === "custom" && !hasCustom())) return "all";
+  if (((!G.timeTrial || practicePick()) && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) || (trackFilter === "custom" && !hasCustom())) return "all";
   // The ACTIVE tile is never filtered out: RACE from the designer lands here on
   // a custom circuit whatever chip the player last left pressed.
   const cur = Tracks.LIST[G.trackIdx];
@@ -396,7 +420,7 @@ function trackFilterBar() {
   bar.setAttribute("role", "group");
   bar.setAttribute("aria-label", "Circuit list controls");
   const hasFav = favList().length > 0;
-  const filters = trackFilters.filter(([id]) => (id !== "daily-open" || G.timeTrial) && (id !== "fav" || hasFav) && (id !== "custom" || hasCustom()));
+  const filters = trackFilters.filter(([id]) => (id !== "daily-open" || ttChrome()) && (id !== "fav" || hasFav) && (id !== "custom" || hasCustom()));
   filters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -409,6 +433,7 @@ function trackFilterBar() {
       e.stopPropagation();
       if (id === "daily-open") {
         G.daily.select(undefined, "open");
+        leavePracticePick();
         setTrackFilter(id, false, true);
       } else setTrackFilter(id, false, false);
     };
@@ -423,14 +448,16 @@ function trackFilterBar() {
       const nextId = filters[next][0];
       if (nextId === "daily-open") {
         G.daily.select(undefined, "open");
+        leavePracticePick();
         setTrackFilter(nextId, true, true);
       } else setTrackFilter(nextId, true, false);
     };
     bar.appendChild(b);
   });
-  // TODAY'S CHALLENGE — time trial only. Selection is intentionally separate
-  // from starting: NEXT → RACE SETTINGS → RACE! is the one start grammar.
-  if (G.timeTrial && G.daily) {
+  // TODAY'S CHALLENGE — Time Trial only. Practice reuses the TT picker
+  // under the hood but must not wear this chrome (or keep the Practice
+  // brief up after a Daily arm). NEXT → settings → go is the start grammar.
+  if (ttChrome() && G.daily) {
     const p = G.daily.plan();
     const done = G.daily.today();
     const b = document.createElement("button");
@@ -451,6 +478,7 @@ function trackFilterBar() {
     b.onclick = (e) => {
       e.stopPropagation();
       G.daily.select();
+      leavePracticePick();
       setTrackFilter("all", false, true);
     };
     bar.insertBefore(b, bar.firstChild);
@@ -529,7 +557,7 @@ function buildSelect() {
   // is what the screen is called and what the foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
-  const practice = typeof UiExperience !== "undefined" && UiExperience.isPracticePick && UiExperience.isPracticePick();
+  const practice = practicePick();
   // NEXT opens race settings. YOUR CAR is the garage door beside it.
   els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS"
     : practice ? "PRACTICE SETUP"
@@ -602,15 +630,13 @@ function buildSelect() {
     // divider changes — every tile is a normal, selectable circuit either way.
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
     // Tracks.LIST — selection still indexes into the full list.
+    // If the current pick is not in this filter (Classics over Montreal), snap
+    // so the hero is a circuit that is actually in the strip.
+    snapTrackToFilter();
     let group = null;
     const favs = favList();
     Tracks.LIST.forEach((t, i) => {
-      const filter = visibleTrackFilter();
-      if (filter === "season" && (t.classic || t.custom)) return;
-      if (filter === "classic" && !t.classic) return;
-      if (filter === "custom" && !t.custom) return;
-      if (filter === "fav" && !favs.includes(t.id)) return;
-      if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return;
+      if (!trackMatchesFilter(t)) return;
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;
@@ -630,7 +656,7 @@ function buildSelect() {
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
-      if (G.timeTrial) {
+      if (ttChrome()) {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
@@ -899,7 +925,7 @@ function updateTrackPreview() {
     const board = ttBoard(t.id);
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best across setups  ★ " + fmtTime(rec)
-      : G.timeTrial ? "No time set" : "";
+      : ttChrome() ? "No time set" : "";
   }
   showStill(t);
   // While #select is hidden (buildSelect's synchronous pass) the hero measures

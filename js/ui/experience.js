@@ -7,7 +7,12 @@ const UiExperience = (function () {
   // of TIME TRIAL. Cleared in capture on the other session doors so their
   // open handlers paint the right title.
   let practicePick = false;
+  let hidePracticeBrief = () => {};
   function isPracticePick() { return practicePick; }
+  function leavePracticePick() {
+    practicePick = false;
+    hidePracticeBrief();
+  }
 
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
@@ -142,6 +147,7 @@ const UiExperience = (function () {
         if (goal) goal.focus({ preventScroll: true });
       }
     }
+    hidePracticeBrief = () => { wantedPractice = false; showPractice(); };
     if (goal) {
       const values = goalValues();
       // Built at runtime so the shell keeps its two Goal nodes (label + select)
@@ -387,6 +393,6 @@ const UiExperience = (function () {
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },
       state: () => ({ home, painted, failure, scene: scene(), world: world.state() }) };
   }
-  return { create, raceBrief, openPhoto, homeVariation, isPracticePick };
+  return { create, raceBrief, openPhoto, homeVariation, isPracticePick, leavePracticePick };
 })();
 Object.freeze(UiExperience);
