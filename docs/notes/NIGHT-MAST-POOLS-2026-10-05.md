@@ -102,3 +102,23 @@ behind. Accepted.
 - A night picture can be judged in Node before a browser: the bake is the
   shader's diffuse pool verbatim, so lateral-offset ratios and valley/peak
   along the centreline predict "pool vs plane" and "dark beyond the run-off".
+
+## Fit with #917 (`Atmosphere.floodEmit` at session resolve)
+
+Measured 2026-10-05 on tip `6362af853` (after merging deploy `0e1f901fd`, which
+already includes #917's `a7d27757f`).
+
+#917 moved the prop-emissive ramp into `Atmosphere.floodEmit(sunY)` and writes
+`G._lastFloodEmit` at the end of `applyRaceSettings`, so a night→day `race()`
+no longer reports the previous night's 0.0858 before the first day frame. The
+formula is unchanged: `min(1, floodEmitMul × (night ? 0.78 : dusk/dawn ramp : 0))`.
+
+#923 does not touch `floodEmitMul` on `qatar|night|dry` / `bahrain|night|dry`
+(still 0.11 → night floodEmit 0.0858). `beamCore` is `rebuild:true` and already
+named in `profiles.js`'s held-rebuild list next to `beamCone`; the bake and the
+three backends read the cone from the light record, not from floodEmit. No
+knob, preset, bake, or rebuild path assumed the old frame-only write — the
+earlier note that floodEmit was "0.0858 and unchanged" is still true at night;
+only the *when* of the write moved, and the #917 unit
+(`weather-blend.test.mjs`: resolve and frame share one formula; day after night
+with no frame is 0) still passes on this branch.
