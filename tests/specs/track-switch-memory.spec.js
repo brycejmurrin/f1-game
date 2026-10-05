@@ -45,21 +45,12 @@ test.use({ viewport: { width: 960, height: 540 } });
 // least this many render objects. Measured 54–312 on monza/monaco here: a
 // revisit draws less than the first visit (monza 109–145, then 54 every run),
 // so this floor only rules out an undrawn world; assertion 2 is the leak's.
-// 2026-10-05: the deploy tip's gfx group (llvmpipe, 4 shards, run
-// 37273020922) drew 39 on monza's second visit, twice (retry too), with the
-// world built and lit (apex-state carried the full lightState) — 40 was the
-// SwiftShader revisit's number with no margin under it, and a floor that
-// trips on a drawn world is not the undrawn-world guard it claims to be. An
-// undrawn world reads 0; 20 keeps the guard and the measured margin.
-// Selected-specs job 111655042275 (run 37274796306) then failed visit 1 to
-// monza at Received 10 with the same "world built and lit" dump — that was
-// the census racing menuFinish (car assets, then hidden warm frames), not a
-// drawn world of 10; a wait on the render-object count read 10 again (run
-// 37330132243: the previous scene's objects satisfy it before the new world
-// draws). waitUntilDrawn now waits for the "menu warm drawn <id>" record the
-// render loop logs on the last hidden warm frame; the floor stays as the
-// anti-vacuity check behind it — do not lower it.
-const MIN_RENDER_OBJECTS = 20;
+// The floor is NOT lowered when the opening flyby `wide` shot is levelled at
+// the horizon (39 ROs on llvmpipe at u=0): picker warm frames sit on
+// turn-first (FlybySeq.warmProgress) so the leak path still draws.
+// waitUntilDrawn waits for the "menu warm drawn <id>" Log record (not the
+// render-object count — that can read the previous scene; run 37330132243).
+const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 

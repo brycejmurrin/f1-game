@@ -2243,12 +2243,17 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
 // Set by the flyby sequencer on a shot boundary; consumed by the camera damping
 // one block later, which would otherwise smear the cut (see there).
 let camSnapNext = false;
-/** The loading screen's flyby progress, 0..1, or 0 when it is not running. The
- *  menu camera also draws a couple of WARM-UP frames under the picker with no
- *  screen open (scheduleFlybyTrack), and those should sit on the first shot
- *  rather than somewhere arbitrary. */
+/** The loading screen's flyby progress, 0..1, or 0 when it is not running.
+ *  Hidden picker warm-up frames (scheduleFlybyTrack, `_menuGate.warm`) used to
+ *  sit on shot 0 so they were not arbitrary. Shot 0 is now the horizon-levelled
+ *  `wide` establishing look (FlybySeq.level): those two presents no longer
+ *  walk the road/prop batches the warm exists to compile. Use turn-first. */
 function flybyProgress() {
-  return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+  const p = (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+  if (loadingScreen && loadingScreen.active && loadingScreen.active()) return p;
+  if (state === "menu" && _menuGate.warm > 0 && typeof FlybySeq !== "undefined" && FlybySeq.warmProgress)
+    return FlybySeq.warmProgress(flybyShots);
+  return p;
 }
 
 // The shot list the FLYBY SHOT EDITOR saved, or null for the shipped sequence.

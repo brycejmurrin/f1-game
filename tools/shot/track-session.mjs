@@ -16,8 +16,10 @@
 //   {"id":6,"status":true}                                    → {id, ok, track, shots, uptimeMs}
 //
 // Cameras are shot.mjs's: park | eye | orbit | cinematic | trackside, with
-// az/el/dist/side/tod/hud. The first line it prints is {"ready":true,…}; stdin
-// EOF closes the browser. Usage:
+// az/el/dist/side/tod/hud, plus h: metres above the road (eye: eye height;
+// orbit: the aim point, so a prop 200 m up can be framed). On eye, el is the
+// pitch (view() free-look); without it eye looks ahead as before. The first
+// line it prints is {"ready":true,…}; stdin EOF closes the browser. Usage:
 //   node tools/shot/track-session.mjs --serve --track spa --out artifacts/track-session
 import { mkdirSync, existsSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
@@ -67,14 +69,28 @@ async function shot(op) {
   if (!NAME_RE.test(name)) throw new Error("shot name: letters, digits, . _ - only");
   const num = (v, d) => (v == null || v === "" ? d : Number(v));
   const args = { frac, cam, tod, az: num(op.az, 45), el: num(op.el, 18), dist: num(op.dist, 45),
-    side: Number(op.side) === -1 ? -1 : 1, hud: !!op.hud };
+    side: Number(op.side) === -1 ? -1 : 1, hud: !!op.hud,
+    // eye: an explicit el is the pitch (degrees, + up); none keeps eyeAt's look-ahead.
+    pitch: op.el == null || op.el === "" ? null : Number(op.el),
+    // metres above the road at frac: eye = eye height (eyeAt h, default 2.5),
+    // orbit = aim point (orbit h, default 1.5) — frames a prop high in the air.
+    h: op.h == null || op.h === "" ? null : Number(op.h) };
+  for (const k of ["az", "el", "dist", "h"]) {
+    if (args[k] != null && !Number.isFinite(args[k])) throw new Error(`${k} must be a finite number`);
+  }
   const frame = await page.evaluate((o) => {
     const a = window.__apex;
     a.go(); a.park(o.frac); a.freeze(true);
     if (a.setTimeOfDay) a.setTimeOfDay(o.tod);
     if (a.hud) a.hud(o.hud);
-    if (o.cam === "eye") a.eyeAt(o.frac, 0, 2.5);
-    else if (o.cam === "orbit") a.orbit(o.frac, o.az, o.el, o.dist);
+    if (o.cam === "eye") {
+      const r = a.eyeAt(o.frac, 0, o.h == null ? 2.5 : o.h);
+      // Re-aim by pitch along the same heading: view() free-look, yaw 0 = -Z.
+      if (o.pitch != null && r) {
+        const yaw = Math.atan2(r.target[0] - r.eye[0], -(r.target[2] - r.eye[2])) * 180 / Math.PI;
+        a.view({ eye: r.eye, yaw, pitch: o.pitch });
+      }
+    } else if (o.cam === "orbit") a.orbit(o.frac, o.az, o.el, o.dist, o.h == null ? 1.5 : o.h);
     else if (o.cam === "cinematic") a.cinematic(o.frac, { dist: o.dist, el: o.el });
     else if (o.cam === "trackside") a.view({ s: o.frac, side: o.side, dist: o.dist, height: Math.max(3, o.el * 0.35), look: "in" });
     else a.snapCam();

@@ -506,7 +506,7 @@ const CATALOG = [
   {
     name: "apex_graph_parity",
     week: 4,
-    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. Skill: scenery-dress.",
+    description: "Tree — TrackGraph vertex parity vs required git base. Never omit base. id: one circuit, ~2–5 s. all:true outlasts the 180 s tool cap, so it starts apex_job_start graph_parity_all and returns its jobId — watch with apex_job_status. Skill: scenery-dress.",
     inputSchema: {
       type: "object",
       properties: {
@@ -659,7 +659,7 @@ const CATALOG = [
     name: "apex_track",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,side,tod,name} / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
+    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,h,side,tod,name} (eye: el = pitch, h = eye height; orbit: h = aim height, so a prop 200 m up frames) / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -668,7 +668,10 @@ const CATALOG = [
         track: { type: "string", description: "Circuit id (open; op track switches)." },
         frac: { type: "number", minimum: 0, maximum: 1 },
         cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
-        az: { type: "number" }, el: { type: "number" }, dist: { type: "number" },
+        az: { type: "number" },
+        el: { type: "number", description: "Degrees. orbit/cinematic: elevation; eye: pitch (+ up; omit to look ahead)." },
+        dist: { type: "number" },
+        h: { type: "number", description: "Metres above the road at frac. eye: eye height (default 2.5); orbit: aim-point height (default 1.5)." },
         side: { type: "number", enum: [-1, 1] },
         tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
         hud: { type: "boolean" },
@@ -700,6 +703,7 @@ const CATALOG = [
         scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
         site: { type: "string", description: "flicker_gate: comma list of site ids (default all)." },
         team: { type: "string", description: "livery_contrast: one team id (default every team — slow)." },
+        base: { type: "string", description: "graph_parity_all: the git ref for BASE= (required)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -938,6 +942,10 @@ bound("apex_shot", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_shot", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_shot", "el", { minimum: -90, maximum: 90 });
 bound("apex_shot", "side", { enum: [-1, 1] });
+bound("apex_track", "dist", { exclusiveMinimum: 0, maximum: 10000 });
+bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
+bound("apex_track", "el", { minimum: -90, maximum: 90 });
+bound("apex_track", "h", { minimum: -100, maximum: 3000 });
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
@@ -1850,6 +1858,18 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === "apex_graph_parity" && args.all === true) {
+    // Every circuit twice outlasts the 180 s cap (killed at ~46 of 52,
+    // 2026-10-05): the whole fleet runs as a background job instead.
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    const r = extras().handlers.apex_job_start(   // sync: returns the jobId at once
+      { kind: "graph_parity_all", base: args.base, dryRun: args.dryRun });
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: "apex_job_start graph_parity_all",
+      hint: "all:true runs in the background: apex_job_status {jobId} until state is done; the verdict is in tail / log." });
+  }
   if (Object.hasOwn(extras().handlers, name)) {
     const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
     if (gate) return gate;
@@ -1937,7 +1957,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
