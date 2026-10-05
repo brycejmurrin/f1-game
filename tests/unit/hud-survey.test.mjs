@@ -600,6 +600,9 @@ test("hud-live-sample: argv parsing — defaults, overrides, and every refusal",
   const d = parseLive([]);
   assert.deepEqual([d.track, d.device, d.cam, d.tolerate, d.interval], ["monza", "desktop-1280", "cockpit", 250, 40]);
   assert.ok(d.jumps.length >= 4 && d.ids === null, "several jumps, every moved piece");
+  assert.equal(d.keep, false, "by default every HUD piece is switched on first, like hud-survey");
+  assert.equal(parseLive(["--keep"]).keep, true, "--keep is a flag: it takes no value");
+  assert.deepEqual(parseLive(["--keep", "--ids", "aero"]).ids, ["aero"], "and it does not swallow the next option");
   const o = parseLive(["--ids", "aero,ot", "--jumps=0.1,0.9", "--device", "phone-landscape-844x390", "--tolerate", "0", "--cam=chase"]);
   assert.deepEqual(o.ids, ["aero", "ot"]);
   assert.deepEqual(o.jumps, [0.1, 0.9]);

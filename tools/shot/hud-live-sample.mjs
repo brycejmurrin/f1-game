@@ -7,6 +7,7 @@
 //   node tools/shot/hud-live-sample.mjs --device phone-landscape-844x390 --cam chase
 //   node tools/shot/hud-live-sample.mjs --ids aero,ot --jumps 0.12,0.3,0.55 --window 4000
 //   node tools/shot/hud-live-sample.mjs --tolerate 0                       # any off-screen frame fails
+//   node tools/shot/hud-live-sample.mjs --keep                             # don't switch every HUD piece on first
 //
 // WHY THIS EXISTS. hud-survey freezes the sim per cell (a.freeze(true)) and reads
 // one frame, so the HUD's own ~10 Hz tick — which is what re-fits a moved piece
@@ -94,7 +95,7 @@ const num = (v, d) => { const n = +v; return Number.isFinite(n) ? n : d; };
 
 export function parseArgs(argv) {
   const o = { track: "monza", device: "desktop-1280", cam: "cockpit", ids: null, jumps: [0.12, 0.3, 0.55, 0.8, 0.12, 0.3],
-    window: 3000, interval: 40, tolerate: 250, speed: 70 };
+    window: 3000, interval: 40, tolerate: 250, speed: 70, keep: false };
   for (let i = 0; i < argv.length; i++) {
     const m = /^--([a-z]+)(?:=(.*))?$/.exec(argv[i]);
     if (!m) return { error: `unexpected argument "${argv[i]}"` };
@@ -109,6 +110,7 @@ export function parseArgs(argv) {
       case "interval": o.interval = num(val(), NaN); break;
       case "tolerate": o.tolerate = num(val(), NaN); break;
       case "speed": o.speed = num(val(), NaN); break;
+      case "keep": o.keep = true; break;   // a flag: no value to consume
       default: return { error: `unknown option --${m[1]}` };
     }
   }
@@ -122,7 +124,7 @@ export function parseArgs(argv) {
 async function main() {
   const argv = process.argv.slice(2);
   exitIfHelp(argv, `usage: node tools/shot/hud-live-sample.mjs [--track monza] [--device desktop-1280] [--cam cockpit]
-         [--ids aero,ot] [--jumps 0.12,0.3,0.55] [--window 3000] [--interval 40] [--tolerate 250] [--speed 70]
+         [--ids aero,ot] [--jumps 0.12,0.3,0.55] [--window 3000] [--interval 40] [--tolerate 250] [--speed 70] [--keep]
   Samples moved HUD pieces in an UNFROZEN race after each position jump; prints JSON; exit 1 when a piece is
   off screen longer than --tolerate ms. Devices: ${Object.keys(DEVICES).join(", ")}. See the header of this file.`);
   const o = parseArgs(argv);
@@ -150,10 +152,11 @@ async function main() {
     await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS, polling: 100 });
     await sleep(1600); // mesh build
     // go + camera, then show every piece (a hidden piece cannot overflow, and a survey that
-    // forgot to switch one on would pass it) — the same switch-all hud-survey uses.
-    const picked = await page.evaluate(async ({ cam, ids }) => {
+    // forgot to switch one on would pass it) — the same switch-all hud-survey uses. --keep
+    // leaves the switches as the game booted them.
+    const picked = await page.evaluate(async ({ cam, ids, keep }) => {
       const a = window.__apex;
-      for (const [id] of HudElements.ELEMENTS) HudElements.set(id, true);
+      if (!keep) for (const [id] of HudElements.ELEMENTS) HudElements.set(id, true);
       a.go(); a.camera(cam);
       await new Promise((r) => setTimeout(r, 600));
       const sels = {};
@@ -163,7 +166,7 @@ async function main() {
         if (ids ? ids.includes(id) : el.hasAttribute("data-hl")) sels[id] = sel;
       }
       return { sels, set: HudLayout.shown() };
-    }, { cam: o.cam, ids: o.ids });
+    }, { cam: o.cam, ids: o.ids, keep: o.keep });
     const ids = Object.keys(picked.sels);
     if (!ids.length) throw new Error("no moved HUD piece to sample in this layout (" + picked.set + "); pass --ids to force some");
 
