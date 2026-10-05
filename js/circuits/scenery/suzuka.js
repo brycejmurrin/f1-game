@@ -915,7 +915,7 @@
             addBox(stage, vadd(a.c, a.u, 4.15), [0.34, 0.32, 6.6], VERM, b);
             // Stone steps climbing away from the torii to the honden.
             // +0.12 lift: ground-audit buried the bottom tread 0.08 m into the
-            // Spoon-side rise (circuits/scenery/suzuka.js:849 before this pass).
+            // Spoon-side rise (pre-pass shrine steps in this file).
             stage._mat = MAT.STONE;
             for (let i = 0; i < 6; i++) {
               addBox(stage, vadd(vadd(a.c, a.r, 2.2 + i * 1.5), a.u, 0.34 + i * 0.42),
