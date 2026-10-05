@@ -379,17 +379,20 @@
    readout wraps to two lines beside FREE BUILD instead of above it, and the
    row is as tall as the FREE BUILD chip (~52 own with padding). The budget row
    asks for 5.5 chips of width, so a team name too long for the title column
-   still wraps the row underneath, as before — nothing truncates. */
+   still wraps the row underneath, as before — nothing truncates.
+   FOLDED WITH #919 (d5eb31183): its compact-tier `#cs-budget-row` nowrap and
+   `#cs-budget` flex: 1 1 0 / min-width: 0 (end of this file, every compact
+   garage) are the readout-beside-FREE-BUILD half of this, so those
+   declarations are no longer repeated here; this tier adds only the title
+   column, the row's width basis and the readout's leading. */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-header { flex-wrap: wrap; align-items: center; }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar {
   flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: 0;
   min-width: 0; max-width: calc(var(--label) * 7.5);
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row {
-  flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; flex-wrap: nowrap;
-}
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { flex: 1 1 0; min-width: 0; line-height: 1.2; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { line-height: 1.2; }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
