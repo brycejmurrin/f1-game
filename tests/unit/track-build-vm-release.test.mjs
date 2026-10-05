@@ -203,7 +203,8 @@ const STRIP = {
   //   wall coping (flush road side, far-side overhang) strips 2 more, measured
   // → park woods back behind the pit straight at a 75 m setback (2026-10-05:
   //   pit-complex's crown-over-bays test needs trees along the row), 313412/287164
-  monza: { before: 313412, after: 287164 },
+  // → denser deep-park rank D (the flyby aerial read 70 % lawn), 316814/290549
+  monza: { before: 316814, after: 290549 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

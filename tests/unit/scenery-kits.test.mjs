@@ -615,6 +615,7 @@ test("fence footings reach terrain or the universal floor without moving tilted 
       out: {}, track, def: {}, n: 100, ds: 1, hw: [], px: [], py: [], pz: [], MAT: {},
       kitOf: () => "chainlink", indexBarrier: () => {}, noteSpan: () => {},
       noteSuppressed: () => {}, onTrack: () => false,
+      rejBox: () => false, rejRad: () => false,   // the road guard the barrier pre-checks share
       anchor: () => ({ c: [0, 4, 0], r, u, t }), vadd: Geom.vadd,
       instance: (key, placement, build) => {
         const ops = [];

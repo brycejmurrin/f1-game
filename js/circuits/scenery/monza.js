@@ -134,11 +134,13 @@
         const g2 = setback(k, -side, 30 + h * 16, 1 - h);
         if (!thin && h > 0.55 && g2 != null) pine(k, -side, g2 + 8, 24 + h * 14, PINE_D);
       });
-      // Rank D — outermost broadleaf rank blending to backdrop.
-      every(55, (k) => {
+      // Rank D — outermost broadleaf rank blending to backdrop. Denser since
+      // the run-off clearance: from the flyby's 360 m aerial the royal park
+      // read as lawn (frame-report EMPTY_GROUND 70 %); the real park is woods.
+      every(40, (k) => {
         const h = hash(k * 67 + 17);
         const thin = openParkland(k / n);
-        if (h < (thin ? 0.85 : 0.35)) return;
+        if (h < (thin ? 0.85 : 0.12)) return;
         const s1 = h < 0.5 ? -1 : 1;
         const g1 = setback(k, s1, 42 + h * 30, h);
         if (g1 != null) tree(k, s1, g1 + 16, 13 + h * 10, LEAF_D);
