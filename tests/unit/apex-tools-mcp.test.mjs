@@ -352,6 +352,15 @@ test("playwright occupancy matches `playwright test` tokens, not MCP JSON", asyn
     classifyPlaywrightLine("99 /opt/google/chrome/chrome --user-data-dir=/workspace/.playwright-mcp --headless")?.kind,
     "hostBrowser",
   );
+  assert.equal(
+    classifyPlaywrightLine("260 node /root/.npm/_npx/51691537fc71f2b0/node_modules/.bin/playwright-mcp --isolated --headless --browser chromium --executable-path /opt/pw-browsers/chromium-1194/chrome-linux/chrome --no-sandbox --output-dir /home/user/f1-game/artifacts/playwright-mcp")?.kind,
+    "hostMcp",
+    "the idle server names a Chromium path and an output dir as ARGUMENTS — it is not the browser",
+  );
+  assert.equal(
+    classifyPlaywrightLine("137 npm exec @playwright/mcp@0.0.79 --isolated --headless --browser chromium --executable-path /opt/pw-browsers/chromium-1194/chrome-linux/chrome --no-sandbox")?.kind,
+    "hostMcp",
+  );
   const scan = scanPlaywrightLines([
     "1 /exec-daemon/cursor-exec-daemon --mcp-config {\"playwright\":{}}",
     "2 node /x/@playwright/mcp/cli.js",
@@ -1302,4 +1311,20 @@ test("thumbBlock returns an MCP image block a client can render", async () => {
     const meta = await sharp(Buffer.from(b.data, "base64")).metadata();
     assert.equal(meta.width, 640);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("apex-eval: the shapeOf helper it injects into the page parses (named fn expr, no source rewrite)", async () => {
+  // 2026-10-05: a global /shapeOf\(/ -> "window.__shape(" rewrite also hit the
+  // declaration and injected `function window.__shape(` — a SyntaxError that
+  // failed EVERY browser apex_eval. Rebuild the injected string from source.
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../../tools/shot/apex-eval.mjs", import.meta.url), "utf8");
+  assert.ok(!/SHAPE\.replace\(/.test(src), "the injected helper must not be source-rewritten");
+  const body = src.slice(src.indexOf("function shapeOf("), src.indexOf("\nconst SHAPE"));
+  const shapeLine = src.match(/^const SHAPE = (.+);$/m)[1];
+  const SHAPE = new Function("shapeOf", "return " + shapeLine)(new Function("return " + body)());
+  const win = {};
+  new Function("window", SHAPE)(win);
+  assert.equal(typeof win.__shape, "function");
+  assert.equal(win.__shape([1, 2]).startsWith("Array(2)"), true);
 });
