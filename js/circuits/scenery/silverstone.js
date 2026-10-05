@@ -88,7 +88,13 @@
       const LIT_WIN = [0.95, 0.82, 0.40];  // warm amber — Wing/tower lit windows
       const LIT_COOL = [0.70, 0.85, 0.95]; // cool blue-white — upper control room
       const GLASS_WING = [0.16, 0.24, 0.32], WING_WHITE = [0.94, 0.95, 0.96];
-      const WING_DIST = 31;   // anchor dist so the Wing front face clears the garage rear (lat 38)
+      // Pit keep peaks at 30.1 m beyond the edge on the Hamilton Straight (a1 ≈
+      // lat 38). Facades + wave roof sit just behind that outer wall so
+      // modelGroup preflight emits them instead of "superseded by the pit
+      // complex" — same reseat pattern as Jerez El Ovni (PR #983).
+      const WING_DIST = 50;     // wave-roof mass behind the facade panels (was 31)
+      const FACADE_DIST = 38;   // thin glazed face just behind pit keep (≤30.1)
+      const PODIUM_DIST = 36;
 
       every(110, (kk) => {
         for (const side of [-1, 1]) {
@@ -267,69 +273,74 @@
       // Four bays cover the pit-lane frontage; each bay owns one roof peak so
       // the silhouette reads as the Wing, not a flat slab.
       //
-      // These sit ON the pit lane (sceneryStartFrac 0.02). ALWAYS call
-      // modelGroup — do NOT preflight with onTrack and skip: the engine's pit
-      // complex must supersede all four (models.suppressed, reason
-      // "superseded by the pit complex"), same Portimão pattern pinned by
-      // new-hooks-vm. Skipping the call leaves suppressed=[] and CI red.
+      // Engine pit keep owns the garage strip (keep ≤ 30.1 m). These bays sit
+      // BEHIND that keep-out (FACADE_DIST) so they emit as required landmarks
+      // instead of being pit-superseded. Always call modelGroup — do not
+      // preflight-skip with onTrack (that hides a true reject from diagnostics).
       {
-        const wingFracs = [0.455, 0.465, 0.475, 0.485];  // on the pit lane under sceneryStartFrac 0.02
+        const wingFracs = [0.455, 0.465, 0.475, 0.485];
         const ROOF_DK = [0.42, 0.44, 0.48];
         const ROOF_LT = [0.88, 0.90, 0.94];
         const SOFFIT  = [0.94, 0.93, 0.90];
         const GLASS_D = [0.10, 0.14, 0.22];
+        // Thin track-facing panels: depth stays clear of the wave-roof mass at
+        // WING_DIST 50 (clip-audit hit 3 m when both were deep at ~40–48).
+        const F_R = 2;
         for (let i = 0; i < wingFracs.length; i++) {
-          const a = anchor(k(wingFracs[i]), 1, 16);
+          const a = anchor(k(wingFracs[i]), 1, FACADE_DIST);
           const b = [a.r, a.u, a.t];
+          const ac = (rr, uu, tt) => vadd(vadd(vadd(a.c, a.r, rr), a.u, uu), a.t, tt);
           // Zig-zag: bays 0/2 peak high, 1/3 dip — angular wing silhouette.
           const peakHi = (i % 2 === 0);
           const roofY = peakHi ? 14.8 : 11.2;
           const roofRise = peakHi ? 3.4 : 1.6;
           modelGroup(`silverstone-wing-facade-${i + 1}`, {
-            center: vadd(a.c, a.u, 8.2), size: [28, 18, 64], basis: b,
+            // half-depth 5: FACADE_DIST+F_R-5 = 35 > keep 30.1; short chord
+            // avoids the pit-entry curve reject that ate bay 1 at 64 m.
+            center: ac(F_R, 8.2, 0), size: [10, 18, 48], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            TrackGeom.addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 64], [0.86, 0.86, 0.88], b);
-            // Dark charcoal angular support blocks breaking the glass curtain.
+            TrackGeom.addBox(stage, ac(F_R, 5.5, 0), [8, 11, 48], [0.86, 0.86, 0.88], b);
+            // Dark charcoal piers fully inset; bottoms clear of the curtain's
+            // ground plane (flatCoplanar was counting shared undersides).
             stage._mat = MAT.METAL;
-            for (const tOff of [-22, -7, 7, 22]) {
-              TrackGeom.addBox(stage, vadd(vadd(a.c, a.t, tOff), a.u, 5.5),
-                [20.4, 11, 3.2], [0.28, 0.30, 0.34], b);
+            for (const tOff of [-16, -5, 5, 16]) {
+              TrackGeom.addBox(stage, ac(F_R + 0.2, 5.2, tOff),
+                [5.2, 8.0, 3.0], [0.28, 0.30, 0.34], b);
             }
+            // Single glass band (was two coplanar sheets — flatCoplanar spots).
             stage._mat = MAT.GLASS;
-            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [20.2, 3.8, 62], GLASS_D, b);
-            TrackGeom.addBox(stage, vadd(a.c, a.u, 7.8), [18, 3.2, 60], LIT_WIN, b);
+            TrackGeom.addBox(stage, ac(F_R - 0.2, 7.8, 0), [8.2, 3.8, 46], GLASS_D, b);
             // Stepped zig-zag roof bands — back spine tallest, leading edge thin.
             stage._mat = MAT.METAL;
             const bands = [
-              { rOff:  9, h: roofRise,       top: roofY + 0.6 },
-              { rOff:  2, h: roofRise * 0.65, top: roofY - 0.4 },
-              { rOff: -6, h: 0.55,            top: roofY - 1.6 },
+              { rOff:  F_R + 3.5, h: roofRise,       top: roofY + 0.6 },
+              { rOff:  F_R + 0.5, h: roofRise * 0.65, top: roofY - 0.4 },
+              { rOff:  F_R - 2.5, h: 0.55,            top: roofY - 1.6 },
             ];
             for (const bd of bands) {
-              const rc = vadd(vadd(a.c, a.r, bd.rOff), a.u, bd.top - bd.h / 2);
-              TrackGeom.addBox(stage, rc, [9.2, bd.h, 64], ROOF_LT, b);
+              TrackGeom.addBox(stage, ac(bd.rOff, bd.top - bd.h / 2, 0),
+                [4.2, bd.h, 48], ROOF_LT, b);
             }
             // Cream soffit under the cantilevered leading edge.
-            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, -8.2), a.u, roofY - 2.0),
-              [4.0, 0.35, 62], SOFFIT, b);
+            TrackGeom.addBox(stage, ac(F_R - 3.6, roofY - 2.0, 0),
+              [2.2, 0.35, 46], SOFFIT, b);
             // Red/white edge trim — THE Wing identity marker from trackside.
             const TRIM_R = [0.88, 0.14, 0.14], TRIM_W = [0.96, 0.96, 0.94];
-            for (let ti = 0; ti < 16; ti++) {
-              const tOff = -30 + ti * 4;
+            for (let ti = 0; ti < 12; ti++) {
+              const tOff = -22 + ti * 4;
               const trimCol = (ti % 2 === 0) ? TRIM_R : TRIM_W;
-              TrackGeom.addBox(stage,
-                vadd(vadd(vadd(a.c, a.r, -8.6), a.t, tOff), a.u, roofY - 1.55),
+              TrackGeom.addBox(stage, ac(F_R - 4.0, roofY - 1.55, tOff),
                 [0.55, 0.55, 3.6], trimCol, b);
             }
             // Dark roof top surface over the highest band.
-            TrackGeom.addBox(stage, vadd(vadd(a.c, a.r, 9), a.u, roofY + 0.85),
-              [9.0, 0.4, 62], ROOF_DK, b);
+            TrackGeom.addBox(stage, ac(F_R + 3.5, roofY + 0.85, 0),
+              [4.0, 0.4, 46], ROOF_DK, b);
           }, { required: true });
         }
         // Checkered podium backdrop recessed into the Wing's right bay (photo).
         {
-          const a = anchor(k(0.482), 1, 22);
+          const a = anchor(k(0.482), 1, PODIUM_DIST);
           if (!onTrack(a.c[0], a.c[2], 12)) {
             const b = [a.r, a.u, a.t];
             modelGroup("silverstone-wing-podium-check", {
@@ -409,14 +420,12 @@
       }
 
       // ── The Wing building + wave roof (behind the engine's garage block) ──
-      // The facades above are superseded by the pit complex, so from the
-      // track the Wing read as a plain 9 m garage block (parent TLX capture,
-      // built frac 0.00–0.03). The real Wing (2011, Populous) is a 390 m,
-      // three-storey glazed pit/paddock building under a blade-like wave
-      // roof. Here: plinth + glazed upper storeys whose front face stands
-      // just behind the garages' rear wall (measured lat 38 m), four roof
-      // crests (zig-zag prisms) dressed with overhanging white blades. The
-      // plane-tree row at dist 39 stood exactly here and was removed.
+      // Real Wing (2011, Populous): ~390 m three-storey glazed pit/paddock
+      // under a blade-like wave roof. Plinth + glazed storeys sit just behind
+      // the garages' rear wall (keep a1 ≈ lat 38); WING_DIST 36 clears the
+      // declared [21,…] footprint that 31 still clipped. Four roof crests
+      // (zig-zag prisms) with overhanging white blades. The plane-tree row at
+      // dist 39 stood here and was removed.
       {
         const a = anchor(k(0.479), 1, WING_DIST), rN = [-a.r[0], -a.r[1], -a.r[2]];
         const b = [a.r, a.u, a.t], L = 128, P = 32, TROUGH = 14.5, RISE = 5;
@@ -451,7 +460,7 @@
             }
           }
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       // Double-arm floodlight columns — distinctive at circuits (white/silver poles, twin heads)
