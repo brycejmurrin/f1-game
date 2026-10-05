@@ -114,8 +114,20 @@ const CarGeometry = (function () {
         : null;
       const xF = attachedX != null ? attachedX : x;
       const xR = attachedX != null ? attachedX : x * taper;
-      const yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
-      const zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
+      let yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+      let zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
+      // teCurve: pull the TE toward the LE at the tip (quadratic) so the
+      // trailing edge is an arc, not a straight plank. chordTaper shortens
+      // the tip chord. twist adds a few degrees of outboard incidence.
+      if (spec.teCurve) zR += spec.teCurve * edge * edge;
+      const ct = 1 - Math.max(0, spec.chordTaper || 0) * edge;
+      if (ct < 1) { zR = zF + (zR - zF) * ct; yR = yF + (yR - yF) * ct; }
+      const tw = (spec.twist || 0) * edge;
+      if (tw) {
+        const dzc = zR - zF, dyc = yR - yF, c = Math.cos(tw), s = Math.sin(tw);
+        zR = zF + dzc * c - dyc * s;
+        yR = yF + dzc * s + dyc * c;
+      }
       return {
         x: xF + (xR - xF) * t,
         y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
