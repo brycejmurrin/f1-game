@@ -1578,8 +1578,8 @@ const FlybySeq = (function () {
     if (!onRoad) { if (prof) _fe[1] += liftAt(prof, e); floorEye(track, clearEye(track, _fe)); }
     return (shot.fov ? shot.fov[0] + (shot.fov[1] - shot.fov[0]) * e : 50) * (fovK || 1);
   }
-  function judgeMove(track, shot, eye, look, prof, onRoad, subj, at, coarse, fovK, withMix) {
-    const w = { cost: 0, near: 0, nearSubj: 0, inside: false, ground: 0, mixCost: 0 }, es = at || FRAME_AT;
+  function judgeMove(track, shot, eye, look, prof, onRoad, subj, at, coarse, fovK, withMix, lapCover) {
+    const w = { cost: 0, near: 0, nearSubj: 0, inside: false, ground: 0, mixCost: 0, inF: 1, vis: 1, cover: null }, es = at || FRAME_AT;
     // `withMix`: the rest of the frame too (FlybySight.mix, a lap shot's
     // ground and sky) at the move's two ENDS, the worst added once — the end
     // that swings over open lawn is the one the report flags (Monza's wide:
@@ -1587,11 +1587,14 @@ const FlybySeq = (function () {
     const mixed = withMix && subj.lap;
     for (let j = 0; j < es.length; j++) {
       const fov = frameAt(track, shot, eye, look, prof, onRoad, es[j], fovK);
-      const f = FlybySight.frame(track, _fe, _ft, fov, subj, coarse, mixed && (j === 0 || j === es.length - 1));
+      const f = FlybySight.frame(track, _fe, _ft, fov, subj, coarse, mixed && (j === 0 || j === es.length - 1), lapCover);
       if (f.mix) { w.ground = Math.max(w.ground, f.mix.ground); w.mixCost = Math.max(w.mixCost, f.mixCost); }
       if (f.cost - f.mixCost > w.cost) w.cost = f.cost - f.mixCost;
       if (f.near > w.near) w.near = f.near;
       if (f.nearSubj > w.nearSubj) w.nearSubj = f.nearSubj;
+      if (f.inF < w.inF) w.inF = f.inF;
+      if (f.vis < w.vis) w.vis = f.vis;
+      if (f.cover != null && (w.cover == null || f.cover < w.cover)) w.cover = f.cover;
       if (f.inside) w.inside = true;
     }
     w.cost += w.mixCost;
@@ -1630,7 +1633,7 @@ const FlybySeq = (function () {
       return Object.assign({}, look[i], { y: (look[i].y || 0) + k * Math.max(0, _te[1] - _tl[1]) });
     });
   }
-  function level(track, shot, frac, fin, onRoad, subj, fovK, best) {
+  function level(track, shot, frac, fin, onRoad, subj, fovK, best, cand, ref) {
     if (fin.look[0].at !== "centre" || fin.look[1].at !== "centre") return null;
     const eye = fin.pe.eye, prof = fin.pe.prof, ok = FlybySight.GROUND_OK;
     const g0 = groundOf(track, shot, eye, fin.look, prof, onRoad, fovK);
@@ -1650,9 +1653,9 @@ const FlybySeq = (function () {
       dr += g - ok + TILT_PAD;
       const k = Math.min(TILT_MAX, dr * perRow), lk = tilt(track, eye, fin.look, k);
       if (!fin.fast && panRate(track, shot, frac, eye, lk, prof) > 1) break;
-      const j = judgeMove(track, shot, eye, lk, prof, onRoad, subj, FRAME_AT, false, fovK, true);
+      const j = judgeMove(track, shot, eye, lk, prof, onRoad, subj, FRAME_AT, false, fovK, true, !!(cand && cand.aim));
       g = j.ground;
-      const cost = j.cost + (j.ok ? 0 : FRAME_MISS);
+      const cost = j.cost + (j.ok ? 0 : FRAME_MISS) + lapLoss(ref || best, j, cand, LAP_TILT);
       if (cost < bestCost) { bestCost = cost; out = { j, f: Object.assign({}, fin, { look: lk }) }; }
       if (k >= TILT_MAX) break;
     }
@@ -1669,15 +1672,53 @@ const FlybySeq = (function () {
   // be steep at Monaco's 470 m and timid at Spa's 850; null in W_UP is the crest.
   // ±1.2 rad: Monaco's wide2 sees its lap past the mountain only from there.
   const W_TURN = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2], W_UP = [0, 60, null], W_CREST = 23 * Math.PI / 180;
+  // HIGHER STILL, AIMED THE SAME. The crest was still a grazing look into the
+  // far half of a big forest lap: Spa (rad 1230 m, the eye clamped 850 m out)
+  // saw 45-48 % of it through the pines from 360 m up, under the report's 50 %.
+  // From the 30 and 36 deg crests its look is RAISED (aimed()) until it looks
+  // down at W_AIM, shallower than the fov's half-angle so the horizon stays in
+  // frame (at 23 deg Hockenheim's raised frame was 76 % lawn, EMPTY_GROUND):
+  // the extra height buys sightline, not lawn. Tried only in a second round,
+  // for a lap the plain framings still see under W_HIGH_VIS of (planShot).
+  const W_HIGH = [30 * Math.PI / 180, 36 * Math.PI / 180], W_AIM = 15 * Math.PI / 180;
   function centreD(track, p) {
     const b = bounds(track), dR = p.distR === undefined ? 1.4 : p.distR;
     return dR > 0 ? Math.max(C_DMIN, Math.min(C_DMAX, dR * b.rad)) : 0;
   }
-  function crestY(track, p) {
+  function crestY(track, p, ang) {
     if (p.at !== "centre") return 0;
     const b = bounds(track), yR = p.yR === undefined ? 0.5 : p.yR;
     const h = yR > 0 ? Math.max(C_HMIN, Math.min(C_HMAX, yR * b.rad)) : yR * b.rad;
-    return Math.max(0, centreD(track, p) * Math.tan(W_CREST) - h - (p.y || 0));
+    return Math.max(0, centreD(track, p) * Math.tan(ang || W_CREST) - h - (p.y || 0));
+  }
+  /** What a raised (W_HIGH) framing pays for the lap it lets out of frame: the
+   *  report does not score a lap's in-frame share, so without this the cheapest
+   *  high eye on Spa framed a third of the lap where the authored one framed
+   *  62 %. LAP_SLACK of the authored share is free. */
+  // …and for the road it thins: an eye high enough to see over the trees sees
+  // a thinner ribbon, and Jeddah's and Vegas's raised framings kept a third of
+  // their lap's cover (the report's SUBJECT_SMALL, 0.5 %). The planner's lap
+  // cover is only roughly on the report's scale, so it pays twice: as a RATIO
+  // to the plain framing it would replace (under LAP_THIN of it, LAP_THIN_K a
+  // unit) and under LAP_COVER of the frame (a margin over the report's 0.5 %:
+  // Spa's raised wide reads 0.76 here, 1.0-1.3 there; Jeddah's 0.47 and 0.3).
+  const LAP_SLACK = 0.08, LAP_LOSS = 200, LAP_TILT = 60, W_HIGH_VIS = 0.6, LAP_THIN = 0.5, LAP_THIN_K = 100, LAP_COVER = 0.006;
+  function lapLoss(j0, j, cand, rate) {
+    if (!(cand && cand.aim)) return 0;
+    let thin = 0;
+    if (j.cover != null) thin = Math.max(0, LAP_COVER - j.cover) * LAP_THIN_K * 100 + (j0.cover > 0 ? Math.max(0, LAP_THIN - j.cover / j0.cover) * LAP_THIN_K : 0);
+    return Math.max(0, j0.inF - LAP_SLACK - j.inF) * (rate || LAP_LOSS) + thin;
+  }
+  /** A whole-circuit look raised until `eye` looks down at it no steeper than
+   *  `pitch` (a W_HIGH framing's aim); any other look, or no pitch, as given. */
+  function aimed(track, eye, look, pitch) {
+    if (!pitch) return look;
+    return [0, 1].map((i) => {
+      if (look[i].at !== "centre") return look[i];
+      posePoint(track, eye[i], _te); posePoint(track, look[i], _tl);
+      const up = _te[1] - _tl[1] - Math.hypot(_te[0] - _tl[0], _te[2] - _tl[2]) * Math.tan(pitch);
+      return up > 0 ? Object.assign({}, look[i], { y: (look[i].y || 0) + up }) : look[i];
+    });
   }
   /** Every alternative eye pair, the AUTHORED pair first (index 0), each
    *  tagged with its tier. */
@@ -1722,6 +1763,13 @@ const FlybySeq = (function () {
         // The crest only where it is above the last fixed step (else it is that step again).
         if (dy === null && !(Math.min(crestY(track, e0), crestY(track, e1)) > W_UP[1] + 20)) continue;
         for (const db of W_TURN) add((p) => ({ bear: (p.bear || 0) + db, y: (p.y || 0) + (dy === null ? crestY(track, p) : dy) }));
+      }
+      let below = Math.max(W_UP[1], Math.min(crestY(track, e0), crestY(track, e1)));
+      for (const ang of W_HIGH) {
+        const up = Math.min(crestY(track, e0, ang), crestY(track, e1, ang));
+        if (!(up > below + 20)) continue;   // the same step again
+        below = up;
+        for (const db of W_TURN) { add((p) => ({ bear: (p.bear || 0) + db, y: (p.y || 0) + crestY(track, p, ang) })); out[out.length - 1].aim = W_AIM; }
       }
     }
     return out;
@@ -1776,6 +1824,7 @@ const FlybySeq = (function () {
     // is still too fast) and judged the same way.
     const subj = typeof FlybySight !== "undefined" ? subjectOf(track, shot) : null;
     const tried = [];
+    let picked = null, lapRef = null;
     if (subj) {
       const j0 = judgeMove(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj);
       let best = j0;
@@ -1784,47 +1833,62 @@ const FlybySeq = (function () {
         // SCREEN every alternative at the authored squeeze, unplanned (the
         // per-frame safety net only — an eye in a canopy screens as inside),
         // then PLAN the few best and judge them as they will play.
-        const k = fin.k, n0 = Math.round(Math.log(k) / Math.log(PAN_K)), cands = framings(track, shot), screened = [];
+        const k = fin.k, n0 = Math.round(Math.log(k) / Math.log(PAN_K)), cands = framings(track, shot);
         const lk0 = k === 1 ? shot.look : squeeze(track, shot.look, k);
         // Tier by tier (a corner's outside, then its inside, then a slide along
         // the road): a tier with a passing framing ends the screen.
         // A SKETCH first (the middle frame, coarse), then both ends of the
         // best few at full resolution.
-        const sketched = [];
-        for (let i = 1, pass = false; i < cands.length; i++) {
-          if (pass && cands[i].tier !== cands[i - 1].tier) break;
-          const ey = k === 1 ? cands[i] : squeeze(track, cands[i], k);
-          const lk = planLook(track, ey, lk0);
-          // On the road the sketch sees the whole move: a grid walk clears a
-          // barrier mid-shot and meets it at the start (Monaco's, 31 %), and
-          // a passing middle frame (on a coarse raster) ended the search a tier too soon.
-          const j = judgeMove(track, shot, ey, lk, null, onRoad, subj, onRoad ? FRAME_AT : SKETCH_AT, !onRoad, cands[i].fovK);
-          sketched.push({ i, ey, lk, cost: j.cost + i * FRAME_TIE * 0.2 });
-          if (j.ok && !subj.lap) pass = true;
-        }
-        sketched.sort((a, b) => a.cost - b.cost);
-        for (let m = 0; m < Math.min(FRAME_SCREEN, sketched.length); m++) {
-          const c = sketched[m], j = judgeMove(track, shot, c.ey, c.lk, null, onRoad, subj, SCREEN_AT, false, cands[c.i].fovK);
-          screened.push({ i: c.i, cost: Math.max(j.cost, c.cost) + c.i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) });
-        }
-        screened.sort((a, b) => a.cost - b.cost);
-        // A move still too fast at the ladder's last rung is a whip pan however
-        // well framed: it pays like a missed framing.
-        let bestCost = j0.cost + (j0.ok ? 0 : FRAME_MISS) + (fin.fast ? FRAME_FAST : 0);
-        for (let m = 0; m < Math.min(FRAME_PLANS, screened.length); m++) {
-          const i = screened[m].i, src = { eye: cands[i], look: planLook(track, cands[i], shot.look) };
-          let n = n0, c = at(src, k);
-          while (c.fast && n < PAN_RUNGS && canSqueeze(src)) c = at(src, Math.pow(PAN_K, ++n));
-          const f = finish(c);
-          const j = judgeMove(track, shot, f.pe.eye, f.look, f.pe.prof, onRoad, subj, FRAME_AT, false, cands[i].fovK);
-          tried.push(j);
-          const cost = j.cost + i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) + (f.fast ? FRAME_FAST : 0);
-          if (cost < bestCost) { bestCost = cost; fin = f; framing = i; fovK = cands[i].fovK; best = j; }
-          if (j.ok && !subj.lap) break;
+        // Two rounds: the plain framings, then — only for a lap the best of
+        // them still sees under W_HIGH_VIS of — the raised ones (W_HIGH), each
+        // paying for lap it lets out of frame against that best (lapLoss).
+        let bestCost = j0.cost + (j0.ok ? 0 : FRAME_MISS) + (fin.fast ? FRAME_FAST : 0), ref = j0;
+        for (let round = 0; round < 2; round++) {
+          if (round === 1) {
+            if (!(subj.lap && best.vis < W_HIGH_VIS)) break;
+            // Height buys sightline AND lawn: this round is judged with the
+            // frame's ground/sky (FlybySight.mix) and its lap's cover, so the
+            // incumbent pays them too.
+            const jr = judgeMove(track, shot, fin.pe.eye, fin.look, fin.pe.prof, onRoad, subj, FRAME_AT, false, fovK, true, true);
+            bestCost += jr.cost - best.cost;
+            ref = lapRef = jr;
+          }
+          const sketched = [], screened = [];
+          for (let i = 1, pass = false; i < cands.length; i++) {
+            if (!cands[i].aim !== !round) continue;
+            if (pass && cands[i].tier !== cands[i - 1].tier) break;
+            const ey = k === 1 ? cands[i] : squeeze(track, cands[i], k);
+            const lk = aimed(track, ey, planLook(track, ey, lk0), cands[i].aim);
+            // On the road the sketch sees the whole move: a grid walk clears a
+            // barrier mid-shot and meets it at the start (Monaco's, 31 %), and
+            // a passing middle frame (on a coarse raster) ended the search a tier too soon.
+            const j = judgeMove(track, shot, ey, lk, null, onRoad, subj, onRoad ? FRAME_AT : SKETCH_AT, !onRoad, cands[i].fovK, false, round === 1);
+            sketched.push({ i, ey, lk, cost: j.cost + i * FRAME_TIE * 0.2 + lapLoss(ref, j, cands[i]) });
+            if (j.ok && !subj.lap) pass = true;
+          }
+          sketched.sort((a, b) => a.cost - b.cost);
+          for (let m = 0; m < Math.min(FRAME_SCREEN, sketched.length); m++) {
+            const c = sketched[m], j = judgeMove(track, shot, c.ey, c.lk, null, onRoad, subj, SCREEN_AT, false, cands[c.i].fovK, false, round === 1);
+            screened.push({ i: c.i, cost: Math.max(j.cost + lapLoss(ref, j, cands[c.i]), c.cost) + c.i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) });
+          }
+          screened.sort((a, b) => a.cost - b.cost);
+          // A move still too fast at the ladder's last rung is a whip pan however
+          // well framed: it pays like a missed framing.
+          for (let m = 0; m < Math.min(FRAME_PLANS, screened.length); m++) {
+            const i = screened[m].i, src = { eye: cands[i], look: aimed(track, cands[i], planLook(track, cands[i], shot.look), cands[i].aim) };
+            let n = n0, c = at(src, k);
+            while (c.fast && n < PAN_RUNGS && canSqueeze(src)) c = at(src, Math.pow(PAN_K, ++n));
+            const f = finish(c);
+            const j = judgeMove(track, shot, f.pe.eye, f.look, f.pe.prof, onRoad, subj, FRAME_AT, false, cands[i].fovK, round === 1, round === 1);
+            tried.push(j);
+            const cost = j.cost + i * FRAME_TIE * 0.2 + (j.ok ? 0 : FRAME_MISS) + (f.fast ? FRAME_FAST : 0) + lapLoss(ref, j, cands[i]);
+            if (cost < bestCost) { bestCost = cost; fin = f; framing = i; fovK = cands[i].fovK; best = j; picked = cands[i]; }
+            if (j.ok && !subj.lap) break;
+          }
         }
       }
       if (subj.lap) {
-        const lv = level(track, shot, frac, fin, onRoad, subj, fovK, best);
+        const lv = level(track, shot, frac, fin, onRoad, subj, fovK, best, picked, lapRef);
         if (lv) { fin = lv.f; tried.push(lv.j); }
       }
     }
