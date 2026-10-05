@@ -1,1 +1,1 @@
-1791228882	Cursor Agent	PR #985: CI on 3c2678a59 still running; tip CONFLICTING again — wait CI then report blocker or ready  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
+1791229244	Cursor Agent	PR #985 CONFLICTING: sync onto ship tip; skip-three/no-GPU lane only; no other PRs  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
