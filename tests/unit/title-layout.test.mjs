@@ -449,3 +449,12 @@ test("registered: manifest, export key, and the shell loads it", () => {
   assert.match(read("js/ui/settings-export.js"), /k: "titleLayout", lane: "json", group: "appearance", def: null/);
   assert.match(SHELL, /<script defer crossorigin="anonymous" src="js\/ui\/title-layout\.js\?v=dev"><\/script>/);
 });
+
+test("the home-scene motion chip cannot steal HOW TO PLAY at compact 200%", () => {
+  // Pages 37293090788: #home-motion kept `#overlay > *` zoom at 200% while
+  // brand/buttons capped at --ui-compact-brand/scale, and the disabled chip
+  // intercepted #mb-help on phone-browser-landscape.
+  const css = read("css/experience.css");
+  assert.match(css, /#home-motion:disabled\s*\{\s*pointer-events:\s*none/);
+  assert.match(css, /#home-motion\s*\{[^}]*zoom:\s*var\(--ui-compact-brand-scale\)/s);
+});

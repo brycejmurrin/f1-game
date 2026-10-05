@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
-  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
+  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, isEnvGatedSpec, envGateOf,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
@@ -114,7 +114,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
-    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + (x.coveredByOptIn || []).length + x.unreadable.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
 });
 
@@ -166,6 +166,24 @@ test("fixed blocking specs can never run under the selected gate's timeout", () 
   const r = fit([...FIXED_GATE_SPECS], 60);
   assert.deepEqual(r.selected, [], "even a huge selected budget must not duplicate fixed specs");
   assert.deepEqual(r.coveredByFixedGates.map((s) => s.file).sort(), [...FIXED_GATE_SPECS].sort());
+});
+
+test("an env-gated spec is named, never scheduled — all-skipped stays a RED", () => {
+  // Pages 37293090788: material-shimmer rode as oversize, skipped without
+  // APEX_SHIMMER, live-reporter failed the shard. The skip-fail is correct;
+  // the selector must not pick a row that can only skip.
+  const pin = "tests/specs/material-shimmer.spec.js";
+  assert.equal(isEnvGatedSpec(pin), true);
+  assert.equal(envGateOf(pin), "APEX_SHIMMER");
+  assert.equal(isEnvGatedSpec("tests/specs/boot-guard.spec.js"), false);
+  const r = fit([pin, "tests/specs/boot-guard.spec.js"], 60);
+  assert.deepEqual(r.coveredByOptIn.map((s) => s.file), [pin]);
+  assert.equal(r.coveredByOptIn[0].env, "APEX_SHIMMER");
+  assert.ok(!r.oversize.some((s) => s.file === pin));
+  assert.ok(!r.selected.some((s) => s.file === pin));
+  assert.ok(!r.overBudgetRun.some((s) => s.file === pin));
+  const planned = new Set(shards(r).flatMap((j) => j.specs.split(" ")));
+  assert.ok(!planned.has(pin), "no selected-gate job may carry the opt-in spec");
 });
 
 test("TRACKED covers the paths that make a selection meaningless", () => {
@@ -1005,7 +1023,7 @@ test("a routed over-budget spec is never silently dropped: run, or named, and ev
     const r = fit(specs, 10, { db: EMPTY, ...opts });
     const over = specs.filter((f) => maxDeclaredTimeout(f) >= SELECTED_GATE.perTestTimeoutSec * 1000);
     const accounted = new Set([...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun, ...r.overBudgetSpecs,
-      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByVmTwin].map((x) => x.file));
+      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByVmTwin, ...(r.coveredByOptIn || [])].map((x) => x.file));
     for (const f of over) assert.ok(accounted.has(f), `${f} is in no bucket (${JSON.stringify(opts)})`);
     const planned = new Set(shards(r, EMPTY).flatMap((j) => j.specs.split(" ")));
     for (const x of [...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun])
