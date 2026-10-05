@@ -285,6 +285,7 @@ const RaceSettings = (function () {
       }
       const stops = plan.stops || 0;
       $("rs-plan-loss").textContent = (stops ? stops + (stops === 1 ? " STOP · BOX L" : " STOPS · BOX L") + plan.lapsAt.join(", L") : "NO STOP")
+        + (pin === 0 && stops ? " · 2 DRY COMPOUNDS" : "")   // NO STOP pinned, the rule raised it (AiDrive.stintPlan)
         + " · PIT LOSS ≈ " + Math.round(pits.lossS()) + " s";
     }
 

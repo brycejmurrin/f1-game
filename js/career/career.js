@@ -1085,7 +1085,7 @@ function seasonCraft() {
   return rows.reduce((a, r) => a + r.craft, 0) / rows.length;
 }
 
-function settleRound(order, player) {
+function settleRound(order, player, table = Teams.POINTS) {   // table: a shortened race pays SeasonCal.payTable
   if (!inCareer() || !player || careerConflict) return null;
   // The calendar has already moved on, so the brief that was live for this race is
   // the PREVIOUS round's. Idempotent: a second call for the same raced round must
@@ -1095,7 +1095,7 @@ function settleRound(order, player) {
   const pos = order.indexOf(player) + 1;
   const team = teamOf(career.team);
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
-  const pts = scored(player) ? (Teams.POINTS[pos - 1] || 0) : 0;
+  const pts = scored(player) ? (table[pos - 1] || 0) : 0;
   const prize = prizeFor(pos);
   // AN OWNER IS NOT ON THE PAYROLL. The guide (career-ui "how the money works")
   // and docs/CAREER.md: a driver is paid a salary, an owner by sponsors. MY TEAM
@@ -1135,7 +1135,7 @@ function settleRound(order, player) {
                  + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
-  const matePts = mate && scored(mate) ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
+  const matePts = mate && scored(mate) ? (table[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
@@ -1154,7 +1154,7 @@ function settleRound(order, player) {
 // copy, check the revision again, then keep that alias while settling. A
 // rejected save restores the whole career in place (including economy/sponsors)
 // so a foreign write cannot leave phantom points or prize money in this tab.
-function scoreRound(order, player, fastestId) {
+function scoreRound(order, player, fastestId, run) {   // run: RaceControl.shortRun
   if (!inCareer() || !player || careerConflict ||
       (careerRevision != null && currentRevision() !== careerRevision)) {
     careerConflict = true;
@@ -1165,7 +1165,7 @@ function scoreRound(order, player, fastestId) {
   const original = JSON.parse(JSON.stringify(career));
   const seasonRef = career.season;
   const staged = JSON.parse(JSON.stringify(seasonRef));
-  if (SeasonCal.award(staged, order, fastestId) !== "race") return null;
+  if (SeasonCal.award(staged, order, fastestId, run) !== "race") return null;
   if (careerConflict || (careerRevision != null && currentRevision() !== careerRevision)) {
     careerConflict = true;
     lastSave = { ok: false, durable: false, reason: "conflict" };
@@ -1176,7 +1176,7 @@ function scoreRound(order, player, fastestId) {
     Object.assign(target, source);
   }
   replace(seasonRef, staged);
-  const result = settleRound(order, player);
+  const result = settleRound(order, player, SeasonCal.payTable(Teams.POINTS, "race", run));
   if (result && result.save && result.save.ok) return result;
   replace(career, original);
   replace(seasonRef, original.season);

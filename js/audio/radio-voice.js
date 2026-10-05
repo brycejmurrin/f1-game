@@ -186,7 +186,7 @@ const RadioVoice = (function () {
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
-      say: () => false, sayPreRace: () => false, stop: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: () => {}, halt: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
@@ -363,6 +363,13 @@ const RadioVoice = (function () {
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
       for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn) pack.ensure(recordedPack(sp));
     }
+    /** EVERY channel, the spotter's too: the race stopped (pause card, hidden
+     *  tab, the pit garage). stop() alone spares a spotter call mid-word.
+     *  THE PIT GARAGE IS A PAUSE WITHOUT THE CARD (game.js openPitWork), so the
+     *  #pausemenu observer below never sees it: an engineer line (the pit calls
+     *  land right there), a spotter clip and the card's hiss bed played on over
+     *  the garage, and the frozen card never ages out to stop them. It calls this. */
+    function halt() { stop(); if (pack) pack.stop(); }
     function stop() {
       stopVoice();
       // The hiss bed belongs to the line, so it goes when the line does —
@@ -543,7 +550,7 @@ const RadioVoice = (function () {
       // EVERY channel here: stop() spares a spotter call mid-word on purpose (the
       // next engineer line waits it out), but a spotter clip over a pause card or
       // into a hidden tab talks over a stopped game.
-      const haltAll = () => { stop(); if (pack) pack.stop(); };
+      const haltAll = () => halt();
       observe(pause, () => { if (!pause.hidden) haltAll(); });
       // iOS bricks the synthesiser until reload if it is backgrounded mid-line.
       document.addEventListener("visibilitychange", () => { if (document.hidden) haltAll(); });
@@ -608,7 +615,7 @@ const RadioVoice = (function () {
     }
 
     return {
-      say, stop, unlock, preview,
+      say, stop, halt, unlock, preview,
       /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
        *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
        *  master sound off, or a line that will not fit its budget all refuse it
