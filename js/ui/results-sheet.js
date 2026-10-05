@@ -58,6 +58,27 @@ function teamOrder(season) {
   const tp = season.teamPts || {};
   return Object.keys(tp).sort((a, b) => SeasonCal.rankTeams(season, a, b)).map((id) => [id, tp[id]]);
 }
+// THE CHAMPIONSHIP TABLE, NOT THE GRID. Season points are keyed by seat
+// (team:index) and the grid holds only THIS race's teams, so a Season raced
+// partly as MY TEAM / LEGENDS kept that seat's points after a team switch while
+// the results list and the champion banner, sorted from G.cars, dropped it —
+// and crowned the wrong driver while STANDINGS (season.pts) disagreed. Every
+// seat in season.pts plus every grid car, in SeasonCal.rank order (points,
+// then countback); an off-grid seat takes its code from driverCodes and its
+// team from the id prefix, as buildStandings does.
+function seasonTable(cars, season) {
+  const ids = new Set(Object.keys(season.pts || {}));
+  for (const c of cars) ids.add(c.driverId);
+  return Array.from(ids).sort((a, b) => SeasonCal.rank(season, a, b)).map((id) => {
+    const c = cars.find((x) => x.driverId === id);
+    if (c) return c;
+    const teamId = String(id).split(":")[0];
+    const team = (typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((t) => t.id === teamId)) || { id: teamId, name: teamId };
+    return { driverId: id, code: (season.driverCodes && season.driverCodes[id]) || id, name: "", team, isPlayer: false };
+  });
+}
+function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
+
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -370,9 +391,9 @@ function buildResults(order, race) {
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
-    const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
+    const all = seasonTable(cars, season).slice(0, 10);
     all.forEach((c, i) => {
-      rankRow(els.resultsTable, i, G.cssCol(c.team.color), `${c.code}  ${c.name}`,
+      rankRow(els.resultsTable, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
         ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
@@ -637,25 +658,26 @@ function buildChampion() {
   const season = G.season;
   // Countback decides a tie for the title (SeasonCal.rank); a points-only sort
   // crowned whichever tied driver came first in the field order.
-  const sorted = G.cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId));
+  const sorted = seasonTable(G.cars, season);
   const champ = sorted[0];
-  const champColor = G.cssCol(champ.team.color);
+  const champColor = seatColor(G, champ);
   els.resultsTitle.textContent = "WORLD CHAMPION";
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");
   banner.style.cssText = `text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:${champColor}`;
-  banner.textContent = `${champ.code}  ${champ.name}`;
+  banner.textContent = champ.name ? `${champ.code}  ${champ.name}` : champ.code;
   const teamBanner = document.createElement("div");
-  teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
-  teamBanner.textContent = champ.team.name.toUpperCase();
+  // Theme tokens, not a hard-coded #aaa: the LIGHT theme drew grey on a light sheet.
+  teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:var(--dim);margin-bottom:14px;letter-spacing:var(--ls-5)";
+  teamBanner.textContent = String(champ.team.name || "").toUpperCase();
   els.resultsTable.append(banner, teamBanner);
   const head = document.createElement("div");
   head.className = "sel-label";
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {
-    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, ptsLabel(season, c.driverId));
+    rankRow(els.resultsTable, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
