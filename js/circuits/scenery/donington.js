@@ -143,7 +143,7 @@
             const d = dist + c * 6.5 + h * 1.4;
             const a = anchor(k, side, d);
             if (onTrack(a.c[0], a.c[2], 8)) continue;
-            place(k, side, d, [4.3, 1.5, 1.9], CARS[Math.floor(h * 6) % 6]);
+            place(k, side, d, [4.3, 2.25, 1.9], CARS[Math.floor(h * 6) % 6]);   // 1.45 m showing (place sinks 0.8)
           }
         }
       };

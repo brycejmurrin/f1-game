@@ -11,6 +11,9 @@
  * Run: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames]
  */
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv.slice(2), `usage: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames] [pack] [apex26.<key>=<value> ...]
+  Per-frame GL call averages (draw / bind / upload) of ONE GLX frame mid-race with a full field (boots Chromium).`);
 const TRACK = process.argv[2] || "vegas";
 const TOD = process.argv[3] || "night";
 const FRAMES = +(process.argv[4] || 40);

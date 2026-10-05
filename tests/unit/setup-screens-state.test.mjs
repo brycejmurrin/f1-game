@@ -493,7 +493,7 @@ test("title SEASON door: refreshTitle writes the round into the label span and t
   // refreshTitle looked for a text node DIRECTLY in the button, found none and
   // returned — the label read "SEASON" through a whole championship.
   const shell = read("index.html");
-  assert.match(shell, /<button id="mb-season"[^>]*>(?:(?!<\/button>).)*<\/svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES<\/span><\/span><\/button>/s,
+  assert.match(shell, /<button id="mb-season"[^>]*>(?:(?!<\/button>).)*<\/svg><span>SEASON <span class="mb-sub">A CHAMPIONSHIP, YOUR RULES<\/span><\/span><\/button>/s,
     "the shell's door shape this test models");
   let progress = true;
   const { ui, $, G, dom } = loadSeasonUi(["a", "b"], { hasProgress: () => progress, rounds: () => 23 });
@@ -501,17 +501,17 @@ test("title SEASON door: refreshTitle writes the round into the label span and t
   btn.setAttribute("aria-label", "Season — A championship, your rules");
   const svg = dom.document.createElement("svg"), lab = dom.document.createElement("span"), sub = dom.document.createElement("span");
   sub.className = "mb-sub"; sub.textContent = "A CHAMPIONSHIP, YOUR RULES";
-  const text = { nodeType: 3, nodeValue: "SEASON" };
+  const text = { nodeType: 3, nodeValue: "SEASON " };   // the trailing space separates label and sub-line
   btn.appendChild(svg); btn.appendChild(lab); lab.appendChild(sub);
   btn.childNodes = [svg, lab]; lab.childNodes = [text, sub];   // mini-dom has no text nodes: model the shell's
   G.season = { round: 4 };
   ui.refreshTitle();
-  assert.equal(text.nodeValue, "SEASON · R5 OF 23");
+  assert.equal(text.nodeValue, "SEASON · R5 OF 23 ");
   assert.deepEqual(lab.childNodes, [text, sub], "the .mb-sub line is kept");
   assert.equal(sub.textContent, "A CHAMPIONSHIP, YOUR RULES");
   assert.equal(btn.getAttribute("aria-label"), "Season · R5 of 23 — A championship, your rules");
   progress = false;
   ui.refreshTitle();
-  assert.equal(text.nodeValue, "SEASON");
+  assert.equal(text.nodeValue, "SEASON ");
   assert.equal(btn.getAttribute("aria-label"), "Season — A championship, your rules", "no progress: the shell's own name");
 });

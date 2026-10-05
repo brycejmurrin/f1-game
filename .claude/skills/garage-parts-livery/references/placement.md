@@ -6,6 +6,14 @@ can land somewhere nothing will ever see (a geometry question, per design). The
 first has been guarded for a while. The second was not, and this is how it is
 answered now.
 
+## Contents
+- The colour half is in CI
+- Shoot the cheapest surface that can answer the question
+- Occlusion is geometry, so it is also offline
+- What still needs a browser
+- Judging garage framing from a capture — read this before calling it a defect
+- garage-angles shots are not reproducible across runs
+
 ## The colour half is in CI
 
 `tests/unit/cover-legibility.test.mjs` measures the atlas: for every shipped
@@ -73,7 +81,7 @@ which is the only reason to believe it would catch the next one.
 ## Occlusion is geometry, so it is also offline
 
 `flank-occlusion.mjs` projects the REAL body mesh and the four wheels at their
-game.js anchors through one garage camera and asks, per station, whether
+`js/car/car-draw.js` anchors through one garage camera and asks, per station, whether
 anything nearer covers it. The station's 3D point comes off the real decal mesh
 (`CarMesh.carDecalData` emits the spineSide quad with its UVs, so a region
 coordinate interpolates straight onto the skin) — nothing about the cover
@@ -188,7 +196,7 @@ make a correctly-framed bay look broken.
 **1. The capture is the bare canvas; the player also sees the sheet.**
 The setup sheet is DOM docked over `#game` — at 1280x720 it holds x 848..1268,
 the right 33%. The preview compensates with an OFF-AXIS frustum
-(`_spProj[8] = panelFrac`, `[9] = panelFracY`, game.js) that shifts the car into
+(`_spProj[8] = panelFrac`, `[9] = panelFracY`, `js/garage/setup-camera.js`) that shifts the car into
 the gap the sheet does not cover; measured `panelFrac` is 0.328, matching the
 sheet exactly. `screenshotGameCanvas` captures the canvas alone, so the car
 reads as shoved off-centre with dead space on the sheet side. That is correct
@@ -200,7 +208,7 @@ sees, cut it with `--crop=x,y,w,h` (fractions of the canvas).
 The car is ~5.4 m long and ~1.0 m tall. Framed to fill the visible WIDTH, it
 covers about a fifth of the height, so most of the frame is bay floor and back
 wall. That is the aspect ratio, not a framing error — SP_VIEWS fits the
-horizontal axis deliberately ("panelFracY is NOT a term here", game.js).
+horizontal axis deliberately ("panelFracY is NOT a term here", `js/garage/setup-camera.js`).
 
 **The roof truss in TOP is deliberate, and elevation cannot move it.**
 `GarageScene`: two rails along z at `x = +/-2.6` and five cross members at
@@ -233,7 +241,7 @@ Run pairs of identical code and config (`--team=redbull --views=hero,side,rear`)
 | + render scale pinned | 0.24 | 42.9 | 43.2 |
 
 **One source is fixed.** The bay's door-end washer flickers on three
-incommensurate sines of the clock `game.js` hands `GarageScene.live()`, and that
+incommensurate sines of the clock `js/garage/setup-camera.js` hands `GarageScene.live()`, and that
 clock was `performance.now()` — so two captures at different WALL instants lit
 the room differently (`on` lands on 0.30, 0.72 or 1 for that fixture, a 3.3x
 swing). `garageNow()` now hands it the FRAME clock whenever

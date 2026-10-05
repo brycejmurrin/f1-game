@@ -327,7 +327,7 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -435,6 +435,7 @@ const CATALOG = [
         speed: { type: "number" },
         lateral: { type: "number" },
         what: { type: "string" },
+        id: { type: "string" },   // describe: prop:12 | corner:T3 | car:4 | span:2 (agent.mjs --id)
         radius: { type: "number" },
         limit: { type: "number" },
         seconds: { type: "number" },
@@ -1213,7 +1214,15 @@ function buildArgv(name, args) {
         String(args.frac ?? 0.1),
         String(args.cam || "orbit"),
       ];
-      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.out) {
+        // shot.mjs's 4th positional is a FILE (`[out.png]`); a directory here
+        // made it write a path with no extension and die 84 s later with
+        // "unsupported mime type null" (measured 2026-10-05). Keep the CLI's
+        // own default name inside the directory instead.
+        const out = assertSafeOut(args.out);
+        const track = String(args.track || "monza"), cam = String(args.cam || "orbit");
+        argv.push(/\.png$/i.test(out) ? out : path.join(out, `${track}-${Math.round(Number(args.frac ?? 0.1) * 100)}-${cam}.png`));
+      }
       if (args.az != null) argv.push("--az", String(args.az));
       if (args.el != null) argv.push("--el", String(args.el));
       if (args.dist != null) argv.push("--dist", String(args.dist));
@@ -1234,6 +1243,7 @@ function buildArgv(name, args) {
         ["speed", args.speed],
         ["lateral", args.lateral],
         ["what", args.what],
+        ["id", args.id],
         ["radius", args.radius],
         ["limit", args.limit],
         ["seconds", args.seconds],
@@ -1870,7 +1880,10 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || name === "apex_frame_report" || name === "apex_who_is_on_it";
-  const timeoutMs = longTree ? 180000 : 60000;
+  // verify-change --fast runs the node suites serially; measured >180 s on a
+  // ~90-file diff (2026-10-05), where the cap killed it with no verdict. Ten
+  // minutes is its ceiling; the host moves a long MCP call to the background.
+  const timeoutMs = name === "apex_verify_change_fast" ? 600000 : longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;

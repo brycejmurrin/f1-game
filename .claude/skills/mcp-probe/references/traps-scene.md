@@ -2,6 +2,13 @@
 
 Load from traps.md when debugging this class of failure.
 
+## Contents
+- A THIRD trap: verify TUNE_DEFS by grep, not by memory
+- A FOURTH trap: two same-value screenshots must diff near-zero before you trust any pair
+- An ELEVENTH trap: a screenshot cannot tell you WHICH mesh is hiding another
+- An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render
+- A NINTH trap: `scene()` lists what the circuit ASKED for, not what got drawn
+
 ## A THIRD trap: verify TUNE_DEFS by grep, not by memory
 
 Proving a lighting-tuner slider "does nothing" (or "does something") means

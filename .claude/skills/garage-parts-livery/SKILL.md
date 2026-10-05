@@ -29,7 +29,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
   batch `garage-angles.mjs` run) → **mcp-probe** against the local server,
   clicking category tabs / livery swatches directly — see
   `.claude/skills/mcp-probe/references/recipes.md` § "Driving a UI screen" and
-  `references/traps-chrome.md` for the click-timeout and soft-present-wait
+  `.claude/skills/mcp-probe/references/traps-chrome.md` for the click-timeout and soft-present-wait
   gotchas specific to that screen.
 
 ## Quick Reference
@@ -47,7 +47,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 
 ```sh
 node tools/ci/test-bg.mjs car              # browser-gated
-node tools/ci/test-bg.mjs modes            # browser-gated              # research locks / ownership UI — no test:career
+node tools/ci/test-bg.mjs modes            # browser-gated; research locks / ownership UI — no test:career
 node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme

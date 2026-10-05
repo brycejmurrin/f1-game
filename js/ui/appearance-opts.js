@@ -215,11 +215,13 @@ const AppearanceOpts = (function () {
     const el = byId(containerId);
     if (!el || el.dataset.built === "1") return;
     el.dataset.built = "1";
+    const chips = [];
     for (const [id, label] of ACCENTS) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pm-accent-chip" + (id === "custom" ? " pm-accent-chip-custom" : "");
       btn.dataset.accent = id;
+      btn.dataset.arrows = "listbox";
       btn.setAttribute("role", "option");
       btn.setAttribute("aria-label", label);
       btn.title = label;
@@ -227,10 +229,25 @@ const AppearanceOpts = (function () {
       // and three identical red squares read as one choice.
       btn.textContent = label;
       paintChip(btn, id, which, false);
-      btn.addEventListener("click", () => {
-        if (which === "menu") setMenuAccent(id);
-        else setHudAccent(id);
+      const choose = () => {
+        if (which === "menu") { if (menuAccent !== id) setMenuAccent(id); }
+        else if (hudAccent !== id) setHudAccent(id);
+        btn.focus();
+      };
+      btn.addEventListener("click", choose);
+      btn.addEventListener("keydown", (e) => {
+        if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+        // MenuNav uses the pad's synthetic vertical arrows to leave the row.
+        if (e.isTrusted === false && (e.key === "ArrowUp" || e.key === "ArrowDown")) return;
+        const at = chips.indexOf(btn), last = chips.length - 1;
+        const next = e.key === "Home" ? 0 : e.key === "End" ? last
+          : e.key === "ArrowLeft" || e.key === "ArrowUp" ? Math.max(0, at - 1)
+          : e.key === "ArrowRight" || e.key === "ArrowDown" ? Math.min(last, at + 1) : -1;
+        if (next < 0) return;
+        e.preventDefault(); e.stopPropagation();
+        chips[next].click();
       });
+      chips.push(btn);
       el.appendChild(btn);
     }
   }
@@ -239,12 +256,19 @@ const AppearanceOpts = (function () {
     const el = byId(containerId);
     if (!el) return;
     const chips = el.querySelectorAll ? el.querySelectorAll(".pm-accent-chip") : [];
+    let focused = false, selectedButton = null;
     for (const btn of chips) {
       const id = btn.dataset.accent;
       const on = id === selected;
       btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.tabIndex = on ? 0 : -1;
+      if (document.activeElement === btn) focused = true;
+      if (on) selectedButton = btn;
       if (id === "team" || id === "custom") paintChip(btn, id, which, on);
     }
+    // A profile/native select may change the chosen option while this list owns
+    // focus. Keep its focus and sole tab stop together; hex editors stay put.
+    if (focused && selectedButton && document.activeElement !== selectedButton) selectedButton.focus();
   }
 
   // CUSTOM shows the player's colour only once it is the pick; until then it is

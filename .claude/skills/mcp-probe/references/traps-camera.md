@@ -2,6 +2,13 @@
 
 Load from traps.md when debugging this class of failure.
 
+## Contents
+- A SECOND trap: `snapCam()` after a free-cam call cancels the free-cam
+- A FIFTH trap: only `chase` (and other player-relative modes) hold still for a frozen before/after pair — broadcast-cut cameras and the debug free-cam don't
+- A SEVENTH trap: the chase cam auto-cuts to a broadcast angle after ~2 s idle
+- A TWELFTH trap: the CAMERA only advances on real rAF frames — not on step()
+- A TENTH trap: camera `lat` and circuit `gap` are different spaces
+
 ## A SECOND trap: `snapCam()` after a free-cam call cancels the free-cam
 
 `park()`/`jump()` need `snapCam()` right after them (see `docs/DEBUG-HOOKS.md`).
@@ -57,7 +64,7 @@ because it's not `orbit()`/`view()` (the free-cam family covered by the SECOND
 trap above).
 
 **2. `orbit()`/`view()`/`eyeAt()`-family calls silently zero the draw-distance
-cull.** `game.js`'s `frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0) : ...`
+cull.** `game.js`'s `frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : ...`
 — on desktop, ANY free-cam hook (`G.dbgCam` set) makes the scenery draw-distance
 cull a no-op (uncapped), and the far-clip plane comes from `dbgCam.far`, not the
 renderDistMul-scaled `farPlane`. A render-distance knob will show **zero**

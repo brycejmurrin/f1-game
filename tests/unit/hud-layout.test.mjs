@@ -128,7 +128,7 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   const { H, written, els } = load();
   const e = H.set("map", { x: 5, s: 150 }, "other");
   assert.deepEqual({ ...e }, { x: 5, y: 0, s: 150 });
-  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 3, standard: { cockpit: {}, other: { map: { x: 5, y: 0, s: 150 } } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 3, standard: { cockpit: {}, helmet: {}, other: { map: { x: 5, y: 0, s: 150 } } } });
   const m = els["#minimap"];
   assert.equal(m.attrs["data-hl"], "");
   assert.equal(m.props["--hl-x"], "5");
@@ -149,7 +149,7 @@ test("values clamp; back to shipped clears the element and the store", () => {
 test("cockpit and other cameras keep separate layouts; setCam swaps them", () => {
   const { H, els } = load({ hudLayout: { v: 1, cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } });
   assert.equal(H.camSet("cockpit"), "cockpit");
-  assert.equal(H.camSet("helmet"), "cockpit");
+  assert.equal(H.camSet("helmet"), "helmet", "HELMET is the visor: its own set (js/camera/cam-groups.js)");
   assert.equal(H.camSet("visor"), "other", "VISOR draws no wheel (js/camera/cam-groups.js)");
   assert.equal(H.camSet("chase"), "other");
   assert.equal("data-hl" in els["#hud-tyre"].attrs, false, "chase layout shows by default");
@@ -326,7 +326,7 @@ test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERG
 });
 
 test("touch cockpit: TYRES joins the strip's hide in the CSS and in hiddenReason (hud-survey Y1)", () => {
-  const touch = TD.match(/body\.cockpit-cam:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
+  const touch = TD.match(/body\[data-hl-set="cockpit"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
   assert.ok(touch, "the touch-cockpit hide rule exists");
   const hidden = touch[1].split(",").map((x) => x.trim()).sort();
   assert.deepEqual(hidden, ["#hud-aero", "#hud-bb", "#hud-energy", "#hud-ot", "#hud-tyre"]);
@@ -334,6 +334,43 @@ test("touch cockpit: TYRES joins the strip's hide in the CSS and in hiddenReason
   const { H } = load();
   const sel = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[2]]));
   for (const id of Object.keys(H.SHIPPED.standard.cockpit)) assert.ok(hidden.includes(sel[id]), id);
+});
+
+test("touch cockpit with a wheel that has no screen (CLASSIC / NONE): the strip still hides; the gearbox does not", () => {
+  // body.cockpit-cam needs wheelHasScreen() (js/camera/mode-switch.js); the
+  // cockpit LAYOUT set is chosen by camera alone, so the hide must follow it.
+  const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  assert.match(ms, /"cockpit-cam", [^;]*wheelHasScreen\(\)/, "premise: cockpit-cam is the wheel LCD");
+  const L = load3({ classes: [], live: false });   // no cockpit-cam: CLASSIC wheel
+  L.H.setCam("cockpit");
+  for (const id of ["energy", "tyre", "ot", "aero", "bb"]) {
+    const r = L.H.hiddenReason(id);
+    assert.ok(r && /touch cockpit/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
+  }
+  assert.equal(L.H.hiddenReason("gearbox"), null, "no LCD: the gearbox chip is the read");
+  L.H.setCam("chase");
+  assert.equal(L.H.hiddenReason("ot"), null, "the chase layout set shows the strip");
+  // The CSS keys the same hide on the attribute apply() paints.
+  assert.match(TD, /body\[data-hl-set="cockpit"\]:not\(\.desktop\) :is\([^)]*#hud-ot[^)]*\)/);
+  assert.doesNotMatch(TD, /body\.cockpit-cam:not\(\.desktop\)/, "the touch hide no longer needs the wheel LCD");
+});
+
+test("apply() paints body[data-hl-set] with the camera set on screen", () => {
+  const attrs = {};
+  const els = {};
+  const doc = { readyState: "complete", getElementById: () => null, addEventListener() {},
+    body: { classList: { contains: () => false }, getAttribute: (k) => (k in attrs ? attrs[k] : null),
+      setAttribute: (k, v) => { attrs[k] = String(v); }, removeAttribute: (k) => { delete attrs[k]; } },
+    querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())) };
+  const ctx = { console, document: doc, GameStore: { store: { get: (k, d) => d, set() {} } } };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.setCam("cockpit");
+  assert.equal(attrs["data-hl-set"], "cockpit");
+  ctx.HudLayout.setCam("helmet");
+  assert.equal(attrs["data-hl-set"], "helmet");
+  ctx.HudLayout.setCam("chase");
+  assert.equal(attrs["data-hl-set"], "other");
 });
 
 test("module has no Tracks / curvature reads", () => {
@@ -395,6 +432,44 @@ test("fit clamps pieces that share an offset as ONE block, so neighbours keep th
   assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
 });
 
+test("fit clamps a size-only piece on its own, not as one block with every other size-only piece", () => {
+  // BIG + TOWER SIZE 200 at 844 wide: the tower (centred, grown to 640) and the
+  // map (top-left, grown) both carry offset 0,0. Grouped as one "0,0" block their
+  // union outgrew the screen and was pinned to the map's left edge, leaving the
+  // tower's right end ~170 px past the right edge.
+  const W = 844, H = 390;
+  const mk = (left, top, w, h) => {
+    const props = {}, attrs = { "data-hl": "" };
+    return {
+      props,
+      style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() {
+        const x = left + parseFloat(props["--hl-x"] || 0) / 100 * W, y = top + parseFloat(props["--hl-y"] || 0) / 100 * H;
+        return { left: x, right: x + w, top: y, bottom: y + h, width: w, height: h };
+      },
+    };
+  };
+  const tower = mk(W / 2 - 160 + 170, 8, 640, 100);   // grown about its left: 432..1072, 228 px past 840
+  const map = mk(10, 8, 160, 160);                    // 10..170: on screen
+  const written = { hudLayout: { v: 3, standard: { cockpit: {}, other: { tower: { x: 0, y: 0, s: 200 }, map: { x: 0, y: 0, s: 125 } } } } };
+  const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+  const ctx = {
+    console, window: { innerWidth: W, innerHeight: H },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {},
+      querySelector: (sel) => (sel === ".hud-top" ? tower : sel === "#minimap" ? map : blank) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.fit();
+  const t = tower.getBoundingClientRect(), m = map.getBoundingClientRect();
+  assert.ok(t.right <= W - 4 + 1e-6 && t.left >= 4 - 1e-6, `the tower ends on screen: ${t.left}..${t.right}`);
+  assert.equal(m.left, 10, "the map, already on screen, is not dragged with the tower");
+  assert.equal(map.props["--hl-x"], "0");
+  assert.equal(ctx.HudLayout.get("tower", "other").s, 200, "stored size unchanged");
+});
+
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
@@ -422,14 +497,14 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
 test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
   const { H } = load3();
   const m = plain(H.migrate({ v: 2, cockpit: { ot: { x: 10, y: 0, s: 100 } }, other: { tower: { x: -30, y: 0, s: 100 } } }));
-  assert.deepEqual(m.standard, { cockpit: { ot: { x: 10, y: 0, s: 100 } }, other: { tower: { x: -30, y: 0, s: 100 } } });
-  assert.deepEqual(m.minimal, { cockpit: {}, other: {} });
-  assert.deepEqual(m.broadcast, { cockpit: {}, other: {} });
+  assert.deepEqual(m.standard, { cockpit: { ot: { x: 10, y: 0, s: 100 } }, helmet: {}, other: { tower: { x: -30, y: 0, s: 100 } } });
+  assert.deepEqual(m.minimal, { cockpit: {}, helmet: {}, other: {} });
+  assert.deepEqual(m.broadcast, { cockpit: {}, helmet: {}, other: {} });
   // v3 reads per style, and a value equal to that style's shipped one is dropped.
   const v3 = plain(H.migrate({ v: 3, broadcast: { other: { map: { x: 1 } } }, minimal: { cockpit: { tyre: H.SHIPPED.minimal.cockpit.tyre } } }));
   assert.deepEqual(v3.broadcast.other, { map: { x: 1, y: 0, s: 100 } });
   assert.deepEqual(v3.minimal.cockpit, {});
-  assert.deepEqual(plain(H.migrate(null)), { standard: { cockpit: {}, other: {} }, minimal: { cockpit: {}, other: {} }, broadcast: { cockpit: {}, other: {} } });
+  assert.deepEqual(plain(H.migrate(null)), { standard: { cockpit: {}, helmet: {}, other: {} }, minimal: { cockpit: {}, helmet: {}, other: {} }, broadcast: { cockpit: {}, helmet: {}, other: {} } });
   for (const p of H.PROFILES) for (const id of ["energy", "tyre", "ot", "aero"]) assert.ok(Math.abs(H.SHIPPED[p].cockpit[id].x) >= 25, p + " " + id);
 });
 
@@ -443,8 +518,8 @@ test("layouts are keyed by style: a STANDARD tower move does not paint in BROADC
   assert.equal("data-hl" in els[".hud-top"].attrs, false, "broadcast shows its own (shipped) tower");
   H.set("tower", { y: 5 }, "other");
   assert.deepEqual(plain(written.hudLayout), { v: 3,
-    standard: { cockpit: {}, other: { tower: { x: -30, y: 0, s: 100 } } },
-    broadcast: { cockpit: {}, other: { tower: { x: 0, y: 5, s: 100 } } } });
+    standard: { cockpit: {}, helmet: {}, other: { tower: { x: -30, y: 0, s: 100 } } },
+    broadcast: { cockpit: {}, helmet: {}, other: { tower: { x: 0, y: 5, s: 100 } } } });
   assert.equal(H.get("tower", "other", "standard").x, -30);
   assert.equal(H.get("tower", "other", "minimal").x, 0);
   assert.equal(H.isShipped(undefined, "minimal"), true);
@@ -466,8 +541,11 @@ test("profile: the live body class while racing, else the stored HUD STYLE", () 
 test("CamGroups: one onboard table, a wheel-only cockpit-layout table; hud.js and hud-layout read it", () => {
   const { CG, H } = load3();
   assert.deepEqual(Object.keys(CG.ONBOARD).sort(), ["cockpit", "helmet", "hood", "tcam", "visor"]);
-  assert.deepEqual(Object.keys(CG.COCKPIT_LAYOUT).sort(), ["cockpit", "helmet"]);
-  for (const id in CG.COCKPIT_LAYOUT) assert.ok(CG.ONBOARD[id], id + ": a wheel camera is onboard");
+  assert.deepEqual(Object.keys(CG.COCKPIT_LAYOUT), ["cockpit"]);
+  assert.deepEqual(Object.keys(CG.HELMET_LAYOUT), ["helmet"]);
+  for (const id in Object.assign({}, CG.COCKPIT_LAYOUT, CG.HELMET_LAYOUT)) assert.ok(CG.ONBOARD[id], id + ": a wheel camera is onboard");
+  assert.deepEqual(["cockpit", "helmet", "visor", "chase"].map(CG.layoutSet), ["cockpit", "helmet", "other", "other"]);
+  assert.deepEqual([...H.SETS], ["cockpit", "helmet", "other"]);
   for (const id of ["chase", "far", "heli", "tv", "rear"]) assert.equal(CG.isOnboard(id), false, id);
   assert.ok(Object.isFrozen(CG.ONBOARD) && Object.isFrozen(CG.COCKPIT_LAYOUT));
   assert.equal(H.COCKPIT_CAMS, CG.COCKPIT_LAYOUT);
@@ -494,15 +572,25 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.match(h({ classes: ["hud-hide-gaps"], live: false }).hiddenReason("gaps").reason, /GAPS is off/);
   assert.match(h({ hide: "pos energy", live: false, classes: ["desktop"] }).hiddenReason("energy").reason, /HUD element list/);
   assert.match(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("gearbox").reason, /wheel/);
-  const touch = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("ot");
+  // The touch-cockpit row follows the cockpit LAYOUT set (setCam), not the wheel LCD.
+  const hc = (o) => { const x = h(o); x.setCam("cockpit"); return x; };
+  const touch = hc({ classes: ["cockpit-cam"], live: false }).hiddenReason("ot");
   assert.equal(touch.soft, true, "a touch cockpit chip shows once placed: sliders stay");
-  const tyT = h({ classes: ["cockpit-cam"], live: false }).hiddenReason("tyre");
+  const tyT = hc({ classes: ["cockpit-cam"], live: false }).hiddenReason("tyre");
   assert.equal(tyT.soft, true, "TYRES too: hidden on a touch cockpit until placed");
   assert.match(tyT.reason, /touch cockpit/);
-  assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("tyre"), null, "a desktop cockpit shows TYRES beside the wheel");
-  assert.equal(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
+  assert.equal(hc({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("tyre"), null, "a desktop cockpit shows TYRES beside the wheel");
+  assert.equal(hc({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
   assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
+  // TOUCH: STRATEGY has a home under the minimap; RELATIVE / INPUTS still wait to be placed.
+  assert.equal(h({ live: false }).hiddenReason("strat"), null, "touch STRATEGY shows at its touch home");
+  assert.equal(h({ live: false }).hiddenReason("rel").soft, true, "touch RELATIVE still waits to be placed");
+  const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
+  assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(144px/, "touch STRATEGY sits under the 128px map");
+  assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
+    "touch TYRES sits on top of the left dock");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
     assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");
@@ -546,4 +634,51 @@ test("apply() asks GameHud to re-fit at once (typeof-guarded)", () => {
   L.H.set("map", { x: 3 }, "other");
   assert.ok(n > before, "a move invalidates the fit");
   assert.doesNotThrow(() => load3({ gameHud: {} }).H.set("map", { x: 3 }, "other"));
+});
+
+// HELMET — the visor HUD (reported 2026-10-05 from a phone: "the HUD isn't
+// really showing with helmet camera"). Its own set: no cockpit-cam, so gear and
+// speed paint; a desktop stacks them left of the wheel over the cockpit strip;
+// a touch screen takes TOUCH_SHIPPED (ENERGY above the wheel, TYRES in the left
+// corner) and leaves gear / OT / AERO / BB to the LCD glyph and the buttons.
+test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a desktop, a touch strip of its own on a phone", () => {
+  const D = load3({ classes: ["desktop"], live: false });
+  for (const id of ["energy", "tyre", "ot", "aero", "bb"]) assert.deepEqual(plain(D.H.get(id, "helmet")), plain(D.H.get(id, "cockpit")), id + ": the cockpit strip");
+  assert.ok(D.H.get("gearbox", "helmet").x <= -25 && D.H.get("gearbox", "helmet").y < 0, "GEAR left of the wheel and up");
+  assert.ok(D.H.get("speed", "helmet").x <= -25 && D.H.get("speed", "helmet").y < D.H.get("gearbox", "helmet").y, "SPEED above GEAR");
+  assert.deepEqual(plain(D.H.get("gearbox", "cockpit")), { x: 0, y: 0, s: 100 }, "the cockpit still leaves gear to the LCD");
+  D.H.setCam("helmet");
+  assert.equal(D.els["#hud-gearbox"].props["--hl-x"], String(D.H.SHIPPED.standard.helmet.gearbox.x));
+  const T = load3({ classes: [], live: false });   // a touch screen: no body.desktop
+  assert.deepEqual(plain(T.H.get("energy", "helmet")), plain(T.H.TOUCH_SHIPPED.helmet.energy));
+  assert.ok(T.H.get("energy", "helmet").y <= -25, "ENERGY lifts above the wheel's top edge");
+  assert.ok(T.H.get("tyre", "helmet").x === 0 && T.H.get("tyre", "helmet").y < 0, "TYRES stays in the left corner, lifted off the steer buttons");
+  for (const id of ["gearbox", "speed", "ot", "aero", "bb"]) assert.deepEqual(plain(T.H.get(id, "helmet")), { x: 0, y: 0, s: 100 }, id + ": shipped on touch");
+  assert.deepEqual(plain(T.H.get("energy", "cockpit")), plain(D.H.get("energy", "cockpit")), "the cockpit strip is the same on both");
+  assert.equal(T.H.isShipped("helmet"), true);
+  T.H.set("energy", { y: -40 }, "helmet");
+  assert.equal(T.H.isShipped("helmet"), false);
+  T.H.set("energy", plain(T.H.TOUCH_SHIPPED.helmet.energy), "helmet");
+  assert.equal(T.written.hudLayout, null, "writing the touch default stores nothing");
+});
+
+test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY and TYRES show (CSS and hiddenReason agree)", () => {
+  const T = load3({ classes: [], live: false });
+  T.H.setCam("helmet");
+  for (const id of ["gearbox", "ot", "aero", "bb"]) {
+    const r = T.H.hiddenReason(id);
+    assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
+  }
+  for (const id of ["energy", "tyre", "speed"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
+  const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
+  assert.ok(rule, "the touch-helmet hide rule exists");
+  assert.deepEqual(rule[1].split(",").map((x) => x.trim()).sort(), ["#hud-aero", "#hud-bb", "#hud-gearbox", "#hud-ot"]);
+  const D = load3({ classes: ["desktop"], live: false });
+  D.H.setCam("helmet");
+  for (const id of ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"]) assert.equal(D.H.hiddenReason(id), null, id + " shows on a desktop helmet");
+  assert.ok(D.H.ELEMENTS.some((e) => e[0] === "speed" && e[2] === "#hud-speed"), "SPEED is a MOVE & SIZE piece of its own");
+  // No cockpit-cam in HELMET: mode-switch.js keys the LCD hide on COCKPIT alone.
+  const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  assert.match(ms, /"cockpit-cam", camId === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/);
+  assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet"\)/, "the visor frame stays");
 });

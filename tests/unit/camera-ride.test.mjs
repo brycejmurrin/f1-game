@@ -155,6 +155,49 @@ test("flat road: the chase rig frames exactly as its constants say", () => {
   assert.ok(Math.abs(v.tgt[1] - (7.5 + 0.7)) < 1e-6, `tgt ${v.tgt[1]}`);
 });
 
+// HELI and TV SIDE framing (#770): the helicopter close and low enough not to be
+// a second overhead, TV side tracking a few metres behind with the car leading
+// the frame. A later merge resolved vantage.js to its pre-#770 side and the old
+// poses (heli 26 m back / 17 m up / 18 m out; side 25 m out, aimed at the car)
+// came back unseen. Pinned here on a flat straight, so a conflict resolution has
+// to break a test to undo them. One-shot solve (no dt): no CamFeel easing, no
+// speed climb; kA = 0, so the outside of a straight is +right (+X here). The
+// TV director and ResultsCam.cheqPose solve these same branches.
+test("heli and TV side: straight-road pose (eye height, back/out offsets, aim)", () => {
+  const Y = 7.5, s = 1000, x = 2;   // car at world (x, Y, s): +Z forward, +X right
+  const near = (got, want, what) => assert.ok(Math.abs(got - want) < 1e-6, `${what}: ${got} vs ${want}`);
+  const pose = (street, mode) => {
+    const track = makeTrack(() => Y);
+    if (!street) track.def = {};    // open circuit: no street-canyon corridor
+    const cams = loadGameCams(makeTracksStub(track));
+    const v = cams.vantage(track, mode, s, x, 60, 0, { carPos: [x, s], carHead: 0 });
+    return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov };
+  };
+  const heli = pose(false, "heli");
+  near(heli.eye[2], s - 16, "heli eye 16 m behind the car");
+  near(heli.eye[0], 12, "heli eye 12 m out");
+  near(heli.eye[1], Y + 8.5, "heli eye 8.5 m up");
+  near(heli.tgt[2], s + 6, "heli aims 6 m up the road");
+  near(heli.tgt[0], x * 0.2, "heli aim keeps a fifth of the car's lateral");
+  near(heli.tgt[1], Y + 0.7, "heli aim 0.7 m up");
+  near(heli.fov, 36, "heli lens (no CamFeel)");
+  const side = pose(false, "side");
+  near(side.eye[2], s - 6, "side eye 6 m behind the car");
+  near(side.eye[0], 14, "side eye 14 m out");
+  near(side.eye[1], Y + 3.2, "side eye 3.2 m up");
+  near(side.tgt[2], s + 14, "side aims 14 m up the road: the car leads the frame");
+  near(side.tgt[0], x * 0.3, "side aim keeps 0.3 of the car's lateral");
+  near(side.tgt[1], Y + 0.7, "side aim 0.7 m up");
+  near(side.fov, 44, "side lens (no CamFeel)");
+  // Street circuit (hw 6 → corridor 5 m): the lost width is traded for height.
+  const heliSt = pose(true, "heli"), sideSt = pose(true, "side");
+  near(heliSt.eye[0], 5, "street heli stays over the road edge");
+  near(heliSt.eye[1], Y + 8.5 + (12 - 5) * 0.45, "street heli climbs for the lost width");
+  near(sideSt.eye[0], 5, "street side stays over the road edge");
+  near(sideSt.eye[1], Y + 3.2 + (14 - 5) * 0.25, "street side climbs for the lost width");
+  near(sideSt.fov, 44 + (14 - 5) * 0.35, "street side widens for the lost width");
+});
+
 // The other half of the split above. Recorded because it is a REAL consequence
 // of the lower eye, not an accident: on a steep climb the chase eye is inside
 // (and past 9.5 % below) the terrain floor the rig is clamped to, so the floor

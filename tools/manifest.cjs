@@ -106,7 +106,7 @@ const CIRCUITS = [
 const CIRCUITS_DIR = "js/circuits";
 const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
 // The bespoke scenery closure for each circuit, split out of its def file.
-// ~27 KB each; all 40 were 1,083 KB of the boot script wall for a session that
+// ~27 KB each; all 40 (52 today) were 1,083 KB of the boot script wall for a session that
 // builds ONE circuit. No <script> tag — game.js fetches the one it is about to
 // build (RACE_SCENERY / sceneryUrl), and js/track/tracks.js resolves through
 // window.TrackScenery[def.id]. The Node build harnesses load the whole dir.
@@ -254,6 +254,7 @@ const FULL = [
   "js/garage/scene.js",
   "js/garage/arrival.js",
   "js/garage/setup-camera.js",
+  "js/garage/prebuild.js",              // GaragePrebuild: the garage built while the title/race settings idle
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
@@ -663,6 +664,7 @@ const HARD_EDGES = [
   ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
+  ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
