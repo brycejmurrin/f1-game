@@ -34,7 +34,7 @@ const TitleMenu = (function () {
           const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
           contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
             + (next ? " · " + next.name : "");
-          cont.setAttribute("aria-label", "Continue career — " + contSub.textContent);
+          cont.setAttribute("aria-label", "Continue — " + contSub.textContent);   // starts with the visible "CONTINUE"
         }
       }
 
@@ -43,7 +43,8 @@ const TitleMenu = (function () {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
         dailySub.textContent = p.trackName + " · " + p.weather.toUpperCase()
           + (streak > 0 ? " · STREAK " + streak : "");
-        dailyBtn.setAttribute("aria-label", "Daily challenge — " + dailySub.textContent);
+        // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
+        dailyBtn.setAttribute("aria-label", "Daily time trial — " + dailySub.textContent);
       }
     }
 

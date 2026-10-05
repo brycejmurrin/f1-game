@@ -353,8 +353,16 @@ function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
   for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
+  // A divider introduces the RUN of tiles that follows it (Tracks.LIST interleaves
+  // the groups, so one group owns several dividers): show it only while a tile in
+  // ITS run survives. Testing the whole group left every SEASON divider standing
+  // as an orphan whenever any season circuit matched ("spa" also finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
-    head.hidden = !rows.some((row) => row.dataset.trackGroup === head.dataset.trackGroup && !row.hidden);
+    let live = false;
+    for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
+      if (el.classList.contains("track-row") && !el.hidden) { live = true; break; }
+    }
+    head.hidden = !live;
   }
   const empty = document.getElementById("sel-track-empty");
   if (empty) empty.hidden = rows.some((row) => !row.hidden);

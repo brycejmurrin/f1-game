@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# @doc Official `@playwright/mcp@0.0.79` wrapper (`help`/`status`/`run`); isolated headless Chromium, profile in `scratch/`.
+# @doc Official `@playwright/mcp@0.0.79` wrapper (`help`/`status`/`run`); the stdio server behind `playwright-official`, on the repo-discovered Chromium.
 # @skill survey-ui-matrix / css-play / mcp-probe
-# playwright-mcp.sh — shell wrapper for official @playwright/mcp (CLI only).
-# NOT MCP-ATTACHED since 2026-09: .mcp.json / .cursor/mcp.json carry
-# `playwright-official` (the bare pinned @playwright/mcp package) instead — this
-# wrapper's `run` (which passes --browser chromium) failed to connect as a
-# server. Keep it for `status` / `play` / `dom` (css-play) from a shell.
+# playwright-mcp.sh — shell wrapper for official @playwright/mcp.
+# MCP-ATTACHED AGAIN since 2026-10-05: .mcp.json / .cursor/mcp.json /
+# .codex/config.toml launch `playwright-official` through `run`. The bare
+# package failed in the cloud container two ways (measured 2026-10-05): its
+# default `chrome` channel wants /opt/google/chrome, and `--browser chromium`
+# wants the build its own bundled Playwright pins (chromium-1237), not the one
+# installed here (chromium-1194). `run` resolves the installed executable with
+# tools/lib/chromium-path.mjs and passes --executable-path, which works. The
+# 2026-09 "failed to connect" was --isolated combined with --user-data-dir.
 #
 # Interactive UI survey (resize / a11y snapshot / evaluate CSS+DOM).
 # Not a CI gate. Never run while chrome-devtools MCP or a Playwright *test*
@@ -28,12 +32,12 @@ playwright-mcp.sh — official @playwright/mcp (${MCP_NPM_PACKAGE})
 Commands:
   help
   status
-  run                 # stdio MCP (.mcp.json → tools/mcp/playwright-mcp.sh run)
+  run                 # stdio MCP server (.mcp.json → bash tools/mcp/playwright-mcp.sh run)
   play [flags]        # host + open a screen + screenshot (tools/ui/css-play.mjs)
   dom  [flags]        # same, --no-shot: structured DOM JSON only
 
-Pinned: isolated Chromium, headless, profile under scratch/playwright-mcp,
-shots under artifacts/playwright-mcp. Stdio only — never --port / 0.0.0.0.
+Pinned: isolated in-memory profile, headless, the repo-discovered Chromium
+(tools/lib/chromium-path.mjs --path), shots under artifacts/playwright-mcp. Stdio only — never --port / 0.0.0.0.
 
 MCP tools that matter for UI survey: browser_navigate, browser_resize,
 browser_snapshot (DOM/a11y tree), browser_evaluate (CSS / getComputedStyle /
@@ -64,15 +68,20 @@ cmd_status() {
 }
 
 cmd_run() {
-  mkdir -p "$PROFILE" "$OUTDIR"
-  # Isolated so two agents do not share a locked user-data-dir.
+  mkdir -p "$OUTDIR"
+  # Isolated (in-memory profile, so two agents never share a locked
+  # user-data-dir; --user-data-dir must NOT be combined with it).
   # --no-sandbox: this Cloud image is already a container.
+  # --executable-path: the Chromium the repo discovered, because the package's
+  # bundled Playwright pins a different build than the one installed here.
+  local exe=""
+  exe="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
   exec npx --yes "$MCP_NPM_PACKAGE" \
     --isolated \
     --headless \
     --browser chromium \
+    ${exe:+--executable-path "$exe"} \
     --no-sandbox \
-    --user-data-dir "$PROFILE" \
     --output-dir "$OUTDIR" \
     "$@"
 }

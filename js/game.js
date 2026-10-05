@@ -2254,9 +2254,9 @@ function reloadFlybyShots() {
 
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
-// garageWarm/garageReady: the setup garage pre-built on race settings
-// (garagePrewarm), so the drive-out's first frame compiles nothing.
-const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false };
+// garageWarm/garageReady/garageKey: the setup garage pre-built on race settings
+// and the idle title (garagePrewarm, js/garage/prebuild.js), keyed per team/livery.
+const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false, garageKey: "" };
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
@@ -2334,17 +2334,14 @@ async function menuFinish(current, key) {
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
 }
-// THE GARAGE, PRE-BUILT ON RACE SETTINGS. RACE! opens on the garage drive-out, and
-// a player who came straight from the picker has never drawn the garage: its first
-// frame built the room and the car and compiled their programs, synchronously —
+// THE GARAGE, PRE-BUILT ON RACE SETTINGS AND THE IDLE TITLE. RACE! opens on the
+// garage drive-out and GARAGE on the garage, and an undrawn garage's first frame
+// built the room and the car and compiled their programs, synchronously —
 // measured 1.3-1.8 s of frozen screen under SwiftShader at the tap. Once the
-// circuit is done and the sheet is idle, request the backend's program warm (TLX
-// compiles it off the next present) and draw two garage frames hidden.
-async function garagePrewarm(current) {
-  if (_menuGate.garageReady || $("race-settings").hidden || !(await menuIdle(current))) return;
-  if (gfx.warm) gfx.warm();
-  _menuGate.garageWarm = 2;
-}
+// circuit is done and the menu is idle: car, room, then two hidden garage frames
+// after one program-warm request (GaragePrebuild.create below; its title poll
+// covers a title with no circuit build).
+async function garagePrewarm(current) { await garagePre.run(current, $("race-settings").hidden ? "title" : "settings"); }
 function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
@@ -3529,7 +3526,12 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 // the module has to exist by then.
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
   teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render });
-const { renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
+const { resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
+// The garage pre-built while the menu idles (js/garage/prebuild.js); `timed` measures tap -> first garage frame.
+const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle, menuSlice,
+  ui: () => uiExperience, studio: () => _studio, worldReady: () => menuWorld() });
+const renderSetupPreview = garagePre.timed(setupCam.renderSetupPreview);
+garagePre.start();
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
 const shadowPass = ShadowPass.create(G, { teamMesh, vStd, cockpitCaster: carDraw.cockpitCaster });
@@ -4584,7 +4586,7 @@ function updateCar(c, dt, ranked) {
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans included, not only the AI.
-  // Cautions default ON (RaceControl store default true); a race with them
+  // Cautions default OFF (store.get("caution", false)); a race with them
   // disabled never hits lvl≥2. Fraction of pace-scaled top speed, so it rides
   // OVERALL SPEED like the rest.
   // PIT LANE SPEED LIMIT. Modelled exactly like the caution cap below — a
@@ -8353,7 +8355,8 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: (
   snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
-  photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio.") }); }
+  photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),
+  photoSubject: (m) => uiExperience.photoSubject(m), reopen: () => openExperiencePhoto("home"), onDone: () => uiExperience.photoSubject(null) }); }
 uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
@@ -8528,6 +8531,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
+  garagePre.markOpen(from);
   if (from === "menu" && soundOn) GameAudio.init();
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;

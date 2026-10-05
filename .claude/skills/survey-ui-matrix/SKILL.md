@@ -1,6 +1,6 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — before a restructure, to prove a CSS change regressed no other shape, or to check every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
+description: "Use when reviewing the whole UI systematically across orientations, viewport shapes, UI/HUD scale and pointer type: enumerate every screen from source, measure each cell for clipping, truncation, tap targets and overflow, capture screenshots — before a restructure, after a CSS change, or for every menu on every device. Not a single cramped screen (ui-menu-a11y) or doing the restructure (css-play)."
 ---
 
 # Surveying the whole UI across the whole matrix
@@ -74,6 +74,12 @@ Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
 (wildcard = prefix), `--scale=100,130` (40-200), `--circuits=`, `--shots`, `--dom`,
 `--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME`, `--force`, `--report`
 (summarize the last gallery, no browser), `--out=DIR`.
+
+`--scale` takes a PERCENT (`--scale=125`; `1.25` throws). Viewports are catalog
+names only (`VIEWPORTS`, `menu-screens.mjs`; shortest is 852x344), so a free-form
+size such as 568x320 is `menu-fit.mjs 568x320 --scale=125` (its own 18 screens,
+not the 49) or `fit-audit.mjs --sizes=568x320 --scale=125` (12), or a new
+`VIEWPORTS` row for the full catalog.
 
 Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
 §Enumerate). 2. Measure/capture (browser-only). 3. Stop when every cell of

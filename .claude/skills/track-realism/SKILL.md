@@ -1,7 +1,7 @@
 ---
 name: track-realism
 argument-hint: "<circuit ids…> [target year]"
-description: "Use when a reusable or parallel realism campaign spans several circuits (/track-realism spa monza silverstone): dated evidence, geometry, scenery, exclusive circuit ownership. One circuit's accuracy pass → survey-track."
+description: "Use when a reusable or parallel realism campaign spans several circuits, or the user wants a repeatable track research workflow to set up (/track-realism spa monza silverstone): dated evidence, geometry, scenery, exclusive circuit ownership. One circuit's accuracy pass → survey-track."
 ---
 
 # Track realism campaign

@@ -2,6 +2,14 @@
 
 Load from the SKILL.md index when the task needs this detail.
 
+## Contents
+- Workflow / Implementation
+- "Build mismatch" though both are on the live build
+- Rival never appears (connected, no second car)
+- Rival never moves (connected, remote car frozen)
+- Three-player (star topology)
+- Common Mistakes
+
 ## Workflow / Implementation
 
 1. **Classify the failure by layer.**
@@ -92,13 +100,23 @@ Load from the SKILL.md index when the task needs this detail.
 
 Not an encoding bug: `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`), and the `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy. Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research; `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`). `theirs > mine` = THIS device is stale. Also `build_unknown` = no meta and `version.json` fetch failed (offline phone). The link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell. Offline pins: `node --test tests/unit/net-transport.test.mjs` (checkBuild/localBuild/inviteFromUrl/withoutInviteUrl), `lobby-codes.test.mjs` (codeFrom on pasted links), `net-qr.test.mjs`; the shell guard/stamp side is `service-worker.test.mjs` and `deploy-stamp.test.mjs`. Fixing means getting the stale device onto the current shell, never relaxing `checkBuild`. Record: both metas, which side is older, whether installed app or Safari tab.
 
+## Rival never appears (connected, no second car)
+
+Connected is not seated: the link can be up while `NetPlay.start()` never bound a rival. Trace in order, stop at the first broken link:
+1. `__apex.net()`: `{ active: false }` means start failed or never ran. Read `reason`, and `__apex.logs({ns:"net"})` for `play start fail no_slot|no_track|already_active|no_transport` (`netplay.js` `start()`). `no_slot` = `pickRemoteSlot` found no free car (empty `G.cars`, or the rival's profile team is absent from THIS grid); the lobby then says "Could not find a grid slot" and quits to menu (`lobby.js` `finishStart`).
+2. `active: true` but `remotes: []`: no seat. `slotFallback` is `"team"` (right team, other seat), `"any"` (profile-less join, loopback) or `"profile-miss"` (named profile matched nobody; `docs/DEBUG-HOOKS.md` lists only the first two). A profile-less join happens when HELLO had not arrived: check the lobby's peers/profile.
+3. `remotes` has an entry but `wire` is `-1`: `G.wireId(c)` found no team index; every packet for it is dropped.
+4. Seated but not drawn where expected: `separateGrid()` lays the humans by `wireId` from the local P12 (skipped when `G.gridPreOrdered`); a grid that differs per peer stacks the rival inside you (`net-grid-separation.test.mjs`).
+5. Posed then gone: `net().stale` lists wire ids silent past `STALE_MS` (2 s); `owns()` is false for them and the local AI drives the car until a packet returns. `stale` plus `buffered: 0` = packets not arriving, so go to the "never moves" trace.
+Offline: `node --test tests/unit/net-authority.test.mjs` (slot pick, `stale` status), `net-grid-separation.test.mjs`, `net-roster.test.mjs` (hand-back to AI). Real-network behaviour is browser-only.
+
 ## Rival never moves (connected, remote car frozen)
 
 Trace the path in order, stop at the first broken link:
 1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
 2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
-3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`).
-Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green rules out the exercised contracts, not every game-loop/wire combination; inspect the first failed live link next, using step 6 for ICE evidence. The whole `npm run test:net-unit` (17 files) is the pre-browser gate (step 8), not needed to localise this.
+3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`); it is false for a car in `net().stale` (silent past 2 s, the local AI drives it).
+Offline (no browser), single files: `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). Green rules out the exercised contracts, not every game-loop/wire combination; inspect the first failed live link next, using step 6 for ICE evidence. The whole `npm run test:net-unit` is the pre-browser gate (step 8), not needed to localise this.
 
 ## Three-player (star topology)
 

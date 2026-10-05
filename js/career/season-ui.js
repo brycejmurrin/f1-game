@@ -238,7 +238,10 @@ function create(G) {
     const season = G.season;
     const n = SeasonCal.rounds();
     const r = (SeasonCal.hasProgress(season) && n) ? Math.min((season.round || 0) + 1, n) : 0;
-    textNode.nodeValue = r ? `SEASON · R${r} OF ${n}` : "SEASON";
+    // The trailing space is the gap between the label and the sub-line below it
+    // (index.html writes it too): without it the visible text reads "SEASONA
+    // CHAMPIONSHIP…" and the accessible name below cannot contain it (WCAG 2.5.3).
+    textNode.nodeValue = (r ? `SEASON · R${r} OF ${n}` : "SEASON") + " ";
     // The accessible name overrides the text, so it carries the progress too;
     // with none it is the shell's own "Season — A championship, your rules".
     const sub = btn.querySelector(".mb-sub"), tag = sub ? String(sub.textContent || "") : "";

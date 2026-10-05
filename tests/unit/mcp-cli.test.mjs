@@ -52,9 +52,15 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
 test("Playwright MCP network fallback is pinned to the audited release", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
-  assert.match(src, /NOT MCP-ATTACHED/, "the wrapper is a CLI now; playwright-official is the server");
+  // The bare package cannot launch here (its default `chrome` channel, and
+  // `--browser chromium` wants the build ITS Playwright pins, not the one
+  // installed): the wrapper's `run` resolves the discovered Chromium and is the
+  // attached server again (measured 2026-10-05).
+  assert.match(src, /MCP-ATTACHED AGAIN/, "the wrapper's run IS playwright-official");
+  assert.match(src, /chromium-path\.mjs" --path/, "run resolves the installed Chromium for --executable-path");
+  assert.doesNotMatch(src, /^\s*--user-data-dir/m, "--isolated and a --user-data-dir flag do not combine (the 2026-09 connect failure)");
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", "@playwright/mcp@0.0.79"]);
+  assert.deepEqual(cfg.mcpServers["playwright-official"], { type: "stdio", command: "bash", args: ["tools/mcp/playwright-mcp.sh", "run"] });
   assert.doesNotMatch(src, /@playwright\/mcp@latest/);
   assert.match(src, /never --port \/ 0\.0\.0\.0/);
   assert.doesNotMatch(src, /npx[\s\S]*--port/);

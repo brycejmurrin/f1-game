@@ -250,6 +250,12 @@ export function stale() {
 }
 
 export function main(argv = process.argv.slice(2)) {
+  const USAGE = "usage: node tools/gen/gen-shell.mjs [--check]\n  Regenerates the @gen-shell blocks (index.html, sw.js, ...) from tools/manifest.cjs; --check only reports drift.";
+  if (argv.includes("--help") || argv.includes("-h")) { process.stdout.write(USAGE + "\n"); return 0; }
+  // An unknown flag used to fall through to WRITE mode (an agent's `--help`
+  // regenerated every block on 2026-10-05). Refuse it instead.
+  const unknown = argv.filter((a) => a !== "--check");
+  if (unknown.length) { process.stderr.write(`gen-shell: unknown argument ${unknown.join(" ")}\n${USAGE}\n`); return 2; }
   const check = argv.includes("--check");
   const drift = stale();
   if (check) {

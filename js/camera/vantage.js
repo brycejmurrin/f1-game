@@ -527,18 +527,22 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
     // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
     // agentview.js corner-table note) whose outside is +r.
+    // Close enough, and low enough, that this is not a second overhead: the
+    // car stays large and the horizon stays in frame. 16 m back, 8.5 m up,
+    // 12 m out, aim 6 m ahead: tests/unit/camera-ride.test.mjs pins them, so a
+    // merge cannot quietly put the 26 / 17 / 18 m overhead back.
     // Live frames ease the side across; a hard sign flip teleported the eye
-    // ~36 m and the damper then swam it through the circuit.
-    Tracks.sample(track, wrapS(s - 26), cvB);
+    // across the road and the damper then swam it through the circuit.
+    Tracks.sample(track, wrapS(s - 16), cvB);
     const sgnRaw = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendHeli", sgnRaw, 2.4, extra.dt || 0) : sgnRaw;
-    const hl = Math.min(18, corr);              // stay inside the street canyon
+    const hl = Math.min(12, corr);              // stay inside the street canyon
     const hlLat = hl * hangScale("heli");
     eye[0] = cvB.p[0] + cvB.r[0] * hlLat * sgn;
-    eye[1] = centreY(track, s - 26) + 17 + (18 - hl) * 0.6 + bankDy;
+    eye[1] = centreY(track, s - 16) + 8.5 + (12 - hl) * 0.45 + bankDy;
     eye[2] = cvB.p[2] + cvB.r[2] * hlLat * sgn;
     eye[1] += speedOpen("heliClimb", spN, extra.dt, extra.reduceMotion, extra.snap, 2.2, 1.4);
-    const heliAim = aheadPt(14, 0.9, x * 0.2);
+    const heliAim = aheadPt(6, 0.7, x * 0.2);
     tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
@@ -548,16 +552,22 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
-    // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
+    // TV tracking: a few metres behind the car, outside the bend, looking
+    // up the road so the car leads the frame instead of sitting dead-centre.
+    // 6 m back, 3.2 m up, 14 m out, aim 14 m ahead: pinned by
+    // tests/unit/camera-ride.test.mjs. The TV director and the results
+    // screen's chequered cut (ResultsCam.cheqPose) solve this same branch.
     const sgnRaw = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendSide", sgnRaw, 2.6, extra.dt || 0) : sgnRaw;
-    const sl = Math.min(25, corr);              // stay inside the street canyon
+    const sl = Math.min(14, corr);              // stay inside the street canyon
     const slLat = sl * hangScale("side");
-    eye[0] = p[0] + r[0] * sgn * slLat; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * slLat;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+    Tracks.sample(track, wrapS(s - 6), cvB);
+    eye[0] = cvB.p[0] + cvB.r[0] * sgn * slLat; eye[1] = centreY(track, s - 6) + 3.2 + (14 - sl) * 0.25 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * sgn * slLat;
+    const sideAim = aheadPt(14, 0.7, x * 0.3);   // after the eye: aheadPt reuses cvB
+    tgt[0] = sideAim[0]; tgt[1] = sideAim[1]; tgt[2] = sideAim[2];
     // Corridor widen stays local; speed widen shares CamFeel.speedFov (mild scale).
     const sideBase = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 44;
-    fov = sideBase + (25 - sl) * 0.5;
+    fov = sideBase + (14 - sl) * 0.35;
   } else if (mode === "cinematic") {
     // Outside-of-corner cinematic that gently breathes its angle instead of doing
     // full disorienting loops. Auto-picks the outside of the bend; on a straight it
