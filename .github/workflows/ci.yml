@@ -710,8 +710,15 @@ jobs:
             vm-b1)
               # First of two time-balanced partitions of test:game-vm-b
               # (tests/groups.json; test:game-vm-b is still the whole list locally).
+              # NODE_PLAN_SKIP_TF=1 drops the five VM files Structural guards
+              # already runs (tooling-fast: real-replay-vm 121 s, game-vm,
+              # physics-characterization-vm, red-flag-fuel-vm, session-entry-vm)
+              # — both jobs share one `if:`, so a matched plan ran them twice
+              # (test audit T5, 2026-10-05). --all / fail-safe keep npm run.
               if planned test:game-vm-b1; then
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
               npm run test:game-vm-b1
+              fi
               fi
               # The former `fast` slice: seconds each, so they ride with vm-b1, the
               # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
@@ -764,7 +771,9 @@ jobs:
               ;;
             vm-b2)
               if planned test:game-vm-b2; then
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b2 --skip-tf; else
               npm run test:game-vm-b2
+              fi
               fi
               ;;
           esac

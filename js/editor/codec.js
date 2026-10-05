@@ -16,8 +16,10 @@ const TrackCodec = (function () {
   const MAX_CODE = 4096, MAX_BYTES = 16384, MAX_N = 200, MIN_N = 8, UNIT = 4 /* per metre */, COORD_MAX = 10000 * UNIT;
   // look (32): the scenery options (TrackThemes.LOOK) as one byte, written only
   // when one is off its default — so every code made before it is unchanged.
-  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32 };
-  const FLAG_ALL = 0x3f;
+  // country (64): a label like name, after it. A build that predates it refuses
+  // the bit ("corrupt"), so a code carries it only when a country is set.
+  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64 };
+  const FLAG_ALL = 0x7f;
   // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
   // dropped what storage keeps (a dropped bridge turned into a RED crossing on
   // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
@@ -97,6 +99,8 @@ const TrackCodec = (function () {
     for (const k of Object.keys(ZONE_CAPS)) if (zones[k].length) flags |= FLAG[k];
     const name = withName && it.name ? new TextEncoder().encode(String(it.name).slice(0, 48)) : null;
     if (name && name.length) flags |= FLAG.name;
+    const country = withName && it.country ? new TextEncoder().encode(String(it.country).slice(0, 32)) : null;
+    if (country && country.length) flags |= FLAG.country;
     const look = TrackThemes.sanitizeLook(it.look);
     if (look) flags |= FLAG.look;
     w.u8(VERSION).u8(flags).u8(themeIdx).u8(Math.round(it.baseHW * 10)).varint(it.seed >>> 0).varint(it.pts.length);
@@ -115,6 +119,7 @@ const TrackCodec = (function () {
     for (const k of ["elevations", "bridges"]) if (flags & FLAG[k]) { w.varint(zones[k].length); for (const z of zones[k]) w.u16(u16frac(z.s)).u16(Math.round(z.halfM)).zz(Math.round(z.rise * 4)); }
     if (flags & FLAG.name) { w.u8(name.length).bytes(name); }
     if (flags & FLAG.look) { const L = TrackThemes.LOOK; w.u8(L.time.indexOf(look.time) | (L.trees.indexOf(look.trees) << 2) | (L.crowd.indexOf(look.crowd) << 4)); }
+    if (flags & FLAG.country) { w.u8(country.length).bytes(country); }
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
     all.set(body); const c = fnv16(body, body.length); all[body.length] = c & 0xff; all[body.length + 1] = c >> 8;
@@ -155,6 +160,7 @@ const TrackCodec = (function () {
         if (b >> 6 || t >= L.time.length || tr >= L.trees.length || c >= L.crowd.length) return { ok: false, reason: "bounds" };
         design.look = { time: L.time[t], trees: L.trees[tr], crowd: L.crowd[c] };
       }
+      if (flags & FLAG.country) { const n = r.u8(); if (n > 32) return { ok: false, reason: "bounds" }; design.country = new TextDecoder().decode(r.bytes(n)); }
       if (r.left !== 0) return { ok: false, reason: "corrupt" };
       return { ok: true, design };
     } catch (e) {

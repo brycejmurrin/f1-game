@@ -424,6 +424,11 @@ const Assets = (function () {
     return out;
   }
 
+  // The same ids, synchronously, from the manifest already loaded (empty before
+  // it lands): which of a circuit's models a build would stamp, compared BY ID
+  // between the page and the build worker (js/track/build-client.js).
+  function modelIds(src) { return _idsNamedIn(_manifest, src ? String(src) : ""); }
+
   // Fetch the models one scenery closure needs (src = its source text).
   // Resolves to how many of them are resident. No pack, or a closure that names
   // no model, resolves 0 without a model fetch.
@@ -507,7 +512,7 @@ const Assets = (function () {
   }
 
   return { init, supported, manifest, load, unload, adopt, state, readLayerBytes,
-           model, modelSync, models, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
+           model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 
 // No-build global export.

@@ -298,6 +298,20 @@ const SceneryNature = (function () {
           }
       return false;
     };
+    // The same registry answers LATER masses (city towers are built after the
+    // closure's trees and massBlocked never saw a tree): is any planted tree's
+    // trunk or crown inside this box (centre c, w x h x d, basis b)?
+    const treeInFootprint = (c, w, h, d, b) => {
+      const f = palmFootprint({ type: "box", c, size: [w, h, d], b }), seen = new Set();
+      for (let x = Math.floor((f.c[0] - f.ex) / TREE_CELL); x <= Math.floor((f.c[0] + f.ex) / TREE_CELL); x++)
+        for (let z = Math.floor((f.c[2] - f.ez) / TREE_CELL); z <= Math.floor((f.c[2] + f.ez) / TREE_CELL); z++)
+          for (const site of placedTrees.get(`${x}|${z}`) || []) {
+            if (seen.has(site)) continue;
+            seen.add(site);
+            if (palmBoundsOverlap(f, site) && site.parts.some((p) => palmOverlaps(f, p))) return true;
+          }
+      return false;
+    };
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
@@ -1430,7 +1444,7 @@ const SceneryNature = (function () {
              cypress, stonePine, broadleafFall, acacia, plane,
              peak, mountain, ridge,
              crowdBank, grandstand, grandstandEx, spectatorHill, bush, hedge, forestEdge,
-             canopyR, forestEdgeNow, deferredFoliage };
+             canopyR, forestEdgeNow, deferredFoliage, treeInFootprint };
   }
 
   return { create };

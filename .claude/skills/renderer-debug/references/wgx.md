@@ -1,9 +1,13 @@
----
-name: webgpu-debug
-description: "Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or a frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack."
----
+# WGX (WebGPU) probes: static validation, Dawn, backend and error state, unit gates
 
-# Debug WebGPU / WGX renderer issues
+Load from SKILL.md when `env.backend` reads `webgpu` (or you expected it and
+got `webgl2`). Shipped defect classes and the device-loss ladder are in
+[wgx-defects.md](wgx-defects.md).
+
+## Contents
+- 1. First probe — static, then Dawn
+- 2. Backend and error state (BROWSER-ONLY: needs a live page)
+- 3. Unit gates and live poke (the live pokes are BROWSER-ONLY)
 
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
 `wgsl-post.js`.
@@ -11,7 +15,7 @@ DEFERRED: no `<script>` tag; `js/game.js` injects it when
 `apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
 WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
 never a dead canvas (deliberate exceptions: blocked storage, hidden-tab loss —
-defects.md "Trace").
+wgx-defects.md "Trace").
 
 ## 1. First probe — static, then Dawn
 
@@ -57,7 +61,7 @@ Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`
 `WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
 `Gfx.bind fallback webgl2` and `js/game.js` binds GLX. No `navigator.gpu` or
 no `WGX` global returns null with NO log line. NaN-white road with
-NO fallback = warning-mode Dawn ran undefined derivatives (defects.md #2);
+NO fallback = warning-mode Dawn ran undefined derivatives (wgx-defects.md #2);
 with fallback = strict uniformity error. Static half of that check:
 `--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`. Live
 half (BROWSER-ONLY, parent): bare `wgx-validate.mjs` prepends
@@ -87,8 +91,3 @@ defect, e.g. `qatar --tod night`). Multi-track gallery: `node tools/gfx/wgx-shot
 full-tier run).
 (`wgx-capture.mjs` aliases `gfx-probe --backend webgpu`; `wgx-lavapipe-probe.mjs`
 aliases `--backend three --tlx-webgpu --lavapipe`, a TLX probe, not WGX.)
-
-## Load on demand
-
-- Late-sky / derivative_uniformity / MSAA+HDR defects, device-loss ladder and the lost-device freeze trace →
-  [references/defects.md](references/defects.md).

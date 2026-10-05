@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements, or race-control tests are being changed or debugged. AI that merely races badly, dives too aggressively or misuses ERS/overtake deploy is ai-racecraft; DNF money/contracts/R&D inside a career save is career-mode."
+description: "Use when debris, Rapier side-worlds, incident takeovers, car launches, the multi-car pile-up takeover (c1Pileup), cautions, yellow/red flags, VSC, safety car (never deploys / stuck out), overtake gating, reliability retirements or race-control tests change. AI that merely races badly, dives too aggressively or misuses ERS/overtake deploy is ai-racecraft; DNF money/contracts/R&D inside a career save is career-mode."
 ---
 
 ## Overview
@@ -24,6 +24,9 @@ Use this for:
 
 Do **not** use this for:
 
+- A car that will not move: `caution().level` ≠ 0 or `sinceT` growing (a flag or
+  safety car stuck out) is HERE; level 0 with `speed < 7` and `stuckT` growing is
+  `ai-racecraft` (wedged AI).
 - Ordinary bicycle-model grip/handling tuning.
 - Pure multiplayer lobby/signalling issues; use `multiplayer-debug`.
 - Active aero zones themselves; only use this for overtake/caution gating.

@@ -10,6 +10,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
@@ -64,6 +65,65 @@ test("a car that retires past 90 % of the winner's laps is classified and scores
     assert.equal(early.classified, false, "4 of 10 is not");
     assert.ok(late.finPos < early.finPos, "the classified retirement ranks above the unclassified one");
   } finally { g2.close(); }
+});
+
+test("flagged finishers need 90 percent distance, rounded down, before scoring", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G } = game;
+    game.apex.headless(true);
+    const S = vm.runInContext("SeasonCal", game.ctx);
+    for (const distance of [10, 3, 2, 1]) {
+      await game.race("monza", "day", "dry", { laps: distance });
+      game.apex.tyres({ level: "real" });
+      const L = G.track.total, minimum = Math.floor(0.9 * distance);
+      const [winner, boundary, short, retired, runner, dsq] = [G.player, ...G.cars.filter((c) => c !== G.player)];
+      for (const c of G.cars) {
+        Object.assign(c, { retired: true, finished: false, lap: 1, prog: 0, penalty: 0, tyreLog: [] });
+        G.tyres.fit(c, G.tyres.classRecord("soft"));
+        G.tyres.fit(c, G.tyres.classRecord("medium"));
+      }
+      const finish = (c, done, time) => Object.assign(c, { retired: false, finished: true,
+        lap: done + 1, prog: done * L, finishT: time });
+      finish(winner, distance, 1000);
+      finish(boundary, Math.max(1, minimum), 1001);
+      // A car only takes the flag after a complete lap: use below-floor
+      // finishers on the 3/10-lap races, not an impossible zero-lap finisher.
+      if (minimum > 1) finish(short, minimum - 1, 1002);
+      Object.assign(retired, { lap: minimum + 1, prog: minimum * L + 100 });
+      Object.assign(runner, { retired: false, lap: 1, prog: L / 2 });
+      if (distance === 10) { finish(dsq, distance, 1003); dsq.tyreLog = dsq.tyreLog.slice(0, 1); }
+      G.endRace();
+      assert.equal(G.state, "results");
+      assert.equal(winner.classified, true);
+      assert.equal(boundary.classified, true, `${distance} laps: the rounded-down boundary qualifies`);
+      assert.equal(retired.classified, true, "a retirement at the distance floor still qualifies");
+      assert.equal(runner.classified, true, "unfinished cars retain the provisional-results policy");
+      if (minimum > 1) {
+        assert.equal(short.finished, true, "the under-distance car really took the flag");
+        assert.equal(short.classified, false, `${distance} laps: below the floor is not classified`);
+        assert.ok(retired.finPos < boundary.finPos, "same-distance retiree crossed the control line before the flagged car");
+      }
+      if (distance === 10) {
+        assert.ok(dsq.dsq, "the real compound rule disqualifies the one-compound finisher");
+        assert.equal(dsq.classified, false, "full distance cannot override a disqualification");
+      }
+      S.setConfig({ flPoint: true }); S.engage("season");
+      const season = S.blank();
+      const order = G.cars.slice().sort((a, b) => a.finPos - b.finPos);
+      S.award(season, order, short.driverId);
+      assert.ok(season.pts[boundary.driverId] > 0, "eligible finisher receives points");
+      assert.ok(season.pts[retired.driverId] > 0, "eligible retirement receives points");
+      assert.ok(season.pts[runner.driverId] > 0, "provisional runner still receives points");
+      if (minimum > 1) {
+        assert.equal(season.pts[short.driverId], 0, "taking the flag below the floor earns no points");
+        assert.equal(season.finishes[short.driverId], undefined, "no countback finish for an unclassified car");
+        assert.equal(season.lastFl, undefined, "an unclassified fastest lap earns no bonus");
+      }
+      if (distance === 10) assert.equal(season.pts[dsq.driverId], 0);
+      S.engage("gp");
+    }
+  } finally { game.close(); }
 });
 
 test("with no finisher, the 90 % rule measures the leader still running", async () => {

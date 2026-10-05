@@ -607,6 +607,38 @@ test("a CLASSIFIED late retirement shows the points award() paid, with its reaso
   assert.equal(rowsOf(un.els.resultsTable)[1].children.find((c) => c.classList.contains("res-pts")).textContent, "DNF", "an unclassified retirement still reads DNF");
 });
 
+test("a flagged finisher below the distance floor reads NC with zero points and no podium or badge", () => {
+  for (const mode of ["gp", "season", "sprint"]) {
+    const { season, cars } = tiedSeason();
+    const winner = cars[1], player = cars[0];
+    Object.assign(winner, { classified: true, finished: true, lap: 11, finishT: 100, penalty: 0 });
+    Object.assign(player, { classified: false, finished: true, lap: 9, finishT: 101, penalty: 0 });
+    const runner = { ...winner, driverId: "runner", code: "RUN", name: "Running", finished: false, lap: 8, finishT: 0 };
+    const order = [winner, player, runner], badgeCalls = [];
+    season.lastFl = player.driverId; // Even a stale fastest-lap marker cannot pay an NC row.
+    const h = bootResults({ season, cars: order, seasonMode: mode !== "gp", globals: {
+      Badges: { setNotifier() {}, onRace: (r) => { badgeCalls.push(r); return []; }, labelOf: (id) => id },
+    } });
+    h.G.player = player;
+    h.api.buildResults(order, { sprint: mode === "sprint" });
+    const rows = rowsOf(h.els.resultsTable).slice(0, order.length);
+    assert.equal(rows[1].children[0].textContent, "NC", mode);
+    assert.equal(rows[1].children.find((c) => c.classList.contains("res-pts")).textContent, "0 pts", mode);
+    assert.match(nameOf(rows[1]), /\(\+2 LAPS\)/, "completed distance remains visible");
+    assert.equal(rows[1].classList.contains("p2"), false, "NC is not a podium finish");
+    assert.deepEqual(badgeCalls, [], "NC cannot unlock a finish or podium badge");
+    const personal = h.els.resultsTable.children.find((c) => c.classList.contains("res-personal"));
+    assert.equal(personal.children[0].textContent, "YOUR RACE · NC");
+    const story = h.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "story");
+    assert.equal(story.children[0].children[1].textContent, "NC · 0 points");
+    const podium = story.children.find((c) => c.getAttribute("data-results-part") === "podium");
+    assert.equal(podium.children.some((c) => c.children[1].textContent === player.code), false);
+    const points = mode === "sprint" ? [8, 7, 6] : POINTS;
+    assert.equal(rows[0].children.find((c) => c.classList.contains("res-pts")).textContent, `${points[0]} pts`);
+    assert.equal(rows[2].children.find((c) => c.classList.contains("res-pts")).textContent, `${points[2]} pts`, "provisional running result keeps its points");
+  }
+});
+
 test("an UNFINISHED car on the lead lap reads no \"+1 LAP\"; a genuinely lapped car still does", () => {
   // Bug hunt 2026-09-26 (16217f3c1): the results sheet read "+1 LAP" on every
   // lead-lap car still running. `lap` counts line crossings and a running car

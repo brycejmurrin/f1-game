@@ -1315,9 +1315,18 @@ function yawVisInterp(c) {
 // shortest-path delta since head crosses ±π every lap.
 // The TV director's subject (js/camera/director.js): the interpolated pose the body is drawn at. Pooled.
 const _dirPos = [0, 0], _dirPose = { s: 0, x: 0, carPos: null, carHead: 0 };
+const _dirSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 function camPoseOf(c) {
   const pa = playerAnchor(c), rp = renderPosOf(c);
   _dirPose.s = pa.cS; _dirPose.x = pa.cX; _dirPose.carHead = headInterp(c);
+  // Ordinary AI never advances c.head. Match its drawn, interpolated basis;
+  // human/network/incident owners retain their authoritative world heading.
+  if (!c.human && !netPlay.owns(c) && !incidentSim.owns(c)) {
+    Tracks.sample(track, pa.cS, _dirSmp);
+    const t = _dirSmp.t, r = _dirSmp.r, yv = yawVisInterp(c);
+    const cy = Math.cos(yv) / (Math.hypot(...t) || 1), sy = Math.sin(yv) / (Math.hypot(...r) || 1);
+    _dirPose.carHead = Math.atan2(t[0] * cy + r[0] * sy, t[2] * cy + r[2] * sy);
+  }
   _dirPose.carPos = rp.world ? (_dirPos[0] = rp.x, _dirPos[1] = rp.z, _dirPos) : null; return _dirPose;
 }
 function headInterp(c) {
@@ -2235,12 +2244,17 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
 // Set by the flyby sequencer on a shot boundary; consumed by the camera damping
 // one block later, which would otherwise smear the cut (see there).
 let camSnapNext = false;
-/** The loading screen's flyby progress, 0..1, or 0 when it is not running. The
- *  menu camera also draws a couple of WARM-UP frames under the picker with no
- *  screen open (scheduleFlybyTrack), and those should sit on the first shot
- *  rather than somewhere arbitrary. */
+/** The loading screen's flyby progress, 0..1, or 0 when it is not running.
+ *  Hidden picker warm-up frames (scheduleFlybyTrack, `_menuGate.warm`) used to
+ *  sit on shot 0 so they were not arbitrary. Shot 0 is now the horizon-levelled
+ *  `wide` establishing look (FlybySeq.level): those two presents no longer
+ *  walk the road/prop batches the warm exists to compile. Use turn-first. */
 function flybyProgress() {
-  return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+  const p = (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+  if (loadingScreen && loadingScreen.active && loadingScreen.active()) return p;
+  if (state === "menu" && _menuGate.warm > 0 && typeof FlybySeq !== "undefined" && FlybySeq.warmProgress)
+    return FlybySeq.warmProgress(flybyShots);
+  return p;
 }
 
 // The shot list the FLYBY SHOT EDITOR saved, or null for the shipped sequence.
@@ -2860,7 +2874,7 @@ function netOrder(order) {
     netPlay.reportResult(order.map((c) => ({
       // `r`: the DNF reason (0 = not retired) — each peer draws its reliability
       // plan off its own seed, so a guest's labels must be the host's verdict.
-      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, r: c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : 0,
+      d: c.driverId, t: c.finishT, p: c.penalty, lap: c.lap, classified: c.classified, r: c.retired ? (c.dnf || "dnf") : c.dsq ? "DSQ — " + c.dsq : 0,
     })));
     return order;
   }
@@ -2882,7 +2896,9 @@ function netOrder(order) {
   for (const e of verdict) {
     if (!e || !byId.has(e.d) || seen.has(e.d) ||
         (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
-        (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return order;
+        (e.p != null && (!Number.isFinite(e.p) || e.p < 0)) ||
+        (e.lap != null && (!Number.isInteger(e.lap) || e.lap < 0 || e.lap > 255)) ||
+        (e.classified != null && typeof e.classified !== "boolean")) return order;
     seen.add(e.d);
   }
   const sorted = verdict.map((e) => byId.get(e.d));
@@ -2891,6 +2907,8 @@ function netOrder(order) {
     if (!c) return;
     if (e.t != null) c.finishT = e.t;
     if (e.p != null) c.penalty = e.p;
+    if (e.lap != null) c.lap = e.lap;
+    if (typeof e.classified === "boolean") c.classified = e.classified;
   });
   return sorted;
 }
@@ -5069,6 +5087,9 @@ function updateCar(c, dt, ranked) {
   const grassDrag = Math.min((1 - surfaceMu) * 24, roadBrake * .75);
   const surfaceBrake = c.offroad
     ? Math.min(roadBrake * surfaceMu, Math.max(0, roadBrake * .95 - grassDrag)) : roadBrake;
+  // `braking` skips the coast drag, so a LIVE pedal never slows less than lifting (the old max(0.15, level) step's job); scripted input is exact.
+  // ONE value: the speed integration and the weight-transfer estimate (axEstTarget) both read it.
+  const brakeDecel = c.human && !inp ? Math.max(surfaceBrake * brakeLvl, COAST_DRAG) : surfaceBrake * brakeLvl;
   const longitudinalSpeed = c.speed;
 
   // --- integrate speed ---
@@ -5084,8 +5105,7 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for braking as well as cornering.
-      // `braking` skips the coast drag, so a LIVE pedal never slows less than lifting (the old max(0.15, level) step's job); scripted input is exact.
-      c.speed = Math.max(0, c.speed - (c.human && !inp ? Math.max(surfaceBrake * brakeLvl, COAST_DRAG) : surfaceBrake * brakeLvl) * dt);
+      c.speed = Math.max(0, c.speed - brakeDecel * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -5685,7 +5705,7 @@ function updateCar(c, dt, ranked) {
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
     // Brake held at a standstill IS reverse (REVERSE_ACCEL above), not a 30+ m/s^2 stop: charging the pedal locked the fronts and grew a flat spot backing off a wall.
-    const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))
+    const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0)));
@@ -6575,7 +6595,11 @@ function render(dt) {
   // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
   if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
-  if (menuBlank) _menuGate.warm--;
+  // The last hidden warm frame is the one observable "this world has drawn":
+  // tools/lib/mem-census.mjs waits on this record (a census taken before it read
+  // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits
+  // while a picker build is in flight (lazyTrackEnsure).
+  if (menuBlank && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
   // RESULTS: physics and PerfGov already stop; the sheet is translucent over
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
@@ -8340,7 +8364,8 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: (
   snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
-  photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio.") }); }
+  photoView: () => uiExperience.photoView(), onWaiting: () => AppearanceStudio.notify("Return Home to finish loading this scene, then open Photo Studio."),
+  photoSubject: (m) => uiExperience.photoSubject(m), reopen: () => openExperiencePhoto("home"), onDone: () => uiExperience.photoSubject(null) }); }
 uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperiencePhoto, openPractice: () => openTimeTrial(false),
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),

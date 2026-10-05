@@ -150,7 +150,9 @@ const NetPlay = (function () {
     for (const e of rows) {
       if (!e || !ids.has(e.d) || seen.has(e.d) ||
           (e.t != null && (!Number.isFinite(e.t) || e.t < 0)) ||
-          (e.p != null && (!Number.isFinite(e.p) || e.p < 0))) return false;
+          (e.p != null && (!Number.isFinite(e.p) || e.p < 0)) ||
+          (e.lap != null && (!Number.isInteger(e.lap) || e.lap < 0 || e.lap > 255)) ||
+          (e.classified != null && typeof e.classified !== "boolean")) return false;
       seen.add(e.d);
     }
     return true;
@@ -639,8 +641,8 @@ const NetPlay = (function () {
             // own car is found by `code` (the only id reportLap carries).
             const fin = Number(d.fin);
             const fr = role === "host" ? remotes.get(remoteFor(id))
-              : remoteList().find((x) => x.car.code === d.code)
-                || [...aiRemotes.values()].find((x) => d.driverId != null && x.car.driverId === d.driverId);   // the host's AI
+              : remoteList().find((x) => x.car.code === d.code) ||
+                (d.epoch === epoch && typeof d.driverId === "string" && [...aiRemotes.values()].find((x) => x.car.driverId === d.driverId));
             // The lap time and best too: poseRemote only carries position, so
             // the rival's car kept lastLap 0 and best Infinity all race — the
             // radio handed YOU the fastest lap and never timed their laps.
@@ -982,6 +984,16 @@ const NetPlay = (function () {
     const { reportQuali, reportQualiLive } = qualiReporters(broadcast, () => sessions.size > 0);
 
     function reportLap(data) {
+      // The host also owns AI retirements. Bind their reliable state to each
+      // receiver's race, so a queued DNF cannot park next race's fresh car.
+      if (role === "host" && data && data.retired) {
+        let sent = false;
+        for (const [id, s] of sessions) {
+          const to = peerEpochs.get(id);
+          try { sent = s.sendEvent(EV.LAP, { ...data, epoch: to }) || sent; } catch (e) { /* peer closed */ }
+        }
+        return sent;
+      }
       return sessions.size ? broadcast(EV.LAP, data) : false;
     }
     function reportCaution(data) {
@@ -1148,6 +1160,13 @@ const NetPlay = (function () {
       if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || phaseChanged)) {
         lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
+        // Resend the host's terminal AI state with the existing reliable sync.
+        // A guest may bind its race handlers after the original retirement;
+        // MODEL resets lastStrategy when that guest supplies its race epoch.
+        if (role === "host") for (const c of G.cars || []) {
+          if (!c.local && !c.human && c.retired) reportLap({ lap: c.lap, code: c.code,
+            driverId: c.driverId, retired: c.dnf || "mechanical", invalid: true });
+        }
       }
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         // A FIXED 20 Hz, whatever the frame rate. `lastPublish = now` dropped

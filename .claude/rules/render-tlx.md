@@ -25,5 +25,5 @@ paths:
   pins `"1"` and short-circuits that off. `headless=true` prints on both and
   discriminates nothing; a headed player has neither flag.
 - A look that differs from GLX/WGX: `docs/ARCHITECTURE.md` §Cross-backend
-  parity. Skills: `webgl-debug`, `webgpu-debug`. Live probe: `mcp-probe` /
+  parity. Skill: `renderer-debug`. Live probe: `mcp-probe` /
   `node tools/mcp/mcp-cli.mjs probe --backend three`.

@@ -1104,6 +1104,8 @@ it lands.
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only render, and only for AI cars: BodyAttitude's AI roll and CarDraw's AI front-wheel angle (`js/car/car-draw.js`, the bend's Ackermann `atan(L·k)`, inside `!c.human` — `tests/unit/car-fx.test.mjs` guards that a human car's wheels read no curvature) |
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick / next-corner `c.kTurn` / get-a-run | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path. `c.kTurn` (2026-10-01: pass side, the level side-by-side election, the defender's predicted side) and `runExtra`'s read of `k` are the same kind: they move only AI targets. `js/physics/collide.js` reads `kTurn` only for an all-AI pair, so it never picks which car a PLAYER rub scrubs |
+| `js/game.js` | `updateCar` AI lateral block: marble `latG = |k|·v²/g` for `DebrisWorld.tyreMarble` | **broadcast-only** | inside the AI arm ("AI cars don't run the slip model") and `if (DebrisWorld.active())`; feeds only the cosmetic Rapier side-world, no force (swept 2026-10-05) |
+| `js/game.js` | `updateCar` AI `yawTarget` (`steerVis·0.35 + clamp(-k·v·0.14)`) → `c.yawVis` | **broadcast-only** | the `else` arm of `if (c.human && c.head != null)`; writes the DRAWN heading only, never a force or steer input (swept 2026-10-05) |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree. The builder it feeds ALSO derives an audible cue — see the `driving-line.js` row |
 | `js/render/shared/driving-line.js` | ribbon `build`/`speedAt`, plus `cue()` | **assist-gated** | the ribbon itself is surface; `cue()` turns the LUT's cornering speed into a brake-urgency ramp that `js/game.js` hands to `GameAudio.brakeCue` — AUDIBLE TO THE PLAYER, but gated by `DrivingLineOpts.brakeCue()` and audio-only: no force, torque or steer path. Escaped this table until 2026-09-22 because it reads an INJECTED `api.curvature(s)`, which the guard's alias test could not see |
@@ -1139,3 +1141,16 @@ player's `driverDelta` from own-state only (`vLat`, yaw rate, speed, `muF`)
 behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
+
+**The incident handback heading reset** (`js/physics/incident-sim.js`, the
+settled-backwards branch of the Rapier takeover's handback, fbaf18822) is a
+classified exception, not a table row, because it reads no curvature (the
+no-ghosts check above would reject the row): when a HUMAN car comes back from
+the takeover settled and facing against the track, `c.head` is snapped to the
+centreline TANGENT from `Tracks.sample(G.track, c.s)`. Channel: **surface** — a
+one-shot recovery reset onto the road's own direction, the same move
+`rescuePlayer()` in `js/game.js` makes, fired by an incident rather than per
+frame, with no curvature, racing line or `kCur` input and nothing applied while
+the player is driving. Ruled 2026-10-05 from the physics-contract sweep at
+`934e8b2cb`; a curvature or line read added to that branch would make it a
+table row and need its own ruling.

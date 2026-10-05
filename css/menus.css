@@ -116,6 +116,22 @@
    pins this exact declaration as the contract that 2-up cells fill, and
    asserts `width: auto` never appears here. A pin is worth more than a line. */
 #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
+/* A DOOR IS NEVER NARROWER THAN ITS LONGEST WORD. min-width: 0 above lets a
+   cell shrink past its content — and .bigbtn is overflow: hidden, so the label
+   is CUT rather than wrapped (a flex item that clips gets no automatic
+   minimum). MEASURED 2026-10-05 (layout-audit, ios-iphone-landscape 734x343,
+   UI SIZE 150 %): the compact column zooms at most 1.25 while the type takes
+   the rest (x 1.2), so a 2x2 cell is ~99 own px and SEASON + its icon needs
+   ~101 — RACE A FRIEND, SEASON and PRACTICE ran 12 / 18 / 2 px past their
+   doors; USE AS CONTROLLER's icon was cut at 130 % and 150 %, and on an
+   upright iPad (834x1194) the five-across room row gave it ~102 for ~114.
+   min-content is the label's longest word plus the icon and padding: where it
+   fits the 2x2 nothing moves (every 100 % layout, both goldens), and where it
+   does not, the balanced row wraps that door onto a line of its own at full
+   width instead of clipping it. The rooms other than USE AS CONTROLLER keep
+   min-width: 0 — their labels already fit the cell they get. */
+#menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
+#menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -136,7 +152,12 @@
   align-items: center;
   justify-content: center;
   gap: 0.35em;
-  min-height: max(36px, var(--tap-min));
+  /* --tap-paint: 52 PAINTED on touch, --tap-min with a mouse (css/tokens.css),
+     so a desktop room keeps its 36. MEASURED 2026-10-05 (layout-audit): on an
+     iPad the rooms were padding-sized — HOW TO PLAY 550x42 upright, USE AS
+     CONTROLLER / HOW TO PLAY 250x45 in landscape. The phone shapes override
+     this below with their own compact floors. */
+  min-height: max(36px, var(--tap-min), var(--tap-paint));
   padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
   /* type comes from .minibtn, which every room carries */
 }
@@ -628,6 +649,20 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
+/* THE RETENTION PAIR STACKS ITS SUB LINE UNDER THE LABEL on a short wide
+   title. MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05):
+   #mb-daily put DAILY TIME TRIAL and its sub side by side in one nowrap line,
+   and the sub painted "MONTREAL · DRY" cut to an ellipsis. Stacked, each line
+   gets the button's whole width. The height is ALWAYS two lines, whatever the
+   text — the shell's TODAY'S CHALLENGE and the booted MONTREAL · DRY · STREAK n
+   occupy the same box — so, like #mb-career-sub, the button never changes
+   height after boot (docs/PERF-FINDINGS.md 4a). Tight leading and a quarter-gap of
+   block padding keep the cost to ~8 own px over the one-line chip. */
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
+  flex-direction: column; gap: 0;
+  padding-block: calc(var(--gap) * 0.25);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; line-height: 1.15; }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------

@@ -210,7 +210,7 @@
           const kFrac = ((i / 12) * 0.28 + 0.90) % 1.0;   // s 0.90 → 0.18
           const k = K(kFrac);
           const side = (i % 3 === 2) ? -1 : 1;
-          const dist = 700 + h0 * 280;           // 700–980 m — horizon haze
+          const dist = 700 + h0 * 280;         // 700–980 m — horizon haze
           const bW = 20 + h1 * 14;
           const bH = 55 + h0 * 80 + (i < 4 ? 40 : 0);
           const bD = 14 + h2 * 8;
@@ -428,7 +428,7 @@
           center: vadd(c, a.u, 12), size: [7, 26, len], basis: bv,
         }, (yacht) => {
           addBox(yacht, vadd(c, a.u, 1.4),      [6.5, 3.2, len],        WHITE,     bv);
-          addBox(yacht, vadd(c, a.u, 3.0),      [6.8, 0.9, len],        trim,      bv);
+          addBox(yacht, vadd(c, a.u, 3.0),      [6.8, 0.9, len + 0.3],  trim,      bv);
           addBox(yacht, vadd(c, a.u, 4.4),      [5.0, 2.8, len * 0.55], GREYWHITE, bv);
           addBox(yacht, vadd(c, a.u, 6.6),      [3.2, 2.0, len * 0.34], GLASS,     bv);
           addCyl(yacht, vadd(c, a.u, 7.4), 0.22, 12 + hash(i) * 4, GREYWHITE, 5, bv);

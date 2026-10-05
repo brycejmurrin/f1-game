@@ -143,6 +143,17 @@ test("clearance lifts a shot, it does not relocate one", async () => {
   }
 });
 
+test("hidden picker warm sits on turn-first, not the horizon-levelled wide shot", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const u = F.warmProgress();
+    assert.ok(u > 0 && u < 1, "warmProgress is inside the sequence");
+    assert.equal(F.shotAt(u).id, "turn-first");
+    assert.equal(F.shotAt(0).id, "wide");
+    assert.equal(F.warmProgress([{ id: "wide", dur: 1 }]), 0, "an edited list without turn-first keeps shot 0");
+  });
+});
+
 test("each shot is continuous, and only a shot BOUNDARY is a cut", async () => {
   await withTrack("monza", (track, g) => {
     const FlybySeq = g.sandbox.FlybySeq;
@@ -1599,9 +1610,15 @@ test("frame report: the subject landmark stays in the scene (Spa's stands framed
     assert.ok(minScore(spa[id]) >= 80, `spa ${id}: worst frame ${minScore(spa[id])} (was 52-62)`);
   }
   // The wide shots: the crest eye sees down into the forest.
-  for (const id of ["wide", "wide2"]) assert.ok(minScore(spa[id]) >= 75, `spa ${id}: worst frame ${minScore(spa[id])} (was 70)`);
-  assert.deepEqual(flagged(spa.wide2, /SUBJECT_OCCLUDED/), [], "spa wide2: the lap is no longer hidden by the pines (was 34-35 % visible)");
-  assert.ok(spa.wide.every((f) => f.subject.visiblePct >= 44), `spa wide: ${spa.wide.map((f) => f.subject.visiblePct)} % of the lap visible (was 34-44)`);
+  // Then the HIGH crest (W_HIGH, look raised to hold the 23 deg pitch) for a
+  // lap the plain framings still see under 60 % of: Spa's wide was 77-79 with
+  // 45-48 % visible (SUBJECT_OCCLUDED); it is 81-82 at 60-62 % from 30 deg.
+  for (const id of ["wide", "wide2"]) {
+    assert.ok(minScore(spa[id]) >= (id === "wide" ? 80 : 75), `spa ${id}: worst frame ${minScore(spa[id])} (wide was 77-79)`);
+    assert.deepEqual(flagged(spa[id], /SUBJECT_OCCLUDED|SUBJECT_SMALL|EMPTY_GROUND|STEEP_DOWN/), [], `spa ${id}: the lap is not hidden by the pines, nor traded for lawn or a thread`);
+    assert.ok(spa[id].every((f) => f.subject.inFramePct >= 40), `spa ${id}: ${spa[id].map((f) => f.subject.inFramePct)} % of the lap in frame (a raised eye must not frame it out)`);
+  }
+  assert.ok(spa.wide.every((f) => f.subject.visiblePct >= 56), `spa wide: ${spa.wide.map((f) => f.subject.visiblePct)} % of the lap visible (was 45-48)`);
 });
 
 test("frame report: Monza's wide shots tilt the horizon down out of the lawn; Monaco's grid walk steps off its barrier", async () => {

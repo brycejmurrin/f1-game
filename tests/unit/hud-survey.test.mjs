@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
 import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras } from "../../tools/shot/hud-survey.mjs";
+import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CLI = path.join(ROOT, "tools/shot/hud-survey.mjs");
@@ -296,9 +297,18 @@ test("expected-visible rules", () => {
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, true, "phone cockpit keeps speed");
   // A wheel with no LCD (CLASSIC / NONE) drops body.cockpit-cam, but the strip
   // still paints at the cockpit offsets: the touch hide follows the layout set.
-  const classic = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  const classic = E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: false });
   assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
     "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
+  // HELMET is the visor HUD (its own layout set, never cockpit-cam): a touch
+  // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
+  // OT / AERO to their buttons; a desktop helmet shows the lot.
+  const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
+    "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
+  const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
+  assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
+  assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");
   assert.equal(E({ device: "phone-portrait-390x844" }).rotateDevice.want, true);
   const off = E({ off: ["pos", "gear", "limits"] });
   assert.deepEqual([off.pos.want, off.gearbox.want, off.limits.want, off.lap.want, off.speed.want], [false, false, false, true, true]);
@@ -535,4 +545,95 @@ test("the dispatch-only workflow shards, runs llvmpipe, merges and stays opt-in"
   for (const l of yml.split("\n").filter((x) => /^\s+(run:|\s{2,}\S)/.test(x) && x.includes("${{ inputs."))) {
     assert.doesNotMatch(l, /^\s+(node|echo|if|extra)/, `input interpolated into a script line: ${l.trim()}`);
   }
+});
+
+// ── hud-live-sample: the LIVE (unfrozen) counterpart of the frozen survey cell ─────
+// hud-survey freezes the sim, so a moved piece whose words change width after the
+// cell's last fit is read stale (the 1280x720 cockpit AERO chip: right edge 1297,
+// where a live race holds it at 1276). This tool samples over time instead.
+const rect = (left, right, top = 500, bottom = 540) => ({ left, right, top, bottom });
+const at = (t, r) => ({ t, rect: r });
+
+test("hud-live-sample: a piece that stays on screen reports nothing", () => {
+  const a = analyzeSamples([at(0, rect(1155, 1276)), at(40, rect(1155, 1276)), at(80, rect(1155, 1276))], { W: 1280, H: 720 });
+  assert.equal(a.maxOffScreenPx, 0);
+  assert.equal(a.offScreenMs, 0);
+  assert.equal(a.pastMarginMs, 0);
+  assert.equal(a.firstOffScreenAt, null);
+  assert.equal(a.shown, 3);
+});
+
+test("hud-live-sample: how far past the edge, and for how long", () => {
+  // 5 px off screen for two samples (80 ms), then back at the clamp, then 2 px past
+  // fit's own 4 px margin but still on screen (the 'AERO 329m' residual).
+  const a = analyzeSamples([at(0, rect(1164, 1285)), at(40, rect(1164, 1285)), at(80, rect(1155, 1276)), at(120, rect(1157, 1278))],
+    { W: 1280, H: 720, interval: 40 });
+  assert.equal(a.maxOffScreenPx, 5);
+  assert.equal(a.offScreenMs, 80, "two samples x the gap to the next one");
+  assert.equal(a.firstOffScreenAt, 0);
+  assert.equal(a.lastOffScreenAt, 40);
+  assert.equal(a.maxPastMarginPx, 9, "1285 against 1280 - 4");
+  assert.equal(a.pastMarginMs, 120, "the two off-screen samples AND the 2 px one count past the margin");
+  assert.equal(a.widthMin, 121);
+  assert.equal(a.widthMax, 121);
+});
+
+test("hud-live-sample: the left and vertical edges count too, and the last sample is one interval long", () => {
+  const left = analyzeSamples([at(0, rect(-80, 50))], { W: 1280, H: 720, interval: 40 });
+  assert.equal(left.maxOffScreenPx, 80);
+  assert.equal(left.offScreenMs, 40, "a lone sample is one interval, not zero");
+  const bottom = analyzeSamples([at(0, rect(100, 200, 700, 730))], { W: 1280, H: 720 });
+  assert.equal(bottom.maxOffScreenPx, 10);
+});
+
+test("hud-live-sample: sub-pixel layout noise and a hidden piece are on screen", () => {
+  const noise = analyzeSamples([at(0, rect(1155, 1280.3))], { W: 1280, H: 720 });
+  assert.equal(noise.offScreenMs, 0, "0.3 px is layout rounding, not an overflow");
+  const hidden = analyzeSamples([at(0, null), at(40, null)], { W: 1280, H: 720 });
+  assert.equal(hidden.shown, 0);
+  assert.equal(hidden.offScreenMs, 0);
+  assert.equal(hidden.widthMin, null);
+});
+
+test("hud-live-sample: summarize keeps each piece's worst trial and counts the trials that went off screen", () => {
+  const ok = { maxOffScreenPx: 0, offScreenMs: 0, maxPastMarginPx: 0, pastMarginMs: 0 };
+  const bad = { maxOffScreenPx: 5, offScreenMs: 1740, maxPastMarginPx: 9, pastMarginMs: 1740 };
+  const w = summarize([{ pieces: { aero: ok, tyre: ok } }, { pieces: { aero: bad, tyre: ok } }, { pieces: { aero: ok, tyre: ok } }]);
+  assert.equal(w.aero.offScreenMs, 1740);
+  assert.equal(w.aero.maxOffScreenPx, 5);
+  assert.equal(w.aero.trialsOffScreen, 1);
+  assert.equal(w.tyre.trialsOffScreen, 0);
+});
+
+test("hud-live-sample: argv parsing — defaults, overrides, and every refusal", () => {
+  const d = parseLive([]);
+  assert.deepEqual([d.track, d.device, d.cam, d.tolerate, d.interval], ["monza", "desktop-1280", "cockpit", 250, 40]);
+  assert.ok(d.jumps.length >= 4 && d.ids === null, "several jumps, every moved piece");
+  assert.equal(d.keep, false, "by default every HUD piece is switched on first, like hud-survey");
+  assert.equal(parseLive(["--keep"]).keep, true, "--keep is a flag: it takes no value");
+  assert.deepEqual(parseLive(["--jumps", "none"]).jumps, [null], "--jumps none: one trial, no teleport");
+  assert.deepEqual(parseLive(["--jumps=none"]).jumps, [null]);
+  assert.match(parseLive(["--jumps", "0.2,none"]).error, /lap fractions/, "none is the whole list, not one entry of it");
+  assert.deepEqual(parseLive(["--keep", "--ids", "aero"]).ids, ["aero"], "and it does not swallow the next option");
+  const o = parseLive(["--ids", "aero,ot", "--jumps=0.1,0.9", "--device", "phone-landscape-844x390", "--tolerate", "0", "--cam=chase"]);
+  assert.deepEqual(o.ids, ["aero", "ot"]);
+  assert.deepEqual(o.jumps, [0.1, 0.9]);
+  assert.equal(o.tolerate, 0);
+  assert.equal(o.cam, "chase");
+  assert.match(parseLive(["--device", "nope"]).error, /--device must be one of/);
+  assert.match(parseLive(["--jumps", "0.2,1.5"]).error, /lap fractions/);
+  assert.match(parseLive(["--interval", "5"]).error, /measures the sampler/);
+  assert.match(parseLive(["--window", "-1"]).error, /--window/);
+  assert.match(parseLive(["--bogus"]).error, /unknown option --bogus/);
+  assert.match(parseLive(["monza"]).error, /unexpected argument/);
+});
+
+test("hud-live-sample: the CLI refuses a bad device before it launches anything, and --help says what it is", () => {
+  const CLI2 = path.join(ROOT, "tools/shot/hud-live-sample.mjs");
+  const bad = spawnSync(process.execPath, [CLI2, "--device", "nope"], { cwd: ROOT, encoding: "utf8", timeout: 30000 });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--device must be one of/);
+  const help = spawnSync(process.execPath, [CLI2, "--help"], { cwd: ROOT, encoding: "utf8", timeout: 30000 });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout + help.stderr, /UNFROZEN/);
 });
