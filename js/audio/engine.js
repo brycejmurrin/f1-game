@@ -1845,17 +1845,25 @@ const GameAudio = (function () {
    */
   // Which rival row each voice plays this call (-1 = none). A row's `slot` is
   // the voice RivalAudio bound to that CAR, so a rank swap moves no voice;
-  // a row without one (an older caller) falls back to its rank.
+  // a row without one (an older caller) falls back to its rank. A row whose
+  // slot AND rank voice are both taken gets the first free voice: on a phone's
+  // two voices a car bound to slot 3 would otherwise go mute beside an idle one.
   const _rivalRow = [];
   function setRivals(list) {
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
     for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
+    let unvoiced = 0;
     for (let k = 0; k < n; k++) {
       const sl = list[k].slot;
       const vi = Number.isInteger(sl) && sl >= 0 && sl < rivalVoices.length && _rivalRow[sl] < 0 ? sl : k;
-      if (_rivalRow[vi] < 0) _rivalRow[vi] = k;
+      if (_rivalRow[vi] < 0) _rivalRow[vi] = k; else unvoiced |= 1 << k;
+    }
+    for (let k = 0, free = 0; unvoiced && k < n; k++) {
+      if (!(unvoiced & (1 << k))) continue;
+      while (_rivalRow[free] >= 0) free++;   // n <= voices, so one is free
+      _rivalRow[free] = k;
     }
     for (let i = 0; i < rivalVoices.length; i++) {
       const v = rivalVoices[i];

@@ -10,7 +10,7 @@ const SceneryCity = (function () {
             seat,
             addBox, addCyl, addCone, addFrustum, addPrism, addPyramid,
             rejBox, blockAt, onTrack, hash, vadd, kitOf,
-            anchor, along, massBlocked, massAdd, terrainYAt } = ctx;
+            anchor, along, massBlocked, massAdd, terrainYAt, treeInFootprint } = ctx;
     Log.info("scenery", "scenery-city dress " + (def && def.id));
     const { WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY } = TrackSceneryData;
 
@@ -431,9 +431,19 @@ const SceneryCity = (function () {
       // base is 1.35x, a jenga stack's offset boxes reach 0.61 d either side.
       // Registered at w x d, a neighbour saw a smaller mass than was built and
       // stood inside it (cota frac 0.049: two towers' sections, 6.65 m deep).
+      // The ROUND kinds build off `reach` = max(w, d), not w x d: a cylinder's
+      // radius is 0.5 reach, a pyramid's 0.62, a drum's 0.6. Registered at
+      // w x d they claimed less ground than they stood on, and the street
+      // retail block yielding to masses walked into them (sochi 0.590).
       const fw = kind === "podium" ? 1.35 : 1, fd = kind === "podium" ? 1.35 : kind === "jenga" ? 1.22 : 1;
-      if (massBlocked(a.c, w * fw, d * fd, b, 0.82)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
-      massAdd(a.c, w * fw, d * fd, b);
+      const roundR = kind === "cylinder" ? 0.5 : kind === "pyramid" ? 0.62 : kind === "drum" ? 0.6 : 0;
+      const footW = roundR ? 2 * roundR * reach : w * fw, footD = roundR ? 2 * roundR * reach : d * fd;
+      if (massBlocked(a.c, footW, footD, b, 0.82)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
+      // …and yield to a TREE already standing here. The circuit closure's trees
+      // are planted before the city pass, and massBlocked never saw them, so a
+      // tower went up through a crown (sochi 0.497, mexico 0.429).
+      if (treeInFootprint(vadd(a.c, a.u, h / 2), footW, h, footD, b)) { blockAt(k, side, dist - reach / 2, reach / 2); return; }
+      massAdd(a.c, footW, footD, b);
       const bodyCol = NIGHT ? (tone && tone.n || [0.14, 0.14, 0.17]) : (tone && tone.d || [0.40, 0.41, 0.44]);
       const cap = NIGHT ? [0.09, 0.09, 0.12] : [0.31, 0.32, 0.35];
       const na = neonAmt == null ? (theme === "street_night" ? 1 : 0) : neonAmt;  // 0=general … 1=neon
