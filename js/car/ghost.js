@@ -10,6 +10,11 @@ const Ghost = (function () {
   // crowd out career/settings saves.
   const MAX_STORE_BYTES = 512 * 1024;
   const HZ = 20;                 // samples per second while recording
+  // A lap left open (parked, stuck, AFK) sampled at HZ without bound, and with no
+  // best yet an hour-long lap became the ghost. Past ten minutes (several times the
+  // slowest lap of the longest circuit) the lap is dropped, as an invalid one is.
+  const MAX_LAP_S = 600;
+  const MAX_SAMPLES = MAX_LAP_S * HZ;
   const MIN_SAMPLES = 8;         // ignore degenerate "laps"
 
   // One-time migration: adopt any store saved under the old, non-conforming key.
@@ -234,6 +239,7 @@ const Ghost = (function () {
   function record(t, s, x) {
     if (!rec) return;
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
+    if (rec.t.length >= MAX_SAMPLES || (rec.t.length && t - rec.t[0] > MAX_LAP_S)) { rec = null; return; }
     if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
     lastSampleT = t;
     rec.t.push(round(t, 3));
@@ -390,7 +396,7 @@ const Ghost = (function () {
   }
 
   return {
-    setTrack, startLap, record, finishLap, at, timeAt, contextKey,
+    setTrack, startLap, record, finishLap, at, timeAt, contextKey, MAX_LAP_S, HZ,
     context: () => context, track: () => trackId,
     hasGhost, bestTime, snapshot, meta, medal, clear, speedAt, flush,
   };
