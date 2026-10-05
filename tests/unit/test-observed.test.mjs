@@ -23,10 +23,10 @@ import { titlesIn, audit, observedTitles } from "../../tools/ci/test-observed.mj
 // which never exists, so the observed half below never ran.)
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("a top-level test carries the file's basename as an implicit suite", () => {
+test("a top-level test carries its testDir-relative path as an implicit suite", () => {
   const src = `import { test } from "./fixtures.js";\ntest("does a thing", async () => {});`;
   const [t] = titlesIn(src, "tests/specs/smoke.spec.js");
-  assert.equal(t.full, "tests/specs/smoke.spec.js › smoke.spec.js › does a thing");
+  assert.equal(t.full, "tests/specs/smoke.spec.js › specs/smoke.spec.js › does a thing");
 });
 
 test("a test inside a describe does NOT get the implicit suite", () => {
@@ -52,7 +52,7 @@ test("sharedTest declarations are counted like test declarations", () => {
   // spec importing it under its own name must not become invisible.
   const src = `sharedTest("shared thing", async () => {});`;
   const [t] = titlesIn(src, "tests/specs/smoke.spec.js");
-  assert.equal(t.full, "tests/specs/smoke.spec.js › smoke.spec.js › shared thing");
+  assert.equal(t.full, "tests/specs/smoke.spec.js › specs/smoke.spec.js › shared thing");
 });
 
 test("a loop-generated title becomes a PATTERN, not a dropped declaration", () => {
@@ -63,10 +63,10 @@ test("a loop-generated title becomes a PATTERN, not a dropped declaration", () =
   const src = "for (const id of X) { test(`${id}: holds on the grade`, async () => {}); }";
   const [t] = titlesIn(src, "tests/specs/smoke.spec.js");
   assert.equal(t.dynamic, true);
-  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › smoke.spec.js › cota: holds on the grade"));
-  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › smoke.spec.js › spa: holds on the grade"));
+  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › cota: holds on the grade"));
+  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › spa: holds on the grade"));
   // and does not swallow an unrelated title from the same file
-  assert.ok(!t.pattern.test("tests/specs/smoke.spec.js › smoke.spec.js › something else"));
+  assert.ok(!t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › something else"));
 });
 
 test("regex metacharacters in a template's literal chunks are escaped", () => {
@@ -75,8 +75,8 @@ test("regex metacharacters in a template's literal chunks are escaped", () => {
   // road-following holds on the grade".
   const src = "test(`${id}: a + b (c)`, async () => {});";
   const [t] = titlesIn(src, "tests/specs/smoke.spec.js");
-  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › smoke.spec.js › x: a + b (c)"));
-  assert.ok(!t.pattern.test("tests/specs/smoke.spec.js › smoke.spec.js › x: a  b  c "));
+  assert.ok(t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › x: a + b (c)"));
+  assert.ok(!t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › x: a  b  c "));
 });
 
 test("skipped tests are declared but not counted as unobserved", () => {
