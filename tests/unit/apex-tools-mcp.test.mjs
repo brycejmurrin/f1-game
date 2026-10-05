@@ -1312,3 +1312,19 @@ test("thumbBlock returns an MCP image block a client can render", async () => {
     assert.equal(meta.width, 640);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("apex-eval: the shapeOf helper it injects into the page parses (named fn expr, no source rewrite)", async () => {
+  // 2026-10-05: a global /shapeOf\(/ -> "window.__shape(" rewrite also hit the
+  // declaration and injected `function window.__shape(` — a SyntaxError that
+  // failed EVERY browser apex_eval. Rebuild the injected string from source.
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../../tools/shot/apex-eval.mjs", import.meta.url), "utf8");
+  assert.ok(!/SHAPE\.replace\(/.test(src), "the injected helper must not be source-rewritten");
+  const body = src.slice(src.indexOf("function shapeOf("), src.indexOf("\nconst SHAPE"));
+  const shapeLine = src.match(/^const SHAPE = (.+);$/m)[1];
+  const SHAPE = new Function("shapeOf", "return " + shapeLine)(new Function("return " + body)());
+  const win = {};
+  new Function("window", SHAPE)(win);
+  assert.equal(typeof win.__shape, "function");
+  assert.equal(win.__shape([1, 2]).startsWith("Array(2)"), true);
+});
