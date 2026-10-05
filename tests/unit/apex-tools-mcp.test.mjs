@@ -79,8 +79,13 @@ test("playwright-official pin matches the wrapper's audited package and never @l
   const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
   const pw = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8")
     .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
-  assert.equal(cfg.mcpServers["playwright-official"].command, "npx");
-  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", pw]);
+  // The catalog launches the wrapper's `run` (2026-10-05: the bare package
+  // cannot launch in the cloud container), and the wrapper is what pins the
+  // audited package — so the pin is asserted on the wrapper, the launch line
+  // on the catalog.
+  assert.equal(cfg.mcpServers["playwright-official"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["tools/mcp/playwright-mcp.sh", "run"]);
+  assert.equal(pw, "@playwright/mcp@0.0.79");
   assert.deepEqual(cursorCfg.mcpServers["playwright-official"], cfg.mcpServers["playwright-official"]);
   // chrome-devtools-official (bare npx, no WebGPU flags) left the catalog 2026-09;
   // the wrapper server keeps the same pinned package as its network fallback.

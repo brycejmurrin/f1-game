@@ -29,10 +29,15 @@ SKILL.md and, past 100 lines, opens with a Contents block").
 ## Custom agents
 
 deploy-research (live == tip, zero lag), ci-red-triage (no red in 30 runs),
-physics-contract-auditor (no BLOCKER, 40 sites classified), verify-agent and
-track-surveyor ran as designed. **bloat-auditor hit the 40-turn limit with no
-report** on a six-file scope and handed back one row only after a nudge: its
-brief needs a hard "report after N rows" stop.
+physics-contract-auditor (no BLOCKER, 40 sites classified) and track-surveyor
+(a dry-run Monaco survey that found the scenery frame defect in the PR's
+handoff) ran as designed. Two agents ran out of turns before reporting and
+handed back only after a nudge: **bloat-auditor** (40 turns on a six-file
+scope, one BLOAT row) and **verify-agent** (`maxTurns: 8`, Haiku: the fast
+gate took 470 s under loadavg 20 and the agent spent its turns polling). Both
+caught real things — the verify-agent's one red was a test still pinning the
+old Playwright launch line — so the fix is a "report what you have" stop in
+each brief, not a bigger cap.
 
 ## Tool defects found by the drive (fixed here)
 
