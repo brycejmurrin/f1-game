@@ -2770,6 +2770,7 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
+  const rs = $("race-settings"); if (rs) rs.hidden = true;   // dialog top-layer covers #loading
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
@@ -3703,9 +3704,10 @@ let _introSheet = null;
 function sheetRelease(hide) {
   const h = _introSheet; if (!h) return;
   if (hide && !loadingScreen.phase()) loadingScreen.building(loadingInfo());
+  if (!hide) loadingScreen.stop();   // retry: drop the plate so the sheet is usable
   _introSheet = null; h.btn.disabled = false; if (h.back) h.back.disabled = false;
   if (h.btn.textContent === "PREPARING…") h.btn.textContent = h.label;   // unless the sheet relabelled it meanwhile
-  if (hide) h.sheet.hidden = true;
+  h.sheet.hidden = !!hide;
 }
 /** Cold preparation's cover: the build card (also behind race settings). */
 function introCover(info, n) { loadingScreen.building(info, () => studioSkip(n)); }
@@ -3911,12 +3913,14 @@ function startRaceCovered() {
 }
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
-// START RACE FROM RACE SETTINGS (_introSheet). A warm compiling at the tap owns the renderer
-// (TLX presents nothing, 1-4 s on a real GPU): waited out under the sheet, bounded as
-// awaitIntroWarm is. The menu's own build and warms stand down, as when the sheet closed.
+// START RACE / PRACTICE START FROM RACE SETTINGS. The sheet is a <dialog> in the
+// top layer, so #loading cannot paint over it — hide it first, then raise the plate.
 function raceIntroFromSheet(go, sheet, btn) {
-  if (_introSheet || loadingScreen.phase()) return;   // already preparing (START is disabled: a synthetic second press)
-  if (!sheet || !btn) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
+  if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
+  if (sheet) sheet.hidden = true;
+  if (loadingScreen.phase()) return;
+  loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race");
+  if (!btn) { raceIntro(go); return; }
   const back = $("rs-cancel"), owner = _introSheet = { sheet, btn, back, label: btn.textContent };
   btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;

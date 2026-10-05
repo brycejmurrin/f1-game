@@ -255,6 +255,12 @@ function showUnavailable(opts) {
   const panel = opts && opts.panel;
   if (opts && opts.hud) { opts.hud.hidden = true; opts.hud.inert = true; }
   if (opts && opts.overlay) { opts.overlay.hidden = true; opts.overlay.inert = true; }
+  // #loading and #race-settings (a top-layer dialog) must not sit over this fallback.
+  const get = typeof document !== "undefined" && document.getElementById;
+  if (typeof get === "function") {
+    const loading = get.call(document, "loading"); if (loading) loading.hidden = true;
+    const rs = get.call(document, "race-settings"); if (rs) rs.hidden = true;
+  }
   if (!panel) return;
   panel.textContent = "";
   const body = document.createElement("div");

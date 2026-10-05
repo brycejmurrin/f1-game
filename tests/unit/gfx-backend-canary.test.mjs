@@ -1690,6 +1690,10 @@ test("terminal graphics failure hides interactive game UI and offers recovery co
   assert.match(recovery, /USE WEBGL2/);
   assert.match(recovery, /COPY DIAGNOSTICS/);
   assert.match(recovery, /location\.reload\(\)/);
+  assert.match(recovery, /get\.call\(document, "loading"\)/,
+    "the fallback drops #loading so the recovery panel is not under a busy plate");
+  assert.match(recovery, /get\.call\(document, "race-settings"\)/,
+    "and closes the settings dialog that would otherwise sit in the top layer");
   const recoveryCss = code("css/overlays.css");
   assert.match(recoveryCss, /#nogl \[data-gfx-recovery-actions\] button[^}]*min-height:\s*var\(--tap\)/);
   assert.match(recoveryCss, /@media\s*\(max-width:\s*480px\)[^{]*\{[^}]*data-gfx-recovery-actions[^}]*grid-template-columns:\s*1fr/);
@@ -1727,9 +1731,13 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
   }
   const byId = {
     nogl: element("div", "nogl"),
+    loading: element("div", "loading"),
+    "race-settings": element("dialog", "race-settings"),
     "htp-close": element("button", "htp-close"),
     "dh-close-btn": element("button", "dh-close-btn"),
   };
+  byId.loading.hidden = false;
+  byId["race-settings"].hidden = false;
   const helpDialog = element("dialog", "howtoplay");
   const dataDialog = element("dialog", "datahub");
   const hud = element("div", "hud"), overlay = element("div", "overlay");
@@ -1746,6 +1754,7 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
   const document = {
     body, readyState: "loading",
     createElement: tag => element(tag),
+    getElementById: id => byId[id] || null,
     execCommand: () => true,
     addEventListener() {},
   };
@@ -1778,6 +1787,8 @@ test("terminal graphics recovery works before the late menu wiring", async () =>
   assert.deepEqual(controls.map(node => node.textContent),
     ["RETRY", "USE WEBGL2", "COPY DIAGNOSTICS", "HELP", "DATA HUB"]);
   assert.equal(byId.nogl.hidden, false);
+  assert.equal(byId.loading.hidden, true, "busy plate is down before the fallback");
+  assert.equal(byId["race-settings"].hidden, true, "settings dialog is closed so it cannot cover #nogl");
   assert.equal(hud.hidden, true); assert.equal(hud.inert, true);
   assert.equal(overlay.hidden, true); assert.equal(overlay.inert, true);
   assert.equal(button("RETRY").focused, true, "keyboard focus starts on the primary recovery action");

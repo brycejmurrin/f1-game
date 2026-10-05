@@ -347,11 +347,12 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
     const events = [];
     const btn = { textContent: 'START RACE', disabled: false }, back = { disabled: false }, sheet = { hidden: false };
     const snap = (tag) => [tag, sheet.hidden, btn.disabled, btn.textContent, back.disabled];
+    let phase = "";
     const ctx = { _introRun: 0, state: 'menu', settings: 'one', flybyBuildTimer: 7, cleared: 0, _menuGate: { generation: 0 },
       $: (id) => (id === 'rs-cancel' ? back : null), clearTimeout(t) { if (t === 7) ctx.cleared++; },
       Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now },
       entrySettings: () => ctx.settings, loadingInfo: () => ({ track: { id: "monza" } }),
-      loadingScreen: { phase: () => "", building: () => events.push(['card']), stop() {} }, studioSkip() {},
+      loadingScreen: { phase: () => phase, building() { phase = "build"; events.push(['card']); return true; }, stop() { phase = ""; } }, studioSkip() {},
       cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
       // Model a successfully presented garage frame releasing the sheet.
       raceIntro: () => { events.push(snap('intro')); if (mode === 'throw') throw new Error('boom'); ctx.sheetRelease(true); },
@@ -372,21 +373,21 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
     return { events, ctx, btn, back, sheet };
   };
   const free = await run('free');
-  assert.deepEqual(free.events[0], ['intro', false, true, 'PREPARING…', true], 'no warm: the intro starts at once, the sheet still up and busy (a cold world prepares under it)');
-  assert.deepEqual(free.events[1], ['card'], 'hiding the sheet raises the card first, so the drop is never black');
-  assert.deepEqual(free.events[2], ['sync', true, false, 'START RACE', false], 'the car moving lowers the sheet and gives both buttons back');
+  assert.deepEqual(free.events[0], ['card'], 'the plate is up before the intro so the dialog drop is never black');
+  assert.deepEqual(free.events[1], ['intro', true, true, 'PREPARING…', true], 'no warm: the intro starts at once under #loading, not the settings dialog');
+  assert.deepEqual(free.events[2], ['sync', true, false, 'START RACE', false], 'the car moving keeps the sheet down and gives both buttons back');
   assert.equal(free.ctx._menuGate.generation, 1, 'the menu\'s own build and warms stand down, as when the sheet closed on the tap');
   assert.equal(free.ctx.cleared, 1);
   const ends = await run('ends');
-  assert.deepEqual(ends.events[0], ['sync', false, true, 'PREPARING…', true], 'a warm compiling at the tap: the sheet stays up, START busy, BACK off (Escape presses BACK)');
-  assert.deepEqual(ends.events[1], ['held', false, true, 'PREPARING…', true]);
-  assert.deepEqual(ends.events[2], ['intro', false, true, 'PREPARING…', true], 'the warm over, the intro runs under the sheet');
-  assert.deepEqual(ends.events[3], ['card'], 'the card is already up when the PREPARING sheet hides');
+  assert.deepEqual(ends.events[0], ['card'], 'Start Race raises the card immediately');
+  assert.deepEqual(ends.events[1], ['sync', true, true, 'PREPARING…', true], 'a warm compiling at the tap: the dialog is already hidden so #loading is visible');
+  assert.deepEqual(ends.events[2], ['held', true, true, 'PREPARING…', true]);
+  assert.deepEqual(ends.events[3], ['intro', true, true, 'PREPARING…', true], 'the warm over, the intro runs under the card');
   assert.deepEqual([ends.sheet.hidden, ends.btn.disabled, ends.btn.textContent, ends.back.disabled], [true, false, 'START RACE', false]);
   for (const mode of ['quit', 'setting']) {
     const r = await run(mode);
     assert.equal(r.events.some((e) => e[0] === 'intro'), false, mode + ': abandoned, no intro');
-    assert.deepEqual([r.sheet.hidden, r.btn.disabled, r.btn.textContent, r.back.disabled], [false, false, 'START RACE', false], mode + ': the sheet stays, its buttons usable again');
+    assert.deepEqual([r.sheet.hidden, r.btn.disabled, r.btn.textContent, r.back.disabled], [false, false, 'START RACE', false], mode + ': the sheet comes back, its buttons usable again');
   }
   const again = await run('again');
   assert.equal(again.events.filter((e) => e[0] === 'intro').length, 1, 'a second press while preparing is ignored: one intro');
@@ -394,7 +395,7 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   assert.equal(stuck.events.some(e => e[0] === 'intro'), false, 'a warm that never ends cannot hand off');
   assert.deepEqual([stuck.sheet.hidden, stuck.btn.disabled, stuck.back.disabled], [false, false, false], 'timed-out preparation releases the sheet for retry');
   const thrown = await run('throw');
-  assert.deepEqual(thrown.events.slice(1), [['failed'], ['sync', false, false, 'START RACE', false]], 'a throwing intro keeps the sheet available for retry');
+  assert.deepEqual(thrown.events.slice(2), [['failed'], ['sync', false, false, 'START RACE', false]], 'a throwing intro brings the sheet back for retry');
   // The cold paths' cover: the card only when the sheet is not already covering.
   const cover = {}; const cv = { _introSheet: null, loadingScreen: { building: () => { cover.card = (cover.card || 0) + 1; } }, studioSkip() {} };
   vm.createContext(cv); vm.runInContext(helpers + ';globalThis.setSheet = (v) => { _introSheet = v; };', cv);
@@ -734,7 +735,7 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
   const warm = game.slice(game.indexOf('async function awaitIntroWarm('), game.indexOf('// THE STUDIO DRIVE-OUT:'));
   const helpers = game.slice(game.indexOf('let _introSheet = null;'), game.indexOf('function studioOpen(n, info) {'));
   const wrapper = game.slice(game.indexOf('function raceIntroFromSheet('), game.indexOf('function raceIntro(go) {'));
-  let clock = 0, warming = true, polls = 0, activeBack;
+  let clock = 0, warming = true, polls = 0, activeBack, phase = "";
   const waits = [], intros = [], announcements = [], warnings = [], views = [];
   const ctx = {
     _studio: null, studioClose() { assert.fail('no studio is open in the warm wait'); },
@@ -748,7 +749,7 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
     Log: { warn(...args) { warnings.push(args); } },
     announce(...args) { announcements.push(args); },
     loadingInfo: () => ({ track: { id: "monza" } }),
-    loadingScreen: { phase: () => "", building() {}, stop() {} },
+    loadingScreen: { phase: () => phase, building() { phase = "build"; return true; }, stop() { phase = ""; } },
     studioSkip() {},
     menuSlice() {
       if (sliceRejects) return Promise.reject(new Error('injected warm slice failure'));
@@ -772,7 +773,7 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
     return view;
   }
   function assertBusy(view) {
-    assert.equal(view.sheet.hidden, false);
+    assert.equal(view.sheet.hidden, true, 'the dialog is down so #loading can paint');
     assert.equal(view.btn.disabled, true);
     assert.equal(view.btn.textContent, 'PREPARING…');
     assert.equal(view.back.disabled, true);
