@@ -873,15 +873,18 @@
       const TARMAC = [0.38, 0.39, 0.41];
       const PAV_WHITE = [0.88, 0.89, 0.90];
       const PAV_STEEL = [0.55, 0.58, 0.62];
+      // Wide enough to read from the high-overview review camera (480×270 cells).
       for (const [sf, side, gap, len, wid] of [
-        [0.16, -1, 48, 90, 10],
-        [0.22,  1, 55, 85, 11],
-        [0.28, -1, 62, 100, 12],
-        [0.38,  1, 50, 95, 11],
-        [0.44, -1, 70, 80, 10],
-        [0.58, -1, 58, 90, 11],
-        [0.92,  1, 40, 70, 10],
-        [0.04, -1, 45, 75, 10],
+        [0.16, -1, 48, 120, 14],
+        [0.22,  1, 55, 110, 13],
+        [0.28, -1, 62, 130, 15],
+        [0.38,  1, 50, 120, 14],
+        [0.44, -1, 70, 100, 13],
+        [0.58, -1, 58, 115, 14],
+        [0.92,  1, 40, 95, 13],
+        [0.04, -1, 45, 100, 13],
+        [0.33, -1, 85, 90, 12],
+        [0.41,  1, 78, 85, 12],
       ]) {
         groundPatch(at(sf), side, gap, [wid, 0.22, len], TARMAC, {
           id: `madrid-svc-${Math.round(sf * 1000)}-${side > 0 ? "r" : "l"}`,
@@ -890,29 +893,30 @@
       }
       // Straw / plaza variety between service roads (not on the same Y as roads).
       for (const [sf, side, gap, col] of [
-        [0.18, -1, 78, STRAW],
-        [0.26,  1, 85, STRAW_DARK],
-        [0.34, -1, 90, [0.42, 0.50, 0.32]],
-        [0.42,  1, 75, STRAW],
-        [0.55, -1, 82, STRAW_DARK],
-        [0.90,  1, 62, STONE],
+        [0.18, -1, 90, STRAW],
+        [0.26,  1, 95, STRAW_DARK],
+        [0.34, -1, 105, [0.42, 0.50, 0.32]],
+        [0.42,  1, 88, STRAW],
+        [0.55, -1, 95, STRAW_DARK],
+        [0.90,  1, 72, STONE],
       ]) {
-        groundPatch(at(sf), side, gap, [22, 0.18, 36], col, {
+        groundPatch(at(sf), side, gap, [28, 0.18, 42], col, {
           id: `madrid-plaza-${Math.round(sf * 1000)}`,
           samples: 4,
         });
       }
-      // Low IFEMA tech / pavilion sheds — solid closed boxes; indexSolid
-      // reserves the footprint so deferred foliage cannot plant inside.
+      // Low IFEMA tech / pavilion sheds — larger so overview reads them.
       for (const [sf, side, gap, w, h, d, col] of [
-        [0.19, -1, 55, 14, 6.5, 22, PAV_WHITE],
-        [0.25,  1, 60, 12, 5.5, 18, PAV_STEEL],
-        [0.31, -1, 68, 16, 7.0, 24, PAV_WHITE],
-        [0.40,  1, 58, 13, 6.0, 20, OFFWHITE],
-        [0.47, -1, 72, 11, 5.0, 16, PAV_STEEL],
-        [0.94,  1, 48, 15, 6.5, 26, PAV_WHITE],
-        [0.01, -1, 50, 14, 6.0, 20, OFFWHITE],
-        [0.07,  1, 56, 12, 5.5, 18, PAV_STEEL],
+        [0.19, -1, 58, 18, 8.0, 28, PAV_WHITE],
+        [0.25,  1, 64, 16, 7.0, 24, PAV_STEEL],
+        [0.31, -1, 72, 20, 8.5, 32, PAV_WHITE],
+        [0.40,  1, 62, 17, 7.5, 26, OFFWHITE],
+        [0.47, -1, 78, 15, 6.5, 22, PAV_STEEL],
+        [0.94,  1, 52, 19, 8.0, 30, PAV_WHITE],
+        [0.01, -1, 54, 18, 7.5, 26, OFFWHITE],
+        [0.07,  1, 60, 16, 7.0, 24, PAV_STEEL],
+        [0.35, -1, 95, 22, 9.0, 34, PAV_WHITE],
+        [0.43,  1, 88, 18, 7.5, 28, PAV_STEEL],
       ]) {
         const aP = anchor(at(sf), side, gap);
         if (!aP || onTrack(aP.c[0], aP.c[2], Math.max(w, d) * 0.4)) continue;
