@@ -55,8 +55,8 @@
      and a content-sized sheet would collapse it to its min-height. */
   height: 100%;
 }
-#sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); }
-#sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); min-width: 0; }
+#sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow-wrap: anywhere; white-space: normal; text-align: center; }
 #sel-track-count { letter-spacing: var(--ls-2); }
 /* The body is a flex column that does NOT scroll: shelf, then hero section.
    The section is the vertical scroller when its caption does not fit. */
@@ -132,7 +132,7 @@
   display: flex; align-items: stretch;
   gap: calc(var(--gap) * 0.3);
   min-width: 0;
-  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.4);
+  padding: calc(var(--gap) * 0.3) var(--pad);
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain;
   touch-action: pan-x;
@@ -152,7 +152,7 @@
      around the flag, so the active rule below needs no geometry of its own. */
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.45);
   border: none; border-radius: var(--r-sm);
-  scroll-snap-align: center;
+  scroll-snap-align: start;
   text-align: center;
 }
 #sel-tracks .track-row:last-child { border-bottom: none; }
@@ -199,15 +199,15 @@
   position: static; flex: 0 0 auto;
   writing-mode: vertical-rl;
   display: flex; align-items: center;
-  /* Never taller than a tile: the label is a divider, and a divider that
-     stretches the row it divides is the bug the short text above avoids. */
-  max-height: calc(var(--chip-h) * 1.9);
-  overflow: hidden;
+  /* Short CLASSICS / SEASON / MINE text — a 1.9-chip cap clipped CLASSICS
+     on a ~500 sheet that is not yet compact (apex11). */
+  max-height: none;
+  overflow: visible;
   padding: 0 calc(var(--gap) * 0.15);
   border-bottom: none;
   border-right: 1px solid var(--card-line);
   background: none;
-  letter-spacing: var(--ls-3);
+  letter-spacing: 0;
   white-space: nowrap;
 }
 /* FAVOURITE CIRCUITS: a ♥ in the tile's own padding corner (★ is the TT
@@ -220,8 +220,43 @@
   pointer-events: none;
 }
 #sel-track-empty { padding: var(--pad); text-align: center; align-self: center; margin: 0; }
-/* Season: the calendar strip is read-only. */
-#sel-tracks[data-mode="season"] .track-row { cursor: default; }
+/* Season: the calendar strip is read-only. Extra inline pad + snap-to-start
+   so the first visible round (R14 SHANGHAI at the end of a pan) is not sliced
+   by the strip edge; token thumbs so the bar is not Chrome's white overlay. */
+#sel-tracks[data-mode="season"] {
+  padding-inline: var(--pad);
+  scroll-padding-inline: var(--pad);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+#sel-tracks[data-mode="season"]::-webkit-scrollbar { height: 8px; }
+#sel-tracks[data-mode="season"]::-webkit-scrollbar-track { background: var(--scroll-track); }
+#sel-tracks[data-mode="season"]::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb); border-radius: var(--r-sm);
+}
+#sel-tracks[data-mode="season"] .track-row {
+  cursor: default;
+  scroll-snap-align: start;
+  position: relative;
+}
+#sel-tracks[data-mode="season"] .track-row[data-tip]:hover::before {
+  content: attr(data-tip);
+  position: absolute;
+  inset: calc(var(--gap) * 0.15);
+  z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(var(--gap) * 0.15);
+  border-radius: var(--r-xs);
+  background: var(--surf-1);
+  color: var(--text);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+  box-shadow: var(--edge);
+}
 #sel-tracks .track-row[data-done] { opacity: 0.45; }
 #sel-tracks .sur-rnd { min-width: 0; }
 /* Compact: flags only — the name moves to the hero — and the strip drops to
@@ -233,7 +268,7 @@
 /* No tracking and no cap in compact: CLASSICS needed 64px against a 1.2-chip
    divider and lost its last letters (fit-audit 852x393; 52px on a mouse, where
    --chip-h is smaller). Untracked it is 57px, inside the strip's own height. */
-#sel-inner[data-density="compact"] #sel-tracks .track-group-head { max-height: none; letter-spacing: 0; }
+#sel-inner[data-density="compact"] #sel-tracks .track-group-head { display: none; }
 #sel-inner[data-density="compact"] #sel-tracks { padding-block: calc(var(--gap) * 0.2); }
 #sel-inner[data-density="compact"] #sel-shelf { gap: calc(var(--gap) * 0.35); }
 
@@ -365,21 +400,23 @@
   min-height: 0;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
-  flex-direction: row; align-items: center; flex-wrap: nowrap;
+  flex-direction: row; align-items: center; flex-wrap: wrap;
   gap: var(--gap);
   padding: 0 0 calc(var(--gap) * 0.2);
-  overflow: hidden;
+  overflow: visible;
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
-  display: flex; flex: 1 1 auto; min-width: 0; gap: var(--gap);
+  display: flex; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: var(--gap);
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(2),
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div:nth-child(3) {
-  display: flex; flex: 0 1 auto; align-items: baseline; gap: calc(var(--gap) * 0.4);
-  white-space: nowrap; overflow: hidden;
+  display: flex; flex: 0 0 auto; align-items: baseline; gap: calc(var(--gap) * 0.4);
+  white-space: normal; overflow: visible;
 }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd {
+  overflow: visible; text-overflow: unset; white-space: normal; overflow-wrap: anywhere;
+}
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; }
 /* PORTRAIT PHONE: THE ACTION BAR WAS A THIRD OF THE SHEET. MEASURED
@@ -396,8 +433,8 @@
    the bar ~85 own instead of ~190, all of it handed to the section.
    Container-gated (<= 480 own px), so a tall tablet keeps the one-row bar it
    already had at its own size. */
-@container sheet (max-width: 480px) {
-  #sel-inner[data-shape="tall"] > .sheet-foot {
+@container sheet (max-width: 520px) {
+  #sel-inner > .sheet-foot {
     display: grid;
     grid-template-columns: auto;
     grid-auto-flow: column;
@@ -405,13 +442,13 @@
     align-items: stretch;
     gap: calc(var(--gap) * 0.5);
   }
-  #sel-inner[data-shape="tall"] > .sheet-foot > .bigbtn {
+  #sel-inner > .sheet-foot > .bigbtn {
     min-width: 0;
     font-size: clamp(14px, calc(4.2 * var(--vwz)), 17px);
     padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.8) calc(var(--gap) * 0.6) var(--gap);
     white-space: normal;
   }
-  #sel-inner[data-shape="tall"] #sel-car small { white-space: normal; overflow-wrap: anywhere; }
+  #sel-inner #sel-car small { white-space: normal; overflow-wrap: anywhere; }
   /* ...AND THE STILL STOPS AT 60% OF THE SECTION, so the numbers under it
      start on screen instead of a scroll away. The section becomes a size
      container (it is a flex remainder with a definite height, never sized by
@@ -447,7 +484,7 @@
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
     linear-gradient(to top, var(--scrim-heavy), transparent 48%),
-    linear-gradient(to bottom, var(--scrim), transparent 40%);
+    linear-gradient(to bottom, var(--scrim-heavy), transparent 46%);
 }
 /* THE MAP BUTTON COVERS THE STILL: tapping anywhere on the image opens
    CIRCUIT DETAIL, and the outline canvas is centred inside it. A real button
@@ -509,18 +546,22 @@
 #sel-preview-name {
   font-size: var(--fs-5); font-weight: 800; font-style: italic;
   color: var(--text); letter-spacing: var(--ls-1); line-height: 1.05;
-  text-shadow: 0 1px 2px var(--carbon);
+  text-shadow: var(--hud-halo);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #sel-preview-gp {
   /* Same grammar as .sheet-head: --text ink (≥4.5:1) + a leading accent rail.
-     Brand red as type on the hero still measured ~2.6:1 (tokens.css --focus note). */
+     Brand red as type on the hero still measured ~2.6:1 (tokens.css --focus note).
+     A plate + halo keeps the subtitle readable on Imola sunset / Bahrain sand. */
   font-size: var(--fs-micro); color: var(--text); font-weight: 700;
   letter-spacing: var(--ls-3); text-transform: uppercase;
   margin-top: calc(var(--gap) * 0.15);
-  padding-left: calc(var(--gap) * 0.55);
+  padding: calc(var(--gap) * 0.1) calc(var(--gap) * 0.4) calc(var(--gap) * 0.1) calc(var(--gap) * 0.55);
+  border-radius: var(--r-xs);
+  background: var(--plate-opaque);
   box-shadow: inset 3px 0 0 var(--red);
-  text-shadow: 0 1px 2px var(--carbon);
+  text-shadow: var(--hud-halo);
+  width: max-content; max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #sel-preview-facts {

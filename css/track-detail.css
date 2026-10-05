@@ -39,6 +39,10 @@
 #td-inner[data-density="compact"] #track-detail-header {
   padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
 }
+#track-detail-header {
+  padding-inline: var(--pad);
+}
+#track-detail-name { padding-left: calc(var(--gap) * 0.4); }
 #track-detail-body {
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
   min-height: 0; overflow: hidden;
@@ -62,6 +66,7 @@
 #track-detail-panel {
   display: flex; flex-direction: column; gap: 0;
   min-width: 0; min-height: 0;
+  padding-inline: var(--pad);
   overflow-y: auto; overscroll-behavior-y: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) var(--scroll-track);
@@ -73,7 +78,8 @@
 }
 #track-detail-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); line-height: 1.5; }
 .tds-subtitle { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
-#track-detail-elev { display: block; width: 100%; height: 48px; }
+#track-detail-elev-wrap { padding-inline: 0; min-width: 0; }
+#track-detail-elev { display: block; width: 100%; max-width: 100%; height: 48px; box-sizing: border-box; }
 #track-detail-drs-list { font-size: var(--fs-2); color: var(--text); }
 .tdd-zone { padding: 2px 0; }
 .tdc-title { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }

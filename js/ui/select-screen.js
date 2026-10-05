@@ -369,11 +369,37 @@ function applyTrackSearch(value) {
   ScrollFadeRefresh();
 }
 
+function trackInFilter(t, filter, favs) {
+  if (!t) return false;
+  if (filter === "season") return !(t.classic || t.custom);
+  if (filter === "classic") return !!t.classic;
+  if (filter === "custom") return !!t.custom;
+  if (filter === "fav") return (favs || favList()).includes(t.id);
+  if (filter === "daily-open") return !!(G.daily && t.id === G.daily.plan().trackId);
+  return true;
+}
+
+// CLASSICS (and the other chips) hide tiles that are not in the group. The
+// hero still read Tracks.LIST[G.trackIdx], so Bahrain stayed in the detail
+// panel with nothing highlighted (apex10). Snap to the first tile that the
+// chip actually shows.
+function snapTrackToFilter() {
+  const filter = visibleTrackFilter();
+  const favs = favList();
+  if (trackInFilter(Tracks.LIST[G.trackIdx], filter, favs)) return;
+  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs));
+  if (i < 0) return;
+  G.trackIdx = i;
+  store.set("trackId", Tracks.LIST[i].id);
+  store.set("track", i);
+}
+
 function setTrackFilter(id, focus, keepDaily) {
   trackFilter = id;
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
+  snapTrackToFilter();
   vt(() => {
     buildSelect();
     // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
@@ -486,7 +512,11 @@ function trackTile(t, i, opts) {
   row.setAttribute("aria-label", t.name);
   // The country is the tooltip: five USA tiles and three Italian ones need
   // it, and the strip has no room for a second line of text under each flag.
-  row.title = t.name + (t.country ? " · " + t.country : "");
+  // Season calendar tiles are read-only and packed: a native `title` pops
+  // over the neighbour's name (Baku over Mexico). data-tip paints above.
+  const tip = t.name + (t.country ? " · " + t.country : "");
+  if (opts && opts.readOnly) row.dataset.tip = tip;
+  else row.title = tip;
   const fl = document.createElement("span");
   fl.className = "track-row-meta";
   fl.innerHTML = Flags.svg(t.country);
@@ -597,15 +627,12 @@ function buildSelect() {
     // divider changes — every tile is a normal, selectable circuit either way.
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
     // Tracks.LIST — selection still indexes into the full list.
+    snapTrackToFilter();
     let group = null;
     const favs = favList();
+    const filter = visibleTrackFilter();
     Tracks.LIST.forEach((t, i) => {
-      const filter = visibleTrackFilter();
-      if (filter === "season" && (t.classic || t.custom)) return;
-      if (filter === "classic" && !t.classic) return;
-      if (filter === "custom" && !t.custom) return;
-      if (filter === "fav" && !favs.includes(t.id)) return;
-      if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return;
+      if (!trackInFilter(t, filter, favs)) return;
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;
@@ -746,6 +773,13 @@ function drawElevProfile(cv, t, showEl) {
   for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
   const span = mx - mn || 1;
   const pad = 3;
+  const lo = Math.round(mn), hi = Math.round(mx);
+  const fmtElev = (v) => (v > 0 ? "+" : "") + v + "m";
+  const topLbl = fmtElev(hi), botLbl = fmtElev(lo);
+  eg.font = "8px monospace";
+  const gutter = Math.min(ew * 0.42, Math.max(28, Math.ceil(Math.max(
+    eg.measureText(topLbl).width, eg.measureText(botLbl).width)) + 6));
+  const plotW = Math.max(1, ew - gutter);
   const yNorm = (v) => eh - pad - ((v - mn) / span) * (eh - 2 * pad);
   // The trace is walked TWICE on purpose: once closed down to the baseline for
   // the fill, once open for the stroke, so the stroke does not draw the two
@@ -753,20 +787,25 @@ function drawElevProfile(cv, t, showEl) {
   const trace = () => {
     eg.beginPath();
     for (let i = 0; i <= py.length; i++) {
-      const ex = (i / py.length) * ew;
+      const ex = (i / py.length) * plotW;
       i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
     }
   };
   trace();
-  eg.lineTo(ew, eh); eg.lineTo(0, eh); eg.closePath();
+  eg.lineTo(plotW, eh); eg.lineTo(0, eh); eg.closePath();
   eg.fillStyle = "rgba(57,183,240,0.18)"; eg.fill();
   eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
   trace();
   eg.stroke();
-  // Y-axis elevation labels (top = max, bottom = min)
-  eg.font = "8px monospace"; eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
-  eg.fillText("+" + Math.round(mx) + "m", ew - 2, 9);
-  eg.fillText(Math.round(mn) + "m", ew - 2, eh - 1);
+  // Signed min/max in a reserved gutter — on a short preview the two 8px
+  // labels sat on the fill at the same x and the minus read as a plus
+  // (Imola "+16m/+14m" for a −14 m trough).
+  eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
+  if (eh < 28) eg.fillText(topLbl + " / " + botLbl, ew - 2, Math.max(9, eh - 2));
+  else {
+    eg.fillText(topLbl, ew - 2, 9);
+    eg.fillText(botLbl, ew - 2, eh - 1);
+  }
   return true;
 }
 
@@ -873,7 +912,10 @@ function updateTrackPreview() {
   const rows = [
     ["LOCATION", t.country || "—"],
     ["TURNS", turns ? String(turns) : "—"],
-    ["CIRCUIT LENGTH", km ? km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi" : "—"],
+    ["CIRCUIT LENGTH", !km ? "—"
+      : ((document.getElementById("sel-inner") || {}).dataset || {}).density === "compact"
+        ? km.toFixed(3) + " km"
+        : km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi"],
     ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],
     ["ELEVATION", elev > 2 ? "+" + elev + " m" : "Flat"],
     ["AERO ZONES", dz && dz.length ? String(dz.length) : "None"],
