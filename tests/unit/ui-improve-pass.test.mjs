@@ -1495,8 +1495,19 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "LOAD CAREER FILE confirm stays stacked — no wrap jump off the pointer");
   assert.equal(decl(css("css/career.css"), "#cr-career-load", "min-height"), "calc(var(--tap-paint) * 2)",
     "armed OVERWRITE copy fits the reserved LOAD height");
-  assert.equal(decl(css("css/career.css"), /\.cr-slot-del,/, "position"), "sticky",
-    "EXPORT / IMPORT / DELETE labels stay visible while the slot card scrolls");
+  assert.equal(decl(css("css/career.css"), ".cr-slot-main", "grid-column"), "1 / -1",
+    "SLOT 1 copy keeps the full card; EXPORT / IMPORT / DELETE sit underneath");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left$/, "overflow-x"), "hidden",
+    "paired career panes do not grow a second horizontal gutter");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\]:has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > \.sheet-foot$/, "grid-column"), "1 / -1",
+    "CAREER MODES BACK spans both columns");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file > button", "text-transform"), "uppercase",
+    "SAVE / LOAD / PROTECT share one uppercase plate");
+  assert.equal(decl(css("css/career-experience.css"), /\[data-career-part="nav"\]$/, "flex-wrap"), "nowrap",
+    "hub chips pan instead of wrapping under the title");
+  assert.match(decl(css("css/career-experience.css"), /\[data-career-part="calendar"\]$/, "grid-template-columns") || "",
+    /auto-fill/,
+    "season story tiles wrap in the pane instead of a clipped H strip");
   assert.match(decl(css("css/settings.css"), "#pmsettings", "--sheet-w") || "",
     /1020px/,
     "SETTINGS matches the career hub width, not a 760 postcard");

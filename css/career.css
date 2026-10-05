@@ -36,8 +36,19 @@
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
 /* ---------- head ---------- */
-#cr-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
-#cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* Title | meters on one row; the experience nav is a full-width strip under
+   them so five chips cannot wrap into the stats or crowd CAREER 2026 (apex8
+   ~500). */
+#cr-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--gap);
+  row-gap: var(--gap);
+}
+#cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; grid-column: 1; }
+#cr-header [data-career-nav],
+#cr-header [data-career-part="nav"] { grid-column: 1 / -1; }
 #cr-sub {
   font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
   color: var(--dim); text-transform: uppercase;
@@ -45,7 +56,15 @@
 }
 /* The three numbers that describe a career at a glance. They push to the right of
    the title and wrap under it rather than squeezing the team name. */
-#cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); margin-left: auto; }
+#cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); grid-column: 2; margin-left: 0; }
+@container sheet (max-width: 640px) {
+  #cr-header { grid-template-columns: minmax(0, 1fr); }
+  #cr-meters {
+    grid-column: 1; width: 100%;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #cr-meters .cr-meter { text-align: start; }
+}
 .cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
 .cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
 .cr-meter-val { font-family: var(--font-hud); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -91,12 +110,12 @@
    layout. The garage lost five category buttons off the bottom of its sheet
    exactly that way. Only what is true WHEN THE PANES SPLIT lives here. */
 #cr-inner[data-pair="on"] #cr-left {
-  overflow-y: auto; overscroll-behavior-y: contain;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
   border-right: 1px solid var(--card-line);
   padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
 }
 #cr-inner[data-pair="on"] #cr-right {
-  overflow-y: auto; overscroll-behavior-y: contain;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
 }
 /* One themed thumb (.sf-scroll::before, --accent). Native gutter + grey
@@ -116,6 +135,17 @@
    divider to the sheet floor so the two columns read as one clean split. */
 #cr-inner[data-pair="on"] > .sheet-foot {
   border-right: 1px solid var(--card-line);
+}
+/* CAREER MODES: BACK is the only foot action — pin it across both columns.
+   The in-career hub keeps a left-only foot so GO RACING cannot clip UPCOMING. */
+#cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) > .sheet-foot {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  border-right: 0;
+  padding-right: var(--pad);
+}
+#cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) #cr-right {
+  grid-row: 2;
 }
 
 /* ---------- SCREEN LOOKS: the CAREER fold (SETTINGS › APPEARANCE) ----------
@@ -161,6 +191,13 @@
   border-right: 0;
   border-left: 1px solid var(--card-line);
 }
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) > .sheet-foot {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) #cr-right {
+  grid-row: 2;
+}
 
 /* LEFT COLUMN is the VISUAL left track, whichever pane COLUMN ORDER put there,
    so the slider means what its label says in both orders. The token is a
@@ -201,9 +238,11 @@
   padding: calc(var(--pad) * 0.45); gap: 2px;
 }
 #cr-inner[data-density="compact"] .cr-record-line { display: none; }
-#cr-inner[data-density="compact"] #cr-header { gap: var(--gap); }
+#cr-inner[data-density="compact"] #cr-header {
+  grid-template-columns: minmax(0, 1fr); gap: var(--gap);
+}
 #cr-inner[data-density="compact"] #cr-titlebar {
-  flex: 1 1 100%; flex-direction: row; align-items: center; gap: var(--gap);
+  grid-column: 1; flex-direction: row; align-items: center; gap: var(--gap);
 }
 #cr-inner[data-density="compact"] #cr-sub {
   flex: 1 1 180px; min-width: 0;
@@ -211,7 +250,7 @@
   white-space: normal; overflow: visible; text-overflow: clip;
 }
 #cr-inner[data-density="compact"] #cr-meters {
-  width: 100%; margin-left: 0; display: grid;
+  grid-column: 1; width: 100%; margin-left: 0; display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap);
 }
 /* Label and value on ONE line: stacked they cost ~18px of a 306px sheet. */
@@ -410,6 +449,15 @@
   flex: 0 0 auto;
   min-height: var(--tap-paint);
   box-sizing: border-box;
+  font: inherit;
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-4);
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-pill);
 }
 #cr-career-load {
   min-height: calc(var(--tap-paint) * 2);
@@ -530,11 +578,13 @@
    a slot is one more card in a column full of them — it just happens to be the
    one that changes which career you are in. */
 .cr-slot {
-  /* main | EXPORT | IMPORT | DELETE — trailing autos collapse when a button is absent */
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+  /* Full-width summary, then EXPORT / IMPORT / DELETE as a tap-tall row.
+     Side-by-side autos cramped SLOT 1's copy into a sliver (apex8). */
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch; gap: 6px; margin-bottom: 6px;
 }
 .cr-slot-main {
+  grid-column: 1 / -1;
   display: flex; flex-direction: column; gap: 3px;
   text-align: left; cursor: pointer; color: inherit; font: inherit;
   min-height: var(--tap); padding: calc(var(--pad) * 0.5);
@@ -584,14 +634,11 @@
    [data-cr-act] is EXPORT / IMPORT on the same card: same quiet chrome, no new
    class token (cssClasses ratchet), and .cr-slot-del stays DELETE-only so
    career.spec.js's `.cr-slot .cr-slot-del` stays a single match. */
+.cr-slot > .cr-note { grid-column: 1 / -1; }
 .cr-slot-del,
 [data-cr-act] {
-  /* Stretch painted empty slabs once the slot card's top (and the label)
-     scrolled off; keep a tap-tall chip that sticks while the card is in view. */
-  align-self: start;
-  position: sticky;
-  top: calc(var(--pad) * 0.25);
-  min-width: 62px;
+  min-width: 0;
+  width: 100%;
   min-height: var(--tap);
   height: var(--tap);
   display: inline-flex;
