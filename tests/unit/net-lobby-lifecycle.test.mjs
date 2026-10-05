@@ -701,6 +701,36 @@ test("READY is host-relayed with from, and guests key _ready by from||id", () =>
     "guests key _ready by from when present, else the connection id");
 });
 
+test("host catch-ups READY to a late joiner (same as HELLO catch-up)", async () => {
+  // Live repro 2026-10-05 on github.io (apex-sha 5cc9497d): host + guest1
+  // READY, invite guest2 — guest2's #vs-them showed both as "choosing".
+  // HELLO was caught up; READY was only relayed on toggle.
+  const { h, made } = await connectedHost();
+  try {
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2, "second guest session bound");
+    // onConnected catch-up (before the late joiner's own HELLO)
+    const fromConnect = made[1].sent.filter((m) => m.t === "ready");
+    assert.ok(fromConnect.some((m) => m.d && m.d.ready && m.d.from == null),
+      "must catch-up host selfReady on connect: " + JSON.stringify(fromConnect));
+    assert.ok(fromConnect.some((m) => m.d && m.d.ready && m.d.from != null),
+      "must catch-up guest1 READY on connect: " + JSON.stringify(fromConnect));
+    // HELLO path catch-up is idempotent when the late joiner announces
+    const before = made[1].sent.length;
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    assert.ok(made[1].sent.slice(before).some((m) => m.t === "hello" && m.d && m.d.from),
+      "HELLO catch-up control");
+    assert.ok(made[1].sent.slice(before).some((m) => m.t === "ready" && m.d && m.d.ready),
+      "HELLO path also catch-ups READY");
+  } finally { h.lobby.cancel(); }
+});
+
 // ── the sim seed and race round travel with the host's settings ─────────────
 // Every reproducible draw — reliability DNFs, the weather arc, the AI
 // restart/skill rolls, the AI qualifying times that set the grid — hashes on

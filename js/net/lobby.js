@@ -505,6 +505,11 @@ const NetLobby = (function () {
             if (k === id || !prof) continue;
             try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) { /* a dead session must not stop the relay */ }
           }
+          // READY the same way: HELLO catch-up alone left late joiners showing
+          // "choosing" for peers who were already READY (live 3p repro on
+          // github.io, 2026-10-05). Live toggles are relayed below; this is
+          // the snapshot of who is ready RIGHT NOW.
+          catchUpReady(made, id);
         } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
@@ -575,7 +580,11 @@ const NetLobby = (function () {
         }
       });
       made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
-      if (role === "host") publishSettings();
+      if (role === "host") {
+        publishSettings();
+        // Existing READY before this connection opened (host + earlier guests).
+        catchUpReady(made, id);
+      }
       openRoom();
     }
 
@@ -599,6 +608,19 @@ const NetLobby = (function () {
       const ids = [...peerIds()];
       return ids.length > 0 && ids.every((k) => _ready.get(k));
     };
+    // Snapshot READY onto one session (a late joiner). Host's own ready has
+    // no `from` (guests key it as the host peer); each earlier guest carries
+    // `from` like the live READY relay. Skip `exceptId` (the joiner itself).
+    function catchUpReady(sess, exceptId) {
+      if (!sess || !sess.sendEvent) return;
+      try {
+        if (selfReady) sess.sendEvent(NetPlay.EV.READY, { ready: true });
+      } catch (e) { /* dead session */ }
+      for (const [k, ready] of _ready) {
+        if (!ready || k === exceptId) continue;
+        try { sess.sendEvent(NetPlay.EV.READY, { ready: true, from: k }); } catch (e) { /* dead session */ }
+      }
+    }
     let selfReady = false;
 
     function openRoom() {
