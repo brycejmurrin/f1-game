@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -227,11 +228,37 @@ export function playwrightShard(args) {
   return null;
 }
 
-/** Mega solos run once: on shard 1 of a sharded group, or on any unsharded run.
- *  Other shards peel them and do not re-run them. */
-export function shouldRunMegaOnThisShard(args) {
+/** WHICH SHARD RUNS EACH MEGA SOLO (test audit T1, 2026-10-05). Every peeled
+ *  mega ran on shard 1, so the nightly modes group put career (101 tests) AND
+ *  quali (20) on one runner: shard 1 1827 s against 185/276/410 s for 2-4
+ *  (run 37195789273); hooks 1040 s vs 170/111/229 s. Longest-first onto the
+ *  least-loaded shard (LPT) spreads them by expected seconds — declared tests
+ *  x the spec's per-test rate. The rate comes from the COMMITTED timings file
+ *  only, never the APEX_SPEC_TIMINGS overlay: every shard must compute the
+ *  same plan from the same commit, or a mega runs twice or not at all. Ties
+ *  break on the path, so the plan is a pure function of (megas, total). */
+export function megaShardPlan(mega, total, db = loadDb(path.join(ROOT, TIMINGS_FILE))) {
+  const plan = new Map();
+  if (!(total >= 1)) return plan;
+  const rows = [...new Set(mega)].map((f) => ({ f, sec: (declaredTests(f) || 1) * specSecPerTest(f, db).sec }))
+    .sort((a, b) => b.sec - a.sec || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0));
+  const load = new Array(total).fill(0);
+  for (const r of rows) {
+    let k = 0;
+    for (let i = 1; i < total; i++) if (load[i] < load[k]) k = i;
+    load[k] += r.sec;
+    plan.set(r.f, k + 1);
+  }
+  return plan;
+}
+
+/** The peeled megas THIS invocation runs: all of them unsharded, else the
+ *  ones megaShardPlan gives this shard. Each mega runs on exactly one shard. */
+export function megasForThisShard(args, mega, db) {
   const s = playwrightShard(args);
-  return !s || s.index === 1;
+  if (!s) return [...mega];
+  const plan = megaShardPlan(mega, s.total, db);
+  return mega.filter((f) => plan.get(f) === s.index);
 }
 
 /** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
