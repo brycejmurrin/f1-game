@@ -84,16 +84,17 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
 }
 /* DESKTOP: size to the content instead of to the screen.
    "Always fill most of the viewport" is right on a phone, where the hub IS the
-   screen. On a desktop it forced every tab to 900px tall no matter how little it
-   had to show — EXPORT ended after ~460px and left 525px of empty card below it,
-   TELEMETRY about 450px before a driver is picked. A floor keeps the card from
-   collapsing to a sliver (and from jumping around as you switch tabs); the cap
-   is unchanged, so the long tabs still scroll inside.
+   screen. On a desktop the overlay is flex-centered, so a content-sized card
+   (EXPORT ~460px, RESULTS near the cap) shrinks and re-centers on every tab
+   switch. Pin min = max to the same local height: long tabs still scroll
+   inside; short ones keep a stable box.
    --wide-at / --compact-at are local (zoom-aware); the old min-width/min-height
    media query could not see UI SIZE. */
 body[data-width="wide"][data-density="normal"] .dh-card {
-  min-height: 420px;
-  max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
+  --dh-desk-h: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
+  min-height: var(--dh-desk-h);
+  max-height: var(--dh-desk-h);
+  height: var(--dh-desk-h);
 }
 
 /* The header is the canonical .sheet-head now (css/components.css) — one
@@ -377,6 +378,10 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Live / constructors put the team (or nothing) AFTER the name inside
+   .dh-cons-main. Growing the name parks that team on the far right when the
+   row has no gap column (P1), while P2+ keep it beside the name. */
+.dh-cons-main .dh-name { flex: 0 1 auto; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
 .dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
 .dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -423,16 +428,18 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* chip + driver name side by side in the driver cell */
 .dh-td-driver {
   min-width: 0; overflow: visible; text-overflow: clip; white-space: normal;
-  overflow-wrap: anywhere;
+  /* Spaces only — `anywhere` split VERSTAPPEN to VERSTAPPE / N. */
+  overflow-wrap: break-word; word-break: normal;
 }
 .dh-td-driver .dh-codechip { display: inline-flex; margin-right: calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-driver .dh-name {
   display: inline; min-width: 0; white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word; word-break: normal;
 }
 .dh-td-team {
   color: var(--dim); font-size: var(--fs-2); width: 100px; max-width: 100px;
-  overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
+  overflow: visible; text-overflow: clip; white-space: normal;
+  overflow-wrap: break-word; word-break: normal;
 }
 .dh-td-grid { width: 30px; text-align: center; color: var(--dim); }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
@@ -822,7 +829,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
   margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
   background: var(--surf-1); border: 1px solid var(--card-line);
   color: #cfcfd6; font-size: var(--fs-2); line-height: 1.45;
-  white-space: pre-wrap; word-break: break-word;
+  font-family: inherit;
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
   /* One axis. The text already `pre-wrap`s and `break-word`s, so there is
      nothing to scroll sideways to — `overflow: auto` turned the other axis on
      by shorthand, not by intent. Same trap as #overlay in css/menus.css. */
@@ -883,7 +891,7 @@ body[data-density="compact"] .dh-td-driver {
 body[data-width="narrow"] .dh-td-driver .dh-name,
 body[data-density="compact"] .dh-td-driver .dh-name {
   white-space: normal;
-  word-break: break-word;
+  word-break: normal;
   overflow-wrap: break-word;
 }
 
