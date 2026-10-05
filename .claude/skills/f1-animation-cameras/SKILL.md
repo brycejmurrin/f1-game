@@ -1,6 +1,6 @@
 ---
 name: f1-animation-cameras
-description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, WATCH broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump. Replay snaps after a seek → replay-camera; still shots/camera modes → playwright-probe."
+description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump. Replay snaps after a seek → replay-camera; still shots/camera modes → playwright-probe."
 ---
 
 # Animation and cameras in f1-game
@@ -12,7 +12,7 @@ measure the transition that prompted the change with a deterministic fixture.
 `node tools/check/skill-smoke.mjs --skill f1-animation-cameras --check` exercises
 the local chase-rig contract. Replay transitions use **replay-camera**; camera
 modes and still framing use **playwright-probe** `references/cameras.md`.
-Garage mesh/ownership uses **garage-parts-livery**. The parent owns every
+WATCH/HIGHLIGHTS loading the wrong driver or race is **data-hub**. Garage mesh/ownership uses **garage-parts-livery**. The parent owns every
 browser; subagents can inspect fixture, source and recorded evidence.
 
 The local guide is usable without a hosted skill package. External host skill

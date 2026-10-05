@@ -185,6 +185,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_track_audit",
     "apex_ui_fit",
     "apex_ui_shot",
+    "apex_unit_test",
     "apex_verify_change_fast",
     "apex_who_is_on_it",
   ]);
@@ -800,10 +801,46 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   }
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
-  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
+});
+
+test("real results of the fast tree tools conform to their advertised outputSchema", () => {
+  // MCP 2025-06-18: a server that advertises outputSchema MUST return
+  // conforming structuredContent. The shapes were measured from these same
+  // calls on 2026-10-05; a CLI that renames a key fails here, not in a client.
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const schemaOf = (n) => listed.find((t) => t.name === n).outputSchema;
+  const typeOk = (v, type) => (Array.isArray(type) ? type : [type]).some((t) =>
+    t === "null" ? v === null
+    : t === "array" ? Array.isArray(v)
+    : t === "object" ? (v !== null && typeof v === "object" && !Array.isArray(v))
+    : t === "integer" ? Number.isInteger(v)
+    : typeof v === t);
+  const validate = (value, schema, where, errors) => {
+    if (schema.type && !typeOk(value, schema.type)) errors.push(`${where}: expected ${JSON.stringify(schema.type)}, got ${Array.isArray(value) ? "array" : value === null ? "null" : typeof value}`);
+    if (schema.properties && value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [k, sub] of Object.entries(schema.properties)) if (k in value) validate(value[k], sub, `${where}.${k}`, errors);
+    }
+    return errors;
+  };
+  const calls = [
+    ["apex_status", {}], ["apex_doctor", {}], ["apex_pick_tests", {}], ["apex_select_specs", { since: "HEAD~1" }],
+    ["apex_session_status", {}], ["apex_bump_cache_check", {}], ["apex_job_status", {}],
+    ["apex_track_audit", { track: "monza" }], ["apex_car_audit", { check: "ladder" }],
+  ];
+  const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
+  for (const [i, [name]] of calls.entries()) {
+    const r = results.find((m) => m.id === 10 + i).result;
+    assert.ok(r.structuredContent && typeof r.structuredContent === "object", `${name}: structuredContent present`);
+    assert.deepEqual(validate(r.structuredContent, schemaOf(name), name, []), [], `${name} conforms to its outputSchema`);
+  }
+  for (const t of listed) {
+    assert.equal(t.outputSchema.additionalProperties, true, `${t.name}: a CLI may grow a key before the schema does`);
+    assert.equal(t.outputSchema.required, undefined, `${t.name}: refusal and dryRun bodies share the tool, so nothing is required`);
+  }
 });
 
 test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
@@ -1218,6 +1255,21 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   const audit = ok("apex_track_audit", { track: "monza" });
   assert.match(JSON.stringify(audit.argv), /verify-track\.cjs","monza","--quiet".*float-audit\.cjs","monza","--json/);
   bad("apex_track_audit", { track: "x" });
+  // `checks` routes through tools/track/audit-circuit.cjs (every per-circuit
+  // audit against its baseline, 2026-10-05); the bare call keeps the old pair.
+  const full = ok("apex_track_audit", { track: "monza", checks: ["clip", "coplanar"] });
+  assert.match(JSON.stringify(full.argv), /audit-circuit\.cjs","monza","--json","--checks","clip,coplanar"/);
+  bad("apex_track_audit", { track: "monza", checks: ["nope"] });
+  bad("apex_track_audit", { track: "monza", checks: [] });
+  // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
+  const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
+  assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  const pat = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" });
+  assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  bad("apex_unit_test", { file: "tests/specs/camera.spec.js" });
+  bad("apex_unit_test", { file: "tests/unit/" + "no-such-file.test.mjs" });   // a missing file is refused (docs-integrity: not a path literal)
+  bad("apex_unit_test", { file: "../etc/passwd" });
+  bad("apex_unit_test", {});
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
   for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel", "apex_car_audit", "apex_track_audit"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);

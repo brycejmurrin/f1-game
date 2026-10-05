@@ -3,7 +3,8 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
-tools: Bash, Read, Grep, Glob, Edit
+tools: Bash, Read, Grep, Glob, Edit, mcp__apex-tools__apex_track_audit, mcp__apex-tools__apex_graph_parity, mcp__apex-tools__apex_frame_report, mcp__apex-tools__apex_doctor, mcp__apex-tools__apex_status
+isolation: worktree
 is_background: true
 background: true
 ---
@@ -67,9 +68,12 @@ floating tree and not reach the line that places it.
   registries and gates are parent work. Report visual checks unverified rather
   than launching a browser or running a group.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
-- Unless `.claude/settings.json` sets `worktree.baseRef: "head"`, a worktree
-  starts STALE: first `git checkout -B <branch> <the session SHA>` and verify
-  a session-known file — a stale base is the wrong circuit.
+- You run in your OWN git worktree (`isolation: worktree`, based on the
+  session head via `worktree.baseRef: "head"`), so two surveyors on two circuits
+  never share a checkout. Your edits land on that worktree's branch, not in the
+  parent's tree: verify a session-known file first (a stale base is the wrong
+  circuit), commit your pair when `verify-track` is clean, and put the branch
+  name and worktree path at the top of the hand-back — the parent merges it.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call

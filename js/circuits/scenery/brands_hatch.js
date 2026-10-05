@@ -544,7 +544,7 @@
           addBox(stage, vadd(a.c, a.u, dy + 4.0), [18, 8.0, 18], CHALK, b);
           stage._mat = MAT.BRICK;
           addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, dy + 4.2),
-            [14, 7.2, 14], BRICK, b);
+            [14.2, 7.2, 14], BRICK, b);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(a.c, a.u, dy + 8.6), [19.5, 0.7, 19.5], ROOF, b);
           // Roof lantern / glazed lantern tower — the Kentagon's silhouette.
@@ -866,8 +866,8 @@
 
       // Sponsor hoardings — only where there is a crowd to read them, i.e. the
       // bowl. The woods carry none (row 0.430: "nothing built beyond here").
-      sponsorHoarding(0.955, 1.045, -1, 11.6, {});
-      sponsorHoarding(0.955, 1.045,  1, 11.6, {});
+      sponsorHoarding(0.955, 1.045, -1, 11.8, {});
+      sponsorHoarding(0.955, 1.045,  1, 11.9, {});
       sponsorHoarding(0.062, 0.108, -1, 11.6, {});
       sponsorHoarding(0.176, 0.216, -1, 11.6, {});
       sponsorHoarding(0.224, 0.310,  1, 11.6, {});

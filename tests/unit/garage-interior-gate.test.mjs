@@ -68,6 +68,21 @@ it("garage tabs split performance and finishing work into named rows", () => {
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \.cs-tab-row\s*\{[^}]*display:\s*contents/s,
     "the split-pane rail remains one vertical keyboard list");
   assert.doesNotMatch(sheet, /--cs-tab-cols/, "the old count-derived packing is gone");
+  // ACCEPTANCE (garage tabs tap-floor PR): compact #cs-tabs .cs-tab keep the
+  // painted --tap floor, and the play-shape strip snaps so a category is not
+  // half-clipped beside BACK / CLOSE (ios-iphone-landscape-safari 852×344).
+  assert.match(css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
+    "compact category tabs floor at --tap-paint / --tap");
+  assert.match(css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
+    "compact category tabs also floor width at the tap rung");
+  assert.match(css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*\{[^}]*scroll-snap-type:\s*x\s+mandatory/s,
+    "compact strip snaps on the inline axis");
+  assert.match(css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*scroll-snap-align:\s*start/s,
+    "each compact category tab is a snap target");
 });
 
 /* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).

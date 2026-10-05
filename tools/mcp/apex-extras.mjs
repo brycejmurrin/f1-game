@@ -350,8 +350,23 @@ export function createExtras(ctx) {
     // Exit 1 = the check found rows to look at — a verdict, not a crash.
     return runSpawn(argv, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal });
   }
+  const AUDIT_CHECKS = ["verify", "float", "clip", "coplanar", "props", "ground"];
   async function trackAudit(args, { signal }) {
     let track; try { track = needTrack(args.track); } catch (e) { return e.refuse; }
+    // `checks` → tools/track/audit-circuit.cjs: every per-circuit audit against
+    // its baseline in one call (~16 s for all six on monza, 2026-10-05). The
+    // bare call keeps the original verify + float pair.
+    if (args.checks !== undefined) {
+      const checks = Array.isArray(args.checks) ? args.checks.map(String) : [];
+      if (!checks.length || checks.some((c) => !AUDIT_CHECKS.includes(c))) return refuse("bad_args", `checks must be a non-empty list of ${AUDIT_CHECKS.join(" | ")}`, 'e.g. {"track":"monza","checks":["clip","coplanar"]}');
+      const argv = nodeArgv("track/audit-circuit.cjs", track, "--json", "--checks", [...new Set(checks)].join(","));
+      if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
+      if (mockMode()) return toolResult({ ok: true, mock: true, argv });
+      // Exit 1 = a check over its baseline — a verdict, not a crash.
+      const r = bodyOf(await runSpawn(argv, { timeoutMs: 180000, allowExit: new Set([0, 1]), signal }));
+      return toolResult({ ok: r.ok, track, audit: r.out, stderr: r.ok ? undefined : String(r.stderr || "").slice(-800),
+        hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !r.ok });
+    }
     const va = nodeArgv("track/verify-track.cjs", track, "--quiet"), fa = nodeArgv("track/float-audit.cjs", track, "--json");
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: [va, fa] });
     if (mockMode()) return toolResult({ ok: true, mock: true, argv: [va, fa] });

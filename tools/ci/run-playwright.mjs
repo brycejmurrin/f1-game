@@ -12,7 +12,7 @@ import { extname, join, resolve as resolvePath, sep } from "node:path";
 import { partitionArgs } from "./twinned-specs.mjs";
 import {
   partitionMegaSweepArgs,
-  shouldRunMegaOnThisShard,
+  megasForThisShard,
   megaSoloFlags,
 } from "./select-specs.mjs";
 
@@ -188,18 +188,20 @@ const cli = join(ROOT, "node_modules", ".bin", "playwright");
 // `--shard=i/n` on `test:circuits` still packs them next to foundation Navigate
 // victims (run 36911235525: 410 s walk → qatar Navigate 190 s hang → retry 23.6 s
 // on a fresh worker). Peel them out of the shared argv; run the rest as usual;
-// re-launch each mega in its own Playwright process on shard 1 only (or when
-// unsharded) so nothing inherits that Chromium. --list keeps them inline.
+// re-launch each mega in its own Playwright process on the ONE shard
+// megaShardPlan gives it (or when unsharded) so nothing inherits that Chromium. --list keeps them inline.
 const listing = args.includes("--list");
 const { mega, rest, peeled } = listing ? { mega: [], rest: args, peeled: false }
   : partitionMegaSweepArgs(args);
 const hasSpecTarget = (list) => list.some((a) => !a.startsWith("-")
   && (a.includes("*") || /\.spec\.js$/.test(a) || /tests\//.test(a)));
 const mainArgs = peeled ? rest : args;
-const runMegaHere = peeled && shouldRunMegaOnThisShard(args);
+// Each mega runs on exactly ONE shard, spread by expected time (megaShardPlan).
+const megaHere = peeled ? megasForThisShard(args, mega) : [];
+const runMegaHere = megaHere.length > 0;
 if (peeled) {
   console.error(`[playwright] peeled ${mega.length} mega-sweep spec(s) from the shared shard: ${mega.join(" ")}`);
-  if (!runMegaHere) console.error(`[playwright] mega-sweep solos run on shard 1 only — skipped on this shard`);
+  console.error(`[playwright] mega-sweep solos on this shard: ${megaHere.join(" ") || "none (another shard owns them)"}`);
 }
 
 const env = {
@@ -246,7 +248,7 @@ if (hasSpecTarget(mainArgs) || !peeled) {
 
 if (runMegaHere && !stopping) {
   const flags = megaSoloFlags(args);
-  for (const spec of mega) {
+  for (const spec of megaHere) {
     if (stopping) break;
     console.error(`[playwright] mega-sweep solo (fresh Chromium): ${spec}`);
     const code = await runOnce([...flags, spec], `mega:${spec}`);
