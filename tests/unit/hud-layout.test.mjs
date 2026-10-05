@@ -590,8 +590,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
   assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
-  assert.match(css, /:root\[data-limits-left\] body:not\(\.desktop\) #hud-strat/,
-    "touch STRATEGY clears the left-mode TRACK LIMITS chip");
+  assert.match(css, /:root\[data-limits-left\] #hud-strat/,
+    "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.

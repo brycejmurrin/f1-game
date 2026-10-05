@@ -1829,7 +1829,11 @@ body:not(.desktop) :is(#hud-rel, #hud-inputs):not([data-hl-user]) { display: non
 body:not(.desktop) #hud-strat {
   top: calc(var(--hud-left-h, 152px) + 8px);
 }
-:root[data-limits-left] body:not(.desktop) #hud-strat {
+/* limits-left is only set when a touch right-dock fills the sector column
+   (js/ui/hud.js fitHud); desktop docks stay empty, so this never moves the
+   desktop 40svh home. Must not write `:root … body` — source-integrity forbids
+   body/html as a descendant. */
+:root[data-limits-left] #hud-strat {
   top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
 }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
