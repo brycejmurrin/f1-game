@@ -197,7 +197,10 @@ const STRIP = {
   //   patches add 264 triangles. All survive; existing strip count is unchanged.
   // → T7 on Lesmo 2 340839/313922 (2026-10-04: turns[6] 0.3827 → 0.4321,
   //   so corner board 7 and its footing stand at Lesmo 2's apex)
-  monza: { before: 340839, after: 313922 },
+  // → towers yield to trees / round footprints 340821/313906 (2026-10-05:
+  //   city.js neonTower registers a round kind's true footprint and yields
+  //   to a planted tree — one fewer unit emitted, −18 / −16)
+  monza: { before: 340821, after: 313906 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
