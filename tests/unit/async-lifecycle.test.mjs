@@ -189,7 +189,11 @@ test("music and SFX enable clicks also unlock a saved-off master synchronously",
 test("MENU SOUNDS row persists apex26.menuSfx and gates the engine's ui blips", () => {
   const { panel, wired, calls } = audioPanelHarness();
   panel.init();
-  assert.ok(calls.includes("ui:true"), "boot restores the saved (default ON) switch");
+  assert.ok(calls.includes("ui:false"), "boot restores the shipped (default OFF) switch");
+  calls.length = 0;
+  wired.get("as-ui").write("on");
+  assert.equal(wired.get("as-ui").read(), "on");
+  assert.ok(calls.includes("ui:true"));
   calls.length = 0;
   wired.get("as-ui").write("off");
   assert.equal(wired.get("as-ui").read(), "off");
