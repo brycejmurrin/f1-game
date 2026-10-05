@@ -418,7 +418,10 @@ async function runGroup(browser, group, plan, log) {
           const a = window.__apex;
           a.freeze(false);
           for (let pass = 0; pass < 2; pass++) {
-            try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+            // `typeof`, not `window.GameHud`: it is a top-level `const` in a classic
+            // script, so it is NOT a window property — the old guard was always
+            // false and this forced re-fit (here since 0327b8e96) never ran.
+            try { if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
             a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2);
           }
           a.freeze(true);
