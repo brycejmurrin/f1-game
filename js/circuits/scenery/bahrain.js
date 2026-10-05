@@ -898,16 +898,19 @@
       // palms ring the team-hospitality buildings and the paddock gardens
       // (the venue's own "Oasis" naming; Tilke's brief for local Gulf
       // architecture). Kept to one tight grove BEHIND the hospitality kit
-      // (gap 100-118) and short of the drag strip's west bleachers (~200 m),
-      // so the open desert read everywhere else is untouched — the design
-      // brief's "no green oasis" rule is about the open desert, not the
-      // paddock. Irregular rows, ~1 in 4 slots left empty.
+      // (SF + 0.012, RIGHT, gap 100) in the paddock wedge between the pit
+      // straight and the inner loop, so the open desert read everywhere else
+      // is untouched — the design brief's "no green oasis" rule is about the
+      // open desert, not the paddock. Keyed off SF: until 2026-10 it sat at
+      // 0.978-1.002 LEFT, the paddock side of the old 0.2250 diagonal, ~500 m
+      // west of the real paddock. Gap 120-136: the inner loop's road is ~185 m
+      // right of the pit straight here. Irregular rows, ~1 in 4 slots empty.
       for (let c = 0; c < 4; c++) {
         for (let r = 0; r < 3; r++) {
-          const sf = 0.978 + c * 0.008 + (hash(c * 5.3 + r * 1.9) - 0.5) * 0.003;
+          const sf = SF + 0.004 + c * 0.008 + (hash(c * 5.3 + r * 1.9) - 0.5) * 0.003;
           const k = K(sf % 1), hv = hash(k * 61 + r * 7);
           if (hv < 0.25) continue;
-          palm(k, -1, 128 + r * 10 + (hv - 0.5) * 4, 8 + hv * 4, hv < 0.6 ? FROND : FROND_DRY);
+          palm(k, 1, 121 + r * 7 + (hv - 0.5) * 3, 8 + hv * 4, hv < 0.6 ? FROND : FROND_DRY);
         }
       }
 
@@ -924,13 +927,19 @@
       // there. Guarded segment-by-segment with onTrack(): the strip is longer
       // than the straight it parallels, so its far ends run past the circuit's
       // own geometry and must not be drawn over tarmac.
+      //
+      // FRAME: it parallels the REAL pit straight (SF), on the main-grandstand
+      // side (LEFT, outside the lap) out beyond the stands — the circuit's
+      // outer edge, so nothing of the lap is behind it. Until 2026-10 it was
+      // keyed 0.930-0.050 LEFT, i.e. along the old 0.2250 diagonal, where it
+      // curved round the far west of the site instead of lying straight.
       (function dragStrip() {
         const PREP   = [0.24, 0.23, 0.24];   // rubbered-in launch surface
         const LANE   = [0.30, 0.29, 0.30];
         const STRIPE = [0.88, 0.87, 0.82];
         const WALL   = [0.80, 0.79, 0.74];
-        const GAP    = 178;                  // metres out past the paddock
-        const S0 = 0.930, S1 = 0.050, STEPS = 26;
+        const GAP    = 178;                  // metres out past the main grandstand
+        const S0 = SF - 0.065, S1 = SF + 0.055, STEPS = 26;
         const span = (S1 - S0 + 1) % 1;
         const pts = [];
         for (let i = 0; i <= STEPS; i++) {
