@@ -298,3 +298,27 @@ test("a committed save from a closed Studio retains its original metadata withou
   assert.equal(b.api.state().busy, true); assert.match(b.dom.byId("ps-message").textContent, /Capturing/);
   read({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
+test("the SUBJECT row shows only when the door offers one, and hands the other pick back without changing anything itself", async () => {
+  const b = boot(), picks = [];
+  const group = b.dom.byId("ps-subject-row").parentElement, sel = b.dom.byId("ps-subject");
+  assert.equal(b.api.open({ source: "garage" }), true);
+  assert.equal(group.hidden, true, "a garage or race door offers no subject");
+  assert.equal(b.api.state().subject, false);
+  b.api.close(false);
+  assert.equal(b.api.open({ source: "home", subject: (v) => { picks.push(v); return Promise.resolve(true); } }), true);
+  assert.equal(group.hidden, false);
+  assert.equal(b.api.state().subject, true);
+  assert.equal(sel.value, "garage", "a Home garage opens on GARAGE");
+  sel.value = "garage"; sel.dispatchEvent({ type: "change" });
+  assert.deepEqual(picks, [], "re-picking the shown subject is not a switch");
+  sel.value = "circuit"; sel.dispatchEvent({ type: "change" });
+  assert.deepEqual(picks, ["circuit"], "the pick goes to the door; the studio swaps nothing itself");
+  assert.equal(b.api.state().source, "home", "still open on the garage until the door reopens it");
+  b.api.close(false);
+  assert.equal(b.api.open({ source: "home-track", subject: (v) => { picks.push(v); return Promise.resolve(true); } }), true);
+  assert.equal(sel.value, "circuit", "a Home circuit opens on CIRCUIT");
+  b.api.close(false);
+  assert.equal(b.api.open({ source: "race" }), true);
+  assert.equal(group.hidden, true, "the pause-menu door (already on the circuit) offers no subject");
+  b.api.close(false);
+});

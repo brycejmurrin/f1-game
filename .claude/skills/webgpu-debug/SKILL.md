@@ -18,7 +18,7 @@ defects.md "Trace").
 ```sh
 node tools/gfx/wgx-validate.mjs --static             # ALWAYS this first (no browser)
 # parent session only — these launch Chromium:
-# node tools/gfx/wgx-validate.mjs
+# node tools/gfx/wgx-validate.mjs [trackId]            (default montreal)
 # node tools/gfx/wgx-validate.mjs --lite
 # node tools/gfx/wgx-validate.mjs --no-rg11b10
 ```
@@ -52,10 +52,11 @@ __apex.logs()                       // "gfx" ns
 `WGX.lastFailure()` and `localStorage["apex26.gfxWgxFail"]`.
 
 Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`
-~L240) awaits `WGX.create()`, which returns null on ANY failure after
+~L224) awaits `WGX.create()` (~L257), which returns null on ANY failure after
 `wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
 `WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
-`Gfx.create fallback webgl2` and `js/game.js` binds GLX. NaN-white road with
+`Gfx.bind fallback webgl2` and `js/game.js` binds GLX. No `navigator.gpu` or
+no `WGX` global returns null with NO log line. NaN-white road with
 NO fallback = warning-mode Dawn ran undefined derivatives (defects.md #2);
 with fallback = strict uniformity error. Static half of that check:
 `--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`. Live
@@ -80,10 +81,12 @@ Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
 `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (`#game` after
-`awaitSoftPresent`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`
+`awaitSoftPresent`; add `--tod day|dusk|dawn|night` for a lighting-dependent
+defect, e.g. `qatar --tod night`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`
 (`npm run wgx:gallery` is exactly that pair — bare `--gallery` is a different,
 full-tier run).
-(`wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` are aliases — prefer `gfx-probe`.)
+(`wgx-capture.mjs` aliases `gfx-probe --backend webgpu`; `wgx-lavapipe-probe.mjs`
+aliases `--backend three --tlx-webgpu --lavapipe`, a TLX probe, not WGX.)
 
 ## Load on demand
 

@@ -2,6 +2,14 @@
 
 Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/ui/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui/ui-scale-axis.mjs`.
 
+## Contents
+- 3. The probe — four questions, each with its trap
+- 4. Reaching each screen, and resetting between them
+- 5. Diagnosing "my CSS change did nothing"
+- 6. What to do with the findings
+- Common mistakes
+- Capture CLI boundaries
+
 ## 3. The probe — four questions, each with its trap
 
 Paste into `evaluate_script`. Every helper here is written the way it is because
@@ -120,9 +128,10 @@ forcing `hidden = false` desyncs the screen's internal state and poisons every
 later cell in the sweep. Reset between cells:
 
 ```js
-const OV = ["select","carsetup","career","teampicker","race-settings","quali","standings","results",
-            "customize","howtoplay","advanced","pmsettings","pausemenu","datahub","track-detail",
-            "vsfriend","audioset","lighting","camtune","photo-controls"];
+const OV = ["select","carsetup","career","career-offers","career-history","career-guide","teampicker",
+            "race-settings","quali","standings","results","customize","season-setup","howtoplay",
+            "advanced","pmsettings","pausemenu","datahub","trackdesigner","track-detail","vsfriend",
+            "audioset","spotifypanel","lighting","camtune","flyby","photo-controls","duel-picker"];  // = OVERLAY_IDS
 for (const id of OV) { const e = document.getElementById(id);
   if (e) { if (e.tagName === 'DIALOG' && e.open) e.close(); e.hidden = true; } }
 const o = document.getElementById('overlay');
@@ -131,10 +140,10 @@ document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
-The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (48
-cells at 2026-09-18 — `node tools/ui/layout-audit.mjs --list` prints them and
-starts no browser); `index.html` currently holds 20 `<dialog>` roots (re-run
-`grep -c '<dialog' index.html`). Sweeping
+The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (49
+at 2026-10-05 — `node tools/ui/layout-audit.mjs --list` prints them and
+starts no browser; `OVERLAY_IDS` there is the reset list above); `index.html`
+currently holds 19 `<dialog>` roots (re-run `grep -c '^<dialog' index.html`). Sweeping
 the seven or eight you can reach from the title in two clicks is the easy half
 and is NOT the survey — the defects this session found were on the shapes and
 screens nobody had opened.
@@ -150,17 +159,22 @@ screens nobody had opened.
 | `#pmsettings` | `mb-settings` |
 | `#howtoplay` | `mb-help` |
 | `#vsfriend` | `mb-vs` |
+| `#duel-picker` | race settings → open FIELD fold (`rs-fold-field`) → `rs-duel-open` |
+| `#trackdesigner` | `mb-designer` |
+| `#photo-studio` | `mb-photo` |
+| `#loading` | pre-race, opened through its own module (see `SCREENS` `loading`) |
 | `#datahub` | `mb-data` (+ its 6 tabs: schedule/standings/lastrace/live/telemetry/export) |
 | `#teampicker` | garage → TEAM tab → `cs-team-card` |
 | `#customize` | garage → TEAM tab → `cs-customize` |
 | `#advanced` | settings → `pm-advanced` |
 | `#audioset` | settings → `pm-audio` |
-| `#lighting` | settings → `pm-lighting` |
+| `#lighting` | in-race settings → `pm-open-display` → ADVANCED VISUALS (`pm-visual-tuners`) → `pm-lighting` |
 | `#spotifypanel` | shown directly (no account needed) |
 | `#track-detail` | select → click `sel-preview-map` |
 | `#pausemenu` | in-race → `pausebtn` |
 | `#standings` | in-race → pause → `pm-standings` |
-| `#camtune` | pause → camera tuner |
+| `#camtune` | in-race settings → `pm-open-display` → ADVANCED VISUALS → `pm-camtune` |
+| `#flyby` | same route → `pm-flyby` |
 | `#photo-controls` | photo mode |
 | `#hud` | in-race (+ the 3 steering modes via `pm-steer`) |
 | `#quali` | race settings → QUALIFYING LAP on → `rs-go` |

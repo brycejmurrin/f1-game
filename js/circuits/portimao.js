@@ -33,6 +33,14 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.30, s1: 0.42 },
+      // Roadside stone pines off the hillside terracing's side (clip-audit:
+      // crowns grew through the terrace rows) — scenery/portimao.js
+      // hillsideTerrace calls, each padded ~0.006 at both ends.
+      { kind: "foliage", s0: 0.029, s1: 0.101, side: 1 },
+      { kind: "foliage", s0: 0.274, s1: 0.366, side: 1 },
+      { kind: "foliage", s0: 0.464, s1: 0.536, side: -1 },
+      { kind: "foliage", s0: 0.614, s1: 0.706, side: -1 },
+      { kind: "foliage", s0: 0.829, s1: 0.896, side: 1 },
     ],
     // Algarve light: dry, bright, faintly dusty, with red-earth soil.
     pal: {

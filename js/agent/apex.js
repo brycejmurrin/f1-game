@@ -1949,8 +1949,8 @@ const api = {
   },
 
   // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
-  // a READ-ONLY race-logic layer over DebrisWorld.hazards() (see js/game.js). It
-  // never slows or moves a car. No arg: current state
+  // the flag machine in js/race/race-control.js over DebrisWorld.hazards();
+  // game.js applies its SC/VSC speed cap (cautionV). No arg: current state
   //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
   //     sectors[3], sinceT, cause, enabled }.
   //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().

@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single cramped screen is ui-menu-a11y; auditing every screen is survey-ui-matrix; dead selectors are slim-bloat."
+description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single cramped screen is ui-menu-a11y; auditing every screen is survey-ui-matrix; dead selectors are slim-bloat."
 ---
 
 # Playing with menu / HUD CSS
@@ -35,14 +35,17 @@ Unknown screen or a sub-panel: `--click "#mb-foo" --root "#id"`. `--click`
 REPLACES the catalog path, so give the whole route: settings DISPLAY panel =
 `--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`
 (door ids: `pm-open-{controls,driving,display,appearance,files}`, `pm-advanced`,
-`pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/layout-audit.mjs`.
+`pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/menu-screens.mjs`.
 Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
 
 Who owns a row: find the class in `index.html`, then `grep -n 'tune-row' css/*.css`.
 Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
-`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/components.css`,
-DISPLAY panel `#pm-panel-display .tune-row`; sizes are tokens `--slider`/`--tap`
-(`css/tokens.css`). Enumerated rows are `.set-row` (components.css).
+`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/settings.css`,
+DISPLAY panel `#pm-panel-display .tune-row` in `css/settings-controls.css`; sizes
+are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
+(`css/settings-controls.css`). The pause menu (`--screen pause`, which boots a
+Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
+included; `css/menus.css` is the title chrome, not the pause sheet.
 
 ## Hard don'ts
 
@@ -56,8 +59,9 @@ DISPLAY panel `#pm-panel-display .tune-row`; sizes are tokens `--slider`/`--tap`
    commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
    title, select and garage screens are pixel-compared at a 1% tolerance. A
    font-size, tracking, weight or gap change relays text and blows that budget.
-   `pick-tests` already selects the spec when `css/` changes, so the signal is
-   there — the failure mode is pushing without running it. Regenerate on this
+   `pick-tests` selects it (`baseline`) only for `css/menus.css` and `index.html`;
+   any other sheet (`css/carsetup.css`, `tokens.css`, `select.css`) gets just
+   `ui`, so run the spec yourself after a type-metric change. Regenerate on this
    box (goldens are portable; the runner and a dev container agree to within
    1-17 px) and REVIEW the diff, never accept it blind:
 

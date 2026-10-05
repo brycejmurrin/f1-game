@@ -14,3 +14,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [PR push with no CI run → dispatch ci.yml](pr-push-no-run-dispatch-ci.md) — a head pushed while the previous run is live may start no run; dispatch by hand, watch by sha
 - [Killed background task: no marker, child gate dies](background-task-kill-no-marker.md) — 2 h ceiling; chain ≤ 3 gates, wait only on process liveness, never on a dead task's output file
 - [Foreground browser run killed (137)](foreground-browser-run-killed.md) — launch Chromium/long node suites in the background only; a foreground one restarts the worker
+- [User plays on a phone](user-plays-on-phone.md) — reproduce HUD/UI reports at phone-landscape-844x390 with touch first, not desktop

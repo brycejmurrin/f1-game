@@ -1815,7 +1815,19 @@ const TrackBuildProps = (function () {
         if (dressingExcluded("city", k, side)) return;
         const lc = cn(HK(k) * 3.3, side);
         if (NIGHT && style.bias > 0.3 && hash(HK(k) * 19) < 0.5) neonSign(k, side, 8 + hash(HK(k)) * 4, 10 + hash(HK(k) * 2) * 10, lc);
-        else { const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54]; place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc); place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45); }
+        else {
+          // YIELD TO A TOWER already standing here. This 9 m-deep block spans
+          // 4.5-13.5 m off the road and the front-row towers centre at 13-25 m,
+          // so on every street circuit it stood buried up to 6 m inside one
+          // (clip-audit, miami: all 18 severe spots). Like neonTower's own
+          // yield, keep the driving limit the block set, and spend its two
+          // place() jitter slots so every later prop lands where it did.
+          const a = anchor(k, side, 9);
+          if (massBlocked(a.c, 9, 7, [a.r, a.u, a.t], 0.82)) { blockAt(k, side, 9 - 4.5, 3.5); placeSeq += 2; return; }
+          const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54];
+          place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
+          place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
+        }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
       if (style.bias > 0.25) every(80, (k) => {
