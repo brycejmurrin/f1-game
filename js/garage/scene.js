@@ -130,8 +130,10 @@ function buildShell(out, liv) {
   // `front`/`rear`, so there is nothing to gain by finding it a flat-keyed one.
   panelGrid(out, [-W, CEIL_Y, Z_BACK], [W * 2, 0, 0], [0, 0, Z_DOOR - Z_BACK], 4, 4,
     [0, -1, 0], () => DARK);
-  // Roof truss. It lives in the shell because the ceiling culls from above and
-  // looking down THROUGH the truss into the bay is the view we want up there.
+  // Roof truss is its own mesh (buildTruss): the TOP preset looks down through
+  // the ceiling, and the cross-members laid over the car have to hide there.
+}
+function buildTruss(out) {
   for (let s = -1; s <= 1; s += 2)
     block(out, s * 2.6, CEIL_Y - 0.42, 0, 0.06, 0.06, (Z_DOOR - Z_BACK) / 2, STEEL, MAT.METAL);
   for (let i = 0; i <= 4; i++)
@@ -548,6 +550,9 @@ function live(liv, now, ctx) {
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
     rig[o + 14] = nightNow ? 1.2 : 0;
   }
+  // TOP hides the ceiling housings, so their glare orbs must go with them.
+  for (let i = 0; i < FIXTURES.length; i++)
+    rig[i * 15 + 14] = spotName === "top" ? 0 : FIXTURES[i][12];
   // Lamp: parked and dark while the turntable runs, else beside the preset's subject.
   const sp = (!ctx || !ctx.spin) && spotName && SPOTS[spotName];
   const lx = sp ? sp[0] : PARK[0], lz = sp ? sp[1] : PARK[1];
@@ -1299,7 +1304,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let floorMesh = null, cacheKey = "";
+let floorMesh = null, trussMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1386,6 +1391,7 @@ function rebuild(team, liv, info, ctx) {
     // not permanently remove this team's wall graphics or moving trace.
     dressFail = 0; dressRetryAt = 0; traceFail = 0;
     if (shellMesh) _gfx.freeMesh(shellMesh);
+    if (trussMesh) _gfx.freeMesh(trussMesh);
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
@@ -1394,6 +1400,9 @@ function rebuild(team, liv, info, ctx) {
     const shell = acc();
     buildShell(shell, liv);
     shellMesh = _gfx.createMesh(shell);
+    const truss = acc();
+    buildTruss(truss);
+    trussMesh = _gfx.createMesh(truss);
     const led = {};
     for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
     buildLed(led, liv);
@@ -1505,6 +1514,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   }
   if (ctx && ctx.studio) return;   // an actual car studio: floor/reflection, no room dressing
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
+  // TOP looks down through the ceiling: hide the truss and the ceiling LED
+  // housings so their beams do not stripe the car. Other presets restore them.
+  const hideRoof = spotName === "top";
+  if (trussMesh && !hideRoof) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
   // Each wall's furniture AND its lighting, only while the eye is inside that
   // wall — the same decision back-face culling makes for the wall itself. A
   // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
@@ -1517,7 +1530,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   for (let i = 0; i < SIDES.length; i++) {
     if (!inside[SIDES[i]]) continue;
     if (propMesh[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, SHELL_OPTS);
-    if (ledMesh[SIDES[i]]) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
+    if (ledMesh[SIDES[i]] && !(hideRoof && SIDES[i] === "mid")) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
   }
   // Dress LAST of the environment: drawDecal depth-tests but does not depth
   // write, so every opaque surface it sits on has to be down first.
@@ -1742,7 +1755,7 @@ function release() {
   let n = 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
-  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh);
+  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);

@@ -115,6 +115,14 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   assert.match(css, /:root\[data-look-garage-stats="hide"\] #carsetup #cs-stats-inner \{ display: none; \}/);
 });
 
+test("REAR-WING sits back and slightly above the wing", () => {
+  const cam = read("js/garage/setup-camera.js");
+  const m = /wingRear:\s*\{[^}]*el:\s*([0-9.]+)[^}]*dist:\s*([0-9.]+)/.exec(cam);
+  assert.ok(m, "wingRear must stay a named SP_VIEWS entry");
+  assert.ok(Number(m[1]) >= 0.46, `el ${m[1]} still frames too low`);
+  assert.ok(Number(m[2]) >= 4.2, `dist ${m[2]} still sits too close`);
+});
+
 test("garage present routes through Lighting Tuner multipliers", () => {
   assert.equal(typeof presentOpts, "function");
   assert.equal(typeof glareScale, "function");

@@ -218,10 +218,12 @@ const SP_VIEWS = {
   // the travel. `aim` names the wing the camera orbits (see setSetupView);
   // `minDist` lets them sit closer than the whole-car floor. Distances come
   // from the frustum (36 deg vertical fov, ~62% usable canvas width at the
-  // target), tightened ~20% from the frustum floor — the flap travel is the
-  // subject, and a little wing-tip crop reads better than a few-pixel flap.
+  // target). REAR-WING used to sit at 2.8 m / el 0.36 — that cropped the far
+  // endplate and parked the number board in the left half. 4.6 m back and a
+  // little above wing height keeps both endplates, the main plane and the
+  // beam wing in the visible half.
   wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 3.6, aim: "front", minDist: 2.0 },
-  wingRear:  { az: Math.PI * 0.72, el: 0.36, dist: 2.8, aim: "rear",  minDist: 1.8 },
+  wingRear:  { az: Math.PI * 0.72, el: 0.50, dist: 4.6, aim: "rear",  minDist: 2.4 },
 };
 // The point the preview camera ORBITS and LOOKS AT. The defaults reproduce the
 // previous hard-coded numbers exactly (eye was offset -1.0 in z from a target at
@@ -331,9 +333,9 @@ function setSetupAero(on) {
   // (8.5 m) the rear wing's 135 mm of travel projects to about TEN PIXELS on a
   // landscape phone — the motion is real and simply cannot be seen, which is
   // indistinguishable from a broken feature and was reported as one. The wing
-  // preset sits at 2.8 m, where the same travel is ~30 px and the slot visibly
-  // opens. A player already close in on something has aimed deliberately, so
-  // they keep their shot.
+  // preset sits at 4.6 m, where the travel is still readable and both endplates
+  // stay in the visible half. A player already close in on something has aimed
+  // deliberately, so they keep their shot.
   if (setupPreviewXOn && !was && (setupPreviewSpin || setupPreviewDist > 5)) setSetupView("wingRear");
   const b = $("cs-aero");
   if (b) {

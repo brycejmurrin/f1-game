@@ -407,6 +407,28 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
     "floor reflection is a contact sheen, not a 0.26 ghost");
 });
 
+test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {
+  const { GarageScene, draws } = harness();
+  const eye = [0, 11, 0];
+  const countAt = (name) => {
+    draws.length = 0;
+    GarageScene.spot(name);
+    GarageScene.draw(TEAM, LIV, eye, null, 0);
+    return draws.length;
+  };
+  const hero = countAt("hero");
+  const top = countAt("top");
+  const rear = countAt("rear");
+  assert.equal(top, hero - 2, `TOP should skip truss + ceiling LEDs (hero ${hero}, top ${top})`);
+  assert.equal(rear, hero, "leaving TOP must restore the roof meshes");
+  GarageScene.spot("top");
+  const rig = GarageScene.live(LIV, 0, { spin: false });
+  assert.equal(rig[14], 0, "TOP must drop the first fixture's glare with its housing");
+  GarageScene.spot("hero");
+  const restored = GarageScene.live(LIV, 0, { spin: false });
+  assert.ok(restored[14] > 0, "leaving TOP must restore fixture glare");
+});
+
 test("pit kit stays off the FRONT and REAR sight lines", () => {
   const eq = read("js/garage/scene-equipment.js");
   assert.doesNotMatch(eq, /\[-0\.18, 0\.40, -2\.72\]/,
