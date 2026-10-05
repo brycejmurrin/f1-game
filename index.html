@@ -2945,9 +2945,10 @@
       <div id="cs-tabs" class="pane pair-side"></div>
       <div id="cs-options" class="pane pair-main"></div>
     </div>
-    <!-- BACK returns to whichever screen opened the GARAGE; DONE goes FORWARD
-         (from the circuit picker it lands on race settings). Escape presses
-         BACK — see data-esc-close on #carsetup. -->
+    <!-- BACK stays visible only when DONE is a forward door (RACE SETUP from
+         the circuit picker). From title / career / pit / lobby the two agree,
+         so #carsetup[data-cs-exit=one] hides BACK. Escape still presses #cs-back
+         (data-esc-close) — the control remains in the DOM. -->
     <div class="sheet-foot"><button id="cs-back" class="bigbtn alt">BACK</button><button id="cs-done" class="bigbtn">DONE</button></div>
   </div>
 </div>

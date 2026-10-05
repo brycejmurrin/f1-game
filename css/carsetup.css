@@ -119,6 +119,22 @@
   pointer-events: auto;
   /* Never wider than the safe box; the formula above decides the rest. */
   width: var(--cs-sheet-w);
+  /* OPAQUE CHROME. .sheet ships --panel (~12% see-through) so the live
+     turntable stays imagery — and the bay's NOR / driver wordmarks then
+     ghost through GARAGE + the team name. Carbon is the same token the
+     SOLID look already uses; GLASS (below) can still thin the body. */
+  background: var(--carbon);
+  isolation: isolate;
+}
+/* Head and foot stay opaque even if Appearance › GARAGE › GLASS thins the
+   card — title, budget and the dismiss bar must not composite over 3D type. */
+#cs-inner > .sheet-head {
+  background: var(--grad-head), var(--carbon);
+  isolation: isolate;
+  z-index: 1;
+}
+#cs-inner > .sheet-foot {
+  background-color: var(--carbon);
 }
 /* ---------- portrait: split the OTHER way ---------- */
 /* A portrait phone has no width to give the car — `min(100%)` above hands the
@@ -439,6 +455,15 @@
    is nothing left to be scoped away from.) */
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
+/* The garage team card is the only .team-card in a ~260px option pane; the
+   select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap. */
+#cs-team-card .tm-name,
+#cs-team-card .tm-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
 
 /* ---------- category tabs ---------- */
 .cs-tab {
@@ -890,6 +915,12 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    that no longer exists — 161px of buttons in a ~460px bar has nothing to
    overflow, and wrapping was what made the foot 132px tall. */
 #carsetup .sheet-foot { justify-content: space-between; }
+/* Title / career / pit / lobby: BACK and the labelled dismiss do the same
+   leave, so BACK hides and CLOSE GARAGE (or RETURN TO …) is the one action.
+   From the circuit picker DONE is RACE SETUP (forward) and BACK stays. */
+#carsetup[data-cs-exit="one"] #cs-back { display: none; }
+#carsetup[data-cs-exit="one"] .sheet-foot { justify-content: stretch; }
+#carsetup[data-cs-exit="one"] #cs-done { flex: 1 1 auto; }
 
 /* THE COLUMNS COME FROM `.pane-pair` (css/components.css) — the shared
    list-detail primitive. This screen used to spell the whole thing out itself,
@@ -1013,11 +1044,13 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   grid-template-columns: minmax(0, 1fr);
   /* a right lane for the scroll thumb — with zero right padding the sliver
      painted on the tab plates and read as an artifact */
-  padding: calc(var(--pad) * 0.25) calc(var(--gap) * 2 / 3) 0 var(--pad);
+  padding: calc(var(--pad) * 0.25) calc(var(--gap) * 2 / 3) var(--pad) var(--pad);
+  scroll-padding-block-end: var(--pad);
   /* Restore the vertical .pane scroller the stacked strip overrides. */
   overflow-x: hidden; overflow-y: auto;
   overscroll-behavior-y: contain; touch-action: pan-y;
-  scrollbar-width: auto; scrollbar-gutter: stable;
+  scrollbar-width: thin; scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in oklab, var(--text) 38%, var(--carbon)) var(--carbon);
   /* Rows exactly as tall as a tab, packed from the top. Left to stretch, the
      nine categories divided up whatever height the rail had and each tab came
      out a couple of px shorter than its own two lines of text. The rail is a
@@ -1032,6 +1065,25 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 #cs-inner[data-pair="on"] #cs-options {
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--text) 38%, var(--carbon)) var(--carbon);
+}
+/* Native scrollbars on the two garage panes default to a bright track that
+   clashes with the dark sheet. Theme both the Firefox shorthand (above) and
+   the Chromium pseudo-elements the live Pages shot showed. */
+#cs-inner[data-pair="on"] #cs-tabs::-webkit-scrollbar,
+#cs-options::-webkit-scrollbar {
+  width: 8px;
+  background: var(--carbon);
+}
+#cs-inner[data-pair="on"] #cs-tabs::-webkit-scrollbar-track,
+#cs-options::-webkit-scrollbar-track {
+  background: var(--carbon);
+}
+#cs-inner[data-pair="on"] #cs-tabs::-webkit-scrollbar-thumb,
+#cs-options::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--text) 38%, var(--carbon));
+  border-radius: var(--r-xs);
 }
 
 /* ---------- preview controls (bottom-left) ----------
@@ -1709,11 +1761,10 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
   }
 }
 
-/* PANEL: SOLID / GLASS. Shipped is --panel (~88% carbon). SOLID is the carbon
-   itself, fully opaque in both themes — --plate-opaque is 74%, which would be
-   MORE see-through than shipped. GLASS thins --panel the way the livery editor
-   already does, a step further; reduced transparency and HIGH CONTRAST keep
-   the shipped plate, as they do for that editor. */
+/* PANEL: SOLID / GLASS. Shipped is --carbon (opaque chrome — pit-bay type
+   must not ghost through GARAGE). SOLID restates that. GLASS thins --panel
+   the way the livery editor already does; reduced transparency and HIGH
+   CONTRAST keep the shipped plate, as they do for that editor. */
 :root[data-look-garage-glass="solid"] #carsetup #cs-inner { background: var(--carbon); }
 :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner {
   background: color-mix(in oklab, var(--panel) 70%, transparent);

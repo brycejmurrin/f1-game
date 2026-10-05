@@ -85,6 +85,26 @@ it("garage tabs split performance and finishing work into named rows", () => {
     "each compact category tab is a snap target");
 });
 
+it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
+  const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
+  const sheet = rd("js/garage/setup-sheet.js");
+  const css = rd("css/carsetup.css");
+  assert.match(css, /#cs-inner \{[^}]*background:\s*var\(--carbon\)/s,
+    "shipped garage card is opaque carbon so 3D type cannot ghost through");
+  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*var\(--carbon\)/s,
+    "header chrome stays opaque under the GLASS look");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*scrollbar-color:/s,
+    "pair rail uses a themed scrollbar, not the platform white track");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*padding:[^;]*var\(--pad\)\s+var\(--pad\)/s,
+    "pair rail keeps bottom padding so ERS can scroll fully into view");
+  assert.match(css, /#cs-team-card \.tm-sub \{[^}]*white-space:\s*normal/s,
+    "garage team line wraps instead of ellipsizing the engine");
+  assert.match(css, /#carsetup\[data-cs-exit="one"\] #cs-back \{ display: none; \}/);
+  assert.match(sheet, /root\.setAttribute\("data-cs-exit", "one"\)/);
+  assert.match(sheet, /\[team\.short, team\.engine\]\.filter\(Boolean\)\.join\(" · "\)/);
+  assert.doesNotMatch(sheet, /team\.engine \|\| ""\} engine/, "no redundant 'engine' suffix on the team line");
+});
+
 /* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).
  *
  * garage-frame.mjs sampled its pixels from ctx.drawImage(#game) inside the
