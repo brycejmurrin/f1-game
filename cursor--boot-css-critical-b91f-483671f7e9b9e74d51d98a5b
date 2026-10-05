@@ -1,1 +1,0 @@
-1791222412	Cursor Agent	boot CSS after #989: extract post-title rules from responsive.css into deferred overlays.css; OWNED css/responsive.css css/overlays.css; tests that pin those selectors  [cursor/boot-css-critical-b91f; session 483671f7e9b9e74d51d98a5b]
