@@ -1198,6 +1198,7 @@ what it covers.
 |---|---|
 | `session-contracts.test.mjs` | Hosted-result error propagation, conflicting plugin metadata, explicit Drive file transport, native document routing and truthful session capability diagnostics; pure local adapters, no service writes. |
 | `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
+| `chromium-shell.test.mjs` | `resolveChromium` accepts Playwright's unpacked `chromium_headless_shell` when the full Chromium archive was never downloaded (Cloud / `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`). |
 | `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |
 | `validation-cli.test.mjs` | Validation and planning CLIs reject invalid numeric inputs, account for unclaimed paths, preserve immutable plans, validate material integrity and bound lighting proposals. |
 | `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |

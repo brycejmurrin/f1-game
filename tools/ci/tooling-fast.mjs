@@ -153,6 +153,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  // Playwright's unpacked chromium_headless_shell is enough; Cloud boxes
+  // skip the full Chromium archive. ~0.1 s, no browser.
+  "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
