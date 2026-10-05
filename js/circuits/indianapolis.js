@@ -52,9 +52,15 @@
       { s0: 0.240, s1: 0.700, hw: 6.4, ease: 0.020 },
       { s0: 0.760, s1: 0.820, hw: 6.6, ease: 0.012 },
     ],
+    // ONE banked corner: oval Turn 1 (9 deg 12 min, IMS), which the F1 road
+    // course runs backwards as its final corner — the only sustained curve at
+    // 0.85-0.91 (curvature -3.0..-5.0e-3/m, measured on this centreline). It
+    // is not a def.turns peak (radius ~220 m), so it stays a frac zone (no
+    // sceneryStartFrac, startFrac 0: authoring = racing frame). The former
+    // 9 deg zone at 0.115 sat on the front straight (|k| < 0.5e-3/m from
+    // 0.085 to 0.135, T1 at 0.1449) and banked a straight, so it is gone.
     bankZones: [
-      { frac: 0.115, angleDeg: 9.0, widthM: 320 },
-      { frac: 0.880, angleDeg: 6.0, widthM: 200 },
+      { frac: 0.880, angleDeg: 9.0, widthM: 260 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

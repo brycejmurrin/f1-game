@@ -281,6 +281,11 @@ function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
   if (!(dt > 0) || reduce || !gain) { if (snap || reduce) hangReset(key, lambda); return 0; }
   if (!kA) { hangReset(key, lambda); return 0; }
   const raw = clamp(kA * 18, -1, 1);
+  if (!(dt > 0)) {   // a snap reseeds (like speedOpen) so the next live frame does not pop from a stale hang
+    _hangOut[key] = raw; _hangFast[key] = 0;
+    if (typeof CamFeel !== "undefined") CamFeel.follow(key, raw, lambda, 0);
+    return raw * gain;
+  }
   const prev = _hangOut[key] || 0;
   // A chicane flips sign before a hairpin-rate head can arrive, and the two
   // sides cancel. Catch faster for a short stretch after the flip, then go

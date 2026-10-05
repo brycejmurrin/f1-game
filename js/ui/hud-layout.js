@@ -630,6 +630,12 @@ const HudLayout = (function () {
       paintAll();
     };
     host.addEventListener("change", (ev) => { if (!fold.contains(ev.target)) setTimeout(refresh, 0); });
+    // SettingRow.wire stops `change` propagation and the chevrons fire none, so
+    // the bubbling listener above misses those rows: follow their store keys.
+    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis"];
+    if (store && store.subscribe) store.subscribe((c) => {
+      if (c && (ROW_KEYS.indexOf(c.key) >= 0 || (Array.isArray(c.keys) && c.keys.some((k) => ROW_KEYS.indexOf(k) >= 0)))) setTimeout(refresh, 0);
+    });
     onModeChange = refresh;   // setCam: the race camera or the painted style changed
     host.appendChild(fold);
     paintAll();

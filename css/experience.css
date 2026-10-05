@@ -90,6 +90,6 @@
      rendered scene's buttons. The shared compact size scales; this only trims
      the height. */
   :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); padding-block: calc(var(--gap) / 2); }
-  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#tagline, #blurb, #disclaimer, #audiostate) { display: none; }
+  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#disclaimer, #audiostate) { display: none; }
   :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
 }

@@ -137,6 +137,21 @@ test("finite numeric strings retain career money and contract values", () => {
   assert.deepEqual(c.deal, { salary: 25, bonusPt: 12, left: 1, years: 2 });
 });
 
+test("MY TEAM roster numbers are sanitised like the contract's: wageBill cannot turn money into NaN", () => {
+  const c = load().migrateCareer({ flavour: "myteam", money: 100, roster: [
+    { code: "AAA", salary: "x", left: "1e400", pending: { kind: "renew", ask: "nope" } },
+    { code: "BBB", salary: "7", left: 2, pending: "junk" },
+  ] });
+  assert.equal(c.roster[0].salary, 0);
+  assert.equal(c.roster[0].left, 0);
+  assert.equal(c.roster[0].pending.ask, 0);
+  assert.equal(c.roster[1].salary, 7);
+  assert.equal(c.roster[1].left, 2);
+  assert.equal(c.roster[1].pending, null);
+  const bill = c.roster.reduce((n, d) => n + (d.salary || 0), 0);   // career.js wageBill()
+  assert.equal(c.money - bill, 93);
+});
+
 test("invalid driver points and overflowing legacy aliases stay finite and idempotent", () => {
   const SM = load();
   const s = SM.remapPoints(JSON.parse(`{"pts":{"AAA":1e309,"BBB":"Infinity","haas:0":25},"teamPts":{"haas":1e309}}`));

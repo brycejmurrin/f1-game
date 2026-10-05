@@ -99,8 +99,7 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        parts: setup,
-        livery: (G.getLiveryId ? G.getLiveryId(team.id) : null),
+        parts: setup,   // no livery: no peer ever read it, and a custom one cannot be built from an id
       };
     }
 
@@ -211,7 +210,7 @@ const NetLobby = (function () {
           } else {
             // The room is over: relayed profiles ("g2", "g3"…) are keyed by the
             // host's ids, not this transport's, so the delete above missed them.
-            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
             show("pick");
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
@@ -606,12 +605,14 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
+    const CUSTOM_MSG = "Custom circuits can't be raced online yet — pick a built-in circuit.";
+    const customPicked = () => !!(Tracks.LIST && Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom);
     function publishSettings() {
       if (!sessions.size || role !== "host") return false;
       // A CUSTOM circuit lives only in this player's storage: the guest cannot
       // build it from an index. Publish the first shipped circuit instead.
-      const customPick = Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom;
-      if (customPick) say("Custom circuits can't be raced online yet — pick a built-in circuit.");
+      const customPick = customPicked();
+      if (customPick) say(CUSTOM_MSG);
       return broadcast(NetPlay.EV.SETTINGS, {
         track: customPick ? 0 : G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
@@ -621,6 +622,8 @@ const NetLobby = (function () {
         // own saved choice: the host's tyres wore while the guest's never did,
         // and the guest's own car could DNF under a level nobody picked.
         tyres: G.raceTyreWear, reliab: G.raceReliability,
+        // DIRTY AIR and AI PACE change every AI car's grip and vmax: same argument.
+        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace,
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -699,6 +702,14 @@ const NetLobby = (function () {
         if (typeof d.reliab !== "string" || (typeof Reliability !== "undefined" && !Reliability.isLevel(d.reliab))) return null;
         out.reliab = d.reliab;
       }
+      if (own(d, "dirtyAir") && d.dirtyAir != null) {
+        if (typeof d.dirtyAir !== "string" || (typeof PhysicsConsts !== "undefined" && !PhysicsConsts.DirtyAir.isLevel(d.dirtyAir))) return null;
+        out.dirtyAir = d.dirtyAir;
+      }
+      if (own(d, "aiPace") && d.aiPace != null) {
+        if (typeof d.aiPace !== "string" || (typeof AiBand !== "undefined" && !AiBand.isMode(d.aiPace))) return null;
+        out.aiPace = d.aiPace;
+      }
       // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
       // exactly the values the setter would keep.
       if (own(d, "seed")) {
@@ -726,12 +737,33 @@ const NetLobby = (function () {
       else if (st.set) st.set(key, before);
     }
 
+    // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
+    // host's overwrote them in memory and nothing put them back. [wire key, G prop, store key]
+    // for each rule; wxArc restores to "no plan" (its getter would draw one).
+    const RULES = [["track", "trackIdx"], ["laps", "raceLaps"], ["quali", "raceQuali"], ["grid", "raceGrid"],
+      ["changeable", "raceChangeable"], ["weather", "raceWeather"], ["tod", "raceTimeOfDay"], ["difficulty", "difficulty"],
+      ["tyres", "raceTyreWear", "tyreWear"], ["reliab", "raceReliability", "reliability"],
+      ["dirtyAir", "raceDirtyAir", "dirtyAir"], ["aiPace", "aiPace", "aiPace"], ["seed", "seed"], ["round", "raceRound"]];
+    let ownRules = null;
+    function restoreOwnRules() {
+      const snap = ownRules;
+      if (!snap || (G.netPlay && G.netPlay.active && G.netPlay.active())) return false;   // never mid-race
+      ownRules = null;
+      for (const [, prop, key] of RULES) {
+        if (!own(snap, prop) || snap[prop] === undefined) continue;
+        if (key) roomOnly(key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
+      }
+      G.wxArcPlan = null;
+      return true;
+    }
+
     function applySettings(d) {
       const next = normaliseSettings(d);
       if (!next) {
         say("The host sent invalid race settings. Your current setup was kept.", true);
         return false;
       }
+      if (!ownRules) { ownRules = {}; for (const [, prop] of RULES) ownRules[prop] = G[prop]; }
       if (own(next, "track")) G.trackIdx = next.track;
       if (own(next, "laps")) G.raceLaps = next.laps;
       if (own(next, "quali")) G.raceQuali = next.quali;
@@ -743,6 +775,8 @@ const NetLobby = (function () {
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
       if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
       if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
+      if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
+      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
@@ -1051,7 +1085,8 @@ const NetLobby = (function () {
       }
       if (e.start) {
         e.start.hidden = !host;
-        e.start.disabled = !(selfReady && peersReady());
+        e.start.disabled = !(selfReady && peersReady()) || customPicked();
+        e.start.title = customPicked() ? CUSTOM_MSG : "";
       }
     }
 
@@ -1085,6 +1120,8 @@ const NetLobby = (function () {
       if (role !== "host" || !session) return false;
       // "Everyone", not "both" — the sentence has to survive a third player.
       if (!(selfReady && peersReady())) { say("Everyone needs to be ready.", true); return false; }
+      // The guests were sent circuit 0 for a custom pick (publishSettings): racing it would desync.
+      if (customPicked()) { say(CUSTOM_MSG, true); return false; }
       publishSettings();
       broadcast(NetPlay.EV.GO, {});
       beginRace();
@@ -1166,6 +1203,7 @@ const NetLobby = (function () {
         peerProfile: firstPeer(),
         peerMods: modsFromProfile(firstPeer()),
         peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
+        onStop: restoreOwnRules,   // the guest's own rules come back when the race ends
       });
       friendQualifying = false;
       clearInterval(pumpTimer);          // the game loop pumps it from here on
@@ -1759,7 +1797,7 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
       // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
       if (G.setNetRoom) G.setNetRoom(false);
       close();

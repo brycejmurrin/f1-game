@@ -198,8 +198,11 @@ const CamFeel = (function () {
     rear:      { sp: 5.5, yaw: 7, brake: 8, slip: 4 },
   });
   function drive(mode, eye, tgt, fov, extra, spN) {
-    if (!extra || !(extra.dt > 0) || extra.reduceMotion) return fov;
-    const dt = extra.dt;
+    if (!extra || extra.reduceMotion) return fov;
+    // A snap (no dt) reseeds the follow keys below, so the next live frame
+    // eases from the snapped value instead of popping from a stale one.
+    const dt = extra.dt > 0 ? extra.dt : 0;
+    if (!dt && !extra.snap) return fov;
     const att = extra.att || {};
     const rate = DRIVE_RESPONSE[mode] || { sp: 3, yaw: 3, brake: 5, slip: 3 };
     let delta = null;

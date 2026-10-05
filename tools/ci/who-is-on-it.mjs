@@ -168,9 +168,24 @@ export function pushBoard(slug, content, { cwd = ROOT, remote = "origin", messag
     run(["fetch", "--quiet", remote, `+refs/heads/${CLAIMS_BOARD}:${tracking}`]);
     const tip = run(["rev-parse", "--verify", "--quiet", tracking]).stdout.trim();
     const files = nextBoard(readBoard(tracking, cwd), slug, content);
-    const lines = files.map((f) => `100644 blob ${run(["hash-object", "-w", "--stdin"], f.content).stdout.trim()}\t${f.slug}`);
-    const tree = run(["mktree"], lines.length ? lines.join("\n") + "\n" : "").stdout.trim();
-    const commit = run(["commit-tree", tree, ...(tip ? ["-p", tip] : []), "-m", message]).stdout.trim();
+    // Every plumbing step must succeed and yield an object id: an empty commit
+    // id would make the refspec `:refs/heads/<board>`, which DELETES the board.
+    const step = (a, input) => {
+      const r = run(a, input);
+      const out = (r.stdout || "").trim();
+      if (r.status !== 0 || !/^[0-9a-f]{40}$/.test(out)) {
+        throw new Error(`git ${a[0]} failed (status ${r.status}): ${((r.stderr || "") + (r.error ? " " + r.error.message : "")).trim() || "no object id"}`);
+      }
+      return out;
+    };
+    let commit;
+    try {
+      const lines = files.map((f) => `100644 blob ${step(["hash-object", "-w", "--stdin"], f.content)}\t${f.slug}`);
+      const tree = step(["mktree"], lines.length ? lines.join("\n") + "\n" : "");
+      commit = step(["commit-tree", tree, ...(tip ? ["-p", tip] : []), "-m", message]);
+    } catch (e) {
+      return { ok: false, ref: CLAIMS_BOARD + ":" + slug, sha: "", err: e.message };
+    }
     const r = run(["push", "--quiet", remote, `${commit}:refs/heads/${CLAIMS_BOARD}`]);
     if (r.status === 0) { run(["update-ref", tracking, commit]); return { ok: true, ref: CLAIMS_BOARD + ":" + slug, sha: commit.slice(0, 7), err: "" }; }
     err = (r.stderr || "").trim().split("\n").filter((l) => !/^remote:|^To |^\s*$/.test(l)).join(" ");
@@ -223,7 +238,7 @@ export function main(argv = process.argv.slice(2)) {
   const branch = currentBranch();
   let claimed = null;
   if (claim || release) {
-    if (!branch || branch === "HEAD") { console.error("who-is-on-it: not on a branch, nothing to claim"); return 0; }
+    if (!branch || branch === "HEAD") { console.error("who-is-on-it: not on a branch, nothing to claim"); return 1; }
     claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch, session) };
   }
 

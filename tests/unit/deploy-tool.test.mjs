@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  REGEN_MESSAGE,
+  REGEN_MESSAGE, mergeTreeConflicts, assertMergeable,
   sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
@@ -90,6 +90,44 @@ test("touchedCircuits reports OUR side only on a diverged history", () => {
     assert.ok(ids.includes("ourside"), "our own circuit edit must be listed");
     assert.ok(!ids.includes("theirside"),
       "a circuit only the OTHER side touched must NOT be reported as ours — that is the two-dot bug");
+  } finally {
+    rmTemp(dir);
+  }
+});
+
+test("merge-tree: clean, real conflicts, and an ERROR with no CONFLICT line (unrelated histories); a shallow clone is named up front", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-mergetree-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+  const mt = (a, b) => {
+    const r = spawnSync("git", ["merge-tree", "--write-tree", a, b], { cwd: dir, encoding: "utf8" });
+    return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
+  };
+  try {
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "f.txt"), "base\n"); g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "other");
+    fs.writeFileSync(path.join(dir, "f.txt"), "other\n"); g("commit", "-qam", "other");
+    g("checkout", "-q", "main");
+    fs.writeFileSync(path.join(dir, "g.txt"), "clean\n"); g("add", "-A"); g("commit", "-qm", "clean");
+    g("checkout", "-q", "-b", "clash", "main~0");
+    fs.writeFileSync(path.join(dir, "f.txt"), "mine\n"); g("commit", "-qam", "clash");
+    g("checkout", "-q", "--orphan", "alien");
+    fs.writeFileSync(path.join(dir, "f.txt"), "alien\n"); g("add", "-A"); g("commit", "-qm", "alien");
+
+    assert.deepEqual(mergeTreeConflicts(mt("main", "other")), [], "a clean merge has no conflicts");
+    assert.equal(mergeTreeConflicts(mt("clash", "other")).length, 1, "a real conflict is listed");
+    assert.throws(() => mergeTreeConflicts(mt("main", "alien")), /could not compute the merge/,
+      "unrelated histories: non-zero with no CONFLICT line is an error, never clean");
+    assert.throws(() => mergeTreeConflicts({ code: 1, out: "", err: "" }), /could not compute/);
+
+    assert.doesNotThrow(() => assertMergeable("main", "other", dir), "related branches in a full clone pass");
+    assert.throws(() => assertMergeable("main", "alien", dir), /share no history/, "unrelated, full clone: not a shallow problem");
+    const shallow = path.join(dir, "shallow");
+    execFileSync("git", ["clone", "-q", "--depth", "1", "--no-single-branch", "file://" + dir, shallow], { stdio: "pipe" });
+    assert.throws(() => assertMergeable("origin/main", "origin/other", shallow), /SHALLOW[\s\S]*--unshallow/,
+      "a depth that stops before the merge base is named, with the cure");
+    assert.doesNotThrow(() => assertMergeable("origin/main", "origin/main", shallow), "shallow alone is fine when the base is reachable");
   } finally {
     rmTemp(dir);
   }

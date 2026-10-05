@@ -91,20 +91,16 @@ _backendBound = backendBoot.bound;
 // on its procedural materials. Boot must never wait on, or fail for, assets.
 if (typeof Assets !== "undefined") {
   Assets.init(gfx);
-  // Loaded unconditionally at boot. A lazy "only fetch when matTexMix > 0" path
-  // was tried and removed: with the knob ON by default nobody can turn it off
-  // BEFORE their first load, so the pack is always fetched at least once, and
-  // from then on sw.js serves it from cache. The guard could not save anyone
-  // anything — it was complexity with no beneficiary.
-  Assets.load();
-  // Models also prefetch, but for a different reason: prop placement is SYNCHRONOUS
-  // (buildProps -> the circuit's scenery() callback), so it must not depend on
-  // network timing — so ensureScenery() awaits Assets.modelsReady() (this same
-  // run, or a 4 s cap) before any build; a circuit that asks for a model that
-  // has not landed would otherwise keep the box fallback for the whole session.
-  // The manifest is a single small fetch and resolves to nothing when no models
-  // are baked.
-  Assets.loadModels();
+  // Loaded unconditionally (a lazy "only when matTexMix > 0" path was removed:
+  // the knob ships ON, so nobody could opt out before their first load), but
+  // at the first IDLE slice after boot, not in it: the arrays are ~1.6 MB of
+  // PNG that competed with the boot scripts for the wire and the decoder, and
+  // boot never awaited them. Skipped when something already loaded, unloaded
+  // (__apex.assetLoad(false)) or adopted a pack before the slice came round.
+  // Baked MODELS are not prefetched here: ensureScenery() loads each circuit's
+  // own set before its build (Assets.modelsReady, capped at 4 s).
+  const kickPack = () => { const s = Assets.state(); if (s.tier === null && !s.uploaded) Assets.load(); };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kickPack, { timeout: 3000 }); else setTimeout(kickPack, 1500);
 }
 
 // ---------- rain ----------
@@ -1855,7 +1851,7 @@ function redFlagRestart() {
     // strategy and the ERS state legitimately carry through a red flag.
     c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
-    c.kerbGripSm = 1; c.kerbCueT = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
     // pit window on most circuits, so a car holding the lane when the flag flew
     // would restart still reading inLane() — pinned at the pit limiter for ~12 s
@@ -1931,7 +1927,7 @@ function gridUp(preOrder) {
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
-    c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
     clearRacingScratch(c);
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
     // never a simRnd() draw — the stream's draw count is a contract. Season /
@@ -2725,7 +2721,7 @@ async function startRaceBody() {
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
-  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); // fresh race — drop free-cam + TV director; arm solo replay ring
+  dbgCam = null; director.reset(); replayBuf.onRaceStart(cars); if (typeof CamFeel !== "undefined") { CamFeel.resetLatch(); CamFeel.resetFreeLook(); } // fresh race — drop free-cam, TV director, look-back latch; arm solo replay ring
   snapGameCam();              // frame the grid correctly on the very first render
   Input.calibrate();
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges

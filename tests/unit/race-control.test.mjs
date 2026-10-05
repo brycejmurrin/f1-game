@@ -398,6 +398,22 @@ test("switching the layer off DROPS a flag already flying", () => {
   assert.equal(rc.info().level, 0, "and stays clear while disabled, hazards or not");
 });
 
+test("CAUTIONS off: a host's safety car a guest inherits on disconnect still ages out", () => {
+  // A guest with the switch off adopts the host's SC; the host drops, netplay
+  // stops and the guest owns race control again. update() returned on
+  // !enabled before the cap, so that SC stayed out for the rest of the race.
+  let owns = false;
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({
+    netPlay: { active: () => !owns, ownsRaceControl: () => owns, reportCaution() {} },
+  }, false));
+  rc.apply({ level: 3, cause: "SAFETY CAR", sinceT: 0 });
+  owns = true;
+  run(rc, 2);
+  assert.equal(rc.info().level, 3, "no hazard loop lowers it early");
+  run(rc, 95);                     // > SC_MAX (90 s)
+  assert.equal(rc.info().level, 0, "the hard cap drops it");
+});
+
 test("the enabled flag reads BOTH storage formats", () => {
   // game.js wrote this key with a raw localStorage.setItem("apex26.caution",
   // "1" | "0"), which JSON-parses to the NUMBERS 1 and 0. A naive `!== false`

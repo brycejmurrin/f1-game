@@ -21,25 +21,34 @@ const LobbyCodes = (function () {
   // the token that carries it (inviteFromUrl drops the "." or ")" a sentence
   // puts after it) and the wrap re-join below runs on what follows, so a link
   // a plain-text mail client folded does not stop at the fold and read "corrupt".
+  const LEAD_JUNK = /^[^A-Za-z0-9_.-]+/, TAIL_JUNK = /[^A-Za-z0-9_-]+$/;   // a code ends in base64url, as inviteFromUrl
   const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;   // \s matches none of these
   function codeFrom(text) {
     const raw = String(text || "").replace(INVISIBLE, "").trim();
     if (!raw) return "";
     const tokens = raw.split(/\s+/);
     const magic = (NetHandshake.MAGIC || "APEX1") + ".";
-    let at = -1, code = "";
+    let at = -1, code = "", opened = false, ended = false;
     for (let i = 0; i < tokens.length && at < 0; i++) {
       const lifted = NetHandshake.inviteFromUrl(tokens[i]);
-      if (lifted) { at = i; code = lifted; }
-      else if (tokens[i].startsWith(magic)) { at = i; code = tokens[i]; }
+      if (lifted) { at = i; code = lifted; continue; }
+      // A BARE code gets the link's punctuation rule too: "(APEX1.s.…)." or
+      // "\"APEX1.s.…\"," — a bracket or quote before it, a sentence's end after.
+      const lead = tokens[i].replace(LEAD_JUNK, "");
+      if (!lead.startsWith(magic)) continue;
+      at = i; opened = lead !== tokens[i];
+      code = lead.replace(TAIL_JUNK, ""); ended = code !== lead;
     }
     if (at < 0) return raw;                       // peekCode says "not an invite code"
     let long = false;
-    for (let i = at + 1; i < tokens.length; i++) {
-      const t = tokens[i];
+    for (let i = at + 1; i < tokens.length && !ended; i++) {
+      // Punctuation after a fragment ends the code there; a short tail only
+      // keeps its punctuation-stripped form when a bracket opened the code.
+      const t = tokens[i].replace(TAIL_JUNK, "");
+      ended = t !== tokens[i];
       if (!CODE_CHARS.test(t)) break;
       if (t.length >= FRAGMENT_MIN) { code += t; long = true; continue; }
-      if (long && i === tokens.length - 1) code += t;   // a wrapped code's short tail
+      if (long && i === tokens.length - 1 && (!ended || opened)) code += t;   // a wrapped code's short tail
       break;
     }
     return code;

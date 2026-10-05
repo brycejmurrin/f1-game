@@ -1311,14 +1311,32 @@ const FlybySeq = (function () {
     while (d < -total / 2) d += total;
     return d;
   }
+  // The arc position lerpPose puts a track-anchored pose pair at for `u`.
+  function lerpS(track, a, b, u) {
+    const sa = anchorS(track, a);
+    let d = anchorS(track, b) - sa;
+    const total = track.total || 1;
+    while (d > total / 2) d -= total;
+    while (d < -total / 2) d += total;
+    return sa + d * u;
+  }
+  // HINTED projection: both ends of every chord are road poses (planLook's
+  // gate), so each sample's arc position is known to within the chord's own
+  // sag, and the hint turns a full-lap scan (n nodes, 40 per call) into the
+  // ±16-node window. Measured identical planShot looks across all 52 circuits.
   function sightOff(track, eye, look) {
     let worst = -Infinity;
+    const total = track.total || 1;
     for (let j = 0; j <= 4; j++) {
       lerpPose(track, eye[0], eye[1], j / 4, _sa);
       lerpPose(track, look[0], look[1], j / 4, _sb);
+      const se = lerpS(track, eye[0], eye[1], j / 4);
+      let dl = lerpS(track, look[0], look[1], j / 4) - se;
+      while (dl > total / 2) dl -= total;
+      while (dl < -total / 2) dl += total;
       for (let k = 1; k <= 8; k++) {
         const f = k / 8;
-        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f);
+        const pr = Tracks.project(track, _sa[0] + (_sb[0] - _sa[0]) * f, _sa[2] + (_sb[2] - _sa[2]) * f, se + dl * f);
         if (!pr) continue;
         Tracks.sample(track, pr.s, _sm);
         const off = Math.abs(pr.lat) - (_sm.hw || 10);

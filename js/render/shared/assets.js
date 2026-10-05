@@ -36,8 +36,8 @@ const Assets = (function () {
 
   function manifest() {
     if (_manifest !== null) return Promise.resolve(_manifest);
-    // Material arrays and model prefetch start together at boot. Cache the
-    // pending request too, so they share both the fetch and its JSON parse.
+    // Material arrays and the first circuit's models can ask together. Cache
+    // the pending request too, so they share both the fetch and its JSON parse.
     if (!_manifestPromise) _manifestPromise = _fetchManifest().finally(() => { _manifestPromise = null; });
     return _manifestPromise;
   }
@@ -225,11 +225,12 @@ const Assets = (function () {
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
       // Start both downloads together; decode and upload remain sequential.
-      // Promise.all observes either rejection immediately, including a normal
-      // fetch that fails while the albedo request is still pending.
+      // The NORMAL strip is optional: its fetch and decode fail on their own
+      // (normal = null, albedo still ships) — sharing the albedo's Promise.all
+      // let a missing normal strip discard the whole pack (_tier "off").
       const [albedoBlob, normalBlob] = await Promise.all([
         _fetchStrip(variant.albedo),
-        variant.normal ? _fetchStrip(variant.normal) : null,
+        variant.normal ? _fetchStrip(variant.normal).catch(() => null) : null,
       ]);
       if (generation !== _loadGeneration) return false;
       albedo = await _decodeStrip(albedoBlob, size, present);
@@ -239,13 +240,14 @@ const Assets = (function () {
       }
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
-      if (variant.normal) {
-        normal = await _decodeStrip(normalBlob, size, present);
+      if (normalBlob) {
+        try { normal = await _decodeStrip(normalBlob, size, present); }
+        catch (_) { normal = null; }   // undecodable normal strip: albedo alone
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
         }
-        normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
+        if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
     } catch (e) {
@@ -322,8 +324,8 @@ const Assets = (function () {
   //       idx u16                                    — 22 B a vertex + 2 B an index
   //
   // v2 is what the shipped pack uses: the 36 baked models went from 2.95 MB to
-  // 1.60 MB, and every one of them is fetched at boot (loadModels() in
-  // js/game.js). The quantisation is chosen against what the models actually
+  // 1.60 MB (each circuit's own set is fetched before its build: modelsReady
+  // in js/core/lazy-bundles.js ensureScenery). The quantisation is chosen against what the models actually
   // contain, not against the format's limits — measured over the whole pack,
   // colours live in [0.1, 1] and are palette-derived so a byte is within half a
   // display level; normals are unit, so a signed short is 0.001° off; material
@@ -403,10 +405,41 @@ const Assets = (function () {
 
   function modelSync(id) { return _models[id] || null; }
 
-  // Prefetch every model in the pack. Resolves to the number now resident.
-  // Cheap by construction: `tools/gen/assets.mjs verify` caps the whole pack at
-  // 8 MB, so this is never a large download.
-  // Memoised: boot calls it once, and modelsReady() below joins the same run.
+  // Ids of pack models a scenery closure's SOURCE names as a quoted literal
+  // ("kenney_ind_building-a"). Every bakedModel caller spells its ids that way
+  // (the circuit files are data, served unminified), so scanning the closure's
+  // own text is the per-circuit model list without a generated table to drift.
+  // Over-inclusion only costs a fetch; a computed id would be missed and keep
+  // its procedural fallback.
+  function _idsNamedIn(m, src) {
+    const out = [];
+    if (!m || !m.models || !src) return out;
+    const seen = Object.create(null);
+    const re = /["'`]([^"'`\s\\]+)["'`]/g;
+    let r;
+    while ((r = re.exec(src)) !== null) {
+      const id = r[1];
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(m.models, id)) { seen[id] = 1; out.push(id); }
+    }
+    return out;
+  }
+
+  // Fetch the models one scenery closure needs (src = its source text).
+  // Resolves to how many of them are resident. No pack, or a closure that names
+  // no model, resolves 0 without a model fetch.
+  async function loadModelsFor(src) {
+    if (!src) return 0;
+    const m = await manifest();
+    const ids = _idsNamedIn(m, String(src));
+    if (!ids.length) return 0;
+    const got = await Promise.all(ids.map((id) => model(id)));
+    return got.reduce((n, g) => n + (g ? 1 : 0), 0);
+  }
+
+  // Prefetch EVERY model in the pack. Resolves to the number now resident.
+  // The game no longer calls this (a build loads its own circuit's set through
+  // modelsReady(ms, src)); tools/shot/* still do, to frame any baked model.
+  // Memoised: one run, joined by every caller.
   let _modelsPromise = null;
   function loadModels() {
     if (_modelsPromise) return _modelsPromise;
@@ -427,8 +460,12 @@ const Assets = (function () {
   // boot or a deep link reached the first build in well under the fetch time.
   // Never rejects; a missing or failing pack resolves 0 at once, a hanging
   // fetch resolves at the timeout so an offline boot still builds the track.
-  function modelsReady(timeoutMs) {
-    const run = loadModels().catch(() => 0);
+  // With `src` (a scenery closure's source text, see loadModelsFor) it waits on
+  // only the models that closure names: 29 of 77 across five circuits, none
+  // for the rest, which resolve at once. Without it, the whole pack.
+  function modelsReady(timeoutMs, src) {
+    if (src !== undefined && !src) return Promise.resolve(0);
+    const run = (src !== undefined ? loadModelsFor(src) : loadModels()).catch(() => 0);
     const ms = timeoutMs > 0 ? timeoutMs : 4000;
     let timer = null;
     const late = new Promise((resolve) => { timer = setTimeout(() => resolve(-1), ms); });
@@ -470,7 +507,7 @@ const Assets = (function () {
   }
 
   return { init, supported, manifest, load, unload, adopt, state, readLayerBytes,
-           model, modelSync, models, loadModels, modelsReady, env, credits, MAT_LAYERS };
+           model, modelSync, models, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 
 // No-build global export.

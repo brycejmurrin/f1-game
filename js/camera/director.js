@@ -79,7 +79,7 @@ const Director = (function () {
   function create(G, eligible = () => true) {
     Log.info("game", "Director.create");
     let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
-    let ownCamera = null, autoSpectate = true, forcedTv = false;
+    let ownCamera = null, autoSpectate = true, forcedTv = false, prevMode = -1;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
 
     function camIdx(id) {
@@ -145,6 +145,7 @@ const Director = (function () {
       if (modeId() === "tv") return;
       const i = camIdx("tv");
       if (i < 0 || !G.setCamMode) return;
+      prevMode = G.camMode;   // reset() hands the player's own camera back
       G.setCamMode(i, { persist: false });
       forcedTv = true;
     }
@@ -173,6 +174,10 @@ const Director = (function () {
 
       wall += dt > 0 ? dt : 0;
       const running = runningList();
+      // A subject that retired or took the flag leaves the shot now, not after SHOT_MAX_S.
+      if (subject && (subject.retired || subject.finished) && running.length) {
+        subject = null; onAirShot = null; lastCut = -1e9;
+      }
       // After the player is done, include them as a spectate subject via follow
       // of the field only — still no force path.
       const decision = decideCut({
@@ -193,7 +198,9 @@ const Director = (function () {
     }
     function reset() {
       wall = 0; lastCut = -1e9; cuts = 0; onAirShot = null; subject = null;
-      forcedTv = false; clearDbg();
+      // Auto-spectate forced "tv" non-persistently; the next race starts on the player's mode.
+      if (forcedTv && prevMode >= 0 && modeId() === "tv" && G.setCamMode) G.setCamMode(prevMode, { persist: false });
+      forcedTv = false; prevMode = -1; clearDbg();
     }
     function status() {
       return {

@@ -17,6 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
 
@@ -264,7 +265,11 @@ test("Car3D: OFF is the build that never heard of CarShade; ON (the default) is 
     assert.equal(pOn[name].vertices, pRef[name].vertices, name + " untouched");
   }
   for (const name of ["livery", "helmet", "sharkFin", "sponsorBoard", "bodyDetail", "wheels"]) assert.ok(pRef[name], name + " is still a part");
-  assert.ok(ms < 1500, `a smoothed build stays cheap enough for a garage pick (${ms} ms)`);
+  // A wall-clock budget, so scale it by how oversubscribed the box is (1-min
+  // loadavg per core, ≥ 1×, capped at 6×): an idle box still catches a
+  // pathological regression at 1500 ms, a loaded CI runner does not read as red.
+  const loadScale = Math.min(6, Math.max(1, os.loadavg()[0] / Math.max(1, os.cpus().length)));
+  assert.ok(ms < 1500 * loadScale, `a smoothed build stays cheap enough for a garage pick (${ms} ms, budget ${Math.round(1500 * loadScale)} ms)`);
   // The cockpit (first-person) build never rounds or smooths its body; only the
   // tyres it shows follow the page's switch (shaded shoulders, no vertex moved).
   const ck = Car3D.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], { teamId: "mclaren", smooth: true, cockpit: true, measure: true });

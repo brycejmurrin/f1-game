@@ -18,7 +18,8 @@
  *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
  *                                                   #   run it as a background task; exit 1 = a red)
  *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
- *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next
+ *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next (waits ≤ 10 min for
+ *                                                   #   loadavg < 3 between groups; exit 3 if it never settles)
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *
@@ -414,7 +415,7 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // refuse to start a browser group above loadavg 3 unless --force. Every false
   // red in tiny.log on 2026-09-01 was a start at loadavg > 3.
   const load1 = os.loadavg()[0];
-  if (!force && load1 >= 3) {
+  if (!force && load1 >= LOAD_LIMIT) {
     console.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
     console.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
     process.exit(3);
@@ -505,6 +506,22 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   say(`block:      node tools/ci/test-bg.mjs --wait`);
 }
 
+const LOAD_LIMIT = 3;                  // start()'s refusal threshold (1-min loadavg)
+const CHAIN_SETTLE_MS = 10 * 60_000;   // how long a chain waits for it between groups
+
+/** Resolve true once the 1-min loadavg is under LOAD_LIMIT, false after maxMs. */
+async function settleLoad(maxMs, pollMs = 15_000) {
+  const until = Date.now() + maxMs;
+  let told = false;
+  for (;;) {
+    const load1 = os.loadavg()[0];
+    if (load1 < LOAD_LIMIT) return true;
+    if (Date.now() >= until) return false;
+    if (!told) { say(`loadavg ${load1.toFixed(2)} >= ${LOAD_LIMIT}: waiting up to ${maxMs / 60000} min for it to settle before the next group`); told = true; }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
 /** Start each group, wait for it to finish, then start the next. */
 async function waitChain(groups, { force = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -518,6 +535,15 @@ async function waitChain(groups, { force = false } = {}) {
   for (let i = 0; i < groups.length; i++) {
     const g = groups[i];
     say(`── chain ${i + 1}/${groups.length}: ${g}`);
+    // start() REFUSES at loadavg >= 3 with process.exit(3) — right for a lone
+    // start, but in a chain the previous group's own teardown keeps the 1-min
+    // average up, so group 2 was refused and every later group died with it.
+    // Wait (bounded) for the load to settle; give up cleanly, naming the rest.
+    if (!force && !(await settleLoad(CHAIN_SETTLE_MS))) {
+      say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} after ${CHAIN_SETTLE_MS / 60000} min — not started: ${groups.slice(i).join(" ")}`);
+      process.exitCode = 3;
+      return;
+    }
     // Cap is 1 in sequential; force still allows starting when something else is live.
     start([g], { force, parallel: false });
     await waitForRunning();

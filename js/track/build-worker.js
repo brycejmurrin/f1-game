@@ -75,7 +75,11 @@ async function build(m) {
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx }));
   const ms = performance.now() - t0;
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
-  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, models: residentModels() };
+  // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
+  // (tracks.js); the main-thread def never sees it, so every later reader there
+  // (scenery reloads, frac-keyed tables, agent hooks) read 0. Send it back,
+  // with _startFrac (same story, tracks.js).
+  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels() };
   self.postMessage(msg, transferables(msg));
 }
 

@@ -772,6 +772,50 @@ test("load() never persists a season this build could not read whole (an unknown
   assert.equal(whole.S.lastLoadLossy(), false);
 });
 
+test("a season with an unknown circuit races the stored round's circuit and is never saved shrunk", () => {
+  // The stored round indexes the FULL calendar. Shrunk to the ids this build
+  // knows, round 2 of [monza, nosuch, monaco, imola] pointed at imola (skipping
+  // monaco), and endRace's SeasonCal.save wrote the 3-round calendar back.
+  const raw = { round: 2, pts: { d0: 25 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "nosuch", "monaco", "imola"] } };
+  const a = load({ season: raw });
+  a.S.engage("season");
+  const season = a.S.load();
+  assert.equal(season.round, 1, "the round is re-read as the known circuits already raced");
+  assert.equal(a.S.track(season.round).id, "monaco", "the next round is the circuit the save named");
+  const res = a.S.save(season);
+  assert.equal(res.ok, false, "a shrunk read is refused, not written back");
+  assert.equal(a.writes("season"), 0, "the stored 4-round calendar is never overwritten");
+  // A finished season stays finished (not blanked by round > rounds()).
+  const done = load({ season: { round: 4, pts: { d0: 100 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "nosuch", "monaco", "imola"] } } });
+  done.S.engage("season");
+  const fin = done.S.load();
+  assert.equal(fin.round, 3);
+  assert.equal(fin.pts.d0, 100);
+  // A new season (restart) is a new object and saves normally.
+  const fresh = a.S.restart();
+  assert.equal(a.S.save(fresh).ok, true);
+  // A save read whole keeps its round and saves exactly as before.
+  const whole = load({ season: { round: 2, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco", "imola"] } } });
+  whole.S.engage("season");
+  const w = whole.S.load();
+  assert.equal(w.round, 2);
+  assert.equal(whole.S.save(w).ok, true);
+});
+
+test("rankTeams: points, then the team's tier, then the id — one order for every constructors' table", () => {
+  const { S } = load();
+  const season = { teamPts: { b: 10, a: 10, c: 12, z: 10 } };
+  assert.deepEqual(["a", "b", "c", "z"].sort((x, y) => S.rankTeams(season, x, y)), ["c", "a", "b", "z"],
+    "no tier known: points then id");
+  // results-sheet routes both CONSTRUCTORS tables through teamOrder → rankTeams
+  // (not a bare Object.entries sort); career.teamStandings still ranks by id.
+  const results = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.match(results, /function teamOrder\(season\)/);
+  assert.match(results, /teamOrder\(season\)\.slice\(0, 5\)/, "results CONSTRUCTORS uses teamOrder");
+  assert.match(results, /^\s*const tmList = teamOrder\(season\);/m, "standings CONSTRUCTORS uses teamOrder");
+  assert.match(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), /SeasonCal\.rankTeams\(career\.season, a\.id, b\.id\)/);
+});
+
 test("boot's migrate-and-save never writes back a season load() refused (game.js)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
   assert.match(game, /season = GameStore\.migrateSeasonPoints\(season\); if \(!SeasonCal\.lastLoadLossy\(\)\) SeasonCal\.save\(season, \{ migration: true \}\);/);

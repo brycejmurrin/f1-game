@@ -308,7 +308,13 @@ const RaceControl = (function () {
         publish();
         return;
       }
-      if (!enabled) return;
+      // CAUTIONS off: no hazard loop, but a flag already flying (a host's,
+      // applied before the guest took race control back on a disconnect) must
+      // still age out at the hard cap, or its safety car stays out forever.
+      if (!enabled) {
+        if (!(held && caution.level <= held)) capDropIfExpired();
+        return;
+      }
       if (!DebrisWorld.active()) {
         // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
         // "debris going inactive mid-race freezes a flying flag") but it keeps
@@ -488,10 +494,19 @@ const RaceControl = (function () {
   // Returns a FRACTION of vTop() — the caller multiplies, so it rides PACE.
   const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
   function scQueueFrac(c, cars, total, leader, vTop, skip) {
+    const out = (o) => o.finished || o.retired || (skip && skip(o));
+    // A leader in the pit lane (or out) is not the front of the queue: the
+    // first car still on track by cumulative prog is. Otherwise that car's
+    // forward gap search wrapped to the tail of the field a lap away and it
+    // ran SC_CATCH while it should be setting the SC pace.
+    if (leader && out(leader)) {
+      leader = null;
+      for (const o of cars) if (!out(o) && (!leader || o.prog > leader.prog)) leader = o;
+    }
     if (!c || c === leader || !(total > 0)) return SC_PACE;
     let gap = Infinity;
     for (const o of cars) {
-      if (o === c || o.finished || o.retired || (skip && skip(o))) continue;
+      if (o === c || out(o)) continue;
       const d = ((o.prog - c.prog) % total + total) % total;   // forward, on the road
       if (d > 0 && d < gap) gap = d;
     }

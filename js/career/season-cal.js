@@ -250,6 +250,15 @@ function resume(saved) {
   activeCfg = frozenConfig(s && s.config ? s.config : config());
   resolved = null;
   const n = activeCfg.trackIds.length;
+  // MAP THE ROUND BY CIRCUIT ID. A stored calendar holding an id this build
+  // does not know shrinks in normalize(); the stored `round` indexes the FULL
+  // list, so read it as "the circuits already raced that this build knows" —
+  // the next round is the same circuit, and a finished season stays finished.
+  // Identity for a calendar read whole (every id known and unique).
+  const rawIds = s && s.config && Array.isArray(s.config.trackIds) ? s.config.trackIds : null;
+  if (rawIds && Number.isInteger(s.round) && s.round >= 0 && s.round <= rawIds.length && knownIds(rawIds).length) {
+    s.round = knownIds(rawIds.slice(0, s.round)).length;
+  }
   if (!s || !Number.isInteger(s.round) || s.round < 0 || s.round > n) {
     return restart();
   }
@@ -268,6 +277,7 @@ function resume(saved) {
   return s;
 }
 let lastLossy = false;
+let shrunkSeason = null;   // the season object load() read with a shrunk calendar: save() refuses it
 function lastLoadLossy() { return lastLossy; }
 function load() {
   const raw = store.get(SAVE_KEY, null);
@@ -281,12 +291,21 @@ function load() {
   // writing that back erased the circuit for good, or blanked a finished season.
   const lossy = !!raw && (season !== raw || (rawIds != null && season.config.trackIds.length !== rawIds));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
+  // Nor the race that follows: endRace's SeasonCal.save would persist the shrunk
+  // calendar and erase the unknown circuit for good. A build that knows every id
+  // reads the save whole again; restart()/applyConfig() hand out a new object.
+  shrunkSeason = rawIds != null && season === raw && season.config.trackIds.length !== rawIds ? season : null;
   if (raw && !lossy) save(season, { migration: true });
   return season;
 }
 function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
+    return lastSave;
+  }
+  if (season === shrunkSeason) {
+    lastSave = { ok: false, durable: false, reason: "unknown circuit" };
+    Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
     return lastSave;
   }
   const now = currentRevision();

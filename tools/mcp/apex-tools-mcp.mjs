@@ -1860,9 +1860,9 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     });
   }
   if (name === "apex_ci_status") {
-    // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 124 still running
-    // — each a verdict, not a tool failure. 3 (no token / API down) is one.
-    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 124]), env, signal }));
+    // ci-watch exits: 0 green / no run, 1 red, 2 cancelled, 4 superseded, 124
+    // still running — each a verdict, not a tool failure. 3 (no token / API down) is one.
+    return withCiVerdict(runSpawn(argv, { timeoutMs: 60000, allowExit: new Set([0, 1, 2, 4, 124]), env, signal }));
   }
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"

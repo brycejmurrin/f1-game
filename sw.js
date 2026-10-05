@@ -385,6 +385,14 @@ async function precacheAssetLists() {
   const shell = await fetch("index.html", { cache: "no-store" });
   if (!shell || !shell.ok) throw new Error("Unable to fetch the application shell");
   const html = await shell.text();
+  // ONE shell download seeds both shell keys: "./" and "index.html" are the
+  // same document, and the install used to fetch it three times (this parse
+  // plus one per key). A fresh Response per key, built from these bytes, also
+  // drops any redirect the server answered "index.html" with (a redirected
+  // response cannot answer a navigation).
+  const shellHeaders = {};
+  try { shell.headers.forEach((v, k) => { shellHeaders[k] = v; }); } catch (_) { /* header-less test double */ }
+  const shellResponse = () => new Response(html, { status: 200, headers: shellHeaders });
   const re = /<(script|link)\b[^>]*>/gi;
   let m;
   while ((m = re.exec(html))) {
@@ -408,7 +416,7 @@ async function precacheAssetLists() {
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
-  return { essential: Array.from(essential), optional: Array.from(optional) };
+  return { essential: Array.from(essential), optional: Array.from(optional), shellResponse };
 }
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
@@ -475,7 +483,9 @@ self.addEventListener("install", (event) => {
     // cached (or fail), an offline boot without it is "graphics unavailable".
     // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
     const isGlx = (u) => /^js\/render\/glx\//.test(u);
-    const required = urls.essential.concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
+    const isShell = (u) => u === "./" || u === "index.html";
+    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
+    await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
     await pooled(required, 6, (u) => cacheRequiredAsset(cache, u));
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
@@ -624,7 +634,13 @@ self.addEventListener("fetch", (event) => {
     // which caches.match(req) ever hit again from the fallback below, which
     // reads "index.html". A query navigation is served from the network and,
     // offline, from the precached shell like everything else.
-    const network = fetch(req, { cache: "no-store" }).then(async (res) => {
+    // The shell REVALIDATES ("no-cache": a conditional request, a 304 reuses
+    // the HTTP-cached bytes) — never served unvalidated, so the version guard
+    // sees exactly what "no-store" did, minus re-downloading an unchanged
+    // shell every launch. version.json and the ?b= bust keep "no-store": they
+    // are the fail-fast answers below, where the cheaper path buys nothing.
+    // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
+    const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then(async (res) => {
       if (res && res.ok && !isVersion && url.search === "") {
         // The write is awaited (the waitUntil below depends on that) but must
         // never reject the chain: a version.json hiccup (deploy window,

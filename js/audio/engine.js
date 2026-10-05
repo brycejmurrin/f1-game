@@ -1007,14 +1007,18 @@ const GameAudio = (function () {
     if (!engineOn) return;
     const t0 = now();
     soundtrack.releaseEngineDuck(t0, true);   // a line still on air keeps its own duck
-    engGain.gain.cancelScheduledValues(t0);
-    engGain.gain.setTargetAtTime(0, t0, 0.06);
-    whineGain.gain.setTargetAtTime(0, t0, 0.06);
-    harvGain.gain.setTargetAtTime(0, t0, 0.06);
-    ersGain.gain.setTargetAtTime(0, t0, 0.04);
-    windGain.gain.setTargetAtTime(0, t0, 0.06);
-    skidGain.gain.setTargetAtTime(0, t0, 0.04);
-    if (scrubGain) { scrubGain.gain.setTargetAtTime(0, t0, 0.04); lockGain.gain.setTargetAtTime(0, t0, 0.04); surfGain.gain.setTargetAtTime(0, t0, 0.06); }
+    // Every node is guarded: startEngine's catch calls this on a HALF-built
+    // graph, and one throw here skipped the stopAt()s below, leaking every
+    // oscillator already started.
+    if (engGain) { engGain.gain.cancelScheduledValues(t0); engGain.gain.setTargetAtTime(0, t0, 0.06); }
+    if (whineGain) whineGain.gain.setTargetAtTime(0, t0, 0.06);
+    if (harvGain) harvGain.gain.setTargetAtTime(0, t0, 0.06);
+    if (ersGain) ersGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (windGain) windGain.gain.setTargetAtTime(0, t0, 0.06);
+    if (skidGain) skidGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (scrubGain) scrubGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (lockGain) lockGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (surfGain) surfGain.gain.setTargetAtTime(0, t0, 0.06);
     if (brakeGain) brakeGain.gain.setTargetAtTime(0, t0, 0.06);
     const stopAt = (n, t) => { try { if (n) n.stop(t); } catch (e) { /* already stopped */ } };
     if (usingSamples) {
@@ -1529,11 +1533,11 @@ const GameAudio = (function () {
 
   function stopRain(keepWant) {
     if (!keepWant) rainWanted = false;
-    // Only clear rainPending when there is an active source to tear down.
-    // If rainStopping is already true and rainSrc is null, a prior stopRain is
-    // already running its 1.2 s teardown — clearing rainPending here would drop
-    // a startRain that queued itself during that window (rapid stop→start→stop).
-    if (!rainSrc) return;
+    // No source: a prior stopRain may still be running its 1.2 s teardown with
+    // a startRain queued behind it. A real (dry) stop cancels that queued
+    // restart — rain→dry→rain→dry inside the window otherwise restarted rain
+    // in a dry session. A keepWant teardown (tab hide / ctx rebuild) keeps it.
+    if (!rainSrc) { if (!keepWant) rainPending = null; return; }
     rainPending = null;   // a newer stop cancels a queued restart, wet or dry
     rainStopping = true;
     const s = rainSrc, g = rainGain, h = rainHp, l = rainLp;

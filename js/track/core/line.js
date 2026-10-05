@@ -533,8 +533,12 @@ const TrackLine = (function () {
       // the AI grades the exit of a chicane as the best passing place on the
       // circuit. Measured 2026-09-22: 233 such pairs across 52 circuits,
       // Monaco 15 of 22 corners, a -60.8 m overlap read as 3234 m of straight
-      // on a 3295 m lap.
-      let straight = c.s0 - prev.s1; if (straight < 0) straight = ci === 0 ? straight + L : 0;
+      // on a 3295 m lap. The seam case has the same trap: when the last
+      // corner's window ITSELF wraps (prev.s1 < prev.s0, its exit already past
+      // the seam), prev.s1 is in this lap's frame, so a negative gap is an
+      // overlap there too, not a lap-length straight.
+      let straight = c.s0 - prev.s1;
+      if (straight < 0) straight = ci === 0 && prev.s1 >= prev.s0 ? straight + L : 0;
       if (sorted.length === 1) straight = L - (c.s1 - c.s0);
       const iMid = Math.floor(wrapS(L, c.s0 - ZONE_M / 2) / L * n) % n;
       const width = clamp((hw[iMid] - 4) / 2.5, 0, 1);

@@ -280,7 +280,13 @@ function create(G, deps) {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list"); } catch (_) { photos = []; }
     if (!st.open || gen !== st.generation || paint !== libraryPaint) return;
-    const box = E["ps-library"]; box.replaceChildren();
+    const box = E["ps-library"];
+    // DELETE repaints the list under the focused button; keepFocus lands on the
+    // same slot in the new list instead of dropping focus to <body>.
+    const render = () => { box.replaceChildren(); paintPhotos(box, photos); };
+    if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(box, render); else render();
+  }
+  function paintPhotos(box, photos) {
     photos = photos.concat(session).sort((a, b) => b.at - a.at).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     for (const p of photos) {

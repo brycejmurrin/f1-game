@@ -137,7 +137,7 @@ const ResultsCam = (function () {
       reel = highlightsReel(tags, w.t0, w.t1, HIGHLIGHT_MAX_S);
       if (!reel.length && w.frames > 2) {
         const dur = Math.min(HIGHLIGHT_CLIP_S, Math.max(1, w.t1 - w.t0));
-        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: 0 }];
+        reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: -1 }];   // no tagged car: film the winner
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
