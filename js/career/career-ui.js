@@ -322,7 +322,7 @@ function create(G) {
         left.appendChild(head("BACKUP"));
         left.appendChild(el("div", "cr-note",
           "Save or restore every career slot as one JSON file. Settings and "
-          + "garage builds are not included — use SETTINGS › FILES and GARAGE › TEAM for those."));
+          + "garage builds are not included — use SETTINGS › BACKUP & RESTORE and GARAGE › TEAM for those."));
         left.appendChild(row);
       }
     }

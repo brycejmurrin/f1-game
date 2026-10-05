@@ -49,6 +49,9 @@ test("guide and history contents rail keys on wide sheet shape, strip when compa
   assert.match(js, /"cg-" \+ slug\(title\)/);
   assert.match(js, /head\("CAREER TOTALS", "ch-totals"\)/);
   assert.match(js, /head\("SEASON BY SEASON", "ch-seasons"\)/);
+  // Live survey: blurb still said SETTINGS › FILES after the door was renamed.
+  assert.match(js, /SETTINGS › BACKUP & RESTORE and GARAGE › TEAM/);
+  assert.doesNotMatch(js, /SETTINGS › FILES/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #cg-contents\)/);
   assert.match(css, /#career-history \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #ch-contents\)/);
   assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents/);

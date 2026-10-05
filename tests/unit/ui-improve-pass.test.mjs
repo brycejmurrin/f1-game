@@ -779,7 +779,14 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
   assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-pits:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-driving:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
+  assert.ok(decl(overlays, "#howtoplay .sheet-body::after", "height") ||
+    rulesFor(overlays, /#howtoplay \.sheet-body::after/).some((r) => r.decls.get("height")),
+    "HTP body keeps scroll slack so FRIENDS can reach the pane top");
+  assert.ok(decl(overlays, "#howtoplay .sheet-body", "scroll-padding-block-start") ||
+    rulesFor(overlays, /^#howtoplay \.sheet-body$/).some((r) => r.decls.has("scroll-padding-block-start")));
   assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
     "help rows must not synchronize two unrelated answers");
   assert.equal(decl(css("css/components.css"), "#howtoplay", "--sheet-w"), "1000px");
@@ -1619,8 +1626,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
   assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
-  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
+  assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
+    "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
+  assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
+  assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
