@@ -34,7 +34,7 @@ import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
-  help: "the agent surface manifest — no track needed",
+  help: "the agent surface manifest (still boots Chromium; browser-free: createGame(...).apex.agentHelp() in tools/lib/game-vm.cjs)",
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
   field: "the grid / standings  --detail brief|full",

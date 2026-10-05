@@ -1,0 +1,34 @@
+[
+{
+"query": "When a car pulls into the garage for the pit-work animation it arrives about a metre short of the jack and then teleports onto it. Fix the arrival so it eases into the mark, and show me how you validated the motion deterministically.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "the flyby intro at the start of a race cuts hard between shot 2 and shot 3 \u2014 the camera visibly jumps. can you smooth the shot transition and keep the rest of the sequence timing the same",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Add a slider to the camera tuner that controls how far the chase camera lags behind the car on acceleration, with sensible min/max, and prove the rig still frames the car on a flat straight.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "In Data Hub WATCH the broadcast camera swings too fast when it switches from the leader to P2 \u2014 it looks like whip-pan. Slow the follow-target blend down and keep a before/after measurement.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "I want the cinematic roadside camera to pan with the car a bit before it passes instead of sitting static until the car is in frame. Where does that motion live and how do I change it safely?",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Take six screenshots of Monza from the chase and cockpit cameras at fracs 0.1 to 0.6 so I can compare framing before and after my lighting change.",
+"expect": "playwright-probe"
+},
+{
+"query": "After I scrub the replay timeline back 10 seconds in HIGHLIGHTS the camera keeps looking at where the car used to be for a frame or two before it catches up. Why does the anchor survive the seek?",
+"expect": "replay-camera"
+},
+{
+"query": "The car feels floaty after kerb hits and the screen shake on a wall tap is barely noticeable. Punch up the hit feedback and camera kick without changing the driving physics.",
+"expect": "tune-physics"
+}
+]

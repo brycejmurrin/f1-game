@@ -5,6 +5,9 @@ const TrackMesh = (function () {
   const __M = Math;
 
   const { cross, MAT } = TrackGeom;
+  // The ground material a def names (def.terrainMat), else GRASS.
+  const GROUND_MATS = { SAND: MAT.SAND, SNOW: MAT.SNOW, CONCRETE: MAT.CONCRETE };
+  const groundMatOf = (def) => GROUND_MATS[def.terrainMat] != null ? GROUND_MATS[def.terrainMat] : MAT.GRASS;
   const { curvature, cr: catmull } = TrackSpline;
   const lerp = M4.lerp;
 
@@ -603,6 +606,7 @@ const TrackMesh = (function () {
     const _gWarm = (hash(_idn * 4.4) - 0.5) * 0.07;
     const _bG = pal.grass || [0.30, 0.42, 0.22];
     const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
+    const edgeMat = groundMatOf(track.def);
     // RACING-LINE WEAR FOLLOWS THE BAKED LINE. TrackLine.bake runs before
     // buildRoad (js/track/tracks.js), so track.line — the line's lateral offset
     // per node, +right metres, the same frame as the column offsets — is here:
@@ -713,7 +717,9 @@ const TrackMesh = (function () {
             c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
             m = MAT.ASPHALT;
           } else {
-            c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
+            // kerb ribbons added separately by buildKerbs; a def that names its
+            // ground material (terrainMat) carries it onto these edge columns too
+            c = grass; m = edgeMat;
           }
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
@@ -825,7 +831,7 @@ const TrackMesh = (function () {
     // The ground beyond the runoff verge: GRASS unless the def names SAND or
     // SNOW (the designer's desert / alpine themes; no shipped def does, so the
     // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
-    const groundMat = track.def.terrainMat === "SAND" ? MAT.SAND : track.def.terrainMat === "SNOW" ? MAT.SNOW : MAT.GRASS;
+    const groundMat = groundMatOf(track.def);
     const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();

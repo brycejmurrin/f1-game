@@ -77,6 +77,9 @@ function toolResult(body, { isError = false } = {}) {
   const result = {
     content: [{ type: "text", text: JSON.stringify(body) }],
   };
+  // MCP 2025-06-18: a tool that advertises an outputSchema MUST return
+  // structuredContent conforming to it, mirrored as serialized text (above).
+  if (body && typeof body === "object" && !Array.isArray(body)) result.structuredContent = body;
   if (isError || body.ok === false) result.isError = true;
   return result;
 }
@@ -324,7 +327,7 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -432,6 +435,7 @@ const CATALOG = [
         speed: { type: "number" },
         lateral: { type: "number" },
         what: { type: "string" },
+        id: { type: "string" },   // describe: prop:12 | corner:T3 | car:4 | span:2 (agent.mjs --id)
         radius: { type: "number" },
         limit: { type: "number" },
         seconds: { type: "number" },
@@ -1210,7 +1214,15 @@ function buildArgv(name, args) {
         String(args.frac ?? 0.1),
         String(args.cam || "orbit"),
       ];
-      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.out) {
+        // shot.mjs's 4th positional is a FILE (`[out.png]`); a directory here
+        // made it write a path with no extension and die 84 s later with
+        // "unsupported mime type null" (measured 2026-10-05). Keep the CLI's
+        // own default name inside the directory instead.
+        const out = assertSafeOut(args.out);
+        const track = String(args.track || "monza"), cam = String(args.cam || "orbit");
+        argv.push(/\.png$/i.test(out) ? out : path.join(out, `${track}-${Math.round(Number(args.frac ?? 0.1) * 100)}-${cam}.png`));
+      }
       if (args.az != null) argv.push("--az", String(args.az));
       if (args.el != null) argv.push("--el", String(args.el));
       if (args.dist != null) argv.push("--dist", String(args.dist));
@@ -1231,6 +1243,7 @@ function buildArgv(name, args) {
         ["speed", args.speed],
         ["lateral", args.lateral],
         ["what", args.what],
+        ["id", args.id],
         ["radius", args.radius],
         ["limit", args.limit],
         ["seconds", args.seconds],
@@ -1867,18 +1880,82 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || name === "apex_frame_report" || name === "apex_who_is_on_it";
-  const timeoutMs = longTree ? 180000 : 60000;
+  // verify-change --fast runs the node suites serially; measured >180 s on a
+  // ~90-file diff (2026-10-05), where the cap killed it with no verdict. Ten
+  // minutes is its ceiling; the host moves a long MCP call to the background.
+  const timeoutMs = name === "apex_verify_change_fast" ? 600000 : longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
   return runSpawn(argv, { timeoutMs, allowExit, env, signal });
 }
 
+// Tool annotations (MCP 2025-06-18 ToolAnnotations). The spec's defaults are
+// destructiveHint: true and openWorldHint: true, which misdescribe nearly every
+// wrap here; derive honest hints from the catalog instead of restating them per
+// tool. Clients treat these as untrusted hints, so they are self-description,
+// not a permission boundary — the pins and the lock remain the real guards.
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+const DESTRUCTIVE = new Set(["apex_job_cancel"]);
+const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
+function toolAnnotations(entry) {
+  const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
+  return {
+    title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "),
+    readOnlyHint: readOnly,
+    destructiveHint: DESTRUCTIVE.has(entry.name),
+    idempotentHint: readOnly || DESTRUCTIVE.has(entry.name),
+    openWorldHint: OPEN_WORLD.has(entry.name),
+  };
+}
+
+// Every result body is the CLI's JSON summary (ok / error / message / fix /
+// argv / durationMs / out) — toolResult mirrors it as structuredContent. The
+// race-HUD pair adds the keys hudResult builds.
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    error: { type: "string" },
+    message: { type: "string" },
+    fix: { type: "string" },
+    tool: { type: "string" },
+    dryRun: { type: "boolean" },
+    argv: { type: "array", items: { type: "string" } },
+    durationMs: { type: "number" },
+    out: {},
+  },
+  additionalProperties: true,
+};
+const HUD_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: {
+    ...RESULT_SCHEMA.properties,
+    counts: { type: "object" },
+    report: { type: "string" },
+    findingsMd: { type: "string" },
+    indexHtml: { type: "string" },
+    cell: { type: "string" },
+    shot: { type: ["string", "null"] },
+    findings: { type: "array" },
+    measurements: { type: "array" },
+    cells: { type: "array" },
+    top: { type: "array" },
+    sheets: { type: "array" },
+  },
+};
+function toolOutputSchema(entry) {
+  return /^apex_hud_(shot|survey)$/.test(entry.name) ? HUD_RESULT_SCHEMA : RESULT_SCHEMA;
+}
+
 function listTools() {
   return CATALOG.map((t) => ({
     name: t.name,
+    title: toolAnnotations(t).title,
     description: t.description,
     inputSchema: t.inputSchema,
+    outputSchema: toolOutputSchema(t),
+    annotations: toolAnnotations(t),
   }));
 }
 

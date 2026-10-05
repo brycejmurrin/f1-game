@@ -11,7 +11,7 @@
 //
 // Usage:
 //   node tools/track/verify-track.cjs <trackId>     # verify one track
-//   node tools/track/verify-track.cjs --all         # verify every track in js/track/tracks.js
+//   node tools/track/verify-track.cjs --all         # verify every circuit in Tracks.LIST (js/circuits/)
 //   node tools/track/verify-track.cjs <id> --quiet  # OK line only (no diagnostics report)
 //
 // Success: prints "OK <id>: props N verts (road Y, terrain Z)" and, unless
@@ -34,6 +34,10 @@ const MANIFEST = require("../manifest.cjs");
 if (require.main === module) main();
 
 function main() {
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node tools/track/verify-track.cjs <trackId> [--quiet]   # build one circuit in a VM; any THROW fails\n       node tools/track/verify-track.cjs --all [--quiet]       # every circuit (APEX_CIRCUITS narrows it)");
+  process.exit(0);
+}
 const quiet = process.argv.includes("--quiet");
 const args = process.argv.slice(2).filter((a) => a !== "--quiet");
 if (args[0] === "--all") {

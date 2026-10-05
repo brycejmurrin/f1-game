@@ -528,6 +528,9 @@ const api = {
     // that has not changed at all.
     xOn: G.setupPreviewXOn, aeroX: G.setupPreviewAeroX,
   }),
+  // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
+  garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
+  garagePrewarm: (on) => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().setEnabled(on) : null),   // the title prebuild's A/B switch (session; apex26.garagePrewarm="off" at boot)
   // GARAGE ACTIVE AERO, drivable without a frame loop. The preview eases inside
   // the rAF render, and a headless page composites no frames at all, so the
   // whole garage animation was unobservable from a test — which is exactly how
@@ -1946,8 +1949,8 @@ const api = {
   },
 
   // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
-  // a READ-ONLY race-logic layer over DebrisWorld.hazards() (see js/game.js). It
-  // never slows or moves a car. No arg: current state
+  // the flag machine in js/race/race-control.js over DebrisWorld.hazards();
+  // game.js applies its SC/VSC speed cap (cautionV). No arg: current state
   //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
   //     sectors[3], sinceT, cause, enabled }.
   //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().

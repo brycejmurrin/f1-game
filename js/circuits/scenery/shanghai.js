@@ -165,8 +165,11 @@
           out._mat = MAT.METAL;
           // Stepped white wing slabs behind the garages (decorative cantilevers —
           // posts that reach grade clipped the bay; a few unsupported prims are
-          // cheaper than a severe clip raise).
-          for (const [d, y, w] of [[6, 12.8, 8], [13, 13.9, 8], [20, 15.2, 8], [27, 16.7, 8]]) {
+          // cheaper than a severe clip raise). The d20 / d27 pair rested on the
+          // old seven-box main stand, now moved to the pit straight; alone
+          // they read +12 unsupported (ground-audit, 2026-10-05), and the d13
+          // slab then floated 13.3 m (float-audit), so all three retired.
+          for (const [d, y, w] of [[6, 12.8, 8]]) {
             const aW = anchor(K(s), -1, d);
             addBox(out, vadd(aW.c, aW.u, y), [w, 0.55, 15.6], WHITE, [aW.r, aW.u, aW.t]);
           }
@@ -209,20 +212,34 @@
       building(K(0.98), -1, 14, 16, 11, 55,
         { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
 
-      (function twinWings() {
-        // Long white main stand (L) — steeply raked tiers (~30k seats on the
-        // real stand: Autosport 2004 / Wikipedia). Flat roof, no cantilever clutter.
+      // RACING-frame fractions. This file's s = 0 is the scenery origin
+      // (sceneryStartFrac), not the start line: sl(r) maps a racing-lap
+      // fraction r (0 = the real start line) onto it — the brands_hatch idiom.
+      // Measured 2026-10-05 (track-build-vm): K(0.004..0.08) sits INSIDE the
+      // T1-T3 snail, so the pit-straight set dressed there read as a bare start
+      // straight; the pit straight is racing ~0.932 -> 0.030 (pit lane sA/sB),
+      // engine pit complex on side +1, so the main stand is side -1.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (((f + SL) % 1) + 1) % 1;
+
+      (function mainGrandstand() {
+        // Main grandstand opposite the pits — ~29-30k seats, raked tiers under
+        // a sweeping cantilever roof facing the grid (Wikipedia; Autosport
+        // 2004). Seven ~52 m bays ≈ 365 m, racing -0.052 .. +0.007 (start line
+        // at 0); exact stand length is UNCERTAIN, the read is "huge stand".
+        // https://en.wikipedia.org/wiki/Shanghai_International_Circuit
         // https://www.autosport.com/f1/news/analysis-china-raises-f1-to-new-heights-5067038/5067038/
         for (let i = 0; i < 7; i++) {
-          const s = 0.012 + i * 0.011;
-          const a = anchor(K(s), -1, 20), b = [a.r, a.u, a.t];
-          addBox(out, vadd(vadd(a.c, a.u, 5), a.r, 6), [14, 10, 15], SEAT, b);
-          addBox(out, vadd(vadd(a.c, a.u, 7.5), a.r, 1), [14, 2.6, 5], CROWD, b);
-          addBox(out, vadd(vadd(a.c, a.u, 8), a.r, 14), [14, 16, 2.5], CONC, b);
-          addBox(out, vadd(vadd(a.c, a.u, 16.5), a.r, 4), [14.5, 1.1, 20], WHITE, b);
-          for (const tOff of [-6, 0, 6])
-            seat.cyl(out, vadd(vadd(a.c, a.t, tOff), a.r, -3), 0.35, 16.2, STEEL, 6, b);
+          grandstandEx(sl(-0.052 + i * 0.0098), -1, 12, 52, null, null, {
+            livery: i % 2 ? "alu" : "crimson", tiers: 2, roof: "cantilever",
+            suites: true, endWalls: i === 0 || i === 6,
+          });
         }
+      })();
+
+      (function twinWings() {
+        // (The old seven-box "main stand" here stood at K 0.012..0.078 — the
+        // T1-T3 snail, on top of the snail stands; the real one is above.)
 
         // Twin wing bridges — CONFIRMED: aluminium, glass and steel decks
         // spanning the pit straight at either end of the main-stand/pit complex
@@ -273,14 +290,18 @@
               seat.cyl(stage, vadd(aL.c, aL.t, tOff), 0.45, pierH, STEEL, 6, bL);
           });
         };
-        wingPier(0.004, 38, (bounds, emit) => {
+        // Re-keyed 2026-10-05 from file 0.004 / 0.022 (racing ~0.094 / 0.112,
+        // spanning the snail) onto the pit straight, one beyond each end of
+        // the main stand: racing -0.064 and +0.022.
+        const W1 = sl(-0.064), W2 = sl(0.022);
+        wingPier(W1, 38, (bounds, emit) => {
           modelGroup("shanghai-wing-east", bounds, emit, { required: true });
         });
-        wingDeck("shanghai-wing-east-deck", 0.004, 38, 8.0, WHITE);
-        wingPier(0.022, 36, (bounds, emit) => {
+        wingDeck("shanghai-wing-east-deck", W1, 38, 8.0, WHITE);
+        wingPier(W2, 36, (bounds, emit) => {
           modelGroup("shanghai-wing-west", bounds, emit, { required: true });
         });
-        wingDeck("shanghai-wing-west-deck", 0.022, 36, 7.0, [0.86, 0.88, 0.90]);
+        wingDeck("shanghai-wing-west-deck", W2, 36, 7.0, [0.86, 0.88, 0.90]);
       })();
 
       building(K(0.042), -1, 70, 20, 28, 34, {
@@ -293,8 +314,6 @@
       // Start gantry over the line — the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
       // alone put the gantry — and the start lamps it carries — 508 m away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       gantry(sl(0.004), 9, STEEL);
 
       wall(0.965, 0.05, 1, 6, 1.1, WHITE);
@@ -811,8 +830,10 @@
       (function crowds() {
         const spots = [
           [0.045, -1, 18], [0.06,  1, 70], [0.46, 1, 16],
-          [0.80,   1, 22], [0.905,-1, 20], [0.10,-1, 30],
+          [0.80,   1, 22], [0.10,-1, 30],
         ];
+        // [0.905, -1, 20] retired 2026-10-05: it is racing ~-0.006, inside the
+        // footprint of the main grandstand (mainGrandstand above) — clip 2.56 m.
         for (const [s, sd, d] of spots) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {

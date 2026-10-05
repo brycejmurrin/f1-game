@@ -26,6 +26,10 @@
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log("usage: node tools/net/rtc-e2e.mjs\n  A REAL WebRTC handshake between two headless pages (boots two Chromiums, ~10 s). Takes no flags.");
+  process.exit(0);
+}
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4467;
 const alive = async () => {

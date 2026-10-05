@@ -1,8 +1,37 @@
 # garage-angles.mjs — when, how, and how fast
 
+**Contents**
+
+- [Pick the cheapest path first](#pick-the-cheapest-path-first)
+- [Everything is an axis](#everything-is-an-axis)
+  - [Cameras](#cameras)
+  - [Stations — cameras keyed to a PART](#stations-cameras-keyed-to-a-part)
+  - [Designs](#designs)
+  - [Free camera](#free-camera)
+  - [Comparisons](#comparisons)
+  - [Session — hot-swapping designs](#session-hot-swapping-designs)
+  - [Output](#output)
+- [Presets are starting points](#presets-are-starting-points)
+- [Fast iteration](#fast-iteration)
+- [Multi-team](#multi-team)
+- [Before you run](#before-you-run)
+- [When NOT to use](#when-not-to-use)
+- [Offline preflight](#offline-preflight)
+
+
 The garage is the only place occlusion, wall crests, and real lighting get a
 vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
 answered placement and you need **lit, foreshortened** proof.
+
+## Contents
+- Pick the cheapest path first
+- Everything is an axis
+- Presets are starting points
+- Fast iteration
+- Multi-team
+- Before you run
+- When NOT to use
+- Offline preflight
 
 ## Pick the cheapest path first
 
@@ -74,7 +103,7 @@ The absolute flags, targets and lamps go through `__apex.garageFrame`;
 `--picker-team` still clicks the DOM for the counted flags only.
 
 **The game clamps the orbit, not the tool.** Elevation is `0..1.30` rad
-(`SP_EL_MIN/MAX`, `js/game.js`): the eye never goes below the target, so a
+(`SP_EL_MIN/MAX`, `js/garage/setup-camera.js`): the eye never goes below the target, so a
 "looking up" shot is not reachable — put the TARGET below the subject instead
 and the subject lands above frame centre from a floor-level eye. Distance is
 `4.6..15` m on every base view except `wingFront` (2.0) and `wingRear` (1.8),

@@ -13,7 +13,8 @@
               modelGroup, groundPatch, groundedSegments,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
-              cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt } = api;
+              cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt,
+              indexSolid } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -151,8 +152,19 @@
       // follows the winding stadium route and never costs a box per seat.
       // Short, atomic upper-deck segments follow the winding stadium route.
       // Their roofs remain legitimate architecture but never chord across tarmac.
+      // Built lap length (m), to turn a stand's length into an arc fraction.
+      let lapLen = 0;
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        lapLen += Math.hypot(px[j] - px[i], pz[j] - pz[i]);
+      }
       const boundedStand = (s, side, gap, len, col, crowd, required) => {
         const k = K(s), depth = 12, a = anchor(k, side, gap + depth / 2);
+        // Reserve the footprint: the deferred roadside trees (plantTree ->
+        // clearTreeDist) only avoid RECORDED solids, and a modelGroup records
+        // none, so crowns grew through the crowd face (0.026, 0.900).
+        const hf = (len / 2 + 2) / lapLen;
+        indexSolid(s - hf, s + hf, side, gap, depth);
         const bv = [a.r, a.u, a.t], h = 12;
         modelGroup(`mexico-stand-${k}-${side}-${gap}`, {
           center: vadd(a.c, a.u, h / 2),
@@ -434,20 +446,29 @@
         BOWL_BLUE, BOWL_GREY, BOWL_POP,
       ];
       const BOWL_SHELL = [[0.62, 0.61, 0.60], [0.54, 0.54, 0.55]];
-      for (const side of [-1, 1]) {
-        tieredBowl(0.728, 0.858, side, 9, {
-          tiers: 4, tierDepth: 5.2, base: 3.6, rise: 3.1,
-          shell: BOWL_SHELL, fascia: [0.90, 0.89, 0.84],
-          crowd: SEAT_NAVY, density: 0.66, step: 9,
-        });
-      }
-      for (const side of [-1, 1]) {
-        terrace(0.734, 0.852, side, 32, {
-          rows: 5, rise: 1.9, depth: 2.8,
-          conc: [0.68, 0.67, 0.64], concAlt: [0.58, 0.57, 0.56],
-          crowd: SEAT_NAVY, density: 0.5, step: 10,
-        });
-      }
+      // The right-hand (inside) rake breaks at the 90-degree stadium entry
+      // (built R ~26 m at 0.822-0.830): four tiers reach 30 m from the road,
+      // past the corner's centre of curvature, so the steps on either side of
+      // the apex folded into one another — risers 4.8 m deep inside each other
+      // (clip-audit 2026-10-05). The outside (left) rake runs through.
+      const BOWL_OPTS = {
+        tiers: 4, tierDepth: 5.2, base: 3.6, rise: 3.1,
+        shell: BOWL_SHELL, fascia: [0.90, 0.89, 0.84],
+        crowd: SEAT_NAVY, density: 0.66, step: 9,
+      };
+      tieredBowl(0.728, 0.858, -1, 9, BOWL_OPTS);
+      tieredBowl(0.728, 0.814,  1, 9, BOWL_OPTS);
+      tieredBowl(0.836, 0.858,  1, 9, BOWL_OPTS);
+      // The upper terrace breaks at the same corner for the same reason: on
+      // the inside it stands 32-48 m off the road, beyond the apex's centre.
+      const UPPER_OPTS = {
+        rows: 5, rise: 1.9, depth: 2.8,
+        conc: [0.68, 0.67, 0.64], concAlt: [0.58, 0.57, 0.56],
+        crowd: SEAT_NAVY, density: 0.5, step: 10,
+      };
+      terrace(0.734, 0.852, -1, 32, UPPER_OPTS);
+      terrace(0.734, 0.812,  1, 32, UPPER_OPTS);
+      terrace(0.838, 0.852,  1, 32, UPPER_OPTS);
       boundedStand(0.744, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_BLUE, false);
       boundedStand(0.842, -1, 52, 26, [0.60, 0.59, 0.58], BOWL_GREY, false);
       // Entry/exit end caps stay behind the bright apertures.
@@ -540,11 +561,22 @@
           }, { required: true });
         }
       }
-      terrace(0.892, 0.952, 1, 46, {
-        rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,
-        conc: [0.70, 0.69, 0.66], concAlt: [0.60, 0.59, 0.57],
-        density: 0.58, step: 10,
-      });
+      // The inner Peraltada terrace, as separate stand blocks rather than one
+      // continuous run. It is on the INSIDE of the curve, 46-63 m off the
+      // road: one continuous run started before the R ~22 m right-hander at
+      // 0.910, where those rows sat past the centre of curvature and the run
+      // before the corner and the run after it overlapped, and even on the
+      // R ~100-160 m sweep after it consecutive 10 m treads overlapped ~5 m at
+      // the back rows (about L/R of every tread; clip-audit 2026-10-05).
+      // Single-node blocks 8 m long, ~28 m apart, leave clear air between
+      // neighbours even at the back row.
+      for (let s = 0.920; s <= 0.951; s += 0.0065) {
+        terrace(s, s, 1, 46, {
+          rows: 6, rise: 1.7, depth: 2.7, crowd: crowdCols,
+          conc: [0.70, 0.69, 0.66], concAlt: [0.60, 0.59, 0.57],
+          density: 0.58, step: 8,
+        });
+      }
       // Taller floodlights flanking the Peraltada
       lightMast(K(0.90), 1, 32, 44);
       lightMast(K(0.94), 1, 32, 44);
@@ -555,12 +587,10 @@
       cameraTower(K(0.92), -1, 18, { h: 20 });
       sponsorHoarding(0.895, 0.935, -1, 9, { palette: fiesta });
 
-      // Banked kerb edges through the Peraltada/Estadio corners
-      for (const s of [0.89, 0.92, 0.95]) {
-        const k = K(s);
-        place(k, 1, 2.2, [2.4, 0.6, 9], [0.80, 0.76, 0.72]);
-        place(k, 1, 1.8, [0.6, 0.16, 9], [0.88, 0.12, 0.12]);
-      }
+      // (The Peraltada "banked kerb edges" were place() boxes 0.6 and 0.16 m
+      // tall: place() sinks every box 0.8 m, so both stood wholly underground
+      // and drew nothing — ground-audit's buried count. The corner's kerbs are
+      // kerb()'s, above.)
 
       // Mexican flag strip accents at the Peraltada outer bank
       for (let i = 0; i < 6; i++) {
@@ -633,9 +663,15 @@
           endWalls: i % 5 === 0,
         });
       }
-      terrace(0.215, 0.265,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
+      // Ends before the T7 right-hander (built R ~33 m at 0.255): carried
+      // through it, the inside rows 20-33 m off the road folded onto
+      // themselves (1.85 m, clip-audit 2026-10-05).
+      terrace(0.215, 0.248,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
-      terrace(0.915, 0.965, -1, 20, { rows: 4, rise: 1.6, depth: 2.6,
+      // gap 18, not 20: with the trees that grew through it now kept out
+      // (blocked() below), its back rows over the falling ground read as
+      // unsupported at 20 (ground-audit 13 > 11); 2 m closer they seat.
+      terrace(0.915, 0.965, -1, 18, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
 
       avenue(0.60, 0.70, -1, 15, 30);
@@ -677,6 +713,7 @@
         if (s < 0.50) return;   // start-finish straight + park/city sections handled
         if (s > 0.70 && s < 0.90) return;   // stadium section
         for (const side of [-1, 1]) {
+          if (blocked(s, side)) continue;   // a stand/terrace already stands here
           const r = hash(k * 91 + side);
           if (r > 0.50) continue;
           const d = cityBand(s) ? 22 + hash(k * 92 + side) * 8
@@ -704,6 +741,7 @@
           const s = k / n;
           if (s < 0.50) continue;   // start-finish straight + park/city sections handled elsewhere
           if (s > 0.70 && s < 0.90) continue;   // stadium section
+          if (blocked(s, side)) continue;   // a stand/terrace already stands here
           if (hash(k * 57 + side) > 0.62) continue;
           const d = cityBand(s) ? 22 + hash(k * 63 + side) * 8
                                 : 15 + hash(k * 63 + side) * 20;
@@ -720,6 +758,10 @@
         const pA = anchor(K(0.45), -1, 55);
         if (!onTrack(pA.c[0], pA.c[2], 14)) {
           const pb = [pA.r, pA.u, pA.t];
+          // Reserve the 20 m base so the deferred forestEdge treeline walks
+          // its crowns clear of it (a cone stood 1.5 m into the base).
+          const hf = 12 / lapLen;
+          indexSolid(0.45 - hf, 0.45 + hf, -1, 45, 20);
           // Three stacked boxes — stepped pyramid silhouette, bases on ground
           addBox(out, vadd(pA.c, pA.u, 2.0),  [20, 4,  20], STONE, pb);
           addBox(out, vadd(pA.c, pA.u, 6.0),  [14, 4,  14], STONE, pb);
@@ -782,11 +824,11 @@
 
       // Mid/far city tower ring — thinned + pushed so mountains win the horizon
       // A ring tower is 380+ m off ITS leg, but the lap folds: two landed
-      // 91/143 m off the Mixiuhca park stretch (0.10-0.30, T1 -> Esses).
-      // Keep that stretch's skyline >= 150 m out; other stretches unchanged.
-      const PARK_K0 = K(0.10), PARK_K1 = K(0.30);
-      const nearParkRoad = (x, z) => {
-        for (let k = PARK_K0; k <= PARK_K1; k++) {
+      // 91/143 m off the Mixiuhca park stretch (0.10-0.30, T1 -> Esses) and one
+      // (h 44) 30 m off the 0.48-0.68 park. The ring is the FAR skyline, so it
+      // keeps >= 150 m from every leg of the lap, not only the one it hangs off.
+      const nearAnyLeg = (x, z) => {
+        for (let k = 0; k < n; k++) {
           if (Math.hypot(px[k] - x, pz[k] - z) < 150) return true;
         }
         return false;
@@ -799,7 +841,7 @@
         const h = 32 + hash(i * 37) * 58;
         const w = 18 + hash(i * 53) * 16;
         const p = anchor(k, side, d);
-        if (!onTrack(p.c[0], p.c[2], 20) && !nearParkRoad(p.c[0], p.c[2])) {
+        if (!onTrack(p.c[0], p.c[2], 20) && !nearAnyLeg(p.c[0], p.c[2])) {
           const tone = 0.60 + hash(i * 41) * 0.10;
           building(k, side, d - w / 2, w, h, w,
             { wall: [tone * 0.98, tone, tone * 1.02],

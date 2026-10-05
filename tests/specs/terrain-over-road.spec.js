@@ -95,7 +95,8 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     // 0.02-0.30: the Magdalena Mixiuhca park band (T1 -> Esses), where the
     // generic city pass stood 20-50 m towers 25-30 m off both edges.
     expect.objectContaining({ kind: "city", s0: 0.02, s1: 0.30 }),
-    expect.objectContaining({ kind: "city", s0: 0.60, s1: 0.94 }),
+    // 0.48 not 0.60: the same park's sports-facility side.
+    expect.objectContaining({ kind: "city", s0: 0.48, s1: 0.94 }),
     expect.objectContaining({ kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 }),
   ]));
   // mexico.js authors a deliberate gentle profile. The old "essentially flat"

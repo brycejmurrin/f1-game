@@ -72,10 +72,9 @@ function parseArgs(argv) {
 
 const { force, maxLoad, rest } = parseArgs(process.argv.slice(2));
 
-if (!rest.length || rest.includes("--help") || rest.includes("-h")) {
-  console.error("usage: node tools/ci/test-solo.mjs [--force] [--max-load N] <spec.js> [-g <pattern>]");
-  process.exit(2);
-}
+const USAGE = "usage: node tools/ci/test-solo.mjs [--force] [--max-load N] <spec.js> [-g <pattern>]";
+if (rest.includes("--help") || rest.includes("-h")) { console.log(USAGE); process.exit(0); }
+if (!rest.length) { console.error(USAGE); process.exit(2); }
 
 const load = load1();
 const busy = load > maxLoad;
