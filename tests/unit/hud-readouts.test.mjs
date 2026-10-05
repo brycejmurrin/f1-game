@@ -284,13 +284,15 @@ test("LiveRegion: a lower-priority line waits out the hold; stale HUD lines are 
 
 test("hud.js: the flag and the radio go through the one writer", () => {
   const hud = read("js/ui/hud.js"), game = read("js/game.js"), ro = read("js/ui/hud-readouts.js");
-  for (const [name, code] of [["hud.js", hud], ["game.js", game], ["hud-readouts.js", ro]]) {
+  const sel = read("js/ui/select-screen.js");   // the SESSION ONLY warning, the fourth voice
+  for (const [name, code] of [["hud.js", hud], ["game.js", game], ["hud-readouts.js", ro], ["select-screen.js", sel]]) {
     assert.doesNotMatch(code, /setTimeout\(\(\) => \{ live\.textContent =/, `${name} must not time its own #announce-live write`);
     assert.match(code, /LiveRegion\.say\(/, `${name} speaks through LiveRegion`);
   }
   assert.match(hud, /LiveRegion\.say\(said, "flag"\)/);
   assert.match(game, /LiveRegion\.say\(said, kind\)/);
   assert.match(ro, /LiveRegion\.say\(said, "hud"\)/);
+  assert.match(sel, /LiveRegion\.say\(text, "save"\)/);
 });
 
 // ── the timing tower and its chips ────────────────────────────────────────────
