@@ -42,10 +42,18 @@ const GROWTH_MB = 10;
 test.use({ viewport: { width: 960, height: 540 } });
 // Anti-vacuity: a reading taken before the world drew (or with the world
 // hidden) cannot see a render-object leak. Every reading must have drawn at
-// least this many render objects. Measured 54–312 on monza/monaco here: a
-// revisit draws less than the first visit (monza 109–145, then 54 every run),
-// so this floor only rules out an undrawn world; assertion 2 is the leak's.
-const MIN_RENDER_OBJECTS = 40;
+// least this many render objects. Measured 54–312 on monza/monaco under
+// SwiftShader: a revisit draws less than the first visit (monza 109–145, then
+// 54 every run). On CI's llvmpipe runners the monza revisit reads 39 — the
+// live RenderObject cache is pruned 20 s after a wrapper was last seen
+// (tlx.js prunePool), so a slower visit cycle leaves fewer live objects, and
+// three runs on 2026-10-05 (37267789050, 37272291867 and the deploy tip's
+// own gfx 37273020922) all read exactly 39 against the old floor of 40. The
+// floor only rules out an UNDRAWN world (the switch drops the old world's
+// objects, so an undrawn new one reads a handful at most); assertion 2 is the
+// leak's. 20 keeps that discrimination on both adapters; the census also
+// records the last frame's draw calls so the next calibration has them.
+const MIN_RENDER_OBJECTS = 20;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
@@ -76,7 +84,7 @@ test("loading circuits one after another keeps one world in memory and does not 
         .toBeGreaterThanOrEqual(MIN_RENDER_OBJECTS);
       (heap[id] = heap[id] || [])[visit] = c.heapMB;
       const nbc = await page.evaluate(() => { const n = window.renderer && window.renderer._nodes; let zero = 0; if (n) for (const st of n.nodeBuilderCache.values()) if (st.usedTimes <= 0) zero++; return n ? { size: n.nodeBuilderCache.size, zero } : null; });
-      readings.push({ visit, id, heapMB: c.heapMB, renderObjects: c.three && c.three.renderObjects, nodeBuilderCache: nbc });
+      readings.push({ visit, id, heapMB: c.heapMB, renderObjects: c.three && c.three.renderObjects, drawCalls: c.three && c.three.drawCalls, nodeBuilderCache: nbc });
       mkdirSync("artifacts/logs", { recursive: true });
       writeFileSync("artifacts/logs/track-switch-memory.json", JSON.stringify(readings, null, 1));
       expect(nbc, "three r186 keeps renderer._nodes.nodeBuilderCache; a three upgrade that moves it must move this read").not.toBeNull();

@@ -65,6 +65,9 @@ export function readCensus() {
       three = {
         geometries: r.info.memory.geometries, textures: r.info.memory.textures,
         renderObjects: r._objects && r._objects._renderObjects ? r._objects._renderObjects.size : null,
+        // The last frame's draw calls: a drawn world is tens, a still is ~0,
+        // and unlike the RenderObject cache it is not pruned by idle time.
+        drawCalls: r.info.render && typeof r.info.render.calls === "number" ? r.info.render.calls : null,
       };
     }
   } catch (_) { three = null; }
