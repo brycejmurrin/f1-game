@@ -24,24 +24,34 @@
 }
 #menu-retention .bigbtn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15em;
+  gap: 0.65em;
   min-width: 0;
   padding-block: calc(var(--gap) * 0.65);
 }
-/* A career save unhides CONTINUE beside Daily. Side-by-side label+sub
-   then ellipsised to "2026 · ROU…" / "MONTREA…" (desktop survey
-   2026-10-05). Stacked, each line gets the chip. Compact-wide already
-   did this; the returning-player title is not compact. */
-#menu-retention .bigbtn > span { max-width: 100%; }
 #menu-retention .mb-sub {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* CONTINUE + Daily: row+ellipsis is the desktop title (1440
+   title-desktop golden). Stack only under 1366px so a ~500px / 1280
+   returning save can show ROUND + circuit (CI 37371854254 leaked
+   column flex into the 1440 golden — 6%). Compact-wide already stacks. */
+@media (max-width: 1366px) {
+  #menu-retention .bigbtn {
+    flex-direction: column;
+    gap: 0.15em;
+  }
+  #menu-retention .bigbtn > span { max-width: 100%; }
+  #menu-retention .mb-sub {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
 }
 /* Shared gap / stretch. Column count lives on each row: primary is a
    forced 2x2, explore and secondary wrap from local space. */
@@ -407,10 +417,13 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
 }
 /* Mid-wide (~752–768) 5-across rooms sat flush on the viewport floor
-   (apex9). Same --tap air the tall leftover-row already keeps. */
-:where(body[data-shape="wide"]) #overlay #menu-buttons {
-  padding-bottom: calc(var(--tap) + var(--gap));
-  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+   (apex9). Same --tap air the tall leftover-row already keeps. Cap
+   at 899 so 1440 title-desktop does not grow a leftover inset. */
+@media (max-width: 899px) {
+  :where(body[data-shape="wide"]) #overlay #menu-buttons {
+    padding-bottom: calc(var(--tap) + var(--gap));
+    scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  }
 }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */

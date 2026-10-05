@@ -148,15 +148,20 @@ test("narrow title column hides the native bar and reserves a tap under the last
 
 test("CONTINUE + Daily stack the save line under the label, not beside it", () => {
   // A Driver Career save unhides CONTINUE next to Daily. The pair used a
-  // row flex + nowrap ellipsis, so desktop painted "2026 · ROU…" and
-  // "MONTREA…" once each chip was half a column (survey 2026-10-05).
-  // Compact-wide already stacked; the base rule must, or a returning
-  // save truncates on every non-compact title.
+  // row flex + nowrap ellipsis, so a ~1280 returning save painted
+  // "2026 · ROU…" / "MONTREA…". Compact-wide already stacked. An
+  // unscoped column flex also moved 1440 title-desktop.png (6%,
+  // CI 37371854254) — keep the stack under 1366px only.
   const menus = readCssSource("css/menus.css");
   assert.match(
     menus,
+    /@media \(max-width:\s*1366px\) \{/,
+    "retention stack is capped at 1366px so 1440 title-desktop.png stays row+ellipsis",
+  );
+  assert.match(
+    menus,
     /#menu-retention \.bigbtn \{[^}]*flex-direction:\s*column/,
-    "retention chips stack label over sub on every title shape",
+    "retention chips stack label over sub under that cap",
   );
   assert.match(
     menus,
@@ -172,6 +177,11 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
     menus,
     /#menu-retention \.bigbtn > span \{[^}]*max-width:\s*100%/,
     "the visible label also cannot spill the cell",
+  );
+  assert.doesNotMatch(
+    menus,
+    /#menu-retention \.bigbtn \{\s*display:\s*flex;\s*flex-direction:\s*column/,
+    "desktop base retention stays row+ellipsis so title-desktop.png is unchanged",
   );
 });
 
@@ -192,8 +202,8 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
-    "wide title keeps --tap air under the utility row",
+    /@media \(max-width:\s*899px\) \{[^}]*body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "mid-wide title keeps --tap air under the utility row; 1440 desktop does not",
   );
 });
 
@@ -212,14 +222,29 @@ test("tall Classic docks ANIMATE BACKGROUND to the bottom, not under the wordmar
     /body\[data-shape="tall"\]\) #overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #home-motion/,
     "must not still require a live scene before the chip leaves the wordmark",
   );
+  assert.match(
+    experience,
+    /body\[data-shape="wide"\]\) #overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #home-motion/,
+    "wide Classic keeps ANIMATE top-left so title-desktop.png does not move",
+  );
+  assert.doesNotMatch(
+    experience,
+    /body\[data-shape="wide"\]\) #home-motion \{/,
+    "must not dock every wide title including Classic/static",
+  );
 });
 
 test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(
     overlays,
-    /#home-motion:not\(\[hidden\]\)\)[^{]*#install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
-    "fixed INSTALL APP sits one --tap above the live-scene toggle, not on top of it",
+    /body\[data-shape="tall"\]:has\(#home-motion:not\(\[hidden\]\)\) #install-chip,[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
+    "tall title lifts INSTALL when ANIMATE is showing (both chips share the bottom)",
+  );
+  assert.doesNotMatch(
+    overlays,
+    /^body:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{/m,
+    "must not lift INSTALL on desktop Classic where ANIMATE stays top-left",
   );
   // experience.css's live-scene padding shorthand is @layer overlays; a
   // components-layer inset loses. The restore has to live in this sheet.

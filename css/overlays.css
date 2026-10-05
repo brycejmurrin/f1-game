@@ -653,8 +653,12 @@ body:has(dialog[open]) #save-warning { display: none; }
 /* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
    (#home-motion, css/experience.css). Lift this chip one --tap so the
    two never share a hit target (survey ~500px, 2026-10-05). --safe-b
-   already includes --sab, matching the toggle's dock. */
-body:has(#home-motion:not([hidden])) #install-chip {
+   already includes --sab, matching the toggle's dock. Desktop Classic
+   keeps ANIMATE top-left, so a bare :has(home-motion) lift would
+   still walk INSTALL on the title-desktop golden. */
+body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip,
+:where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip,
+body[data-shape="wide"]:has(#overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
 /* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,

@@ -66,10 +66,11 @@
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
   }
-  /* Bottom-left on every wide title — including Classic/static. The
-     brand lives top-left; a live-scene-only dock left ANIMATE under
-     the wordmark whenever Appearance was Classic. */
-  :where(body[data-shape="wide"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  /* Live wide docks ANIMATE bottom-left. Classic/static stays top-left
+     on desktop (title-desktop golden). Compact-wide and tall Classic
+     have their own docks; an unscoped wide Classic rule moved the
+     chip on 1440 (menu-baseline 6%, CI 37371854254). */
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
