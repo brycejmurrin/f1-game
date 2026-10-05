@@ -1,6 +1,7 @@
 {
-  "why": "Wave 6 — Magny-Cours: pit control + conference wing, Conservatoire at the main entrance, Château d'Eau water tower (T14), Nivernais ferme + bourg. Grandstand names UNCERTAIN (operator lists 14 tribunes; not scraped).",
+  "why": "Detail 2026-10-05 — Magny-Cours: French GP main tribuna (seat rake/roof), race-control outside pit reject, Conservatoire, Château d'Eau, Nivernais ferme + bourg. Grandstand names UNCERTAIN (operator lists 14 tribunes; not scraped).",
   "ids": [
+    "magny-cours-main-tribuna",
     "magny-cours-control-block",
     "magny-cours-conservatoire",
     "magny-cours-chateau-deau",

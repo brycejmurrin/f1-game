@@ -111,6 +111,49 @@
       // (No second-band groundPatches — they shared tops with the furrow strips
       // and raised flatCoplanar above the ratchet.)
 
+      // Midfield densify (sheet-07 overview was empty green between loops).
+      // Cheap service-road ribbons, grass variety, low tech sheds, tree clumps.
+      // Keep clear of the ferme yard (s≈0.34) and Adelaide stands (s≈0.58).
+      (function midfieldCampus() {
+        // No extra groundPatch ribbons here — they shared horizontal tops with
+        // the field-patch band (flatCoplanar +1 vs baseline). Densify with
+        // seated tech sheds + tree/bush clumps instead.
+        const TECH = [0.74, 0.74, 0.72], TECH_D = [0.62, 0.63, 0.60];
+        for (let i = 0; i < 8; i++) {
+          const sf = 0.14 + i * 0.09;
+          if (sf > 0.30 && sf < 0.38) continue;
+          if (sf > 0.54 && sf < 0.62) continue;
+          const side = (i % 3 === 0) ? 1 : -1;
+          const gap = 70 + hash(i * 11) * 35;
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 22)) continue;
+          const foot = a.c.slice();
+          const ty = terrainYAt(foot[0], foot[2]);
+          if (ty != null) foot[1] = Math.max(foot[1], ty);
+          const w = 10 + hash(i * 7) * 8, h = 4.5 + hash(i * 13) * 3.5, d = 12 + hash(i * 19) * 10;
+          out._mat = MAT.CONCRETE;
+          seat.box(out, foot, [w, h, d], i & 1 ? TECH : TECH_D, b);
+          out._mat = MAT.METAL;
+          addBox(out, vadd(foot, a.u, h + 0.22), [w * 1.06, 0.4, d * 1.06], SLATE, b);
+          out._mat = 0;
+        }
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.14 + i * 0.055;
+          if (sf > 0.30 && sf < 0.38) continue;
+          if (sf > 0.54 && sf < 0.62) continue;
+          const side = (i % 2) ? -1 : 1;
+          const gap = 38 + hash(i * 23) * 28;
+          const ht = 7 + hash(i * 29) * 5;
+          if (i % 3 === 0) pine(K(sf), side, gap, ht + 2, [0.14, 0.32, 0.16]);
+          else if (i % 3 === 1) tree(K(sf), side, gap, ht, LEAF);
+          else bush(K(sf), side, gap, LEAF_D);
+        }
+        // Extra midfield copses for the high-overview panel read.
+        copse(K(0.22), -1, 48, 5);
+        copse(K(0.46), 1, 52, 5);
+        copse(K(0.70), -1, 46, 5);
+      })();
+
       // 2. PIT COMPLEX — Magny-Cours was rebuilt in 1991 as the centrepiece of
       //    the Technopôle, a publicly funded motorsport industrial park, and it
       //    was built to look like one: pale render, a shallow CORRUGATED BARREL
@@ -147,52 +190,159 @@
           stage._mat = 0;
         }, { required: true });
       }
-      // Control block: two low storeys with a flat roof and a blue fascia. No
-      // tower — Magny-Cours never had one, and adding one would make it look
-      // like every other circuit in this batch. A short conference wing sits
-      // behind (Business Center / Centre de Conférence on the operator site).
+      // Race-control silhouette OUTSIDE pit reject (gap 50). The old gap-30
+      // block sat inside the pit footprint and read as a low grey box from
+      // S/F cameras (sheet-07). Still a squat Technopôle block — not a
+      // tower — but with a glazed control deck + blue fascia that registers
+      // against the pit roof. Conference wing = Business Center.
       {
-        const a = anchor(K(0.996), 1, 30);
+        const a = anchor(K(0.998), 1, 50);
         const b = [a.r, a.u, a.t];
         modelGroup("magny-cours-control-block", {
-          center: vadd(a.c, a.u, 6), size: [22, 16, 36], basis: b,
+          center: vadd(a.c, a.u, 9), size: [20, 24, 44], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 4.5), [12, 9, 26], RENDER, b);
-          // Conference wing (operator Business Center) — pale render, same trim.
-          const wing = vadd(a.c, a.t, -18);
-          addBox(stage, vadd(wing, a.u, 3.6), [10, 7.2, 14], RENDER, b);
+          // Seated pad so ground-audit does not mark the stack unsupported.
+          const foot = a.c.slice();
+          const ty = terrainYAt(foot[0], foot[2]);
+          if (ty != null) foot[1] = Math.max(foot[1], ty);
+          seat.box(stage, foot, [14, 0.45, 24], RENDER, b);
+          // Main mass: bottom at +0.5 so it is not coplanar with the pad top
+          // or the conference wing (flatCoplanar ratchet).
+          addBox(stage, vadd(a.c, a.u, 6.0), [12, 10.5, 22], RENDER, b);
+          // Glazed control deck — the silhouette that reads from the pits.
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(a.c, a.r, -6.1), a.u, 6.6), [0.35, 2.8, 24],
-            [0.20, 0.28, 0.38], b);
-          addBox(stage, vadd(vadd(wing, a.r, -5.1), a.u, 4.8), [0.3, 2.4, 12],
+          addBox(stage, vadd(a.c, a.u, 13.4), [11, 4.0, 18],
+            [0.18, 0.26, 0.36], b);
+          addBox(stage, vadd(vadd(a.c, a.r, -6.2), a.u, 13.4), [0.3, 3.4, 16],
+            [0.88, 0.82, 0.52], b);
+          // Conference wing clear of the main mass in t (was sharing a floor).
+          const wing = vadd(a.c, a.t, -22);
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(wing, a.u, 4.2), [10, 7.0, 12], RENDER, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(wing, a.r, -5.1), a.u, 5.2), [0.3, 2.2, 10],
             [0.20, 0.28, 0.38], b);
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(a.c, a.u, 9.4), [13.5, 0.6, 27], SLATE, b);
-          addBox(stage, vadd(wing, a.u, 7.5), [11, 0.5, 15], SLATE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 8.9), [0.5, 0.7, 27],
+          addBox(stage, vadd(a.c, a.u, 15.9), [13.5, 0.55, 23], SLATE, b);
+          addBox(stage, vadd(wing, a.u, 7.9), [11, 0.5, 13], SLATE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -6.6), a.u, 15.3), [0.5, 0.7, 23],
             [0.24, 0.38, 0.62], b);
-          // addCyl is BASE-anchored; the roof cap above tops out at 9.4+0.3=
-          // 9.7, so a base of 13 left this mast 3.3 m clear of it (measured
-          // via float-audit). Based at 9.5 (0.2 m into the roof) instead.
-          addCyl(stage, vadd(vadd(a.c, a.t, 12), a.u, 9.5), 0.10, 8,
+          // Mast seated into the roof (float-audit: base into the cap).
+          addCyl(stage, vadd(vadd(a.c, a.t, 8), a.u, 16.0), 0.10, 9,
             [0.80, 0.80, 0.82], 5, b);
           stage._mat = 0;
         }, { required: true });
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 11, 150, null, null,
-        { livery: "navy", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // Detail 2026-10-05: navy grandstandEx read as a solid blue block from
+      // elevated S/F cameras (sheet-07). Concrete bays keep crowd/roof; a
+      // local French GP tribuna shell adds seat rake, end walls and blue eaves.
+      grandstandEx(0.985, -1, 11, 58, null, null,
+        { livery: "concrete", tiers: 2, roof: "cantilever", suites: true,
+          endWalls: true, pylons: true });
+      grandstandEx(0.008, -1, 11, 58, null, null,
+        { livery: "concrete", tiers: 2, roof: "cantilever",
+          endWalls: true, pylons: true });
+      grandstandEx(0.028, -1, 12, 42, null, null,
+        { livery: "alu", tiers: 1, roof: "flat", endWalls: true });
+      {
+        const FR_BLUE = [0.20, 0.34, 0.64];
+        const SEAT_B = [0.22, 0.38, 0.70], SEAT_W = [0.86, 0.86, 0.84];
+        // Build the hero shell OUTSIDE the stand (gap 22) so elevated S/F
+        // cameras see stepped rear + roof + blue eaves instead of the
+        // grandstandEx back slab (sheet-07 solid-blue read).
+        const a = anchor(K(0.005), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("magny-cours-main-tribuna", {
+            center: vadd(a.c, a.u, 10), size: [18, 24, 130], basis: b,
+          }, (stage) => {
+            const foot = a.c.slice();
+            const ty = terrainYAt(foot[0], foot[2]);
+            if (ty != null) foot[1] = Math.max(foot[1], ty);
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, foot, [14, 0.5, 120], RENDER, b);
+            // Three-step rear shell — breaks the monolithic slab silhouette.
+            addBox(stage, vadd(vadd(a.c, a.r, 1.5), a.u, 5.0), [6, 9.5, 118], RENDER, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 4.5), a.u, 10.0), [5, 7.5, 110],
+              [0.78, 0.78, 0.74], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 7.0), a.u, 14.0), [4, 5.5, 100],
+              [0.82, 0.82, 0.78], b);
+            // Vertical ribs on the outer face (readable from S/F overview).
+            for (let i = -5; i <= 5; i++) {
+              addBox(stage, vadd(vadd(a.c, a.t, i * 10), a.r, 9.2),
+                [0.45, 16, 0.45], [0.70, 0.71, 0.68], b);
+            }
+            // Seat colour bands facing the track (peek past grandstandEx).
+            for (let t = 0; t < 5; t++) {
+              const lat = -6.5 + t * 1.2;
+              const y = 2.0 + t * 1.1;
+              addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+                [1.0, 0.9, 110 - t * 2], t & 1 ? SEAT_B : SEAT_W, b);
+            }
+            // End walls + blue cornice.
+            for (const sgn of [-1, 1]) {
+              addBox(stage, vadd(vadd(a.c, a.t, sgn * 58), a.u, 8.0),
+                [12, 15, 0.65], RENDER, b);
+              stage._mat = MAT.METAL;
+              addBox(stage, vadd(vadd(a.c, a.t, sgn * 58), a.u, 15.5),
+                [11, 0.45, 0.85], FR_BLUE, b);
+              stage._mat = MAT.CONCRETE;
+            }
+            stage._mat = MAT.METAL;
+            // Wide canopy + French-blue eaves lip.
+            addBox(stage, vadd(vadd(a.c, a.r, 2.0), a.u, 18.0), [14, 0.55, 122], SLATE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -4.5), a.u, 17.4), [0.55, 0.75, 118], FR_BLUE, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 8.5), a.u, 17.6), [0.45, 0.55, 105], FR_BLUE, b);
+            for (let i = -4; i <= 4; i++) {
+              addCyl(stage, vadd(vadd(a.c, a.t, i * 13), a.u, 9.0),
+                0.22, 9.0, [0.55, 0.56, 0.58], 5, b);
+            }
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(a.c, a.r, 8.8), a.u, 14.5), [0.35, 2.6, 90],
+              [0.20, 0.28, 0.38], b);
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
       for (let i = 0; i < 4; i++) {
         building(K(0.925 + i * 0.013), 1, 40, 27, 10, 17,
           { kind: "podium", wall: RENDER, window: [0.32, 0.36, 0.44], floor: 4.5 });
       }
-      // Paddock vans omitted this pass — motorhome() awning/accent prims bury
-      // under apron swells (was 7 buried @ 0.20 m). Technopôle sheds +
-      // broadcast compound already fill the paddock read.
+      // Clip-safe paddock / tech sheds behind the pit reject (gap ≥ 72).
+      // Solid seat.box cores — no motorhome() awnings (bury under apron swells).
+      // Skip s≈0.99–0.02 so sheds stay clear of the race-control footprint
+      // (clip severe 3.03 m @frac 0.995 was shed×control).
+      for (const [sf, gap] of [
+        [0.955, 74], [0.968, 82], [0.035, 76], [0.048, 84], [0.062, 72], [0.075, 88],
+      ]) {
+        const a = anchor(K(sf), 1, gap);
+        if (onTrack(a.c[0], a.c[2], 20)) continue;
+        const b = [a.r, a.u, a.t];
+        const foot = a.c.slice();
+        const ty = terrainYAt(foot[0], foot[2]);
+        if (ty != null) foot[1] = Math.max(foot[1], ty);
+        const w = 11 + hash(Math.round(sf * 1000)) * 5;
+        const h = 4.8 + hash(Math.round(sf * 700)) * 2.8;
+        const d = 12 + hash(Math.round(sf * 900)) * 6;
+        out._mat = MAT.CONCRETE;
+        seat.box(out, foot, [w, h, d], (sf * 10) & 1 ? RENDER : [0.72, 0.73, 0.70], b);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(foot, a.u, h + 0.22), [w * 1.06, 0.4, d * 1.06], SLATE, b);
+        addBox(out, vadd(vadd(foot, a.r, -w * 0.5 - 0.1), a.u, h + 0.05),
+          [0.4, 0.5, d * 0.95], [0.24, 0.38, 0.62], b);
+        out._mat = 0;
+      }
       broadcastCompound(K(0.916), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.32, 0.66]);
+      // French GP signage — blue boards on the main straight + Adelaide approach.
+      for (const s of [0.970, 0.985, 0.01, 0.025, 0.04])
+        billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.32, 0.66]);
+      for (const s of [0.540, 0.560, 0.595])
+        billboard(K(s), 1, 9, 10, 4.0, [0.88, 0.88, 0.86]);
+      billboard(K(0.172), -1, 9, 10, 4.0, [0.20, 0.32, 0.66]);
+      billboard(K(0.920), 1, 9, 10, 4.0, [0.78, 0.22, 0.20]);
 
       // Conservatoire de la Monoplace Française — museum at the main entrance
       // (operator site + fr.wikipedia; inaugurated 1 May 2015, ~1 400 m²).
