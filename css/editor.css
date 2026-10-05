@@ -69,13 +69,17 @@
 }
 .td-stats { display: flex; flex-wrap: wrap; gap: var(--gap); text-transform: uppercase; letter-spacing: var(--ls-3); font-variant-numeric: tabular-nums; }
 .td-rail {
-  min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+  min-height: 0; min-width: 0;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
   display: flex; flex-direction: column; gap: var(--gap);
   padding-right: calc(var(--gap) / 4);
 }
-.td-tabs, .td-chips { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); }
-.td-tab { flex: 1 1 auto; }
-.td-pane { display: flex; flex-direction: column; gap: var(--gap); }
+/* Equal-width tabs: flex-basis auto sized each chip to its label, so DESIGN /
+   MY CIRCUITS / HOW TO jumped width when the selected border changed. */
+.td-tabs { display: flex; flex-wrap: nowrap; gap: calc(var(--gap) / 2); }
+.td-chips { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); min-width: 0; }
+.td-tab { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; }
+.td-pane { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-label {
   font-size: var(--label); font-weight: 700; font-style: italic;
@@ -130,7 +134,7 @@
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
 }
-.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); min-width: 0; }
 .td-grid[aria-busy="true"] { opacity: 0.5; }
 .td-card {
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
@@ -138,9 +142,24 @@
   background: var(--plate);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
+  min-width: 0;
 }
 .td-card canvas { width: 100%; aspect-ratio: 16 / 11; background: var(--surf-1); border-radius: var(--r-sm); }
-.td-empty { font-size: var(--fs-micro); color: var(--dim); }
+/* Empty MY CIRCUITS lives inside .td-grid: without a full-row span it sat in
+   one auto-fill track (~150px) and read as a narrow column. */
+.td-empty {
+  grid-column: 1 / -1;
+  min-width: 0;
+  font-size: var(--fs-micro); color: var(--dim);
+  overflow-wrap: anywhere;
+}
+/* LOOK option rows reuse .td-row (a 4-col stepper grid) with a label + chips —
+   that overflowed the rail and spawned the horizontal scrollbar. */
+.td-row:has([data-look]) {
+  display: flex; flex-wrap: wrap;
+  grid-template-columns: none;
+  min-width: 0;
+}
 .td-foot {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--gap);
