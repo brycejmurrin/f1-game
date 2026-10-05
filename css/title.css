@@ -320,10 +320,14 @@
   :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(2) { --n: 3; }
   :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(3) { --n: 4; }
   :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-primary > :nth-child(4) { --n: 5; }
-  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > * { --n: 6; }
-  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 7; }
-  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 8; }
-  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 9; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-explore > :nth-child(1) { --n: 6; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-explore > :nth-child(2) { --n: 7; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-explore > :nth-child(3) { --n: 8; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-explore > :nth-child(4) { --n: 9; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > * { --n: 10; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+3) { --n: 11; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+4) { --n: 12; }
+  :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-secondary > :nth-child(n+5) { --n: 13; }
 }
 /* inset() on an SVG group measures its own stroke box. The end keyframes
    restate the open clip because an inset() cannot interpolate to `none`. */

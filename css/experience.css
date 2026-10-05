@@ -37,10 +37,9 @@
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; padding: var(--gap); font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap); }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-secondary .bigbtn { transform: none; font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #mb-daily { justify-content: flex-start; text-align: start; font-style: normal; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { align-self: end; }
   body.photo-studio-open #overlay > :not(#title-car) { visibility: hidden; }
   body.photo-studio-open #overlay[data-home-scene] { background: transparent; pointer-events: none; }
@@ -55,7 +54,12 @@
      right column: centred when they fit, scrolling only when the window is
      shorter than the column. */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-content: stretch; align-items: start; gap: var(--gap); }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { grid-column: 1; grid-row: 1; align-self: start; padding: 0; text-align: start; align-items: flex-start; }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
+    grid-column: 1; grid-row: 1; align-self: start; text-align: start; align-items: flex-start;
+    padding: var(--gap);
+    border-radius: var(--r-md);
+    background: linear-gradient(180deg in oklab, var(--scrim-heavy) 0%, var(--scrim) 70%, transparent);
+  }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #title { font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4)); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; min-height: 0; }
   /* Just above the compact threshold (body --compact-at 600px) the full column
@@ -69,8 +73,18 @@
   /* The brand is top-left now, where this button used to dock: bottom-left for every wide scene, not only compact. */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
+  /* INSTALL APP is position:fixed bottom-left; ANIMATE BACKGROUND docks there
+     on a live Home scene. Lift the chip one tap above the toggle. */
+  body:has(#home-motion:not([hidden])) #install-chip {
+    bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+  }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
+    padding: var(--gap);
+    border-radius: var(--r-md);
+    background: linear-gradient(180deg in oklab, var(--scrim-heavy) 0%, var(--scrim) 70%, transparent);
+  }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
   /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
      above), but menus.css still places it in grid row 3, an implicit ~235 px

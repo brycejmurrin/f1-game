@@ -39,8 +39,9 @@ test('pause context reads live classification and distinguishes online practice'
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"/);
+  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
+  assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
   assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
   assert.match(code,/openSettingsPage\("driving", "pm-pit-panel"\)/);
   assert.match(code,/openSettingsPage\("driving", "pm-session-review"\)/);
