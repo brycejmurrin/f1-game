@@ -8988,4 +8988,10 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
 if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
 
+// APEX_SURVEY_HUD=1 — cockpit HUD fixture without startRace / scenery warm (UI Survey).
+if (typeof SurveyHud !== "undefined" && SurveyHud.enabled(location, typeof localStorage !== "undefined" ? localStorage : null)) {
+  SurveyHud.apply({ $, els, document, loadingScreen });
+  els.pausebtn.onclick = () => SurveyHud.openPause({ $, els, document });
+}
+
 })();

@@ -1,0 +1,137 @@
+"use strict";
+/* Apex 26 — APEX_SURVEY_HUD survey fixture.
+ *
+ * Wave-3 UI Survey needs cockpit HUD / touch docks / pause screenshots without
+ * surviving a full race start (this box often freezes or hits Graphics
+ * unavailable). Enable with ANY of:
+ *   ?APEX_SURVEY_HUD=1
+ *   #APEX_SURVEY_HUD=1   (also #…&APEX_SURVEY_HUD=1)
+ *   localStorage.APEX_SURVEY_HUD === "1"
+ *
+ * apply() shows #hud + docks + pausebtn, hides menus / #nogl, and never calls
+ * startRace / ensureScenery / track warm. Pause is a cheap #pausemenu unhide
+ * (TopModal mirrors hidden → showModal). Prefer LoadingScreen.busy when the
+ * #1012 plate exists; otherwise stop() any leftover card and show HUD.
+ */
+const SurveyHud = (function () {
+  const KEY = "APEX_SURVEY_HUD";
+
+  /** True when query, hash, or localStorage says =1. Pure; hostile input is off. */
+  function enabled(loc, storage) {
+    try {
+      if (loc) {
+        const q = typeof URLSearchParams === "function"
+          ? new URLSearchParams(loc.search || "").get(KEY) : null;
+        if (q === "1") return true;
+        const h = String(loc.hash || "");
+        if (/(?:^|[?#&])APEX_SURVEY_HUD=1(?:&|$)/.test(h)) return true;
+      }
+      if (storage && typeof storage.getItem === "function" && storage.getItem(KEY) === "1")
+        return true;
+    } catch (_) { /* blocked storage / odd location → off */ }
+    return false;
+  }
+
+  /** Place touch groups into the docks so layout is measurable without Input. */
+  function fillDocks($) {
+    const left = $("dock-left"), right = $("dock-right");
+    if (!left || !right) return;
+    const pedals = $("grp-pedals"), taps = $("grp-taps");
+    const steer = $("grp-steer"), shifts = $("grp-shifts");
+    // Auto-tilt order (same as game.js layoutDocks when !steerBtns && !manual).
+    if (pedals) left.appendChild(pedals);
+    if (steer) left.appendChild(steer);
+    if (taps) right.appendChild(taps);
+    if (shifts) right.appendChild(shifts);
+  }
+
+  /** Unhide the touch stack so docks are layoutable on desktop too. */
+  function showTouchStub($, body) {
+    // Literals only — shell-ids.mjs ratchets non-literal $() as dynamicIdReads.
+    const brake = $("btn-brake"), thr = $("btn-throttle"), boost = $("btn-boost");
+    const ot = $("btn-ot"), aero = $("btn-aero");
+    const up = $("shift-up"), dn = $("shift-down");
+    const sl = $("btn-steer-left"), sr = $("btn-steer-right");
+    if (brake) brake.hidden = false;
+    if (thr) thr.hidden = false;
+    if (boost) boost.hidden = false;
+    if (ot) ot.hidden = false;
+    if (aero) aero.hidden = false;
+    if (up) up.hidden = false;
+    if (dn) dn.hidden = false;
+    if (sl) sl.hidden = false;
+    if (sr) sr.hidden = false;
+    fillDocks($);
+    if (body && body.classList) body.classList.add("steer-touch", "manual");
+  }
+
+  /**
+   * Boot into a layoutable cockpit HUD without race / scenery warm.
+   * hooks: { document, $, els?, loadingScreen? }
+   */
+  function apply(hooks) {
+    hooks = hooks || {};
+    const doc = hooks.document || (typeof document !== "undefined" ? document : null);
+    const $ = hooks.$;
+    if (!doc || typeof $ !== "function") return false;
+
+    const ls = hooks.loadingScreen;
+    // Prefer #1012 busy plate when present; else disarm any leftover card.
+    if (ls && typeof ls.busy === "function") {
+      try { ls.busy("Survey HUD"); } catch (_) { /* plate refused */ }
+    } else if (ls && typeof ls.stop === "function") {
+      try { ls.stop(); } catch (_) { /* already down */ }
+    }
+
+    const overlay = (hooks.els && hooks.els.overlay) || $("overlay");
+    if (overlay) { overlay.hidden = true; if ("inert" in overlay) overlay.inert = false; }
+    for (const node of doc.querySelectorAll(".screen")) {
+      if (node.id === "pausemenu") continue;
+      node.hidden = true;
+    }
+    // Graphics-unavailable covers the viewport (z-99); hide it so HUD is the survey target.
+    const nogl = $("nogl");
+    if (nogl) nogl.hidden = true;
+
+    const hud = (hooks.els && hooks.els.hud) || $("hud");
+    if (hud) { hud.hidden = false; if ("inert" in hud) hud.inert = false; }
+    const pausebtn = (hooks.els && hooks.els.pausebtn) || $("pausebtn");
+    if (pausebtn) pausebtn.hidden = false;
+    const btnCam = (hooks.els && hooks.els.btnCam) || $("btn-cam");
+    if (btnCam) btnCam.hidden = false;
+
+    if (doc.body) {
+      doc.body.classList.add("in-race");
+      if (doc.body.dataset) doc.body.dataset.surveyHud = "1";
+    }
+    showTouchStub($, doc.body);
+
+    if (ls && typeof ls.stop === "function") {
+      try { ls.stop(); } catch (_) { /* card already down */ }
+    }
+    return !!hud && !hud.hidden;
+  }
+
+  /** Open #pausemenu over the survey HUD (no race state). TopModal mirrors hidden. */
+  function openPause(hooks) {
+    hooks = hooks || {};
+    const doc = hooks.document || (typeof document !== "undefined" ? document : null);
+    const $ = hooks.$;
+    if (!doc || typeof $ !== "function") return false;
+    const pm = (hooks.els && hooks.els.pausemenu) || $("pausemenu");
+    if (!pm) return false;
+    for (const node of doc.querySelectorAll(".screen")) {
+      if (node !== pm) node.hidden = true;
+    }
+    pm.hidden = false;
+    return true;
+  }
+
+  function active(doc) {
+    doc = doc || (typeof document !== "undefined" ? document : null);
+    return !!(doc && doc.body && doc.body.dataset && doc.body.dataset.surveyHud === "1");
+  }
+
+  return { KEY, enabled, apply, openPause, active };
+})();
+Object.freeze(SurveyHud);
