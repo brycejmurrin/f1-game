@@ -1,1 +1,1 @@
-1791230971	Cursor Agent	PR #985 re-sync onto current tip after #956; wait CI; NO merge  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
+1791231004	Cursor Agent	PR #985 MERGEABLE vs tip (incl 053350441); no re-sync; wait CI on d25840a98; NO merge  [cursor/skip-three-no-gpu-773f; session 72278828ff0b7aebcda722a2]
