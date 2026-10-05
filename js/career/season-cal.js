@@ -45,15 +45,18 @@ function fresh() {
 // for a save whose shape may predate the build reading it. An id that no longer
 // exists is dropped rather than failing the whole config, because losing one
 // retired circuit should not cost the player their calendar.
-function knownIds(raw) {
+// Each stored index's place in the calendar this build can race (-1: dropped —
+// an id it does not know, or a repeat). knownIds is the ids that keep a place.
+function knownMap(raw) {
   const seen = new Set();
-  return (Array.isArray(raw) ? raw : []).filter((id) => {
-    if (typeof id !== "string" || seen.has(id)) return false;
-    if (!Tracks.LIST.some((t) => t.id === id)) return false;
+  let n = 0;
+  return (Array.isArray(raw) ? raw : []).map((id) => {
+    if (typeof id !== "string" || seen.has(id) || !Tracks.LIST.some((t) => t.id === id)) return -1;
     seen.add(id);
-    return true;
+    return n++;
   });
 }
+function knownIds(raw) { const m = knownMap(raw); return m.length ? raw.filter((_, i) => m[i] >= 0) : []; }
 // PER-ROUND SPRINTS are additive: a config written before them has no
 // `sprintIds` and a boolean `sprint`, and normalises to exactly what it meant.
 // An older build reading "rounds" sees a non-true sprint and races no sprints.
@@ -256,8 +259,10 @@ function resume(saved) {
   // the next round is the same circuit, and a finished season stays finished.
   // Identity for a calendar read whole (every id known and unique).
   const rawIds = s && s.config && Array.isArray(s.config.trackIds) ? s.config.trackIds : null;
-  if (rawIds && Number.isInteger(s.round) && s.round >= 0 && s.round <= rawIds.length && knownIds(rawIds).length) {
-    s.round = knownIds(rawIds.slice(0, s.round)).length;
+  const idx = rawIds ? knownMap(rawIds) : null;
+  const remap = idx && idx.some((v) => v >= 0) ? idx : null;
+  if (remap && Number.isInteger(s.round) && s.round >= 0 && s.round <= rawIds.length) {
+    s.round = remap.slice(0, s.round).filter((v) => v >= 0).length;
   }
   if (!s || !Number.isInteger(s.round) || s.round < 0 || s.round > n) {
     return restart();
@@ -268,6 +273,17 @@ function resume(saved) {
   s.driverCodes = codeMap(s.driverCodes);
   s.finishes = finishMap(s.finishes);
   s.roundPts = roundMap(s.roundPts);
+  // …and the per-round points with it: roundPts is indexed by the STORED round,
+  // so with dropped scores netPts read the wrong rounds and award() added this
+  // round into a slot already used. A dropped circuit's round leaves the
+  // counting set (its points stay in the gross total; the save is refused).
+  if (remap && remap.some((v, i) => v !== i)) {
+    for (const id of Object.keys(s.roundPts)) {
+      const row = [];
+      s.roundPts[id].forEach((v, r) => { if (remap[r] >= 0) row[remap[r]] = v; });
+      s.roundPts[id] = row;
+    }
+  }
   if (typeof s.lastFl !== "string") delete s.lastFl;
   if (!(Number.isInteger(s.seed) && s.seed > 0 && s.seed <= 0xFFFFFFFF)) delete s.seed;
   // A save from before separate sprint qualifying carries the sprint RESULT as

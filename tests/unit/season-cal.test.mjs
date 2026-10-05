@@ -852,6 +852,22 @@ test("a season with an unknown circuit races the stored round's circuit and is n
   assert.equal(whole.S.save(w).ok, true);
 });
 
+test("a calendar shrunk by an unknown circuit keeps roundPts aligned with the remapped round", () => {
+  // resume() re-read `round` as the known circuits raced but left roundPts on
+  // the stored indexes: netPts (dropped scores) read the wrong rounds, and the
+  // next award landed in a slot already used (bug hunt 2026-10-05 G10).
+  const raw = { round: 3, pts: { d0: 25 + 1 + 18 }, teamPts: {}, driverCodes: {},
+    roundPts: { d0: [25, 1, 18] },   // monza 25, the unknown circuit 1, monaco 18
+    config: { trackIds: ["monza", "nosuch", "monaco", "imola"], drop: 2 } };
+  const a = load({ season: raw });
+  a.S.engage("season");
+  const season = a.S.load();
+  assert.equal(season.round, 2, "monza and monaco raced");
+  assert.deepEqual(Array.from(season.roundPts.d0), [25, 18], "round 0 monza, round 1 monaco; the dropped circuit's round leaves");
+  a.S.award(season, field(2));                                     // imola: d0 wins
+  assert.deepEqual(Array.from(season.roundPts.d0), [25, 18, 25], "imola lands in its own slot, not on top of monaco's");
+});
+
 test("rankTeams: points, then the team's tier, then the id — one order for every constructors' table", () => {
   const { S } = load();
   const season = { teamPts: { b: 10, a: 10, c: 12, z: 10 } };
