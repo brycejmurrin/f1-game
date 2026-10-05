@@ -720,9 +720,17 @@ const SceneryNature = (function () {
              opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) return;   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.46, h * 1.1);
-      for (let i = 0; i < stages; i++)
-        addCyl(out, vadd(a.c, a.u, h * (0.46 + i * 0.28)), rad * (1 - i * 0.28),
-               h * (0.34 - i * 0.10), i ? c2 : col, 7, b);
+      // Each stage starts just inside the one below. A fixed 0.28 h step left
+      // the THIRD disc 0.09 h clear of the second ([0.95, 1.09] h over a top
+      // at 0.86 h): a floating crown on every stages:3 tree (ground-audit,
+      // mexico's street planes). Stages 1-2 are unchanged.
+      let base = 0;
+      for (let i = 0; i < stages; i++) {
+        const sh = h * (0.34 - i * 0.10);
+        const y = i < 2 ? h * (0.46 + i * 0.28) : base - h * 0.01 + sh / 2;
+        addCyl(out, vadd(a.c, a.u, y), rad * (1 - i * 0.28), sh, i ? c2 : col, 7, b);
+        base = y + sh / 2;
+      }
       out._mat = 0; swayOff();
     };
 
