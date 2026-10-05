@@ -121,3 +121,68 @@ test('Home Photo keeps its manual camera through resize and temporary hiding, th
   assert.equal(current.shot, 'hero', 'a later photo cannot inherit the discarded manual pose');
   ui.stopHome(); assert.deepEqual(current, { shot: 'garage-before-Home', dist: 8 });
 });
+
+test('a Home Photo SUBJECT pick closes the studio, swaps the scene for the visit and reopens through the door; DONE restores', async () => {
+  const settings={hidden:false}, garage={hidden:true}, pause={hidden:false};
+  const G={paused:false,teamIdx:0,track:{def:{name:'Monza'}},$:id=>({pmsettings:settings,carsetup:garage,pausemenu:pause})[id]};
+  ctx.Teams={LIST:[{name:'McLaren'}]};
+  const log=[]; let opened=null, back=null;
+  const studio={open:(o)=>{opened=o;back=o.back;log.push('open:'+o.source);return true;},close:(b)=>log.push('close:'+b)};
+  const deps={source:'home',trackHome:false,trackReady:true,photoStudio:studio,setPaused:()=>{},
+    photoSubject:(m)=>{log.push('subject:'+m);return Promise.resolve(m!=='garage');},reopen:()=>{log.push('reopen');return true;},onDone:()=>log.push('done')};
+  assert.equal(ctx.api.openPhoto(G,deps),true);
+  assert.equal(typeof opened.subject,'function','the Home door offers a subject switch');
+  assert.equal(settings.hidden,true,'the caller is hidden under the studio');
+  assert.equal(await opened.subject('circuit'),true);
+  assert.deepEqual(log,['open:home','close:false','subject:circuit','reopen'],'close, swap, reopen through the door');
+  assert.equal(settings.hidden,false,'the caller comes back before the reopen so the reopened studio restores it on DONE');
+  log.length=0; settings.hidden=true;
+  assert.equal(await opened.subject('garage'),true);
+  assert.deepEqual(log,['close:false','subject:garage','subject:null','reopen'],'a swap that fails hands the scene back before reopening');
+  log.length=0; back();
+  assert.deepEqual(log,['done'],'DONE clears the visit override');
+  assert.equal(settings.hidden,false);
+  const race={...deps,source:'race'}; opened=null;
+  assert.equal(ctx.api.openPhoto(G,race),true);
+  assert.equal(opened.subject,null,'the pause-menu door is on the circuit already: no subject');
+});
+
+test('photoSubject lays a scene over the stored one for the visit only, resolves on the rendered swap, and never writes the store', async () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  const writes=[]; let trackReady=false, worldRendered=false;
+  const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: () => true, endHome() {}, homeState: () => ({}), renderHome: () => true };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: (_G, d) => ({ begin() { if (d.prepareTrack) d.prepareTrack(); return true; }, end() {}, active: () => worldRendered, wantsTrack: () => true, needsFrame: () => true, camera: () => null, didRender: () => worldRendered, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set(k, v) { writes.push([k, v]); } } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, Log: { warn() {} }, setTimeout, Date };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const G = { $: dom.byId, state: 'menu', setupPreviewOn: false };
+  const ui = local.api.create(G, { setupCam, trackReady: () => trackReady, prepareTrack: () => { trackReady = true; } });
+  ui.renderHome(1 / 60);
+  assert.equal(ui.state().scene.mode, 'garage');
+  const overlay = dom.byId('overlay');
+  assert.equal(overlay.dataset.homeReady, '1', 'the garage home has painted');
+  const swap = ui.photoSubject('circuit');
+  assert.equal(ui.state().scene.mode, 'track', 'the circuit is the scene for this visit');
+  assert.equal(overlay.dataset.homeReady, undefined, 'the old scene no longer reads as ready');
+  assert.equal(dom.byId('mb-photo').textContent, 'SCENE LOADING…');
+  ui.renderHome(1 / 60);   // begins the track world (prepareTrack) with the studio still closed: the override survives
+  assert.equal(ui.state().scene.mode, 'track');
+  worldRendered = true; ui.didRenderTrack();
+  assert.equal(await swap, true);
+  assert.equal(dom.byId('mb-photo').textContent, 'PHOTO STUDIO');
+  ui.photoSubject(null);
+  assert.equal(ui.state().scene.mode, 'garage', 'DONE hands the stored scene back');
+  assert.deepEqual(writes.filter(([k]) => k === 'homeScene'), [], 'the Home scene setting is never written');
+  // A newer pick supersedes a pending one.
+  const first = ui.photoSubject('circuit'); const second = ui.photoSubject('garage');
+  ui.renderHome(1 / 60);
+  assert.equal(await first, false); assert.equal(await second, true);
+  ui.photoSubject(null);
+});
