@@ -1521,7 +1521,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "APPEARANCE wrap stretches the pair so DISPLAY is not a short neighbour");
   assert.equal(decl(css("css/career.css"), /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents a,/, "white-space"), "nowrap",
     "How My Team Works topic chips stay one line");
-  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents, #career-history .sheet-body, #career-history .sheet[data-shape=\"wide\"] > #ch-contents", "scrollbar-width"), "none",
+  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents", "scrollbar-width"), "none",
     "How My Team Works keeps the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
     "1px solid var(--card-line)",

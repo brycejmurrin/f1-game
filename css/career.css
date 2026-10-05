@@ -828,14 +828,19 @@
 /* Native gutter + grey overlay stacked a second indicator beside the red
    .sf-scroll thumb (apex7 How My Team Works). Same hide as NEW CAREER. */
 #career-guide .sheet-body,
-#career-guide .sheet[data-shape="wide"] > #cg-contents,
+#career-guide .sheet[data-shape="wide"] > #cg-contents {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
 #career-history .sheet-body,
 #career-history .sheet[data-shape="wide"] > #ch-contents {
   scrollbar-width: none;
   scrollbar-gutter: auto;
 }
 #career-guide .sheet-body::-webkit-scrollbar,
-#career-guide .sheet[data-shape="wide"] > #cg-contents::-webkit-scrollbar,
+#career-guide .sheet[data-shape="wide"] > #cg-contents::-webkit-scrollbar {
+  display: none;
+}
 #career-history .sheet-body::-webkit-scrollbar,
 #career-history .sheet[data-shape="wide"] > #ch-contents::-webkit-scrollbar {
   display: none;
