@@ -181,12 +181,14 @@ const ShadowPass = (function () {
     // THE PLAYER CASTS WHAT THE PLAYER SEES, WHERE IT IS DRAWN. game.js calls
     // this once livePlayerMat holds the grounded transform, before either pass.
     // In cockpit, helmet and visor the visible body is the cockpit build (no
-    // driver, the player's own halo) at the camera-anchored cockpit matrix, but
-    // both maps cast the EXTERIOR silhouette at the grounded matrix: its helmet
-    // crown (~0.83 m) sits ~0.3 m over the sidepod tops, past the 0.32 m bias,
-    // and with the factory halo it stamped dark blobs on the cockpit sides with
-    // no visible caster. deps.cockpitCaster (car-draw.js) resolves the mesh and
-    // matrix the car loop draws; null = an exterior view, the silhouette as before.
+    // driver, the player's own halo) at the camera-anchored cockpit matrix. The
+    // EXTERIOR silhouette's helmet crown (~0.83 m) sits ~0.3 m over the sidepod
+    // tops, past the 0.32 m bias, and with the factory halo it stamped dark blobs
+    // on the cockpit sides with no visible caster; the cockpit build itself has
+    // no wheels and no rear assembly, a hollow half-car on the road. So
+    // deps.cockpitCaster (car-draw.js) resolves cockpitShadowMesh — the whole
+    // car, no driver, the player's own halo — at the matrix the car loop draws
+    // the cockpit body with; null = an exterior view, the silhouette as before.
     function resolvePlayer(smp, yv) {
       _playerCockpit = deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
     }
