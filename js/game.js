@@ -5106,6 +5106,9 @@ function updateCar(c, dt, ranked) {
   const grassDrag = Math.min((1 - surfaceMu) * 24, roadBrake * .75);
   const surfaceBrake = c.offroad
     ? Math.min(roadBrake * surfaceMu, Math.max(0, roadBrake * .95 - grassDrag)) : roadBrake;
+  // `braking` skips the coast drag, so a LIVE pedal never slows less than lifting (the old max(0.15, level) step's job); scripted input is exact.
+  // ONE value: the speed integration and the weight-transfer estimate (axEstTarget) both read it.
+  const brakeDecel = c.human && !inp ? Math.max(surfaceBrake * brakeLvl, COAST_DRAG) : surfaceBrake * brakeLvl;
   const longitudinalSpeed = c.speed;
 
   // --- integrate speed ---
@@ -5121,8 +5124,7 @@ function updateCar(c, dt, ranked) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md). The AI earns it too: its
       // `tread: null` resolves to the right compound for braking as well as cornering.
-      // `braking` skips the coast drag, so a LIVE pedal never slows less than lifting (the old max(0.15, level) step's job); scripted input is exact.
-      c.speed = Math.max(0, c.speed - (c.human && !inp ? Math.max(surfaceBrake * brakeLvl, COAST_DRAG) : surfaceBrake * brakeLvl) * dt);
+      c.speed = Math.max(0, c.speed - brakeDecel * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -5722,7 +5724,7 @@ function updateCar(c, dt, ranked) {
     // transfer) for an acceleration that isn't actually happening.
     // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
     // Brake held at a standstill IS reverse (REVERSE_ACCEL above), not a 30+ m/s^2 stop: charging the pedal locked the fronts and grew a flat spot backing off a wall.
-    const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))
+    const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))
       : (onThrottle
           ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * surfaceMu
           : -COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0)));
