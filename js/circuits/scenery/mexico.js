@@ -555,12 +555,10 @@
       cameraTower(K(0.92), -1, 18, { h: 20 });
       sponsorHoarding(0.895, 0.935, -1, 9, { palette: fiesta });
 
-      // Banked kerb edges through the Peraltada/Estadio corners
-      for (const s of [0.89, 0.92, 0.95]) {
-        const k = K(s);
-        place(k, 1, 2.2, [2.4, 0.6, 9], [0.80, 0.76, 0.72]);
-        place(k, 1, 1.8, [0.6, 0.16, 9], [0.88, 0.12, 0.12]);
-      }
+      // (The Peraltada "banked kerb edges" were place() boxes 0.6 and 0.16 m
+      // tall: place() sinks every box 0.8 m, so both stood wholly underground
+      // and drew nothing — ground-audit's buried count. The corner's kerbs are
+      // kerb()'s, above.)
 
       // Mexican flag strip accents at the Peraltada outer bank
       for (let i = 0; i < 6; i++) {
@@ -782,11 +780,11 @@
 
       // Mid/far city tower ring — thinned + pushed so mountains win the horizon
       // A ring tower is 380+ m off ITS leg, but the lap folds: two landed
-      // 91/143 m off the Mixiuhca park stretch (0.10-0.30, T1 -> Esses).
-      // Keep that stretch's skyline >= 150 m out; other stretches unchanged.
-      const PARK_K0 = K(0.10), PARK_K1 = K(0.30);
-      const nearParkRoad = (x, z) => {
-        for (let k = PARK_K0; k <= PARK_K1; k++) {
+      // 91/143 m off the Mixiuhca park stretch (0.10-0.30, T1 -> Esses) and one
+      // (h 44) 30 m off the 0.48-0.68 park. The ring is the FAR skyline, so it
+      // keeps >= 150 m from every leg of the lap, not only the one it hangs off.
+      const nearAnyLeg = (x, z) => {
+        for (let k = 0; k < n; k++) {
           if (Math.hypot(px[k] - x, pz[k] - z) < 150) return true;
         }
         return false;
@@ -799,7 +797,7 @@
         const h = 32 + hash(i * 37) * 58;
         const w = 18 + hash(i * 53) * 16;
         const p = anchor(k, side, d);
-        if (!onTrack(p.c[0], p.c[2], 20) && !nearParkRoad(p.c[0], p.c[2])) {
+        if (!onTrack(p.c[0], p.c[2], 20) && !nearAnyLeg(p.c[0], p.c[2])) {
           const tone = 0.60 + hash(i * 41) * 0.10;
           building(k, side, d - w / 2, w, h, w,
             { wall: [tone * 0.98, tone, tone * 1.02],

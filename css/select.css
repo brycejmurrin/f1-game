@@ -56,9 +56,15 @@
   scrollbar-width: none;
 }
 #sel-track-filter::-webkit-scrollbar { display: none; }
+/* min-width is the painted tap floor, not max-content: `flex: 0 0 auto` on a
+   nowrap row already holds every chip at its max-content width, so the old
+   value only restated that, and the ACTIVE "ALL" chip painted 43x52 on a
+   landscape iPhone (50x52 portrait, layout-audit 2026-10-05) — tall enough,
+   too narrow. --tap-paint (css/tokens.css) widens a one-word chip to 52 painted
+   on touch; the row still pans rather than wraps. */
 #sel-track-filter .sel-chip {
   flex: 0 0 auto;
-  min-width: max-content;
+  min-width: var(--tap-paint);
   justify-content: center;
   font-size: var(--fs-micro);
   padding-inline: calc(var(--gap) * 0.83);
