@@ -1343,6 +1343,11 @@ function buildStatic(liv, opts) {
   const o = opts || {};
   const out = acc();
   buildShell(out, liv);
+  // Trackside pit rows (SceneryPits → buildStatic) bake one bay per team into
+  // propsGeo. The truss used to live inside buildShell; keep calling it here
+  // so extracting it for the TOP hide does not drop 84 tris × 12 bays from
+  // monaco/monza STRIP (1008 tris). The live bay draws trussMesh separately.
+  buildTruss(out);
   buildBayFloor(out, liv);
   const led = {};
   for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();

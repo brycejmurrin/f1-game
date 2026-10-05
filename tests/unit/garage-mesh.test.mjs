@@ -429,6 +429,17 @@ test("TOP hides the roof truss and ceiling LED housings; other presets restore t
   assert.ok(restored[14] > 0, "leaving TOP must restore fixture glare");
 });
 
+test("buildStatic still emits the roof truss for the trackside pit row", () => {
+  // SceneryPits places GarageScene.buildStatic({props:"lite"}) once per team.
+  // Extracting buildTruss from buildShell for the TOP hide must not drop those
+  // beams from the baked bay — 84 tris × 12 teams = the 1008 monaco/monza
+  // STRIP shortfall on tip 63f209fc4.
+  const { GarageScene } = harness();
+  const bay = GarageScene.buildStatic(LIV, { props: "lite" });
+  assert.equal(bay.idx.length, 12318,
+    "lite bay keeps the 7-block roof truss (252 idx) that buildShell used to carry");
+});
+
 test("pit kit stays off the FRONT and REAR sight lines", () => {
   const eq = read("js/garage/scene-equipment.js");
   assert.doesNotMatch(eq, /\[-0\.18, 0\.40, -2\.72\]/,
