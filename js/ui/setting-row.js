@@ -106,13 +106,24 @@ window.SettingRow = (function () {
     return p && p.sel ? p.sel.value : "";
   }
 
+  /* Walk the FULL list from the current option, skipping disabled ones. The
+     old walk indexed the enabled-only list, where a disabled current value
+     (the trailing CUSTOM sentinel of STEERING FEEL / DRIVING LINE / SOUND
+     PROFILE) is -1, coerced to 0 — so › from CUSTOM skipped OFF and landed on
+     the second option. hud-layout.js's stepper walks the same way. */
   function step(p, dir, read, write) {
-    const live = options(p.sel).filter((o) => !o.disabled).map((o) => o.value);
-    const n = live.length;
-    if (!n) return;
-    const i = live.indexOf(S(read()));
-    const next = live[(((i < 0 ? 0 : i) + dir) % n + n) % n];
-    if (next !== S(read())) write(next);
+    const all = options(p.sel);
+    const n = all.length;
+    if (!all.some((o) => !o.disabled)) return;
+    const cur = S(read());
+    let i = all.findIndex((o) => o.value === cur);
+    if (i < 0) i = dir > 0 ? -1 : 0;   // an unlisted value: › the first, ‹ the last
+    for (let k = 1; k <= n; k++) {
+      const o = all[((i + dir * k) % n + n) % n];
+      if (o.disabled) continue;
+      if (o.value !== cur) write(o.value);
+      break;
+    }
     paint(p.el, read());
   }
 

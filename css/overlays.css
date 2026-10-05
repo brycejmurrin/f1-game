@@ -650,10 +650,11 @@ body:has(dialog[open]) #save-warning { display: none; }
   background: var(--plate-opaque);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
 }
-/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above every
-   menu sheet, bottom-right clear of the safe area, a full tap target; never
-   shown in a race (the module hides it there). The HUD chip's plate, not the
-   team accent (nontext-contrast: --accent is decoration only). */
+/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
+   non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
+   of the safe area, a full tap target; never shown in a race (the module hides
+   it there). The HUD chip's plate, not the team accent (nontext-contrast:
+   --accent is decoration only). */
 #update-chip {
   position: fixed; z-index: 9000;
   right: calc(var(--sar) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
@@ -664,4 +665,11 @@ body:has(dialog[open]) #save-warning { display: none; }
 }
 #install-chip[hidden] { display: none; }
 #update-chip[hidden] { display: none; }
+/* NOT UNDER A MODAL DIALOG. showModal() puts dialog.screen (RESULTS after
+   every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
+   z-index outranks, and makes everything outside it inert — the chip sat under
+   the ::backdrop, visible and unpressable. A popover would draw above it and
+   still be inert ("except the dialog and its descendants": MDN, showModal()).
+   It stands down like #save-warning and is back when the dialog closes. */
+body:has(dialog:modal) #update-chip { display: none; }
 } /* @layer overlays */
