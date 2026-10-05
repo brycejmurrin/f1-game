@@ -192,8 +192,8 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   assert.match(draw, /":H" \+ haloSz \+ ":B" \+ CockpitOpts\.body\(\)/, "the cockpit body is cached per halo size");
   assert.match(read("js/car/car3d.js"), /opts\.halo === true \? 1 : \[0, 0\.64, 1, 1\.44\]/, "car3d sizes the first-person hoop");
   const ms = read("js/camera/mode-switch.js");
-  assert.match(ms, /"cockpit-cam", \(camId === "cockpit" \|\| camId === "helmet"\)\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/,
-    "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen — in COCKPIT and in HELMET, which looks at the same wheel");
+  assert.match(ms, /"cockpit-cam", camId === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/,
+    "body.cockpit-cam (which hides the HUD gear/speed) needs a wheel with a screen — in COCKPIT only: HELMET is the visor HUD (js/camera/cam-groups.js)");
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
   for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],

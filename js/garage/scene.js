@@ -1356,7 +1356,9 @@ function buildStatic(liv, opts) {
   return out;
 }
 
-function rebuild(team, liv, info, ctx) {
+// The room's build identity: `gKey` is what the geometry and the live atlas are
+// built from, `key` adds the spec boards. rebuild() and prepared() share it.
+function roomKeys(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1371,7 +1373,10 @@ function rebuild(team, liv, info, ctx) {
   const gKey = `${team && team.id}|${(team && team.legend) || ""}|${livKey}`
                + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
                + `|${ctxKey(ctx)}`;
-  const key = `${gKey}|${boardKey(info)}`;
+  return { gKey, key: `${gKey}|${boardKey(info)}` };
+}
+function rebuild(team, liv, info, ctx) {
+  const { gKey, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   if (key === cacheKey && shellMesh &&
       (dressTex || dressFail >= 3 || now < dressRetryAt ||
@@ -1714,12 +1719,25 @@ function dropPreviewMeshes() {
   previewMeshes.clear();
 }
 
+// THE ROOM WITHOUT A FRAME (js/garage/prebuild.js): the same rebuild draw()
+// runs first, so the GARAGE tap's first frame finds the room already built.
+// Builds meshes and canvases only; the programs still compile on a draw.
+function prepare(team, liv, getParts, driverIdx, ctx) {
+  if (!_gfx) return false;
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
+  ensureDynamic();
+  return prepared(team, liv, getParts, driverIdx, ctx);
+}
+function prepared(team, liv, getParts, driverIdx, ctx) {
+  return !!shellMesh && roomKeys(team, liv, boardInfo(team, getParts, driverIdx), ctx).key === cacheKey;
+}
+
 function debug() {
   return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey,
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt };
+           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

@@ -77,6 +77,9 @@ function toolResult(body, { isError = false } = {}) {
   const result = {
     content: [{ type: "text", text: JSON.stringify(body) }],
   };
+  // MCP 2025-06-18: a tool that advertises an outputSchema MUST return
+  // structuredContent conforming to it, mirrored as serialized text (above).
+  if (body && typeof body === "object" && !Array.isArray(body)) result.structuredContent = body;
   if (isError || body.ok === false) result.isError = true;
   return result;
 }
@@ -324,7 +327,7 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -432,6 +435,7 @@ const CATALOG = [
         speed: { type: "number" },
         lateral: { type: "number" },
         what: { type: "string" },
+        id: { type: "string" },   // describe: prop:12 | corner:T3 | car:4 | span:2 (agent.mjs --id)
         radius: { type: "number" },
         limit: { type: "number" },
         seconds: { type: "number" },
@@ -1210,7 +1214,15 @@ function buildArgv(name, args) {
         String(args.frac ?? 0.1),
         String(args.cam || "orbit"),
       ];
-      if (args.out) argv.push(assertSafeOut(args.out));
+      if (args.out) {
+        // shot.mjs's 4th positional is a FILE (`[out.png]`); a directory here
+        // made it write a path with no extension and die 84 s later with
+        // "unsupported mime type null" (measured 2026-10-05). Keep the CLI's
+        // own default name inside the directory instead.
+        const out = assertSafeOut(args.out);
+        const track = String(args.track || "monza"), cam = String(args.cam || "orbit");
+        argv.push(/\.png$/i.test(out) ? out : path.join(out, `${track}-${Math.round(Number(args.frac ?? 0.1) * 100)}-${cam}.png`));
+      }
       if (args.az != null) argv.push("--az", String(args.az));
       if (args.el != null) argv.push("--el", String(args.el));
       if (args.dist != null) argv.push("--dist", String(args.dist));
@@ -1231,6 +1243,7 @@ function buildArgv(name, args) {
         ["speed", args.speed],
         ["lateral", args.lateral],
         ["what", args.what],
+        ["id", args.id],
         ["radius", args.radius],
         ["limit", args.limit],
         ["seconds", args.seconds],
@@ -1867,18 +1880,121 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || name === "apex_frame_report" || name === "apex_who_is_on_it";
-  const timeoutMs = longTree ? 180000 : 60000;
+  // verify-change --fast runs the node suites serially; measured >180 s on a
+  // ~90-file diff (2026-10-05), where the cap killed it with no verdict. Ten
+  // minutes is its ceiling; the host moves a long MCP call to the background.
+  const timeoutMs = name === "apex_verify_change_fast" ? 600000 : longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
   return runSpawn(argv, { timeoutMs, allowExit, env, signal });
 }
 
+// Tool annotations (MCP 2025-06-18 ToolAnnotations). The spec's defaults are
+// destructiveHint: true and openWorldHint: true, which misdescribe nearly every
+// wrap here; derive honest hints from the catalog instead of restating them per
+// tool. Clients treat these as untrusted hints, so they are self-description,
+// not a permission boundary — the pins and the lock remain the real guards.
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+const DESTRUCTIVE = new Set(["apex_job_cancel"]);
+const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
+function toolAnnotations(entry) {
+  const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
+  return {
+    title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "),
+    readOnlyHint: readOnly,
+    destructiveHint: DESTRUCTIVE.has(entry.name),
+    idempotentHint: readOnly || DESTRUCTIVE.has(entry.name),
+    openWorldHint: OPEN_WORLD.has(entry.name),
+  };
+}
+
+// Every result body is the CLI's JSON summary (ok / error / message / fix /
+// argv / durationMs / out) — toolResult mirrors it as structuredContent. The
+// race-HUD pair adds the keys hudResult builds.
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    error: { type: "string" },
+    message: { type: "string" },
+    fix: { type: "string" },
+    tool: { type: "string" },
+    dryRun: { type: "boolean" },
+    argv: { type: "array", items: { type: "string" } },
+    durationMs: { type: "number" },
+    out: {},
+  },
+  additionalProperties: true,
+};
+const HUD_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: {
+    ...RESULT_SCHEMA.properties,
+    counts: { type: "object" },
+    report: { type: "string" },
+    findingsMd: { type: "string" },
+    indexHtml: { type: "string" },
+    cell: { type: "string" },
+    shot: { type: ["string", "null"] },
+    findings: { type: "array" },
+    measurements: { type: "array" },
+    cells: { type: "array" },
+    top: { type: "array" },
+    sheets: { type: "array" },
+  },
+};
+// Per-tool shapes, measured from real calls on 2026-10-05 (docs/notes/
+// AGENT-SURFACE-SURVEY-2026-10-05.md §8). Every CLI wrap returns the runSpawn
+// envelope {ok, exit, argv, stdout, stderr, out, durationMs}; `out` is the
+// CLI's --json object (null when the CLI printed none). Nothing is `required`
+// because a refusal body ({ok:false, error, message, fix}) and a dryRun body
+// ({ok, dryRun, argv}) share the tool; `additionalProperties: true` because a
+// CLI may grow a key before this map does. The test validates real results.
+const CLI_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: { ...RESULT_SCHEMA.properties, exit: { type: "number" }, stdout: { type: "string" }, stderr: { type: "string" },
+    out: { type: ["object", "null"] } },
+};
+const cliOut = (properties, type = ["object", "null"]) => ({
+  ...CLI_RESULT_SCHEMA,
+  properties: { ...CLI_RESULT_SCHEMA.properties, out: { type, properties, additionalProperties: true } },
+});
+const S = (type) => ({ type });
+const OUTPUT_SCHEMAS = {
+  apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
+    testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+  apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
+  apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
+  apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
+    shards: S("array"), cap: S("object"), testsSelected: S("number"), testsFit: S("number"), secSelected: S("number"), secFit: S("number") }),
+  apex_session_status: cliOut({ at: S("string"), branch: S("string"), base: S("string"), upstream: S("string"), ahead: S("number"),
+    behind: S("number"), unpushed: S("number"), sessions: S("array"), commits: S("array"), dirty: S("array"), logs: S("array"),
+    live: S(["object", "null"]) }),
+  apex_bump_cache_check: cliOut({ consistent: S("boolean"), mode: S("string"), tagCount: S("number"), assetMismatches: S("array"),
+    shellBuild: S("number"), versionJson: S("number") }),
+  apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
+    touched: S("array") }),
+  apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
+    float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
+    message: S("string"), fix: S("string") } },
+  apex_hud_shot: HUD_RESULT_SCHEMA,
+  apex_hud_survey: HUD_RESULT_SCHEMA,
+};
+function toolOutputSchema(entry) {
+  return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
+}
+
 function listTools() {
   return CATALOG.map((t) => ({
     name: t.name,
+    title: toolAnnotations(t).title,
     description: t.description,
     inputSchema: t.inputSchema,
+    outputSchema: toolOutputSchema(t),
+    annotations: toolAnnotations(t),
   }));
 }
 

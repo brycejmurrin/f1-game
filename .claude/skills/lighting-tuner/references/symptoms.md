@@ -7,7 +7,7 @@ Load this when a look complaint has a named field, or when validating a
 
 ```js
 __apex.lightState()
-// {
+// {   (subset — the full field list is in docs/DEBUG-HOOKS.md §lightState)
 //   ambientSky:    [r,g,b]   → uAmbSky
 //   ambientGround: [r,g,b]   → uAmbGround
 //   sunColor:      [r,g,b]   → directional sun
@@ -37,7 +37,7 @@ Monza has `night:false` — prefer vegas/singapore for night probes.
 ```sh
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
-# shell tags stay ?v=dev (no bump); then:
+# no cache bump (check-changes/references/bump.md); then:
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```

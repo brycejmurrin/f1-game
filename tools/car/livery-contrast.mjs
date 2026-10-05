@@ -128,6 +128,10 @@ export function sweepAll(A, { teams, regions = ["crest", "spineSide", "spineSide
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.log("usage: node tools/car/livery-contrast.mjs [--team=<id>] [--json]\n  Scores every paint panel with >= 15 % area share for contrast (no browser, ~2 min for the grid; a glyph is crest-marks.test.mjs).");
+    process.exit(0);
+  }
   const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
   const A = loadAtlas();
   const only = arg("team", null);

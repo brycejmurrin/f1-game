@@ -1796,10 +1796,31 @@ body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
 body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
 body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
 body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
-/* TOUCH: the opt-in readouts ship where the touch columns sit (RELATIVE over
+/* TOUCH: RELATIVE and INPUTS ship where the touch columns sit (RELATIVE over
    BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04 HUD survey,
    844x390 cockpit), so on a touch screen they show once MOVE & SIZE places
-   them, the same deal as BRAKE BIAS (js/ui/hud-layout.js HIDE_RULES). */
-body:not(.desktop) :is(#hud-rel, #hud-strat, #hud-inputs):not([data-hl-user]) { display: none; }
+   them, the same deal as BRAKE BIAS (js/ui/hud-layout.js HIDE_RULES).
+   STRATEGY has a touch home instead: the left column under the minimap
+   (128px at the same top-band zoom, + 8px), clear of both button columns. */
+body:not(.desktop) :is(#hud-rel, #hud-inputs):not([data-hl-user]) { display: none; }
+body:not(.desktop) #hud-strat { top: calc(144px + var(--sat) / var(--hud-z)); }
+/* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
+   the car) to the left column, sitting on top of the left dock (the steer
+   group, whatever the STEERING INPUT sized it to, wherever DOCK EDIT dragged
+   it). CSS anchor positioning, because the dock's height is per input mode and
+   no fixed offset can know it; #hud-dock is the containing block of both (the
+   touch .hud-bottom is a static flex child). An engine without anchor
+   positioning keeps TYRES in the stack, as before. A placed TYRES still moves
+   from here (MOVE & SIZE `translate`). */
+@supports (anchor-name: --a) {
+  body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+  body:not(.desktop) #hud-tyre {
+    position: absolute;
+    position-anchor: --apex-dock-left;
+    left: anchor(left);
+    bottom: calc(anchor(top) + var(--gap));
+    margin: 0;
+  }
+}
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */

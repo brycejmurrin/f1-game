@@ -361,6 +361,44 @@ test("circuit catalogue has a searchable filter toolbar", () => {
   assert.equal(decl(css("css/menus.css"), "#sel-track-search", "min-height"), "var(--chip-h)");
 });
 
+test("circuit search: a divider survives only while ITS run of tiles does", () => {
+  // Tracks.LIST interleaves the groups (Zandvoort, Imola, Istanbul and Portimao
+  // are classics among the season circuits), so one group owns several
+  // dividers. Testing the whole group left every SEASON divider standing as an
+  // orphan whenever any season circuit matched — searching "spa" (which also
+  // finds Spain) drew vertical labels between empty runs. The real function,
+  // run against a stand-in list.
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
+  const fn = /function applyTrackSearch\(value\) \{[\s\S]*?\n\}\n/.exec(src);
+  assert.ok(fn, "applyTrackSearch is in select-screen.js");
+  const mk = (kind, group, search) => {
+    const classes = new Set([kind]);
+    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group,
+      classList: { contains: (c) => classes.has(c) } };
+  };
+  const list = [
+    mk("track-group-head", "S"), mk("track-row", "S", "spa belgium season"), mk("track-row", "S", "madrid spain season"),
+    mk("track-group-head", "C"), mk("track-row", "C", "zandvoort netherlands classic"),
+    mk("track-group-head", "S"), mk("track-row", "S", "jeddah saudi arabia season"),
+    mk("track-group-head", "C"), mk("track-row", "C", "imola italy classic"),
+  ];
+  list.forEach((el, i) => { el.nextElementSibling = list[i + 1] || null; });
+  const heads = list.filter((e) => e.classList.contains("track-group-head"));
+  const rows = list.filter((e) => e.classList.contains("track-row"));
+  const els = { selTracks: { querySelectorAll: (sel) => (sel === ".track-row" ? rows : heads) } };
+  const empty = { hidden: true };
+  const run = new Function("els", "document", "ScrollFadeRefresh",
+    `let trackQuery = ""; ${fn[0]}; return applyTrackSearch;`)(els, { getElementById: () => empty }, () => {});
+  run("spa");
+  assert.deepEqual(heads.map((h) => h.hidden), [false, true, true, true],
+    "only the divider over the matching run shows; the three empty runs lose theirs");
+  run("");
+  assert.deepEqual(heads.map((h) => h.hidden), [false, false, false, false], "no query: every divider is back");
+  run("zzz");
+  assert.deepEqual(heads.map((h) => h.hidden), [true, true, true, true], "no match: no dividers at all");
+  assert.equal(empty.hidden, false, "…and the NO CIRCUITS MATCH line shows");
+});
+
 test("compact catalogue keeps a pannable toolbar and shrinks the strip to flags", () => {
   const menus = css("css/menus.css");
   assert.equal(decl(menus, "#sel-track-filter", "overflow-x"), "auto",
@@ -587,7 +625,7 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   }
   assert.ok(ruleFor(tuner, /#lt-head h2, #ct-head/), "tuner heads share one rule");
   assert.ok(decl(career, /^#cr-inner\[data-density="compact"\] #cr-foot\b/, "grid-template-columns"));
-  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-min)");
+  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-paint)");
   assert.ok(ruleFor(data, /^body\[data-density="compact"\] \.dh-overlay\b/));
   assert.ok(!data.some((r) => r.context.some((c) => /orientation:\s*landscape\) and \(max-height:/.test(c))),
     "data hub short-height chrome must use body[data-density], not viewport max-height");

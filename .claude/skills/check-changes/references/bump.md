@@ -25,7 +25,7 @@ node tools/ci/bump-cache.mjs            # repo check: every tag is ?v=dev, meta 
 ```
 
 `bump-cache.mjs --apply` without `--root` REFUSES (exit 2): a habitual
-repo-side run would put 151 hashes back into the shell. Never hand-edit a
+repo-side run would put a content hash on every tag back into the shell. Never hand-edit a
 `@gen-shell` block, `version.json` or the `apex-build` meta —
 `tests/unit/load-order.test.mjs` fails on drift.
 

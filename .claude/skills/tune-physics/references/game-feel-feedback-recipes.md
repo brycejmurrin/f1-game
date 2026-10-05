@@ -1,8 +1,16 @@
 # Feedback recipes — depth for `game-feel`
 
-Detail the `game-feel` body defers here: the shake math, easing cheat sheet, the rest of the
+Detail [game-feel.md](game-feel.md) defers here: the shake math, easing cheat sheet, the rest of the
 feedback menu (knockback, flash, number pop, freeze), importance-tier presets, and the
 per-engine bindings for tweens and particles. All snippets target **Godot 4.x** and **Unity 6**.
+
+## Contents
+- 1. The trauma model (why shake feels good)
+- 2. Easing cheat sheet — which curve for which job
+- 3. The rest of the feedback menu
+- 4. Importance tiers (keep the whole game proportional)
+- 5. Accessibility (ship these toggles)
+- 6. Per-engine binding summary
 
 ## 1. The trauma model (why shake feels good)
 
@@ -59,11 +67,11 @@ IEnumerator Pop(Transform t, float dur = 0.18f) {
 - **Flash:** tint the sprite/material white for 1–3 frames on hit (`modulate`/material color),
   then tween back. Cheap, hugely legible.
 - **Knockback:** apply an impulse away from the hit normal, clamped and short; let
-  `physics-tuning` own stability. Pair with brief control lockout, not a long one.
+  **tune-physics** own stability. Pair with brief control lockout, not a long one.
 - **Number/text pop:** spawn a damage number that rises, fades, and eases out; randomize the
   horizontal drift so stacked hits fan out.
 - **Particles:** a short burst at the contact point (sparks, dust, debris). Pool them
-  (`performance-optimization`) — do not instance-and-free per hit.
+  (`js/perf/governor.js`) — do not instance-and-free per hit.
 - **Freeze frame:** the hit-stop in the body; scale duration to importance (0.04 s light →
   0.15 s heavy). Optionally freeze only the attacker+target, not the whole world.
 - **Anticipation & follow-through:** a tiny wind-up before a big action and a settle after read

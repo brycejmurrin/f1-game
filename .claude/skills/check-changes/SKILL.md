@@ -1,9 +1,16 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` that exited 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
+description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the no-bump shell/cache policy (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
 # Validate changes before committing/pushing
+
+## This tree, right now
+
+Live selection, run when the skill loads (Claude Code expands the line; Cursor and
+Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
+
+!`node tools/ci/pick-tests.mjs 2>&1 | head -24`
 
 ## Prerequisites
 
@@ -51,6 +58,13 @@ Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed
 job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs
 were cancelled by a newer push; two of three inspected hid a real failure).
 `verify-change` says so at verdict time when it can see a live run.
+
+Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
+prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
+change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
+already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
+Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
+groups than the cap (engine / physics: the two most specific, name the rest not-run).
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 

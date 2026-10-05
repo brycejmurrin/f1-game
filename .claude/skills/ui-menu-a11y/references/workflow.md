@@ -3,6 +3,11 @@
 Load this when adding a screen, wiring Escape, or chasing a touch/zoom
 geometry bug.
 
+## Contents
+- Workflow
+- Common mistakes
+- Reduced motion
+
 ## Workflow
 
 1. **Identify the layer first.** If keys, wheel, or Escape go to the wrong
@@ -61,7 +66,7 @@ Back-stack (Escape/BACK goes to the wrong screen): Escape -> `TopModal`
 `home` does it return `true`, and `closeSettings()` then unhides `#pausemenu`
 **only if `paused`** (title-menu settings, `#mb-settings`, has no pause menu to
 return to, so it closes to the title). The pause key takes the same path via
-`Input.init` `onPause`. Suspect `paused` / `state` first, then whether
+`Input.init` `onPause` (`js/ui/platform-session.js` `initInput`). Suspect `paused` / `state` first, then whether
 `hidden` on `#pmsettings` was flipped by something other than the door.
 Node-level pins (no browser, run singly):
 `node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
@@ -93,7 +98,7 @@ should add a source-regex pin to that unit file.
 ### Cramped single screen (phone shape, UI scale)
 
 Static route: `SheetShape` writes `data-density="compact"` on the sheet
-(`#sel-inner`); `css/menus.css` `#sel-inner[data-density="compact"] ...` drops
+(`#sel-inner`); `css/select.css` `#sel-inner[data-density="compact"] ...` drops
 row names, elevation, and the `.track-row` `min-height` (deliberately below the
 `--tap` rung, flags-only strip). Rungs live in `css/tokens.css`: `--tap` 44 /
 `--chip-h` 40 on a mouse pointer, 52 / 46 on `body:not(.desktop)`, each

@@ -56,9 +56,15 @@
   scrollbar-width: none;
 }
 #sel-track-filter::-webkit-scrollbar { display: none; }
+/* min-width is the painted tap floor, not max-content: `flex: 0 0 auto` on a
+   nowrap row already holds every chip at its max-content width, so the old
+   value only restated that, and the ACTIVE "ALL" chip painted 43x52 on a
+   landscape iPhone (50x52 portrait, layout-audit 2026-10-05) — tall enough,
+   too narrow. --tap-paint (css/tokens.css) widens a one-word chip to 52 painted
+   on touch; the row still pans rather than wraps. */
 #sel-track-filter .sel-chip {
   flex: 0 0 auto;
-  min-width: max-content;
+  min-width: var(--tap-paint);
   justify-content: center;
   font-size: var(--fs-micro);
   padding-inline: calc(var(--gap) * 0.83);
@@ -345,6 +351,47 @@
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: 0 0 auto; align-self: center; }
+/* PORTRAIT PHONE: THE ACTION BAR WAS A THIRD OF THE SHEET. MEASURED
+   (layout-audit, ios-iphone-portrait 393x659, 2026-10-05, tip a7d27757f):
+   #sel-inner 542 px (497 own); the hero section — still, numbers, CIRCUIT
+   DETAIL — was a 93 own px scroller over 542 of content (5.8 screens), and
+   198 own px sat UNDER it: BACK / CHANGE CAR / RACE SETUP at the 20px
+   viewport-height type size, three 110px-floored buttons that cannot share a
+   295px bar, so they wrapped to two rows and CHANGE CAR's two-line label made
+   the first row taller still. A tall NARROW sheet has height to spare and no
+   width, so here the bar is one row of three: BACK takes its own width, the
+   other two split the rest, the type steps down to a width-scaled rung and a
+   long label wraps inside its button instead of wrapping the bar. Expected:
+   the bar ~85 own instead of ~190, all of it handed to the section.
+   Container-gated (<= 480 own px), so a tall tablet keeps the one-row bar it
+   already had at its own size. */
+@container sheet (max-width: 480px) {
+  #sel-inner[data-shape="tall"] > .sheet-foot {
+    display: grid;
+    grid-template-columns: auto;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: calc(var(--gap) * 0.5);
+  }
+  #sel-inner[data-shape="tall"] > .sheet-foot > .bigbtn {
+    min-width: 0;
+    font-size: clamp(14px, calc(4.2 * var(--vwz)), 17px);
+    padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.8) calc(var(--gap) * 0.6) var(--gap);
+    white-space: normal;
+  }
+  #sel-inner[data-shape="tall"] #sel-car small { white-space: normal; overflow-wrap: anywhere; }
+  /* ...AND THE STILL STOPS AT 60% OF THE SECTION, so the numbers under it
+     start on screen instead of a scroll away. The section becomes a size
+     container (it is a flex remainder with a definite height, never sized by
+     its content) so the cap can read its height; 52cqw now reads the
+     section's width rather than the sheet's, ~13 own px narrower. The floor
+     keeps a still worth looking at — and over the 110px the outline needs. */
+  #sel-inner[data-shape="tall"] #sel-track-section { container: sel-room / size; }
+  #sel-inner[data-shape="tall"] #sel-hero {
+    height: min(52cqw, max(calc(var(--chip-h) * 3), calc(46 * var(--svhz))), max(calc(var(--chip-h) * 2.6), 60cqh));
+  }
+}
 #sel-hero {
   position: relative; min-height: 0; min-width: 0;
   border-radius: var(--r-lg);
@@ -383,6 +430,20 @@
   cursor: pointer;
 }
 #sel-preview-map { display: block; max-width: 100%; max-height: 100%; }
+/* AN OUTLINE TOO SMALL TO READ IS HIDDEN, NOT SHRUNK FURTHER. The canvas is
+   fitted by js/ui/select-screen.js to ~60% of the hero's height, so the hero's
+   height is the whole question — and only a size container can ask it.
+   MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05): the
+   lower-third hero is ~97 own px tall, so the lap outline painted 39x57 CSS px
+   — 4% of the still it sits on, a smudge rather than a circuit. Under 110 own
+   px of hero (a ~66 px outline) it goes; the still, the caption and the
+   CIRCUIT DETAIL chip stay, and the still is still the door to the full map.
+   visibility, not display: the canvas keeps its box, so nothing re-flows and
+   the next refit on a taller hero brings it straight back. */
+#sel-hero { container: sel-hero / size; }
+@container sel-hero (max-height: 110px) {
+  #sel-preview-map { visibility: hidden; }
+}
 @media (hover: hover) {
   .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
 }

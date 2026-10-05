@@ -181,11 +181,19 @@ function subjectFor(ctx, look, shotId) {
     if (!lm.length) return null;
     const rec = lm[Math.min(a.rank || 0, lm.length - 1)];
     for (const bx of boxes) bx.subj = bx.rec === rec;
+    // THE SUBJECT IS NEVER CLEARED OFF THE ROAD. FlybySight.offRoad drops an
+    // angled stand whose axis-aligned box reaches across the tarmac, because
+    // as an OCCLUDER it hides a road it does not cover; as the shot's subject
+    // it is what the frame is about, and dropped it scored every Spa landmark
+    // frame 0 % subject with 89 % of its points in frame. Back in, for this
+    // frame only, and never in the way of itself.
+    const extra = (ctx.dropped || []).filter((bx) => bx.rec === rec);
+    for (const bx of extra) bx.subj = true;
     const pts = [];
     for (const fx of [-0.45, 0, 0.45]) for (const fy of [-0.45, 0, 0.45]) for (const fz of [-0.45, 0, 0.45]) {
       pts.push([rec.x + fx * rec.w, rec.y + fy * rec.h, rec.z + fz * rec.d]);
     }
-    return { kind: "landmark", label: `${rec.kind} ${rec.w}x${rec.h}x${rec.d} m (rank ${a.rank || 0})`, pts, roadS: null };
+    return { kind: "landmark", label: `${rec.kind} ${rec.w}x${rec.h}x${rec.d} m (rank ${a.rank || 0})`, pts, roadS: null, extra };
   }
   if (a.at === "centre") {
     for (const bx of boxes) bx.subj = false;
@@ -219,9 +227,10 @@ function reportFrame(ctx, pose, subj, opts) {
   const cam = FM.makeCamera({ eye: pose.eye, tgt: pose.tgt, fovDeg: pose.fov, aspect: opts.aspect, near: FlybySeq.NEAR });
   // A box the eye stands in is reported, not drawn: casting from inside a box
   // paints every ray at t = 0 and the frame reads as 100 % of that box.
-  const inside = scene.allBoxes.filter((b) => FM.insideBox(cam.eye, b));
+  const all = subj && subj.extra && subj.extra.length ? scene.allBoxes.concat(subj.extra) : scene.allBoxes;
+  const inside = all.filter((b) => FM.insideBox(cam.eye, b));
   const insideHard = inside.find((b) => b.op >= 0.5 && !/ridge|mountain|hill/.test(b.kind));
-  scene.boxes = inside.length ? scene.allBoxes.filter((b) => !inside.includes(b)) : scene.allBoxes;
+  scene.boxes = inside.length ? all.filter((b) => !inside.includes(b)) : all;
   const frame = FM.castFrame(cam, scene, subj, opts.cols, opts.rows);
   const st = FM.frameStats(frame, 30);
   const g = scene.groundAt(cam.eye[0], cam.eye[2]);
@@ -440,10 +449,18 @@ Accepts: ${KNOWN.filter((k) => k.startsWith("--")).join(" ")}`);
   const g = await createGame({ track });
   const bootMs = Date.now() - t0;
   const sb = g.sandbox, G = g.G, T = G.track, FlybySeq = sb.FlybySeq, Tracks = sb.Tracks;
-  const props = sb.FlybySight.offRoad(sb.FlybySight.propBoxes(T), T), spans = sb.FlybySight.spanBoxes(T), cars = carBoxes(G, Tracks);
+  const allProps = sb.FlybySight.propBoxes(T), props = sb.FlybySight.offRoad(allProps, T);
+  const spans = sb.FlybySight.spanBoxes(T), cars = carBoxes(G, Tracks);
+  const keptSet = new Set(props), dropped = allProps.filter((b) => !keptSet.has(b));
   const gm = groundModel(T, Tracks);
   const scene = { allBoxes: props.concat(spans, cars), boxes: null, groundAt: gm.groundAt, maxGroundY: gm.maxGroundY, range };
-  const ctx = { track: T, FlybySeq, Tracks, boxes: scene.allBoxes, cars, scene };
+  // A box's dither key (castRay's hash) is its place in the WORLD, fixed here:
+  // keyed by its index in the first frame that culled it, a translucent
+  // signboard in turn-late dithered differently whenever a wide shot earlier
+  // in the list re-aimed, and its score moved with no change of its own.
+  scene.allBoxes.forEach((b, i) => { b._i = i; });
+  dropped.forEach((b, i) => { b._i = scene.allBoxes.length + i; });
+  const ctx = { track: T, FlybySeq, Tracks, boxes: scene.allBoxes, cars, scene, dropped };
   const list = shots && shots.length ? shots : FlybySeq.DEFAULT;
   const FLY = flyMs();
   const t1 = Date.now();

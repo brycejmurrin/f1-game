@@ -357,6 +357,88 @@ const FlybySight = (function () {
     return thirds;
   }
 
+  /* WHAT THE REST OF THE FRAME IS. An establishing shot is judged on more than
+     its lap: Monza's wide shots looked down 16 degrees from 250 m with the
+     horizon at the top edge, and the frame report flagged 72-80 % of every
+     frame flat lawn (EMPTY_GROUND, frame-math's groundMaxPct 70). mix() casts a
+     coarse ray grid against the same boxes and terrain and returns the shares
+     the report counts: a box first (its opacity's worth, nearest first), then
+     the terrain, else sky above the eye's level and ground below it — the
+     report's own rule for a ray that runs out of world (castRay). Road is
+     counted as ground, so the estimate errs towards "too much ground". */
+  // Rows over columns: the horizon's row is what the ground share turns on,
+  // and at 8 rows it moved the estimate 12 points at a time.
+  const MIX_RANGE = 2500, MIX_C = 8, MIX_R = 16;
+  function floorOf(track, sc) {
+    if (sc.floorY != null) return sc.floorY;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    let lo = Infinity;
+    for (let i = 0; i < 128; i++) { Tracks.sample(track, (i / 128) * (track.total || 1), smp); if (smp.p[1] < lo) lo = smp.p[1]; }
+    sc.floorY = isFinite(lo) ? lo - 0.3 : 0;
+    return sc.floorY;
+  }
+  function topOf(sc) {
+    if (sc.topY == null) { sc.topY = -Infinity; for (const b of sc.boxes) sc.topY = Math.max(sc.topY, b.y + b.h / 2); }
+    return sc.topY;
+  }
+  const _md = [0, 0, 0];
+  function mix(track, cam, coarse) {
+    const sc = sceneOf(track), e = cam.eye, floor = floorOf(track, sc);
+    const nc = coarse ? MIX_C / 2 : MIX_C, nr = coarse ? MIX_R / 2 : MIX_R;
+    let sky = 0, ground = 0, prop = 0;
+    const hits = [];
+    for (let y = 0; y < nr; y++) {
+      const ny = 1 - (y + 0.5) / nr * 2;
+      for (let x = 0; x < nc; x++) {
+        const nx = (x + 0.5) / nc * 2 - 1, a = nx * cam.tanX, bb = ny * cam.tanY;
+        _md[0] = cam.f[0] + cam.r[0] * a + cam.u[0] * bb;
+        _md[1] = cam.f[1] + cam.u[1] * bb;
+        _md[2] = cam.f[2] + cam.r[2] * a + cam.u[2] * bb;
+        const l = Math.hypot(_md[0], _md[1], _md[2]);
+        _md[0] /= l; _md[1] /= l; _md[2] /= l;
+        // The terrain first (it bounds the box walk): march with a step that
+        // grows with distance; a downward ray off the terrain's edge meets
+        // the report's floor plane.
+        // Up, over every box and all the terrain: sky, with nothing to walk.
+        if (_md[1] >= 0 && e[1] > sc.maxT && e[1] > topOf(sc)) { sky++; continue; }
+        let tg = Infinity;
+        if (!(_md[1] >= 0 && e[1] > sc.maxT)) {
+          for (let t = 2; t <= MIX_RANGE; t += Math.max(2, t * 0.04)) {
+            const py = e[1] + _md[1] * t;
+            if (_md[1] >= 0 && py > sc.maxT) break;
+            if (py < terrainAt(track, e[0] + _md[0] * t, e[2] + _md[2] * t)) { tg = t; break; }
+          }
+        }
+        if (tg === Infinity && _md[1] < 0 && e[1] > floor) tg = Math.min(MIX_RANGE * 2, (e[1] - floor) / -_md[1]);
+        hits.length = 0;
+        walk(sc, e, _md, Math.min(tg, MIX_RANGE), (b) => {
+          const vx = b.x - e[0], vy = b.y - e[1], vz = b.z - e[2], tc = vx * _md[0] + vy * _md[1] + vz * _md[2];
+          if (vx * vx + vy * vy + vz * vz - tc * tc > b._r * b._r) return;   // bounding sphere first
+          const t = rayBox(e, _md, b);
+          if (t < tg && t <= MIX_RANGE && !inBox(e, b, 0)) hits.push(t, b.op);
+        });
+        let pass = 1;
+        for (let k = 0; k < hits.length; k += 2) pass *= 1 - hits[k + 1];
+        prop += 1 - pass;
+        if (tg < Infinity || _md[1] < 0) ground += pass; else sky += pass;
+      }
+    }
+    const n = nc * nr;
+    return { sky: sky / n, ground: ground / n, prop: prop / n };
+  }
+  // The report's groundMaxPct / skyMaxPct (tools/lib/frame-math.mjs THRESH),
+  // and a MARGIN under them for the flag: 128 rays against the report's 2688,
+  // with the road counted as ground here, read 1-4 points high on Monza.
+  const GROUND_MAX = 70, SKY_MAX = 65, MIX_MARGIN = 2, MIX_FLAG = 10;
+  const GROUND_OK = (GROUND_MAX - MIX_MARGIN) / 100;
+  /** A mix's cost: the report's rate (0.5 a point over groundMaxPct /
+   *  skyMaxPct), plus MIX_FLAG for being near either at all — a flagged frame
+   *  is a defect, not a few points. */
+  function mixCost(m) {
+    const g = m.ground * 100, s = m.sky * 100;
+    return Math.max(0, g - GROUND_MAX) * 0.5 + Math.max(0, s - SKY_MAX) * 0.5 + (g > GROUND_MAX - MIX_MARGIN || s > SKY_MAX - MIX_MARGIN ? MIX_FLAG : 0);
+  }
+
   /** One camera judged against a subject {pts, skip, lap}: inF (share of its
    *  points in frame), vis (mean survival of those in frame), nearSubj (share
    *  lost to boxes within NEAR_M), near (the worst third's near cover), inside
@@ -427,6 +509,29 @@ const FlybySight = (function () {
     }
     return Math.abs(A) / 2;
   }
+  /** How much of the frame a FIELD of cars fills, 0..1: each car (its
+   *  centre, nose and tail points, `stride` 3) a screen rectangle from nose to
+   *  tail, CAR_W wide and CAR_H tall at its depth, rasterised on a coarse
+   *  grid so a column of cars stacked behind one another counts once — the
+   *  report's car boxes (frame-report.mjs carBoxes) as its raster sees them. */
+  const CAR_W = 2.0, CAR_H = 1.0, FC = 32, FR = 18;
+  const _cells = new Uint8Array(FC * FR);
+  function fieldCover(cam, pts) {
+    _cells.fill(0);
+    let n = 0;
+    for (let i = 0; i + 2 < pts.length; i += 3) {
+      const m = project(cam, pts[i]), a = project(cam, pts[i + 1]), b = project(cam, pts[i + 2]);
+      if (!m || !a || !b) continue;
+      const vx = pts[i][0] - cam.eye[0], vy = pts[i][1] - cam.eye[1], vz = pts[i][2] - cam.eye[2];
+      const z = vx * cam.f[0] + vy * cam.f[1] + vz * cam.f[2];
+      const hw = CAR_W / 2 / (z * cam.tanX), hh = CAR_H / 2 / (z * cam.tanY);
+      const x0 = Math.min(a.x, b.x) - hw, x1 = Math.max(a.x, b.x) + hw, y0 = Math.min(a.y, b.y) - hh, y1 = Math.max(a.y, b.y) + hh;
+      const c0 = Math.max(0, Math.floor((x0 + 1) / 2 * FC)), c1 = Math.min(FC - 1, Math.floor((x1 + 1) / 2 * FC));
+      const r0 = Math.max(0, Math.floor((y0 + 1) / 2 * FR)), r1 = Math.min(FR - 1, Math.floor((y1 + 1) / 2 * FR));
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (!_cells[r * FC + c]) { _cells[r * FC + c] = 1; n++; }
+    }
+    return n / (FC * FR);
+  }
   const SMALL_PCT = 8;     // frame-math judge(): subjectMinPct (2) x 4 — under it costs 4 a point
 
   /** One camera judged against a subject {pts, skip, lap, box, strip} (`coarse`:
@@ -438,7 +543,7 @@ const FlybySight = (function () {
    *  report's own scale — tools/lib/frame-math.mjs judge(), term for term
    *  where this model can see the term: 100 - cost ~ its score. */
   const STEEP = 25 * Math.PI / 180;
-  function frame(track, eye, tgt, fov, subj, coarse) {
+  function frame(track, eye, tgt, fov, subj, coarse, withMix) {
     const cam = camera(eye, tgt, fov, 16 / 9);
     let inF = 0, vis = 0, nearSubj = 0, sx = 0, sy = 0, n = 0;
     const pts = subj.pts, step = coarse ? 2 : 1, Ts = subj.strip ? new Float32Array(pts.length).fill(-1) : null;
@@ -475,9 +580,13 @@ const FlybySight = (function () {
       const c = boxCover(cam, subj.box);
       cover = c == null ? null : c * vis;
     } else if (subj.strip) cover = stripCover(cam, pts, subj.strip, Ts, vis);
+    else if (subj.field) cover = fieldCover(cam, pts) * vis;
     if (cover != null) cost += Math.max(0, SMALL_PCT - cover * 100) * 4;
-    return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, cost };
+    // The whole lap, when asked: the rest of the frame too (mix above).
+    let m = null, mc = 0;
+    if (subj.lap && withMix) { m = mix(track, cam, coarse); mc = mixCost(m); cost += mc; }
+    return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, mix: m, mixCost: mc, cost };
   }
 
-  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, rayBox, transmit, nearThirds, frame, camera, project, NEAR_M });
+  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, rayBox, transmit, nearThirds, mix, mixCost, frame, camera, project, NEAR_M, GROUND_OK });
 })();

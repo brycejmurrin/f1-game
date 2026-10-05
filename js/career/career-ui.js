@@ -952,7 +952,12 @@ function create(G) {
     left.appendChild(head("CONTRACT"));
     if (c.deal) {
       const card = el("div", "cr-card");
-      card.append(
+      // An OWNER has no salary and no contract clock (rollover() never runs
+      // MY TEAM's down): say how the team is paid instead of "Seasons left 1" forever.
+      if (c.flavour === "myteam") card.append(
+        row("Team", team ? team.name : c.deal.team),
+        row("Paid by", "prize money (both cars) + sponsor"));
+      else card.append(
         row("Team", team ? team.name : c.deal.team),
         row("Seasons left", String(c.deal.left)),
         row("Salary", `${c.deal.salary} cr / round`),
