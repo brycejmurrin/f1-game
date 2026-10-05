@@ -40,6 +40,10 @@ window.ScrollFade = (function () {
     // The circuit picker's flag strip and its toolbar: sideways scrollers.
     "#sel-tracks", "#sel-track-filter", "#htp-contents", "#cg-contents", "#ch-contents",
     ".dh-tabs", ".dh-pick-years", "#pm-settings-index", ".lt-tabs", ".cs-tab-row",
+    // Compact stacked garage flattens .cs-tab-row (display: contents); the
+    // sideways scroller is #cs-tabs itself. Without this id the strip had no
+    // sf-l / sf-r edge fade on play-shape phones (852×344, 2026-10-05).
+    "#cs-tabs",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
