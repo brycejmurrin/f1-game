@@ -129,6 +129,18 @@
              h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
         if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
       });
+      // Far canopy fill over the Sopraelevata parkland — Rank A/B were cleared
+      // of the banking ruin (severe cone×box), which opened the wide flyby to
+      // EMPTY_GROUND. Seat pines past the upper banking tier (gap≥100).
+      every(20, (k) => {
+        const s = k / n;
+        if (s < 0.685 || s > 0.775) return;
+        const h = hash(k * 211 + 3);
+        if (h < 0.35) return;
+        pine(k, -1, 100 + h * 28, 22 + h * 14, PINE_D);
+        if (h > 0.55) pine(k, 1, 48 + h * 20, 18 + h * 12, PINE);
+      });
+
       // Clipped park hedge banding through several sweeps for a manicured edge.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
       hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
