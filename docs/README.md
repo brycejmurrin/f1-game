@@ -63,6 +63,7 @@ anything in here.
 | Note | What it records |
 |---|---|
 | [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |
+| [notes/NIGHT-MAST-POOLS-2026-10-05.md](notes/NIGHT-MAST-POOLS-2026-10-05.md) | Why Qatar/Bahrain nights read washed out (flood-mast throw radius × the fleet POOL RADIUS 1.9, cone-less LAMP BOUNCE, the mast foot inside the 37° core, the moon key), the BEAM CORE knob, the shipped preset table, before/after bake ratios and live `lightState`. |
 | [notes/REAL-RACE-2026-09-27.md](notes/REAL-RACE-2026-09-27.md) | REAL RACE (Data Hub RACE IT): the OpenF1 bodies a race script needs and their measured sizes, the script shape, the director's arm / pace-loop / flag design over the live field, and the v1 limits |
 | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) | **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement. |
 | [notes/TLX-PERF-PLAN.md](notes/TLX-PERF-PLAN.md) | The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS. |
