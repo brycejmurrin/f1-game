@@ -1573,6 +1573,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact VS Friend CLOSE floors at --tap-paint");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
     "compact HOST / JOIN floor at --tap-paint");
+  // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
+    "compact VS Friend head clears --tap-paint CLOSE");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > .sheet-foot', "top"), "0",
+    "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
