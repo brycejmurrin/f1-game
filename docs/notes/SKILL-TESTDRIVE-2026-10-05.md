@@ -54,6 +54,14 @@ Cap at ~12, or allow one-file `node --test` at any load.
 
 ## Routing eval
 
-`tools/check/skill-routing-eval.py`, 240 queries (8 per skill; replay-camera and
-f1-animation-cameras gained query files today): see the PR body for the score
-on this branch; baseline 214/216 on 2026-09-30.
+`tools/check/skill-routing-eval.py` on claude-fable-5-1: **213/224** with 4
+workers under loadavg 20+ (the eval's own `claude -p` sessions spawn the three
+MCP servers each, so the eval IS the load). Re-running the 11 misses alone at
+loadavg 6: 6 routed correctly, 5 still went to Bash first (race-incidents
+"make the cones settle faster", season-mode "implement flPoint", slim-bloat
+"AGENTS.md has grown repetitive", steward "I marked the PR ready and the
+earlier run shows cancelled", track-realism "a repeatable research skill").
+Net ≈ 218/224 (97 %) against 214/216 (99 %) on 2026-09-30; none of those five
+descriptions changed today, so the drift is model behaviour on "implement /
+do" phrasings, not vocabulary. The two query files added today (replay-camera,
+f1-animation-cameras) scored 16/16 and are not in the 224.
