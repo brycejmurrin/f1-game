@@ -1113,6 +1113,25 @@ const FlybySeq = (function () {
     const dur = list[idx].dur || 1;
     return { index: idx, id: list[idx].id || String(idx), t: Math.max(0, Math.min(1, (at - acc) / dur)), total };
   }
+  /** Progress through `list` at the midpoint of `turn-first`. Hidden picker
+   *  presents (game.js flybyProgress while `_menuGate.warm`) use this instead
+   *  of 0: the opening `wide` shot is a whole-circuit look that level() aims
+   *  at the horizon, so u=0 no longer draws the road/prop batches those frames
+   *  exist to compile (track-switch-memory anti-vacuity: 39 ROs on llvmpipe).
+   *  A list without that id (an edited sequence) keeps 0. */
+  function warmProgress(list) {
+    list = (list && list.length) ? list : DEFAULT;
+    let tot = 0;
+    for (let i = 0; i < list.length; i++) tot += list[i].dur || 0;
+    if (!(tot > 0)) return 0;
+    let acc = 0;
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i].dur || 0;
+      if (list[i].id === "turn-first") return (acc + 0.5 * d) / tot;
+      acc += d;
+    }
+    return 0;
+  }
   function solve(track, u, shots) {
     const list = bindCorners(track, (shots && shots.length) ? shots : DEFAULT);
     const on = shotAt(u, list), idx = on.index, t = on.t, total = on.total;
@@ -1941,7 +1960,7 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; _airCorner = 0; }
 
   return {
-    solve, shotAt, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
+    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
