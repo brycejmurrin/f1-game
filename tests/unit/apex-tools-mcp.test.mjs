@@ -185,6 +185,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_track_audit",
     "apex_ui_fit",
     "apex_ui_shot",
+    "apex_unit_test",
     "apex_verify_change_fast",
     "apex_who_is_on_it",
   ]);
@@ -350,6 +351,15 @@ test("playwright occupancy matches `playwright test` tokens, not MCP JSON", asyn
   assert.equal(
     classifyPlaywrightLine("99 /opt/google/chrome/chrome --user-data-dir=/workspace/.playwright-mcp --headless")?.kind,
     "hostBrowser",
+  );
+  assert.equal(
+    classifyPlaywrightLine("260 node /root/.npm/_npx/51691537fc71f2b0/node_modules/.bin/playwright-mcp --isolated --headless --browser chromium --executable-path /opt/pw-browsers/chromium-1194/chrome-linux/chrome --no-sandbox --output-dir /home/user/f1-game/artifacts/playwright-mcp")?.kind,
+    "hostMcp",
+    "the idle server names a Chromium path and an output dir as ARGUMENTS — it is not the browser",
+  );
+  assert.equal(
+    classifyPlaywrightLine("137 npm exec @playwright/mcp@0.0.79 --isolated --headless --browser chromium --executable-path /opt/pw-browsers/chromium-1194/chrome-linux/chrome --no-sandbox")?.kind,
+    "hostMcp",
   );
   const scan = scanPlaywrightLines([
     "1 /exec-daemon/cursor-exec-daemon --mcp-config {\"playwright\":{}}",
@@ -800,10 +810,46 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   }
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
-  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
+});
+
+test("real results of the fast tree tools conform to their advertised outputSchema", () => {
+  // MCP 2025-06-18: a server that advertises outputSchema MUST return
+  // conforming structuredContent. The shapes were measured from these same
+  // calls on 2026-10-05; a CLI that renames a key fails here, not in a client.
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const schemaOf = (n) => listed.find((t) => t.name === n).outputSchema;
+  const typeOk = (v, type) => (Array.isArray(type) ? type : [type]).some((t) =>
+    t === "null" ? v === null
+    : t === "array" ? Array.isArray(v)
+    : t === "object" ? (v !== null && typeof v === "object" && !Array.isArray(v))
+    : t === "integer" ? Number.isInteger(v)
+    : typeof v === t);
+  const validate = (value, schema, where, errors) => {
+    if (schema.type && !typeOk(value, schema.type)) errors.push(`${where}: expected ${JSON.stringify(schema.type)}, got ${Array.isArray(value) ? "array" : value === null ? "null" : typeof value}`);
+    if (schema.properties && value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [k, sub] of Object.entries(schema.properties)) if (k in value) validate(value[k], sub, `${where}.${k}`, errors);
+    }
+    return errors;
+  };
+  const calls = [
+    ["apex_status", {}], ["apex_doctor", {}], ["apex_pick_tests", {}], ["apex_select_specs", { since: "HEAD~1" }],
+    ["apex_session_status", {}], ["apex_bump_cache_check", {}], ["apex_job_status", {}],
+    ["apex_track_audit", { track: "monza" }], ["apex_car_audit", { check: "ladder" }],
+  ];
+  const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
+  for (const [i, [name]] of calls.entries()) {
+    const r = results.find((m) => m.id === 10 + i).result;
+    assert.ok(r.structuredContent && typeof r.structuredContent === "object", `${name}: structuredContent present`);
+    assert.deepEqual(validate(r.structuredContent, schemaOf(name), name, []), [], `${name} conforms to its outputSchema`);
+  }
+  for (const t of listed) {
+    assert.equal(t.outputSchema.additionalProperties, true, `${t.name}: a CLI may grow a key before the schema does`);
+    assert.equal(t.outputSchema.required, undefined, `${t.name}: refusal and dryRun bodies share the tool, so nothing is required`);
+  }
 });
 
 test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
@@ -1218,6 +1264,21 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   const audit = ok("apex_track_audit", { track: "monza" });
   assert.match(JSON.stringify(audit.argv), /verify-track\.cjs","monza","--quiet".*float-audit\.cjs","monza","--json/);
   bad("apex_track_audit", { track: "x" });
+  // `checks` routes through tools/track/audit-circuit.cjs (every per-circuit
+  // audit against its baseline, 2026-10-05); the bare call keeps the old pair.
+  const full = ok("apex_track_audit", { track: "monza", checks: ["clip", "coplanar"] });
+  assert.match(JSON.stringify(full.argv), /audit-circuit\.cjs","monza","--json","--checks","clip,coplanar"/);
+  bad("apex_track_audit", { track: "monza", checks: ["nope"] });
+  bad("apex_track_audit", { track: "monza", checks: [] });
+  // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
+  const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
+  assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  const pat = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" });
+  assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  bad("apex_unit_test", { file: "tests/specs/camera.spec.js" });
+  bad("apex_unit_test", { file: "tests/unit/" + "no-such-file.test.mjs" });   // a missing file is refused (docs-integrity: not a path literal)
+  bad("apex_unit_test", { file: "../etc/passwd" });
+  bad("apex_unit_test", {});
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
   for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel", "apex_car_audit", "apex_track_audit"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
@@ -1250,4 +1311,101 @@ test("thumbBlock returns an MCP image block a client can render", async () => {
     const meta = await sharp(Buffer.from(b.data, "base64")).metadata();
     assert.equal(meta.width, 640);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// 2026-10-05: three apex-tools defects (job log empty, graph_parity --all past
+// the 180 s cap, apex_track unable to frame anything high in the air).
+test("a job's reported log is the file holding its output, and status tails it", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  // A fake ROOT whose job CLIs report the way the real ones do: text, then JSON on stdout.
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'console.log("52/52 circuits ok"); console.error("a warning"); console.log(JSON.stringify({ ok: true, n: 52 }));\n');
+    fs.writeFileSync(path.join(fake, "tools/track/graph-parity.cjs"),
+      'console.log(`BASE=${process.env.BASE} args=${process.argv.slice(2).join(" ")}`);\n');
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const x = createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const settle = async (jobId) => {
+      for (let i = 0; i < 200; i++) {
+        const b = body(x.handlers.apex_job_status({ jobId }));
+        if (b.state !== "running") return b;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error(`job ${jobId} never finished`);
+    };
+    const started = body(x.handlers.apex_job_start({ kind: "verify_all" }));
+    assert.match(started.log, /^artifacts\/logs\/apex-jobs\/verify_all-.*\.log$/);
+    const done = await settle(started.jobId);
+    assert.equal(done.state, "done", JSON.stringify(done));
+    const logText = fs.readFileSync(path.join(fake, done.log), "utf8");
+    assert.match(logText, /52\/52 circuits ok/, "the reported log holds the CLI's output, not 0 bytes");
+    assert.match(fs.readFileSync(path.join(fake, done.stderr), "utf8"), /a warning/);
+    assert.match(done.tail, /52\/52 circuits ok[\s\S]*--- stderr ---\na warning/);
+    assert.deepEqual(done.out, { ok: true, n: 52 });
+    assert.ok(!fs.readdirSync(path.join(fake, "artifacts/logs/apex-jobs")).some((f) => f.endsWith(".out")), "no unreported side file");
+
+    // graph_parity_all: BASE travels by env, --all is pinned.
+    const gp = body(x.handlers.apex_job_start({ kind: "graph_parity_all", base: "HEAD~1" }));
+    assert.match((await settle(gp.jobId)).tail, /BASE=HEAD~1 args=--all/);
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+test("apex_graph_parity all:true routes to the graph_parity_all job, never the 180 s spawn", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const all = callCli("apex_graph_parity", { dryRun: true, base: "HEAD~1", all: true });
+  assert.equal(all.status, 0, all.stdout + all.stderr);
+  const b = body(all);
+  assert.equal(b.kind, "graph_parity_all");
+  assert.equal(b.routed, "apex_job_start graph_parity_all");
+  assert.deepEqual(b.env, { BASE: "HEAD~1" });
+  assert.match(JSON.stringify(b.argv), /graph-parity\.cjs","--all"\]$/);
+  const job = body(callCli("apex_job_start", { dryRun: true, kind: "graph_parity_all", base: "origin/main" }));
+  assert.deepEqual(job.env, { BASE: "origin/main" });
+  for (const args of [{ kind: "graph_parity_all" }, { kind: "graph_parity_all", base: "--output=/x" }, { kind: "graph_parity_all", base: "a b" }]) {
+    const r = body(callCli("apex_job_start", { dryRun: true, ...args }));
+    assert.equal(r.error, "bad_args", JSON.stringify(args));
+  }
+  assert.equal(body(callCli("apex_graph_parity", { dryRun: true, all: true })).error, "bad_args", "base stays required");
+});
+
+test("apex_track shot carries el and h: eye pitch / eye height, orbit aim height", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const eye = body(callCli("apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "eye", el: -12, h: 206 }));
+  assert.equal(eye.ok, true, JSON.stringify(eye));
+  assert.equal(eye.command.el, -12);
+  assert.equal(eye.command.h, 206);
+  const orbit = body(callCli("apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "orbit", el: 15, dist: 120, h: 206 }));
+  assert.deepEqual([orbit.command.cam, orbit.command.h, orbit.command.dist], ["orbit", 206, 120]);
+  for (const bad of [{ h: 5000 }, { h: -500 }, { h: "206" }, { el: 120 }, { dist: 0 }, { az: 1e6 }]) {
+    const r = body(callCli("apex_track", { dryRun: true, op: "shot", ...bad }));
+    assert.equal(r.error, "bad_args", JSON.stringify(bad));
+  }
+  assert.equal(body(callCli("apex_track", { op: "shot", h: 10 })).error, "track_not_open", "a real shot still needs a session");
+  // The page half: h reaches eyeAt / orbit, an explicit el re-aims eye through view({eye,yaw,pitch}).
+  const ts = fs.readFileSync(path.join(ROOT, "tools/shot/track-session.mjs"), "utf8");
+  assert.match(ts, /a\.eyeAt\(o\.frac, 0, o\.h == null \? 2\.5 : o\.h\)/);
+  assert.match(ts, /a\.view\(\{ eye: r\.eye, yaw, pitch: o\.pitch \}\)/);
+  assert.match(ts, /a\.orbit\(o\.frac, o\.az, o\.el, o\.dist, o\.h == null \? 1\.5 : o\.h\)/);
+});
+
+test("apex-eval: the shapeOf helper it injects into the page parses (named fn expr, no source rewrite)", async () => {
+  // 2026-10-05: a global /shapeOf\(/ -> "window.__shape(" rewrite also hit the
+  // declaration and injected `function window.__shape(` — a SyntaxError that
+  // failed EVERY browser apex_eval. Rebuild the injected string from source.
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../../tools/shot/apex-eval.mjs", import.meta.url), "utf8");
+  assert.ok(!/SHAPE\.replace\(/.test(src), "the injected helper must not be source-rewritten");
+  const body = src.slice(src.indexOf("function shapeOf("), src.indexOf("\nconst SHAPE"));
+  const shapeLine = src.match(/^const SHAPE = (.+);$/m)[1];
+  const SHAPE = new Function("shapeOf", "return " + shapeLine)(new Function("return " + body)());
+  const win = {};
+  new Function("window", SHAPE)(win);
+  assert.equal(typeof win.__shape, "function");
+  assert.equal(win.__shape([1, 2]).startsWith("Array(2)"), true);
 });

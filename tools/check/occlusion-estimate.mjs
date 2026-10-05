@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU.
- * @skill webgl-debug
+ * @skill renderer-debug
  * occlusion-estimate.mjs — the number that decides whether "render only what we
  * can see" is worth building.
  *

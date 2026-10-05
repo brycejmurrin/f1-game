@@ -567,7 +567,7 @@
         const kp = K(s);
         const ap = anchor(kp, 1, 20);
         // Plinth sits on the ground (ap.c is ground level), extends 1.2 m up.
-        addBox(out, vadd(ap.c, ap.u, 0.6), [8, 1.2, 80], [0.58, 0.56, 0.54], [ap.r, ap.u, ap.t]);
+        addBox(out, vadd(ap.c, ap.u, 0.6), [8.4, 1.2, 80.4], [0.58, 0.56, 0.54], [ap.r, ap.u, ap.t]);
       }
       // ── Lit window bands on Parabolica stands ──
       {
@@ -847,7 +847,7 @@
         }, (stage) => {
           addBox(stage, vadd(vadd(a.c, a.t, -9), a.u, 5), [6, 10, 4.2], stone, b);
           addBox(stage, vadd(vadd(a.c, a.t, 9), a.u, 5), [6, 10, 4.2], stone, b);
-          addBox(stage, vadd(a.c, a.u, 10.2), [6, 2.2, 22], [0.77, 0.72, 0.62], b);
+          addBox(stage, vadd(a.c, a.u, 10.2), [6.2, 2.2, 22], [0.77, 0.72, 0.62], b);
           addPrism(stage, vadd(a.c, a.u, 11.1), [6.4, 2.5, 23],
             [0.88, 0.84, 0.74], b);
         });

@@ -286,7 +286,7 @@ __apex.lightCopy({ undo })      // put back exactly what a copy replaced
 - `docs/SCENERY-API.md` — per-circuit `scenery(api)` callback, barrier/furniture
   definitions that interact with light placement
 - `/playwright-probe` skill (`references/cameras.md`) — framing & camera control in the browser console
-- `/webgl-debug` skill — WebGL state inspection, shader uniforms, draw calls
+- `/renderer-debug` skill — WebGL state inspection, shader uniforms, draw calls
 - `/lighting-tuner` skill — live palette and bloom/grade tuning workflow
 
 ## Hand-tuned lighting constants (knobs)

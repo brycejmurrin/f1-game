@@ -164,6 +164,12 @@ export const RULES = [
   [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
   [/^js\/race\/pit-lane\.js/, ["physics-core", "game-vm"], "pit-lane.spec.js rides in test:physics-core; the commitment's VM twin (pit-lane-vm) in test:game-vm"],
   [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
+  // CONTACT AND AI (test audit T10, 2026-10-05): these routed to physics-core
+  // alone, never to the group whose subject they are — collisions-deep.spec.js
+  // drives AiDrive, and car/wall contact is what `collisions` asserts. Its
+  // specs are VM-twinned, so `game-vm` names where they actually run on CI.
+  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
+   "car/wall contact and the AI driver: collisions-deep.spec.js and the collision VM twins"],
   [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
   [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],
   [/^js\/race\//, ["modes", "state-unit"], "session model: quali, reliability, race control"],
@@ -304,16 +310,57 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }
 
+/* A SPEC EDIT RUNS ITS OWN GROUP (test audit T10, 2026-10-05). `^tests/`
+ * routes to `audit` only — the "is every test file grouped" check — so editing
+ * a browser spec never named the group that RUNS it. The owner is read
+ * from tests/groups.json (the source package.json's scripts are generated
+ * from), globs expanded, so a regroup moves the route with the spec and no
+ * RULE can go stale. Only browser groups own a spec; the multi-group boot
+ * specs (smoke, logging, dev-tools) name every group they sit in.
+ *
+ * The CI selectors drop a group this alone named (stripSpecOwner):
+ * select-specs already runs an edited spec FIRST (rank 0) and on its own, so
+ * routing its group-mates would spend the budget on specs the diff never
+ * touched, and node-plan has no VM work an edited browser spec can change. */
+export const SPEC_OWNER_REASON = "the edited spec's own browser group (tests/groups.json)";
+let _groupsJson = null;
+const groupsJson = () => (_groupsJson ||= JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups);
+const globRe = (g) => new RegExp("^" + g.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*") + "$");
+
+/** The browser groups (names without `test:`) whose file list holds `spec`. */
+export function specOwners(spec, groups = groupsJson()) {
+  const out = [];
+  for (const [script, v] of Object.entries(groups)) {
+    if (v?.kind !== "browser" || !script.startsWith("test:")) continue;
+    if ((v.files || []).some((g) => globRe(g).test(spec))) out.push(script.slice("test:".length));
+  }
+  return out.sort();
+}
+
+/** Undo the spec-owner routing for a CI selector: strip SPEC_OWNER_REASON
+ *  from every group and drop a group it alone named, so the selection (and
+ *  dropBootFallback after it) sees exactly the RULES' answer. */
+export function stripSpecOwner(groups) {
+  const dropped = [];
+  for (const [g, reasons] of groups) {
+    if (!reasons.delete(SPEC_OWNER_REASON)) continue;
+    if (!reasons.size) { groups.delete(g); dropped.push(g); }
+  }
+  return dropped;
+}
+
 export function pick(files) {
   const groups = new Map();   // group -> reasons
+  const add = (g, why) => {
+    if (!groups.has(g)) groups.set(g, new Set());
+    groups.get(g).add(why);
+  };
   for (const f of files) {
     for (const [re, gs, why] of RULES) {
       if (!re.test(f)) continue;
-      for (const g of gs) {
-        if (!groups.has(g)) groups.set(g, new Set());
-        groups.get(g).add(why || f);
-      }
+      for (const g of gs) add(g, why || f);
     }
+    if (/^tests\/specs\/[^/]+\.spec\.js$/.test(f)) for (const g of specOwners(f)) add(g, SPEC_OWNER_REASON);
   }
   return groups;
 }

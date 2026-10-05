@@ -205,6 +205,76 @@ Items 1–7 of §7, in one commit after the survey:
    plugin name, not a skills directory (`--plugin-dir` loads a plugin, not
    `.claude/skills/`). Run the two slash commands once in a local session.
 
+### 8b. Second pass, the same day (branch `claude/agent-surface-followups`)
+
+The follow-ups the first landing left open, each measured:
+
+- **Budget headroom.** `AGENTS.md` sat at 199 of 200 lines and 72 of 75
+  rule-bearing lines: prose paragraphs were rewrapped to ~118 columns (no
+  words changed) and rules 6, 7 and 10 compressed to what the hooks do not
+  already enforce. Skill descriptions sat at 1599 of 1600 words: seven
+  verbose ones lost parentheticals that restated the body (`check-changes`,
+  `css-play`, `playwright-probe`, `agent-view`, `survey-ui-matrix`,
+  `mcp-probe`), every test-pinned trigger word kept. New figures are in the
+  PR body with the routing re-measurement of the trimmed skills.
+- **`track-realism` meta-request miss, re-measured.** Its description now also
+  names "a repeatable track research workflow to set up", the phrasing of the
+  queries that missed. Result on the 56-query pass: the six trimmed skills
+  48/48, `track-realism` 6/8 — the same two misses ("use parallel agents to
+  upgrade Spa, Monza and Silverstone…", "I want a repeatable track research
+  skill…"). Three runs with three different descriptions give the same
+  verdict: the description is not the lever here. Both queries read as
+  build-a-tool requests and the model opens with Bash before consulting any
+  skill. Accept them as known misses (`/track-realism` by name always works),
+  or rewrite the two queries if they no longer reflect how the campaign is
+  asked for.
+- **`!command` injection, measured.** `check-changes` opens with a live
+  `pick-tests` line. The command is read-only and ran in 0.1 s (exit 0) on
+  this tree, so the load-time cost is negligible; Cursor and Codex see the
+  literal line and the sentence above it tells them to run it by hand.
+- **Per-tool `outputSchema`.** Eleven apex-tools wraps advertise the shape
+  measured from a real call (the `runSpawn` envelope plus the CLI's `--json`
+  keys; `apex_status`, `apex_track_audit` and `apex_job_status` have their own
+  bodies). Nothing is `required` and `additionalProperties` stays true,
+  because refusal and dryRun bodies share a tool and a CLI may grow a key
+  first. The test calls nine of them for real and validates the result
+  against the advertised schema with a small type-checker (no ajv in the tree).
+- **`isolation: worktree` on `track-surveyor`.** Two surveyors on two circuits
+  no longer share a checkout; the fork commits its pair on its worktree branch
+  and the parent merges it before verifying (`survey-track` §Hand-back,
+  AGENTS.md rule 10).
+- **Nested `AGENTS.md`, settled from the docs** (no `/context` run needed):
+  "a subdirectory's `AGENTS.md`, when Claude opens a file there with the Read
+  tool and that subdirectory has none of the three `CLAUDE.md` files of its
+  own" loads on demand — https://code.claude.com/docs/en/memory.md §When Claude
+  Code reads AGENTS.md. `js/track/` and `js/circuits/` have no `CLAUDE.md`, so
+  both nested files load as intended. `/skill-doctor` reports each skill
+  description's token cost and runs non-interactively (`claude -p`); nothing
+  reports `.claude/agents/` cost beyond a startup warning at 15 000 tokens
+  (https://code.claude.com/docs/en/sub-agents.md §Manage subagent context).
+- **`/skill-doctor`, run here** (`claude -p "/skill-doctor"`): the 30 project
+  skill descriptions cost ≈ 4 300 tokens of system prompt per turn (80–190
+  each; `tune-physics` 190, `css-play` and `playwright-probe` 180 are the
+  heaviest), the four workflows ≈ 400 more, and the nine claude.ai-synced
+  Anthropic skills ≈ 1 900 — the single largest always-on block, and not
+  this repo's to trim. Its "never invoked" column counts this machine's last
+  seven days, so on a fresh container it says nothing about usefulness.
+- **Bloat audit of the two heaviest skills** (`bloat-auditor`, read-only, every
+  cited path verified): one finding — `garage-parts-livery/SKILL.md`'s intro
+  restated `references/livery-fields.md`; folded into the pointer line
+  (~480 bytes). `mcp-probe` came back clean: its war stories each carry a rule.
+- **Physics-contract sweep** (`physics-contract-auditor`, read-only): CLEAN, 0
+  violations — all 57 `curvature(` sites and every racing-line read classified;
+  no `c.xOn` physics read outside game.js (the remaining reads are telemetry,
+  HUD and the garage preview). Two safe AI-arm sites had no row in
+  `docs/PHYSICS.md`'s channel table (the marble `latG` and the drawn `yawVis`);
+  both rows added. `tools/check/vstd-lint.mjs` has no `--help` (a bare `--help`
+  is read as a path): left to `claude/skill-tooling-round2`, which is adding
+  help gates.
+- Still local-only: `/doctor prompt-audit`. Deleting the merged `claude/agent-surface-survey` branch on GitHub was
+  refused by the session's permission classifier as destructive; it is one click
+  in the PR's "Delete branch" button.
+
 ## Sources
 
 - https://code.claude.com/docs/en/skills.md — frontmatter fields, 1536-char description cap, 500-line body, `!command`, `$ARGUMENTS`, `context: fork`, `disallowed-tools`, `hooks:`

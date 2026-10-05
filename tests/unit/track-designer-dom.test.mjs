@@ -906,6 +906,20 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.startFrom("custom-nope"), false);
 });
 
+// START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
+// once the panel opened; a card strokes a 160×110 outline, so only that is kept.
+test("START FROM… memoises a small outline per circuit, not its whole centreline", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const design = panes(b)[0], from = chipsIn(design, "START FROM…")[0];
+  from.click();
+  const shipped = b.Tracks.LIST.filter((t) => !t.custom).length;
+  for (let i = 0; i < shipped * 4 && b.D.state().thumbs.cached < shipped; i++) await new Promise((r) => setTimeout(r, 0));
+  const th = b.D.state().thumbs;
+  assert.equal(th.cached, shipped, "every card drew");
+  assert.ok(th.maxPts > 32 && th.maxPts <= 256, "an outline of at most 256 points: " + th.maxPts);
+});
+
 // ── Authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ──
 const rowOf = (root, label) => walk(root).find((e) => e.classList.contains("td-row") && e.children[0] && e.children[0].textContent === label);
 const stepBy = (row, n) => { const b = row.children[n > 0 ? 3 : 1]; for (let i = 0; i < Math.abs(n); i++) b.click(); };
@@ -1410,11 +1424,11 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (sixteen), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   const T = b.ctx.TrackThemes;
-  assert.equal(T.ORDER.length, 16);
+  assert.equal(T.ORDER.length, 20);
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
   assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
   const blurb = walk(b.root).find((e) => e.classList && e.classList.contains("td-hint") && e.textContent === T.get(b.D.state().design.theme).blurb);

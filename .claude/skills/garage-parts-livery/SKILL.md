@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: "Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against the car's own paint (livery contrast, cover legibility; HUD digits are ui-menu-a11y, billboards scenery-dress), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics."
+description: "Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against the car's paint (livery contrast/legibility; HUD digits are ui-menu-a11y, billboards scenery-dress), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, Car3D visual recipes. Isolated studio renders → playwright-probe; handling → tune-physics."
 ---
 
 # Garage — parts, livery, and car mesh
@@ -9,10 +9,9 @@ The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you
 drive (12 categories + 780 cr, `Parts.BUDGET`), and how it looks. Catalog: `js/car/parts.js`.
 Paint: `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
-`Parts.CATALOG` is an **ordered array**. SIGNATURE = mesh-only clone of
-`equivalent`. `FACTORY_PRESETS` = AI meshes only. ERS/aero from `ersProfile` /
-`aeroLoad`. Finish via `Car3D.FINISH_SURFACE`. Full field catalog (fin/spine/
-cover/draft lockstep, paint-sheet rules) → [references/livery-fields.md](references/livery-fields.md).
+Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProfile` /
+`aeroLoad`, `Car3D.FINISH_SURFACE`, fin/spine/cover/draft lockstep, paint-sheet rules
+→ [references/livery-fields.md](references/livery-fields.md).
 
 ## When to Use
 
