@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
 import { filesFor } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
@@ -135,6 +135,7 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   assert.match(nodeJob, /\. "\$\{RUNNER_TEMP:-\.\}\/node-plan\.sh"/, "the suites step must source the plan");
   const step = nodeJob.slice(nodeJob.indexOf("- name: Pure-node unit suites"));
   for (const script of Object.keys(SCOPED)) {
+    if (THINNED_VM.includes(script)) continue;   // the thinned form, pinned below
     const re = new RegExp(`if planned ${script.replace(/[-]/g, "\\-")}; then\\n\\s+npm run ${script}\\n\\s+fi`);
     assert.match(step, re, `${script} must be guarded by planned() and stay an npm run line`);
   }
@@ -163,6 +164,22 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
       `if \\[ -n "\\$\\{NODE_PLAN_SKIP_TF:-\\}" \\]; then node tools/ci/run-group\\.mjs ${esc} --skip-tf; else\\n\\s+npm run ${esc}\\n\\s+fi`),
       `${script} must thin TF on PR and keep npm run for the deploy gate`);
   }
+  // The planned VM slices thin the same way, INSIDE planned(): the five VM
+  // files tooling-fast already runs (Structural guards shares this job's `if:`)
+  // are dropped on a matched plan, every onlyHere file stays (T5, 2026-10-05).
+  const tf = new Set(TOOLING_FAST_FILES);
+  for (const script of THINNED_VM) {
+    const esc = script.replace(/[-]/g, "\\-");
+    assert.match(step, new RegExp(
+      `if planned ${esc}; then\\n\\s+if \\[ -n "\\$\\{NODE_PLAN_SKIP_TF:-\\}" \\]; then node tools/ci/run-group\\.mjs ${esc} --skip-tf; else\\n\\s+npm run ${esc}\\n\\s+fi\\n\\s+fi`),
+      `${script} must thin TF on a matched plan and keep npm run for the deploy gate`);
+    assert.ok(gateNodeSuites().includes(script), `${script} must still parse from the npm run else-branch`);
+    const kept = filesFor(script, { skipTf: true });
+    assert.ok(kept.length > 0, `${script} --skip-tf must leave its onlyHere files`);
+    for (const f of groups[script].files) assert.equal(kept.includes(f), !tf.has(f), `${script}: ${f}`);
+  }
+  assert.ok(THINNED_VM.flatMap((s) => groups[s].files).some((f) => tf.has(f)),
+    "anti-vacuity: at least one game-vm-b file is in tooling-fast, or THINNED_VM is dead weight");
   assert.ok(gateNodeSuites().filter((s) => ALWAYS_ON_TOPICAL.includes(s)).length === ALWAYS_ON_TOPICAL.length,
     "every always-on topical script must still parse from the npm run else-branch");
 });

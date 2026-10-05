@@ -80,6 +80,13 @@ export const ALWAYS_ON_TOPICAL = Object.freeze([
   "test:mcp",
 ]);
 
+/** The planned VM slices that thin the same way (ci.yml vm-b1 / vm-b2, inside
+ *  `planned`). Five game-vm-b files sit in tooling-fast too — real-replay-vm
+ *  alone is ~121 s on a runner — and Structural guards shares node-suites'
+ *  `if:`, so whenever a slice runs, guards already ran them (test audit T5,
+ *  2026-10-05). Same contract: only a matched plan sets NODE_PLAN_SKIP_TF. */
+export const THINNED_VM = Object.freeze(["test:game-vm-b1", "test:game-vm-b2"]);
+
 /** Files ALWAYS_ON_TOPICAL would re-run that tooling-fast already covers. */
 export function topicalTfOverlap(groups = groupsJson()) {
   const tf = new Set(TOOLING_FAST_FILES);
