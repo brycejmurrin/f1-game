@@ -804,12 +804,18 @@
       // HERO (OPTIONAL): AIRLINER ON APPROACH TO BENITO JUÁREZ INTERNATIONAL
       // Hermanos Rodríguez sits directly under Mexico City's main landing
       // corridor — no other circuit on the calendar can use this. One low-poly
-      // silhouette, gear down, set far beyond the Esses/back straight so it
-      // reads as a distant hazed shape crossing the sky, never as a trackside
-      // prop. Flat-shaded fuselage + wing + tail — cheap, placed once.
+      // silhouette, gear down. Flat-shaded fuselage + wing + tail, placed once.
+      //
+      // The anchor (s 0.20, +1, 820 m) is the heading the assembly was tuned
+      // at — float-audit counts it as ONE cluster, which is the baseline.
+      // That world point is only ~12 m from the centreline where the lap folds
+      // back under the Esses (s 0.52). Slide the same assembly 1000 m further
+      // out along the same lateral, so the heading (and the one cluster) stay
+      // and the nearest sample is ~1 km. Altitude stays the approach height.
       {
-        const a = anchor(K(0.20), 1, 820);           // ~700 m beyond the Esses
-        const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude
+        const a = anchor(K(0.20), 1, 820);
+        const origin = vadd(a.c, a.r, 1000);
+        const c = [origin[0], origin[1] + 210, origin[2]];
         const bn = [a.r, a.u, a.t];                   // normal box basis
         const bf = [a.r, a.t, a.u];                   // cylinder axis along fuselage
         const FUSE = [0.60, 0.62, 0.66], DARK = [0.28, 0.29, 0.32];
