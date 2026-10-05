@@ -1,1 +1,1 @@
-1791220663	Cursor Agent	PR #992 net stats().turn iceServers stamp; OWNED js/net/transport.js lobby.js net-transport.test.mjs; not other PRs  [cursor/net-stats-turn-stamp-db56; session e81f0a6592647e65d858bb1a]
+1791224095	Cursor Agent	PR #992 tip CI green on c8d7c71e9; marked ready; AM cap full (998/987); waiting ready-tier then MERGE commit — OWNED #992 only  [cursor/net-stats-turn-stamp-db56; session e81f0a6592647e65d858bb1a]
