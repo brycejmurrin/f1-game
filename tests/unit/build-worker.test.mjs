@@ -137,6 +137,32 @@ test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackSte
   delete main.localStorage;
 });
 
+// Turning BUILD IN BACKGROUND off left the worker (a whole TRACK_VM heap, ~20 MB)
+// alive for the session: only a spawn or worker error terminated it.
+test("turning BUILD IN BACKGROUND off terminates the worker; on spawns a fresh one", async () => {
+  const mem = new Map([["apex26.buildWorker", "1"]]);
+  const made = [];
+  const ctx = vm.createContext({ Promise, Map, URL, setTimeout, console,
+    Log: { info() {}, warn() {}, debug() {} }, window: { __APEX_BUILD: 1 }, location: { href: "http://x/index.html" },
+    document: { querySelectorAll: () => [], readyState: "loading", addEventListener() {} },
+    localStorage: { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) },
+    ApexRoster: { TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [] },
+    Worker: class { constructor() { this.terminated = 0; this.posted = []; made.push(this); }
+      postMessage(m) { this.posted.push(m.type); } terminate() { this.terminated++; } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8"), ctx, { filename: "build-client.js" });
+  const C = vm.runInContext("TrackBuildClient", ctx);
+  C.set(true);
+  assert.equal(made.length, 1, "on: the worker spawns and parses the build modules now");
+  assert.deepEqual(made[0].posted, ["init"]);
+  C.set(false);
+  assert.equal(made[0].terminated, 1, "off: the worker is terminated, not kept for the session");
+  C.set(false);
+  assert.equal(made[0].terminated, 1, "a second off is a no-op");
+  C.set(true);
+  assert.equal(made.length, 2, "on again spawns a fresh worker");
+  assert.equal(made[1].terminated, 0);
+});
+
 test("a replay whose upload throws frees the handles it had already made", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;

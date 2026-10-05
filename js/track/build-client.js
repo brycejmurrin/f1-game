@@ -30,6 +30,7 @@ const TrackBuildClient = (function () {
   function set(on) {
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* private mode: the row still reads back what stuck */ }
     if (on) spawn();   // parse the build modules now, not at the next RACE!
+    else if (_w) drop("turned off");   // the worker holds a whole TRACK_VM heap (~20 MB) for nothing
   }
   function initUI() {
     if (typeof SettingRow === "undefined" || !document.getElementById("pm-buildworker")) return;
