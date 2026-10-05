@@ -439,49 +439,66 @@
 
       // Bowl floor + midfield — cover the bare mustard terrain plate with park
       // lawn, baseball dirt, plaza concrete and thin service-road asphalt.
+      // Keep footprints CLEAR of every road leg: long/wide patches on the Foro
+      // inside and midfield folds were footprint-rejected (terrain-over-road
+      // Mexico migration pin: models.suppressed must stay []).
       const FIELD = [0.30, 0.44, 0.24];
       const DIRT  = [0.50, 0.40, 0.28];
       const PLAZA = [0.70, 0.68, 0.64];
       const ASPH  = [0.30, 0.30, 0.32];
       const LAWN  = [0.34, 0.50, 0.28];
-      // Trackside verge inside the stadium corridor (was mustard between road
-      // and the first bowl tier at gap 9). Keep clear of foro-floor patches
-      // (gap 12 / half-width 9 → starts at 3) to avoid flatCoplanar.
+      // Trackside verge — short along-track pieces so the Foro inside corner
+      // never chords onto the road (foro-verge-r-* was footprint-rejected).
       for (const s of [0.74, 0.77, 0.80, 0.83]) {
-        groundPatch(K(s), -1, 3.0, [5.5, 0.42, 28], LAWN,
-                    { id: `foro-verge-l-${K(s)}`, samples: 4 });
-        groundPatch(K(s),  1, 3.0, [5.5, 0.42, 28], LAWN,
-                    { id: `foro-verge-r-${K(s)}`, samples: 4 });
-        groundPatch(K(s), -1, 14, [16, 0.55, 28], s < 0.79 ? FIELD : DIRT,
-                    { id: `foro-floor-l-${K(s)}`, samples: 4 });
-        groundPatch(K(s),  1, 14, [16, 0.55, 28], s < 0.79 ? DIRT : FIELD,
-                    { id: `foro-floor-r-${K(s)}`, samples: 4 });
+        for (const side of [-1, 1]) {
+          const a = anchor(K(s), side, 5.5);
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          groundPatch(K(s), side, 5.0, [4.0, 0.40, 12], LAWN,
+                      { id: `foro-verge-${side < 0 ? "l" : "r"}-${K(s)}`, samples: 3 });
+        }
+        const aL = anchor(K(s), -1, 16), aR = anchor(K(s), 1, 16);
+        if (!onTrack(aL.c[0], aL.c[2], 8))
+          groundPatch(K(s), -1, 14, [12, 0.55, 18], s < 0.79 ? FIELD : DIRT,
+                      { id: `foro-floor-l-${K(s)}`, samples: 4 });
+        if (!onTrack(aR.c[0], aR.c[2], 8))
+          groundPatch(K(s),  1, 14, [12, 0.55, 18], s < 0.79 ? DIRT : FIELD,
+                      { id: `foro-floor-r-${K(s)}`, samples: 4 });
       }
-      groundPatch(K(0.785), -1, 28, [42, 0.6, 42], FIELD,
-                  { id: "foro-infield-left", samples: 6 });
-      groundPatch(K(0.785),  1, 28, [42, 0.6, 42], DIRT,
-                  { id: "foro-infield-right", samples: 6 });
-      // Park / sports midfield plazas (sheet-05 overview mustard plate)
+      {
+        const aL = anchor(K(0.785), -1, 36), aR = anchor(K(0.785), 1, 36);
+        if (!onTrack(aL.c[0], aL.c[2], 14))
+          groundPatch(K(0.785), -1, 32, [28, 0.6, 28], FIELD,
+                      { id: "foro-infield-left", samples: 5 });
+        if (!onTrack(aR.c[0], aR.c[2], 14))
+          groundPatch(K(0.785),  1, 32, [28, 0.6, 28], DIRT,
+                      { id: "foro-infield-right", samples: 5 });
+      }
+      // Park / sports midfield plazas — compact so a fold never lands a
+      // patch over another leg (mexico-plaza-deportes was footprint-rejected).
       for (const [s, side, gap, sz, col, id] of [
-        [0.22,  1, 38, [70, 0.4, 90],  LAWN,  "mexico-park-lawn-esses"],
-        [0.28, -1, 42, [80, 0.4, 100], LAWN,  "mexico-park-lawn-mid"],
-        [0.36,  1, 48, [90, 0.4, 110], LAWN,  "mexico-park-lawn-city"],
-        [0.42, -1, 36, [60, 0.4, 70],  PLAZA, "mexico-plaza-horquilla"],
-        [0.52,  1, 40, [75, 0.4, 85],  LAWN,  "mexico-sports-lawn"],
-        [0.58, -1, 44, [70, 0.4, 80],  PLAZA, "mexico-plaza-deportes"],
-        [0.64,  1, 36, [55, 0.4, 65],  LAWN,  "mexico-park-lawn-late"],
+        [0.22,  1, 42, [36, 0.4, 40], LAWN,  "mexico-park-lawn-esses"],
+        [0.28, -1, 48, [40, 0.4, 44], LAWN,  "mexico-park-lawn-mid"],
+        [0.36,  1, 55, [44, 0.4, 48], LAWN,  "mexico-park-lawn-city"],
+        [0.42, -1, 42, [32, 0.4, 36], PLAZA, "mexico-plaza-horquilla"],
+        [0.52,  1, 48, [36, 0.4, 40], LAWN,  "mexico-sports-lawn"],
+        [0.58, -1, 52, [34, 0.4, 36], PLAZA, "mexico-plaza-deportes"],
+        [0.64,  1, 42, [30, 0.4, 34], LAWN,  "mexico-park-lawn-late"],
       ]) {
-        groundPatch(K(s), side, gap, sz, col, { id, samples: 6 });
+        const a = anchor(K(s), side, gap + sz[0] / 2);
+        if (onTrack(a.c[0], a.c[2], Math.max(sz[0], sz[2]) * 0.35)) continue;
+        groundPatch(K(s), side, gap, sz, col, { id, samples: 5 });
       }
-      // Discrete service pads (not draped over the lawn patches — coplanar)
+      // Discrete service pads further out than the verges
       for (const [s, side, gap, id] of [
-        [0.24,  1, 20, "mexico-svc-esses"],
-        [0.38, -1, 20, "mexico-svc-city"],
-        [0.44,  1, 18, "mexico-svc-horquilla"],
-        [0.56, -1, 20, "mexico-svc-deportes"],
-        [0.62,  1, 18, "mexico-svc-late"],
+        [0.24,  1, 24, "mexico-svc-esses"],
+        [0.38, -1, 26, "mexico-svc-city"],
+        [0.44,  1, 24, "mexico-svc-horquilla"],
+        [0.56, -1, 28, "mexico-svc-deportes"],
+        [0.62,  1, 24, "mexico-svc-late"],
       ]) {
-        groundPatch(K(s), side, gap, [7, 0.28, 36], ASPH, { id, samples: 4 });
+        const a = anchor(K(s), side, gap + 3.5);
+        if (onTrack(a.c[0], a.c[2], 6)) continue;
+        groundPatch(K(s), side, gap, [6, 0.28, 24], ASPH, { id, samples: 3 });
       }
 
       // ── Foro Sol entry/exit apertures — grounded portals with footing pads
