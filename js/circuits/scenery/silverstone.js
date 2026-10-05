@@ -283,9 +283,13 @@
         const ROOF_LT = [0.88, 0.90, 0.94];
         const SOFFIT  = [0.94, 0.93, 0.90];
         const GLASS_D = [0.10, 0.14, 0.22];
-        // Thin track-facing panels: depth stays clear of the wave-roof mass at
-        // WING_DIST 50 (clip-audit hit 3 m when both were deep at ~40–48).
         const F_R = 2;
+        const facadeIds = [
+          "silverstone-wing-facade-1",
+          "silverstone-wing-facade-2",
+          "silverstone-wing-facade-3",
+          "silverstone-wing-facade-4",
+        ];
         for (let i = 0; i < wingFracs.length; i++) {
           const a = anchor(k(wingFracs[i]), 1, FACADE_DIST);
           const b = [a.r, a.u, a.t];
@@ -294,7 +298,7 @@
           const peakHi = (i % 2 === 0);
           const roofY = peakHi ? 14.8 : 11.2;
           const roofRise = peakHi ? 3.4 : 1.6;
-          modelGroup(`silverstone-wing-facade-${i + 1}`, {
+          modelGroup(facadeIds[i], {
             // half-depth 5: FACADE_DIST+F_R-5 = 35 > keep 30.1; short chord
             // avoids the pit-entry curve reject that ate bay 1 at 64 m.
             center: ac(F_R, 8.2, 0), size: [10, 18, 48], basis: b,
@@ -591,65 +595,68 @@
       // Hangar Straight's RAF T2 halls: three long, shallow barrel silhouettes
       // parallel to the old perimeter track. Keep the 8%-density fringe above;
       // open sky around the roofs is more important here than woodland mass.
+      // One left-side rank avoids the nearby Stowe/Vale foldback on the right
+      // while preserving clear 95–110 m driver-eye silhouettes.
       {
         const T2_OLIVE = [0.34, 0.36, 0.30], T2_OLIVE_D = [0.28, 0.30, 0.26];
         const T2_DOOR  = [0.24, 0.26, 0.23];
-        const hangar = (id, kk, side, dist, col) => {
-          const a = anchor(kk, side, dist);
+        const emitHangar = (stage, a, col) => {
           const W = 35, LEN = 73, EAVE = 7.5, RISE = 3.6;
-          const c = a.c;
-          const b = [a.r, a.u, a.t];
-          modelGroup(`silverstone-t2-hangar-${id}`, {
-            center: vadd(c, a.u, (EAVE + RISE) / 2),
-            size: [W + 2, EAVE + RISE + 1, LEN + 2], basis: b,
-          }, (stage) => {
-            stage._mat = MAT.CONCRETE;
-            addBox(stage, vadd(c, a.u, EAVE / 2), [W, EAVE, LEN], col, b);
-            stage._mat = MAT.RUST;
-            // Seven tangent strips form a shallow segmental barrel. A full
-            // addCyl would double the intended height and protrude through the
-            // walls; this keeps the true 3.6 m rise using existing primitives.
-            const halfW = W / 2;
-            const radius = (halfW * halfW + RISE * RISE) / (2 * RISE);
-            const centerY = EAVE - (radius - RISE);
-            const edgeAng = Math.asin(halfW / radius);
-            const bands = 7, thick = 0.38;
-            for (let i = 0; i < bands; i++) {
-              const a0 = -edgeAng + (2 * edgeAng * i) / bands;
-              const a1 = -edgeAng + (2 * edgeAng * (i + 1)) / bands;
-              const ang = (a0 + a1) / 2;
-              const rr = [
-                a.r[0] * Math.cos(ang) - a.u[0] * Math.sin(ang),
-                a.r[1] * Math.cos(ang) - a.u[1] * Math.sin(ang),
-                a.r[2] * Math.cos(ang) - a.u[2] * Math.sin(ang),
-              ];
-              const uu = [
-                a.r[0] * Math.sin(ang) + a.u[0] * Math.cos(ang),
-                a.r[1] * Math.sin(ang) + a.u[1] * Math.cos(ang),
-                a.r[2] * Math.sin(ang) + a.u[2] * Math.cos(ang),
-              ];
-              let roofC = vadd(c, a.r, radius * Math.sin(ang));
-              roofC = vadd(roofC, a.u, centerY + radius * Math.cos(ang));
-              roofC = vadd(roofC, uu, -thick / 2);
-              addBox(stage, roofC,
-                [radius * (a1 - a0) + 0.18, thick, LEN + 0.6],
-                T2_OLIVE_D, [rr, uu, a.t]);
-            }
-            // Sliding door bays at the trackside gable — the one detail that
-            // survives at this range, because it breaks the flat end wall.
-            stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(c, a.u, EAVE * 0.46), a.t, -(LEN / 2 + 0.2)),
-              [W * 0.84, EAVE * 0.86, 0.4], T2_DOOR, b);
-            stage._mat = 0;
-          }, { required: true });
+          const c = a.c, b = [a.r, a.u, a.t];
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(c, a.u, EAVE / 2), [W, EAVE, LEN], col, b);
+          stage._mat = MAT.RUST;
+          // Seven tangent strips form a shallow segmental barrel.
+          const halfW = W / 2;
+          const radius = (halfW * halfW + RISE * RISE) / (2 * RISE);
+          const centerY = EAVE - (radius - RISE);
+          const edgeAng = Math.asin(halfW / radius);
+          const bands = 7, thick = 0.38;
+          for (let i = 0; i < bands; i++) {
+            const a0 = -edgeAng + (2 * edgeAng * i) / bands;
+            const a1 = -edgeAng + (2 * edgeAng * (i + 1)) / bands;
+            const ang = (a0 + a1) / 2;
+            const rr = [
+              a.r[0] * Math.cos(ang) - a.u[0] * Math.sin(ang),
+              a.r[1] * Math.cos(ang) - a.u[1] * Math.sin(ang),
+              a.r[2] * Math.cos(ang) - a.u[2] * Math.sin(ang),
+            ];
+            const uu = [
+              a.r[0] * Math.sin(ang) + a.u[0] * Math.cos(ang),
+              a.r[1] * Math.sin(ang) + a.u[1] * Math.cos(ang),
+              a.r[2] * Math.sin(ang) + a.u[2] * Math.cos(ang),
+            ];
+            let roofC = vadd(c, a.r, radius * Math.sin(ang));
+            roofC = vadd(roofC, a.u, centerY + radius * Math.cos(ang));
+            roofC = vadd(roofC, uu, -thick / 2);
+            addBox(stage, roofC,
+              [radius * (a1 - a0) + 0.18, thick, LEN + 0.6],
+              T2_OLIVE_D, [rr, uu, a.t]);
+          }
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(c, a.u, EAVE * 0.46), a.t, -(LEN / 2 + 0.2)),
+            [W * 0.84, EAVE * 0.86, 0.4], T2_DOOR, b);
+          stage._mat = 0;
         };
-        // One left-side rank avoids the nearby Stowe/Vale foldback on the
-        // right while preserving clear 95–110 m driver-eye silhouettes.
-        for (const [id, s, dist, col] of [
-          ["west", 0.185,  98, T2_OLIVE],
-          ["centre", 0.228, 104, T2_OLIVE_D],
-          ["east", 0.272,  96, T2_OLIVE],
-        ]) hangar(id, k(s), -1, dist, col);
+        const hangarBounds = (a) => ({
+          center: vadd(a.c, a.u, (7.5 + 3.6) / 2),
+          size: [37, 12.1, 75], basis: [a.r, a.u, a.t],
+        });
+        {
+          const a = anchor(k(0.185), -1, 98);
+          modelGroup("silverstone-t2-hangar-west", hangarBounds(a),
+            (stage) => emitHangar(stage, a, T2_OLIVE), { required: true });
+        }
+        {
+          const a = anchor(k(0.228), -1, 104);
+          modelGroup("silverstone-t2-hangar-centre", hangarBounds(a),
+            (stage) => emitHangar(stage, a, T2_OLIVE_D), { required: true });
+        }
+        {
+          const a = anchor(k(0.272), -1, 96);
+          modelGroup("silverstone-t2-hangar-east", hangarBounds(a),
+            (stage) => emitHangar(stage, a, T2_OLIVE), { required: true });
+        }
       }
 
       for (const [s, side, d, w, h, ln] of [
