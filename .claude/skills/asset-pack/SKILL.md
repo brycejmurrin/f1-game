@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, when editing js/render/shared/assets.js or tools/gen/assets.mjs, or when tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with no pack is lighting-tuner; liveries garage-parts-livery). A black screen or NaN-white surface with no material involved is webgl-debug / webgpu-debug."
+description: "Use when baked PBR materials in assets/pack are missing, wrong, garbled, or mismatched in colour or layer (MAT id) on GLX/TLX/WGX, editing js/render/shared/assets.js or tools/gen/assets.mjs, or tuning matTexMix / __apex.assets() / matTex() and the procedural-vs-textured tarmac A/B (sheen/exposure with a pack loaded is lighting-tuner; liveries garage-parts-livery). Black screen or NaN-white with no material involved: webgl-debug / webgpu-debug."
 ---
 
 # Baked asset pack
@@ -12,6 +12,14 @@ indexed by per-vertex **MAT id**, blended over the procedural look via
 Every failure degrades to **pure procedural** — no pack, bad manifest, decode
 error, or a backend without `createTextureArray` never breaks boot. Deep
 reference: `docs/research/ASSET-API-RESEARCH.md`.
+
+**Step 0, always:** read `__apex.assets()` — `uploaded: false` (or `supported: false`) means
+every surface is procedural, so "flat / plasticky / no texture" is a pack-load problem here;
+`uploaded: true` with the look still flat is exposure/sheen → **lighting-tuner**.
+
+**TLX (the default backend, `three`) has no renderer-debug skill:** a garbled, wrong-layer or
+wrong-colour material on TLX is this skill's workflow (`references/workflow.md`, one-backend-only
+trace); other TLX defects are routed by `.claude/rules/render-tlx.md`.
 
 **GLX, TLX, and WGX all implement the arrays.** A WGX `supported: false` is a
 device/feature miss, not "WGX has no pack."

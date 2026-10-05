@@ -1,6 +1,6 @@
 ---
 name: webgpu-debug
-description: "Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or a frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or when validating WGSL changes with real Dawn in-container via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack."
+description: "Use when WebGPU/WGX rendering is wrong — black screen, missing road/world, NaN-white surfaces, GPU validation errors, WGSL compile failures, device lost or frozen frame on WebGPU, silent fallback to WebGL2, MSAA/HDR format issues, or validating WGSL changes with real Dawn via wgx-validate. A textured-vs-procedural or wrong-colour material look on WGX is asset-pack."
 ---
 
 # Debug WebGPU / WGX renderer issues

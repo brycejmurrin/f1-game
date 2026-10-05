@@ -1,10 +1,15 @@
 ---
 name: webgl-debug
-description: "Use when the user reports a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems, or GLX renderer artifacts. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer → asset-pack; shimmer while driving → playwright-probe."
+description: "Use when a blank/dark/black GLX canvas, lights wrong, shadow acne, bloom too strong/blown-out/missing (GPU path), HDR/hdrMode issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile failures, uniform-array light bugs, instancing problems or GLX artifacts. GLX only, not TLX (default) or WGX. Washed-out night → lighting-tuner; WebGPU → webgpu-debug; garbled PBR layer, TLX included → asset-pack; shimmer while driving → playwright-probe."
 
 ---
 
 # Debug WebGL2 / GLX renderer issues
+
+**Step 0, before anything else:** `__apex.diag({download:false}).env.backend`. If it is not
+`webgl2` (`three` = TLX, the default; `webgpu` = WGX), STOP: this skill is GLX-only and TLX is
+not its own (a TLX material garble is **asset-pack**; WGX is **webgpu-debug**). "Black screen after an
+HDR format change" is decided by that one read.
 
 The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It is NOT the
 default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
