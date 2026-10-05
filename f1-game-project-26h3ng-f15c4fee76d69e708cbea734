@@ -1,0 +1,1 @@
+1791226619	Cursor Agent	race-start/WebGL hang + CONTEXT_LOST: OWNED js/render/glx/** js/render/three/** js/render/gfx.js + race-start gfx fail-fast; NOT #1012 garage UI, NOT scenery, NOT HUD chrome  [claude/f1-game-project-26h3ng; session f15c4fee76d69e708cbea734]
