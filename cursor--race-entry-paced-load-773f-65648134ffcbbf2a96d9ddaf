@@ -1,1 +1,1 @@
-1791229264	Cursor Agent	PR #976 rebase onto ship; resolve paced-load conflicts; no twin  [cursor/race-entry-paced-load-773f; session 65648134ffcbbf2a96d9ddaf]
+1791229380	Cursor Agent	PR #976 rebased dc0e48324 onto 4770d57ea; pushed; leave ready when green; no merge  [cursor/race-entry-paced-load-773f; session 65648134ffcbbf2a96d9ddaf]
