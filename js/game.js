@@ -2715,7 +2715,7 @@ async function startRaceBody() {
   // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
   // nothing until it is done, so it is raised again, disarmed, and render()
   // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build") && !!player;   // "build": startRaceCovered's card
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;   // "build"/"busy": startRaceCovered + Start Race cover
   clearMenuScreens(); garagePre.release();  // garage GPU set is not the race's (js/garage/prebuild.js); next idle title rebuilds it
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
@@ -2770,6 +2770,7 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
+  if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
@@ -3701,12 +3702,13 @@ let _studio = null;
 let _introSheet = null;
 function sheetRelease(hide) {
   const h = _introSheet; if (!h) return;
+  if (hide && !loadingScreen.phase()) loadingScreen.building(loadingInfo());
   _introSheet = null; h.btn.disabled = false; if (h.back) h.back.disabled = false;
   if (h.btn.textContent === "PREPARING…") h.btn.textContent = h.label;   // unless the sheet relabelled it meanwhile
   if (hide) h.sheet.hidden = true;
 }
-/** Cold preparation's cover: the build card, unless race settings already covers it. */
-function introCover(info, n) { if (!_introSheet) loadingScreen.building(info, () => studioSkip(n)); }
+/** Cold preparation's cover: the build card (also behind race settings). */
+function introCover(info, n) { loadingScreen.building(info, () => studioSkip(n)); }
 function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
@@ -3913,7 +3915,7 @@ function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overla
 // (TLX presents nothing, 1-4 s on a real GPU): waited out under the sheet, bounded as
 // awaitIntroWarm is. The menu's own build and warms stand down, as when the sheet closed.
 function raceIntroFromSheet(go, sheet, btn) {
-  if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
+  if (_introSheet || loadingScreen.phase()) return;   // already preparing (START is disabled: a synthetic second press)
   if (!sheet || !btn) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
   const back = $("rs-cancel"), owner = _introSheet = { sheet, btn, back, label: btn.textContent };
   btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
@@ -6594,13 +6596,14 @@ function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   if (gfx.warming && gfx.warming()) return;
-  if (uiExperience && uiExperience.renderHome(dt)) return;
+  if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
+  if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
   // The live Home garage returned above. Other menus hide undrawn canvases
   // so a previous garage/race frame cannot leak behind a new screen. Loading
   // cinematics and garage previews retain their existing covered warm-up.
   const homeTrack = !!(uiExperience && uiExperience.trackActive());
   const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
-    || (loadingScreen.phase() === "build" && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
+    || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -8620,6 +8623,7 @@ function closePitWork() {
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
   setupCam.cancelArrival();
+  if (garageReturn !== "pit" && !loadingScreen.phase()) loadingScreen.busy("Returning");
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
@@ -8635,15 +8639,11 @@ function garageBack() {
   if (soundOn) GameAudio.uiTick();
   if (garageReturn === "pit") { closePitWork(); return; }
   leaveGarage();
-  if (garageReturn === "vsfriend") {
-    $("vsfriend").hidden = false;
-    netLobby.roomChanged("car");
-    return;
-  }
-  if (garageReturn === "career") { careerUi.openHub(); return; }
-  if (garageReturn === "select") { buildSelect(); vt(() => { $("select").hidden = false; }); return; }
-  buildSelect();
-  vt(() => { els.overlay.hidden = false; });   // came in from the title screen's GARAGE button
+  if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
+  else if (garageReturn === "career") careerUi.openHub();
+  else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
+  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  if (garageReturn !== "menu") loadingScreen.stop();
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
@@ -8652,19 +8652,15 @@ $("cs-done").onclick = () => {
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
   // choosing a car neither can see.
-  if (garageReturn === "vsfriend") {
-    $("vsfriend").hidden = false;
-    netLobby.roomChanged("car");
-    return;
-  }
-  if (garageReturn === "career") { careerUi.openHub(); return; }
+  if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
+  else if (garageReturn === "career") careerUi.openHub();
   // Reached from the circuit picker's START, so DONE goes FORWARD to the race
   // settings, not back to a screen whose question is already answered. Race
   // settings' own BACK still returns to #select, so the circuit stays two taps
   // away if you change your mind.
-  if (garageReturn === "select") { raceSettings.openRaceSettings("select"); return; }
-  buildSelect();
-  vt(() => { els.overlay.hidden = false; });   // only the title screen's GARAGE button gets here
+  else if (garageReturn === "select") raceSettings.openRaceSettings("select");
+  else { buildSelect(); els.overlay.hidden = false; }   // no vt: snapshot after hiding #carsetup is a black hold
+  if (garageReturn !== "menu") loadingScreen.stop();
 };
 $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;

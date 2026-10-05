@@ -785,8 +785,31 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* A WAIT WITH NO RACE YET. Garage teardown and a Start Race that has not
+     * painted a circuit card still owe the player a plate: otherwise the
+     * canvas goes black (setupPreviewOn dropped, Home still compiling) and
+     * nothing says the tap landed. Reuses #loading / #ld-card — no new layer.
+     * Already covering? Keep that phase; do not reset a flyby or build. */
+    function busy(label) {
+      if (phase === "run" || phase === "card" || phase === "build" || phase === "handoff"
+        || phase === "garage" || phase === "busy") return true;
+      const r = root();
+      if (!r) return false;
+      const title = (typeof label === "string" && label.trim()) ? label.trim() : "Loading";
+      applyCard();
+      r.hidden = false;
+      if (typeof r.setAttribute === "function") r.setAttribute("aria-label", title);
+      const name = $("ld-name"); if (name) name.textContent = title.toUpperCase();
+      const gp = $("ld-gp"); if (gp) gp.textContent = "Please wait";
+      const meta = $("ld-meta");
+      if (meta) { if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = ""; }
+      const flag = $("ld-flag"); if (flag) flag.innerHTML = "";
+      setPhase("busy");
+      return true;
+    }
+
     return {
-      run, stop, hold, building, garage, handoff,
+      run, stop, hold, building, garage, handoff, busy,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. Pass
        *  warmReady=false to keep FLY_MS while the backend is still compiling. */

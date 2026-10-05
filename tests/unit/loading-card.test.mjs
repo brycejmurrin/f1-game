@@ -290,6 +290,34 @@ test("three skips in a row shorten the next flyby — and its announcer budget �
   assert.equal(h.races.length, 4, "every run handed over to the race");
 });
 
+test("busy(): the card over the scrim without a circuit, no timer, no skip, not active", () => {
+  const h = harness();
+  assert.equal(h.screen.busy("Returning"), true);
+  assert.equal(h.els.loading.dataset.phase, "busy");
+  assert.equal(h.els.loading.hidden, false, "the plate is up while garage teardown / a start waits");
+  assert.equal(h.els["ld-name"].textContent, "RETURNING");
+  assert.equal(h.els["ld-gp"].textContent, "Please wait");
+  assert.equal(h.screen.active(), false, "not the flyby: game.js still owns the canvas");
+  assert.equal(h.screen.busy("Starting race"), true, "already covering: keep the first phase");
+  assert.equal(h.els.loading.dataset.phase, "busy");
+  assert.equal(h.els["ld-name"].textContent, "RETURNING", "a second busy() does not reset the plate");
+  h.skip();
+  h.tick(LS.FLY_MS * 2);
+  assert.equal(h.races.length, 0, "nothing to skip to and no timer");
+  h.screen.stop();
+  assert.equal(h.els.loading.hidden, true);
+  assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="busy"\] #ld-card/, "the busy phase shows the card");
+  const game = read("js/game.js");
+  assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
+    "startRace raises the card before ensureScenery / stopHome");
+  assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
+    "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
+  assert.match(game, /if \(_introSheet \|\| loadingScreen\.phase\(\)\) return;/,
+    "a second Start Race while the cover is up does not start another intro");
+  assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
+    "title return skips the view-transition snapshot that held a blank page");
+});
+
 test("building(): the card over the scrim, no timer, no skip, not active — then run() takes over", () => {
   const h = harness();
   assert.equal(h.screen.building({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }), true);
@@ -328,7 +356,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // first countdown present on TLX starts the program warm and paints nothing.
   const game = read("js/game.js");
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
-  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build"\) && !!player;/,
+  assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !!player;/,
     "startRaceBody still decides handoff from the screen that was up before the sweep");
   assert.match(body, /clearMenuScreens\(\); garagePre\.release\(\);[^\n]*\n\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep (and garage GPU release), only when the screen was up");
