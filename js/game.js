@@ -6572,9 +6572,21 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
+/** True when the bound backend reports a lost context/device (GLX/TLX backendState). */
+function gfxContextLost() {
+  try { const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
+  catch (_) { return false; }
+}
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  // Context / device loss: shadow+begin already no-op, but render used to return
+  // before afterPresent (begin===false / warming stuck) and leave handoff up forever.
+  if (gfxContextLost()) {
+    mirrorPass.cancelPreparation();
+    RaceEntryProfile.afterPresent(loadingScreen, gfx, false);
+    return;
+  }
   if (gfx.warming && gfx.warming()) return;
   if (uiExperience && uiExperience.renderHome(dt)) return;
   // The live Home garage returned above. Other menus hide undrawn canvases

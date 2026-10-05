@@ -114,6 +114,10 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      // Set by onDeviceLost: abort in-flight compileAsync so warming() cannot
+      // stick true forever (race-start handoff waited on !warming via afterPresent,
+      // and render() returned early while warming — HUD surveys hung).
+      let _deviceLost = false;
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
@@ -831,6 +835,13 @@ const TLX = (function () {
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
+        // Abort program warm first: compileAsync after a loss often never
+        // settles, and warming()===true makes game.js skip present/afterPresent
+        // forever (handoff card + HUD survey hang). Clear before any reload.
+        _deviceLost = true;
+        _warmRequested = false;
+        _warmPending = null;
+        _warmDone = true;
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -891,8 +902,15 @@ const TLX = (function () {
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
             if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
-            else if (typeof window.__apexReportError === "function")
-              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+            else {
+              if (typeof window.__apexReportError === "function")
+                window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+              try {
+                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+                  RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                }
+              } catch (_) { /* picker absent in harness */ }
+            }
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
@@ -3632,9 +3650,10 @@ const TLX = (function () {
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         warm() {
+          if (_deviceLost) return;
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
-        warming() { return !!_warmPending; },
+        warming() { return !_deviceLost && !!_warmPending; },
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
         // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
@@ -4138,7 +4157,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (_warmRequested && !_warmPending) startProgramWarm(opts);
+          if (_warmRequested && !_warmPending && !_deviceLost) startProgramWarm(opts);
           if (_warmPending) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
@@ -4606,6 +4625,7 @@ const TLX = (function () {
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
               presents: _presentN, healed: _healTried,
+              ctxLost: !!_deviceLost,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager); tsl-lit's frame block left that group for
               // renderGroup (SHARED_UNIFORMS), so what remains per draw is
