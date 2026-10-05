@@ -498,9 +498,10 @@ test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU 
 // over the sidepod tops, past the 0.32 m bias, so with the factory halo it
 // stamped dark blobs on the cockpit sides that nothing visible cast. The real
 // CarDraw, the real ShadowPass and the real vantage.js in one VM: in first
-// person the player casts the drawn mesh at the drawn matrix, outside it the
-// silhouette at livePlayerMat, in both the car map and the lamp map.
-test("first-person views cast the cockpit body at the cockpit matrix; exterior views the silhouette at the ground matrix", () => {
+// person the player casts cockpitShadowMesh (the whole car, no driver, its own
+// halo; 2026-10-05, next test) at the drawn matrix, outside it the silhouette
+// at livePlayerMat, in both the car map and the lamp map.
+test("first-person views cast the first-person caster at the cockpit matrix; exterior views the silhouette at the ground matrix", () => {
   const v = carDrawVm({ casters: true });
   const { ctx, G, carDraw } = v;
   ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
@@ -553,13 +554,14 @@ test("first-person views cast the cockpit body at the cockpit matrix; exterior v
     for (const [mode, seat, eyeU, eyeF] of [[1, "cockpit", 0.75, -0.10], [2, "cockpit", 0.75, -0.10], [3, "visor", 0.82, -0.20]]) {
       const k = cast(mode, f, which);
       const id = ctx.CamModes.CAM_MODES[mode].id;
-      assert.equal(k.mesh, carDraw.cockpitBodyMesh(player.team, player), `${id}/${which}: the cockpit body the player sees casts`);
+      assert.equal(k.mesh, carDraw.cockpitShadowMesh(player.team, player), `${id}/${which}: the first-person caster casts`);
+      assert.notEqual(k.mesh, carDraw.cockpitBodyMesh(player.team, player), `${id}/${which}: not the cockpit build (no wheels, no rear assembly)`);
       assert.notEqual(k.mesh, carDraw.teamMesh(player.team, player, true), `${id}/${which}: not the exterior silhouette (helmet, factory halo)`);
       assert.deepEqual(k.m, drawnMat(seat), `${id}/${which}: cast at the matrix the cockpit body is drawn with`);
       close(eyeAt(k.m, eyeU, eyeF), G.camEye, `${id}/${which}: the ${seat} seat's eye sits at the camera`);
     }
     // The countdown is first person too (the car loop's race|count test).
-    assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitBodyMesh(player.team, player), `count/${which}: the cockpit body`);
+    assert.equal(cast(1, f, which, "count").mesh, carDraw.cockpitShadowMesh(player.team, player), `count/${which}: the first-person caster`);
     // Exterior: chase, and the cockpit mode under a debug camera (no rig drawn).
     for (const [mode, dbg, label] of [[0, null, "chase"], [1, { eye: [0, 50, 0] }, "debug cam"]]) {
       G.dbgCam = dbg;
@@ -590,6 +592,72 @@ test("the first-person caster is pinned to the car loop's cockpit branch", () =>
   assert.match(cd, /const id = !G\.dbgCam && \(G\.state === "race" \|\| G\.state === "count"\) \? CamModes\.CAM_MODES\[G\.camMode\]\.id : "";\s*if \(id !== "cockpit" && id !== "helmet" && id !== "visor"\) return null;/);
   assert.match(cd, /GameCams\.cockpitViewmodelAxes\(smp\.r, smp\.t, yv, G\.camEye, _ckR, _ckU, _ckF, _ckP, GameCams\.seatFwd\(seat\), GameCams\.seatUp\(seat\)\);/);
   // …and the mesh it returns is the one drawCockpitRig draws at that base.
-  assert.match(cd, /return cockpitBodyMesh\(c\.team, c\);\s*\}/);
+  assert.match(cd, /return cockpitShadowMesh\(c\.team, c\);\s*\}/);
   assert.match(cd, /G\.gfx\.draw\(cockpitBodyMesh\(c\.team, c\), base, paint\);/);
+});
+
+// THE FIRST-PERSON CASTER IS THE WHOLE CAR (2026-10-05). #840 cast the drawn
+// cockpit build, and `cockpit` + noWheels drop the engine cover/airbox, the
+// shark fin, the rear assembly and all four wheels: the shadow on the road was
+// a hollow half-car with no wheels. The caster now keeps all of that and drops
+// only what stamped #840's blobs — the driver/helmet and the factory halo with
+// its head-surround attachments — carrying the player's OWN cockpit halo. The
+// options car-draw.js really passes (recorded off the real CarDraw) are fed to
+// the REAL Car3D, so a car3d.js gate that drifts fails here.
+test("the first-person caster is the whole car minus the driver, with the player's own halo", () => {
+  const v = carDrawVm({ casters: true, cam: "cockpit" });
+  const { ctx, carDraw } = v;
+  v.field((c, i) => 1000 + 9 * i);
+  const seen = [], stub = ctx.Car3D.build;
+  ctx.Car3D.build = (c1, c2, o) => { seen.push(o); return stub(c1, c2, o); };
+  const halos = [0, 2, 4];
+  const opts = {};
+  for (const h of halos) {
+    ctx.CockpitOpts.haloSize = () => h;
+    seen.length = 0;
+    const m = carDraw.cockpitShadowMesh(v.G.player.team, v.G.player);
+    assert.equal(seen.length, 1, `halo ${h}: one caster build`);
+    assert.notEqual(m, carDraw.cockpitBodyMesh(v.G.player.team, v.G.player), `halo ${h}: its own cache key, not the cockpit body`);
+    opts[h] = seen[0];
+    const o = seen[0];
+    assert.equal(o.silhouette, true, "a depth silhouette");
+    assert.equal(o.noDriver, true, "no driver: the helmet crown stamped the cockpit sides");
+    assert.equal(o.ownHalo, true, "the player's halo, not the factory hoop");
+    assert.equal(o.halo, h, "the player's COCKPIT halo choice");
+    assert.ok(!o.noWheels && !o.cockpit, "wheels and the rear assembly stay: not the cockpit build");
+  }
+  // The real Car3D over those options.
+  const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
+  cx.globalThis = cx; vm.createContext(cx);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
+    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-shade.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
+  const Car3D = vm.runInContext("Car3D", cx);
+  const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
+  for (const teamId of ["ferrari", "mclaren", "redbull"]) {
+    const parts = (o) => Object.fromEntries(Car3D.build(C1, C2, Object.assign({}, o, { teamId, parts: undefined, livery: undefined, measure: true }))
+      .parts.map((p) => [p.name, p]));
+    const ext = parts({ silhouette: true }), ck = (h) => parts({ noWheels: true, noDriver: true, cockpit: true, halo: h });
+    for (const h of halos) {
+      const sh = parts(opts[h]);
+      for (const name of ["wheels", "rearAssembly", "engineCover", "sidepods", "frontWing", "suspension"]) {
+        assert.ok(sh[name] && sh[name].vertices > 0, `${teamId}/halo ${h}: the caster has ${name}`);
+        assert.equal(sh[name].vertices, ext[name].vertices, `${teamId}/halo ${h}: ${name} is the exterior silhouette's`);
+      }
+      if (ext.sharkFin) assert.equal(sh.sharkFin && sh.sharkFin.vertices, ext.sharkFin.vertices, `${teamId}: the fin stays`);
+      assert.ok(ext.helmet && ext.halo, `${teamId}: the exterior silhouette carries a helmet and the factory halo`);
+      // part("helmet") also holds the airbox intake mouth (bodywork, top y 0.805):
+      // with no driver that box is all it has, and nothing reaches the crown.
+      const lid = parts({ silhouette: true, noDriver: true }).helmet;
+      assert.ok(!sh.driver, `${teamId}/halo ${h}: no driver`);
+      assert.equal(sh.helmet && sh.helmet.vertices, lid.vertices, `${teamId}/halo ${h}: no helmet, only the intake box`);
+      assert.ok(sh.helmet.vertices < ext.helmet.vertices, `${teamId}/halo ${h}: the lid is gone`);
+      assert.ok(sh.helmet.centreM[1] + sh.helmet.sizeM[1] / 2 <= 0.81, `${teamId}/halo ${h}: nothing at the 0.83 m crown`);
+      assert.ok(!sh.halo, `${teamId}/halo ${h}: no factory hoop`);
+      // The player's halo: the same geometry the drawn cockpit build adds for it.
+      const nv = (p) => (p.cockpit ? p.cockpit.vertices : 0);   // the cockpit build with no halo emits no cockpit section
+      const ownH = nv(sh) - nv(parts(opts[0])), ckH = nv(ck(h)) - nv(ck(0));
+      assert.equal(ownH, ckH, `${teamId}/halo ${h}: the cockpit halo the player sees (${ckH} vertices)`);
+      if (h) assert.ok(ownH > 0, `${teamId}/halo ${h}: a halo is cast`);
+    }
+  }
 });

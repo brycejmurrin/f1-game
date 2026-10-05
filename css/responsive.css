@@ -120,6 +120,25 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #disclaimer { font-size: clamp(11px, calc(0.8 * var(--vwz)), 14px); }
 }
 
+/* THE FRONT WING STAYS ON SCREEN — TABLET LANDSCAPE ONLY. Sibling of the
+   large-landscape block above, not inside it: that block is also the 1440×900
+   desktop title (menu-baseline's title-desktop golden). The generator's one
+   placement (tools/gen/title-art.mjs, translate(202 675) scale(0.99)) puts
+   the nearer car's front wing at viewBox x -67, and on the two-column layout
+   at its smallest nothing re-frames it: MEASURED 2026-10-05 (layout-audit,
+   ios-ipad-landscape 1194x834): #tc-frame and every car group ran 57 px past
+   the svg's left edge, the wing cut off at the screen edge under the
+   wordmark. 72 units right clears it with a hair of air; the trail end, 82
+   units inside the right edge, keeps ~10. Same per-shape #tc-frame mechanism
+   the phone shapes use (css/menus.css).
+   An unguarded translate in the ≥900 landscape block moved the car 72 px on
+   every mouse desktop (CI 2026-10-05, 50758 px / 0.04 of the title-desktop golden).
+   Cap at 1366 (iPad Pro 12.9 landscape) and require a coarse pointer so a
+   1280 laptop with a mouse keeps the shipped composition. */
+@media (min-width: 900px) and (max-width: 1366px) and (orientation: landscape) and (pointer: coarse) {
+  :where(body:not([data-density="compact"])) #tc-frame { transform: translate(72px, 0); }
+}
+
 /* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
 /* Keeps the stacked composition — a tall screen has height to spend, not width —
    but not the phone's SIZES. A 340px button column centred in an 834px iPad left
@@ -397,6 +416,10 @@ html:has(#pausemenu[open]) #ios-install {
 :root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }
 :root[data-title-btns="stack"] #menu-retention { grid-template-columns: minmax(0, 1fr); }
 :root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+/* ONE ROW MEANS SHRINK: css/menus.css floors the doors at their longest word
+   (min-content) so a narrow 2x2 wraps instead of clipping; a nowrap row has
+   no line to wrap onto, so it keeps the old shrink-to-fit cells. */
+:root[data-title-btns="row"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) > .bigbtn { min-width: 0; }
 /* SIDE. Two-column shapes trade columns; a single column trades order. */
 :root[data-title-side="swap"] #menu-brand { order: 1; }
 :root[data-title-side="swap"] :where(body[data-shape="tall"]) #menu-brand { grid-row: 2; }

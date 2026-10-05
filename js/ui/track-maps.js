@@ -144,6 +144,13 @@ const TrackMaps = (function () {
   function compute(def) {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
     Log.info("track", `maps compute ${def.id}`);
+    // A custom circuit's id is its content hash (custom-tracks.js idOf): every saved
+    // revision the picker drew stayed here for the page. Keep only what Tracks.LIST
+    // still lists (CustomTracks.sync replaces the custom rows), plus this one.
+    if (def.custom) {
+      const listed = new Set(Tracks.LIST.map((d) => d.id));
+      for (const id of Object.keys(cache)) if (!listed.has(id)) delete cache[id];
+    }
     let out = null;
     try {
       // Centreline-only build: the minimap needs the spline (positions, tangents,
@@ -636,7 +643,8 @@ const TrackMaps = (function () {
 
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
-    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses,
+    cachedIds: () => Object.keys(cache),
   };
 })();
 Object.freeze(TrackMaps);

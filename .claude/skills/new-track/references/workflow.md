@@ -17,10 +17,10 @@ Load from the SKILL.md index when the task needs this detail.
 
    **Real-world centreline (OSM) — `path` is REQUIRED.** `tools/track/import-circuit-path.mjs`
    pulls the centreline from `bacinger/f1-circuits` (ODbL-1.0) in the same
-   projection every committed `path` already uses (verify with `--self-check`
+   projection the committed `path`s use (verify with `--self-check`
    before trusting a new entry):
    ```sh
-   node tools/track/import-circuit-path.mjs --self-check            # sanity-check the projection against every committed path
+   node tools/track/import-circuit-path.mjs --self-check            # re-projects the ~40 ids it maps (24 rounds + 16 classics), not every circuit
    node tools/track/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
    node tools/track/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
    ```
@@ -123,9 +123,9 @@ node tools/track/float-audit.cjs <id>                  # floating props vs float
 node tools/track/props-tris.cjs <id>                   # tris vs props-tris-baseline.json (ratchet: tests/unit/props-tri-ratchet.test.mjs)
 node tools/track/rotate-markings.cjs --check           # read-only proposed transformation; NOT a stale/fresh verdict and NOT idempotent; verify Turn 1/apex evidence before scoped --write
 ```
-Green = the counts equal the baseline rows (monza: clip 11, coplanar 5, float 0, props-tris 314855, a ratchet ceiling: 313922 measures fine). Re-run after the edit;
+Green = each count equals its `"<id>"` row in `tools/track/{clip,coplanar,float}-baseline.json` (an absent float row = 0); `props-tris-baseline.json` is a ratchet ceiling, so a lower measure is fine. Read the rows, never a number quoted in prose. Re-run after the edit;
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
-`import-circuit-path.mjs --self-check` ends "1 over the 2 m bar" today (worst 3.79 m) - that is the standing state, not yours.
+`import-circuit-path.mjs --self-check` exits 1 today on one known row, `FAIL miami err=3.79 m` ("1 over the 2 m bar"): committed path drift, the standing state, not yours (`docs/plans/skilltest-content-pipeline.md`). Any other FAIL row is yours.
 
 ## Adding a bridge or an elevation bump to an existing def (walked read-only on zandvoort)
 
@@ -133,7 +133,7 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
 - **`elevations`** — terrain follows the road. Silently DROPPED (`js/track/core/def.js` (`fromRaw`)) when the id has a profile in `js/track/circuit-elevations.js` (SRTM bake; check registered ids, including whether zandvoort is present, which has one authored bump `s 0.56 halfM 300 rise 8`): edit the bake (`tools/gen/bake-elevation.mjs`) there, not the def. Check first: `grep -c "^    <id>:" js/track/circuit-elevations.js`.
 - **`bridges`** — road lifts, `js/track/core/surface.js` (~L74) carves the ground back flat under the deck, `js/track/scenery/build-props.js` (~L2209) adds four pillar pairs. Only suzuka has one; pick `s` from the real crossover (a bridge over nothing is a bare hump), and keep `halfM` short.
 - **`s` frame:** authored against `sceneryStartFrac` (else `startFrac`), remapped to racing frac by `materializeListPoints`, then shifted by `def._sceneryShift` at every consumer (road, ground carve, pillars). `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`. Zandvoort names none (its header says do not re-add), so `s` there is a plain racing-lap fraction. A def WITH it nets `racing = authored + _sceneryShift - sceneryStartFrac` (imola: 0.5094 - 0.495, so authored s = racing s - 0.014). Never add `sceneryStartFrac` to compensate; never read `b.s`/`e.s` raw in new code, add `+ (def._sceneryShift || 0)`.
-- **Audits that move** (all no-browser except the last): `verify-track <id>` (throws), `clip-audit` and `coplanar-audit` (a bridge deck adds overhead coplanar faces; `coplanar-audit.cjs --overhead`), `float-audit` and `props-tris` (pillars, re-seated props on the new height), `tests/unit/elevation-smoothness.test.mjs` (grade cap; only baked ids, and it skips bridge windows), `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape). Baselines: zandvoort clip 15, coplanar 7, props-tris 283071 (ceiling), float absent (= 0). Node-VM twin (heavy, ~200 s, load < 3): `tests/unit/elevation-tracks-vm.test.mjs`. Browser-only: `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `<id>-foundation.spec.js` (e.g. `zandvoort-foundation.spec.js`); name them not-run in the PR when you skip them. `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not from the numbers you typed.
+- **Audits that move** (all no-browser except the last): `verify-track <id>` (throws), `clip-audit` and `coplanar-audit` (a bridge deck adds overhead coplanar faces; `coplanar-audit.cjs --overhead`), `float-audit` and `props-tris` (pillars, re-seated props on the new height), `tests/unit/elevation-smoothness.test.mjs` (grade cap; only baked ids, and it skips bridge windows), `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape). Baselines: the `"zandvoort"` rows of `tools/track/*-baseline.json` (props-tris is a ceiling; float absent = 0). Node-VM twin (heavy, ~200 s, load < 3): `tests/unit/elevation-tracks-vm.test.mjs`. Browser-only: `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `<id>-foundation.spec.js` (e.g. `zandvoort-foundation.spec.js`); name them not-run in the PR when you skip them. `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not from the numbers you typed.
 - **Reading heights/curvature with no browser:** `require("tools/lib/track-build-vm.cjs").buildContext().Tracks.buildCenterline(def)` returns `{n,total,py,curv,...}` (`py[k]`, `curv[k]` per point; `__apex.trackProfile()` is the browser twin). Mutating `def.elevations` on the VM's def before the call previews a bump without editing the circuit.
 - **Hand-off note** to leave in the PR: which key, `s`/`halfM`/`rise`, the measured audit counts before and after, and which baseline rows you updated.
 
