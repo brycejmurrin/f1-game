@@ -70,10 +70,15 @@ const TrackBuildClient = (function () {
     if (!enabled() || typeof Worker === "undefined" || !files) return null;
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
-    _ready = new Promise((res) => { ok = res; });
-    _w.onmessage = (e) => {
+    const worker = _w, ready = _ready = new Promise((res) => { ok = res; });
+    const failed = (why) => { if (_w === worker) { ok(false); drop(why); } };
+    worker.onmessage = (e) => {
+      if (_w !== worker) return;
       const m = e.data || {};
       if (m.type === "ready") { ok(true); return; }
+      // importScripts failures are caught by the worker before a build has a
+      // seq. Settle readiness too, so the caller can fall back to paced builds.
+      if (m.type === "error" && m.seq == null) { failed("init " + m.message); return; }
       const p = _pending.get(m.seq);
       if (!p) return;
       _pending.delete(m.seq);
@@ -83,11 +88,13 @@ const TrackBuildClient = (function () {
       } else if (m.type === "built") p.resolve(m);
       else { Log.warn("track", "build worker failed: " + m.message); p.resolve(null); }
     };
-    _w.onerror = (e) => { ok(false); drop("error " + ((e && e.message) || "")); };
+    worker.onerror = (e) => failed("error " + ((e && e.message) || ""));
+    worker.onmessageerror = () => failed("unreadable worker response");
     // `base`: the PAGE's URL. The worker resolves relative fetches (assets.js's
     // "assets/pack/…") against it, not against js/track/build-worker.js.
-    _w.postMessage({ type: "init", files: pageUrls(files), base: location.href });
-    return _ready;
+    try { worker.postMessage({ type: "init", files: pageUrls(files), base: location.href }); }
+    catch (e) { failed("init " + e.message); }
+    return ready;
   }
 
   // One circuit, built off the main thread. Resolves the worker's message
@@ -151,7 +158,7 @@ const TrackBuildClient = (function () {
   async function replay(msg, def, gfx, budgetMs) {
     if (msg.taken) return null;
     msg.taken = true;
-    const { track, recs } = msg, real = new Array(recs.length), budget = budgetMs > 0 ? budgetMs : 8;
+    const { track, recs } = msg, real = new Array(recs.length), fallback = [], budget = budgetMs > 0 ? budgetMs : 8;
     try {
       for (let i = 0; i < recs.length;) {
         const t0 = performance.now();
@@ -162,9 +169,47 @@ const TrackBuildClient = (function () {
         } while (i < recs.length && performance.now() - t0 < budget);
         if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
       }
+      const swap = (v) => {
+        if (Array.isArray(v)) return v.map(swap);
+        if (!v || typeof v !== "object" || typeof v.__rec !== "number") return v;
+        const h = real[v.__rec];
+        if (h && typeof h === "object") for (const k in v) if (k !== "__rec" && k !== "chunks") h[k] = v[k];
+        return h;
+      };
+      const m = track.meshes;
+      for (const k of Object.keys(m)) {
+        const tok = m[k];
+        m[k] = swap(tok);
+        if (!k.endsWith("Chunked") || !m[k] || !tok || typeof tok.__rec !== "number") continue;
+        const h = m[k], base = k.slice(0, -"Chunked".length);
+        if (h.chunks && h.chunks.length) continue;
+        if (h.chunks == null) m[base] = h;
+        else {
+          m[base] = gfx.createMesh(recs[tok.__rec].args[0]);
+          fallback.push(m[base]);
+          // The empty chunk handle is replaced, so the adopted track cannot
+          // free it later. Remove it from our ledger before releasing it.
+          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); }
+        }
+        m[k] = null;
+      }
+      // The worker built against its own def copy; carry back what the build
+      // derived onto it (build-worker.js), as a main-thread build would leave it.
+      if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
+      if (Number.isFinite(msg.startFrac)) def._startFrac = msg.startFrac;
+      track.def = def;
+      track._gfx = gfx;
+      track.surface = TrackSurface.profile(def, track);
+      // The bay signs: the worker has no canvas or livery painter, so the build
+      // there skipped PitSigns.upload (tracks.js) — paint and upload them here,
+      // exactly where the main-thread build does, from the geometry it posted.
+      if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
+      track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
+      Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
+      return track;
     } catch (e) {
-      // An upload that throws part-way: the handles already made have no owner
-      // yet (track.meshes still holds tokens), so release them here.
+      // Own uploads until the entire replay succeeds, including fallback
+      // meshes and surface reconstruction after the upload loop.
       for (let i = 0; i < real.length; i++) {
         const h = real[i], r = recs[i];
         if (!h) continue;
@@ -174,39 +219,13 @@ const TrackBuildClient = (function () {
           else gfx.freeMesh(h);
         } catch (_) { /* the replay's error is the one to surface */ }
       }
+      for (const h of fallback) {
+        try { if (h) gfx.freeMesh(h); } catch (_) { /* preserve the replay error */ }
+      }
+      try { if (typeof PitSigns !== "undefined" && PitSigns.free) PitSigns.free(gfx, track); }
+      catch (_) { /* preserve the replay error */ }
       throw e;
     }
-    const swap = (v) => {
-      if (Array.isArray(v)) return v.map(swap);
-      if (!v || typeof v !== "object" || typeof v.__rec !== "number") return v;
-      const h = real[v.__rec];
-      if (h && typeof h === "object") for (const k in v) if (k !== "__rec" && k !== "chunks") h[k] = v[k];
-      return h;
-    };
-    const m = track.meshes;
-    for (const k of Object.keys(m)) {
-      const tok = m[k];
-      m[k] = swap(tok);
-      if (!k.endsWith("Chunked") || !m[k] || !tok || typeof tok.__rec !== "number") continue;
-      const h = m[k], base = k.slice(0, -"Chunked".length);
-      if (h.chunks && h.chunks.length) continue;
-      m[base] = h.chunks == null ? h : gfx.createMesh(recs[tok.__rec].args[0]);
-      m[k] = null;
-    }
-    // The worker built against its own def copy; carry back what the build
-    // derived onto it (build-worker.js), as a main-thread build would leave it.
-    if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
-    if (Number.isFinite(msg.startFrac)) def._startFrac = msg.startFrac;
-    track.def = def;
-    track._gfx = gfx;
-    track.surface = TrackSurface.profile(def, track);
-    // The bay signs: the worker has no canvas or livery painter, so the build
-    // there skipped PitSigns.upload (tracks.js) — paint and upload them here,
-    // exactly where the main-thread build does, from the geometry it posted.
-    if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
-    track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
-    Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
-    return track;
   }
 
   // A build is out at the worker: the caller's world is null until it lands, and
