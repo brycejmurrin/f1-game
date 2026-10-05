@@ -372,7 +372,11 @@ const TrackMaps = (function () {
     // zone down the main straight runs past the line (end > total). Clamping
     // cut it off at the line on 46 of 52 circuits (Suzuka drew 80 of 704 m).
     // Drawers walk floor(a*n)..floor(b*n) and index `% n`.
-    return AeroZones.zonesFor(tr).map((z) => ({ a: z.start / total, b: z.end / total }));
+    return AeroZones.zonesFor(tr).map((z) => ({
+      a: z.start / total,
+      b: z.end / total,
+      wrap: z.end > total
+    }));
   }
 
   // Local maxima of |curvature| above a threshold, merged when close together,

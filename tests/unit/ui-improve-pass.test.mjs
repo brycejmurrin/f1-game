@@ -580,8 +580,16 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
   const menus = code("js/ui/select-screen.js");
   assert.match(menus, /past S\/F/, "a DRS zone that wraps the line says so");
+  assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
+    "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
+  assert.match(menus, /if \(filter !== "all"\)/,
+    "ALL does not reprint SEASON/CLASSICS heads on every LIST group flip");
   assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
   assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+  const maps = code("js/ui/track-maps.js");
+  assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
+  const nav = code("js/ui/menu-nav.js");
+  assert.match(nav, /if \(overStrip\) \{/, "wheel over #sel-tracks pans the strip before the ancestor walk");
 });
 
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {

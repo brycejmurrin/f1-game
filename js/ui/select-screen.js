@@ -609,15 +609,22 @@ function buildSelect() {
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;
-        const head = document.createElement("div");
-        head.className = "track-group-head";
-        head.dataset.trackGroup = g;
-        // Short, because the strip draws it as a VERTICAL rule between the two
-        // groups: the full "CLASSIC CIRCUITS" stood taller than the tiles and
-        // stretched the whole strip (measured 131px at 852x393). The filter
-        // chips beside the strip carry the long names.
-        head.textContent = t.custom ? "MINE" : t.classic ? "CLASSICS" : "SEASON";
-        els.selTracks.appendChild(head);
+        // ALL walks Tracks.LIST order (script-tag == picker). That list
+        // interleaves season and classic rows, so a head-on-every-flip reprinted
+        // SEASON / CLASSICS all the way down the strip (apex7 mid-scroll). The
+        // filter chips already name the view; only a single-group filter gets
+        // one divider.
+        if (filter !== "all") {
+          const head = document.createElement("div");
+          head.className = "track-group-head";
+          head.dataset.trackGroup = g;
+          // Short, because the strip draws it as a VERTICAL rule between the two
+          // groups: the full "CLASSIC CIRCUITS" stood taller than the tiles and
+          // stretched the whole strip (measured 131px at 852x393). The filter
+          // chips beside the strip carry the long names.
+          head.textContent = t.custom ? "MINE" : t.classic ? "CLASSICS" : "SEASON";
+          els.selTracks.appendChild(head);
+        }
       }
       const row = trackTile(t, i, { active: i === G.trackIdx });
       row.dataset.trackGroup = g;
@@ -1024,12 +1031,15 @@ function openTrackDetail() {
   if (drsWrap && drsList) {
     if (dz && dz.length) {
       const trackLen = (t.lengthKm || 5) * 1000;
-      // A zone across the line ends past 1 lap (z.b > 1): print its end in
-      // the next lap's metres. Name the wrap — "4870 m – 514 m" looked broken.
+      // A zone across the line: AeroZones leaves end > total (z.b > 1, z.wrap),
+      // or a drawer already folded b into the next lap (z.b < z.a). Either way
+      // "4870 m – 514 m" looked broken — name the S/F wrap. Place-keys stay on
+      // Tracks / AeroZones; this is only the label.
       const lapM = function (f) { const m = Math.round(f * trackLen); return m > trackLen ? m - trackLen : m; };
+      const wraps = function (z) { return !!(z.wrap || z.b > 1 || z.b < z.a); };
       drsList.innerHTML = dz.map(function (z, i) {
         const a = lapM(z.a), b = lapM(z.b);
-        const range = z.b > 1
+        const range = wraps(z)
           ? (a + " m &ndash; past S/F &ndash; " + b + " m")
           : (a + " m &ndash; " + b + " m");
         return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + range + "</div>";
