@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// @doc Streamable-HTTP MCP on 127.0.0.1 that opens this tree in Chromium. Tunnel the printed URL for a Grok custom connector. Not a .mcp.json server.
-// @skill mcp-probe
+// @doc Phone-sized Chromium over streamable HTTP on 127.0.0.1. Not a .mcp.json server.
+// @skill phone-browser
 /**
  * Local browser MCP. One process keeps Chromium on the working tree and
  * answers MCP at http://127.0.0.1:<port>/mcp. Chromium is a phone (touch,
