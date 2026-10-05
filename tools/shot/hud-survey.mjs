@@ -407,25 +407,23 @@ async function runGroup(browser, group, plan, log) {
         // cell's caps against the previous cell's (2026-10-04: --radio-top-*
         // identical before and after the slot fix).
         await cdpShot(page, null);
-        // TWICE. The first jump's refreshHud rewrites the chips' WORDS (the AERO
-        // chip goes AERO ZONE -> CORNER MODE, 100px -> 121px) AFTER the fit it
-        // came with, and a frozen sim never ticks again, so the measured frame
-        // kept the old clamp: aero right edge 1286 of 1280 in the 1280x720
-        // cockpit cell, a position no player holds (the live 10 Hz tick re-fits
-        // it within a frame; with the clamp re-run it reads 1278). The second
-        // pass fits against the words as they now stand.
         await page.evaluate((frac) => {
+          // `typeof`, not `window.GameHud`: it is a top-level `const` in a classic
+          // script, so it is NOT a window property — the old guard was always
+          // false and this forced re-fit (here since 0327b8e96) never ran.
+          try { if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
           const a = window.__apex;
-          a.freeze(false);
-          for (let pass = 0; pass < 2; pass++) {
-            // `typeof`, not `window.GameHud`: it is a top-level `const` in a classic
-            // script, so it is NOT a window property — the old guard was always
-            // false and this forced re-fit (here since 0327b8e96) never ran.
-            try { if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
-            a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2);
-          }
-          a.freeze(true);
+          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
         }, plan.frac);
+        await cdpShot(page, null);
+        // FIT THE FINAL STATE, DIRECTLY. The sim is frozen, so the 10 Hz tick that
+        // would re-fit never comes, and a chip that is still hidden — or whose WORDS
+        // change (AERO ZONE -> CORNER MODE is 100px -> 121px) — when the cell's own
+        // fit runs is left unclamped for good: measured, in the 1280x720 cockpit
+        // cell, TYRES at x -80 and AERO right edge 1286..1339, positions a player
+        // never holds (the live tick re-fits them within a frame). HudLayout.fit is
+        // what that tick calls; run it once the cell's state stands, then land it.
+        await page.evaluate(() => { if (typeof HudLayout !== "undefined" && HudLayout.fit) HudLayout.fit(); });
         await cdpShot(page, null);
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);
