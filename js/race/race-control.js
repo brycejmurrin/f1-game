@@ -135,6 +135,42 @@ const RaceControl = (function () {
     return (a, b) => (b.prog - (b.penalty || 0) * vRef) - (a.prog - (a.penalty || 0) * vRef);
   }
 
+  // THE CLASSIFICATION ORDER from endRace's three piles: `fin` (flagged, clock
+  // order), `run` (running, runOrder), `out` (retired, furthest first).
+  // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race ends
+  // takes the flag on its next crossing, so it counts one more lap — a lapped
+  // car that crossed is not put ahead of a lead-lap car on its last lap. Stable
+  // sort: within a lap count, finishers keep the clock order, runners progress.
+  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (B2.5.5(b)), RETIRED OR NOT: a last-lap
+  // failure scores where it stopped, and a car still RUNNING below the line
+  // (stuck, rescued) is not classified either — it was paid P2 at half
+  // distance. c.lap is the lap a car is ON, so a retirement completed lap - 1
+  // and a runner completes lap at its flag. With no finisher (the only human
+  // retired) the leader on the road is the reference. Sets c.classified for
+  // every car (SeasonCal.award, career settlement, the sheet's NC); the
+  // unclassified — runners and retirements alike — follow by distance.
+  function classify(cars, fin, run, out) {
+    const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
+    const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
+    const ref = fin.length ? fin : run;
+    const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
+    const cut = Math.floor(0.9 * winDone);
+    for (const c of cars) c.classified = !c.dsq && (winDone > 0 ? done(c) >= cut : !c.retired);
+    const all = fin.concat(run, out);
+    return all.filter((c) => c.classified).sort((a, b) => lapsAt(b) - lapsAt(a))
+      .concat(run.concat(out).filter((c) => !c.classified && !c.dsq).sort((a, b) => (b.prog || 0) - (a.prog || 0)));
+  }
+
+  // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):
+  // `{ laps, of }` — laps the leader completed of the scheduled distance — for
+  // the shortened-race points scale (SeasonCal.payTable); null once any car
+  // took the chequered flag, which is a completed race whatever came after.
+  function shortRun(cars, lapsTarget) {
+    if (!(lapsTarget > 0) || !cars || cars.some((c) => c.finished && !c.retired)) return null;
+    const live = cars.filter((c) => !c.retired);
+    return { laps: live.length ? Math.max(0, Math.max(...live.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
+  }
+
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
   const VSC_MIN = 6;       // total settled hazards on the surface -> VSC
@@ -538,6 +574,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

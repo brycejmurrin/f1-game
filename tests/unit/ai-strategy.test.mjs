@@ -517,10 +517,20 @@ test("twoCompound: every plan runs at least two different dry compounds", () => 
   }
 });
 
-test("twoCompound: a re-cut counts the compounds already run, and a pinned 0-stop keeps its pin", () => {
+test("twoCompound: a re-cut counts the compounds already run, and a pinned NO STOP rises to the one stop the rule needs", () => {
   const recut = A.stintPlan({ laps: 12, lifeLaps: lifeFor(12), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5,
                               start: "hard", twoCompound: true, used: ["medium"] });
   assert.ok(recut, "a plan exists");
-  const pinned = A.stintPlan({ laps: 20, lifeLaps: lifeFor(20), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 0, twoCompound: true });
-  assert.equal(pinned.stops, 0, "the STRATEGY row's pin wins over the rule");
+  // The pin used to win: a legal-looking one-set plan, and a DSQ at the flag
+  // for the player who followed it (bug hunt 2026-10-05 G3).
+  for (const laps of [10, 20]) {
+    const pinned = A.stintPlan({ laps, lifeLaps: lifeFor(laps), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 0, twoCompound: true });
+    assert.equal(pinned.stops, 1, `${laps} laps: NO STOP under the two-compound rule plans one stop`);
+    assert.ok(new Set(pinned.seq).size >= 2, `${laps} laps: on two compounds (${pinned.seq.join(">")})`);
+  }
+  const free = A.stintPlan({ laps: 20, lifeLaps: lifeFor(20), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 0 });
+  assert.equal(free.stops, 0, "where the rule does not apply (wet, sprint, short) the pin stands");
+  const reCut = A.stintPlan({ laps: 8, lifeLaps: lifeFor(8), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 0, twoCompound: true,
+                              start: "hard", used: ["medium"] });
+  assert.equal(reCut.stops, 0, "a re-cut that has already run two compounds keeps NO STOP");
 });

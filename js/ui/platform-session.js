@@ -106,6 +106,10 @@ if ($("pm-fullscreen")) {
     deferred = e;
     if (store.get("installChipSeen", false) || UiLayers.inRace()) return;
     chip.hidden = false;
+    // SEEN ONCE SHOWN, like the iOS nudge: set only on a tap or an install, it
+    // came back for 20 s on every launch until somebody tapped it. The stashed
+    // event still serves a tap during this showing.
+    store.set("installChipSeen", true);
     setTimeout(hide, 20000);
   });
   chip.addEventListener("click", async () => {

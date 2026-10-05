@@ -254,12 +254,18 @@
    that one of them is a decision the player makes, and a line you can press has
    to look like one. The chosen brief keeps the .cr-obj-line weight so the card
    reads the same as it did when the brief was dealt; the other two recede. */
+/* --tap-paint floor: layout-audit 2026-10-05 ios-iphone-landscape measured
+   each .cr-obj-pick at 548×32 / 666×32 — soft under the 52 touch floor.
+   Padding alone sized the row; --tap-paint holds 52 painted on touch and
+   stays --tap-min with a mouse (css/tokens.css). */
 .cr-obj-pick {
   display: block; width: 100%; text-align: left;
   font: inherit; font-size: var(--fs-2); font-style: italic; font-weight: 600;
   color: var(--dim); background: none; border: 0;
   border-bottom: 1px solid var(--card-line);
+  min-height: var(--tap-paint);
   padding-block: calc(var(--gap) / 2); cursor: pointer; line-height: 1.35;
+  box-sizing: border-box;
 }
 .cr-obj-pick.on { color: var(--text); font-weight: 700; }
 .cr-obj-pick.on::before { content: "\25B8  "; color: var(--red); }

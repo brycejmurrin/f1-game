@@ -129,20 +129,36 @@ test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul 
   // onto 42 "<track>|dusk|wet" profiles and keyMul 0 + ambientMul 0 onto
   // nurburgring|dusk|dry; the owner judged the stamp "crushing" for Suzuka and
   // Silverstone (508b052e, 68df8a68) and it was replaced fleet-wide with the
-  // same short delta (review-wgx-lighting item 4).
-  // dawn|dry is the one exception, and it is a pending decision, not a pass:
-  // all 44 dawn|dry profiles ship ambientMul 0 inside a deliberate-looking
-  // twilight set (keyMul 0.29, mist, god-rays, lamps) that needs a rendered
-  // A/B before it changes. Remove the exemption when that A/B lands.
+  // same short delta (review-wgx-lighting item 4). dawn|dry had the same
+  // ambientMul 0 pin; the fleet fill now lives on LightPresets["*|dawn|dry"]
+  // (ambientMul 0.5, twilight keyMul 0.29) and per-track dawn|dry no longer
+  // pins those two knobs.
   const P = presets();
   const bad = [];
   for (const [key, o] of Object.entries(P)) {
-    const [, tod, wx] = key.split("|");
-    if (!wx || tod === "night" || (tod === "dawn" && wx === "dry")) continue;
+    const parts = key.split("|");
+    const tod = parts[0] === "*" ? parts[1] : parts[1];
+    const wx = parts[0] === "*" ? parts[2] : parts[2];
+    if (!wx || tod === "night") continue;
     const a = o.ambientMul ?? 1, k = o.keyMul ?? 1;
     if (a < 0.15 || k < 0.1) bad.push(`${key} ambientMul ${a} keyMul ${k}`);
   }
   assert.deepEqual(bad, [], "a non-night preset crushes ambient or switches the sun off");
+});
+
+test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
+  const P = presets();
+  const shared = P["*|dawn|dry"];
+  assert.ok(shared, "expected LightPresets['*|dawn|dry']");
+  assert.equal(shared.ambientMul, 0.5);
+  assert.equal(shared.keyMul, 0.29);
+  const pinned = Object.keys(P).filter((k) => {
+    if (!/\|dawn\|dry$/.test(k) || k.startsWith("*")) return false;
+    const o = P[k];
+    return Object.prototype.hasOwnProperty.call(o, "ambientMul")
+      || Object.prototype.hasOwnProperty.call(o, "keyMul");
+  });
+  assert.deepEqual(pinned, [], "per-track dawn|dry must defer ambientMul/keyMul to *|dawn|dry");
 });
 
 test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {

@@ -397,8 +397,13 @@ const NetTransport = (function () {
     if (!PC) return null;                      // caller falls back / reports
 
     const ep = makeEndpoint(opts.name || "rtc");
+    // iceServers are fixed at construction — see lobby.js readyIce(). stats().turn
+    // must describe THIS PeerConnection, not whatever hasRelay() says later when
+    // a credentials fetch lands (or expires) after the PC was built.
+    let usedIce = null;
     const build = (stunOnly) => {
-      const cfg = { iceServers: iceServers(opts, stunOnly) };
+      usedIce = iceServers(opts, stunOnly);
+      const cfg = { iceServers: usedIce };
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       return new PC(cfg);
@@ -425,6 +430,10 @@ const NetTransport = (function () {
         return null;
       }
     }
+    const hadTurn = (usedIce || []).some((e) => {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      return urls.some((u) => /^turns?:/i.test(String(u || "")));
+    });
     Log.info("net", "rtc create");
     const chans = {};
     const STATE_INBOX_CAP = 64;
@@ -599,7 +608,7 @@ const NetTransport = (function () {
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,
       candidates: Object.assign({}, found),
-      turn: hasRelay(),
+      turn: hadTurn,
       ownTurn: !!turnFromStore(),
     });
     return ep;
