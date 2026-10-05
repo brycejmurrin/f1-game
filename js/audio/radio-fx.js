@@ -1,4 +1,4 @@
-/* GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use the SFX bus, recorded voices use master. resetContext drops the shared voice-chain cache and old bed without touching closed nodes. */
+/* GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use the SFX bus, recorded voices use master. resetContext stops the bed and disconnects every cached voice chain (M8). */
 "use strict";
 
 const GameAudioRadioFx = (function () {
@@ -58,7 +58,10 @@ const GameAudioRadioFx = (function () {
     let radioPreset = "modern";
     function setRadioPreset(id) {
       if (!Object.prototype.hasOwnProperty.call(RADIO_PRESETS, id)) return radioPreset;
-      radioStingStop(); radioPreset = id;
+      radioStingStop();
+      if (radioPreset === id) return radioPreset;
+      radioPreset = id;
+      pruneForeignVoiceChains(id);
       return radioPreset;
     }
     let radioBed = null;    // the live hiss, or null
@@ -252,18 +255,50 @@ const GameAudioRadioFx = (function () {
      * filter pair, the soft-clip and a compressor were built (and torn down) per
      * LINE, and on a phone a DynamicsCompressor is not a free node. A line now
      * adds only its buffer sources and one gain, its own so that cutting it off
-     * fades this line and not the one that replaced it. */
-    const _voiceChains = new Map();   // fx -> { ctx, input }
+     * fades this line and not the one that replaced it.
+     *
+     * M8 — BOUNDED + CLEANED. Keys are `fx` (control/coach/announcer) or
+     * `fx:preset` (radio/spotter × modern/clean/vintage): at most 9. Before
+     * this, a player who skimmed every radio preset left every chain wired into
+     * master for the rest of the session; resetContext only cleared the Map, so
+     * the nodes kept rendering. Now: disconnect on drop, prune foreign presets
+     * in setRadioPreset, and LRU-evict if the Map somehow exceeds VOICE_CHAIN_MAX. */
+    const VOICE_CHAIN_MAX = 9;
+    const _voiceChains = new Map();   // fx -> { ctx, input, nodes }
+    function dropVoiceChain(ent) {
+      if (!ent || !ent.nodes) return;
+      for (const n of ent.nodes) { try { n.disconnect(); } catch (e) { /* closed or already gone */ } }
+    }
+    /** Drop radio/spotter chains that belong to a preset other than `id`. */
+    function pruneForeignVoiceChains(id) {
+      for (const [k, ent] of [..._voiceChains]) {
+        if (!(k.startsWith("radio:") || k.startsWith("spotter:"))) continue;
+        if (k === "radio:" + id || k === "spotter:" + id) continue;
+        dropVoiceChain(ent);
+        _voiceChains.delete(k);
+      }
+    }
     function voiceChain(fx, ch) {
       const have = _voiceChains.get(fx);
-      if (have && have.ctx === host.context()) return have.input;
+      if (have && have.ctx === host.context()) {
+        // Touch for LRU: Map insertion order is the eviction order.
+        _voiceChains.delete(fx);
+        _voiceChains.set(fx, have);
+        return have.input;
+      }
+      if (have) { dropVoiceChain(have); _voiceChains.delete(fx); }
       const hp = host.context().createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = ch.lo;
       const lp = host.context().createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
       const ws = host.context().createWaveShaper(); ws.curve = softClip(ch.drive);
       const comp = host.context().createDynamicsCompressor();
       comp.threshold.value = -26; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.12;
       hp.connect(lp).connect(ws).connect(comp).connect(host.master());
-      _voiceChains.set(fx, { ctx: host.context(), input: hp });
+      _voiceChains.set(fx, { ctx: host.context(), input: hp, nodes: [hp, lp, ws, comp] });
+      while (_voiceChains.size > VOICE_CHAIN_MAX) {
+        const oldest = _voiceChains.keys().next().value;
+        dropVoiceChain(_voiceChains.get(oldest));
+        _voiceChains.delete(oldest);
+      }
       return hp;
     }
     const _shapes = new Map();
@@ -358,7 +393,9 @@ const GameAudioRadioFx = (function () {
       decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset,
       radioPreset: () => radioPreset,
       radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
-      radioVoicesLive: () => voicesLive, radioFxLevel: () => radioFx,
+      radioVoicesLive: () => voicesLive,
+      voiceChainsLive: () => _voiceChains.size,
+      radioFxLevel: () => radioFx,
       /** How long `channel`'s courtesy figure runs, in seconds, at the current
        *  level — 0 when it would not play at all. The VOICE waits this out so the
        *  words land after the cue instead of under it (js/audio/radio-voice.js
@@ -372,7 +409,12 @@ const GameAudioRadioFx = (function () {
       },
       radioFxMax: () => RADIO_FX_MAX,
       radioChannels: () => Object.keys(RADIO_CH),
-      resetContext() { _voiceChains.clear(); radioBed = null; },
+      resetContext() {
+        radioStingStop();
+        for (const ent of _voiceChains.values()) dropVoiceChain(ent);
+        _voiceChains.clear();
+        radioBed = null;
+      },
     };
   }
   return { create };
