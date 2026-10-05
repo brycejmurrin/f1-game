@@ -4647,7 +4647,7 @@ function updateCar(c, dt, ranked) {
   // stays separate because the player's already lives in mods.cornering.
   if (!c.human && c.tyreClass) {
     vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
-                       : AiDrive.tyrePace(c.tyreClass, c.lap);
+                       : AiDrive.tyrePace(c.tyreClass, Math.max(0, c.lap - 1));   // laps DONE: c.lap counts line crossings (TyreModel lapsDone)
   } else if (c.human) vmax *= tyres.tractionMul(c);   // the same curve for the player: perfMul only slows the climb to vmax, never the cap (exactly 1 with wear off)
   // FUEL BURN, the counterweight that gives a stint its shape: the car gets
   // lighter and faster while the tyre goes off and gets slower, and where those
@@ -5564,7 +5564,7 @@ function updateCar(c, dt, ranked) {
       const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX);
+      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
     }
@@ -5574,7 +5574,7 @@ function updateCar(c, dt, ranked) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
+  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX, aeroDfMult(c));
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
@@ -5856,7 +5856,10 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   let oldS = c._prevS ?? c.s;
-  if (!c.human) c.s = wrapS(c.s + c.speed * dt);
+  // AI arc = ground distance ÷ the Frenet stretch h, as trackFrom charges the player (AI-only
+  // column). At speed·dt the AI got ~7 % free arc on the outside of a bend and nothing inside.
+  const hAi = c.human ? 1 : frenetH(c.s, c.x);
+  if (!c.human) c.s = wrapS(c.s + c.speed * dt / hAi);
   // Progress is the cumulative arc-length. For the PLAYER, derive it from the
   // actual (signed, wrap-aware) change in s — NOT speed*dt — so prog stays exactly
   // coupled to s, and going backwards (a spin/reverse) correctly DECREASES prog
@@ -5872,12 +5875,8 @@ function updateCar(c, dt, ranked) {
   }
 
   const dLine = ds;   // signed change in s, contact shove INCLUDED — the lap-line test needs it
-  if (c.human) {
-    c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
-  } else {
-    ds = c.speed * dt;
-    c.prog += ds;
-  }
+  if (c.human) c.prog += ds - (c._pushD || 0);   // the shove was already banked by shiftLong
+  else c.prog += (ds = c.speed * dt / hAi);
   c._pushD = 0; c.totalT += dt;
   c.lapTime += dt;
   // OUR QUALIFYING LAP, AS IT HAPPENS. Everyone else in a friend race is

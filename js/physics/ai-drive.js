@@ -425,7 +425,7 @@ const AiDrive = (function () {
     // Keep the same solve as cornerSpeed without reclamping pace/vmax per node.
     const V = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace)
       * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
-    let vLimSq = Infinity;
+    let vLimSq = Infinity, bVC = 0, bD = 1;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
@@ -434,12 +434,13 @@ const AiDrive = (function () {
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const entrySq = vC * vC + 2 * brake * 0.85 * d;
-      if (entrySq >= 0 && entrySq < vLimSq) vLimSq = entrySq;
+      if (entrySq >= 0 && entrySq < vLimSq) { vLimSq = entrySq; bVC = vC; bD = d; }
     }
     // sqrt is monotonic: choose the tightest entry budget before taking it.
     // The tightest sample remains independent of sample order.
     let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
+    const vLimRaw = vLim;
     const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
     if (hold) vLim *= 1 - hold * 0.025;
     // Craft late-brake when attacking with room: allow a few % over the limit.
@@ -455,10 +456,14 @@ const AiDrive = (function () {
     const opt = clamp(t.optimism != null ? t.optimism : 0, -1, 1);
     if (opt) vLim *= 1 + opt * 0.012;
     if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
+    // The BINDING sample, for brakeDecision's feed-forward: its corner speed
+    // carries the same style/attack/optimism/error scale as the entry budget.
+    _bind.vC = bVC * (vLimRaw > 0 && vLimRaw < 1e6 ? vLim / vLimRaw : 1); _bind.d = bD;
     return vLim;
   }
+  const _bind = { vC: 0, d: 1 };
 
-  const _br = { braking: false, brakeLvl: 0, vLim: 0, excess: 0 };
+  const _br = { braking: false, brakeLvl: 0, vLim: 0, excess: 0, ff: 0 };
   function brakeDecision(ctx) {
     const vLim = brakeTarget(ctx);
     const speed = ctx.speed || 0;
@@ -470,16 +475,26 @@ const AiDrive = (function () {
     const excessStd = excess / pace;
     const d = (ctx.traits.consistency != null ? ctx.traits.consistency : 0.75) - 0.75;
     const soft = 1 - d * 0.8, full = 7 - d * 2;
-    let brakeLvl = 0;
+    let brakeLvl = 0, ff = 0;
     let braking = false;
     if (excessStd > soft) {
       braking = true;
-      brakeLvl = clamp((excessStd - soft) / (full - soft), 0.2, 1);
+      // FEED-FORWARD + P trim (verify-physics #3, 2026-10-04). The planner
+      // budgets 0.85·brake of deceleration, but a pure P band reaches pedal
+      // 0.85 only at ~6 m/s of standing overspeed, so the AI arrived 12-41 %
+      // above its own planned corner speed (VM, monza) and braked into the
+      // apex. aNeed is the deceleration that lands the binding sample's speed
+      // at its distance — on the envelope it IS 0.85·brake — and scale-free
+      // against the executor (game.js decelerates at brake·brakeLvl).
+      const brake = ctx.brake || 22, vC = _bind.vC, d = Math.max(_bind.d, 1);
+      ff = Math.max(0, (speed * speed - vC * vC) / (2 * d * brake));
+      brakeLvl = clamp(ff + (excessStd - soft) / (full - soft), 0.2, 1);
     }
     _br.braking = braking;
     _br.brakeLvl = brakeLvl;
     _br.vLim = vLim;
     _br.excess = excess;
+    _br.ff = ff;
     return _br;
   }
 
