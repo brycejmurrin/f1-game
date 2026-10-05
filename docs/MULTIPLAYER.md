@@ -265,6 +265,12 @@ to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
 qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
 both phases and stored as a number. tick() also runs
 through the paused gate: one player opening a menu cannot stop a shared world.
+AI retirements use the existing reliable LAP event, bound to the receiving
+race's epoch. The host repeats terminal AI state with its one-second strategy
+sync so a guest binding late still removes retired cars from the active field.
+RESULT carries optional `lap` and `classified` fields; guests adopt the host's
+distance and NC verdict after validating the whole classification.
+
 UP TO FOUR PLAYERS, in a STAR: the host holds one session per guest and each
 guest holds one, to the host. Rivals are a Map keyed by G.wireId(c) =
 teamIndex*2 + seat — a byte both peers compute identically, which is what lets
@@ -357,4 +363,3 @@ Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;
 like the shell's; its script list is `CONTROLLER` in `tools/manifest.cjs`,
 written by `gen-shell.mjs`. The phone runs no service worker and no store.
 Tests: `tests/unit/phone-pad.test.mjs` (both halves over the loopback transport).
-
