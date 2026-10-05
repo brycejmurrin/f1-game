@@ -142,7 +142,7 @@ test("every front-wing top flap reaches its endplates after taper and tip rise",
     // Twist / teCurve / chordTaper move the tip off the recipe chord (DEFAULT_WING
     // and TEAM_STYLE.wingStyle). Keep a volume around the old TE so we still
     // prove the flap reaches the plate, without pinning the flat-plank Y/Z.
-    const yLo = y0 - 0.04, yHi = y0 + 0.12, zLo = z0 - 0.10, zHi = z0 + 0.08;
+    const yLo = y0 - 0.10, yHi = y0 + 0.22, zLo = z0 - 0.18, zHi = z0 + 0.14;
     const mesh = M.Car3D.buildComplete([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
       noWheels: true, parts: { aero: 1, _visual: { aero: style } },
     });
@@ -151,7 +151,7 @@ test("every front-wing top flap reaches its endplates after taper and tip rise",
       const y = mesh.pos[i + 1], z = mesh.pos[i + 2];
       if (y < yLo || y > yHi || z < zLo || z > zHi) continue;
       const ax = Math.abs(mesh.pos[i]);
-      if (ax < endplateX - 0.04) continue;
+      if (ax < endplateX - 0.008) continue;
       maxX = Math.max(maxX, ax);
       hits++;
     }

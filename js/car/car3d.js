@@ -63,22 +63,22 @@ const Car3D = (function () {
     ]),
   });
 
-  const DEFAULT_WING = Object.freeze({ flaps: 3, arch: 0.55, twist: 0.08, teCurve: 0.036, chordTaper: 0.18, foot: 1, canard: 1 });
+  const DEFAULT_WING = Object.freeze({ flaps: 3, arch: 0.70, twist: 0.14, teCurve: 0.055, chordTaper: 0.26, foot: 1.15, canard: 1 });
   const W = (o) => Object.freeze(Object.assign({}, DEFAULT_WING, o));
   const DEFAULT_STYLE = Object.freeze({ noseTipZ: 0, noseSlim: 1, noseDroop: 0,
     airbox: 1, fin: 0, mirror: 0, inlet: 0, wingStyle: DEFAULT_WING });
   const TEAM_STYLE = Object.freeze({
-    mercedes:    Object.freeze({ noseTipZ:  0.08, noseSlim: 0.84, noseDroop: -0.028,  airbox: 1.00, fin: 0, mirror: 1, inlet: -0.022, wingStyle: W({ arch: 0.32, twist: 0.05, teCurve: 0.022, chordTaper: 0.14, foot: 0.88 }) }),
-    ferrari:     Object.freeze({ noseTipZ:  0,    noseSlim: 1.04, noseDroop: -0.024,  airbox: 0.82, fin: 0, mirror: 0, inlet:  0.018, wingStyle: W({ arch: 0.72, twist: 0.09, teCurve: 0.042, chordTaper: 0.20, foot: 1.12 }) }),
-    mclaren:     Object.freeze({ noseTipZ: -0.06, noseSlim: 0.92, noseDroop:  0.040,  airbox: 1.00, fin: 0, mirror: 2, inlet: -0.028, wingStyle: W({ arch: 0.50, twist: 0.11, teCurve: 0.048, chordTaper: 0.24, canard: 2 }) }),
-    redbull:     Object.freeze({ noseTipZ:  0.06, noseSlim: 0.88, noseDroop: -0.012,  airbox: 0.92, fin: 0, mirror: 0, inlet:  0,     wingStyle: W({ flaps: 2, arch: 0.40, twist: 0.06, teCurve: 0.028, foot: 0.92 }) }),
-    alpine:      Object.freeze({ noseTipZ:  0,    noseSlim: 1.10, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 1, inlet:  0.014, wingStyle: W({ arch: 0.82, twist: 0.09, teCurve: 0.040, foot: 1.16, canard: 2 }) }),
-    racingbulls: Object.freeze({ noseTipZ:  0.04, noseSlim: 0.95, noseDroop:  0,      airbox: 1.10, fin: 0, mirror: 0, inlet: -0.024, wingStyle: W({ flaps: 2, arch: 0.38, twist: 0.07, teCurve: 0.030 }) }),
-    haas:        Object.freeze({ noseTipZ: -0.04, noseSlim: 1.10, noseDroop: -0.012,  airbox: 1.04, fin: 0, mirror: 0, inlet:  0.028, wingStyle: W({ flaps: 2, arch: 0.28, twist: 0.045, teCurve: 0.018, chordTaper: 0.12, foot: 0.82, canard: 1 }) }),
-    williams:    Object.freeze({ noseTipZ: -0.10, noseSlim: 1.16, noseDroop: -0.022,  airbox: 0.96, fin: 1, mirror: 1, inlet:  0.012, wingStyle: W({ arch: 0.68, twist: 0.08, teCurve: 0.038, foot: 1.18 }) }),
-    audi:        Object.freeze({ noseTipZ: -0.05, noseSlim: 1.08, noseDroop:  0,      airbox: 1.12, fin: 1, mirror: 2, inlet:  0.020, wingStyle: W({ arch: 0.60, twist: 0.085, teCurve: 0.034, canard: 2 }) }),
-    astonmartin: Object.freeze({ noseTipZ:  0.05, noseSlim: 0.96, noseDroop: -0.030,  airbox: 0.96, fin: 0, mirror: 1, inlet: -0.030, wingStyle: W({ arch: 0.36, twist: 0.10, teCurve: 0.044, chordTaper: 0.22 }) }),
-    cadillac:    Object.freeze({ noseTipZ: -0.02, noseSlim: 1.02, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 2, inlet:  0.010, wingStyle: W({ arch: 0.58, twist: 0.075, teCurve: 0.033, canard: 2, foot: 1.08 }) }),
+    mercedes:    Object.freeze({ noseTipZ:  0.08, noseSlim: 0.84, noseDroop: -0.028,  airbox: 1.00, fin: 0, mirror: 1, inlet: -0.022, wingStyle: W({ arch: 0.48, twist: 0.10, teCurve: 0.038, chordTaper: 0.20, foot: 1.00 }) }),
+    ferrari:     Object.freeze({ noseTipZ:  0,    noseSlim: 1.04, noseDroop: -0.024,  airbox: 0.82, fin: 0, mirror: 0, inlet:  0.018, wingStyle: W({ arch: 0.88, twist: 0.16, teCurve: 0.062, chordTaper: 0.28, foot: 1.22 }) }),
+    mclaren:     Object.freeze({ noseTipZ: -0.06, noseSlim: 0.92, noseDroop:  0.040,  airbox: 1.00, fin: 0, mirror: 2, inlet: -0.028, wingStyle: W({ arch: 0.64, twist: 0.18, teCurve: 0.070, chordTaper: 0.30, canard: 2 }) }),
+    redbull:     Object.freeze({ noseTipZ:  0.06, noseSlim: 0.88, noseDroop: -0.012,  airbox: 0.92, fin: 0, mirror: 0, inlet:  0,     wingStyle: W({ flaps: 2, arch: 0.52, twist: 0.11, teCurve: 0.042, foot: 1.05 }) }),
+    alpine:      Object.freeze({ noseTipZ:  0,    noseSlim: 1.10, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 1, inlet:  0.014, wingStyle: W({ arch: 0.92, twist: 0.16, teCurve: 0.060, foot: 1.24, canard: 2 }) }),
+    racingbulls: Object.freeze({ noseTipZ:  0.04, noseSlim: 0.95, noseDroop:  0,      airbox: 1.10, fin: 0, mirror: 0, inlet: -0.024, wingStyle: W({ flaps: 2, arch: 0.50, twist: 0.12, teCurve: 0.044 }) }),
+    haas:        Object.freeze({ noseTipZ: -0.04, noseSlim: 1.10, noseDroop: -0.012,  airbox: 1.04, fin: 0, mirror: 0, inlet:  0.028, wingStyle: W({ flaps: 2, arch: 0.42, twist: 0.09, teCurve: 0.032, chordTaper: 0.18, foot: 0.95, canard: 1 }) }),
+    williams:    Object.freeze({ noseTipZ: -0.10, noseSlim: 1.16, noseDroop: -0.022,  airbox: 0.96, fin: 1, mirror: 1, inlet:  0.012, wingStyle: W({ arch: 0.80, twist: 0.14, teCurve: 0.056, foot: 1.26 }) }),
+    audi:        Object.freeze({ noseTipZ: -0.05, noseSlim: 1.08, noseDroop:  0,      airbox: 1.12, fin: 1, mirror: 2, inlet:  0.020, wingStyle: W({ arch: 0.72, twist: 0.15, teCurve: 0.050, canard: 2 }) }),
+    astonmartin: Object.freeze({ noseTipZ:  0.05, noseSlim: 0.96, noseDroop: -0.030,  airbox: 0.96, fin: 0, mirror: 1, inlet: -0.030, wingStyle: W({ arch: 0.50, twist: 0.17, teCurve: 0.064, chordTaper: 0.28 }) }),
+    cadillac:    Object.freeze({ noseTipZ: -0.02, noseSlim: 1.02, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 2, inlet:  0.010, wingStyle: W({ arch: 0.70, twist: 0.13, teCurve: 0.048, canard: 2, foot: 1.16 }) }),
   });
   function teamStyleOf(teamId) {
     return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
@@ -191,9 +191,9 @@ const Car3D = (function () {
   function wingFoilOf(st, i) {
     const w = (st && st.wingStyle) || st || DEFAULT_WING;
     const k = Math.max(0, Math.min(1, i / 2));
-    return { twist: (w.twist || 0) * (0.28 + 0.80 * k),
-             teCurve: (w.teCurve || 0) * (0.40 + 0.70 * k),
-             chordTaper: (w.chordTaper || 0) * (0.45 + 0.65 * k) };
+    return { twist: (w.twist || 0) * (0.55 + 0.55 * k),
+             teCurve: (w.teCurve || 0) * (0.60 + 0.55 * k),
+             chordTaper: (w.chordTaper || 0) * (0.55 + 0.55 * k) };
   }
   function frontCascade(aLvl) {
     const a = aLvl;
@@ -2905,20 +2905,20 @@ const Car3D = (function () {
       const bevel = Math.min(0.014, epW * 0.28);
       addBeveledSpan(out,
         { z: 2.66, x: epX, y: 0.135, w: epW, h: PLATE.hF, t: _fp.front.t },
-        { z: 2.32, x: epX + s*epKick*0.42, y: 0.188 + archN * 0.010, w: epW * 0.94,
-          h: (PLATE.hF + PLATE.hR) * 0.5 + archN * 0.014, t: 0.70 },
+        { z: 2.30, x: epX + s*epKick*0.42, y: 0.190 + archN * 0.008, w: epW * 0.93,
+          h: (PLATE.hF + PLATE.hR) * 0.5 + archN * 0.038, t: 0.70 },
         bevel, c2);
       addBeveledSpan(out,
-        { z: 2.32, x: epX + s*epKick*0.42, y: 0.188 + archN * 0.010, w: epW * 0.94,
-          h: (PLATE.hF + PLATE.hR) * 0.5 + archN * 0.014, t: 0.70 },
-        { z: 1.98, x: epX + s*epKick, y: 0.245, w: epW * 0.90, h: PLATE.hR, t: _fp.rear.t },
+        { z: 2.30, x: epX + s*epKick*0.42, y: 0.190 + archN * 0.008, w: epW * 0.93,
+          h: (PLATE.hF + PLATE.hR) * 0.5 + archN * 0.038, t: 0.70 },
+        { z: 1.98, x: epX + s*epKick, y: 0.245, w: epW * 0.88, h: PLATE.hR, t: _fp.rear.t },
         bevel, c2);
-      const footW = Math.min(PLATE.footW * (ws.foot || 1), (CAR_HALF - Math.abs(epX) - 0.01) * 2);
-      addBox(out, epX - s * (footW * 0.18), 0.040, 2.36, footW, 0.018, PLATE.footZ * 1.08, c1);
+      const footW = Math.min(PLATE.footW * (ws.foot || 1), (CAR_HALF - Math.abs(epX) - 0.02) * 2);
+      addBox(out, epX - s * (footW * 0.08), 0.034, 2.50, footW * 0.92, 0.016, 0.50, CARBON);
       addBeveledSpan(out,
-        { z: 2.54, x: epX + s * (footW * 0.22), y: 0.052, w: 0.030, h: 0.020, t: 0.55 },
-        { z: 2.12, x: epX + s * (footW * 0.16 + epKick * 0.25), y: 0.060, w: 0.026, h: 0.028, t: 0.70 },
-        0.005, c1);
+        { z: 2.58, x: epX + s * (footW * 0.20), y: 0.050, w: 0.032, h: 0.022, t: 0.55 },
+        { z: 2.14, x: epX + s * (footW * 0.14 + epKick * 0.25), y: 0.058, w: 0.028, h: 0.030, t: 0.70 },
+        0.005, CARBON);
       addBeveledSpan(out,
         { z: 2.58, x: s * (fwHalf * 0.52), y: 0.058, w: 0.012, h: 0.050, t: 0.50 },
         { z: 2.20, x: s * (fwHalf * 0.70), y: 0.066, w: 0.010, h: 0.044, t: 0.68 },
@@ -2927,12 +2927,10 @@ const Car3D = (function () {
       // plate 2 and gills only on plate >= 2, so four plate profiles were four
       // fixed combinations rather than a plate crossed with two choices. Null
       // keeps every shipped recipe exactly where it was.
-      if (aArch) {
-        addBeveledSpan(out,
-          { z: 2.60, x: epX + s*0.012, y: 0.135 + PLATE.hF * 0.5 + 0.010, w: 0.030, h: 0.018 },
-          { z: 2.06, x: epX + s*(epKick + 0.012), y: 0.245 + PLATE.hR * 0.5 + 0.010, w: 0.026, h: 0.016 },
-          0.008, c1);
-      }
+      addBeveledSpan(out,
+        { z: 2.62, x: epX + s*0.010, y: 0.135 + PLATE.hF * 0.5 + archN * 0.028, w: 0.032, h: 0.020 },
+        { z: 2.06, x: epX + s*(epKick + 0.010), y: 0.245 + PLATE.hR * 0.46, w: 0.028, h: 0.016 },
+        0.006, aArch ? c1 : CARBON);
       if (aGill > 0) {
         // GILLS. The rear endplate has had its louvre stack for ages; the
         // front plate — the one a chase camera actually fills the frame with —
@@ -2967,9 +2965,9 @@ const Car3D = (function () {
       for (let i = 0; i < nCan; i++) {
         if (i === 0) {
           addBeveledSpan(out,
-            { z: 2.58, x: epX + s * 0.016, y: 0.148, w: 0.062, h: 0.014, t: 0.50 },
-            { z: 2.36, x: epX + s * 0.038, y: 0.162, w: 0.078, h: 0.012, t: 0.68 },
-            0.004, c1);
+            { z: 2.60, x: epX + s * 0.030, y: 0.152, w: 0.095, h: 0.016, t: 0.45 },
+            { z: 2.30, x: epX + s * 0.058, y: 0.172, w: 0.115, h: 0.013, t: 0.62 },
+            0.004, CARBON);
         } else {
           const cz = 2.52 - i * 0.18, cy = 0.170 + i * 0.058;
           addBeveledSpan(out,

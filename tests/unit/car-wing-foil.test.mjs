@@ -191,11 +191,9 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
       if (n > worst.tris) worst = { num: d.num, tris: n };
     }
   assert.ok(worst.tris <= 6800, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
-  // 1500 -> 1540: the 2026 front-wing plate is now two beveled lofts (an arch
-  // through a mid station) plus a footplate fence. The first-person build
-  // still carries that exterior cascade, so the extras land here too.
-  // Measured 1520.
-  assert.ok(cockpit <= 1540, `cockpit ${cockpit} > 1540`);
+  // 1500 -> 1580: arched two-loft plate + always-on crown rail + foot fence.
+  // First-person still carries the exterior cascade. Measured 1552.
+  assert.ok(cockpit <= 1580, `cockpit ${cockpit} > 1580`);
   // THE WHEELS LIVE HERE NOW. tests/specs/parts-physics.spec.js carried a second
   // copy of the body/cockpit/wheel ceilings, drifted from these by two raises,
   // and was red without anyone seeing it — a ratchet with two owners has none.
