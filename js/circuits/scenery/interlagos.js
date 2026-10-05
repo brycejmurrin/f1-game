@@ -11,8 +11,8 @@
               grandstand, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
-              modelGroup, waterSurface, groundPatch, broadcastCompound, cameraTower,
-              sponsorHoarding, broadleafFall, lapBounds, py } = api;
+              modelGroup, groundPatch, broadcastCompound, cameraTower,
+              sponsorHoarding, broadleafFall, lapBounds, py, terrainYAt } = api;
       // Subtropical broadleaf canopy greens + flowering jacaranda.
       const BROAD = [[0.20, 0.42, 0.18], [0.24, 0.47, 0.20], [0.18, 0.38, 0.17]];
       const JACARANDA = [0.56, 0.44, 0.74];
@@ -492,8 +492,77 @@
       crowdBank(0.275, -1, 31, 78, 6);
       marshalPost(K(0.24), 1, 8);
 
-      waterSurface(K(0.42), -1, 520, [380, 0.5, 460], [0.20, 0.40, 0.49],
-                   { id: "interlagos-guarapiranga", required: true });
+      // GUARAPIRANGA. The old waterSurface(K(0.42), -1, 520, [380,0.5,460])
+      // sat at pyMin - 0.82 (~-40.7 m) while the terrain ribbon over the same
+      // footprint reads about -27…-39 m (measured), so the sheet was ~6–13 m
+      // under the ground and invisible from the circuit. waterSurface /
+      // waterField both hard-code that pyMin floor in the engine — do not
+      // change them. Same pattern as Buenos Aires' park lake: terrain-
+      // following thin cells via addBox (models.waterSurface is not on the
+      // scenery api). Off-ribbon void cells use the lowest nearby shore
+      // sample so the open basin still reads as water. A dirt rim was tried
+      // and dropped — it blew the props-tris 0.5 % ratchet. Billings
+      // (further SW) is visible in the real layout but not added here.
+      {
+        const LAKE = [0.20, 0.40, 0.49];
+        const a = anchor(K(0.42), -1, 520);
+        const LCX = a.c[0], LCZ = a.c[2];
+        // C=64 keeps the sheet inside the props-tris 0.5 % ratchet (finer
+        // cells + a dirt rim blew it; C=56 was still ~170 over the cap).
+        const RA = 190, RB = 230, C = 64;
+        let shoreLo = 1e9, nS = 0;
+        for (let x = LCX - RA - 100; x < LCX + RA + 100; x += C) {
+          for (let z = LCZ - RB - 100; z < LCZ + RB + 100; z += C) {
+            const y = terrainYAt(x, z);
+            if (y == null || !isFinite(y)) continue;
+            nS++;
+            if (y < shoreLo) shoreLo = y;
+          }
+        }
+        const voidY = nS ? shoreLo + 0.08 : pyMin + 0.08;
+        // Emit into `out` (not one modelGroup): the lake AABB spans other
+        // stretches of this compact lap, so a single group's emitted-box
+        // preflight rejects the whole sheet. Per-cell onTrack + Buenos Aires
+        // addBox is the same pattern; the first cell is the required pin so
+        // we do not pay a duplicate box for the id.
+        let pin = null;
+        for (let x = LCX - RA; x < LCX + RA; x += C) {
+          for (let z = LCZ - RB; z < LCZ + RB; z += C) {
+            const mx = x + C / 2, mz = z + C / 2;
+            const e = ((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2;
+            if (e > 1 - hash(mx * 0.31 + mz * 0.17) * 0.18) continue;
+            if (onTrack(mx, mz, 20)) continue;
+            let lo = 1e9, hi = -1e9, any = false;
+            for (const fx of [0, 0.5, 1]) for (const fz of [0, 0.5, 1]) {
+              const y = terrainYAt(x + fx * C, z + fz * C);
+              if (y === null || !isFinite(y)) continue;
+              any = true;
+              if (y < lo) lo = y;
+              if (y > hi) hi = y;
+            }
+            let top, bot;
+            if (any) {
+              top = hi + 0.09;
+              bot = lo - 0.14;
+            } else {
+              top = voidY + 0.05;
+              bot = voidY - 0.2;
+            }
+            const cy = (top + bot) / 2;
+            const sz = [C, Math.max(0.2, top - bot), C];
+            if (!pin) pin = { mx, mz, cy, sz };
+            else addBox(out, [mx, cy, mz], sz, LAKE, null);
+          }
+        }
+        if (!pin) pin = { mx: LCX, mz: LCZ, cy: voidY - 0.25, sz: [380, 0.5, 460] };
+        modelGroup("interlagos-guarapiranga", {
+          center: [pin.mx, pin.cy, pin.mz],
+          size: [pin.sz[0] + 4, pin.sz[1] + 4, pin.sz[2] + 4],
+        }, (stage) => {
+          stage._mat = 0;
+          addBox(stage, [pin.mx, pin.cy, pin.mz], pin.sz, LAKE, null);
+        }, { required: true });
+      }
 
       // Dense shoreline forestEdge — guaranteed no barrier clipping
       forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
