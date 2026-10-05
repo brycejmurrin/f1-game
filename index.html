@@ -633,6 +633,16 @@
      A region filled while hidden and unhidden in one step is not announced by
      NVDA, JAWS or macOS VoiceOver
      (tetralogical.com/blog/2024/05/01/why-are-my-live-regions-not-working/). -->
+<!-- SESSION ONLY — SAVING UNAVAILABLE (js/ui/select-screen.js). Shown only when
+     a WRITE to localStorage failed (store.writeFailed(): quota, or storage
+     blocked) — never because one corrupt key failed to parse. Static here, like
+     all shell DOM (it used to be injected by insertAdjacentHTML). Not a live
+     region: a region unhidden and filled in one step is the pattern NVDA, JAWS
+     and VoiceOver miss (see #announce-live below), so the warning is SPOKEN
+     once through #announce-live instead. DISMISS collapses it to its own toggle
+     (aria-expanded); it stands down during a race and under any open dialog
+     (css/overlays.css), where it would sit inert over the HUD or the sheet. -->
+<aside id="save-warning" aria-labelledby="save-warning-title" hidden><strong id="save-warning-title">SESSION ONLY — SAVING UNAVAILABLE</strong><span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span><button id="save-retry" type="button">RETRY SAVE</button><button id="save-export" type="button">EXPORT RECOVERY</button><button id="save-dismiss" type="button" aria-expanded="true">DISMISS</button></aside>
 <div id="announce-live" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="announce" aria-hidden="true" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
