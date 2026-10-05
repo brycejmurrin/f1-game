@@ -178,7 +178,10 @@ const STRIP = {
   //   build-props.js every(34) retail box + skirt no longer emitted where a
   //   neonTower stands — −624 emitted; the tower faces those buried boxes
   //   enclosed now survive the strip, +573 kept)
-  monaco: { before: 280119, after: 259033 },
+  // → coplanar z-fight cleanup 280119/259008 (2026-10-05): the casino box is
+  //   0.2 m wider and the yacht glow band 0.15 m wider / 0.1 m longer, so they
+  //   enclose 25 more hidden triangles; emission unchanged at 280119
+  monaco: { before: 280119, after: 259008 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

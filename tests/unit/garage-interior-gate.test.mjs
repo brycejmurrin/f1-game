@@ -77,7 +77,7 @@ it("garage tabs split performance and finishing work into named rows", () => {
  * plus `.cs-tab { min-height: 0 }` overriding components.css --tap.
  * Compact must keep the painted --tap / --tap-paint floor (logical +
  * physical), pan/snap instead of a 2-row tap-min grid, and leave livery
- * ⧉ chips on --chip-h / --tap-min. */
+ * ⧉ chips on --chip-h / --tap-min. Folded #973's snap/width pins here. */
 it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)", () => {
   const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
   // Strip comments so a historical note cannot trip the crush-pattern ban.
@@ -99,6 +99,10 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
     css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
     "compact category tabs also keep physical min-height at the tap rung");
+  assert.match(
+    css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
+    "compact category tabs also floor width at the tap rung");
   assert.match(
     css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*\{[^}]*scroll-snap-type:\s*x\s+mandatory/s,

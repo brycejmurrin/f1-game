@@ -350,7 +350,7 @@
             addBox(stage, vadd(p, a.u, 4), [26, 8, 32], [0.80, 0.80, 0.78], b);
             stage._mat = MAT.METAL;
             // Barrel roof, laid along the hangar's length like a real Nissen span.
-            addCyl(stage, vadd(vadd(p, a.u, 8), a.t, -16), 13, 32,
+            addCyl(stage, vadd(vadd(p, a.u, 8), a.t, -16.2), 13, 32.4,
               [0.68, 0.70, 0.73], 10, [a.r, a.t, a.u]);
             // Full-width sliding door band on the apron face.
             addBox(stage, vadd(vadd(p, a.r, -13.1), a.u, 3.4), [0.3, 6.4, 28],
@@ -586,7 +586,7 @@
                 const py_ = terrainYAt(pbase[0], pbase[2]);
                 if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
                 else pbase[1] = a.c[1];
-                addBox(out, vadd(pbase, a.u, 0.65), [1.5, 0.85, 40],
+                addBox(out, vadd(pbase, a.u, 0.75), [1.9, 1.25, 40],
                   alt ? LAV : LAV_D, b);
               }
             }

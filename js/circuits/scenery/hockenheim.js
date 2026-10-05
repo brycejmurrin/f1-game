@@ -189,7 +189,7 @@
             [0.30, 0.31, 0.34], roofB);
           addBox(stage, vadd(vadd(a.c, a.r, -18), a.u, 23.6), [1.2, 2.6, 48],
             [0.88, 0.88, 0.86], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -18.1), a.u, 23.6), [1.0, 1.6, 42],
+          addBox(stage, vadd(vadd(a.c, a.r, -18.3), a.u, 23.6), [1.0, 1.6, 42],
             [0.10, 0.12, 0.16], b);
           stage._mat = 0;
         }, { required: true });

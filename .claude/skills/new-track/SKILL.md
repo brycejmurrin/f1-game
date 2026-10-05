@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: "Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), or register a new circuit in js/circuits/. Read-only corner/terrain/elevation diagnosis (does the road clip, what is the grade) → agent-view; picture-driven accuracy → survey-track; scenery(api) props and floating/sunken pillars or props → scenery-dress."
+description: "Use when asked to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), or register a new circuit in js/circuits/. Read-only corner/terrain/elevation diagnosis (does the road clip, what is the grade) → agent-view; picture-driven accuracy → survey-track; scenery(api) props and floating/sunken props → scenery-dress."
 ---
 
 # Author or edit a track
