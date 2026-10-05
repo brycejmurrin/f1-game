@@ -785,9 +785,11 @@ const Car3D = (function () {
   const COVER_SHOULDER = 0.72, COVER_CROWN = 0.32, COVER_DROP = 0.18;
   function coverProfile(c) {
     const h = c.top - c.bottom, d = h * COVER_DROP;
+    const ck = Math.max(-0.04, Math.min(0.06, c.k || 0));
+    const cr = Math.max(0.20, COVER_CROWN - ck * 2.4);
     return { x: c.x, bottom: c.bottom, top: c.top, shoulder: c.top - d, d,
              pts: [[c.xb != null ? c.xb : c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],   // xb: the rounded car's coke-bottle foot (CarShade.cokeFoot)
-                   [c.x * 0.55, c.top - d * 0.32], [c.x * COVER_CROWN, c.top]] };
+                   [c.x * 0.55, c.top - d * 0.32], [c.x * cr, c.top]] };
   }
   // x of the flank skin at height y (clamped to the flank) — where a side-
   // mounted detail (panel, louvre, cable, pinstripe) actually touches the car.
@@ -1338,13 +1340,15 @@ const Car3D = (function () {
     const crown = style.coverCrown || 0;
     // Two stations only. A third (z -1.13) made coverAt non-linear and broke
     // car-shade: downwash gap vs cover.bottom, and cokeFoot xb<=x. coverCrown
-    // lives here; CarShade.coverLoft already walks COVER_Z through coverAt.
+    // pinches x and peaks the profile — it must NOT lift coverAt().top or
+    // spineHeight "high"/"dorsal" walk through the roll-hoop cap (fin-design).
+    // CarShade.coverLoft already walks COVER_Z through coverAt.
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth * (1 - crown * 0.6),
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise + crown },
+        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise, k: crown },
       { z: -2.00, x: 0.13 * eng.tailWidth,
-        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL + crown * 0.45 },
+        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL, k: crown * 0.45 },
     ];
     const podStations = round ? CarShade.downwash(sidepodStations(eng, style), (z) => sampleStations(coverStations, z).bottom, eng.coke) : sidepodStations(eng, style);   // rounded: the downwash ramp
     const noseStations = styledNoseStations(style).map((station) => ({

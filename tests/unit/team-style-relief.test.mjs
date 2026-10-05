@@ -72,11 +72,12 @@ test("stock-recipe sidepods: four showcase teams stay ≥4 cm apart at the inlet
     "McLaren inlet should be the wide one");
   assert.ok(samples.mclaren.inlet.top < samples.redbull.inlet.top,
     "McLaren inlet should sit under Red Bull's tall mouth");
-  // coverCrown stays on the two original stations; mid is interpolated.
-  assert.ok(samples.mclaren.coverMid.top > samples.haas.coverMid.top + 0.025,
-    `McLaren crown ${samples.mclaren.coverMid.top.toFixed(3)} is not proud of Haas ${samples.haas.coverMid.top.toFixed(3)}`);
-  assert.ok(samples.redbull.coverMid.top > samples.mercedes.coverMid.top + 0.010,
-    "Red Bull cover should sit above Mercedes' shallow crown");
+  // coverCrown pinches x / peaks the profile; it must not lift coverAt().top
+  // (spineHeight high/dorsal stay under the roll-hoop cap).
+  const mclProf = Car3D.coverProfile(samples.mclaren.coverMid);
+  const haasProf = Car3D.coverProfile(samples.haas.coverMid);
+  assert.ok(mclProf.pts[3][0] < haasProf.pts[3][0] - 0.004,
+    `McLaren crown peak ${mclProf.pts[3][0].toFixed(3)} is not narrower than Haas ${haasProf.pts[3][0].toFixed(3)}`);
   assert.ok(gaps.length === 6, gaps.join(" "));
 });
 
