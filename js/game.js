@@ -1779,7 +1779,8 @@ function gridOrderFor(base) {
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
-  if (rule === "revchamp" && isChampionship() && season && !base) {
+  // Round 1 (nobody scored) falls through to gridUp's pace order, as STANDINGS does: the all-zero table sorted by driver id.
+  if (rule === "revchamp" && isChampionship() && season && !base && Object.values(season.pts || {}).some((p) => p > 0)) {
     // SPEND THE JITTER ANYWAY. gridUp() draws one simRnd() per car when it
     // builds its own order, so a rule that returns a full order without
     // drawing leaves every later consumer (the AI overtake fire, the start
@@ -2993,29 +2994,9 @@ function endRace(forcedOrder) {
   const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
   run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-  // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
-  // ends takes the flag on its next crossing, so it counts one more lap. A
-  // lapped car that crossed was put ahead of every lead-lap car still on its
-  // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
-  // lap count, finishers keep the clock order and runners their progress.
-  const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
-  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA 2026 SR B2.5.5(b)), retired or not: a
-  // car that failed on the last lap scores where it stopped, not behind the
-  // field with nothing. Below that it is not classified. c.classified carries
-  // the verdict to the points tables (SeasonCal.award, career settlement).
-  // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
-  // laps COMPLETED is c.lap - 1 for every car. With no finisher (the only human
-  // retired, finishDelay ended it early) the leader on the road is the reference.
-  const ref = fin.length ? fin : run;
-  const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
-  const minDone = Math.floor(0.9 * winDone);
-  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= minDone) : [];
-  // A flagged backmarker must meet the same distance floor. Still-running cars
-  // keep the provisional classification used by the short results countdown.
-  for (const c of cars) c.classified = !c.dsq && ((!c.retired && (!c.finished || (c.lap || 0) - 1 >= minDone)) || lateOut.includes(c));
-  const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
+  // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
-  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
+  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out).concat(dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
@@ -3032,8 +3013,8 @@ function endRace(forcedOrder) {
     for (const c of cars) if (!c.retired && !c.dsq && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const careerScoring = isCareer();
     const scored = careerScoring
-      ? Career.scoreRound(order, player, fastest)
-      : SeasonCal.award(season, order, fastest);
+      ? Career.scoreRound(order, player, fastest, RaceControl.shortRun(cars, lapsTarget))
+      : SeasonCal.award(season, order, fastest, RaceControl.shortRun(cars, lapsTarget));   // no flag: the shortened-race scale
     const settles = careerScoring ? !!scored : scored === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it keeps
@@ -6228,8 +6209,9 @@ function retireCar(c, reason) {
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
   // The owner's word, on the reliable channel: nothing else carries it and a
-  // rival left "running" holds the other screen's result to the hard cap.
-  if (netPlay.active() && (c.local || (!c.human && netPlay.role() === "host"))) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
+  // rival left "running" holds the other screen's result to the hard cap. The
+  // HOST owns its AI too: a guest posed it running, raced into it, scored it.
+  if ((c.local || (!c.human && netPlay.ownsRaceControl())) && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
   Tracks.sample(track, c.s, smp);
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);
@@ -8610,7 +8592,7 @@ function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
   paused = true;
-  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
   openGarage("pit");
 }
 /** Back to the race. Called by BOTH garage exits — there is no "cancel" here
@@ -8713,6 +8695,7 @@ els.resNext.onclick = () => {
     // After a SPRINT the round has not advanced, so this re-selects the circuit
     // the weekend is already at — the Grand Prix is its second half.
     trackIdx = SeasonCal.trackIndex(season.round);
+    raceLaps = SeasonCal.roundLaps(raceLaps, season, Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps);
   }
   els.results.hidden = true;
   // Every championship SESSION that races qualifies first — every round, and on

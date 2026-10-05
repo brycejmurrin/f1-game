@@ -99,8 +99,10 @@ const DailyChallenge = (function () {
         e.classes[context] = cls;
       }
       if (e.best == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-      // Streak: consecutive UTC days with at least one lap.
-      if (d.streak.last !== day) {
+      // Streak: consecutive UTC days with at least one lap. Only a NEWER day
+      // moves it (ISO dates compare as strings): a tab left on yesterday's plan
+      // past midnight, today already played elsewhere, reset it to 1.
+      if (!d.streak.last || day > d.streak.last) {
         d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
         d.streak.last = day;
       }

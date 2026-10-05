@@ -161,6 +161,10 @@ function buildResults(order, race) {
   // A WATCHED real race (REAL REPLAY / HIGHLIGHTS, js/race/real-race.js) ends here too, with the
   // followed car as G.player (G.followCar) — nobody drove it: no badge, no YOUR RACE card.
   const watched = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+  // The table SeasonCal.award / Career.scoreRound paid: a race nobody took the
+  // flag in (the only human retired) pays the shortened-race scale.
+  const table = SeasonCal.payTable(sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+    sprint ? "sprint" : "race", RaceControl.shortRun(order, G.lapsTarget));
   const badges = sprint || watched ? [] : awardBadges(order, !!(race && race.duel));   // a sprint is not a Grand Prix result
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
@@ -212,7 +216,7 @@ function buildResults(order, race) {
   }
   if (typeof ResultsStory !== "undefined") {
     const story = ResultsStory.render(G, order, { dnfOf, watched, duel: race && race.duel,
-      points: sprint ? SeasonCal.SPRINT_POINTS : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS,
+      points: table,
       fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
     if (story) els.resultsTable.appendChild(story);
   }
@@ -239,7 +243,7 @@ function buildResults(order, race) {
   }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
-    const nc = c.classified === false && !dnf;
+    const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
     const row = document.createElement("div");
     const podium = nc ? "" : PODIUM[i] || "";
     const other = c.human && !c.local ? " q-real" : "";
@@ -270,15 +274,14 @@ function buildResults(order, race) {
       nm.appendChild(tag);
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
-    const table = sprint ? SeasonCal.SPRINT_POINTS
-      : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
     // A CLASSIFIED retirement (past 90 % of the winner's laps, endRace sets
     // c.classified) is paid by SeasonCal.award / Career.settleRound: the row
     // shows those points, and its reason stays in the name suffix above.
-    const paid = c.classified !== false && (!dnf || (c.classified && !c.dsq));
+    // NOT CLASSIFIED: still running below 90 % of the winner's laps (RaceControl.classify).
+    const paid = c.classified !== false && ((!dnf && !nc) || (c.classified && !c.dsq));
     pt.textContent = G.practice && !watched ? "Unscored"
       : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "0 pts" : outLabel(dnf);
     row.append(pos, sw, nm);

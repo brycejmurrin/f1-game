@@ -71,6 +71,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
+  vm.runInContext(src("js/race/race-control.js"), ctx, { filename: "js/race/race-control.js" });   // shortRun: the sheet's points table
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: "js/ui/results-story.js" });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);

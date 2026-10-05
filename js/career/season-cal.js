@@ -45,15 +45,18 @@ function fresh() {
 // for a save whose shape may predate the build reading it. An id that no longer
 // exists is dropped rather than failing the whole config, because losing one
 // retired circuit should not cost the player their calendar.
-function knownIds(raw) {
+// Each stored index's place in the calendar this build can race (-1: dropped —
+// an id it does not know, or a repeat). knownIds is the ids that keep a place.
+function knownMap(raw) {
   const seen = new Set();
-  return (Array.isArray(raw) ? raw : []).filter((id) => {
-    if (typeof id !== "string" || seen.has(id)) return false;
-    if (!Tracks.LIST.some((t) => t.id === id)) return false;
+  let n = 0;
+  return (Array.isArray(raw) ? raw : []).map((id) => {
+    if (typeof id !== "string" || seen.has(id) || !Tracks.LIST.some((t) => t.id === id)) return -1;
     seen.add(id);
-    return true;
+    return n++;
   });
 }
+function knownIds(raw) { const m = knownMap(raw); return m.length ? raw.filter((_, i) => m[i] >= 0) : []; }
 // PER-ROUND SPRINTS are additive: a config written before them has no
 // `sprintIds` and a boolean `sprint`, and normalises to exactly what it meant.
 // An older build reading "rounds" sees a non-true sprint and races no sprints.
@@ -256,8 +259,10 @@ function resume(saved) {
   // the next round is the same circuit, and a finished season stays finished.
   // Identity for a calendar read whole (every id known and unique).
   const rawIds = s && s.config && Array.isArray(s.config.trackIds) ? s.config.trackIds : null;
-  if (rawIds && Number.isInteger(s.round) && s.round >= 0 && s.round <= rawIds.length && knownIds(rawIds).length) {
-    s.round = knownIds(rawIds.slice(0, s.round)).length;
+  const idx = rawIds ? knownMap(rawIds) : null;
+  const remap = idx && idx.some((v) => v >= 0) ? idx : null;
+  if (remap && Number.isInteger(s.round) && s.round >= 0 && s.round <= rawIds.length) {
+    s.round = remap.slice(0, s.round).filter((v) => v >= 0).length;
   }
   if (!s || !Number.isInteger(s.round) || s.round < 0 || s.round > n) {
     return restart();
@@ -268,6 +273,17 @@ function resume(saved) {
   s.driverCodes = codeMap(s.driverCodes);
   s.finishes = finishMap(s.finishes);
   s.roundPts = roundMap(s.roundPts);
+  // …and the per-round points with it: roundPts is indexed by the STORED round,
+  // so with dropped scores netPts read the wrong rounds and award() added this
+  // round into a slot already used. A dropped circuit's round leaves the
+  // counting set (its points stay in the gross total; the save is refused).
+  if (remap && remap.some((v, i) => v !== i)) {
+    for (const id of Object.keys(s.roundPts)) {
+      const row = [];
+      s.roundPts[id].forEach((v, r) => { if (remap[r] >= 0) row[remap[r]] = v; });
+      s.roundPts[id] = row;
+    }
+  }
   if (typeof s.lastFl !== "string") delete s.lastFl;
   if (!(Number.isInteger(s.seed) && s.seed > 0 && s.seed <= 0xFFFFFFFF)) delete s.seed;
   // A save from before separate sprint qualifying carries the sprint RESULT as
@@ -395,22 +411,52 @@ function lapsFor(fallback, season) {
 }
 
 function formatLaps(fallback) { return fmtActive() ? rulesConfig().laps : fallback; }
+// NEXT ROUND's distance: what RACE SETTINGS would preselect for the new round
+// (the format's laps, clamped to the circuit's FULL, never raised) — NEXT ROUND
+// skips that screen, so a 57-lap format ran 57 at Silverstone (full 52) and a
+// value clamped at a short circuit stuck to every longer round after it. The
+// Grand Prix after a sprint keeps the weekend's distance (lapsFor divides it).
+function roundLaps(prev, season, full) {
+  const laps = midWeekend(season) ? prev : formatLaps(prev);
+  return full > 0 ? Math.min(laps, full) : laps;
+}
 
 function pointsTable() {
   return fmtActive() && rulesConfig().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
 }
 
-function award(season, order, fastestId) {
+// A SHORTENED RACE (FIA F1 SR 2024 Art. 6.5 / 6.6; the 2019–2024 point, 6.4).
+// `run` = RaceControl.shortRun: { laps the leader completed, of the scheduled
+// laps }, null for a race that saw the flag. The game ends a session when its
+// only human retires, so without this a lap-1 snapshot paid a full Grand Prix.
+// Under 2 laps nothing; a Grand Prix pays column 1/2/3 below 25/50/75 %, a
+// sprint nothing below 50 %; the CLASSIC (1991–2002) table pays half below 75 %,
+// the rule of its era. The fastest-lap point needs 50 % (Art. 6.4).
+const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 10, 8, 6, 4, 3, 2, 1]];
+function shortFrac(run) { return run ? run.laps / Math.max(1, run.of) : 1; }
+function payTable(table, scoring, run) {
+  if (!run) return table;
+  const f = shortFrac(run);
+  if (run.laps < 2) return [];
+  if (scoring === "sprint") return f < 0.5 ? [] : table;
+  if (f >= 0.75) return table;
+  return table === CLASSIC_POINTS ? table.map((p) => p / 2) : SHORT_POINTS[f < 0.25 ? 0 : f < 0.5 ? 1 : 2];
+}
+
+function award(season, order, fastestId, run) {
+  // `lastFl` names THIS round's fastest-lap recipient for the results sheet:
+  // cleared before either refusal, or a save conflict left last round's +FL
+  // (and its +1 pt) painted beside whoever held it.
+  if (season) delete season.lastFl;
   if (fmtActive() && seasonConflict) return null;
   if (!canRace(season)) return null;
   const scoring = stage(season);
-  const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
+  const table = payTable(scoring === "sprint" ? SPRINT_POINTS : pointsTable(), scoring, run);
   // The 2019–2024 fastest-lap point: one point, Grand Prix leg only, and only
   // to a driver classified inside the top ten. Season format only (fmtActive):
-  // a career keeps the table it always paid. `lastFl` names this round's
-  // recipient for the results sheet and is cleared on the next scoring.
-  const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null;
-  delete season.lastFl;
+  // a career keeps the table it always paid. `lastFl` (cleared above) names
+  // this round's recipient for the results sheet.
+  const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null && shortFrac(run) >= 0.5;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
     // CLASSIFIED = STILL IN THE RACE. endRace ends the session 2.2 s after the
@@ -637,12 +683,12 @@ function shuffled(ids, seed) {
 }
 
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
+  SPRINT_POINTS, CLASSIC_POINTS, SHORT_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, resetConfig, applyConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
-  quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
+  quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
   award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
   presetIds, preset, shuffled, gpName,
 };

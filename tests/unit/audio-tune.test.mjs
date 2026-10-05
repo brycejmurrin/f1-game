@@ -945,6 +945,51 @@ test("mute, the SFX bus and the music level glide instead of stepping", async ()
   A.setMusicVolume(0.25); glided(music.gain, 0.25 * 0.52, "music volume");
 });
 
+// A RADIO LINE ON AIR KEEPS THE MUSIC UNDER IT, whatever else moves the music
+// level. setEngine re-applies the radio duck every frame, but only while the
+// engine runs with SFX on; the settings sheet that carries the music slider and
+// the SFX switch also carries the radio TEST buttons, and it is open on the
+// title or under the pause card, engine stopped. Three writers ignored the duck:
+// the slider (musicVol * MUSIC_FULL), SFX OFF (releaseEngineDuck(..., false))
+// and a music gain created mid-line. Each put the music back over the voice for
+// the rest of the clip.
+async function duckRig() {
+  const b = boot(); const gains = []; const mk = b.ctx.createGain;
+  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  b.GameAudio.init(); b.GameAudio.startMusic(); await b.release();
+  const music = gains.find((g) => g !== gains[0] && g !== gains[1] && Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
+  assert.ok(music, "precondition: the music gain exists at its default level");
+  return { ...b, gains, music };
+}
+test("the music slider keeps a radio line's duck (engine stopped: title / pause sheet)", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  A.setRadioDuck(true);
+  assert.ok(Math.abs(r.music.gain.value - 0.5 * 0.52 * 0.35) < 1e-9, "precondition: the line ducks the music");
+  A.setMusicVolume(0.4);
+  assert.ok(Math.abs(r.music.gain.value - 0.4 * 0.52 * 0.35) < 1e-9, `slider mid-line stays ducked, got ${r.music.gain.value}`);
+  A.setRadioDuck(false);
+  assert.ok(Math.abs(r.music.gain.value - 0.4 * 0.52) < 1e-9, "the line's end lifts it to the new level");
+});
+test("SFX OFF mid-line releases the engine's duck but keeps the radio's", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  A.startEngine(); A.setRadioDuck(true); A.setEngine(0.5, 0, false, 0.5, 4, {});
+  assert.ok(r.music.gain.value < 0.5 * 0.52 * 0.35, "precondition: engine + radio duck stacked");
+  A.setSfxEnabled(false);
+  assert.ok(Math.abs(r.music.gain.value - 0.5 * 0.52 * 0.35) < 1e-9, `SFX off mid-line stays under the voice, got ${r.music.gain.value}`);
+  A.setRadioDuck(false);
+  assert.ok(Math.abs(r.music.gain.value - 0.5 * 0.52) < 1e-9, "and comes up when the line ends");
+});
+test("a music gain created while a line is on air starts ducked", async () => {
+  const b = boot(); const gains = []; const mk = b.ctx.createGain;
+  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  const A = b.GameAudio; A.init(); await b.release();
+  A.setRadioDuck(true);
+  const n0 = gains.length; A.startMusic(); await b.release();
+  const g = gains.slice(n0).find((x) => x.gain.value > 0);
+  assert.ok(g, "precondition: startMusic built the music gain");
+  assert.ok(Math.abs(g.gain.value - 0.5 * 0.52 * 0.35) < 1e-9, `born at the ducked level, got ${g.gain.value}`);
+});
+
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
   const { GameAudio: A, release, ctx } = boot();
   const nodes = [];
