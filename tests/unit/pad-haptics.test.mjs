@@ -278,3 +278,51 @@ test("Firefox legacy pulse(): a rejection is caught too", async () => {
     assert.equal(unhandled, 0, "pulse()'s rejection must be caught inside the mixer");
   } finally { process.off("unhandledRejection", onRej); }
 });
+
+test("mixer: OFF stops the actuator and discards queued pulses without reviving them", async () => {
+  const { Input, sb, fire, clock } = boot();
+  let preempt;
+  const { calls, pad } = attachPad(sb, fire, { result: () => new Promise((r) => { preempt = r; }) });
+  let resets = 0;
+  pad.vibrationActuator.reset = () => { resets++; return Promise.reject(new Error("already stopped")); };
+  Input.poll(); Input.rumble(.8, 90, "brake"); Input.rumble(.4, 120, "handles");
+  Input.setHaptics(0);
+  assert.equal(resets, 1, "OFF also stops the effect already playing");
+  preempt("preempted"); await tick();
+  clock.t = 16; Input.poll(); Input.rumble(1, 100);
+  assert.equal(calls.length, 1, "neither queued nor newly requested pulses play while OFF");
+  Input.setHaptics(1); Input.poll();
+  assert.equal(calls.length, 1, "turning back on cannot revive discarded pulses");
+  Input.rumble(.5, 70); assert.equal(calls.length, 2);
+});
+
+test("mixer: strength and trigger changes remix live pulses without extending their duration", () => {
+  const { Input, sb, fire, clock } = boot();
+  const { calls } = attachPad(sb, fire);
+  Input.poll(); Input.rumble(.8, 90, "brake"); Input.rumble(.4, 120, "handles");
+  Input.setHaptics(.5); Input.setTriggerHaptics(false);
+  clock.t = 16; Input.poll();
+  assert.equal(calls[1].type, "dual-rumble");
+  assert.equal(calls[1].params.strongMagnitude, .4);
+  assert.equal(calls[1].params.duration, 104);
+  Input.setTriggerHaptics(true); clock.t = 32; Input.poll();
+  assert.equal(calls[2].type, "trigger-rumble");
+  assert.equal(calls[2].params.leftTrigger, .4);
+  assert.equal(calls[2].params.duration, 88);
+  clock.t = 95; Input.poll();
+  assert.equal(calls[3].type, "dual-rumble", "expired trigger pulse cannot be revived");
+  assert.equal(calls[3].params.strongMagnitude, .2);
+  assert.equal(calls[3].params.duration, 25);
+  clock.t = 130; Input.poll(); assert.equal(calls.length, 4);
+});
+
+test("mixer: OFF sends a zero-duration stop on actuators without reset", () => {
+  const { Input, sb, fire } = boot();
+  const { calls } = attachPad(sb, fire);
+  Input.poll(); Input.rumble(.8, 120);
+  Input.setHaptics(0);
+  assert.equal(calls.at(-1).params.duration, 0);
+  assert.equal(calls.at(-1).params.strongMagnitude, 0);
+  assert.equal(calls.at(-1).params.weakMagnitude, 0);
+  Input.poll(); assert.equal(calls.length, 2);
+});
