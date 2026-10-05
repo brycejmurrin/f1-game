@@ -263,6 +263,13 @@ const HudLayout = (function () {
     if (!doc) return;
     const sn = shown(), pn = shownProf(), st = stored(), a = effective(st, sn, pn);
     prof = profile();
+    // body[data-hl-set] names the camera set painted now: css/track-detail.css
+    // keys the TOUCH cockpit hide of the strip on it, not on body.cockpit-cam —
+    // that one means "the wheel's LCD shows gear / speed" and is off for a
+    // wheel with no screen (CLASSIC, NONE), where the strip still sits at the
+    // cockpit offsets over the steer column.
+    const body = doc.body;
+    if (body && body.setAttribute) body.setAttribute("data-hl-set", sn);
     for (const [id, , sel] of ELEMENTS) {
       const el = doc.querySelector(sel);
       if (!el || !el.style) continue;
@@ -302,12 +309,16 @@ const HudLayout = (function () {
     if (hi > size - EDGE) return size - EDGE - hi;
     return 0;
   }
-  // Pieces that share one offset move as ONE BLOCK: clamping each on its own
-  // pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the shipped
-  // cockpit layout moves both +30vw, and at 1280 wide only AERO overran the
-  // edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The block
-  // is clamped by the UNION of its members' rects and every member gets the
-  // same correction, so neighbours keep their spacing.
+  // Pieces that share one NON-ZERO offset move as ONE BLOCK: clamping each on
+  // its own pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the
+  // shipped cockpit layout moves both +30vw, and at 1280 wide only AERO overran
+  // the edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The
+  // block is clamped by the UNION of its members' rects and every member gets
+  // the same correction, so neighbours keep their spacing. A piece whose only
+  // change is SIZE (offset 0,0) is clamped ON ITS OWN: those sit in different
+  // corners, and one union of them spans the screen, so the "bigger than the
+  // screen" branch pinned it (BIG + TOWER SIZE 200 at 844 wide left the tower
+  // ~170 px off the left edge).
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
     // The fold is never collapsed when SETTINGS closes (or a race resumes), so
@@ -319,7 +330,7 @@ const HudLayout = (function () {
     }
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
-    const groups = new Map();   // "x,y" offset -> [{ el, e, r }]
+    const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
     for (const [id, , sel] of ELEMENTS) {
       const e = a[id];
       if (!e || isDefEl(e)) continue;
@@ -331,7 +342,7 @@ const HudLayout = (function () {
       el.style.setProperty("--hl-o", originOf(id));
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;                // hidden right now: nothing to keep on screen
-      const k = e.x + "," + e.y;
+      const k = e.x || e.y ? e.x + "," + e.y : "solo:" + id;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push({ el, e, r });
     }
@@ -416,7 +427,10 @@ const HudLayout = (function () {
      The classes are js/ui/hud.js's and the rules css/hud.css's /
      css/track-detail.css's; first match wins. SOFT = the sliders still matter:
      a placed chip shows in a touch cockpit (data-hl-user), and a chip that
-     appears only on an event (flag, limits strike, message) is edited blind. */
+     appears only on an event (flag, limits strike, message) is edited blind.
+     "cockpit-cam" is the wheel's LCD (gear / speed); the touch-cockpit row
+     follows the painted LAYOUT set (shown(), = body[data-hl-set]) instead,
+     whatever the wheel. */
   const BOTTOM = ["gearbox", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
@@ -435,7 +449,7 @@ const HudLayout = (function () {
     [["gearbox"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
     [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
-    [CHIPS.concat(["tyre", "bb"]), (h, a) => h("cockpit-cam") && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
+    [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["rel", "strat", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
