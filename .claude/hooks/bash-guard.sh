@@ -231,6 +231,17 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$R2" ] && ROOT="$R2"
   fi
+  # A COMMIT ON A DETACHED HEAD IS UNREACHABLE (2026-10-05): a session merged
+  # three fix branches onto a detached checkout and had to redo every merge on
+  # the real branch. A rebase in progress commits detached by design.
+  if [ -z "${APEX_GUARD_PROBE:-}" ] && ! git -C "$ROOT" symbolic-ref -q HEAD >/dev/null 2>&1; then
+    GD="$(git -C "$ROOT" rev-parse --git-dir 2>/dev/null || true)"
+    case "$GD" in /*) ;; *) GD="$ROOT/$GD" ;; esac
+    if [ ! -d "$GD/rebase-merge" ] && [ ! -d "$GD/rebase-apply" ]; then
+      echo "BLOCKED: HEAD is detached in $ROOT, so this commit would belong to no branch. Check out the branch first (git checkout -B <branch> HEAD keeps the current tree)." >&2
+      exit 2
+    fi
+  fi
   if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
     echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
     exit 2

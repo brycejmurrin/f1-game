@@ -193,7 +193,9 @@ const STRIP = {
   //   patches add 264 triangles. All survive; existing strip count is unchanged.
   // → T7 on Lesmo 2 340839/313922 (2026-10-04: turns[6] 0.3827 → 0.4321,
   //   so corner board 7 and its footing stand at Lesmo 2's apex)
-  monza: { before: 340839, after: 313922 },
+  // → run-off clearance (2026-10-05): the lap-wide foliage exclusion and the
+  //   zone setbacks pull trees out of the run-off, 306798/280552
+  monza: { before: 306798, after: 280552 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

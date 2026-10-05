@@ -15,6 +15,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -170,6 +171,28 @@ test("the Bash guard blocks every shape of the kill that orphans browsers", () =
     // 2026-10-04, refuse on any unstaged edit in the checkout under test).
     "git commit --dry-run -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
   ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("the Bash guard refuses a commit on a detached HEAD, and only there", () => {
+  // 2026-10-05: three fix branches were merged onto a detached checkout and
+  // every merge had to be redone on the real branch.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-detached-"));
+  const git = (...a) => spawnSync("git", ["-C", tmp, ...a], { encoding: "utf8" });
+  git("init", "-q", "-b", "main");
+  git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "a");
+  const run = () => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command: `git -C ${tmp} commit -m x` } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  try {
+    assert.doesNotMatch(run().stderr, /HEAD is detached/, "a named branch is not refused for being detached");
+    git("checkout", "-q", "--detach");
+    const r = run();
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /HEAD is detached/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
