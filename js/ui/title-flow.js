@@ -88,8 +88,9 @@ function openCareer() {
 // The same entry, stopping at the slot picker. Deliberately does NOT engage the
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
 // the picker's own handler calls openCareer() once a slot is taken.
+// Pass "title" so Esc/BACK returns here, never to the CAREER hub (U01).
 function openCareerSlots() {
-  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
+  vt(() => { careerUi.openSlots("title"); els.overlay.hidden = true; });
   if (G.soundOn) GameAudio.uiSelect();
 }
 function refreshCareerButton() {

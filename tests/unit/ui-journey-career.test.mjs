@@ -100,3 +100,24 @@ test("career hub objective picks floor at --tap-paint", () => {
     /\.cr-obj-pick\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
     "objective brief buttons must hit the painted tap floor on touch");
 });
+
+/* U01 / U03 — title-origin Esc and NEW CAREER field gate (PR #1030). */
+test("CAREER MODES records slotsOrigin; title Esc never climbs to the hub", () => {
+  const js = read("js/career/career-ui.js");
+  const title = read("js/ui/title-flow.js");
+  assert.match(js, /let slotsOrigin = "title"/);
+  assert.match(js, /slotsOrigin = origin === "hub" \? "hub" : "title"/);
+  assert.match(js, /picking && slotsOrigin === "hub" && Career\.active\(\)/);
+  assert.match(js, /openSlots\("hub"\)/);
+  assert.match(title, /careerUi\.openSlots\("title"\)/);
+});
+
+test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => {
+  const js = read("js/career/career-ui.js");
+  assert.match(js, /function draftErrors\(d\)/);
+  assert.match(js, /Enter a name/);
+  assert.match(js, /Code must be 3 letters/);
+  assert.match(js, /Number must be 1–99/);
+  assert.match(js, /\/\^\[A-Z\]\{3\}\$\//);
+  assert.match(js, /draftFieldErr = errs/);
+});
