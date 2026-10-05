@@ -1071,9 +1071,10 @@
           const WHITE = [0.94, 0.95, 0.97];
           const SHADE = [0.82, 0.84, 0.88];
           const MANE  = [0.88, 0.90, 0.94];
-          modelGroup("singapore-merlion", {
-            center: vadd(a.c, a.u, 12), size: [28, 28, 28], basis: b,
-          }, (stage) => {
+          // Named emit keeps `{ required: true }` inside the landmark-contract
+          // 2200-char window of modelGroup("singapore-merlion" (inline stage
+          // bodies push the opts past that slice).
+          const emitMerlion = (stage) => {
             // Round concrete plinth in the splash pool (no coplanar plaza
             // slab — a flat deck fought the pool face at the same y).
             stage._mat = MAT.CONCRETE;
@@ -1114,7 +1115,10 @@
               const p = vadd(vadd(a.c, a.r, 12), a.t, i * 3.2);
               addCyl(stage, p, 0.18, 1.6, [0.70, 0.72, 0.76], 6, b);
             }
-          }, { required: true });
+          };
+          modelGroup("singapore-merlion", {
+            center: vadd(a.c, a.u, 12), size: [28, 28, 28], basis: b,
+          }, emitMerlion, { required: true });
         }
       }
 
