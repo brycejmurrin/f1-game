@@ -221,10 +221,7 @@
         const b = [a.r, a.u, a.t];
         const gy = terrainYAt(a.c[0], a.c[2]);
         if (gy != null && Math.abs(gy - a.c[1]) > 1.2) continue;
-        modelGroup(`mexico-paddock-suite-${i}`, {
-          center: vadd(a.c, a.u, 6), size: [16, 14, 20], basis: b,
-        }, (stage) => {
-          // Pad seated on grade (no foundation embed — keeps buried count clean)
+        const emitSuite = (stage) => {
           seat.box(stage, a.c, [14, 0.5, 18], [0.62, 0.60, 0.58], b);
           addBox(stage, vadd(a.c, a.u, 4.4), [13, 7.6, 17], SUITE_W, b);
           addBox(stage, vadd(vadd(a.c, a.r, -PIT * 6.6), a.u, 5.6),
@@ -235,7 +232,16 @@
                  [0.4, 1.0, 16], FLAG_R, b);
           addBox(stage, vadd(a.c, a.u, 9.4), [13.4, 1.5, 17.2], SUITE_GLASS, b);
           addBox(stage, vadd(a.c, a.u, 10.5), [14.2, 0.45, 18], [0.78, 0.30, 0.22], b);
-        }, i === 0 ? { required: true } : undefined);
+        };
+        if (i === 0) {
+          modelGroup("mexico-paddock-suite-0", {
+            center: vadd(a.c, a.u, 6), size: [16, 14, 20], basis: b,
+          }, emitSuite, { required: true });
+        } else {
+          modelGroup(`mexico-paddock-suite-${i}`, {
+            center: vadd(a.c, a.u, 6), size: [16, 14, 20], basis: b,
+          }, emitSuite);
+        }
       }
       for (const s of [0.01, 0.03, 0.05]) {
         const a = anchor(K(s), PIT, 58);
@@ -479,28 +485,48 @@
       }
 
       // ── Foro Sol entry/exit apertures — grounded portals with footing pads
-      // so white bits no longer float at the corridor ends.
-      const foroPortal = (id, s) => {
-        const a = anchor(K(s), -1, 22);
-        if (onTrack(a.c[0], a.c[2], 10)) return;
-        const b = [a.r, a.u, a.t];
-        modelGroup(id, {
-          center: vadd(a.c, a.u, 10), size: [10, 24, 20], basis: b,
-        }, (stage) => {
-          for (const t of [-6, 6]) {
-            const foot = vadd(a.c, a.t, t);
-            seat.box(stage, foot, [4.2, 0.5, 3.2], [0.58, 0.56, 0.52], b);
-            addBox(stage, vadd(foot, a.u, 8.2), [3.8, 15.4, 2.4], [0.78, 0.76, 0.72], b);
-          }
-          addBox(stage, vadd(a.c, a.u, 17), [4.2, 2.4, 16.5], [0.88, 0.86, 0.80], b);
-          addBox(stage, vadd(a.c, a.u, 15.6), [3.8, 0.9, 14.5], BOWL_BLUE, b);
-          for (const t of [-8.5, 8.5]) {
-            addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 6.2), [2.2, 11.4, 3.0], [0.60, 0.59, 0.58], b);
-          }
-        }, { required: true });
-      };
-      foroPortal("mexico-foro-sol-entry", 0.72);
-      foroPortal("mexico-foro-sol-exit", 0.875);
+      // so white bits no longer float at the corridor ends. String-literal
+      // modelGroup ids (BATCH-01 requiredLandmark source gate).
+      {
+        const a = anchor(K(0.72), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-entry", {
+            center: vadd(a.c, a.u, 10), size: [10, 24, 20], basis: b,
+          }, (stage) => {
+            for (const t of [-6, 6]) {
+              const foot = vadd(a.c, a.t, t);
+              seat.box(stage, foot, [4.2, 0.5, 3.2], [0.58, 0.56, 0.52], b);
+              addBox(stage, vadd(foot, a.u, 8.2), [3.8, 15.4, 2.4], [0.78, 0.76, 0.72], b);
+            }
+            addBox(stage, vadd(a.c, a.u, 17), [4.2, 2.4, 16.5], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.8, 0.9, 14.5], BOWL_BLUE, b);
+            for (const t of [-8.5, 8.5]) {
+              addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 6.2), [2.2, 11.4, 3.0], [0.60, 0.59, 0.58], b);
+            }
+          }, { required: true });
+        }
+      }
+      {
+        const a = anchor(K(0.875), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
+          const b = [a.r, a.u, a.t];
+          modelGroup("mexico-foro-sol-exit", {
+            center: vadd(a.c, a.u, 10), size: [10, 24, 20], basis: b,
+          }, (stage) => {
+            for (const t of [-6, 6]) {
+              const foot = vadd(a.c, a.t, t);
+              seat.box(stage, foot, [4.2, 0.5, 3.2], [0.58, 0.56, 0.52], b);
+              addBox(stage, vadd(foot, a.u, 8.2), [3.8, 15.4, 2.4], [0.78, 0.76, 0.72], b);
+            }
+            addBox(stage, vadd(a.c, a.u, 17), [4.2, 2.4, 16.5], [0.88, 0.86, 0.80], b);
+            addBox(stage, vadd(a.c, a.u, 15.6), [3.8, 0.9, 14.5], BOWL_BLUE, b);
+            for (const t of [-8.5, 8.5]) {
+              addBox(stage, vadd(vadd(a.c, a.t, t), a.u, 6.2), [2.2, 11.4, 3.0], [0.60, 0.59, 0.58], b);
+            }
+          }, { required: true });
+        }
+      }
 
       // ── THE BOWL ITSELF ─────────────────────────────────────────────────
       // Foro Sol is a BASEBALL STADIUM the circuit drives through — steep
