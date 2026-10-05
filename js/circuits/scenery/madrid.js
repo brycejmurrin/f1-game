@@ -13,7 +13,7 @@
         ridge, floodMast, tree, bush, hedge,
         billboard, marshalPost, wall, fence, guardrail, tyreWall,
         grandstandEx, cameraTower, broadcastCompound, sponsorHoarding,
-        runoffApron, recordBarrier,
+        runoffApron, recordBarrier, groundUnder, indexSolid,
       } = api;
 
       const WHITE = [0.92, 0.93, 0.94];
@@ -236,16 +236,44 @@
       }
 
       function monumentalArcade(id, frac, side) {
-        venueGroup(id, frac, side, 35, [20, 18, 36], false, (stage, a) => {
+        // Detail 2026-10-05: was a solid red floating mass (sheet-03 SF/signature).
+        // Proper Las Ventas-cue tribuna: seated shell, seat rake, roof, end walls.
+        venueGroup(id, frac, side, 35, [22, 20, 38], false, (stage, a) => {
           const b = basis(a);
-          addBox(stage, vadd(a.c, a.u, 4.5), [17, 9, 33], MADRID_RED, b);
-          for (let bay = -3; bay <= 3; bay++) {
-            const opening = vadd(vadd(a.c, a.t, bay * 4.2), a.r, -side * 8.7);
-            addBox(stage, vadd(opening, a.u, 4.3), [0.7, 5.4, 2.4], ARCADE_DARK, b);
+          const IN = -side;
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          // Closed shell — length shorter than end-wall span so end-cap planes
+          // do not coplanar-fight the footing (was 11.9 m² × 6).
+          seat.box(stage, foot, [16, 9.0, 30], MADRID_RED, b);
+          // End walls inset and raised — own planes, close the open section.
+          for (const sgn of [-1, 1]) {
+            addBox(stage, vadd(vadd(foot, a.t, sgn * 15.6), a.u, 5.2),
+              [14.5, 10.2, 0.55], OFFWHITE, b);
           }
-          addBox(stage, vadd(a.c, a.u, 9.5), [18, 1.0, 34], WHITE, b);
-          addBox(stage, vadd(a.c, a.u, 12.0), [15, 4.0, 31], CROWD, b);
-          addPrism(stage, vadd(a.c, a.u, 15.0), [17, 2.2, 34], WHITE, b);
+          // Arcade openings recessed (proud of shell plane — coplanar-safe).
+          for (let bay = -2; bay <= 2; bay++) {
+            const opening = vadd(vadd(foot, a.t, bay * 4.5), a.r, IN * 8.1);
+            addBox(stage, vadd(opening, a.u, 4.0), [0.65, 5.0, 2.2], ARCADE_DARK, b);
+          }
+          // Seat rake facing track (shorter than shell so ends stay clear).
+          for (let tier = 0; tier < 3; tier++) {
+            const lat = IN * (2.0 + tier * 2.0);
+            const y = 2.0 + tier * 2.0;
+            seat.box(stage, vadd(vadd(foot, a.r, lat), a.u, y),
+              [1.8, 0.22, 26 - tier], [0.74, 0.75, 0.78], b);
+            seat.box(stage, vadd(vadd(foot, a.r, lat), a.u, y + 0.22),
+              [1.4, 1.1, 24 - tier], SEAT_COL[tier % SEAT_COL.length], b);
+          }
+          // Roof canopy + rear spine — spine clear of the red shell's back face
+          // (was 26 m² coplanar with seat.box shell).
+          addBox(stage, vadd(vadd(foot, a.r, -IN * 8.4), a.u, 5.0),
+            [0.85, 10.0, 27], OFFWHITE, b);
+          seat.prism(stage, vadd(vadd(foot, a.r, -IN * 2.0), a.u, 11.2),
+            [16, 2.2, 29], WHITE, b);
+          addBox(stage, vadd(vadd(foot, a.r, IN * 0.3), a.u, 1.8),
+            [0.22, 2.0, 22], GOLD, b);
         });
       }
 
@@ -397,23 +425,58 @@
         });
       }
 
-      // Pit wall & main grandstand (brief s≈0.00 R) — the brief's very first
-      // landmark, and until now there was no grandstand() call anywhere in the
-      // file. The pit/paddock modules below already occupy side R at gap 8-22,
-      // so the main stand is built facing them from the OPPOSITE side of the
-      // straight (side L) — fans across from the pits, not stacked on top of
-      // them. Three raked tiers + glazed suites + end walls reads as a proper
-      // international-broadcast main grandstand instead of a grey slab.
-      // Kept to one 52 m bay. grandstandEx lays its crowd risers as rigid boxes
-      // along ONE node's tangent, so the original 100 m span chorded across a
-      // start "straight" that is not actually straight — props-over-road measured
-      // the riser 0.77 m onto the tarmac.
-      grandstandEx(0.00, -1, 10, 52, null, null,
-        { livery: "crimson", tiers: 3, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.085, -1, 16, 45, null, null,
-        { livery: "sandstone", tiers: 1, roof: "truss", h: 8 });
-      grandstandEx(0.50, -1, 20, 40, null, null,
-        { livery: "steel", tiers: 2, roof: "flat", endWalls: true, pylons: true });
+      // Pit wall & main grandstand (brief s≈0.00 R) — fans on the OPPOSITE side
+      // of the pits (side L). Detail 2026-10-05: sheet-03 showed a floating red
+      // S/F mass / open-front grey shells — close every bay with endWalls+pylons
+      // and a local under-cantilever soffit + end fascias (shanghai pattern;
+      // shared grandstandEx untouched).
+      for (const [sf, gap, len, liv, tiers, roof] of [
+        [0.00, 10, 52, "crimson", 3, "cantilever"],
+        [0.018, 11, 40, "crimson", 2, "cantilever"],
+        [0.085, 16, 45, "sandstone", 1, "truss"],
+        [0.50, 20, 40, "steel", 2, "flat"],
+      ]) {
+        grandstandEx(sf, -1, gap, len, null, null, {
+          livery: liv, tiers, roof, suites: sf < 0.05, endWalls: true, pylons: true,
+        });
+        // Closed under-roof soffit + end fascias (local only).
+        const aS = anchor(at(sf), -1, gap - 1.6), bS = basis(aS);
+        out._mat = MAT.METAL;
+        addBox(out, vadd(aS.c, aS.u, 11.6), [6.8, 0.4, len - 6],
+          liv === "crimson" ? [0.86, 0.84, 0.82] : OFFWHITE, bS);
+        for (const sgn of [-1, 1]) {
+          const aE = anchor(at(sf), -1, gap + 2);
+          addBox(out, vadd(vadd(aE.c, aE.t, sgn * (len * 0.46)), aE.u, 5.8),
+            [10.2, 10.8, 0.55],
+            liv === "crimson" ? MADRID_RED : CONCRETE,
+            basis(aE));
+        }
+        out._mat = 0;
+      }
+      // Hero S/F tribuna footing — grounds the crimson bay so it never reads as
+      // a floating red slab from the SF cameras. Literal modelGroup id for
+      // BATCH-01 landmark scan (venueGroup(id) hides the string).
+      {
+        const side = -1, gap = 9, size = [20, 18, 56];
+        const k = at(0.0);
+        const a = anchor(k, side, gap + size[0] / 2);
+        const center = vadd(a.c, a.u, size[1] / 2);
+        modelGroup("madrid-sf-tribuna", { center, size, basis: basis(a) }, (stage) => {
+          const b = basis(a);
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          seat.box(stage, foot, [14, 0.5, 50], CONCRETE, b);
+          for (let i = -3; i <= 3; i++) {
+            seat.cyl(stage, vadd(vadd(foot, a.t, i * 7.2), a.r, 5.5),
+              0.28, 9.5, STEEL, 5, b);
+          }
+          addBox(stage, vadd(vadd(foot, a.r, 4.8), a.u, 1.4),
+            [0.35, 1.6, 48], MADRID_RED, b);
+          addBox(stage, vadd(vadd(foot, a.r, 4.95), a.u, 2.1),
+            [0.18, 0.35, 44], GOLD, b);
+        }, { required: true });
+      }
 
       madringDeck("madrid-deck-avenue", 0.135, 1, 12, 7, { rows: 7 });
       madringDeck("madrid-deck-avenue-far", 0.300, 1, 14, 6, { rows: 6, banner: GOLD });
@@ -690,10 +753,8 @@
       // +Z north), so ONE anchor there carries the whole cluster on a true
       // sightline; spreading it across s 0.30-0.40 smears it over 25°.
       //
-      // Real heights at the real distance, so the apparent size is right by
-      // construction rather than by taste: Torre de Cristal 249 m subtends
-      // 2.26° at 6.33 km, which is what you see from Valdebebas. The towers
-      // spread ~450 m N-S along the Castellana, which is what `a.t` runs here.
+      // Detail 2026-10-05: solid closed box cores (not open frustums) so the
+      // skyline stays closed when the shared city.js open-face fix lands.
       {
         const TORRES = [
           // name              height  half-width  offset along the cluster
@@ -708,14 +769,40 @@
         venueGroup("madrid-cuatro-torres", 0.40, -1, 6330,
           [40, 260, 760], false, (stage, a) => {
             const b = basis(a);
-            for (const [name, h, hw, along] of TORRES) {
+            for (const [name, h, hwT, along] of TORRES) {
               const foot = vadd(a.c, a.t, along);
-              addFrustum(stage, foot, hw, hw * 0.74, h,
-                name === "cristal" ? GLASS : DARK_GLASS, 6, b);
-              addFrustum(stage, vadd(foot, a.u, h), hw * 0.74, hw * 0.24, h * 0.055, GLASS, 6, b);
-              addCyl(stage, vadd(foot, a.u, h + h * 0.055), 0.5, h * 0.04, STEEL, 5, b);
+              const col = name === "cristal" ? GLASS : DARK_GLASS;
+              // Closed taper via stacked solid boxes (local; city.js untouched).
+              seat.box(stage, foot, [hwT * 1.7, h * 0.55, hwT * 1.5], col, b);
+              seat.box(stage, vadd(foot, a.u, h * 0.55),
+                [hwT * 1.35, h * 0.35, hwT * 1.2],
+                name === "cristal" ? GLASS : [0.34, 0.46, 0.58], b);
+              seat.box(stage, vadd(foot, a.u, h * 0.90),
+                [hwT * 0.9, h * 0.10, hwT * 0.8], GLASS, b);
+              addCyl(stage, vadd(foot, a.u, h), 0.5, h * 0.04, STEEL, 5, b);
             }
           });
+      }
+      // Nearer closed skyline masses — break the grey-cube placeholder band
+      // visible from trackside / overview (sheet-03). Solid cores only.
+      for (let i = 0; i < 10; i++) {
+        const frac = 0.30 + i * 0.018;
+        const side = i % 2 ? -1 : 1;
+        const gap = 95 + hash(1200 + i) * 40;
+        const aB = anchor(at(frac), side, gap);
+        if (!aB || onTrack(aB.c[0], aB.c[2], 14)) continue;
+        const foot = aB.c.slice();
+        const gyB = groundUnder(foot[0], foot[2]);
+        if (gyB !== null) foot[1] = gyB;
+        const h = 28 + hash(1210 + i) * 36;
+        const w = 10 + hash(1220 + i) * 8;
+        out._mat = MAT.CONCRETE;
+        seat.box(out, foot, [w, h, w * 0.7],
+          i % 3 === 0 ? DARK_GLASS : (i % 2 ? OFFWHITE : CONCRETE), basis(aB));
+        out._mat = MAT.GLASS;
+        addBox(out, vadd(foot, aB.u, h * 0.45),
+          [w * 1.04, h * 0.08, w * 0.74], GLASS, basis(aB));
+        out._mat = 0;
       }
 
       for (let i = 0; i < 9; i++) {
@@ -734,29 +821,40 @@
       }
 
       function ifemaStand(id, frac, side) {
-        venueGroup(id, frac, side, 14, [18, 17, 30], false, (stage, a) => {
+        // Gap 16 (was 14) keeps closed end walls clear of plantTree (clip).
+        venueGroup(id, frac, side, 16, [20, 18, 32], false, (stage, a) => {
           const b = basis(a);
-          // Each tier is half a metre shorter than the one in front, and the
-          // spine wall longer than all of them. At one shared length every
-          // tier's END CAP sits on the same two planes, same-facing, overlapping
-          // wherever two tiers overlap in section — 15 coplanar pairs, the
-          // worst 13.3 m2 (2026-09-22). A stand that narrows as it rises is
-          // also what the real one does.
+          const IN = -side;
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          // Detail 2026-10-05: closed shell — thick back + end walls. No slab
+          // footing under the tiers (that shared end-cap planes → 324 m² coplanar).
           for (let tier = 0; tier < 4; tier++) {
-            const c = vadd(vadd(a.c, a.r, side * tier * 2.0), a.u, 1.8 + tier * 2.2);
-            addBox(stage, c, [12 - tier, 3.6, 27 - tier * 0.5], tier % 2 ? CONCRETE : CROWD, b);
+            const c = vadd(vadd(foot, a.r, side * tier * 2.0), a.u, 1.8 + tier * 2.2);
+            addBox(stage, c, [12 - tier, 3.6, 25 - tier * 0.6],
+              tier % 2 ? CONCRETE : SEAT_COL[tier % SEAT_COL.length], b);
           }
-          addBox(stage, vadd(vadd(a.c, a.r, side * 7.6), a.u, 6.2),
-            [0.8, 12.4, 28.2], STEEL, b);
-          // Prism is base-anchored: seat it on the spine top (was u=13.0 with
-          // spine top at 12.4 → 0.6 m AABB gap → 11.4 m unsupported vs terrain).
-          seat.prism(stage, vadd(vadd(a.c, a.r, side * 3.2), a.u, 12.35),
-            [16, 2.6, 29], WHITE, b);
+          // Thick closed back — longer than tiers so end caps do not share planes.
+          addBox(stage, vadd(vadd(foot, a.r, side * 8.4), a.u, 6.4),
+            [1.6, 12.8, 28.5], OFFWHITE, b);
+          // End walls outside the tier length (tiers ≤25 → walls at ±14.2).
+          for (const sgn of [-1, 1]) {
+            addBox(stage, vadd(vadd(foot, a.t, sgn * 14.2), a.u, 5.8),
+              [11.5, 11.2, 0.6], CONCRETE, b);
+          }
+          seat.prism(stage, vadd(vadd(foot, a.r, side * 3.2), a.u, 12.5),
+            [15, 2.4, 27], WHITE, b);
+          // Track-facing Madrid GP fascia (short — clear of end walls).
+          addBox(stage, vadd(vadd(foot, a.r, IN * 5.8), a.u, 1.6),
+            [0.22, 1.8, 20], MADRID_RED, b);
+          addBox(stage, vadd(vadd(foot, a.r, IN * 5.95), a.u, 2.3),
+            [0.14, 0.3, 16], GOLD, b);
         });
       }
       ifemaStand("madrid-ifema-stand-0", 0.893, 1);
-      ifemaStand("madrid-ifema-stand-1", 0.902, 1);
-      ifemaStand("madrid-ifema-stand-2", 0.911, 1);
+      ifemaStand("madrid-ifema-stand-1", 0.905, 1);
+      ifemaStand("madrid-ifema-stand-2", 0.917, 1);
 
       // Warm terrain-conforming plazas and pelouse replace broad flat land boxes.
       for (const [frac, side, gap, col] of [
@@ -767,6 +865,68 @@
           id: `madrid-ground-${frac}-${side}`,
           samples: 5,
         });
+      }
+
+      // ── IFEMA midfield campus (sheet-03 overview was bare tan) ───────────
+      // Cheap service roads + low pavilion sheds + plaza pads. Keep grass /
+      // straw patches clear of road ribbons so flatCoplanar does not fire.
+      const TARMAC = [0.38, 0.39, 0.41];
+      const PAV_WHITE = [0.88, 0.89, 0.90];
+      const PAV_STEEL = [0.55, 0.58, 0.62];
+      for (const [sf, side, gap, len, wid] of [
+        [0.16, -1, 48, 90, 10],
+        [0.22,  1, 55, 85, 11],
+        [0.28, -1, 62, 100, 12],
+        [0.38,  1, 50, 95, 11],
+        [0.44, -1, 70, 80, 10],
+        [0.58, -1, 58, 90, 11],
+        [0.92,  1, 40, 70, 10],
+        [0.04, -1, 45, 75, 10],
+      ]) {
+        groundPatch(at(sf), side, gap, [wid, 0.22, len], TARMAC, {
+          id: `madrid-svc-${Math.round(sf * 1000)}-${side > 0 ? "r" : "l"}`,
+          samples: 4,
+        });
+      }
+      // Straw / plaza variety between service roads (not on the same Y as roads).
+      for (const [sf, side, gap, col] of [
+        [0.18, -1, 78, STRAW],
+        [0.26,  1, 85, STRAW_DARK],
+        [0.34, -1, 90, [0.42, 0.50, 0.32]],
+        [0.42,  1, 75, STRAW],
+        [0.55, -1, 82, STRAW_DARK],
+        [0.90,  1, 62, STONE],
+      ]) {
+        groundPatch(at(sf), side, gap, [22, 0.18, 36], col, {
+          id: `madrid-plaza-${Math.round(sf * 1000)}`,
+          samples: 4,
+        });
+      }
+      // Low IFEMA tech / pavilion sheds — solid closed boxes; indexSolid
+      // reserves the footprint so deferred foliage cannot plant inside.
+      for (const [sf, side, gap, w, h, d, col] of [
+        [0.19, -1, 55, 14, 6.5, 22, PAV_WHITE],
+        [0.25,  1, 60, 12, 5.5, 18, PAV_STEEL],
+        [0.31, -1, 68, 16, 7.0, 24, PAV_WHITE],
+        [0.40,  1, 58, 13, 6.0, 20, OFFWHITE],
+        [0.47, -1, 72, 11, 5.0, 16, PAV_STEEL],
+        [0.94,  1, 48, 15, 6.5, 26, PAV_WHITE],
+        [0.01, -1, 50, 14, 6.0, 20, OFFWHITE],
+        [0.07,  1, 56, 12, 5.5, 18, PAV_STEEL],
+      ]) {
+        const aP = anchor(at(sf), side, gap);
+        if (!aP || onTrack(aP.c[0], aP.c[2], Math.max(w, d) * 0.4)) continue;
+        const foot = aP.c.slice();
+        const gy = groundUnder(foot[0], foot[2]);
+        if (gy !== null) foot[1] = gy;
+        const bP = basis(aP);
+        const hf = 0.006;
+        indexSolid(sf - hf, sf + hf, side, gap - w / 2 - 2, w + 6);
+        out._mat = MAT.CONCRETE;
+        seat.box(out, foot, [w, h, d], col, bP);
+        // Roof lip only — a wall-face stripe buried into sloping verge (3.55 m).
+        addPrism(out, vadd(foot, aP.u, h), [w * 1.05, 1.4, d * 0.9], STEEL, bP);
+        out._mat = 0;
       }
 
       for (const side of [-1, 1]) {
@@ -797,9 +957,71 @@
       // every mast and banner hung 0.2-0.4 m over the ground (45 unsupported).
       sponsorHoarding(0.00, 0.03, -1, 6, { h: 1.3, style: "panel" });
       sponsorHoarding(0.615, 0.645, 1, 6, { h: 1.3, style: "panel" });
+      // Madrid GP hoarding densify (sheet-03: missing trackside banners).
+      sponsorHoarding(0.08, 0.11, -1, 6.5, { h: 1.4, style: "panel" });
+      sponsorHoarding(0.48, 0.52, 1, 6.5, { h: 1.4, style: "panel" });
+      sponsorHoarding(0.88, 0.92, 1, 6.2, { h: 1.3, style: "panel" });
+      sponsorHoarding(0.74, 0.78, -1, 7.0, { h: 1.5, style: "panel" });
       cameraTower(at(0.078), 1, 20, { h: 16 });
       cameraTower(at(0.75), -1, 56, { h: 18 });
       broadcastCompound(at(0.965), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
+      // Second compound further out — gap 28 clipped neonTower / buried into verge.
+      broadcastCompound(at(0.015), 1, 42, { vans: 2, dishes: 1, mastH: 7 });
+
+      // Pit / paddock motorhome stand-ins — seat.box on groundUnder (shared
+      // motorhome() buried 0.6–4.8 m into the IFEMA verge at every gap tried).
+      for (let i = 0; i < 4; i++) {
+        const sf = 0.022 + i * 0.014;
+        const side = -1;
+        const gap = 62 + (i % 2) * 6;
+        const aM = anchor(at(sf), side, gap);
+        if (!aM || onTrack(aM.c[0], aM.c[2], 8)) continue;
+        const foot = aM.c.slice();
+        const gy = groundUnder(foot[0], foot[2]);
+        if (gy !== null) foot[1] = gy;
+        const bM = basis(aM);
+        const body = i % 2 ? WHITE : OFFWHITE;
+        const accent = i % 3 === 0 ? MADRID_RED : GOLD;
+        out._mat = MAT.METAL;
+        seat.box(out, foot, [9, 3.4, 11], body, bM);
+        addBox(out, vadd(vadd(foot, aM.r, -side * 4.6), aM.u, 1.6),
+          [0.12, 0.9, 9], accent, bM);
+        addBox(out, vadd(foot, aM.u, 3.7), [3.5, 0.45, 2.2], STEEL, bM);
+        out._mat = 0;
+      }
+      // Hospitality tents — clip-safe gaps past race-control / pit buildings.
+      for (const [sf, side, gap] of [
+        [0.068, 1, 32], [0.078, 1, 34],
+        [0.955, 1, 30], [0.968, 1, 32],
+      ]) {
+        const aT = anchor(at(sf), side, gap);
+        if (!aT || onTrack(aT.c[0], aT.c[2], 8)) continue;
+        const foot = aT.c.slice();
+        const gy = groundUnder(foot[0], foot[2]);
+        if (gy !== null) foot[1] = gy;
+        const bT = basis(aT);
+        out._mat = MAT.FABRIC;
+        seat.box(out, foot, [7, 3.0, 9], WHITE, bT);
+        seat.prism(out, vadd(foot, aT.u, 3.0), [8, 1.4, 10],
+          sf < 0.5 ? MADRID_RED : GOLD, bT);
+        out._mat = 0;
+      }
+      // One seated tyre pad (loose addCyl stacks were unsupported).
+      {
+        const aY = anchor(at(0.072), 1, 28);
+        if (aY && !onTrack(aY.c[0], aY.c[2], 4)) {
+          const foot = aY.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          seat.box(out, foot, [3.2, 0.35, 4.5], CONCRETE, basis(aY));
+          for (let stack = 0; stack < 2; stack++) {
+            for (let layer = 0; layer < 3; layer++) {
+              seat.cyl(out, vadd(vadd(foot, aY.t, stack * 1.2 - 0.6), aY.u, 0.35 + layer * 0.5),
+                0.42, 0.48, [0.12, 0.12, 0.13], 6, basis(aY));
+            }
+          }
+        }
+      }
 
       // Sparse, deliberate furniture keeps the dry Castilian venue readable.
       hedge(0.12, 0.24, -1, 8, 1.3, OLIVE);
@@ -814,12 +1036,21 @@
         const f = 0.905 + hash(400 + i * 7) * 0.07;
         bush(at(f), -1, 12 + hash(410 + i * 3) * 22, OLIVE);
       }
+      // Madrid GP billboards — red/gold + blue variety (was sparse).
+      const GP_COLS = [
+        MADRID_RED, GOLD, [0.14, 0.42, 0.82], [0.88, 0.22, 0.16],
+        [0.10, 0.10, 0.12], [0.92, 0.90, 0.86],
+      ];
       for (const [frac, side] of [
         [0.05, 1], [0.18, -1], [0.34, 1], [0.47, -1],
         [0.59, 1], [0.67, -1], [0.86, 1], [0.94, -1],
+        [0.01, -1], [0.10, 1], [0.30, -1], [0.52, 1],
+        [0.72, -1], [0.80, 1], [0.90, -1], [0.98, 1],
       ]) {
         const k = at(frac);
-        billboard(k, side, 7.5, 8, 4.2, side > 0 ? [0.88, 0.22, 0.16] : [0.14, 0.42, 0.82]);
+        const ci = Math.floor(hash(Math.round(frac * 997) + side * 17) * GP_COLS.length);
+        billboard(k, side, 7.5, 8 + hash(k) * 3, 4.2 + hash(k + 3) * 1.2,
+          GP_COLS[ci % GP_COLS.length]);
         marshalPost(k, -side, 4.5);
         if (frac < 0.50) tree(k, side, 14, 6 + hash(k) * 2.5, OLIVE);
         else bush(k, side, 13, OLIVE);
