@@ -163,3 +163,82 @@ test("lift and gain primarily affect their matching channel", () => {
     }
   }
 });
+
+// ── L4-d (2026-10-04): bloom threshold in EXPOSED units; the mirror / PiP inset
+// takes the frame's colour grade + dither. ─────────────────────────────────────
+const ROOT_URL = new URL("../../", import.meta.url);
+const src = (p) => readFileSync(new URL(p, ROOT_URL), "utf8");
+const TSL_POST = src("js/render/three/tsl-post.js");
+const CHUNKS = src(P.WGSL_CHUNKS);
+
+// BRIGHT_FS's quadratic soft knee, verbatim (half-width = threshold / 2).
+function brightK(l, t) {
+  const knee = t * 0.5 + 1e-4;
+  let soft = clamp(l - t + knee, 0, 2 * knee);
+  soft = soft * soft / (4 * knee);
+  return Math.max(soft, l - t) / Math.max(l, 1e-4);
+}
+
+test("the bright pass tests EXPOSED luminance on all three backends, output scene-referred", () => {
+  const bright = /const BRIGHT_FS = `([\s\S]*?)`;/.exec(GLSL)[1];
+  assert.match(bright, /uniform float uExposure;/);
+  assert.match(bright, /float l = max\(max\(c\.r, c\.g\), c\.b\) \* uExposure;/, "GLX: luminance x exposure");
+  assert.match(bright, /outColor = vec4\(c \* k, 1\.0\);/, "the output stays scene-referred (the composite exposes bloom)");
+  const down = /const BLOOM_DOWN = `([\s\S]*?)`;/.exec(WGSL)[1];
+  assert.match(down, /exposure\s*: f32,/, "WGX BloomDownU carries the exposure");
+  assert.match(down, /let lum = max\(max\(c\.r, c\.g\), c\.b\) \* U\.exposure;/);
+  assert.match(WGSL, /BLOOM_DOWN_UNIFORM_BYTES: 32,/, "BloomDownU grew to 32 B (vec2 + 6 f32, 16-aligned)");
+  assert.match(TSL_POST, /const l = max\(max\(c\.r, c\.g\), c\.b\)\.mul\(brightU\.exposure\)\.toVar\(\);/, "TLX");
+  assert.match(src("js/render/three/tlx-post.js"), /P\.bright\.U\.exposure\.value = o\.exposure/, "TLX uploads it");
+  assert.match(src("js/render/glx/post.js"), /gl\.uniform1f\(brightU\.uExposure, opts && opts\.exposure !== undefined \? opts\.exposure : 1\.0\);/);
+  assert.match(src("js/render/webgpu/wgx.js"), /s\[4\] = o\.exposure != null \? o\.exposure : 1\.0;/, "WGX uploads it");
+});
+
+test("exposed-units threshold keeps the shipped bloom at default knobs, and EXPOSURE now moves it", () => {
+  // game.js passes threshold x the time-of-day exposure; at exposureMul 1 the
+  // composite exposure IS that value, and the knee is scale-invariant:
+  // k(l*E; T*E) == k(l; T) for every l — the shipped look, unchanged.
+  for (const E of [0.86, 0.9, 1.0, 1.08]) {
+    for (const T of [0.78, 0.82, 0.97]) {
+      for (const l of [0, 0.2, 0.5, 0.7, 0.8, 0.9, 1.0, 1.5, 4, 40]) {
+        assert.ok(Math.abs(brightK(l * E, T * E) - brightK(l, T)) < 2e-4, `E ${E} T ${T} l ${l}`);
+      }
+    }
+  }
+  // EXPOSURE x1.25 (exposureMul) now blooms more of the frame it brightens.
+  assert.ok(brightK(0.7 * 1.25, 0.82) > brightK(0.7, 0.82));
+  const game = src("js/game.js");
+  assert.match(game, /po\.threshold = clamp\(_thresh \+ LT\.threshOff, 0\.4, 1\.2\) \* frame\.exposure;/,
+    "game.js scales the per-TOD threshold by the TOD exposure (not by the EXPOSURE knob)");
+  assert.match(src("js/garage/setup-camera.js"), /threshold: 0\.62 \* 1\.28/, "the garage present keeps its bloom too");
+});
+
+test("the mirror / PiP inset takes the composite's colour grade and dither on all three backends", () => {
+  // GLX: one COLOUR_GRADE / DITHER_LSB string in both programs.
+  const comp = /const COMPOSITE_FS = `([\s\S]*?)`;\n/.exec(GLSL)[1];
+  const mir = /const MIRROR_FS = `([\s\S]*?)`;/.exec(GLSL)[1];
+  for (const s of [comp, mir]) {
+    assert.match(s, /\$\{COLOUR_GRADE\}/);
+    assert.match(s, /\$\{DITHER_LSB\}/);
+  }
+  assert.match(comp, /c = colourGrade\(c\);/);
+  assert.match(comp, /c = ditherLSB\(c\);/);
+  assert.match(mir, /if \(uHdr > 0\.5\) c = ditherLSB\(colourGrade\(acesTonemap\(c \* uExposure \/ uWhitePoint\)\)\);/,
+    "graded only on the HDR path (post off = the frame is ungraded too)");
+  const post = src("js/render/glx/post.js");
+  for (const u of ["uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uBlackLift", "uGrainTime"])
+    assert.ok(new RegExp(`mirU = locs\\(mirProg, \\[[^\\]]*"${u}"`).test(post), `GLX mirror locates ${u}`);
+  // WGX: the shared leaves, gated by BlitU.params.w (the plain tonemap blit stays ungraded).
+  assert.match(CHUNKS, /fn colourGradeP\(/);
+  assert.match(CHUNKS, /fn ditherLSB\(/);
+  assert.match(WGSL, /\$\{colourGradeLeaf\}/, "the WGX composite uses the same leaf");
+  assert.match(WGSL, /c = ditherLSB\(c, in\.pos\.xy, U\.fx\.z\);/);
+  assert.match(CHUNKS, /return vec4<f32>\(select\(c, graded, B\.params\.w > 0\.5\), 1\.0\);/);
+  const wgx = src("js/render/webgpu/wgx.js");
+  assert.match(wgx, /_mirrorComposite\(exposure, _postReady \? o\.tune : _TONE_STANDIN, _postReady \? o : null\);/);
+  assert.match(wgx, /_mirData\[3\] = 1; _mirData\[10\] = frameTime;/);
+  // TLX: the composite's grade/dither builders on the mirror's tone-mapped colour.
+  const tmir = TSL_POST.slice(TSL_POST.indexOf("const mirror = {"));
+  assert.match(tmir, /colourGradeT\(t\);\s*ditherT\(t, vec2\(screenCoordinate\.xy\)\);/);
+  assert.match(TSL_POST, /colourGradeT\(c\);/, "the composite calls the same builder");
+});

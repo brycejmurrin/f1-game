@@ -65,6 +65,15 @@ const GLTF = (function () {
     ];
   }
 
+  // Sign of the upper-left 3x3 determinant: negative for a MIRRORED node (an
+  // odd number of negative scale axes — a modeller's "mirror" modifier, or a
+  // left/right part exported once and instanced with scale -1).
+  function det3(m) {
+    return m[0] * (m[5] * m[10] - m[6] * m[9])
+         - m[1] * (m[4] * m[10] - m[6] * m[8])
+         + m[2] * (m[4] * m[9] - m[5] * m[8]);
+  }
+
   function normalMatTransform(m, n) {
     // upper-left 3x3
     const a = m[0], b = m[1], c = m[2];
@@ -293,6 +302,18 @@ const GLTF = (function () {
       const mesh = json.meshes[inst.mesh];
       if (!mesh || !mesh.primitives) continue;
       const world = inst.world;
+      // A mirrored world transform reverses every triangle's winding, so the
+      // front faces arrive clockwise: back-face culling drops the visible side
+      // and computeVertexNormals points inward. glTF 2.0 §3.7.4: "the
+      // determinant of the node's global transform defines the winding order
+      // ... if the determinant is a negative value, the front-facing
+      // triangles use the clockwise order". We emit CCW-front, so flip. The uniform
+      // opts.scale mirrors through the origin when negative (sign^3 = sign).
+      const mirrored = det3(world) * (scale < 0 ? -1 : 1) < 0;
+      // Normals: the inverse-transpose already handles a mirrored node; the
+      // scalar opts.scale is applied to positions only, so a negative one
+      // must turn the supplied normals round too.
+      const nSign = scale < 0 ? -1 : 1;
 
       for (const prim of mesh.primitives) {
         if (prim.mode !== undefined && prim.mode !== 4) {
@@ -344,7 +365,7 @@ const GLTF = (function () {
 
           if (normals) {
             const n = normalMatTransform(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
-            const l = Math.hypot(n[0], n[1], n[2]) || 1;
+            const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
             nrmOut.push(n[0] / l, n[1] / l, n[2] / l);
           } else {
             nrmOut.push(0, 0, 0); // filled after, from faces
@@ -358,6 +379,18 @@ const GLTF = (function () {
             cb *= vcolA.data[i * ncn + 2];
           }
           colOut.push(cr, cg, cb);
+        }
+
+        // Restore counter-clockwise front faces on a mirrored node (swap the
+        // 2nd and 3rd index of every triangle) BEFORE any normal is derived
+        // from the winding below.
+        if (mirrored) {
+          const flipped = new Array(indices.length);
+          for (let t = 0; t < indices.length; t++) flipped[t] = indices[t];
+          for (let t = 0; t + 2 < flipped.length; t += 3) {
+            const b = flipped[t + 1]; flipped[t + 1] = flipped[t + 2]; flipped[t + 2] = b;
+          }
+          indices = flipped;
         }
 
         // compute averaged vertex normals if the primitive had none

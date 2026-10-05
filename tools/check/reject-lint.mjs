@@ -63,6 +63,7 @@ const QUALIFIED = new Map([
   ["audioCtx.resume", "AudioContext.resume"],
   ["player.resume", "Spotify Web Playback SDK resume"],
   ["player.pause", "Spotify Web Playback SDK pause"],
+  ["legacy.pulse", "GamepadHapticActuator.pulse (Gecko)"],
 ]);
 
 const SKIP_KEYS = new Set(["loc", "range", "type", "parent", "start", "end"]);

@@ -177,3 +177,14 @@ test("street wall FX gates on isPlayer (VS FRIEND is human, not local)", () => {
   assert.equal(rumbles[0][2], "handles", "pad-haptics v2 channels wall rumble to handles");
   assert.ok(audioHits >= 1, "local player street scrape plays collision");
 });
+
+// verify-physics #16: game.js called WallClamp.apply(c, { …, addShake(d){…} })
+// once per car per tick — an object and a closure each time (~1,300/s at 22
+// cars). The ctx is pooled like _aiBr; apply() reads it into locals on entry
+// and keeps nothing, so one object serves every car.
+test("game.js hands WallClamp.apply a pooled ctx, not a per-call literal", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /WallClamp\.apply\(c, _wallCtx\);/);
+  assert.doesNotMatch(game, /WallClamp\.apply\(c, \{/);
+  assert.match(game, /const _wallCtx = \{[^\n]*addShake\(d\)/);
+});

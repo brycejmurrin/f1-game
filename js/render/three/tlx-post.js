@@ -481,6 +481,7 @@
       const haveBloom = bloomAmt > 0 && ensureBloom();
       if (haveBloom) {
         P.bright.U.threshold.value = threshold;
+        P.bright.U.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;   // threshold is in exposed units
         runPass(P.bright.mat, bloomLv[0].rt);
         for (let i = 1; i < nLv; i++) {
           P.down.tex.value = bloomLv[i - 1].rt.texture;

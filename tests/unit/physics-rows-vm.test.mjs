@@ -234,6 +234,19 @@ test("an AI car advances its arc at speed·dt ÷ the Frenet stretch: no free dis
   function retireReset() { for (const c of G.cars) c.retired = false; }
 });
 
+// verify-physics #15: a car in the PIT LANE (or retired) is not the car ahead
+// ON THE ROAD. The default detection line (0.9 of the lap) is often where pit
+// entry is, so diving into the pits within 1 s of a rival handed them the
+// allowance. A source pin: the pit state is owned by PitLane.update, which
+// clears a hand-set pitState outside the lane window, so a VM pose cannot hold a
+// car "in the lane" at monza's detection line without driving the whole stop.
+test("the overtake scan skips pit-lane and retired cars", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const scan = src.slice(src.indexOf("let ahead = null, gapAhead = Infinity"), src.indexOf("gapAhead = ahead && c.speed > 1"));
+  assert.ok(scan.length > 50 && scan.length < 1200, "anti-vacuity: found the detection scan");
+  assert.match(scan, /if \(o === c \|\| o\.finished \|\| o\.retired \|\| pits\.inLane\(o\)\) continue;/);
+});
+
 // ---------------------------------------------------------------------------
 // Row 5 — js/game.js slip angles in reverse: slip is measured against |vx|.
 // atan2(vLat, -4) put both axles on the tanh plateau with a sign that flipped

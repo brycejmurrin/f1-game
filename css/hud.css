@@ -100,6 +100,15 @@
   color: var(--dim);
 }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* A STABLE TOWER. .hud-top is a centred flex row, so any box that changes width
+   re-centres all of them: POS going 9/22 -> 10/22, LAP 9/58 -> 10/58, a lap
+   clock gaining its minute. Each slot holds its widest spelling (tabular
+   figures, so `ch` is a digit) and DELTA keeps its place while it waits for a
+   reference (js/ui/hud.js paintHudDelta: data-pending), instead of unhiding
+   half a box wide after lap 1. */
+#hud-pos, #hud-lap { min-width: 5ch; }
+#hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
+#hud-delta[data-pending] { visibility: hidden; }
 /* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
@@ -249,9 +258,15 @@
   content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 12%;
   background: color-mix(in srgb, var(--red) 55%, transparent);
 }
+/* THE COLOURS ARE ON THE DIAL, NOT ON THE NEEDLE. The gradient used to span
+   the FILL's own box, whose width was the RPM, so the stops slid with it: at
+   half revs the bar was already yellow at its tip. Now the fill is the whole
+   tach, clipped at --rpm (js/ui/hud.js paintInstruments), so green is always
+   65 % and yellow 88 % of the range — and the redline zone above agrees. */
 #hud-rpm-fill {
-  height: 100%; width: 0%; position: relative; z-index: 1;
+  height: 100%; width: 100%; position: relative; z-index: 1;
   background: linear-gradient(90deg in oklab, #2ad1ff, #aeea00 65%, #ffd600 88%);
+  clip-path: inset(0 calc((1 - var(--rpm, 0)) * 100%) 0 0);
 }
 :root { --hud-pulse: 0.8s; }
 @keyframes pulse { 50% { opacity: 0.55; } }

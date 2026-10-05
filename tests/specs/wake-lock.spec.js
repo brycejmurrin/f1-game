@@ -107,7 +107,9 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
   });
 
-  test("hiding the page releases it; becoming visible re-acquires it", async ({ page }) => {
+  test("hiding the page releases it; RESUME after the return re-acquires it", async ({ page }) => {
+    // A hidden tab pauses the race and a paused race holds no lock (game.js
+    // setPaused), so the return under the pause card asks for nothing; RESUME does.
     await mockWakeLock(page);
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
@@ -123,8 +125,24 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
       document.dispatchEvent(new Event("visibilitychange"));
     });
+    expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
+    await clickLive(page, "pm-resume");
     await page.waitForFunction(() => window.__wakeLog.length >= 3, null, WAIT);
 
+    expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release", "request:screen"]);
+  });
+
+  test("pausing releases it; resuming re-acquires it", async ({ page }) => {
+    // The pause card can sit for minutes; holding the screen awake under it
+    // drained a phone for nothing (game.js setPaused, review 2026-10-04).
+    await mockWakeLock(page);
+    await boot(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
+    await clickLive(page, "pausebtn");
+    await page.waitForFunction(() => window.__wakeLog.length >= 2, null, WAIT);
+    await clickLive(page, "pm-resume");
+    await page.waitForFunction(() => window.__wakeLog.length >= 3, null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release", "request:screen"]);
   });
 

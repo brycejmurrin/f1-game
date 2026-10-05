@@ -1098,8 +1098,10 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
       clock.t += STEP; Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
     }
     assert.deepEqual({ ...feel.freeLookState() }, { yaw: 0, pitch: 0 }, "pedal rest and travel leave the view centered");
-    assert.equal(Input.throttleLevel(), (pedal + 1) / 2, "the mapped throttle still drives");
-    assert.equal(Input.brakeLevel(), (pedal + 1) / 2, "the mapped brake still drives");
+    // Pedal travel (pedal + 1) / 2 through input.js's rescaled 0.12 dead zone (padPedalLevel).
+    const lvl = ((pedal + 1) / 2) > 0.12 ? (((pedal + 1) / 2) - 0.12) / 0.88 : 0;
+    assert.ok(Math.abs(Input.throttleLevel() - lvl) < 1e-12, "the mapped throttle still drives");
+    assert.ok(Math.abs(Input.brakeLevel() - lvl) < 1e-12, "the mapped brake still drives");
   }
   Input.setPadAxisMap({ steer: 2, brake: 3 });
   Input.poll(); feel.tickRace("cockpit", 1 / 60, false, true, 0);
