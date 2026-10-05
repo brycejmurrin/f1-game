@@ -25,6 +25,7 @@ test('Home solo practice stays in sync with the coach and does not offer goals r
   assert.ok(offered.includes('lap') && offered.includes('launch'));
   for (const id of ['start', 'slipstream', 'overtake', 'defend', 'backmarkers']) assert.ok(!offered.includes(id), id);
   button.onclick(); assert.equal(goal.value, 'lap'); assert.equal(opens, 1);
+  assert.equal(local.api.isPracticePick(), true);
   goal.value = 'corner'; goal.onchange(); assert.equal(selected, 'corner');
   coach.setPracticeGoal('sector'); button.onclick(); assert.equal(goal.value, 'sector');
   coach.setPracticeGoal('overtake'); button.onclick(); assert.equal(goal.value, 'free'); assert.equal(selected, 'free');

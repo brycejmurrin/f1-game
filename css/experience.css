@@ -26,7 +26,11 @@
   #pm-checkpoint button { font-size: var(--fs-micro); }
   #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
-  #practice-goal { min-height: var(--tap); max-width: 100%; color: var(--text); background: var(--carbon); border: 1px solid var(--plate-line); }
+  /* GOAL uses the shared ‹ VALUE › row (css/settings-controls.css .set-row).
+     One column here, so the select can take the remaining width instead of the
+     race-settings 8rem that clips FREE PRACTICE. */
+  #practice-brief .set-row { margin-top: calc(var(--gap) / 2); }
+  #practice-brief .set-row > div > select { flex: 1 1 12rem; width: 12rem; min-width: 8rem; }
   #home-motion { position: absolute; z-index: 2; top: var(--safe-t); left: var(--safe-l); padding: calc(var(--gap) / 2) var(--gap); min-height: var(--tap); font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
   /* Disabled still hits-tests: Playwright (and a finger) land on this chip
      instead of HOW TO PLAY when it overlaps the door column. */

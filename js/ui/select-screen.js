@@ -529,8 +529,12 @@ function buildSelect() {
   // is what the screen is called and what the foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
+  const practice = typeof UiExperience !== "undefined" && UiExperience.isPracticePick && UiExperience.isPracticePick();
   // NEXT opens race settings. YOUR CAR is the garage door beside it.
-  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : "RACE SETUP";
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS"
+    : practice ? "PRACTICE SETUP"
+    : G.timeTrial ? "SESSION SETUP"
+    : "RACE SETUP";
   els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
   const selCar = $("sel-car");
   if (selCar) {
@@ -544,6 +548,7 @@ function buildSelect() {
   els.selTitle.textContent = room ? "THE RACE"
     : seasonComplete ? "SEASON COMPLETE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
+    : practice ? "PRACTICE"
     : G.timeTrial ? "TIME TRIAL" : "GRAND PRIX";
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";

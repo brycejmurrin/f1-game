@@ -2,6 +2,13 @@
 const UiExperience = (function () {
   "use strict";
 
+  // Practice from the title door is a Time Trial under the hood. This flag is
+  // the only way the picker and race-settings sheets can say PRACTICE instead
+  // of TIME TRIAL. Cleared in capture on the other session doors so their
+  // open handlers paint the right title.
+  let practicePick = false;
+  function isPracticePick() { return practicePick; }
+
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
     if (!p || !t) return { title: "SESSION PAUSED", detail: "Your session is held here." };
@@ -86,42 +93,89 @@ const UiExperience = (function () {
       eligible: () => G.state === "menu" && !overlay.hidden && !document.hidden && !G.setupPreviewOn
         && (!overlay.inert || !$("photo-studio").hidden) });
     let wantedPractice = false;
+    practicePick = false;
     const node = (tag, text, attrs) => {
       const el = document.createElement(tag);
       if (text) el.textContent = text;
       for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
       return el;
     };
+    const SOLO_GOAL = Object.freeze({
+      free: "FREE PRACTICE", sector: "SECTOR", corner: "CORNER", lap: "FULL LAP",
+      braking: "BRAKING", trail: "TRAIL BRAKING", slalom: "SLALOM", launch: "LAUNCH",
+    });
+    function goalValues() {
+      const out = [];
+      for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
+        if (RaceInsights.needsRivals(id)) continue;
+        out.push([id, SOLO_GOAL[id] || String(label).toUpperCase()]);
+      }
+      return out;
+    }
     function wire(id, fn) { const b = $(id); if (b) b.onclick = fn; }
     wire("mb-watch", deps.openWatch);
-    wire("mb-practice", () => { wantedPractice = true; deps.openPractice(); showPractice(); });
+    wire("mb-practice", () => {
+      wantedPractice = true;
+      practicePick = true;
+      deps.openPractice();
+      showPractice();
+    });
     wire("mb-photo", () => deps.openPhoto("home"));
     wire("pm-photo", () => deps.openPhoto("race"));
     wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
     const intro = $("practice-brief");
+    let goal = $("practice-goal");
+    function paintGoal() {
+      if (!goal) return;
+      const row = goal.closest && goal.closest(".set-row");
+      if (row && typeof SettingRow !== "undefined") SettingRow.paint(row, deps.coach.practiceGoal());
+      else goal.value = deps.coach.practiceGoal();
+    }
     function showPractice() {
       if (!intro) return;
       intro.hidden = !wantedPractice;
       if (wantedPractice) {
         if (RaceInsights.needsRivals(deps.coach.practiceGoal())) deps.coach.setPracticeGoal("free");
-        $("practice-goal").value = deps.coach.practiceGoal(); $("practice-goal").focus({ preventScroll: true });
+        paintGoal();
+        if (goal) goal.focus({ preventScroll: true });
       }
     }
-    const goal = $("practice-goal");
     if (goal) {
-      for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
-        if (RaceInsights.needsRivals(id)) continue;
-        const o = node("option", String(label)); o.value = id; goal.appendChild(o);
+      const values = goalValues();
+      // Built at runtime so the shell keeps its two Goal nodes (label + select)
+      // and shellNodes does not grow. Same ‹ VALUE › contract as race settings.
+      if (typeof SettingRow !== "undefined" && goal.closest && !goal.closest(".set-row")) {
+        const built = SettingRow.build("practice-goal-row", "GOAL");
+        built.sel.id = "practice-goal";
+        built.sel.setAttribute("aria-labelledby", "practice-goal-label");
+        const host = goal.parentNode;
+        const oldLabel = intro && intro.querySelector('label[for="practice-goal"]');
+        if (oldLabel) oldLabel.remove();
+        host.replaceChild(built.row, goal);
+        goal = built.sel;
       }
-      goal.onchange = () => {
-        deps.coach.setPracticeGoal(goal.value);
-      };
+      const row = goal.closest && goal.closest(".set-row");
+      if (row && typeof SettingRow !== "undefined") {
+        SettingRow.wire(row, {
+          values,
+          read: () => deps.coach.practiceGoal(),
+          write: (v) => { deps.coach.setPracticeGoal(v); },
+        });
+      } else {
+        for (const [id, label] of values) {
+          const o = node("option", label); o.value = id; goal.appendChild(o);
+        }
+        goal.onchange = () => { deps.coach.setPracticeGoal(goal.value); };
+      }
     }
-    // Normal Time Trial/Race doors always retire the optional practice brief.
+    // Capture: hide the brief BEFORE the other doors' open handlers paint
+    // the picker, or Time Trial would inherit PRACTICE from the last visit.
     for (const id of ["mb-tt", "mb-race", "mb-daily", "mb-season", "mb-career", "mb-continue", "sel-back"]) {
-      const b = $(id); if (b) b.addEventListener("click", () => { wantedPractice = false; showPractice(); });
+      const b = $(id); if (b) b.addEventListener("click", () => {
+        wantedPractice = false; practicePick = false; showPractice();
+      }, true);
     }
     const context = $("pm-race-context");
     function refreshPause() {
@@ -333,6 +387,6 @@ const UiExperience = (function () {
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },
       state: () => ({ home, painted, failure, scene: scene(), world: world.state() }) };
   }
-  return { create, raceBrief, openPhoto, homeVariation };
+  return { create, raceBrief, openPhoto, homeVariation, isPracticePick };
 })();
 Object.freeze(UiExperience);

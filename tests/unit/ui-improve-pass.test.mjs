@@ -149,6 +149,7 @@ function bootMenus(disk = {}, o = {}) {
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  if (o.practicePick) sb.UiExperience = { isPracticePick: () => true };
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
   // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
@@ -168,6 +169,18 @@ function bootMenus(disk = {}, o = {}) {
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
   return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
+
+test("select titles and CTAs name Practice, Time Trial, and Race", () => {
+  const race = bootMenus();
+  assert.equal(race.G.els.selTitle.textContent, "GRAND PRIX");
+  assert.equal(race.G.els.selGo.textContent, "RACE SETUP");
+  const tt = bootMenus({}, { timeTrial: true });
+  assert.equal(tt.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(tt.G.els.selGo.textContent, "SESSION SETUP");
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true });
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+  assert.equal(practice.G.els.selGo.textContent, "PRACTICE SETUP");
+});
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
   const h = bootMenus();
@@ -1204,6 +1217,9 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   // indices quali.spec.js selects.
   assert.match(raceSettings, /SettingRow\.disable\("rs-quali", !!qForced\)/);
   assert.match(raceSettings, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
+  assert.match(raceSettings, /PRACTICE SETTINGS/, "Practice setup is not titled RACE SETTINGS");
+  assert.match(raceSettings, /START TIME TRIAL/, "Time Trial GO is not START RACE");
+  assert.match(raceSettings, /wrap:\s*false/, "LAPS chevrons stop at the ends");
   assert.match(raceSettings, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
   const menus = css("css/menus.css");
   // The race-settings body is a plain one-or-two column grid of rows now: the
@@ -1632,6 +1648,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
   assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
+  assert.match(shell, /id="practice-goal"/);
+  assert.match(code("js/ui/experience.js"), /SettingRow\.build\("practice-goal-row", "GOAL"\)/,
+    "Practice Goal becomes a setting row at runtime so the shell node count does not grow");
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
