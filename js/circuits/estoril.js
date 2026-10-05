@@ -80,6 +80,7 @@
     // straight and would mark the exit, not the corner. Measured on this
     // centreline; the straight it leads onto is 1019 m to T1's apex against a
     // researched ~986 m, which is what anchors the window.
+    sectors: [0.334, 0.665],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.1132, 0.1752, 0.2322, 0.2417, 0.2892, 0.3062, 0.4922, 0.4997, 0.5187, 0.6117, 0.6187, 0.6902, 0.7637, 0.8225],
     furniture: { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true, treeCrown: "vase" },  // grey-olive cork oak between the parasol pines
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },

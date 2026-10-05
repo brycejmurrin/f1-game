@@ -54,6 +54,7 @@
     // turns: the 16 strongest curvature peaks of THIS centreline in lap order,
     // 16 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
+    sectors: [0.334, 0.667],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.1197, 0.2288, 0.2527, 0.2963, 0.3103, 0.3663, 0.3807, 0.4228, 0.4913, 0.5092, 0.5633, 0.5733, 0.6482, 0.7943, 0.8133, 0.8682],
     furniture: { tree: "broad", fol: [0.26, 0.40, 0.22], lamp: "post", lc: [0.92, 0.96, 1.0] },
     kit: { marshal: "kiosk", rail: "wArmco", fence: "panelled", tyre: "stack", board: "monopole", gantry: "truss", camera: "monopole", hoarding: "panel" },
