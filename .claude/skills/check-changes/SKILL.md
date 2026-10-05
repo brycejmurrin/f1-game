@@ -1,9 +1,16 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` that exited 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
+description: "Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the no-bump shell/cache policy (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang or a `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
 # Validate changes before committing/pushing
+
+## This tree, right now
+
+Live selection, run when the skill loads (Claude Code expands the line; Cursor and
+Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
+
+!`node tools/ci/pick-tests.mjs 2>&1 | head -24`
 
 ## Prerequisites
 
