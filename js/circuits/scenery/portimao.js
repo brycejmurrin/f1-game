@@ -11,7 +11,7 @@
         billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
-        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, terrainYAt } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, terrainYAt, seat } = api;
 
       {
         const CORK_LEAF  = [0.24, 0.34, 0.19];
@@ -260,6 +260,46 @@
         if (keptOut(k, side, dist, 7) || onTerrace(anchor(k, side, dist).c, 7)) return;
         tree(k, side, dist, 8 + h * 5, [0.26, 0.36, 0.20]);
       });
+      // DETAIL 2026-10-05: midfield hills read empty from overview — far olive
+      // scatter + service roads (no mid-slope bush belt: those buried 10 m into
+      // the SRTM cuts). Keep openArea crests clear for brow views.
+      every(40, (k) => {
+        const s = k / n;
+        if (openArea(s) || (s > 0.92 || s < 0.08)) return; // clear S/F stand belt
+        const h = hash(k * 71 + 19);
+        if (h < 0.55) return;
+        const side = h < 0.48 ? -1 : 1, dist = 78 + h * 36;
+        const a = anchor(k, side, dist);
+        if (keptOut(k, side, dist, 6) || onTerrace(a.c, 6)) return;
+        if (onTrack(a.c[0], a.c[2], 20)) return;
+        // Seat only when terrain is near the road-anchored foot (skip gullies).
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        if (gy != null && a.c[1] - gy > 2.5) return;
+        tree(k, side, dist, 6 + h * 4, [0.44, 0.48, 0.36]);
+      });
+      // Service roads cutting the hills (asphalt ribbons; silverstone idiom).
+      // Gaps stay outside hillsideTerrace KEEP_OUT belts (≤46 m).
+      const ASPH = [0.30, 0.31, 0.32];
+      for (const [id, s, side, gap, len] of [
+        ["t1-ridge", 0.12, 1, 56, 55],
+        ["mid-shelf", 0.40, -1, 58, 70],
+        ["t11-cut", 0.58, 1, 54, 60],
+        ["final-brow", 0.80, -1, 58, 55],
+        ["paddock-link", 0.94, 1, 40, 48],
+      ]) {
+        groundPatch(K(s), side, gap, [6.5, 0.12, len], ASPH, {
+          id: `portimao-service-${id}`, samples: 7,
+        });
+      }
+      // Low scrub patches (ground-hugging; not bush() stems that bury in cuts).
+      // Keep clear of quinta footprints (0.24/−1/60 and 0.68/+1/92).
+      for (const [s, side, gap] of [
+        [0.16, 1, 64], [0.42, -1, 66], [0.54, 1, 62], [0.84, -1, 64],
+      ]) {
+        groundPatch(K(s), side, gap, [16, 0.14, 24], SCRUB, {
+          id: `portimao-scrub-${s}-${side}`, samples: 5,
+        });
+      }
 
       // Paddock: six structurally independent blocks (A–F) with separate roofs
       // and dilatation joints — Dimeconsult project notes for the 2008 AIA
@@ -318,6 +358,12 @@
               addCyl(stage, vadd(vadd(vadd(foot, a.t, off), a.r, -8.6), a.u, bodyH * 0.55),
                 0.14, bodyH + 4.5, [0.88, 0.88, 0.90], 6, b);
             }
+            // Algarve identity band on the track-facing fascia (DETAIL 2026-10-05).
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(foot, a.r, -7.8), a.u, bodyH * 0.72),
+              [0.25, 0.85, 26], [0.16, 0.44, 0.26], b);
+            addBox(stage, vadd(vadd(vadd(foot, a.r, -7.8), a.t, 8), a.u, bodyH * 0.72),
+              [0.25, 0.85, 8], [0.76, 0.16, 0.16], b);
             stage._mat = 0;
           }
         };
@@ -353,10 +399,75 @@
       }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.968, 8.0, [0.15, 0.15, 0.18]);
-      // Main covered grandstand opposite the paddock (four dilatation blocks
-      // in the real AIA main stand — Dimeconsult). Keep one long grandstandEx.
-      grandstandEx(0.005, -1, 11, 140, null, null,
-        { livery: "terracotta", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
+      // Main covered tribuna opposite the paddock — DETAIL 2026-10-05.
+      // Sheet-07 showed one solid terracotta grandstandEx as a brown monolith;
+      // split into four dilatation bays (Dimeconsult AIA main stand) with
+      // whitewash shell, seat colour, Algarve green fascia (local only —
+      // shared grandstandEx / city.js untouched).
+      const ALG_GREEN = [0.16, 0.44, 0.26];
+      const ALG_RED = [0.76, 0.16, 0.16];
+      const SEAT_R = [0.84, 0.24, 0.20];
+      const SEAT_B = [0.22, 0.38, 0.64];
+      const ROOF_W = [0.94, 0.94, 0.92];
+      for (const [sf, len, suites] of [
+        [0.982, 34, false], [0.992, 34, true], [0.002, 34, true], [0.012, 34, false],
+      ]) {
+        grandstandEx(sf, -1, 11, len, LIME, SEAT_R, {
+          tiers: 2, roof: "flat", suites, endWalls: true, pylons: true,
+          roofCol: ROOF_W, fasciaCol: ALG_GREEN,
+        });
+      }
+      {
+        // Hero footing + Algarve branding so the S/F cameras never read an
+        // empty brown box. Literal modelGroup id for BATCH-01 landmark scan.
+        const side = -1, gap = 10;
+        const a = anchor(K(0.0), side, gap + 7);
+        const foot = a.c.slice();
+        const gy = terrainYAt(foot[0], foot[2]);
+        if (gy != null) foot[1] = Math.max(foot[1], gy - 0.1);
+        const b = [a.r, a.u, a.t];
+        const dressMainStand = (stage) => {
+          // Footing slab + Algarve canopy lip / end fascias / dilatation joints.
+          // Seat banks come from the four grandstandEx bays (avoid double stack).
+          stage._mat = MAT.CONCRETE;
+          seat.box(stage, foot, [12, 0.45, 130], CONC, b);
+          // Canopy lip under the flat roofs + Portuguese green/red brand band.
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(foot, a.r, side * 2.2), a.u, 12.4),
+            [8.5, 0.4, 128], ROOF_W, b);
+          addBox(stage, vadd(vadd(foot, a.r, side * (-1.2)), a.u, 11.9),
+            [0.4, 0.65, 126], ALG_GREEN, b);
+          addBox(stage, vadd(vadd(vadd(foot, a.r, side * (-1.55)), a.t, 38), a.u, 11.9),
+            [0.4, 0.65, 26], ALG_RED, b);
+          // Dilatation joint stripes between the four bays.
+          for (let j = -1; j <= 2; j++) {
+            addBox(stage, vadd(vadd(foot, a.t, j * 32 - 16), a.u, 6.5),
+              [9, 11, 0.35], [0.22, 0.24, 0.26], b);
+          }
+          // End fascias close the open shell from the S/F orbit.
+          for (const sgn of [-1, 1]) {
+            addBox(stage, vadd(vadd(foot, a.t, sgn * 64), a.u, 6.8),
+              [11, 12.5, 0.55], LIME, b);
+            addBox(stage, vadd(vadd(foot, a.t, sgn * 64), a.u, 11.2),
+              [9, 0.9, 0.65], ALG_GREEN, b);
+          }
+          // Sparse seat-colour cubes along the front lip (crowd read without
+          // coplanar fight against grandstandEx risers).
+          stage._mat = MAT.FABRIC;
+          for (let i = -18; i <= 18; i++) {
+            const hv = hash(900 + i * 17);
+            if (hv < 0.42) continue;
+            seat.box(stage,
+              vadd(vadd(foot, a.t, i * 3.4), a.r, side * 0.6),
+              [0.55, 0.95, 0.5],
+              hv < 0.7 ? SEAT_R : SEAT_B, b);
+          }
+          stage._mat = 0;
+        };
+        modelGroup("portimao-main-stand", {
+          center: vadd(foot, a.u, 8), size: [20, 18, 140], basis: b,
+        }, dressMainStand, { required: true });
+      }
       // Grandstand Norte / MEO — uncovered multi-tier OUTSIDE the Turn 1
       // downhill braking zone (3ddigitalvenue / ticket seating plans). Past the
       // amphitheatre terraces (gap ≥ 42 clears 8×2.9 m rows from gap 16) so the
@@ -401,7 +512,12 @@
       // and neonTower dface panes buried on the ridge (ground-audit: 23+7+21).
       // Six pit blocks + race control already carry the paddock mass.
       // Broadcast vans deferred: hillside paddock apron buried OB trucks.
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.16, 0.42, 0.24]);
+      for (const s of [0.975, 0.01, 0.03, 0.05]) {
+        billboard(K(s), -1, 8, 12, 4.5, ALG_GREEN);
+      }
+      for (const s of [0.968, 0.988, 0.018]) {
+        billboard(K(s), 1, 9, 10, 3.8, ALG_RED);
+      }
 
       groundPatch(K(0.050), -1, 6, [34, 0.18, 46], EARTH,
         { id: "portimao-t1-gravel", samples: 8 });
@@ -456,9 +572,14 @@
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.07, -1, 9, 4, [0.74, 0.76, 0.80]);
-      for (const s of [0.15, 0.22, 0.44, 0.56, 0.74, 0.88]) {
-        marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
-      }
+      // DETAIL: elevation-aware marshals on the brows / cut banks. Skip sites
+      // that already have a post (0.055/0.305/0.645/0.895 + sparse every) —
+      // stacked posts at T5 clipped 1.27 m (addBox×addBox).
+      for (const [s, side, dist] of [
+        [0.04, -1, 9], [0.12, 1, 10], [0.20, -1, 9],
+        [0.36, 1, 9.5], [0.48, -1, 9], [0.58, 1, 9.5],
+        [0.72, -1, 9], [0.82, 1, 9.5], [0.92, -1, 9],
+      ]) marshalPost(K(s), side, dist);
 
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
@@ -588,6 +709,12 @@
       signBoard(K(0.300), -1, 7.5, "corner", 5);
       signBoard(K(0.640), 1, 7.5, "corner", 11);
       sponsorHoarding(0.940, 0.060, -1, 3.4, { h: 1.15, step: 9 });
+      // Algarve branding strips on the main straight and T1 approach.
+      sponsorHoarding(0.970, 0.040, 1, 3.2, { h: 1.05, step: 10 });
+      sponsorHoarding(0.040, 0.090, -1, 3.6, { h: 1.1, step: 11 });
+      for (const s of [0.02, 0.08, 0.48, 0.70]) {
+        billboard(K(s), hash(K(s)) < 0.5 ? -1 : 1, 11, 14, 5.0, [0.16, 0.44, 0.26]);
+      }
       // Camera towers on the high ground, where the whole valley is visible.
       cameraTower(K(0.055), 1, 26, { h: 16 });
       cameraTower(K(0.500), -1, 28, { h: 18 });

@@ -26,7 +26,7 @@ jolts from the old sparse cosine bumps, not the hills themselves.
 |------|------|----------|-----------------|
 | 0.938–0.998 | R | near | **Six independent paddock blocks (A–F)** — whitewashed masses with separate wave-roof slices and dilatation joints (Dimeconsult). Continuous roof phase across all six. Blocks A–D boxes+VIP; F taller media; race-control tower stays its own landmark |
 | 0.992 | R | near | Race control: slim white shaft, dark cantilevered cab, Portuguese green/red band beneath it, standing proud of the ridge |
-| 0.005 | L | near | Main grandstand (140 m) — covered, opposite the paddock (real AIA main stand is four dilatation blocks) |
+| 0.005 | L | near | **Main tribuna** — four dilatation bays (whitewash shell, red/blue seats, Algarve green/red fascia); local `portimao-main-stand` hero replaces the old terracotta brown monolith |
 | 0.055 | R | mid | **Grandstand Norte / T1 stands** — uncovered multi-tier outside the Turn 1 downhill braking zone; rows rise away from the track, past the amphitheatre terraces |
 | 0.050 | L | near | **Turn 1** red-earth gravel apron (34×46) + red tyre wall, at the foot of the plunge |
 | 0.035–0.095 | R | near | Hillside amphitheatre terraces cut into the slope (retaining wall + concrete steps + red escarpment) |
@@ -86,8 +86,12 @@ but not *these* trees.
 - Grandstands concentrated on the pit straight and Turn 1 downhill —
   https://3ddigitalvenue.com/3dmap/clients/f1/algarve-international-circuit/ ;
   seating plans list Grandstand Norte / MEO at T1–T2.
-- Main stand as four dilatation blocks (same Dimeconsult page) — modelled as
-  one long `grandstandEx` opposite the paddock (block subdivision not split).
+- Main stand as four dilatation blocks (same Dimeconsult page) — four
+  `grandstandEx` bays + local `portimao-main-stand` seat/roof/fascia hero
+  (DETAIL 2026-10-05; replaced the single terracotta shell that read as a
+  solid brown placeholder on sheet-07).
+- Midfield service roads + denser scrub/olive scatter on the hills (crests in
+  `openArea` stay clear so brows remain readable).
 - Capacity ~90k seated (official AIA event guide) / ~100k often cited
   (Wikipedia / Autosport).
 - Craig Jones corner naming is real; the roundabout statue was removed in 2009
