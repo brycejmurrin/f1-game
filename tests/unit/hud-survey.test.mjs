@@ -294,6 +294,11 @@ test("expected-visible rules", () => {
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit", preset: "clean" }, { desktop: false, cockpitCam: true }).ot.want, true,
     "CLEAN places OT, so it escapes the touch-cockpit hide");
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, true, "phone cockpit keeps speed");
+  // A wheel with no LCD (CLASSIC / NONE) drops body.cockpit-cam, but the strip
+  // still paints at the cockpit offsets: the touch hide follows the layout set.
+  const classic = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
+    "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
   assert.equal(E({ device: "phone-portrait-390x844" }).rotateDevice.want, true);
   const off = E({ off: ["pos", "gear", "limits"] });
   assert.deepEqual([off.pos.want, off.gearbox.want, off.limits.want, off.lap.want, off.speed.want], [false, false, false, true, true]);
