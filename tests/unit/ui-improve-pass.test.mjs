@@ -243,10 +243,23 @@ test("CLASSICS filter snaps the preview off a season circuit that is not in the 
 test("select preview uses a dark token scrollbar and a readable GP subtitle", () => {
   const rules = css("css/select.css");
   assert.equal(decl(rules, "#sel-preview-gp", "color"), "color-mix(in oklab, var(--red) 40%, var(--text))");
+  assert.equal(decl(rules, "#select", "color-scheme"), "dark");
   assert.equal(
     decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "scrollbar-color"),
     "var(--plate-line) transparent",
   );
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "color-scheme"),
+    "dark",
+  );
+});
+
+test("Practice Goal native select follows Apex dark chrome", () => {
+  const rules = css("css/experience.css");
+  assert.equal(decl(rules, "#practice-brief", "color-scheme"), "dark");
+  assert.equal(decl(rules, "#practice-brief select", "background"), "var(--plate)");
+  assert.equal(decl(rules, "#practice-brief select", "color"), "var(--text)");
+  assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
 });
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {

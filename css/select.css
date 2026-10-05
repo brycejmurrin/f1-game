@@ -11,10 +11,14 @@
    density (--compact-at) and fit (--fit-at) through js/ui/sheet-shape.js. */
 #select {
   z-index: 25;
+  /* Native <select> lists and overlay scrollbars follow color-scheme. Without
+     this they stay OS-light on the dark picker (Practice Goal, stats column). */
+  color-scheme: dark;
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     var(--scrim);
 }
+:root[data-ui-theme="light"] #select { color-scheme: light; }
 @media (prefers-reduced-transparency: reduce) {
   #select { background: var(--scrim-heavy); }
 }
@@ -306,6 +310,7 @@
     min-height: 0;
     overflow-y: auto; overscroll-behavior-y: contain;
     padding-right: calc(var(--gap) * 0.4);
+    color-scheme: dark;
     scrollbar-width: thin;
     scrollbar-color: var(--plate-line) transparent;
   }

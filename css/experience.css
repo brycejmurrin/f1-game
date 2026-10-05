@@ -24,11 +24,22 @@
   #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
   #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint button { font-size: var(--fs-micro); }
-  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); }
+  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
   /* GOAL uses the shared ‹ VALUE › row (css/settings-controls.css .set-row).
      Cap the row so margin-left: auto cannot throw the value across the wide
-     hero; one column, so the select can hold FREE PRACTICE. */
+     hero; one column, so the select can hold FREE PRACTICE. color-scheme +
+     option tokens keep the native list on Apex dark chrome (not OS-light). */
+  #practice-brief select {
+    color: var(--text);
+    background: var(--plate);
+    border: 1px solid var(--plate-line);
+    border-radius: var(--r-sm);
+    color-scheme: dark;
+  }
+  #practice-brief option { color: var(--text); background: var(--plate); }
+  :root[data-ui-theme="light"] #practice-brief,
+  :root[data-ui-theme="light"] #practice-brief select { color-scheme: light; }
   #practice-brief .set-row { margin-top: calc(var(--gap) / 2); max-width: 28rem; }
   #practice-brief .set-row > div { margin-left: 0; }
   #practice-brief .set-row > div > select { flex: 1 1 12rem; width: 12rem; min-width: 8rem; }
