@@ -201,6 +201,23 @@ test("a foreign season save conflicts before standings mutate or stale data writ
   assert.equal(stored.get("season"), winner);
 });
 
+test("a refused award clears last round's fastest-lap recipient, so the sheet paints no stale +FL", () => {
+  // award() returned on the save conflict BEFORE `delete season.lastFl`, and the
+  // results sheet still showed +FL (+1 pt) for last round's holder (bug hunt 2026-10-05 G9).
+  const { S, stored, foreign } = load({
+    seasonCfg: { trackIds: ["monza", "monaco"], flPoint: true },
+    season: { round: 1, pts: { d0: 26 }, teamPts: {}, driverCodes: {}, lastFl: "d0" },
+  });
+  S.engage("season");
+  const local = S.load();
+  assert.equal(local.lastFl, "d0", "precondition: last round's recipient is on the season");
+  stored.set("season", { round: 2, pts: {}, teamPts: {}, driverCodes: {}, config: local.config });
+  foreign("season");
+  assert.equal(S.award(local, field(2), "d0"), null, "the conflict refuses the award");
+  assert.equal(local.lastFl, undefined, "…and no +FL survives it");
+  assert.equal(local.pts.d0, 26, "standings untouched");
+});
+
 test("setup apply refuses a foreign season before changing active rules", () => {
   const { S, stored, foreign } = load({ seasonCfg: { trackIds: ["monza"], points: "modern" },
     season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });

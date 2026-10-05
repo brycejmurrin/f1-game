@@ -424,16 +424,19 @@ function payTable(table, scoring, run) {
 }
 
 function award(season, order, fastestId, run) {
+  // `lastFl` names THIS round's fastest-lap recipient for the results sheet:
+  // cleared before either refusal, or a save conflict left last round's +FL
+  // (and its +1 pt) painted beside whoever held it.
+  if (season) delete season.lastFl;
   if (fmtActive() && seasonConflict) return null;
   if (!canRace(season)) return null;
   const scoring = stage(season);
   const table = payTable(scoring === "sprint" ? SPRINT_POINTS : pointsTable(), scoring, run);
   // The 2019–2024 fastest-lap point: one point, Grand Prix leg only, and only
   // to a driver classified inside the top ten. Season format only (fmtActive):
-  // a career keeps the table it always paid. `lastFl` names this round's
-  // recipient for the results sheet and is cleared on the next scoring.
+  // a career keeps the table it always paid. `lastFl` (cleared above) names
+  // this round's recipient for the results sheet.
   const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null && shortFrac(run) >= 0.5;
-  delete season.lastFl;
   const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
     // CLASSIFIED = STILL IN THE RACE. endRace ends the session 2.2 s after the
