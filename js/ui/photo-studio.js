@@ -230,10 +230,13 @@ function create(G, deps) {
       st.borrowed = null;
     }
     if (deps.onClose) deps.onClose({ restoredPhoto: !!G.photoMode });
+    // Hide before returnTo(): body.photo-studio-open forces #rotate-device
+    // display:none, so setPaused → syncRotateBlocker would miss the portrait
+    // gate and leave the pause card up (photo-studio.spec.js race close).
     const target = focus, generation = st.generation;
-    if (back && returnTo) returnTo();
     root.hidden = true; document.body.classList.remove("photo-studio-open");
     busy(false);
+    if (back && returnTo) returnTo();
     // Let the caller paint its restored visibility after modal isolation settles.
     if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!st.open && st.generation === generation && target.isConnected) target.focus();

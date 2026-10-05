@@ -180,18 +180,23 @@ test("pre-existing photo mode keeps its pose on normal exit", () => {
 test("DONE paints a busy/disabled state before restoring the scene", () => {
   const frames = [], events = [];
   const b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
-  b.api.open({ source: "garage", back: () => events.push("restored") });
+  b.api.open({ source: "garage", back: () => {
+    events.push(b.dom.document.body.classList.contains("photo-studio-open") ? "class-on" : "class-off");
+    events.push(b.dom.byId("photo-studio").hidden ? "hidden" : "visible");
+    events.push("restored");
+  } });
   b.api.close(true);
   assert.equal(b.api.state().busy, true);
   assert.equal(b.dom.byId("ps-close").disabled, true);
   assert.equal(b.dom.byId("ps-close").textContent, "CLOSING…");
   assert.equal(b.dom.byId("ps-panel").getAttribute("aria-busy"), "true");
   assert.equal(b.dom.byId("photo-studio").hidden, false, "studio stays up so CLOSING… can paint");
+  assert.ok(b.dom.document.body.classList.contains("photo-studio-open"));
   assert.deepEqual(events, []);
   assert.equal(b.order.includes("restore"), false);
   frames.shift()();
   assert.equal(b.order.includes("restore"), true);
-  assert.deepEqual(events, ["restored"]);
+  assert.deepEqual(events, ["class-off", "hidden", "restored"], "portrait rotate-device can read display after photo-studio-open is gone");
   assert.equal(b.dom.byId("photo-studio").hidden, true);
   assert.equal(b.api.state().busy, false);
   assert.equal(b.dom.byId("ps-close").textContent, "DONE");
