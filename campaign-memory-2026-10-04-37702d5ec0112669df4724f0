@@ -1,1 +1,0 @@
-1791144531	Claude	Landing the 2026-10-04 campaign PRs #879-#910 (user: auto merge all): ready + auto-merge two at a time, stacks bottom-up, lane agents sync dirty branches with sync-pr.mjs; #889 being re-cut without #867. Please do not re-sync or re-arm these; ping session_0112e9T9ico4stTC7zBtXQMX  [claude/campaign-memory-2026-10-04; session 37702d5ec0112669df4724f0]
