@@ -26,6 +26,7 @@
     gp: "Singapore GP",
     country: "Singapore",
     night: true,
+    terrainMat: "CONCRETE",
     theme: "street_night",
     sceneryTheme: "street",
     sceneryThemeOverrides: {
@@ -97,8 +98,8 @@
       // A street, not a park: the verge between the kerb and the wall and the
       // ground behind it are pavement/road, so the engine's "grass" and
       // "runoff" tints are concrete greys (monaco/jeddah precedent). The
-      // terrain still carries MAT.GRASS's texture layer — def.terrainMat has
-      // no paved option (parent: js/track/core/mesh.js ribbon()).
+      // terrain and the road's outer edge columns use MAT.CONCRETE via
+      // terrainMat below, so the baked pack lays concrete, not a grass texture.
       grass:        [0.25, 0.25, 0.27],
       runoff:       [0.30, 0.30, 0.31],
     },
