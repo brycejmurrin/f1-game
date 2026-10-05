@@ -35,16 +35,16 @@ const saveDismiss = $("save-dismiss");
 // `broken` flag is the only signal there is.
 const writeFailed = () => (store.writeFailed ? store.writeFailed() : store.broken);
 // Spoken ONCE per failure through #announce-live, the always-present polite
-// region: emptied, then filled a beat later, the beat js/game.js showAnnounce
-// and js/ui/hud.js sayFlag use, so a screen reader hears a CHANGE.
-let saveSpoken = false, saveLiveT = 0;
+// region — via LiveRegion (js/ui/live-region.js), its ONE writer, at SAVE
+// priority: a radio call or a flag in the same tick queues behind or ahead of
+// it instead of overwriting it. A bare write only where that module is absent.
+let saveSpoken = false;
 const sayOnce = (text) => {
   const live = $("announce-live");
   if (saveSpoken || !live) return;
   saveSpoken = true;
-  live.textContent = "";
-  clearTimeout(saveLiveT);
-  saveLiveT = setTimeout(() => { live.textContent = text; }, 60);
+  if (typeof LiveRegion !== "undefined") LiveRegion.say(text, "save");
+  else live.textContent = text;
 };
 const setSaveCollapsed = (on) => {
   if (!saveWarning) return;

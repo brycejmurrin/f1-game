@@ -446,6 +446,24 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // it from pause → settings → MORE at 200% on the short landscape sheet.
   await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
   await page.setViewportSize({ width: 852, height: 393 });
+  // SETTLE BEFORE MEASURING. The race HUD was fitted at 734x343 a moment ago,
+  // and fitHud re-caps --hud-z-top on its next 10 Hz tick at the new size.
+  // Reading straight after the resize caught the map BETWEEN the two (CI
+  // 37245582225, PR #904): --hud-z-top already gone from :root, the map still
+  // styled at the old 0.864 cap, so the resolved width came back as its laid-out
+  // 110px over that stale zoom — 127.315px. Same shape as hud-layout.spec.js's
+  // broadcast wait: published inputs can precede Chromium's style invalidation of
+  // the zoomed band. So wait (two frames, then the map's zoom equal to the zoom
+  // fitHud published) and THEN assert; the expectation below is unchanged, and
+  // on a timeout it still fails with the dump.
+  await page.waitForFunction(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const mm = document.getElementById("minimap"), root = document.documentElement;
+    if (!mm || innerWidth !== 852 || document.body.dataset.density !== "compact") return false;
+    const want = +root.style.getPropertyValue("--hud-z-top")
+      || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
+    return Math.abs((mm.currentCSSZoom || 1) - want) < 1e-3;
+  }, null, { polling: 100, timeout: 5_000 }).catch(() => {});
   // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
   // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
   // and the fit pass's cap alongside it, so the next failure names its own
@@ -456,6 +474,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     return {
       density: document.body.dataset.density,
       mmCss: mm ? getComputedStyle(mm).width : "",
+      mmRect: mm ? mm.getBoundingClientRect().width : null,
       zoom: mm ? mm.currentCSSZoom : null,
       zTop: root.style.getPropertyValue("--hud-z-top"),
       hudScale: cs.getPropertyValue("--hud-scale").trim(),
