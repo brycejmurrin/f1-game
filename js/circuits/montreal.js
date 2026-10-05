@@ -50,7 +50,7 @@
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
     turns: [0.0603, 0.0768, 0.1698, 0.1808, 0.2288, 0.2883, 0.3038, 0.3113, 0.4633, 0.4728, 0.4793, 0.6178, 0.6488, 0.8983],
-    furniture: { tree: "fir",   fol: [0.20, 0.42, 0.23], lamp: "none" },  // lush island maple/conifer
+    furniture: { tree: "broad", fol: [0.20, 0.42, 0.23], lamp: "none" },  // Île Notre-Dame parkland is broadleaf (maple, birch), not conifer
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["alu", "steel", "teal"],  // teal is the park's own colour (COL.basinTeal)
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
