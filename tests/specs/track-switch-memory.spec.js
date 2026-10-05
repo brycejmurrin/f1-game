@@ -48,9 +48,8 @@ test.use({ viewport: { width: 960, height: 540 } });
 // The floor is NOT lowered when the opening flyby `wide` shot is levelled at
 // the horizon (39 ROs on llvmpipe at u=0): picker warm frames sit on
 // turn-first (FlybySeq.warmProgress) so the leak path still draws.
-// waitUntilDrawn waits for those hidden warm frames (menuFinish car assets)
-// before the census — Selected-specs visit 1 at Received 10 was a race, not
-// a drawn world of 10 (run 37274796306).
+// waitUntilDrawn waits for the "menu warm drawn <id>" Log record (not the
+// render-object count — that can read the previous scene; run 37330132243).
 const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
@@ -74,7 +73,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
-      await waitUntilDrawn(page, MIN_RENDER_OBJECTS);
+      await waitUntilDrawn(page, id);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
