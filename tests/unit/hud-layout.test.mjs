@@ -588,7 +588,10 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ live: false }).hiddenReason("rel").soft, true, "touch RELATIVE still waits to be placed");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
-  assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(152px/, "touch STRATEGY sits under the 128px map and the limits chip");
+  assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+    "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
+  assert.match(css, /:root\[data-limits-left\] body:not\(\.desktop\) #hud-strat/,
+    "touch STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
@@ -674,6 +677,9 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
   const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
   assert.ok(rule, "the touch-helmet hide rule exists");
+  // GEAR sits on the wheel LCD — plate-opaque so SPD/G on the mesh does not ghost through.
+  assert.match(CSS, /body\[data-hl-set="helmet"\] #hud-gearbox[\s\S]*?background:\s*var\(--plate-opaque\)/,
+    "helmet GEAR pill masks the LCD underneath");
   assert.deepEqual(rule[1].split(",").map((x) => x.trim()).sort(), ["#hud-aero", "#hud-bb", "#hud-ot"]);
   const D = load3({ classes: ["desktop"], live: false });
   D.H.setCam("helmet");
