@@ -33,6 +33,8 @@ const CamFeel = (function () {
   let vignetteOn = false;
   let latchHeld = false;                 // latched look-back state
   let prevLookDown = false;              // edge detect for latch toggle
+  let lookBackOn = false;                // this frame's look-back, as tick() resolved it
+  let aimSnap = false;                   // look-back flipped: the aim is a cut, not a pan
 
   // Free-look offsets in degrees (additive on top of CamTune yaw/pitch).
   let lookYaw = 0, lookPitch = 0;
@@ -230,6 +232,14 @@ const CamFeel = (function () {
       if (!latchOn) latchHeld = false;
     }
 
+    // LOOK BACK IS A CUT FOR THE AIM. vantage.js mirrors the target about the
+    // eye; damping that POINT from ahead to behind drags it along a line through
+    // the eye — the view pitched to the floor (−65° chase, −89° at 144 Hz) and
+    // the yaw flipped in one frame. game.js snaps the target on this edge
+    // (consumeAimSnap) and mirrors the roll; the eye is untouched either way.
+    const lb = shouldLookBack(mode, held);
+    if (lb !== lookBackOn) { lookBackOn = lb; aimSnap = true; }
+
     // FREE-LOOK — onboard only, never under camComfort / menus / non-race.
     if (!racing || comfort || !isFreeLookMode(mode)) {
       lookYaw = dampToward(lookYaw, 0, RECENTER * 1.5, dt);
@@ -238,7 +248,9 @@ const CamFeel = (function () {
       const sx = clamp(opts.stickX || 0, -1, 1);
       const sy = clamp(opts.stickY || 0, -1, 1);
       const mx = opts.mouseDx || 0, my = opts.mouseDy || 0;
-      const active = Math.abs(sx) > 0.02 || Math.abs(sy) > 0.02 || mx || my;
+      // RMB HELD is a glance being held, moving or not: deltas alone counted a
+      // still mouse as released and recentred at λ6 mid-apex.
+      const active = Math.abs(sx) > 0.02 || Math.abs(sy) > 0.02 || mx || my || !!opts.mouseHeld;
       if (active) {
         lookYaw = clamp(lookYaw + sx * STICK_RATE * dt + mx * MOUSE_SENS, -YAW_MAX, YAW_MAX);
         lookPitch = clamp(lookPitch - sy * STICK_RATE * dt - my * MOUSE_SENS, -PITCH_MAX, PITCH_MAX);
@@ -261,10 +273,46 @@ const CamFeel = (function () {
     const ls = (typeof Input !== "undefined" && Input.lookStick) ? Input.lookStick() : { x: 0, y: 0 };
     const lm = (typeof Input !== "undefined" && Input.consumeLookMouse) ? Input.consumeLookMouse() : { dx: 0, dy: 0 };
     const held = !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack());
+    const mouseHeld = !!(typeof Input !== "undefined" && Input.lookMouseHeld && Input.lookMouseHeld());
     tick({
-      mode, dt, comfort, racing, lookHeld: held,
+      mode, dt, comfort, racing, lookHeld: held, mouseHeld,
       stickX: ls.x, stickY: ls.y, mouseDx: lm.dx, mouseDy: lm.dy, spN,
     });
+  }
+  function lookingBackNow() { return lookBackOn; }
+  function consumeAimSnap() { const v = aimSnap; aimSnap = false; return v; }
+
+  /* TRAUMA SHAKE, frame-rate independent and kept inside the tub. game.js used
+     to add a fresh Math.random() offset to the eye/target TARGET every rendered
+     frame and then damp it: white noise through damp(λ, dt) has an rms of
+     sqrt(a/(2−a)), a = 1−e^(−λ·dt), so a crash shook the chase cam 2.2x harder
+     at 30 fps than at 144 — and onboard (λ400 passes everything) it threw the
+     eye ±0.45 m, through the survival cell the cockpit rig budgets in
+     centimetres (eye 0.46 m from the wheel, near plane 0.3).
+     Now the noise is a smooth sum of sines in REAL time (the speed-buzz idea),
+     so the same signal reaches the damper at any frame rate: rms after the
+     chase λ18 is 0.111/0.105/0.103 at 30/60/144 Hz (was 0.156/0.111/0.072 —
+     the 60 Hz feel is kept). Channels stay in [−0.5, 0.5] like the
+     Math.random() − 0.5 they replace. Onboard, the eye moves at most
+     TUB_EYE_MAX and the trauma becomes AIM rotation instead. */
+  const SHAKE_W = Object.freeze([[37.1, 0.0, 53.3, 1.9], [41.7, 2.3, 59.9, 0.7], [33.4, 4.1, 47.2, 3.3], [44.9, 5.2, 61.3, 0.4]]);
+  const TUB_EYE_MAX = 0.03;              // m the onboard eye may shake, per axis
+  const ONBOARD_AIM_DEG = 6;             // aim jitter, degrees per metre of shake amount
+  function shakeNoise(ch, tSec) {
+    const w = SHAKE_W[ch];
+    return 0.5 * (0.6 * Math.sin(tSec * w[0] + w[1]) + 0.4 * Math.sin(tSec * w[2] + w[3]));
+  }
+  function shake(eye, tgt, amt, tSec, onboard) {
+    if (!(amt > 0)) return;
+    const n0 = shakeNoise(0, tSec), n1 = shakeNoise(1, tSec), n2 = shakeNoise(2, tSec), n3 = shakeNoise(3, tSec);
+    if (onboard) {
+      eye[0] += clamp(n0 * amt * 0.1, -TUB_EYE_MAX, TUB_EYE_MAX);
+      eye[1] += clamp(n1 * amt * 0.07, -TUB_EYE_MAX, TUB_EYE_MAX);
+      applyAim(eye, tgt, n2 * amt * ONBOARD_AIM_DEG, n3 * amt * ONBOARD_AIM_DEG * 0.6);
+      return;
+    }
+    eye[0] += n0 * amt; eye[1] += n1 * amt * 0.7;
+    tgt[0] += n2 * amt * 0.6; tgt[1] += n3 * amt * 0.6;
   }
 
   function paintVignette(amt) {
@@ -291,7 +339,7 @@ const CamFeel = (function () {
     return { yaw: lookYaw, pitch: lookPitch };
   }
   function resetFreeLook() { lookYaw = 0; lookPitch = 0; }
-  function resetLatch() { latchHeld = false; prevLookDown = false; }
+  function resetLatch() { latchHeld = false; prevLookDown = false; lookBackOn = false; aimSnap = false; }
 
   function initUI() {
     if (typeof SettingRow === "undefined" || !SettingRow.build) return;
@@ -355,6 +403,7 @@ const CamFeel = (function () {
     shouldLookBack, lookBackLatch, setLookBackLatch,
     speedVignette, setSpeedVignette,
     applyFreeLook, applyAim, tick, tickRace, freeLookState, resetFreeLook, resetLatch,
+    lookingBackNow, consumeAimSnap, shake, shakeNoise, TUB_EYE_MAX,
     follow, resetFollow, drive,
     initUI, loadSettings,
   };

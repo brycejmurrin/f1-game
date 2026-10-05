@@ -171,7 +171,10 @@ const STRIP = {
   // → open sea + city fill + near foothills 282536/260163 (2026-10-04: the
   //   beige out-world fix in scenery/monaco.js — ~340 sea slabs, ~900 city
   //   blocks, four hills inside the 900 m far plane)
-  monaco: { before: 282536, after: 260163 },
+  // → elevation on the real corners 280743/258460 (2026-10-04: the crest
+  //   moved from arc 0.12 to Massenet/Casino, so props re-seat on new ground
+  //   and the scenery's height-gated emitters place fewer prims)
+  monaco: { before: 280743, after: 258460 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -188,7 +191,9 @@ const STRIP = {
   //   HDR-bright box cannot enclose; emission unchanged)
   // → track-realism batch (2026-10-04): 14 terrain-conforming gravel-margin
   //   patches add 264 triangles. All survive; existing strip count is unchanged.
-  monza: { before: 340983, after: 314066 },
+  // → T7 on Lesmo 2 340839/313922 (2026-10-04: turns[6] 0.3827 → 0.4321,
+  //   so corner board 7 and its footing stand at Lesmo 2's apex)
+  monza: { before: 340839, after: 313922 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

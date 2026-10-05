@@ -145,7 +145,7 @@ const GLXPost = (function () {
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
       for (const k in _compUf) delete _compUf[k];
-      brightU = locs(brightProg, ["uScene", "uThreshold"]);
+      brightU = locs(brightProg, ["uScene", "uThreshold", "uExposure"]);
       blurU = locs(blurProg, ["uTex", "uDir"]);
       downU = locs(downProg, ["uTex", "uTexel", "uKaris"]);
       upU = locs(upProg, ["uTex", "uTexel", "uSpread"]);
@@ -726,6 +726,7 @@ const GLXPost = (function () {
         gl.bindTexture(gl.TEXTURE_2D, sceneTex);
         gl.uniform1i(brightU.uScene, 0);
         gl.uniform1f(brightU.uThreshold, threshold);
+        gl.uniform1f(brightU.uExposure, opts && opts.exposure !== undefined ? opts.exposure : 1.0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         // 2) mip-chain bloom: progressive 13-tap downsample to the smallest level,
@@ -1112,12 +1113,15 @@ const GLXPost = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, mirFBO);
       gl.viewport(0, 0, mirW, mirH);
     }
+    const _MIR_GRADE_KNOBS = [["uContrast", "contrast"], ["uVibrance", "vibrance"], ["uSaturation", "saturation"],
+      ["uTint", "tint"], ["uBlackLift", "blackLift"]];
     function mirrorComposite(opts) {
       if (!mirRect || !mirTex || !mirRenders || mirDead) return;
       if (!mirProg) {
         mirProg = link(POST_VS, MIRROR_FS);
         if (!mirProg) { mirDead = true; Log.warn("gfx", "GLX mirror program failed — mirror off"); return; }
-        mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uFlip"]);
+        mirU = locs(mirProg, ["uTex", "uHdr", "uExposure", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uFlip",
+          "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uBlackLift", "uGrainTime"]);
       }
       // The DEFAULT FRAMEBUFFER's own size — the present size under SGSR, the
       // render size otherwise. Not getPresentSize(): that reports the present
@@ -1149,6 +1153,14 @@ const GLXPost = (function () {
       gl.uniform1f(mirU.uAcesD, PostCommon.knob(CT, "acesD"));
       gl.uniform1f(mirU.uAcesE, PostCommon.knob(CT, "acesE"));
       gl.uniform1f(mirU.uFlip, mirFlip ? 1 : 0);
+      // The composite's colour grade + dither inputs (COLOUR_GRADE / DITHER_LSB).
+      const grade = opts && opts.grade;
+      const gSh = grade && grade.shadow ? grade.shadow : _ONE3, gHi = grade && grade.hi ? grade.hi : _ONE3;
+      gl.uniform3f(mirU.uGradeShadow, gSh[0], gSh[1], gSh[2]);
+      gl.uniform3f(mirU.uGradeHi, gHi[0], gHi[1], gHi[2]);
+      gl.uniform1f(mirU.uGradeStr, grade && grade.str !== undefined ? grade.str : 0);
+      for (const k of _MIR_GRADE_KNOBS) gl.uniform1f(mirU[k[0]], PostCommon.knob(CT, k[1]));
+      gl.uniform1f(mirU.uGrainTime, F.time);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       bindVAO(null);
       gl.enable(gl.DEPTH_TEST);

@@ -146,8 +146,9 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
   per circuit). A def without `turns` falls back to **curvature-peak**
   `__apex.corners()` for corner boards — not the curated FIA apexes. The 28
   `classic: true` circuits carry `turns` (the N strongest curvature peaks,
-  N = the real turn count) but mostly no researched `sectors`; those consumers
-  fall back to thirds. (The 16 in `import-circuit-path --classics` are the
+  N = the real turn count). Every def now carries `sectors`; where no FIA
+  split was researched they sit at ~1/3 and ~2/3, snapped to the nearest
+  straight (a missing key still falls back to thirds). (The 16 in `import-circuit-path --classics` are the
   subset that tool holds traces for, not the classic roster.)
 - **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
   `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —

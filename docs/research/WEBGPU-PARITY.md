@@ -229,7 +229,7 @@ Do not re-port these. They are the Phase 2–4b ceiling:
 
 - Adapter / device / swapchain, `Z01` GL→WebGPU clip remap, device-lost → GLX fallback
 - LIT into `rgba16float` + `depth24plus`; FRAME UBO + 32-light storage buffer
-- Sun + car shadow maps, comparison-sampler PCF, 512² `r16float` blocker map
+- Sun + car shadow maps, comparison-sampler PCF, 512² `r32float` blocker map (textureLoad, unfilterable)
 - Sky, chunked cull, env-probe cube (LOD 0), road-only SSR pass
 - Post: SSAO + separable denoise, world-space god-ray + lamp vol + separable blur, bloom mip chain, ACES composite, FXAA
 - Composite image FX: chromatic aberration, sharpen, speed blur, grain, flare
@@ -423,7 +423,7 @@ and keep `matTexScales[i] === 0` so the shader short-circuits.
 No new resource. WGX already:
 
 - binds `shadowTex` + `sampler_comparison` and uses `textureSampleCompareLevel`
-- downsamples the sun map to `blockerTex` (`r16float`) and runs `findBlocker`
+- downsamples the sun map to `blockerTex` (`r32float`, the min over each 4×4 source footprint) and runs `findBlocker`
 
 GLX's remaining quality is in `sampleShadow` (`js/render/glx/shaders/glsl-lit.js`):
 rotated Poisson 8-tap in the near field, 4-tap when
@@ -435,7 +435,7 @@ scales the GLX knob — do not silently change the number without a driven lap).
 **Do not** bind the depth texture as both `texture_depth_2d` + a non-comparison
 `sampler` in the same pipeline. Compat-mode / GLES validation rejects that
 ([gpuweb compatibility-mode notes](https://github.com/gpuweb/gpuweb/blob/main/proposals/compatibility-mode.md)).
-The separate `r16float` blocker is the correct WebGPU spelling of GLX's
+The separate `r32float` blocker is the correct WebGPU spelling of GLX's
 sampler-object trick (one depth texture, two sampler objects).
 
 ### 4.5 Lamp-fog + world-space god-ray
@@ -599,7 +599,7 @@ regresses.
 |---|---|---|
 | Clip-space z | GL NDC z ∈ [-1,1]; WebGPU ∈ [0,1]. `Z01` left-multiplies viewProj and lightVP; `Z01INV` rebuilds SSAO invProj | Applying `Z01` to `invViewProj` (sky rays) half-clips the sky |
 | No loose uniforms | FRAME UBO + light storage + 256-byte dynamic draw slots | Adding a `uniform` outside a struct / bind group |
-| Comparison vs raw depth | Comparison sampler on `texture_depth_2d`; raw reads from `r16float` blocker | Sampling `texture_depth_2d` with a filter sampler |
+| Comparison vs raw depth | Comparison sampler on `texture_depth_2d`; raw `textureLoad` reads from the `r32float` blocker | Sampling `texture_depth_2d` with a filter sampler |
 | Async pipeline errors | `createRenderPipeline` returns a live-looking object; draws drop on the floor. Boot self-test + error scope | Shipping a new pass without extending `_selfTest` |
 | Descriptor-copy install | Missing names inherit dead GLX fns | Adding a GLX method without an explicit WGX value |
 | Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |

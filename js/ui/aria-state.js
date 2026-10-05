@@ -141,13 +141,14 @@ window.AriaState = (function () {
     }
   }
 
+  function syncOne(r) {
+    syncRoot(r);
+    paintOnOff(r);
+    syncHashNav(r);
+    syncValueText(r);
+  }
   function syncAll() {
-    for (const r of document.querySelectorAll(ROOTS)) {
-      syncRoot(r);
-      paintOnOff(r);
-      syncHashNav(r);
-      syncValueText(r);
-    }
+    for (const r of document.querySelectorAll(ROOTS)) syncOne(r);
   }
 
   // Coalesce: a rebuilt list fires one mutation per row, and the answer for the
@@ -159,23 +160,35 @@ window.AriaState = (function () {
   // callback one dropped frame LATCHED this module off permanently — it synced
   // the data hub and never the car-setup tabs. Nothing here is visual, so there
   // is no reason to wait for a frame.
+  //
+  // ONLY THE ROOT THAT CHANGED. Every root has its own observer, and a batch
+  // re-syncs the roots whose records arrived — a slider dragged in SETTINGS
+  // used to re-walk every button, fold and range in the career, garage, data
+  // hub and every other observed screen at the input rate.
   let pending = 0;
-  const schedule = () => {
+  const dirty = new Set();
+  const schedule = (root) => {
+    dirty.add(root);
     if (pending) return;
-    pending = setTimeout(() => { pending = 0; syncAll(); }, 0);
+    pending = setTimeout(() => {
+      pending = 0;
+      const roots = [...dirty];
+      dirty.clear();
+      for (const r of roots) syncOne(r);
+    }, 0);
   };
 
   function init() {
     Log.info("game", "AriaState.init");
-    const obs = new MutationObserver((records) => {
-      for (const r of records) {
-        if (r.type === "childList" || r.type === "attributes" || r.type === "characterData") {
-          schedule(); return;
+    for (const root of document.querySelectorAll(ROOTS)) {
+      const obs = new MutationObserver((records) => {
+        for (const r of records) {
+          if (r.type === "childList" || r.type === "attributes" || r.type === "characterData") {
+            schedule(root); return;
+          }
         }
-      }
-    });
-    for (const r of document.querySelectorAll(ROOTS)) {
-      obs.observe(r, {
+      });
+      obs.observe(root, {
         subtree: true, childList: true, characterData: true,
         attributes: true, attributeFilter: ["class"],
       });

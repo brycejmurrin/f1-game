@@ -129,7 +129,7 @@ const HudReadouts = (function () {
   const POS_HOLD_MS = 2000, GAP_MS = 2000, FOREIGN_MS = 1500;
   function speaker(live) {
     let said = "", foreign = "", foreignT = -1e9, lastT = -1e9;
-    let rank = 0, rankT = 0, rankSaid = 0, best = Infinity, queue = [], liveT = 0;
+    let rank = 0, rankT = 0, rankSaid = 0, best = Infinity, queue = [];
     function reset() { rank = 0; rankT = 0; rankSaid = 0; best = Infinity; queue = []; }
     function push(key, text) {
       for (let i = 0; i < queue.length; i++) if (queue[i].key === key) { queue[i].text = text; return; }
@@ -156,11 +156,11 @@ const HudReadouts = (function () {
       const line = queue.shift();
       if (line.key === "pb" && /BEST/i.test(foreign) && now - foreignT < 4000) return null;   // the engineer just said it
       said = line.text; lastT = now;
-      // Same beat as showAnnounce: clear, then write a moment later, so a
-      // line equal to what the region already holds is still a change.
-      live.textContent = "";
-      clearTimeout(liveT);
-      liveT = setTimeout(() => { live.textContent = said; }, 60);
+      // Through the region's one writer (js/ui/live-region.js) at HUD priority,
+      // the lowest: it keeps the clear-then-write beat, and a flag or a radio
+      // call in the same tick goes first instead of being overwritten.
+      if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "hud");
+      else live.textContent = said;
       return said;
     }
     return { tick, reset };

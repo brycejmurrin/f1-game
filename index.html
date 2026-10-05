@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- @gen-shell:csp -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
@@ -647,6 +650,9 @@
   <span>Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
   <button id="ios-install-x" type="button" aria-label="Dismiss">&times;</button>
 </div>
+<!-- Android / desktop Chromium: the browser's own install offer, behind one tap
+     (beforeinstallprompt, js/ui/platform-session.js installChip). -->
+<button id="install-chip" type="button" hidden>INSTALL APP</button>
 
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
@@ -3677,6 +3683,7 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/live-region.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
