@@ -33,7 +33,13 @@
     dressingExclusions: [
       // Keep generic city furniture out of the tunnel and the Casino sightline.
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
+      // (racing 0.108-0.178: the Beau Rivage climb, kept as it ships.)
       { kind: "city", s0: 0.0116, s1: 0.0816 },
+      // Casino Square as BUILT (racing 0.205-0.285, both sides): the Massenet
+      // bust, the Hôtel de Paris, the Café, the fountain and the Casino were
+      // re-seated here 2026-10-05 (scenery/monaco.js KRACE); the landmarks
+      // own the crest, no generic city or scatter between them.
+      { kinds: ["city", "foliage"], s0: 0.9046, s1: 0.9846 },
       { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
       { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
       // Beau Rivage climb (R) — sparse cream/ochre canyon, not auto cityFront.
@@ -65,8 +71,15 @@
       { s: 0.8180, halfM: 200, rise: 11 },  // arc 0.400 Mirabeau - Loews shoulder
       { s: 0.5750, halfM: 360, rise: -4 },  // arc 0.643 tunnel exit / harbour chicane / Tabac
     ],
+    // hwZones are SOURCE index fractions (TrackSpace.range "source": racing
+    // index = 0.2516 - s), then interpolated by arc; the arc windows below are
+    // MEASURED on the built hw (scratch/monaco-hw.cjs, 2026-10-05).
     hwZones: [
-      { s0: 0.1524, s1: 0.2131, hw: 4.6, ease: 0.012 },  // arc 0.112-0.150 Massenet/Casino
+      // Casino Square: Massenet's apex (0.2124) through Casino corner
+      // (0.2743) — racing index 0.167-0.280 -> source 0.9712 / 0.0844, a
+      // wrap-through-zero zone (applyHwZones handles s1 < s0). The old
+      // 0.1524-0.2131 narrowed arc 0.044-0.114, Ste Devote / Beau Rivage.
+      { s0: 0.9712, s1: 0.0844, hw: 4.6, ease: 0.012 },  // arc 0.205-0.285 Massenet/Casino
       { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
       { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.485-0.510 Portier
       { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.770-0.792 Tabac
