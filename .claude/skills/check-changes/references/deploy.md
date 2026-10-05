@@ -78,8 +78,8 @@ git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED since 2026-09-30 
 
 Live `version.json`: subagent **deploy-research**, or
 `https://brycejmurrin.github.io/f1-game/version.json` via MCP fetch / WebFetch —
-or `curl`, which DOES reach github.io from this container (HTTP 200 in 0.36 s,
-measured 2026-09-18; this line used to say it does not). For "is MY commit
+or `curl`, which reaches github.io from this container (HTTP 200 in 0.36 s,
+measured 2026-09-18). For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
 `curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take up to ~25 min. A NEWER push to the

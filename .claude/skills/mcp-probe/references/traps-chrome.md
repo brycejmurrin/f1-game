@@ -5,7 +5,7 @@ Load from traps.md when debugging this class of failure.
 ## Contents
 - THE trap: never render in the MCP browser while Playwright is running
 - A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine
-- A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
+- A car drawn off the road after `jump()`/`park()`: check the render anchors first
 
 ## THE trap: never render in the MCP browser while Playwright is running
 
@@ -105,27 +105,13 @@ back, both reproduced twice in the same session:
 
 ---
 
-## A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
+## A car drawn off the road after `jump()`/`park()`: check the render anchors first
 
-`playerAnchor()`/`renderPosOf()` (js/game.js) draw the HUMAN car from
-`c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
-toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
-arc-based anchors, which only feed the AI-car branch). `jump()`
-(`js/agent/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
-`rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
-between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
-`G.frozen` (physics never steps again, so `renderAlpha` never advances) that
-lerp never resolved — the car sat at a permanent mid-blend position, which on
-a curved track can be off the road, mid-air, or nowhere near either endpoint.
-MEASURED: `park(0.10)` on Monaco (a track with a ~36 m road-over-terrain
-viaduct gap right there) rendered the car airborne against the skyline, no
-road visible under it, in BOTH the chase cam and a free-cam aimed exactly at
-`physState().px/pz` — the free-cam shot showed no car at all, because the
-render position wasn't near the aim point either. `physState()`/`groundY()`
-read correctly the whole time — only the drawn mesh was wrong, which is why
-this reads as "the car is floating," not as an obvious data bug. Fixed by
-`jump()` calling `AgentView.syncRenderAnchors(G.player)` (js/agent/agentview.js;
-it sets `rPrevPx`/`rPrevPz` and the other render anchors) — verified: same `park(0.10)` now renders the car grounded,
-correctly oriented, at the exact `physState()` position. If a screenshot ever
-shows the car detached from the road again, checking `rPrevPx` vs `px` is the
-first move, not distrusting the shot.
+The HUMAN car is drawn from the world-space render anchors `c.rPrevPx`/`c.rPrevPz`
+blended toward `c.px`/`c.pz` by `renderAlpha` (`playerAnchor()`/`renderPosOf()`,
+js/game.js), not from the arc anchors that feed the AI branch. `jump()` syncs them
+through `AgentView.syncRenderAnchors(G.player)`, so a teleport renders grounded at
+the `physState()` position. If a screenshot ever shows the car detached from the
+road, compare `rPrevPx` with `px` before distrusting the shot: `physState()` and
+`groundY()` read the physics position and stay correct even when the drawn mesh
+is wrong.

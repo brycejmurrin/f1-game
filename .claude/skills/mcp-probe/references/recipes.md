@@ -281,7 +281,7 @@ framework, no parallelism, no reporter. Use Playwright (`tools/ci/test-bg.mjs`).
 The whole suite tests the working tree; **nothing verifies the shipped artifact**.
 After a Pages deploy, confirm the live site actually serves the build you shipped.
 
-Since 2026-09 no TinyFish MCP is attached: the container egress blocks
+No TinyFish MCP is attached here: the container egress blocks
 `agent.tinyfish.ai`, so `tools/mcp/tinyfish-mcp.sh deploy-check --tip` and
 `probe-mcp.py call tinyfish_*` can never answer here (they stay as CLIs for a
 box with egress). Route the check to the **deploy-research** subagent, which

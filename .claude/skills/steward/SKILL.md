@@ -18,8 +18,8 @@ anything on github.io → `deploy-research` (the only thing here that reaches it
 A draft PR's fast-tier run and its `ready_for_review` run land in the same
 concurrency group (`ci-…head.ref`) with `cancel-in-progress`, so marking the PR
 ready cancels the fast run on the same `head_sha` seconds after it starts
-(ci.yml runs on push for the deploy branch only since 2026-09-24; before that
-a branch push and its PR run did the same). **A live sibling on
+(ci.yml runs on push for the deploy branch only; a topic-branch push starts
+no run of its own). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
 failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
 no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
@@ -55,7 +55,7 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
 
 **Do not sync on every tip move.** Branch protection (2026-09-30) requires
 the 12 fast-tier checks green on the PR's own head, NOT an up-to-date
-branch, and every re-sync is a fresh PR run (the account was 20 slots, now 40) — re-syncs
+branch, and every re-sync is a fresh PR run (40 concurrent jobs on this account) — re-syncs
 were ~80 % of the deploy branch's commits on 2026-09-29. Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands.

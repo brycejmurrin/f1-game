@@ -44,7 +44,7 @@ return a short summary with citations (URLs + live vs local build numbers).
    is the train, not a miss; past that, read `pages.yml`'s latest run. A behind
    WORKING TREE is not a Pages miss — compare to the tip, not to disk.
 
-   **NEVER VERDICT ON A `version.json` BUILD NUMBER.** Since 2026-09-01 the
+   Never verdict on a `version.json` build number: since 2026-09-01 the
    shell generation is STAMPED, NOT COMMITTED (`pages.yml` §"Stamp the shell
    generation"): the deploy computes `BUILD=$(( 2000 + $(git rev-list --count
    HEAD) ))`, and the committed `version.json` is a placeholder that workflow's

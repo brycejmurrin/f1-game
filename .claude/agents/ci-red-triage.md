@@ -20,8 +20,7 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    time at timeout caps before deciding whether cancellation was superseded (AGENTS.md §Watching CI and Pages). Two shapes, both
    NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
    seconds in, a sibling still running — the designed draft/ready dedupe
-   (one group per branch name; marking a draft ready cancels its fast run;
-   before 2026-09-24 a branch push and its PR run did the same). Say which,
+   (one group per branch name; marking a draft ready cancels its fast run). Say which,
    and read the live sibling for dedupe. A newest cancelled run with failed jobs
    or timeout-cap evidence is a real red; identify its job and assertion.
 2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a

@@ -2,11 +2,8 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Six agents (`ci-red-triage` added
-2026-09-22; seven until 2026-09:
-`worktree-regression-check` folded into **verify-agent** `--base`, and
-`doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
-lenses — `.claude/workflows/README.md`).
+single Claude tree to avoid drift). Six agents; the roster's fold history is
+in `docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md` §4.3.
 
 | Agent | Use when |
 |---|---|

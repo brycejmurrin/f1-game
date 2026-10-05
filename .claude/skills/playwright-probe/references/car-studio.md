@@ -14,7 +14,7 @@ cockpit/hood on a circuit → **playwright-probe** `shot.mjs`.
 Every command below boots Chromium (BROWSER-ONLY); `render-car` needs the `:3456` server, `carshot`/`garage-angles` self-boot.
 
 ```sh
-node tools/car/carshot.mjs 40 day 2 artifacts/tmp/apex-carshot.jpg   # az tod teamIdx out (CLI; no MCP wrap since 2026-09)
+node tools/car/carshot.mjs 40 day 2 artifacts/tmp/apex-carshot.jpg   # az tod teamIdx out (CLI; no MCP wrap)
 python3 -m http.server 3456        # or: npx serve -l 3456 .
 node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all
