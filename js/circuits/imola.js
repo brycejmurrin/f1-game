@@ -55,8 +55,16 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.32, 0.66],
-    turns: [0.1529, 0.1639, 0.1844, 0.1919, 0.2804, 0.2969, 0.3549, 0.3624, 0.4834, 0.5139, 0.5204, 0.5674, 0.5904, 0.5999, 0.6984, 0.8169, 0.8529, 0.8799, 0.9459],
+    // FIA 2025 circuit map v3 (15 May): S1 115 m before T7/Tosa, S2 190 m
+    // before T14/Variante Alta's first right. Built lap = 4871.249297939 m.
+    // Nominal geometric anchors, not surveyed apex coordinates: T7 is the
+    // full hairpin's half-heading point (.35812372), not either curvature
+    // peak; T14 is the first right's local peak (.69293924). The FIA plan
+    // numbers physical bends: T1 precedes Tamburello, T8 is the uphill right,
+    // T11–13 are Acque Minerali. Never number by sorting curvature peaks.
+    // Source: fia.com/system/files/decision-document/2025_imola_event_-_circuit_map_-_imola_2025.pdf
+    sectors: [0.33451582, 0.65393488],
+    turns: [0.0788, 0.1529, 0.1639, 0.1844, 0.2804, 0.2969, 0.35812372, 0.4392, 0.4834, 0.5204, 0.5674, 0.5904, 0.5999, 0.69293924, 0.6984, 0.8169, 0.8529, 0.8799, 0.9459],
     furniture: { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },  // columnar spires
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "sandstone", "concrete"],  // Ferrari red over Imola's stone-and-terracotta town

@@ -361,11 +361,71 @@
       tyreWall(0.762, 0.798, 1, 5.0, [0.55, 0.55, 0.52]);
       guardrail(0.748, 0.810, 1, 3.5, [0.84, 0.85, 0.88]);
 
+      // Keep the original floor unless the uphill part of this footprint
+      // reaches above it. Account for the building's tilted local floor,
+      // rather than seating a whole unit on one downhill terrain sample.
+      function footprintFloor(base, b, w, d, feet) {
+        const floor = base.slice();
+        for (const x of [-w / 2, 0, w / 2]) for (const z of [-d / 2, 0, d / 2]) {
+          const p = vadd(vadd(base, b[0], x), b[2], z);
+          const gy = terrainYAt(p[0], p[2]);
+          if (gy != null) {
+            floor[1] = Math.max(floor[1], gy - b[0][1] * x - b[2][1] * z + 0.02);
+            if (feet) feet.low = Math.min(feet.low, gy);
+          }
+        }
+        return floor;
+      }
+
+      // Bound the same world-Y support box foundation() emits, including its
+      // embedded foot. A tilted basis moves that box along the local tangent.
+      function foundationBounds(c, b, size, top) {
+        let low = Infinity;
+        for (const x of [-0.5, 0, 0.5]) for (const z of [-0.5, 0, 0.5]) {
+          const wx = c[0] + b[0][0] * x * size[0] + b[2][0] * z * size[1];
+          const wz = c[2] + b[0][2] * x * size[0] + b[2][2] * z * size[1];
+          let gy = terrainYAt(wx, wz);
+          if (gy == null) gy = Tracks.terrainY(api.track, wx, wz);
+          if (gy != null) low = Math.min(low, gy);
+        }
+        const h = top - low + 0.6;
+        return Number.isFinite(low) && h > 0.05
+          ? { center: [c[0], low - 0.6 + h / 2, c[2]], size: [size[0], h, size[1]] } : null;
+      }
+
+      function partsBounds(b, parts) {
+        const dot = (a, c) => a[0] * c[0] + a[1] * c[1] + a[2] * c[2];
+        const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+        for (const part of parts) if (part) for (let axis = 0; axis < 3; axis++) {
+          const p = dot(part.center, b[axis]);
+          let reach = 0;
+          for (let j = 0; j < 3; j++) reach += Math.abs(dot(b[j], b[axis])) * part.size[j] / 2;
+          lo[axis] = Math.min(lo[axis], p - reach);
+          hi[axis] = Math.max(hi[axis], p + reach);
+        }
+        let center = [0, 0, 0];
+        for (let axis = 0; axis < 3; axis++) center = vadd(center, b[axis], (lo[axis] + hi[axis]) / 2);
+        return { center, size: hi.map((v, axis) => v - lo[axis]), basis: b };
+      }
+
       function chalet(k, side, dist, w, h, d, wallCol, roofCol) {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
-        const bounds = { center: vadd(a.c, a.u, h), size: [w * 1.2, h * 2, d * 1.1], basis: b };
+        const originalY = a.c[1];
+        a.c = footprintFloor(a.c, b, w, d);
+        const bounds = partsBounds(b, [
+          { center: vadd(a.c, a.u, h / 2), size: [w, h, d] },
+          { center: vadd(a.c, a.u, h * 1.35), size: [w * 1.05, h * 0.7, d] },
+          { center: vadd(vadd(vadd(a.c, a.u, h * 1.5), a.t, d * 0.28), a.r, w * 0.26),
+            size: [w * 0.16, h * 0.85, w * 0.16] },
+          { center: vadd(vadd(a.c, a.u, h * 0.5), a.r, -side * (w * 0.5 + 0.06)),
+            size: [0.12, h * 0.34, d * 0.42] },
+          a.c[1] > originalY + 0.05 && foundation ? foundationBounds(a.c, b, [w, d], a.c[1] + 0.02) : null,
+        ]);
         modelGroup(`spa-chalet-${k}-${side}`, bounds, (stage) => {
+          if (a.c[1] > originalY + 0.05 && foundation)
+            foundation(stage, { center: a.c, size: [w, d], top: a.c[1] + 0.02,
+              basis: b, col: [0.42, 0.40, 0.38], embed: 0.6 });
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, h / 2), [w, h, d], wallCol, b);              // body
           stage._mat = MAT.ROOF;
@@ -379,51 +439,80 @@
         });
       }
 
-      function rvCamp(k, side, dist, count) {
+      function rvCamp(k, side, dist, count, opts) {
         const a = anchor(k, side, dist);
         const b = [a.r, a.u, a.t];
+        const sourceK = opts && Number.isInteger(opts.sourceK) ? opts.sourceK : k;
         const vanCols = [[0.86, 0.87, 0.88], [0.80, 0.44, 0.26], [0.72, 0.74, 0.78], [0.60, 0.66, 0.58]];
         const tentCols = [[0.78, 0.30, 0.24], [0.24, 0.44, 0.62], [0.86, 0.74, 0.30], [0.40, 0.56, 0.34]];
-        const centre = vadd(a.c, a.r, -side * 4.5);
-        modelGroup(`spa-rv-camp-${k}-${side}`, {
-          center: vadd(centre, a.u, 2.5), size: [14, 5, Math.max(28, count * 4.5)], basis: b,
-        }, (stage) => {
-          for (let i = 0; i < count; i++) {
-            const row = i % 2, col = (i / 2) | 0;
-            const off = (col - count / 4) * 9;
-            const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
-            // Re-seat each unit on its own ground: the camp spans ~36 m of
-            // Ardennes hillside and a0's height buried caravans up to 7 m.
-            // The lower of two samples 3 m apart along the unit, so its
-            // downhill end never hangs.
-            {
-              const g0 = terrainYAt(base[0] + a.t[0] * 2.6, base[2] + a.t[2] * 2.6);
-              const g1 = terrainYAt(base[0] - a.t[0] * 2.6, base[2] - a.t[2] * 2.6);
-              // Clamped to +/-3 m of the anchor: K(0.075)'s camp straddles the
-              // terrain seam between the climb and the pit straight, and an
-              // unclamped drop grew its emitted box onto the road (rejected).
-              if (g0 != null && g1 != null)
-                base[1] = Math.max(a.c[1] - 3, Math.min(a.c[1] + 3, Math.min(g0, g1)));
-            }
-            if (hash(k * 3 + i) < 0.55) {
-              const vc = vanCols[(hash(k * 7 + i) * 4) | 0];
+        const units = [];
+        for (let i = 0; i < count; i++) {
+          const row = i % 2, col = (i / 2) | 0;
+          const off = (col - count / 4) * 9;
+          const base = vadd(vadd(a.c, a.t, off), a.r, -side * (row * 9));
+          const g0 = terrainYAt(base[0] + a.t[0] * 2.6, base[2] + a.t[2] * 2.6);
+          const g1 = terrainYAt(base[0] - a.t[0] * 2.6, base[2] - a.t[2] * 2.6);
+          if (g0 != null && g1 != null)
+            base[1] = Math.max(a.c[1] - 3, Math.min(a.c[1] + 3, Math.min(g0, g1)));
+          const van = hash(sourceK * 3 + i) < 0.55;
+          const size = van ? [3.1, 6.2] : [3.4, 4.2];
+          const feet = { low: Infinity };
+          const floor = footprintFloor(base, b, size[0], size[1], feet);
+          units.push({ base: floor, size, van, raised: floor[1] > base[1] + 0.05,
+            low: Number.isFinite(feet.low) ? feet.low : floor[1] });
+        }
+        const id = `spa-rv-camp-${sourceK}-${side}`;
+        const emitUnit = (stage, i) => {
+            const { base, size, van, raised } = units[i];
+            let complete = true;
+            if (raised && foundation)
+              complete = foundation(stage, { center: base, size, top: base[1] + (van ? 0.02 : 0.22),
+                basis: b, col: [0.42, 0.43, 0.42], embed: 0.6 }) !== false;
+            if (van) {
+              const vc = vanCols[(hash(sourceK * 7 + i) * 4) | 0];
               stage._mat = MAT.METAL;
-              addBox(stage, vadd(base, a.u, 1.25), [3.0, 2.6, 6.2], vc, b);         // caravan body (skirted to grade)
-              addBox(stage, vadd(base, a.u, 2.65), [3.1, 0.5, 6.2],
-                     [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b);                 // roof cap
+              complete = addBox(stage, vadd(base, a.u, 1.25), [3.0, 2.6, 6.2], vc, b) !== false && complete;
+              complete = addBox(stage, vadd(base, a.u, 2.65), [3.1, 0.5, 6.2],
+                     [vc[0] * 0.8, vc[1] * 0.8, vc[2] * 0.8], b) !== false && complete;
               stage._mat = 0;
             } else {
-              const tc = tentCols[(hash(k * 11 + i) * 4) | 0];
+              const tc = tentCols[(hash(sourceK * 11 + i) * 4) | 0];
               stage._mat = MAT.FABRIC;
-              addPrism(stage, vadd(base, a.u, 0.2), [3.4, 1.9, 4.2], tc, b);        // ridge tent
+              complete = addPrism(stage, vadd(base, a.u, 0.2), [3.4, 1.9, 4.2], tc, b) !== false && complete;
               stage._mat = 0;
             }
-          }
+            return complete;
+        };
+        const emitShared = (stage) => {
           stage._mat = MAT.FABRIC;
           addBox(stage, vadd(a.c, a.u, 2.6), [7, 0.15, 5], [0.90, 0.90, 0.86], b); // shared awning
           stage._mat = 0;
           addCone(stage, a.c, 0.6, 1.0, [0.95, 0.55, 0.15], 5, b);                 // campfire glow
-        });
+        };
+        const unitParts = units.map(({ base, size, van, raised }) => [
+          ...(van ? [
+            { center: vadd(base, a.u, 1.25), size: [3.0, 2.6, 6.2] },
+            { center: vadd(base, a.u, 2.65), size: [3.1, 0.5, 6.2] },
+          ] : [{ center: vadd(base, a.u, 1.15), size: [3.4, 1.9, 4.2] }]),
+          raised && foundation ? foundationBounds(base, b, size, base[1] + (van ? 0.02 : 0.22)) : null,
+        ]);
+        const sharedParts = [
+          { center: vadd(a.c, a.u, 2.6), size: [7, 0.15, 5] },
+          { center: vadd(a.c, a.u, 0.5), size: [1.2, 1.0, 1.2] },
+        ];
+        if (opts && opts.unitGroups) {
+          // Separate complete units prevent empty camp space at an uphill
+          // unit's height from rejecting a clear downhill neighbour.
+          for (let i = 0; i < count; i++) {
+            modelGroup(`${id}:unit-${i}`, partsBounds(b, unitParts[i]), (stage) => emitUnit(stage, i));
+          }
+          modelGroup(id, partsBounds(b, sharedParts), emitShared);
+        } else {
+          modelGroup(id, partsBounds(b, unitParts.flat().concat(sharedParts)), (stage) => {
+            for (let i = 0; i < count; i++) emitUnit(stage, i);
+            emitShared(stage);
+          });
+        }
       }
 
       function timingTower(k, side, dist) {
@@ -472,7 +561,9 @@
       chalet(K(0.72),  1, 66, 7, 5, 10, [0.80, 0.77, 0.71], [0.34, 0.22, 0.16]);
 
       // Forest campsites on the Eau Rouge/Raidillon banking and Kemmel hillside.
-      rvCamp(K(0.075), 1, 40, 8);
+      // Clearance search moved only this camp along La Source's outer area.
+      // Keep its original unit choices, colors and stable ids at sourceK(.075).
+      rvCamp(K(0.065), 1, 40, 8, { unitGroups: true, sourceK: K(0.075) });
       rvCamp(K(0.10), -1, 46, 7);
       rvCamp(K(0.135), 1, 52, 8);
       rvCamp(K(0.48), -1, 48, 6);
@@ -511,7 +602,7 @@
         circuitKit.recoveryBay({ id: "kit:spa:pouhon-recovery", frac: 0.565,
           side: -1, gap: 18, size: [12, 4.5, 18] });
         circuitKit.marshalShelter({ id: "kit:spa:blanchimont-shelter", frac: 0.858,
-          side: 1, gap: 8, size: [5, 3.2, 5] });
+          side: 1, gap: 8, size: [5, 3.2, 5], detail: "structure" });
       }
 
       for (const [s, side, seed] of [[0.50, -1, 811], [0.57, -1, 827],
@@ -539,13 +630,17 @@
       // scenery shift). Substitute species on the existing 4 m row; no extra
       // ranks or denser scattering. The rest of the woodland stays pine-led.
       // along() includes both ends: the next belt alone owns the seam node.
+      // Only existing broadleaf placements opt into lobed crowns, at most
+      // 30 accepted substitutions on each side; guards/overflow keep legacy trees.
       const mixedEnd = 0.63 - 1 / n;
       forestEdge(0.55, mixedEnd,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
-        col: PINE_D, col2: PINE_M, pineFrac: 0.80 });
+        col: PINE_D, col2: PINE_M, pineFrac: 0.80,
+        treeOptions: { crown: "lobed", maxDetailed: 30 } });
       forestEdge(0.63, 0.74,  1, 14, { density: 0.74, hMin: 13, hMax: 24,
         col: PINE_D, col2: PINE_M, pineFrac: 0.92 });
       forestEdge(0.55, mixedEnd, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
-        col: PINE_M, col2: PINE_L, pineFrac: 0.80 });
+        col: PINE_M, col2: PINE_L, pineFrac: 0.80,
+        treeOptions: { crown: "lobed", maxDetailed: 30 } });
       forestEdge(0.63, 0.74, -1, 13, { density: 0.72, hMin: 12, hMax: 23,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
       forestEdge(0.74, 0.88,  1, 12, { density: 0.78, hMin: 13, hMax: 24,
