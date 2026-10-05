@@ -91,6 +91,17 @@ when the host catalog is empty; `apex-tools` and `playwright-official` are
 already in project `.mcp.json`. Never run **chrome-devtools** next to
 `browser_*`, and never either of them while `playwright test` is live.
 
+**Two first-use traps of `browser_*` in a Cloud container (measured 2026-10-05).**
+1. `Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome`:
+   the host's `playwright-official` asks for the Chrome *channel*, which the
+   image does not ship. Point that path at the harness Chromium instead of
+   running `playwright install` — `mkdir -p /opt/google/chrome && ln -sf "$(node
+   tools/lib/chromium-path.mjs --path)" /opt/google/chrome/chrome`.
+2. `browser_take_screenshot` times out (5 s) on any page with the live game
+   canvas: the WebGL loop never goes idle. Hide it first —
+   `browser_evaluate` `() => { document.getElementById('game').style.display = 'none'; }`
+   — then screenshot (menu / HUD work only; a render check is `apex_shot`).
+
 **Host catalog** (Cursor Cloud / Claude inject these; they are **not** extra
 rows in repo `.mcp.json`):
 
