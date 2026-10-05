@@ -324,7 +324,7 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1867,7 +1867,10 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const longTree = name === "apex_verify_change_fast"
     || name === "apex_rotate_markings_check" || name === "apex_graph_parity"
     || name === "apex_frame_report" || name === "apex_who_is_on_it";
-  const timeoutMs = longTree ? 180000 : 60000;
+  // verify-change --fast runs the node suites serially; measured >180 s on a
+  // ~90-file diff (2026-10-05), where the cap killed it with no verdict. Ten
+  // minutes is its ceiling; the host moves a long MCP call to the background.
+  const timeoutMs = name === "apex_verify_change_fast" ? 600000 : longTree ? 180000 : 60000;
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
