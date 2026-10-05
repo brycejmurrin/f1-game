@@ -331,3 +331,13 @@ test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the 
   assert.match(ps, /controllerchange/);
   assert.match(read("js/core/script-loader.js"), /UpdateCheck\.blocksLazyLoad\(\)/);
 });
+
+// UI-09 (hunt2): a modal dialog.screen is in the top layer and makes the rest
+// of the document inert, so UPDATE READY sat under RESULTS' backdrop, visible
+// and unpressable. It stands down under a modal, as #save-warning does.
+test("UPDATE READY and the save warning stand down under a modal dialog", () => {
+  const css = read("css/overlays.css");
+  assert.match(css, /body:has\(dialog:modal\) #update-chip \{ display: none; \}/);
+  assert.match(css, /body:has\(dialog\[open\]\) #save-warning \{ display: none; \}/);
+  assert.doesNotMatch(css, /Above every\s+menu sheet/, "the comment no longer promises what the top layer forbids");
+});
