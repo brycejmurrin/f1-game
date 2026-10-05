@@ -45,6 +45,9 @@ test.use({ viewport: { width: 960, height: 540 } });
 // least this many render objects. Measured 54–312 on monza/monaco here: a
 // revisit draws less than the first visit (monza 109–145, then 54 every run),
 // so this floor only rules out an undrawn world; assertion 2 is the leak's.
+// The floor is NOT lowered when the opening flyby `wide` shot is levelled at
+// the horizon (39 ROs on llvmpipe at u=0): picker warm frames sit on
+// turn-first (FlybySeq.warmProgress) so the leak path still draws.
 const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];

@@ -143,6 +143,17 @@ test("clearance lifts a shot, it does not relocate one", async () => {
   }
 });
 
+test("hidden picker warm sits on turn-first, not the horizon-levelled wide shot", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const u = F.warmProgress();
+    assert.ok(u > 0 && u < 1, "warmProgress is inside the sequence");
+    assert.equal(F.shotAt(u).id, "turn-first");
+    assert.equal(F.shotAt(0).id, "wide");
+    assert.equal(F.warmProgress([{ id: "wide", dur: 1 }]), 0, "an edited list without turn-first keeps shot 0");
+  });
+});
+
 test("each shot is continuous, and only a shot BOUNDARY is a cut", async () => {
   await withTrack("monza", (track, g) => {
     const FlybySeq = g.sandbox.FlybySeq;
