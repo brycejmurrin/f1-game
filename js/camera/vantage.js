@@ -273,30 +273,37 @@ function resetSmoothing() {
   for (const k in _hangOut) delete _hangOut[k];
   for (const k in _hangFast) delete _hangFast[k];
 }
+// The maps key by CamFeel's SCOPED key (#913's "tv:" prefix): the TV director
+// solving a car in the other bend must not read as the player's sign flip, and
+// a director cut must not zero the player's hang. CamFeel.follow scopes itself.
+function hangKey(key) {
+  return typeof CamFeel !== "undefined" && CamFeel.scopeKey ? CamFeel.scopeKey(key) : key;
+}
 function hangReset(key, lambda) {
-  _hangOut[key] = 0; _hangFast[key] = 0;
+  const hk = hangKey(key);
+  _hangOut[hk] = 0; _hangFast[hk] = 0;
   if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0);
 }
 function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
   if (!(dt > 0) || reduce || !gain) { if (snap || reduce) hangReset(key, lambda); return 0; }
   if (!kA) { hangReset(key, lambda); return 0; }
-  const raw = clamp(kA * 18, -1, 1);
+  const raw = clamp(kA * 18, -1, 1), hk = hangKey(key);
   if (!(dt > 0)) {   // a snap reseeds (like speedOpen) so the next live frame does not pop from a stale hang
-    _hangOut[key] = raw; _hangFast[key] = 0;
+    _hangOut[hk] = raw; _hangFast[hk] = 0;
     if (typeof CamFeel !== "undefined") CamFeel.follow(key, raw, lambda, 0);
     return raw * gain;
   }
-  const prev = _hangOut[key] || 0;
+  const prev = _hangOut[hk] || 0;
   // A chicane flips sign before a hairpin-rate head can arrive, and the two
   // sides cancel. Catch faster for a short stretch after the flip, then go
   // back to the lazy rate. A hairpin never takes this path.
-  let fast = _hangFast[key] || 0;
+  let fast = _hangFast[hk] || 0;
   if (prev * raw < -0.02) fast = 0.45;
   else fast = Math.max(0, fast - dt);
-  _hangFast[key] = fast;
+  _hangFast[hk] = fast;
   const lam = fast > 0 ? lambda * 3.2 : lambda;
   const eased = typeof CamFeel !== "undefined" ? CamFeel.follow(key, raw, lam, dt) : raw;
-  _hangOut[key] = eased;
+  _hangOut[hk] = eased;
   return eased * gain;
 }
 // Metres the rig opens along the view as speed rises. Not a second dolly:

@@ -230,7 +230,7 @@ const MirrorPass = (function () {
     // very top). Published in SCREEN px — css/hud.css divides by the card's
     // own zoom — and only when a card fits; otherwise the card stacks under
     // the mirror (--mir-bot).
-    const SIDE_MIN = 190, SIDE_GAP = 8;
+    const SIDE_MIN = 190, SIDE_GAP = 8, SIDE_ROWS = 96;
     let _sideFits = null, _sideX = "", _sideW = "";   // what side() last wrote (null: unknown)
     function side(er) {
       const b = document.body;
@@ -244,7 +244,24 @@ const MirrorPass = (function () {
       if (past(p)) right = Math.min(right, p.left - 12);
       if (past(s)) right = Math.min(right, s.left);
       if (past(c) && c.bottom > er.top) right = Math.min(right, c.left);
-      const x = er.right + SIDE_GAP, w = right - SIDE_GAP - x;
+      const x = er.right + SIDE_GAP;
+      // THE TOUCH DOCKS END THE STRIP TOO. The cockpit's right dock reaches the
+      // mirror's rows on a landscape phone (BOOST at y 72 on 844x390), and the
+      // card was published straight across it (survey: #announce [500,66 223x65]
+      // over #btn-boost [603,72]) — the same defect js/ui/hud.js radioTopSlot
+      // fixed for the top row. The card's rows are the mirror's top down by the
+      // card's own height (at least SIDE_ROWS while it is hidden); a group in
+      // them that reaches past the slot's start ends the strip at its left edge,
+      // one that already covers the start leaves no slot (the card stacks).
+      const ann = box(document.getElementById("announce"));
+      const rowsB = er.top + Math.max(er.height, SIDE_ROWS, ann ? ann.height : 0);
+      for (const d of [document.getElementById("dock-left"), document.getElementById("dock-right")]) {
+        for (const g of (d && d.children) || []) {
+          const r = g.getBoundingClientRect ? g.getBoundingClientRect() : null;
+          if (r && r.width > 0 && r.height > 0 && r.top < rowsB && r.bottom > er.top && r.right > x) right = Math.min(right, r.left);
+        }
+      }
+      const w = right - SIDE_GAP - x;
       const fits = w >= SIDE_MIN;
       // Compare before writing: a <body> class or custom-property write
       // invalidates style page-wide even when the value is the same.

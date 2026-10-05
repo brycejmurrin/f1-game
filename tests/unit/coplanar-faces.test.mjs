@@ -200,6 +200,14 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // istanbul, jerez, nurburgring, portimao) — a fixed slot moves coincidences,
 // it cannot remove them.
 // Both re-measured together on the merged tree.
+//
+// 2026-10-05 tarmac-fold chord samples (#993): fuji 9 -> 8 (one same-facing
+// spot left with the 300R fold). buddh 0 -> 1: two generic pit-straight
+// grandstand shells from buildSteps place(k,-1,14,[6,11,16]) (k = i*4) share
+// a 2.1 m² face at 13.9 mm after the extra control points re-seat the
+// resampled start (q=660 vs q=722; --why --raw). Positional coincidence from
+// the intended road move, not a new emitter class; raising records the
+// measured tree. korea stays 0.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );

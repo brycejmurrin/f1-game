@@ -53,6 +53,39 @@ test("verify-change routes a circuit edit to verify-track and graph.js to graph-
   assert.equal(plan.sweepsBeforeDeployPush, true, "track+circuit changes must carry the union-sweeps reminder");
 });
 
+test("verify-change hands graph-parity an explicit BASE (never the bare HEAD default)", (t) => {
+  // Bare `graph-parity --all` diffs only the UNCOMMITTED part against HEAD and,
+  // on a clean tree (the change already committed), exits 2 "nothing to
+  // compare" — which phase 1 counted as a FAIL. The plan carries the baseline:
+  // the merge-base the default selection diffs against, or --since's ref.
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/track/scenery/graph.js"]).out);
+  let mb = "";
+  try {
+    mb = execFileSync("git", ["merge-base", "HEAD", "origin/claude/f1-game-project-26h3ng"], { cwd: ROOT, encoding: "utf8" }).trim();
+  } catch (_) { /* shallow / no remote: the HEAD~1 fallback applies */ }
+  if (mb) assert.equal(plan.fast.graphParityBase, mb, "default baseline = merge-base with the deploy branch");
+  else assert.ok(plan.fast.graphParityBase === null || /^[0-9a-f]{40}$/.test(plan.fast.graphParityBase));
+  const since = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "--since", "deadbeef", "js/track/scenery/graph.js"]).out);
+  assert.equal(since.fast.graphParityBase, "deadbeef", "--since names the baseline outright");
+  const none = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/circuits/monza.js"]).out);
+  assert.equal(none.fast.graphParityBase, null, "no graph.js, no graph-parity baseline");
+
+  // The run path: a stub node fails graph-parity unless BASE reached it.
+  const env = driverEnv(t, { stubFastGate: true });
+  const stubDir = env.PATH.split(path.delimiter)[0];
+  fs.writeFileSync(path.join(stubDir, "node"), `#!${process.execPath}
+const tool = process.argv[2];
+if (tool === "tools/ci/bump-cache.mjs") console.log(JSON.stringify({consistent: true}));
+else if (tool === "tools/track/graph-parity.cjs") process.exit(process.env.BASE === "deadbeef" ? 0 : 91);
+else if (tool !== "tools/ci/tooling-fast.mjs") process.exit(90);
+`, { mode: 0o755 });
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", "--since", "deadbeef", "js/track/scenery/graph.js"], { env });
+  const out = JSON.parse(r.out);
+  const gp = out.phases.find((p) => p.name.startsWith("graph-parity"));
+  assert.ok(gp, r.out);
+  assert.equal(gp.ok, true, `graph-parity must run with BASE=deadbeef: ${JSON.stringify(gp)}`);
+});
+
 test("verify-change batches carry AT MOST ONE browser group each (the 120s-timeout rule)", () => {
   // game.js fans out to the widest selection this repo has; if the rule holds
   // there it holds everywhere.

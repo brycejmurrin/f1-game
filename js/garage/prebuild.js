@@ -26,6 +26,14 @@
    moves it, and a livery edit busts the mesh key (setup-sheet.js
    G._spMeshKey = "") — either re-arms the prebuild on the next idle title.
 
+   DRAWN, NOT JUST BUILT. `_menuGate.garageReady` means the setup garage DREW
+   for that key (render() sets it: the hidden warm frames or a visible garage
+   frame) — it compiled the programs. A frameless plan (a circuit or garage Home)
+   only records `prepped` (car, and the room when the plan built it): enough for
+   the title's poll to stop, never for race settings, whose RACE! drive-out
+   would otherwise compile on the tap. Settings then skips what is prepped and
+   draws the frames.
+
    NEVER: during a race start (loading card or the drive-out studio), with the
    garage open, behind a hidden tab, during the title intro, before the menu
    world's own hidden frames have drawn, or — on the title, where it is
@@ -108,6 +116,7 @@ const GaragePrebuild = (function () {
     const now = () => performance.now(), ms = (t) => Math.round(t);
     let enabled = readSwitch(typeof localStorage !== "undefined" ? localStorage : null);
     let running = false, warmed = false, last = null, open = null, firstFrame = null, timer = 0, visits = 0;
+    let prepped = null;   // { key, room }: built on the CPU by a frameless plan, frames NOT drawn
     const ui = () => { const u = d.ui(); return u && u.state ? u.state() : null; };
     const kind = () => homeKind(ui());
     function surface() {
@@ -129,9 +138,12 @@ const GaragePrebuild = (function () {
         worldWarm: gate.warm > 0, warming: !!(G.gfx && G.gfx.warming && G.gfx.warming()),
       };
     }
-    // Ready = drawn for THIS key, and the car under that key still cached.
-    function ready() {
-      return !!gate.garageReady && gate.garageKey === cam.prebuildKey() && cam.meshKey === cam.previewKey();
+    // Ready = drawn for THIS key (or, for the title only, built as far as the
+    // current Home's plan allows), and the car under that key still cached.
+    function ready(want = "title") {
+      if (gate.garageKey !== cam.prebuildKey() || cam.meshKey !== cam.previewKey()) return false;
+      if (gate.garageReady) return true;
+      return want === "title" && !!prepped && prepped.key === gate.garageKey && !plan(want, kind()).frames;
     }
     function finish(rec, result) {
       rec.result = result; rec.ms = ms(now() - rec.t0); delete rec.t0;
@@ -143,7 +155,7 @@ const GaragePrebuild = (function () {
     // The sequence. `current` is the caller's ownership test (the circuit
     // build's, or the title's); false at any await abandons the rest.
     async function run(current, want) {
-      if (running || ready()) return false;
+      if (running || ready(want)) return false;
       // The menu world's warm is WAITED for below, not refused: menuFinish queues
       // it right before the circuit build's tail calls this.
       if (blockers(env(want)).some((r) => r !== "world-warm")) return false;
@@ -156,16 +168,22 @@ const GaragePrebuild = (function () {
         if (!current() || blockers(env(want)).length) return false;
         const k = kind(), p = plan(want, k);
         const rec = { want, kind: k, key: cam.prebuildKey(), t0: now(), carMs: 0, roomMs: 0, frameMs: 0, room: p.room, frames: p.frames };
+        // What a frameless run already built for this key is not built again.
+        const had = prepped && prepped.key === rec.key ? prepped : null;
+        if (!had) prepped = null;
         gate.garageReady = false; gate.garageKey = rec.key;
-        let t = now(); cam.prebuild("car"); rec.carMs = ms(now() - t);
-        await d.menuSlice();
-        if (!current()) return finish(rec, "superseded");
-        if (p.room) {
+        let t = now();
+        if (!had || cam.meshKey !== cam.previewKey()) {
+          cam.prebuild("car"); rec.carMs = ms(now() - t);
+          await d.menuSlice();
+          if (!current()) return finish(rec, "superseded");
+        }
+        if (p.room && !(had && had.room)) {
           t = now(); cam.prebuild("room"); rec.roomMs = ms(now() - t);
           await d.menuSlice();
           if (!current()) return finish(rec, "superseded");
         }
-        if (!p.frames) { gate.garageReady = true; return finish(rec, "ready"); }
+        if (!p.frames) { prepped = { key: rec.key, room: p.room || !!(had && had.room) }; return finish(rec, "ready"); }
         // TLX compiles the next present's programs once warm() is asked; one
         // request per session — a repeat links nothing yet holds presents.
         if (!warmed && G.gfx.warm) { G.gfx.warm(); warmed = true; }
@@ -180,7 +198,7 @@ const GaragePrebuild = (function () {
     const titleCurrent = () => G.state === "menu" && !G.setupPreviewOn && surface() === "title" && !starting();
     function tick() {
       timer = setTimeout(tick, POLL_MS);
-      if (running || G.state !== "menu" || ready()) return;
+      if (running || G.state !== "menu" || ready("title")) return;
       run(titleCurrent, "title").catch((e) => Log.warn("game", "garage prewarm failed", e));
     }
     function start() { if (!timer) timer = setTimeout(tick, POLL_MS); }
@@ -204,7 +222,7 @@ const GaragePrebuild = (function () {
     }
     function state() {
       const dbg = typeof GarageScene !== "undefined" && GarageScene.debug ? GarageScene.debug() : null;
-      return { enabled, ready: ready(), garageReady: !!gate.garageReady, garageWarm: gate.garageWarm, key: gate.garageKey || "",
+      return { enabled, ready: ready(), garageReady: !!gate.garageReady, prepped: !!prepped, garageWarm: gate.garageWarm, key: gate.garageKey || "",
         running, kind: kind(), blockers: blockers(env("title")), programsWarm: warmed, room: !!cam.roomReady(),
         previewMeshes: dbg ? dbg.previewMeshes : null, last, firstFrame };
     }
@@ -212,7 +230,7 @@ const GaragePrebuild = (function () {
     // title runs a fresh cycle (a spec on a shared page never reads a stale one).
     function setEnabled(on) {
       if (on !== undefined) enabled = !!on;
-      if (on === true) { gate.garageReady = false; gate.garageKey = ""; last = null; }
+      if (on === true) { gate.garageReady = false; gate.garageKey = ""; last = null; prepped = null; }
       return enabled;
     }
     _instance = { run, start, stop, markOpen, timed, state, setEnabled };
