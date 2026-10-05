@@ -82,7 +82,7 @@ node tools/ui/css-play.mjs --screen settings --css css/menus.css
 
 The tool finds the `<link rel="stylesheet">` whose href contains that path
 and sets `href` to `css/menus.css?play=<mtime>`. Same cascade / `@layer`
-order as boot. The `?v=dev` on the shell tag is left alone.
+order as boot. The shell tag is left alone ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 `--inject ".sheet{max-height:80vh}"` writes `#apex-css-play` for a snippet
 that is not a file yet. Prefer `--css` once the rule belongs in a sheet.

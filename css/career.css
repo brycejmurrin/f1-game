@@ -201,7 +201,11 @@
   width: 100%; margin-left: 0; display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap);
 }
-#cr-inner[data-density="compact"] .cr-meter { text-align: center; }
+/* Label and value on ONE line: stacked they cost ~18px of a 306px sheet. */
+#cr-inner[data-density="compact"] .cr-meter {
+  text-align: center; flex-direction: row; align-items: baseline;
+  justify-content: center; gap: 0.5em;
+}
 #cr-inner[data-density="compact"] .cr-meter-lbl {
   font-size: var(--fs-micro);
 }
@@ -338,10 +342,14 @@
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
 /* Exits stay half-weight on EVERY density — .sheet-foot .bigbtn was promoting
    MAIN MENU / GARAGE to the same type rung as GO RACING on roomy sheets. */
+/* --tap-paint, not --tap-min: in portrait (393x659, layout-audit 2026-10-05)
+   MAIN MENU painted 326x46 — 36 x 1.09 + padding, under the 52 touch floor.
+   --tap-paint is 52 painted on touch and --tap-min with a mouse, so the 36
+   arm still sets the half-weight look on desktop (css/tokens.css). */
 #cr-inner #cr-foot .bigbtn.alt {
   font-size: var(--fs-micro);
   letter-spacing: var(--ls-1);
-  min-height: max(36px, var(--tap-min));
+  min-height: max(36px, var(--tap-paint));
   padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.95) calc(var(--gap) * 0.8) calc(var(--gap) * 1.1);
   flex: 1 1 auto;
 }
@@ -352,10 +360,23 @@
 #cr-inner[data-density="compact"] #cr-foot {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+/* A full touch target, not --tap-min: GO RACING is the hub's primary action,
+   and --tap-min painted MAIN MENU / GARAGE / GO RACING at 187x26 on the
+   landscape iPhone (734x343, layout-audit 2026-10-05) — half the 52 the
+   garage's own BACK / CLOSE GARAGE get one screen over. The height comes back
+   from the meters (one line each, above). #919 raised this to --tap, which
+   paints 56.7 at the default and 104 at UI SIZE 200%; merged to --tap-paint,
+   which paints 52 on touch at every UI SIZE and stays --tap-min with a mouse
+   (css/tokens.css), so the foot keeps one row. */
 #cr-inner[data-density="compact"] #cr-foot .bigbtn {
-  width: 100%; min-width: 0; min-height: var(--tap-min);
+  width: 100%; min-width: 0; min-height: var(--tap-paint);
   padding-block: 0; font-size: var(--fs-micro);
 }
+/* SAVE / LOAD CAREER FILE and PROTECT LOCAL SAVES are plain <button>s
+   (js/ui/settings-export.js careerRow) sized only by the base 10px padding:
+   51 tall on a landscape iPhone (layout-audit 2026-10-05), a pixel under the
+   touch floor. Every density — the padding is the same everywhere. */
+#cr-career-file > button { min-height: var(--tap-paint); }
 #cr-inner[data-density="compact"] #cr-meters {
   margin-left: 0;
   width: 100%;
@@ -768,12 +789,18 @@
 #career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
 #career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
 #career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
+/* BACK / DRIVE MY LAP / SIMULATE painted 285x26 on a landscape iPhone
+   (734x343, layout-audit 2026-10-05): the screen's only actions on --tap-min.
+   --tap-paint makes them 52 painted on touch (css/tokens.css); three columns,
+   not two, so the three pre-session buttons share ONE row and the taller
+   floor grows the foot once, not twice. After the session only TO THE GRID
+   shows, spanning all three (below). */
 #quali .sheet[data-density="compact"] #q-foot {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(var(--gap) * 0.6);
 }
 #quali .sheet[data-density="compact"] #q-foot .bigbtn {
-  min-height: var(--tap-min); min-width: 0; margin: 0;
+  min-height: var(--tap-paint); min-width: 0; margin: 0;
   padding-block: 0; font-size: var(--fs-micro);
 }
 #quali .sheet[data-density="compact"] #q-foot #q-drive,

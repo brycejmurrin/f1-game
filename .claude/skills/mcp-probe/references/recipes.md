@@ -1,5 +1,23 @@
 # MCP probe recipes (load on demand)
 
+**Contents**
+
+- [Probing a specific renderer](#probing-a-specific-renderer)
+- [Chrome DevTools MCP — live 3D / __apex debugging](#chrome-devtools-mcp-live-3d-__apex-debugging)
+  - [Setup (canvas visible — you WANT the render here)](#setup-canvas-visible-you-want-the-render-here)
+  - [Background Chromium measure (logged)](#background-chromium-measure-logged)
+  - [When this beats a scratch script](#when-this-beats-a-scratch-script)
+  - [Heap leak across N races (browser-only; tool names are `mcp__chrome-devtools__<name>`, `chrome_*` in prose)](#heap-leak-across-n-races-browser-only-tool-names-are-mcp__chrome-devtools__name-chrome_-in-prose)
+  - [A/B two trees on two ports — the strongest evidence this setup can give](#ab-two-trees-on-two-ports-the-strongest-evidence-this-setup-can-give)
+  - [Reproducing the post-death path on purpose (WebGPU + SwiftShader)](#reproducing-the-post-death-path-on-purpose-webgpu-swiftshader)
+  - [File writes and roots (measured 2026-08-12)](#file-writes-and-roots-measured-2026-08-12)
+  - [When NOT to use it](#when-not-to-use-it)
+- [Post-deploy liveness check (deploy-research — host fetch, NOT tinyfish)](#post-deploy-liveness-check-deploy-research-host-fetch-not-tinyfish)
+- [Research recipes (public web — no Chrome)](#research-recipes-public-web-no-chrome)
+- [Getting a report off a REAL device (a phone with the bug)](#getting-a-report-off-a-real-device-a-phone-with-the-bug)
+- [Offline capability preflight](#offline-capability-preflight)
+
+
 Chrome setup, renderer probes, A/B ports, post-deploy checks (deploy-research).
 
 ## Contents

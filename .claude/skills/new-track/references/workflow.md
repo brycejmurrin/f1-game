@@ -44,7 +44,7 @@ Load from the SKILL.md index when the task needs this detail.
 2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
    `tools/manifest.cjs` (load-order source of truth), then run
    `node tools/gen/gen-shell.mjs` so the `@gen-shell` script block in `index.html`
-   picks it up. Never hand-edit a `?v=` tag — committed tags stay `?v=dev`.
+   picks it up. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
    `tests/unit/load-order.test.mjs` fails if manifest and shell diverge.
    Tag order == `Tracks.LIST` == picker/season order:
 
@@ -95,8 +95,7 @@ Load from the SKILL.md index when the task needs this detail.
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
 4. **Shell sync** — `node tools/gen/gen-shell.mjs --check` (or `gen-shell.mjs`
-   after a `tools/manifest.cjs` change). Committed tags stay `?v=dev`; deploy
-   stamps hashes. Do not hand-bump numeric `?v=N`.
+   after a `tools/manifest.cjs` change) ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js

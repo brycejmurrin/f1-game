@@ -587,7 +587,7 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   }
   assert.ok(ruleFor(tuner, /#lt-head h2, #ct-head/), "tuner heads share one rule");
   assert.ok(decl(career, /^#cr-inner\[data-density="compact"\] #cr-foot\b/, "grid-template-columns"));
-  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-min)");
+  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-paint)");
   assert.ok(ruleFor(data, /^body\[data-density="compact"\] \.dh-overlay\b/));
   assert.ok(!data.some((r) => r.context.some((c) => /orientation:\s*landscape\) and \(max-height:/.test(c))),
     "data hub short-height chrome must use body[data-density], not viewport max-height");

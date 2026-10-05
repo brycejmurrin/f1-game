@@ -4,7 +4,12 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "indianapolis",
-    pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
+    // The pit complex (TrackPit) stands on the INFIELD side of the front
+    // stretch, as at the real IMS (pit road, Pagoda and Gasoline Alley are all
+    // inside the oval; F1 2000-07 ran the lap clockwise, so the infield is on
+    // the driver's RIGHT). Measured on this centreline: r at frac 0 is
+    // (-1, 0) toward the infield road course at x 3..230, so side +1 = inside.
+    pit: { side: 1 },
     classic: true,
     // Upstream us-1909 already runs clockwise, matching the F1 lap.
     reverse: false,
@@ -31,6 +36,11 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.86, s1: 0.22 },
       { kind: "foliage", s0: 0.30, s1: 0.70 },
+      // No generic town at trackside, anywhere on the lap: IMS is grandstands,
+      // the Pagoda/garages, open infield and the Brickyard Crossing golf
+      // course. The town of Speedway, IN stands outside the outer wall and is
+      // authored far back in scenery/indianapolis.js (survey 2026-10-05).
+      { kind: "city" },
     ],
     // Flat Midwestern summer: high hazy sun, humid white horizon.
     pal: {

@@ -221,6 +221,7 @@
 @property --tap { syntax: "<length>"; inherits: true; initial-value: 44px; }
 @property --chip-h { syntax: "<length>"; inherits: true; initial-value: 40px; }
 @property --tap-min { syntax: "<length>"; inherits: true; initial-value: 24px; }
+@property --tap-paint { syntax: "<length>"; inherits: true; initial-value: 24px; }
 /* Menu range hit-band. Painted 32px at every UI SIZE: the token divides by
    --ui-scale so sheet zoom does not grow the control. Chrome stays native
    (accent-color). Unregistered, a parseFloat reader would see the calc(). */
@@ -372,6 +373,19 @@
      max(), so a control never SHRINKS at a large scale either: at 1.5 the 24px
      branch wins and it paints 36. */
   --tap-min: max(24px, calc(24px / var(--ui-scale)));
+  /* --tap-paint: THE FLOOR A COMPACT CONTROL PAINTS AT, in actual px. A
+     compact sheet (data-density="compact") cannot afford --tap in LOCAL px —
+     52 inside zoom 1.09 paints 56.7, and at UI SIZE 200% it paints 104 — so the
+     compact rules sat on --tap-min instead, which paints 24 x 1.09 = 26.
+     MEASURED 2026-10-05, ios-iphone-landscape 734x343: QUALIFYING's BACK /
+     DRIVE MY LAP / SIMULATE 285x26, the career hub's MAIN MENU 187x26, the
+     data hub ✕ 26x26 and all seven tabs 26 tall — every one a primary action
+     on a touch screen, under the 52 the touch ladder promises. Dividing by the
+     scale (the --slider precedent) holds the PAINTED size: on a coarse
+     pointer it paints 52 at every UI SIZE (the touch ladder below) — 52, not
+     --tap's 56.7, at the default, and 52, not 104, at 200%. With a mouse it
+     IS --tap-min, so desktop compact layouts do not move. */
+  --tap-paint: var(--tap-min);
   /* Painted 32px at every UI SIZE (24 × 4/3 of the WCAG floor). Divide by
      --ui-scale so a 150% sheet does not paint a 48px track. Buttons still
      use --tap-min; only <input type=range> reads this. */
@@ -751,8 +765,18 @@
    the `desktop` class on <body>. */
 body:not(.desktop) {
   --tap: max(52px, calc(24px / var(--ui-scale)));
-  --chip-h: max(46px, calc(24px / var(--ui-scale)));
+  /* 48, not 46: --chip-h is LOCAL px inside the sheets' zoom (--ui-scale
+     1.09 on a coarse pointer), and 46 x 1.09 painted 50 — two short of the
+     52 floor this ladder sets. MEASURED 2026-10-05, ios-iphone-landscape
+     734x343: the circuit picker's ALL / SEASON / CLASSICS, search and detail
+     chips, all 95 SEASON SETUP chips, the circuit card's favourite, the
+     garage's FREE BUILD / INSPECT chips and the pause tool tray at 50x50.
+     48 x 1.09 paints 52.3. Still one rung under --tap: a chip is secondary. */
+  --chip-h: max(48px, calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
+  /* --tap-paint (see :root): 52 PAINTED px, local = 52 / --ui-scale. The 24px
+     arm keeps the WCAG floor where the division would undercut it. */
+  --tap-paint: max(24px, calc(52px / var(--ui-scale)));
   --tap-0: var(--tap);         /* the touch values, frozen here too (see :root) */
   --chip-h-0: var(--chip-h);
   /* Same ≥14 CSS floor as :root — 13px under .sheet zoom 0.9 paints 11.7. */

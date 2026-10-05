@@ -1,10 +1,34 @@
 [
-{"query":"In WATCH, seeking the replay to lap 3 keeps the camera on the old follow anchor for a second and then snaps to the car. Trace RealReplay.seek() and the camera anchor in js/race/real-replay.js and say why the anchor is retained across the seek.","expect":"replay-camera"},
-{"query":"highlights reel: when it cuts to the next driver the framing stays on the previous car's position for like half a second then jumps. replay camera bug? can u repro with the offline fixture first","expect":"replay-camera"},
-{"query":"Exiting the replay and re-entering WATCH changes the framing: the chase distance is different on reentry than on the first entry. Use the serialized render evidence to show the discontinuity and find the cause.","expect":"replay-camera"},
-{"query":"tools/shot/replay-camera-probe.mjs reports a 40 m eyeDeltaMetres on the follow-change phase with the Baku OpenF1 fixture. Is that a real camera discontinuity in the replay follow() path or a probe artefact?","expect":"replay-camera"},
-{"query":"After a replay seek the camera's previousAnchor and nextAnchor in __apex.cameraState() disagree with the followed car. Walk the seek → reposition → snapGameCam chain and explain which step should reset the anchor.","expect":"replay-camera"},
-{"query":"The garage pit-work arrival animation snaps when the car reaches the box: the eye jumps from the side angle to the front angle with no transition. Smooth the shot change in js/garage/arrival.js.","expect":"f1-animation-cameras"},
-{"query":"The chase camera lags behind the car after __apex.jump() and the corner framing at Eau Rouge is too tight on TLX. Capture before/after frames with the camera modes and tune the lag.","expect":"playwright-probe"},
-{"query":"The Data Hub WATCH tab loads the wrong race after I change the year picker: it shows last season's grand prix list instead of the selected one. Check the picker invalidation in js/data/.","expect":"data-hub"}
+{
+"query": "In HIGHLIGHTS, seeking to a different lap makes the camera snap to a wrong position for a frame, then it settles. Validate the seek path with the offline fixture before you touch anything, then tell me which anchor is stale.",
+"expect": "replay-camera"
+},
+{
+"query": "when i exit the replay and re-enter it the camera is still following the car i was watching before even though the picker says a different driver. whats holding the old follow target",
+"expect": "replay-camera"
+},
+{
+"query": "WATCH playback: changing the followed driver mid-replay keeps the old framing for about a second. Trace entry \u2192 seek \u2192 follow \u2192 exit \u2192 re-entry and find where the anchor ownership breaks.",
+"expect": "replay-camera"
+},
+{
+"query": "Replay camera discontinuity: after a seek the camera's position jumps but its target does not, so the shot swings. I need a serialized before/after of the camera state across the seek, not a screenshot.",
+"expect": "replay-camera"
+},
+{
+"query": "The replay probe fails before it even opens a page, something about a missing ffmpeg executable. Get the replay camera lifecycle check running again in this container.",
+"expect": "replay-camera"
+},
+{
+"query": "WATCH loads last year's Monza race for the wrong driver after I change the season picker in the Data Hub. The replay itself plays fine once it loads.",
+"expect": "data-hub"
+},
+{
+"query": "Smooth the cut between the two flyby shots at the start of the race and add a tuner knob for the chase camera's lag \u2014 the motion itself, not the replay.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Give me a cockpit and an orbit still of the car at Spa Eau Rouge, same frac, so I can check the halo framing against the broadcast reference.",
+"expect": "playwright-probe"
+}
 ]
