@@ -21,8 +21,11 @@ function lapClock(G, t) {
   return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t);
 }
 
+// The ELAPSED race time: hours past the hour (a FULL-distance race read
+// "92:14.53"), and thousandths like the gaps it is measured against.
 function raceClock(G, seconds) {
   if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
+  if (typeof Dom !== "undefined" && Dom.fmtRaceClock) return Dom.fmtRaceClock(seconds);
   if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
   const cs = Math.round(seconds * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;   // round first (see game.js fmtTime)
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);

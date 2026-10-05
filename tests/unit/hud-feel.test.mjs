@@ -561,6 +561,24 @@ test("lap clocks carry the minute: never 1:60.00 or 1:010.00 (round first, then 
   assert.match(rs, /const cs = Math\.round\(seconds \* 100\)/, "the results sheet's fallback clock rounds first too");
 });
 
+// UI-07 (hunt2): race-length clocks (results ELAPSED, the WATCH seek bar, the
+// Data Hub race table) printed minutes past 60 ("92:14.53"), and results.js's
+// fmtClock split before rounding ("59:60.000"). One formatter, round first.
+test("race clocks roll over to hours and carry every unit (Dom.fmtRaceClock)", async () => {
+  const fs = await import("node:fs"), vm = await import("node:vm"), { seedDom } = await import("../helpers/seed-dom.mjs");
+  const ctx = vm.createContext({}); seedDom(ctx);
+  const { fmtRaceClock } = vm.runInContext("Dom", ctx);
+  const cases = [[3599.9996, 3, "1:00:00.000"], [5534.53, 3, "1:32:14.530"], [59.9996, 3, "1:00.000"],
+    [3599.4, 3, "59:59.400"], [7199.9997, 3, "2:00:00.000"], [5534.9, 0, "1:32:14"], [59.9, 0, "0:59"], [0, 0, "0:00"]];
+  for (const [t, d, want] of cases) assert.equal(fmtRaceClock(t, d), want, `fmtRaceClock(${t}, ${d})`);
+  assert.equal(fmtRaceClock(-1), null);
+  assert.equal(fmtRaceClock(NaN), null);
+  const src = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+  assert.match(src("js/ui/results-sheet.js"), /Dom\.fmtRaceClock\(seconds\)/, "results ELAPSED");
+  assert.match(src("js/ui/watch-transport.js"), /Dom\.fmtRaceClock\(s, 0\)/, "the WATCH seek bar");
+  assert.match(src("js/data/results.js"), /return Dom\.fmtRaceClock\(s\);/, "the Data Hub race table");
+});
+
 /* ── MOTION: REDUCED, the spoken flag, and sector identity (2026-09-30) ──── */
 
 // The ids inside one element of the shell, by <div> depth from its open tag
