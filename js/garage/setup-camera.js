@@ -23,6 +23,51 @@ function panelCover(pr, cr, cw, ch, camTop) {
   return { x: 0, y: lim((pr.bottom + Math.min(camTop(), ch) - ch) / ch) };
 }
 
+// Garage present, in the same units as the race path (game.js):
+//   exposure  = base * LT.exposureMul
+//   bloom     = base * LT.bloomMul   (shed at autoTier 4, same as race)
+//   threshold = clamp(base + LT.threshOff, 0.4, 1.2) * baseExposure
+//   tune.sunShaftMul is the live slider, scaled so the shipped 1.0 is a
+//   near-zero studio shaft (the race 1.0 × skylight Y 0.86 is the wash).
+// Bases are a showroom, not a night-bloom track: 1.04 / 0.20 / 0.86, not the
+// old hardcoded 1.28 / 0.70 / 0.62. Slider 1 / glare 0.12 = these defaults.
+const SP_EXPOSURE = 1.04;
+const SP_BLOOM = 0.20;
+const SP_THRESH = 0.86;
+const SP_SHAFT_SCALE = 0.22;
+const RACE_GLARE_DEF = 0.12;
+function liveTune() {
+  if (typeof LightTune !== "undefined" && LightTune.LT) return LightTune.LT;
+  if (typeof LightKnobs !== "undefined" && LightKnobs.LT) return LightKnobs.LT;
+  return null;
+}
+function _tuneNum(T, id, fallback) {
+  return T && Number.isFinite(T[id]) ? T[id] : fallback;
+}
+function presentOpts(tune) {
+  const T = tune === undefined ? liveTune() : tune;
+  const exposureMul = _tuneNum(T, "exposureMul", 1);
+  const bloomMul = _tuneNum(T, "bloomMul", 1);
+  const threshOff = _tuneNum(T, "threshOff", 0);
+  const sunShaftMul = _tuneNum(T, "sunShaftMul", 1);
+  const shed = typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4;
+  const t = SP_THRESH + threshOff;
+  const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
+  const wrapped = T && typeof T === "object" ? Object.create(T) : {};
+  wrapped.sunShaftMul = sunShaftMul * SP_SHAFT_SCALE;
+  return {
+    exposure: SP_EXPOSURE * exposureMul,
+    bloom: shed ? 0 : SP_BLOOM * bloomMul,
+    threshold,
+    contact: 0,
+    tune: wrapped,
+  };
+}
+function glareScale(tune) {
+  const T = tune === undefined ? liveTune() : tune;
+  return _tuneNum(T, "glareStr", RACE_GLARE_DEF) / RACE_GLARE_DEF;
+}
+
 /** @param {*} G the js/game.js ctx façade.
  *  @param {*} deps car-drawing helpers that stay in game.js (the garage and the
  *  race share them) — the same seam js/car/car-draw.js and
@@ -452,11 +497,6 @@ function endHome() { return home.end(); }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 const _spInvProj = new Float32Array(16);
 const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on store.rev
-// Bloom lower and hotter than the race default: the ceiling panels ARE the
-// subject. ssao needs the proj/invProj pair passed to begin(); contact shadows
-// would additionally need sunViewDir, and the sun is now only a fill.
-// threshold is in EXPOSED units (glsl-post.js BRIGHT_FS): 0.62 scene-referred x 1.28.
-const SP_PRESENT = { exposure: 1.28, bloom: 0.70, threshold: 0.62 * 1.28, contact: 0 };
 function renderSetupPreview(dt, holdDriveOut = false) {
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
   // so its rect stayed set and present() composited it over the car.
@@ -587,15 +627,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   }) === false) return false;
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
-  // Matte preview: the glossy clear-coat + sharp speculars from the studio ring
-  // lights bloom across the bodywork and wash the livery out to a pale sheen.
-  // Soften them here so the setup screen shows the TRUE livery colour. This is a
-  // preview-only override — the in-race PAINT_* materials are untouched, so the
-  // car still reads glossy on track.
-  spMat.clearcoat = 0.1;
-  spMat.specular = 0.22;
-  spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
-  spMat.metalness = Math.min(spMat.metalness, 0.05);
+  // Paint stays the race dry-day material. The old matte override (clearcoat 0.1,
+  // roughness × 2.4) hid a present wash; presentOpts() now owns bloom / exposure.
   // The car's matrix from the pose: translate (x, 0, z), turn by yaw about +Y, then the
   // preview's X mirror (MAT_REFLECT_X). The arrival in, and the parked car, have no x/yaw.
   const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
@@ -619,8 +652,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.live(_spLiv(), sceneTime, context), GarageScene.glareStr());
-  gfx.present(SP_PRESENT);
+  gfx.drawGlow(GarageScene.live(_spLiv(), sceneTime, context), GarageScene.glareStr() * glareScale());
+  gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }
 
@@ -830,6 +863,6 @@ return {
 };
 }
 
-return { create, panelCover };
+return { create, panelCover, presentOpts, glareScale };
 })();
 Object.freeze(SetupCamera);

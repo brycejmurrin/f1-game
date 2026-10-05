@@ -388,6 +388,41 @@ test("arrival moves the reflected car and shutter without rebuilding geometry", 
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
 });
 
+test("garage glare and fixture energy stay under the bloom knee at default knobs", () => {
+  const scene = read("js/garage/scene.js");
+  const glare = /const GLARE_STR = ([0-9.]+);/.exec(scene);
+  assert.ok(glare, "GLARE_STR must stay a named constant");
+  assert.ok(Number(glare[1]) <= 0.10,
+    `GLARE_STR ${glare[1]} is a showroom halo, not the old 0.18 wash`);
+  const keys = [...scene.matchAll(/KEY_TINT, 15\.0, 11, 0, -1, 0,\s+0\.72, 0\.28, 0\.10, ([0-9.]+), 1\]/g)];
+  assert.equal(keys.length, 2, "both key fixtures must still be in the table");
+  for (const m of keys) {
+    assert.ok(Number(m[1]) <= 0.55, `key glareW ${m[1]} must not sit at the old 1.1`);
+  }
+  assert.match(scene, /-s \* 0\.26, 0\.97, 0, 0\.90, 0\.55, 0\.05, 0, 0\.1[0-5]\);/,
+    "floor uplights keep a small glareW, not the old 0.5");
+  assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
+    "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
+  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.1[0-4]/,
+    "floor reflection is a contact sheen, not a 0.26 ghost");
+});
+
+test("pit kit stays off the FRONT and REAR sight lines", () => {
+  const eq = read("js/garage/scene-equipment.js");
+  assert.doesNotMatch(eq, /\[-0\.18, 0\.40, -2\.72\]/,
+    "starter umbilical must not run into the gearbox across the REAR preset");
+  assert.doesNotMatch(eq, /block\(g\.mid, 1\.45, 0\.13, -3\.35/,
+    "rear jack must leave the REAR corridor");
+  const guns = /const gx = sd \* ([0-9.]+);/.exec(eq);
+  assert.ok(guns, "wheel guns still have a shared lateral");
+  assert.ok(Number(guns[1]) >= 2.45, `guns at |x|=${guns[1]} still sit in the FRONT/REAR corridor`);
+  const props = read("js/garage/scene.js");
+  assert.match(props, /block\(g\.mid, 2\.85, 0\.12, 4\.55/,
+    "full-bay front jack sits outboard of the FRONT corridor");
+  assert.match(props, /block\(g\.mid, 1\.55, 0\.12, 4\.35, 0\.55, 0\.05, 0\.12, scale\(STEEL, 0\.8\)\);   \/\/ the front jack, beside the nose/,
+    "trackside lite bay keeps its own front jack (pit-complex vertex pin)");
+});
+
 test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
   // The Legends row keeps team id "legends" across all twelve legends, and two
   // tribute liveries can share every colour (Schumacher's and Senna's reds):

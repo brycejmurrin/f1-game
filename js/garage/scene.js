@@ -360,11 +360,10 @@ function buildProps(g, liv) {
     block(g.mid, s * 3.9, 0.035, 0.5, 0.09, 0.035, 5.4, DARK);
     block(g.mid, s * 4.6, 0.035, -5.9, 0.75, 0.035, 0.09, DARK);
   }
-  // Front jack, parked BESIDE the nose rather than on the centreline: dead
-  // ahead it draws a post straight up the middle of the FRONT camera preset,
-  // which is the one view whose whole job is an unobstructed head-on car.
-  block(g.mid, 1.55, 0.12, 4.35, 0.55, 0.05, 0.12, scale(STEEL, 0.8));
-  cyl(g.mid, 1.55, 0.12, 4.55, 0.03, 0.85, STEEL, 6);
+  // Front jack, parked outboard of the FRONT corridor. At x 1.55 the pole
+  // still sat in the FRONT preset as a thin frame beside the nose.
+  block(g.mid, 2.85, 0.12, 4.55, 0.55, 0.05, 0.12, scale(STEEL, 0.8));
+  cyl(g.mid, 2.85, 0.12, 4.75, 0.03, 0.85, STEEL, 6);
 }
 
 // ── pit equipment around the car ───────────────────────────────────────────
@@ -386,12 +385,12 @@ const FILL_TINT = [0.86, 0.95, 1.14];   // ~5600 K
 const WASH_TINT = [0.90, 0.97, 1.10];
 // [x, y, z, tint, energy, radius, aimX, aimY, aimZ, cosIn, cosOut, bleed, glareW, wide]
 const FIXTURES = [
-  [ 0.00, 4.30,  1.60, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 1.1, 1],
-  [ 0.00, 4.30, -1.10, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 1.1, 1],
-  [-3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.8, 1],
-  [ 3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.8, 1],
-  [-3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.8, 1],
-  [ 3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.8, 1],
+  [ 0.00, 4.30,  1.60, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 0.45, 1],
+  [ 0.00, 4.30, -1.10, KEY_TINT, 15.0, 11, 0, -1, 0,      0.72, 0.28, 0.10, 0.45, 1],
+  [-3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.35, 1],
+  [ 3.90, 4.25,  3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, -0.48, 0.80, 0.42, 0.14, 0.35, 1],
+  [-3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, 0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.35, 1],
+  [ 3.90, 4.25, -3.40, FILL_TINT, 9.5, 12, -0.62, -0.62, 0.48, 0.80, 0.42, 0.14, 0.35, 1],
   // Back-wall washers. Pulled forward to z -5.20 on purpose: at -6.05 the N.L
   // on the wall (normal +Z) is ~0.10, a dead graze; here it is ~0.31, which is
   // what gives the branded wall a top-down gradient instead of flat fill.
@@ -484,7 +483,7 @@ function buildLed(g, liv) {
   // in front of this block's face — keep that order or the sign vanishes).
   block(g.door, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
 }
-const LED_OPTS = { emissive: 1.0, roughness: 1.0, specular: 0, noAlphaWrite: true };
+const LED_OPTS = { emissive: 0.62, roughness: 1.0, specular: 0, noAlphaWrite: true };
 
 // ── light rig ──────────────────────────────────────────────────────────────
 // Stride-15 records: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
@@ -504,7 +503,7 @@ function lights(liv) {
   const m = Math.max(c1[0], c1[1], c1[2]) || 1, ue = (3.0 / m) * E;
   for (let s = -1; s <= 1; s += 2)
     _rig.push(s * 5.05, 0.25, 0, c1[0] * ue, c1[1] * ue, c1[2] * ue, 6,
-              -s * 0.26, 0.97, 0, 0.90, 0.55, 0.05, 0, 0.5);
+              -s * 0.26, 0.97, 0, 0.90, 0.55, 0.05, 0, 0.12);
   // The pit-lane GANTRY outside: four masts along the far wall. Their energy
   // and halo are set per frame from the hour (live() below) — at night they
   // are what you see through the door, by day they are unlit steel.
@@ -592,7 +591,7 @@ function mk(out, tx, ty, tz, ay, az) {
 let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null;
 const _mFan = new Float32Array(16), _mLamp = new Float32Array(16), _mPass = new Float32Array(16);
 const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-const MIRROR_OPTS = { alpha: 0.26, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, noDepthTest: true };
+const MIRROR_OPTS = { alpha: 0.10, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, noDepthTest: true };
 function ensureDynamic() {
   if (fanMesh) return;
   // Fan blades in the XY plane about the origin, turned about Z per frame.
@@ -633,8 +632,9 @@ function ensureDynamic() {
   passMesh = _gfx.createMesh(c);
 }
 // GLOW_FS peaks at (0.75 + 0.28) * uStr, and LT.glareStr ships at 0.12 for
-// distant track masts. A garage has its fixtures IN frame, so half a stop up.
-const GLARE_STR = 0.18;
+// distant track masts. Fixtures sit IN frame here, so the base stays under the
+// race default; glareScale() in setup-camera.js multiplies by LT.glareStr/0.12.
+const GLARE_STR = 0.08;
 function glareStr() { return GLARE_STR; }
 
 // ── floor ──────────────────────────────────────────────────────────────────
