@@ -197,8 +197,11 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await waitReady(page);
       await page.locator("#mb-race").click();
       await page.locator("#select").waitFor({ state: "visible" });
-      // Click the circuit preview map — triggers openTrackDetail() with real canvas/elevation
-      await page.locator("#sel-preview-map").click();
+      // The still's door is #sel-map-btn (openTrackDetail). On a short landscape
+      // hero the outline canvas is visibility:hidden (css/select.css, hero
+      // <110px), so clicking #sel-preview-map waits 60s on a present-but-hidden
+      // canvas (Pages 37293090788). The button still covers the still.
+      await page.locator("#sel-map-btn").click();
       await page.locator("#track-detail").waitFor({ state: "visible" });
       await shot(page, `${orient}-13-track-detail`);
     });

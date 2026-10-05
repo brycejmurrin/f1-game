@@ -353,6 +353,20 @@ test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to 
     // A follow key: the viewer has the picture, and the director waits.
     g.sandbox.dispatchEvent({ type: "keydown", code: "Period", repeat: false, target: null, preventDefault() {}, stopPropagation() {} });
     assert.equal(RR.status().replay.broadcast.manual, true);
+    // UI-10 (hunt2): focus left on a transport button after a click kept the
+    // replay keys dead. Its character keys now reach the replay; Space stays the
+    // button's own, and a select keeps every key.
+    const key = (code, target) => g.sandbox.dispatchEvent({ type: "keydown", code, repeat: false, target, preventDefault() {}, stopPropagation() {} });
+    const inBar = (tagName, extra) => ({ tagName, ...extra, closest: (sel) => (sel === ".watch-transport" ? {} : null) });
+    const sp0 = RR.status().replay.speed, paused0 = RR.status().replay.paused;
+    key("Equal", inBar("BUTTON"));
+    assert.ok(RR.status().replay.speed > sp0, "speed up from a focused transport button");
+    key("Minus", inBar("INPUT", { type: "range" }));
+    assert.equal(RR.status().replay.speed, sp0, "and down from the focused timeline");
+    key("Space", inBar("BUTTON"));
+    assert.equal(RR.status().replay.paused, paused0, "Space presses the focused button, never pauses on top of it");
+    key("Equal", inBar("SELECT"));
+    assert.equal(RR.status().replay.speed, sp0, "a focused select keeps its keys");
     // The flag: the results take the tower down with the replay.
     RR.replay().seek(405);
     g.step(60 * 8);
