@@ -512,7 +512,14 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-session-review > summary');
         await expect(page.locator('#pm-driving-trace')).toBeHidden();
         await press('#pm-settings-close'); await expect(page.locator('#pm-settings-index')).toBeVisible();
-        await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden(); await press('#mb-help');
+        await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
+        // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its
+        // hit centre is still clipped by the safe-area/chrome strip, so a bare
+        // tap times out for 60 s (tip flake on c1308cb / #968 selected-2). Bring
+        // it into the actionability box before the gesture.
+        await expect(page.locator('#overlay')).toBeVisible();
+        await page.locator('#mb-help').scrollIntoViewIfNeeded();
+        await press('#mb-help');
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
