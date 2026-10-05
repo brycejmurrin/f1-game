@@ -1,1 +1,1 @@
-1791182857	Cursor Agent	perf: defer experience/studio CSS from title critical path (cursor/defer-experience-css-4ba6)  [cursor/defer-experience-css-4ba6; session a76f6a47b3fe41bb28f9c349]
+1791188074	Cursor Agent	Perf lane: next CSS defer after #958 — race-setup/select/settings*/dialogs*/dialog-platform (+ scroll-fade measure if small); not pickInk/readLayerBytes/updateCar  [cursor/defer-experience-css-4ba6; session a76f6a47b3fe41bb28f9c349]
