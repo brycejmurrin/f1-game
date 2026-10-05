@@ -71,6 +71,7 @@
 .td-rail {
   min-height: 0; min-width: 0;
   overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   display: flex; flex-direction: column; gap: var(--gap);
   padding-right: calc(var(--gap) / 4);
 }
@@ -88,10 +89,12 @@
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
 .td-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3.5em, auto) var(--tap-sm);
+  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3em, 4em) var(--tap-sm);
   align-items: center;
   gap: calc(var(--gap) / 2);
+  width: 100%; max-width: 100%; min-width: 0;
   font-size: var(--fs-micro);
+  box-sizing: border-box;
 }
 .td-row .sel-chip { min-height: var(--tap-sm); padding: 0; justify-content: center; }
 .td-num { text-align: center; font-variant-numeric: tabular-nums; }

@@ -782,6 +782,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.equal(labels()[1], "2 CORNERS · STRAIGHT 200 m");
   // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
   assert.match(css, /\.td-rail \{[^}]*overflow-x:\s*hidden/, "rail clips horizontal overflow");
+  assert.match(css, /\.td-rail \{[^}]*scrollbar-gutter:\s*stable/, "rail reserves scrollbar gutter");
   assert.match(css, /\.td-tab \{[^}]*flex:\s*1 1 0/, "equal-width tabs (no jump)");
   assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
 });
