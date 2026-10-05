@@ -11,7 +11,7 @@
 //     [--station=spineTop,spineSide,finBadge,…] [--pair=spineLogo:wrap|saddle] [--flat]
 //     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--path=@keyframes.json] [--path-steps=6]
 //     [--serve] [--watch[=js/car/liverytex.js,…]]
-//     [--preset=wall|fin|flank|mark|quick|sweep|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
+//     [--preset=wall|fin|flank|mark|quick|sweep|closeup|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
 //     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
@@ -109,6 +109,7 @@
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, watch as fsWatch } from "node:fs";
 import readline from "node:readline";
 import { execFileSync } from "node:child_process";
@@ -176,9 +177,9 @@ const PRESETS = {
   // colours — every key here is a plain flag, `bayFront` a named camera.
   saddleWall: { views: "bayFront", spineLogo: "saddle", spineSide: "logo", logos: "default" },
   // Part-fill close-ups — each station carries its OWN az (no shared --az product).
+  // No preset-forced --fast: soft-blit needs settle; pass --fast only when iterating.
   closeup: {
     station: "fwLow,fwSide,noseTip,endplate,rwRear,rwSide,rwTop,podInlet,podFloor,wheelF,wheelR,haloBehind,mirror,cover",
-    fast: true,
   },
 };
 const presetRaw = flag("--preset", "").trim();
@@ -1262,12 +1263,16 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     : shotName({ team: teamId, tag, cam: cam.key, view, vp: vpTag, i: capOpts.index ?? 0, dpr: capOpts.dpr || 1,
       az: cam.az != null ? degs(cam.az) : "", el: cam.el != null ? degs(cam.el) : "", dist: cam.dist ?? "" }));
   let gate = null, capMs = 0, gateMs = 0, tries = 0;
-  for (let attempt = 0; attempt < gateRetries; attempt++) {
+  // Soft #game-soft can lag garageFrame by a frame (measured: identical PNGs across
+  // distinct az/el/dist under --fast + skipAwait). Await present every try, and if
+  // the bytes match the previous shot in this team walk, settle and retry.
+  const maxTries = Math.max(gateRetries, capOpts.prevHash ? 4 : gateRetries);
+  for (let attempt = 0; attempt < maxTries; attempt++) {
     tries++;
-    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle - 2), awaitMs: viewAwait });
+    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle), awaitMs: viewAwait });
     const tCap = Date.now();
     const shot = await screenshotGameCanvas(page, png, {
-      skipAwait: true,
+      skipAwait: false,
       skipVisible: !!capOpts.gameVisible,
     });
     capMs += ms(tCap);
@@ -1275,6 +1280,11 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     gate = await bayRendered(png, vpCur[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
+      const hash = createHash("md5").update(readFileSync(png)).digest("hex");
+      if (capOpts.prevHash && hash === capOpts.prevHash && attempt < maxTries - 1) {
+        console.warn(`stale soft blit ${teamId}/${tag}/${cam.key} (hash=${hash.slice(0, 8)}) — retry ${attempt + 1}`);
+        continue;
+      }
       // `--crop` beats a station's own crop: the user named the region.
       await cropPng(png, cropOff ? null : (crop || cam.crop || null));
       // READ THE CAMERA BACK AFTER THE SETTLE, never the value garageFrame
@@ -1297,7 +1307,7 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
         view, cam: cam.key, tag, png, vp: vpTag, spread: gate.spread, via: shot.via || "page-clip",
         occl: occl == null ? undefined : +(occl * 100).toFixed(1),
         baselineDiff: baselineDiff == null ? undefined : baselineDiff,
-        dpr: capOpts.dpr || 1,
+        dpr: capOpts.dpr || 1, hash,
         az: +c.az.toFixed(3), el: +c.el.toFixed(3), dist: +(c.dist ?? c.effDist).toFixed(3),
         pan: c.pan ? c.pan.map((n) => +n.toFixed(3)) : null,
         ms: { settle: settleMs, capture: capMs, gate: gateMs, tries },
@@ -1548,6 +1558,7 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
           for (const cam of cams) {
             const s = await frame(page, teamId, tag, cam, dir, {
               gameVisible, vp: v, index: shots.length, design: it.design || null, dpr: opts.dpr || 1,
+              prevHash: tagShots.length ? tagShots[tagShots.length - 1].hash : null,
             });
             gameVisible = true;
             s.team = teamId;
