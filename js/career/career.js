@@ -1097,22 +1097,31 @@ function settleRound(order, player) {
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
   const pts = scored(player) ? (Teams.POINTS[pos - 1] || 0) : 0;
   const prize = prizeFor(pos);
-  const salary = career.deal ? career.deal.salary : 0;
-  const bonus = career.deal ? career.deal.bonusPt * pts : 0;
+  // AN OWNER IS NOT ON THE PAYROLL. The guide (career-ui "how the money works")
+  // and docs/CAREER.md: a driver is paid a salary, an owner by sponsors. MY TEAM
+  // still paid the start() deal's salary + points bonus every round, under a
+  // contract rollover() never runs down for an owner.
+  const owner = career.flavour === "myteam";
+  const salary = career.deal && !owner ? career.deal.salary : 0;
+  const bonus = career.deal && !owner ? career.deal.bonusPt * pts : 0;
 
   // Recomputed rather than read off career.obj: the draw is pure, so this can
   // never disagree with what the hub showed.
   const obj = objectiveFor(raced);
   const mate = order.find((c) => c !== player && c.team && c.team.id === career.team);
+  const matePos = mate ? order.indexOf(mate) + 1 : 0;
   obj.done = objectiveMet(obj, {
-    pos, pts, player, mate, matePos: mate ? order.indexOf(mate) + 1 : 0,
+    pos, pts, player, mate, matePos,
   });
+  // ...and owns BOTH cars, so both earn prize money ("two cars in the points is
+  // two payments"): the hired team-mate's finish was paid to nobody.
+  const matePrize = owner && mate ? prizeFor(matePos) : 0;
 
   // MY TEAM's wage bill comes off the balance, never off the fitted cap, so
   // hiring well costs upgrades rather than legality. Wages can exceed a round's
   // income, so the balance floors at zero.
   const wages = wageBill();
-  career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
+  career.money += prize + matePrize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
   career.money = Math.max(0, career.money);
   // THREE reputation channels: the result term is relative to the CAR
   // (expectedFinish encodes the tier), the objective term is flat, and race craft
@@ -1136,7 +1145,7 @@ function settleRound(order, player) {
   const sponsorPay = settleSponsor();
   const persisted = saveStatus();
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
-  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
+  return { pos, pts, prize, matePos, matePrize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
            money: career.money, rep: career.rep, save: persisted,
            unsaved: !persisted.durable };
 }

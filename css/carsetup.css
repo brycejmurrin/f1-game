@@ -1140,9 +1140,15 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 #cs-aero-bar {
   pointer-events: auto;
   display: flex; align-items: stretch;
+  max-width: 100%; min-width: 0;
 }
+/* WRAPS INSIDE THE STACK, never past it. #cs-stack is capped at the room left
+   of the panel; `flex: 0 0 auto` and a one-line label let the chip ignore that
+   cap. Measured on the landscape iPhone (734x343): stack 137px, chip 221px, so
+   ACTIVE AERO / CORNER MODE painted 84px over the panel's BACK button. Now the
+   value drops under its label and the chip stays in its column. */
 #cs-aero {
-  flex: 0 0 auto;
+  flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap; row-gap: 0;
   display: flex; flex-direction: row; align-items: baseline; gap: 7px;
   width: auto; margin: 0;
   padding: 5px 10px; border-radius: var(--r-sm);
@@ -1307,7 +1313,7 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    also touch, also thumbs — falls out of the branch and keeps 30px. Measured
    there: #cs-cam 86x31, #cs-aero 157x31, on a device with maxTouchPoints > 0
    and a --tap of 52.
-   --chip-h (46), not --tap: these float over the live car preview and the
+   --chip-h (48), not --tap: these float over the live car preview and the
    canvas is the thing the screen exists to show, so they take the documented
    rung one step below the primary floor rather than the floor itself. Width
    still decides their PADDING and type above; only the target floor moves here.
@@ -1416,7 +1422,11 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"] #cs-options .cs-tune-editor { gap: calc(var(--gap) * 0.35); }
 #cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout),
 #cs-inner[data-density="compact"] #cs-options .cs-tune-editor > .adv-help:not(#cs-rake-readout) { display: none; }
-#cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
+/* ONE header row on a short sheet: the readout wraps BESIDE FREE BUILD instead
+   of pushing the button onto a line of its own. Measured on the landscape
+   iPhone (734x343): header 84 -> 57px, #cs-options 88 -> 115px. */
+#cs-inner[data-density="compact"] #cs-budget-row { flex-wrap: nowrap; }
+#cs-inner[data-density="compact"] #cs-budget-row #cs-budget { flex: 1 1 0; min-width: 0; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
 /* CRITICAL LOCAL WIDTH — at high UI size the stat summary can consume the

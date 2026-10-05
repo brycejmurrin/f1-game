@@ -107,7 +107,7 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
 3. Historical edit: `flatTerrain` def flag (wide, dead-level shelf out to
    `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
    whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` (tags stay `?v=dev`).
+4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Gotchas
 

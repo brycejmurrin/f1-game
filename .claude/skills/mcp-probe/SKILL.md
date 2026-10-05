@@ -17,7 +17,7 @@ reachable from a container browser — that is the **deploy-research** subagent
 ```sh
 python3 tools/mcp/probe-mcp.py status                # no browser: clone/bin/Chrome path + daemon UP/DOWN. Run FIRST
 #   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; else use the attached chrome_* tools)
-# Everything below launches Chromium (browser-only) except `help` (a subcommand: `--help`/`-h` exit 2), status, mcp-cli --dry-run:
+# Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
 python3 tools/mcp/probe-mcp.py call chrome_...
@@ -26,8 +26,7 @@ node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
-`http://127.0.0.1:3456/`, `__apex.race(id); go()` (recipes.md § Setup; `step(1/60, 120)` past the start lights before reading a gap — the
-HUD gaps are `#hud-gap-ahead` / `#hud-gap-behind`, cross-check `__apex.field()`), then
+`http://127.0.0.1:3456/`, `__apex.race(id); go()` (recipes.md § Setup), then
 `take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
 `awaitPresent()` matters only if the 3D behind it must be current. Done = the
 glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), then
@@ -61,12 +60,20 @@ vs playwright-official).
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
-2. **github.io is unreachable from any container BROWSER** — `chrome-devtools`
-   fails every external HTTPS with `net::ERR_CERT_AUTHORITY_INVALID` (Chrome does
-   not trust the agent proxy's CA; measured 2026-09-15). That error means "wrong
-   tool for this URL", not a flag bug: route it to `deploy-research`, which owns
-   the curl-vs-fetch rule (curl for exact bytes such as `<meta name="apex-sha">`,
-   the fetch tool for `version.json` and prose; measured 2026-09-18).
+2. **github.io is unreachable from any container BROWSER** (egress proxy) —
+   route it to `deploy-research`. This said "or curl", and that half was FALSE:
+   measured 2026-09-18, `curl` gets HTTP 200 from github.io in 0.36 s, because
+   curl trusts the agent proxy's CA bundle and Chrome does not. So curl is the
+   RIGHT tool for the deployed shell's exact bytes — a `<meta name="apex-sha">`,
+   a `?v=` hash — which the host fetch tool cannot read at all: it renders to
+   markdown and drops every `<meta>` tag silently, answering "NO META TAGS
+   VISIBLE" about a page that has them. The fetch tool stays correct for plain
+   JSON (`version.json`) and prose.
+   Measured 2026-09-15: `chrome-devtools` navigating to ANY external HTTPS
+   (not just github.io — plain `https://example.com` too) fails
+   `net::ERR_CERT_AUTHORITY_INVALID`, since Chrome here does not trust the
+   proxy's CA. That error is the signature of "wrong tool for this URL," not a
+   flag or config bug — route to `deploy-research` instead of chasing it.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`, or from a live
@@ -91,12 +98,11 @@ beside an active Playwright run. UI matrix → `layout-audit.mjs` (not the archi
 
 ## Load on demand
 
-- Shot / lighting / camera comparison failures → open the slice directly:
-  [`references/traps-chrome.md`](references/traps-chrome.md) (Playwright vs Chrome
-  MCP, park to `about:blank`, CPU starve), [`references/traps-camera.md`](references/traps-camera.md)
-  (`snapCam` / free-cam / chase / rAF), [`references/traps-scene.md`](references/traps-scene.md)
-  (soft-present, lights, `scene()`, occlusion); [`references/traps.md`](references/traps.md)
-  is only the 13-line index of those three.
+- Shot / lighting / camera comparison failures → read
+  [`references/traps.md`](references/traps.md), or its slice directly:
+  [traps-chrome.md](references/traps-chrome.md) (Playwright vs Chrome MCP),
+  [traps-camera.md](references/traps-camera.md) (`snapCam` / free-cam),
+  [traps-scene.md](references/traps-scene.md) (soft-present / lights / `scene()`).
 - Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
