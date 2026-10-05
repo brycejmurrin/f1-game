@@ -92,12 +92,15 @@ const GameAudioSoundtrack = (function () {
       { id: "builtin:song6", name: "song6", url: "assets/music/song6.mp3", builtin: true },
     ];
     let musicIndex = 0;
+    let radioDuck = 1;   // 0.35 while a radio line is on air (setRadioDuck)
     let source = "all";
     let backend = null;
     function ensureMusicGain() {
       if (!musicGain && host.context() && host.master()) {
         musicGain = host.context().createGain();
-        musicGain.gain.value = musicVol * MUSIC_FULL;   // music sits under the engine
+        // Under a line already on air too: a gain born mid-line (SOUND back on,
+        // a ctx rebuild) at the full level put the music over the voice.
+        musicGain.gain.value = musicVol * MUSIC_FULL * radioDuck;   // music sits under the engine
         musicGain.connect(host.master());
       }
     }
@@ -334,10 +337,15 @@ const GameAudioSoundtrack = (function () {
       // A glide, not a `.value =` step (a click on every slider move): the same
       // tau-0.02 s setTargetAtTime engine.js glideLevel uses. Re-aiming here
       // still invalidates the duck cache, so the next setEngine re-ducks.
+      // THE RADIO DUCK RIDES THE SLIDER. setEngine only re-applies it while the
+      // engine runs with SFX on, and the slider lives on the settings sheet —
+      // the pause menu or the title, engine stopped — beside the radio TEST
+      // buttons. Dragging it during a TEST clip popped the music to full over
+      // the voice for the rest of the line.
       if (musicGain && host.context()) {
         const t = host.now();
         musicGain.gain.cancelScheduledValues(t);
-        musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t, 0.02);
+        musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * radioDuck, t, 0.02);
         musicGain._apexDuckTgt = null;
       }
       if (backend) { try { backend.setVolume(musicVol); } catch (e) { /* a broken backend must not take the audio down */ } }
@@ -484,7 +492,6 @@ const GameAudioSoundtrack = (function () {
       if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
     }
 
-    let radioDuck = 1;
     function setRadioDuck(on) {
       const want = on ? 0.35 : 1;
       if (want === radioDuck) return radioDuck;
