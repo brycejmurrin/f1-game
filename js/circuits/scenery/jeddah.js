@@ -8,12 +8,15 @@
   function (api) {
       const { K, out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
-        grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
+        grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, fence, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
         lampPost, seat } = api;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
-      const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
+      // Deep blue-teal, not black: at [0.02,0.04,0.08] the night sea and
+      // marina rendered as a black void (2026-10-05 survey); this value
+      // keeps it dark but reads as lit water against the city glow.
+      const SEA     = [0.04, 0.10, 0.18];
       const SPANGLE = [1.0,  0.80, 0.40];   // warm amber reflections
       const LED     = [0.92, 0.96, 1.0 ];   // cool-white LED
       const WINWARM = [1.0,  0.84, 0.48];   // warm interior windows
@@ -122,12 +125,37 @@
         });
       }
 
+      // CATCH FENCE behind the street wall, both sides, all lap (Jeddah runs
+      // tall debris fencing over its walls almost everywhere; the survey read
+      // none). The canyon is centred at 4.35 (0.55 thick, back face 4.625),
+      // so the fence's 0.13 m posts stand at 4.85; across the wider T13 wall
+      // (5.05, back 5.325) it steps back to 5.75. "panelled", not "mesh":
+      // Singapore measured the solid mesh sheet overlapping on bend insides
+      // (coplanar 11 -> 28). Side -1 stops at the pit window like its wall.
+      const JD_FENCE_GAP = 4.85, JD_FENCE_T13 = 5.75;
+      const JD_FENCE_COL = [0.54, 0.57, 0.62];
+      const JD_FENCE = { style: "panelled", postCol: [0.26, 0.27, 0.31] };
+      for (const side of [-1, 1]) {
+        const a0 = side === -1 ? 0.0211 : 0.0, a1 = side === -1 ? 0.9643 : 1.0;
+        // Side -1 breaks over .18-.19 (the T8 3-degree bank's low side):
+        // there the verge rises over 1 m above the road plane at 4.85 m and
+        // buried the fence rails (ground-audit, 2 prims at 1.06 m).
+        if (side < 0) fence(a0, 0.18, side, JD_FENCE_GAP, 3.4, JD_FENCE_COL, JD_FENCE);
+        fence(side > 0 ? a0 : 0.19, 0.47, side, JD_FENCE_GAP, 3.4, JD_FENCE_COL, JD_FENCE);
+        fence(0.47, 0.53, side, JD_FENCE_T13, 3.4, JD_FENCE_COL, JD_FENCE);
+        fence(0.53, a1, side, JD_FENCE_GAP, 3.4, JD_FENCE_COL, JD_FENCE);
+      }
+
+      // LED lamp poles stand just behind the fence (5.3-6.1 m; 4.6-5.9 put
+      // their 0.1 m poles through it), and behind the T13 wall's fence there.
+      const kT13a = K(0.47), kT13b = K(0.53);
       let poleI = 0;
       every(22, (k) => {
         for (const side of [1, -1]) {
           const accent = (poleI % 5 === 2) ? [0.24, 1.10, 0.48]
                        : (poleI % 5 === 4) ? [1.10, 0.88, 0.18] : LED;
-          ledHead(k, side, (side > 0 ? 4.6 : 4.9) + hash(k * 1.7 + side) * 1.0, accent,
+          const base = (k >= kT13a && k <= kT13b) ? 6.3 : 5.3;
+          ledHead(k, side, base + hash(k * 1.7 + side) * 0.8, accent,
                   poleI % 7 === 0);
           poleI++;
         }
@@ -174,8 +202,44 @@
       }
 
       waterBand(0.06, 0.375, 1, 35, 260, 12, SEA, { id: "jeddah-red-sea" });
-      waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
+      waterBand(0.43, 0.64, 1, 22, 150, 12, [0.035, 0.09, 0.165],
         { id: "jeddah-marina-water" });
+
+      // ── Lit Corniche promenade along the shore edge ─────────────────────
+      // A warm lamp every ~31 m a few metres inland of each water band's
+      // edge, a cool LED kerb strip along the promenade, and a warm light
+      // streak on the water off each lamp, so the shoreline reads at night.
+      // The marina run skips the T13 scaffold stand (.46-.54, gap 17+).
+      const SHORE_LAMP = [1.10, 0.86, 0.50], SHORE_STRIP = [0.50, 0.90, 1.05];
+      const promenade = (s0, s1, edge, skip) => {
+        const STEP = 0.005;
+        for (let s = s0 + STEP / 2; s < s1; s += STEP) {
+          if (skip && s > skip[0] && s < skip[1]) continue;
+          const k = K(s);
+          const a = anchor(k, 1, edge - 3.5), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 6)) continue;
+          // Ground heights 14 m either side along the shore and across the
+          // strip: skip the kerb strip where the verge is not flat enough
+          // to carry a straight 28 m box (one buried 0.63 m on a slope).
+          const hs = [anchor(K(s - STEP * 0.45), 1, edge - 1.2).c[1], anchor(k, 1, edge - 1.35).c[1],
+            anchor(k, 1, edge - 1.05).c[1], anchor(K(s + STEP * 0.45), 1, edge - 1.2).c[1]];
+          const flat = Math.max(...hs) - Math.min(...hs) < 0.2;
+          addCyl(out, a.c, 0.09, 6.3, DARKPOLE, 4, b);
+          addBox(out, vadd(a.c, a.u, 6.25), [0.7, 0.35, 0.7], SHORE_LAMP, b);
+          const e = anchor(k, 1, edge - 1.2);
+          if (flat && !onTrack(e.c[0], e.c[2], 4)) {
+            // 28 m segments at a 30.8 m pitch (built lap 6,160 m x .005):
+            // straight boxes on the node tangent, gapped so curved shore
+            // runs do not overlap at their ends.
+            addBox(out, vadd(e.c, e.u, 0.42), [0.3, 0.5, 28], SHORE_STRIP, [e.r, e.u, e.t]);
+          }
+          // No water glints: a streak 12 cm over the sheet (pyMin - 0.82)
+          // measured 23-25 buried under the shore terrain, which stands
+          // above the sheet just past the band's inner edge.
+        }
+      };
+      promenade(0.06, 0.375, 35);
+      promenade(0.43, 0.64, 22, [0.46, 0.54]);
       for (let i = 0; i < 11; i++) {
         const s = 0.425 + i * 0.019;
         const k = K(s), col = (i % 3 === 0) ? WINTEAL : SPANGLE;
@@ -291,10 +355,19 @@
         palette: WALL_INL, lit: true,
         step: 55, floor: 5,
       });
-      cityFront(0.56, 0.74, -1, 18, {
+      // Ends at .63 and stands 24 m back: past .64 the left side is the
+      // 32-76 m strip between the two legs, Corniche parkland (palms below),
+      // where an 18 m row of 14-36 m blocks walled in both roads.
+      cityFront(0.56, 0.63, -1, 24, {
         minH: 14, maxH: 36, depth: 18,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
         step: 55, floor: 5,
+      });
+      // The north Corniche's high-rises, set well back on the open side.
+      cityFront(0.645, 0.755, 1, 85, {
+        minH: 28, maxH: 70, depth: 20,
+        palette: WALL_INL, lit: true, windowCol: WINWARM,
+        step: 90, floor: 5,
       });
 
       // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
@@ -459,8 +532,10 @@
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
-      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
+      // On the open side, set back past the waterfront park: at -1 60/100
+      // the pair stood against the parallel leg's wall (it is 32-76 m over).
+      building(K(0.69), 1, 120, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
+      tower(K(0.71), 1, 150, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
 
       // Billboards — Corniche signage character
       billboard(K(0.70), -1, 13, 10, 11, GREEN);   // 13 = midpoint of the 26 m strip to the parallel 0.275 leg; at 26 a panel end was on that road
@@ -593,10 +668,16 @@
           [0.3, 8 * sc, 7 * sc], [0.90, 0.88, 0.82], b);                                               // lateen sail
         out._mat = 0;
         addBox(out, vadd(hull, a.u, 0.03), [3.0 * sc, 0.3, 9.6 * sc], SPANGLE, b);                     // water reflection (underside 7 cm below the hull's)
+        // Night lights: a lantern capping the mast and a lit deck cabin
+        // seated 5 cm into the gunwale (top 2.05 sc).
+        addBox(out, vadd(hull, a.u, 12.9 * sc), [0.45, 0.5, 0.45], SPANGLE, b);
+        addBox(out, vadd(vadd(hull, a.u, 2.3 * sc), a.t, -2.4 * sc), [1.5 * sc, 0.6 * sc, 2.4 * sc], WINWARM, b);
       };
-      // dhow fleet alongside the marina + Corniche lagoon
+      // dhow fleet alongside the marina + Corniche lagoon, and a lit
+      // scatter out on the Red Sea band
       for (let i = 0; i < 5; i++) dhow(K(0.43 + i * 0.010), 56 + (i % 3) * 14, 1.0 + (i % 2) * 0.4);
       for (let i = 0; i < 3; i++) dhow(K(0.57 + i * 0.014), 46 + (i % 2) * 12, 0.9 + (i % 2) * 0.3);
+      for (let i = 0; i < 6; i++) dhow(K(0.09 + i * 0.045), 70 + (i % 3) * 35, 1.0 + (i % 2) * 0.3);
 
       for (let i = 0; i < 12; i++) {
         const s = i / 12;

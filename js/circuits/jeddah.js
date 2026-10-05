@@ -22,15 +22,25 @@
     barrierGap: 3.4,
     terrainOuter: 28,
     sceneryCoordinates: "racing",
+    // Jeddah's verges and run-off are concrete/asphalt, not grass: the baked
+    // pack lays concrete under them (Singapore precedent); pal.grass/runoff
+    // below are the matching warm-lit concrete greys.
+    terrainMat: "CONCRETE",
     dressingExclusions: [
       { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
+      // The north Corniche (racing .64-.76) is open waterfront parkland with
+      // its high-rises set well back; the engine's street_night front row
+      // (13-25 m) and back row (40-70 m) stood hard against both walls there,
+      // filling the 32-76 m strip between the two legs (2026-10-05 survey).
+      // The scenery closure lays a set-back skyline instead.
+      { kind: "city", s0: 0.64, s1: 0.76 },
       { kind: "lamps", s0: 0, s1: 1 },
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
     ],
     lengthKm: 6.2,
     tyreSeverity: 0.90,  // Fresh street surface vs Bahrain abrasive (Isola); high speed but lower abrasiveness
     baseHW: 6,
-    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
+    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, runoff: [0.31, 0.30, 0.29], grass: [0.26, 0.25, 0.25] },
     bankZones: [
       { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
