@@ -421,6 +421,18 @@ const PitLane = (function () {
       return Number.isFinite(l) ? G.dashKph(l) : Infinity;
     }
 
+    /** The limit IN THE SPEEDO'S UNIT: hud.js runs dashKph through
+     *  AppearanceOpts.speed(), so under SPEED UNITS: MPH the cue said "80 LIMIT"
+     *  against a speedo reading 50 on the limiter. km/h stays the bare number
+     *  (the wall board's); any other unit names itself ("50 MPH"). */
+    function limitText() {
+      const k = limitKphShown();
+      const AO = typeof AppearanceOpts !== "undefined" ? AppearanceOpts : null;
+      if (!AO || typeof AO.speed !== "function" || !Number.isFinite(k)) return String(Math.round(k));
+      const unit = typeof AO.unitLabel === "function" ? AO.unitLabel() : "KM/H";
+      return AO.speed(k) + (unit === "KM/H" ? "" : " " + unit);
+    }
+
     /** Where THIS CAR's box sits, as a distance into the window. The zone's
      *  sBox is the row's ANCHOR; a team's garage is offset from it by its row,
      *  centred so the row straddles the anchor rather than growing off one end.
@@ -683,7 +695,7 @@ const PitLane = (function () {
         teach("line", "HOLD THE LANE — STOP AT YOUR CREST");
         // STAY IN LANE, all the way from the line to the box: the instruction
         // is continuous, and the limit rides along with it.
-        return { phase: "lane", text: "STAY IN LANE · " + Math.round(limitKphShown()) + " LIMIT", dist: 0, frac: 0 };
+        return { phase: "lane", text: "STAY IN LANE · " + limitText() + " LIMIT", dist: 0, frac: 0 };
       }
       if (st === "out") {
         // THE EXIT ROAD is not silent: it is where a serviced car rejoins at

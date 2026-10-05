@@ -1,8 +1,10 @@
 /* Visible controls for the real-race replay. Clock and camera ownership stay in RealReplay. */
 const WatchTransport = (function () {
   "use strict";
+  // A real race runs past the hour: "1:32:14", not "92:14" (Dom.fmtRaceClock).
   function clock(t) {
     const s = Math.max(0, Math.floor(t || 0));
+    if (typeof Dom !== "undefined" && Dom.fmtRaceClock) return Dom.fmtRaceClock(s, 0);
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   }
   function create(G, replay) {
