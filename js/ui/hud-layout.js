@@ -451,7 +451,7 @@ const HudLayout = (function () {
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
-    [["rel", "strat", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
+    [["rel", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
     [["announce"], () => true, "shows with a race message", true],

@@ -580,6 +580,14 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(hc({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
   assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
+  // TOUCH: STRATEGY has a home under the minimap; RELATIVE / INPUTS still wait to be placed.
+  assert.equal(h({ live: false }).hiddenReason("strat"), null, "touch STRATEGY shows at its touch home");
+  assert.equal(h({ live: false }).hiddenReason("rel").soft, true, "touch RELATIVE still waits to be placed");
+  const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
+  assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(144px/, "touch STRATEGY sits under the 128px map");
+  assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
+    "touch TYRES sits on top of the left dock");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
     assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");
