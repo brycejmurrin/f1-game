@@ -338,10 +338,14 @@
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
 /* Exits stay half-weight on EVERY density — .sheet-foot .bigbtn was promoting
    MAIN MENU / GARAGE to the same type rung as GO RACING on roomy sheets. */
+/* --tap-paint, not --tap-min: in portrait (393x659, layout-audit 2026-10-05)
+   MAIN MENU painted 326x46 — 36 x 1.09 + padding, under the 52 touch floor.
+   --tap-paint is 52 painted on touch and --tap-min with a mouse, so the 36
+   arm still sets the half-weight look on desktop (css/tokens.css). */
 #cr-inner #cr-foot .bigbtn.alt {
   font-size: var(--fs-micro);
   letter-spacing: var(--ls-1);
-  min-height: max(36px, var(--tap-min));
+  min-height: max(36px, var(--tap-paint));
   padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.95) calc(var(--gap) * 0.8) calc(var(--gap) * 1.1);
   flex: 1 1 auto;
 }

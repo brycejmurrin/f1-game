@@ -396,7 +396,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
      wrapped block in a centred column is centred as a BOX while its text stays
      left-ragged — measured: line one flush left, "Formula 1" under it. */
   :where(body[data-shape="tall"]) #disclaimer { text-align: center; font-size: var(--fs-micro); }
-  :where(body[data-shape="tall"]) #soundbtn { font-size: var(--fs-micro); min-height: calc(var(--tap) * 0.8); }
+  /* The tall title's fractions of --tap are LOCAL px under #overlay's zoom:
+     0.8 / 0.85 / 0.9 x 52 x 1.09 painted 45 / 48 / 51 on a 393x659 phone
+     (layout-audit 2026-10-05: #soundbtn 115x45, DAILY / GARAGE / SETTINGS 48
+     tall). max() with --tap-paint (css/tokens.css) keeps 52 painted on touch;
+     with a mouse --tap-paint is the 24px floor and the fraction still wins. */
+  :where(body[data-shape="tall"]) #soundbtn { font-size: var(--fs-micro); min-height: max(calc(var(--tap) * 0.8), var(--tap-paint)); }
   :where(body[data-shape="tall"]) #disclaimer { padding-block: calc(var(--gap) * 0.25); }
   /* Full width, not 78vwz: at 78% a 2x2 cell on a 393px phone is 145px and
      RACE A FRIEND broke into two lines. The column's own padding-inline keeps
@@ -413,7 +418,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   }
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore, #menu-secondary) { gap: calc(var(--gap) * 0.5); }
   :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.55); font-size: var(--fs-4); }
-  :where(body[data-shape="tall"]) #menu-retention .bigbtn { min-height: calc(var(--tap) * 0.85); padding-block: calc(var(--gap) * 0.3); }
+  :where(body[data-shape="tall"]) #menu-retention .bigbtn { min-height: max(calc(var(--tap) * 0.85), var(--tap-paint)); padding-block: calc(var(--gap) * 0.3); }
   /* Each play door is ONE line, icon beside label, sub gone: the four modes
      cost two rows of one tap target each. */
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn {
@@ -421,7 +426,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
     gap: 0.45em;
     padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
     font-size: var(--fs-3);
-    min-height: calc(var(--tap) * 0.9);
+    min-height: max(calc(var(--tap) * 0.9), var(--tap-paint));
   }
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; }
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
@@ -433,7 +438,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   }
   :where(body[data-shape="tall"]) #menu-secondary .bigbtn {
     padding-block: calc(var(--gap) * 0.3);
-    min-height: calc(var(--tap) * 0.85);
+    min-height: max(calc(var(--tap) * 0.85), var(--tap-paint));
   }
 
   /* THE CARS, IN THE CLEAR. The side-on drawing, not the tall one: a portrait
