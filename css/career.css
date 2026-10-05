@@ -201,7 +201,11 @@
   width: 100%; margin-left: 0; display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap);
 }
-#cr-inner[data-density="compact"] .cr-meter { text-align: center; }
+/* Label and value on ONE line: stacked they cost ~18px of a 306px sheet. */
+#cr-inner[data-density="compact"] .cr-meter {
+  text-align: center; flex-direction: row; align-items: baseline;
+  justify-content: center; gap: 0.5em;
+}
 #cr-inner[data-density="compact"] .cr-meter-lbl {
   font-size: var(--fs-micro);
 }
@@ -352,8 +356,12 @@
 #cr-inner[data-density="compact"] #cr-foot {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+/* --tap, not --tap-min: GO RACING is the hub's primary action. Measured on the
+   landscape iPhone (734x343, notch injected) --tap-min painted all three at
+   26px, half the 52 the garage's own BACK / CLOSE GARAGE get one screen over.
+   The height comes back from the meters (one line each, below). */
 #cr-inner[data-density="compact"] #cr-foot .bigbtn {
-  width: 100%; min-width: 0; min-height: var(--tap-min);
+  width: 100%; min-width: 0; min-height: var(--tap);
   padding-block: 0; font-size: var(--fs-micro);
 }
 #cr-inner[data-density="compact"] #cr-meters {
