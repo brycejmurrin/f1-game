@@ -105,7 +105,7 @@ through the merge path above.
    BLOB
    ```
 
-2. **Bake** (writes presets only; shell tags stay `?v=dev` —
+2. **Bake** (writes presets only; ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) —
    validates key syntax, registered knobs, finite values, range and slider grid; never commits):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt

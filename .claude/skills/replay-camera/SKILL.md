@@ -1,6 +1,6 @@
 ---
 name: replay-camera
-description: "Validates Apex 26 replay camera discontinuities, seeks, follow changes and exit/reentry using offline fixtures and serialized render evidence. Use when WATCH/HIGHLIGHTS or replay motion snaps, retains an old anchor or changes framing after seeking."
+description: "Use when WATCH/HIGHLIGHTS or replay camera motion snaps, keeps an old follow anchor or reframes after a seek, follow change, exit or re-entry (serialized probe). New camera motion → f1-animation-cameras; wrong driver → data-hub."
 ---
 
 # Replay camera lifecycle
