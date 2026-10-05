@@ -368,7 +368,14 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
-function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) k += _hlEls[i].hidden ? "h" : "v"; return k; }
+// Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
+// width is part of what HudLayout.fit clamps, and the AERO chip's words change
+// all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
+// keyed on `hidden` alone it widened past the screen edge after the fit and
+// stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
+// aero right edge 1297 of 1280). textContent costs no layout; a length that
+// changes re-fits once, and the countdown only does so when a digit rolls over.
+function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const el = _hlEls[i]; k += el.hidden ? "h" : "v" + (el.textContent || "").length + ","; } return k; }
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
