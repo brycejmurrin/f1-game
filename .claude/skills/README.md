@@ -32,7 +32,7 @@ stayed separate in the 2026-09-03 pass.
 | **input-controls** | Steering, gamepad, touch steer, tilt/gyro, keyboard, on-screen steer buttons, driving-help/racing-line assists. |
 | **lighting-tuner** | Night looks washed out, dawn sun too high, floodlights not firing, day scene flat, `lightTune`/`applyRaceSettings`; baking a pasted `window.LightPresets` / `LightEdits` blob (`references/bake.md`, `scripts/bake.mjs`, `scripts/merge-proposals.mjs`). |
 | **mcp-probe** | Live working-tree canvas via the Chrome DevTools MCP (`chrome_*`) or `probe-mcp.py chrome-start` — poke `__apex`, heap/perf/console during an interactive repro. |
-| **multiplayer-debug** | VS FRIEND, WebRTC connection, invite links/QR codes, room codes, Nostr signalling, TURN/ICE, replicated rivals. |
+| **multiplayer-debug** | VS FRIEND, WebRTC connection, invite links/QR codes, room codes, build handshakes, Nostr signalling, TURN/ICE, replicated rivals, net determinism. |
 | **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`. |
 | **playwright-probe** | Parent-owned headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`; flicker/shimmer/z-fighting via a recorded driven clip (`references/motion-capture.md`); game-loop CPU profile / flame chart (`references/perf-profile.md`); the isolated car studio — livery, sponsors, part geometry (`references/car-studio.md`); camera modes, `orbit()` vs `snapCam()`, framing a corner (`references/cameras.md`). |
 | **pwa-cache-service-worker** | `sw.js`, `version.json`, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache. |

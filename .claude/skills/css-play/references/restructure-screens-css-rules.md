@@ -2,6 +2,14 @@
 
 Load from the SKILL.md index when the task needs this detail.
 
+## Contents
+- Screens and layers
+- CSS: put variation in properties, not in classes
+- DOM size and height
+- While restructuring
+- Fashionable but unproven — do not adopt on vibes
+- Deep references
+
 ## Screens and layers
 
 **1. Screen visibility must be a TOTAL function over a declared registry.**
@@ -56,7 +64,8 @@ leaving the user's scroll position destroyed after close.
 
 **8. Variation belongs in custom properties on context selectors, not in new
 classes.** One primitive class + N `--prop` overrides. The template is already
-in this repo, `css/components.css`:
+in this repo, `css/dialogs.css` (the contexts) and `css/components.css`
+(the `.sheet` rule):
 
 ```css
 #pausemenu  { --sheet-w: 420px; }

@@ -1,10 +1,18 @@
 # Research and author multiple circuits
 
+## Contents
+- Establish the baseline
+- Build a dated reference packet
+- Divide ownership and schedule
+- Add detail that carries the place
+- Acceptance and handoff
+- Skill format references
+
 ## Establish the baseline
 
 Choose the actual event/layout/year. A permanent circuit, temporary F1
-installation and historic layout can differ. Inspect the current brief and
-code before trusting either; refresh durable findings in the circuit brief or
+installation and historic layout can differ. Inspect the current brief
+(`docs/tracks/<id>.md`) and code before trusting either; refresh durable findings in the circuit brief or
 PR. Per-session logs, downloaded imagery and captures stay in `scratch/` or
 `artifacts/`, not committed reports.
 
@@ -119,8 +127,8 @@ clear driving sightlines and agreement between visible boundaries/collision.
 Name before/after discrepancies, exact audit deltas and remaining uncertainties.
 Existing audit caps are regression ratchets, not a licence to add defects.
 
-Children run the appropriate offline checks only, including `verify-track` for
-circuit edits, and report browser evidence unverified. Parent selects the most
+Children run the appropriate offline checks only, including
+`node tools/track/verify-track.cjs <id>` for circuit edits, and report browser evidence unverified. Parent selects the most
 specific foundation/subsystem specs and runs the existing validation ladder;
 broaden only when shared geometry or new failures require it. Keep source,
 offline-contract, rendered and native-device evidence separate. Update the

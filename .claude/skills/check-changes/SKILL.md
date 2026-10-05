@@ -52,6 +52,13 @@ job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs
 were cancelled by a newer push; two of three inspected hid a real failure).
 `verify-change` says so at verdict time when it can see a live run.
 
+Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
+prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
+change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
+already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
+Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
+groups than the cap (engine / physics: the two most specific, name the rest not-run).
+
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):

@@ -3,6 +3,14 @@
 Load this when driving a lap, writing a policy, or debugging a typed error. The SKILL.md index is the entry points only.
 
 
+## Contents
+- Three ways in (same surface, different cost)
+- The tools, by the question they answer
+- The driving loop
+- Determinism — pin the seed before any comparison
+- Staging (the sharp edges the CLI handles for you)
+- Lifecycle/tool receipts
+
 ## Three ways in (same surface, different cost)
 
 - `node tools/shot/agent.mjs <track> <tool> [flags]` — stages `race`/`go`/`jump` +
