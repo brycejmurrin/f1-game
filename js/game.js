@@ -6581,10 +6581,13 @@ function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
   // Context / device loss: shadow+begin already no-op, but render used to return
-  // before afterPresent (begin===false / warming stuck) and leave handoff up forever.
+  // before afterPresent (begin===false / stuck warm) and leave handoff up forever.
+  // Inline the stop (not RaceEntryProfile) so tests/unit/garage-arrival's render
+  // prefix extract stays self-contained; afterPresent still marks lower-lost when
+  // a later present path reaches it.
   if (gfxContextLost()) {
-    mirrorPass.cancelPreparation();
-    RaceEntryProfile.afterPresent(loadingScreen, gfx, false);
+    try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
+    if (loadingScreen.phase() === "handoff") loadingScreen.stop();
     return;
   }
   if (gfx.warming && gfx.warming()) return;

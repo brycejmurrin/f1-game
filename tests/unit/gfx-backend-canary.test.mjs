@@ -416,7 +416,7 @@ test("TLX aborts program warm on device loss so race-start cannot hang on warmin
 test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () => {
   const src = code("js/game.js");
   assert.match(src, /function gfxContextLost\(\)/);
-  assert.match(src, /gfxContextLost\(\)[\s\S]{0,200}?RaceEntryProfile\.afterPresent/);
+  assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
 });
 
