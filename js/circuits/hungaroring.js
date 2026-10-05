@@ -42,7 +42,10 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
-    turns: [0.0899, 0.1990, 0.2182, 0.2503, 0.3612, 0.4226, 0.4914, 0.5399, 0.5702, 0.6628, 0.7544, 0.8241, 0.8653, 0.8983],
+    // FIA 2025 map topology checked against the built racing centreline.
+    // T2/T14 have several curvature peaks but each is ONE physical corner;
+    // retain both chicane corners T6/T7 and the distinct left-hand T10.
+    turns: [0.0898, 0.1989, 0.2502, 0.3602, 0.4225, 0.4922, 0.4995, 0.5408, 0.5710, 0.6159, 0.6627, 0.7544, 0.8240, 0.8818],
     furniture: { tree: "broad", fol: [0.44, 0.44, 0.19], lamp: "none", sparse: true, treeCrown: "columnar" },  // dry straw-olive, dusty bowl
     kit: { marshal: "hut",       rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "sandstone", "steel"],  // poured 1986 terracing; alu reads as steel at distance
