@@ -569,6 +569,60 @@ test("a cache-bust navigation never falls back to the generic cached shell", asy
   assert.equal((await bust.responsePromise).status, 0);
 });
 
+// A SPENT ?b= (no newer than the cached shell) is an ordinary query navigation.
+// Every update reload (boot guard, UPDATE READY) lands on `?b=<build>`; a tab
+// restored or bookmarked there was failed outright offline and on a slow link
+// — the browser's error page instead of the precached shell, forever.
+function settledShellHarness({ online, fetchImpl }) {
+  const harness = createHarness({ immediateTimeoutMs: 3000, navigator: { onLine: online }, fetchImpl });
+  harness.stores.set("apex26-321", new Map([
+    [`${ORIGIN}/index.html`, new Response("shell 321", { status: 200 })],
+    [`${ORIGIN}/version.json`, new Response('{"build":321}', { status: 200 })],
+    [`${ORIGIN}/__apex_install_complete__`, new Response("c")],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("s")],
+  ]));
+  return harness;
+}
+for (const [label, online, fetchImpl] of [
+  ["offline", false, () => Promise.reject(new TypeError("offline"))],
+  ["on a slow link", true, () => new Promise(() => {})],
+]) {
+  test(`${label}, a spent ?b= reloads the cached shell; a newer one still fails fast`, async () => {
+    for (const b of ["321", "300"]) {
+      const h = settledShellHarness({ online, fetchImpl });
+      const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=${b}` });
+      const res = await nav.responsePromise;
+      assert.equal(res.status, 200, `?b=${b} is no newer than the cached 321`);
+      assert.equal(await res.text(), "shell 321");
+    }
+    const h = settledShellHarness({ online, fetchImpl });
+    const fresh = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=322` });
+    assert.equal((await fresh.responsePromise).status, 0, "a bust newer than the cache never gets the stale shell");
+  });
+}
+
+// The page strips the spent `b` itself: the boot guard runs on the shell it
+// asked for, so ?b= has done its job. Query and hash (#vs= invites) survive.
+test("the index.html boot guard removes ?b= from the address bar, keeping query and hash", async () => {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const guard = html.split("<script>").map((c) => c.split("</script>")[0])
+    .find((c) => c.includes('meta[name="apex-build"]') && c.includes("apex26.shellReloadedTo"));
+  assert.ok(guard, "the shell version guard script is found");
+  for (const [search, want] of [["?log=net&b=105", "/f1-game/?log=net#vs=CODE"], ["?b=105", "/f1-game/#vs=CODE"]]) {
+    let replaced = null;
+    vm.runInContext(guard, vm.createContext({
+      URLSearchParams,
+      document: { querySelector: () => ({ content: "105" }) },
+      navigator: {},
+      location: { pathname: "/f1-game/", search, hash: "#vs=CODE", replace() { throw new Error("no reload: same build"); } },
+      history: { state: { k: 1 }, replaceState: (st, _t, u) => { assert.deepEqual(st, { k: 1 }); replaced = u; } },
+      fetch: () => new Promise(() => {}),
+      sessionStorage: { getItem: () => null, setItem() {} },
+    }));
+    assert.equal(replaced, want, `${search} → ${want}`);
+  }
+});
+
 test("install rejects a missing or invalid build instead of creating apex26-0", async () => {
   for (const body of ["{}", '{"build":0}', "not json"]) {
     const harness = createHarness({
