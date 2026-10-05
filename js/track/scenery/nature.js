@@ -2,6 +2,15 @@
 const SceneryNature = (function () {
   "use strict";
 
+  // Opt-in opaque broadleaf silhouettes, in a 12 m canonical frame. Each
+  // [x,z,y,radius,lowerRise,capRise] lobe intersects the trunk/other lobes.
+  // Heights/tints belong to placements, never to the model cache key.
+  const LOBED_CROWNS = [
+    [[-0.6, -0.2, 3.8, 2.55, 2.4, 3.0], [0.7, 0.45, 4.3, 2.45, 2.7, 3.4], [-0.05, -0.65, 5.2, 2.05, 3.0, 3.8]],
+    [[-0.7, 0.35, 3.5, 2.4, 2.5, 3.2], [0.6, -0.5, 4.8, 2.55, 2.2, 3.2], [0.2, 0.3, 5.4, 1.9, 2.8, 3.8]],
+    [[-0.3, -0.7, 4.1, 2.6, 2.3, 3.4], [0.65, 0.2, 3.7, 2.35, 2.9, 3.3], [-0.45, 0.4, 5.8, 1.85, 2.4, 3.8]],
+  ];
+
   // Project every axis onto an orthonormal XZ frame, including leaned trunks
   // and drooping prism up-axes. Cylinders/prisms are base-anchored; boxes are
   // centre-anchored. These rectangles contain every vertex of each primitive.
@@ -142,18 +151,20 @@ const SceneryNature = (function () {
     // Call order inside a circuit file is deterministic and layered calls are
     // always adjacent, so consecutive slots is exactly the guarantee needed.
     let hillSeq = 0, standSeq = 0;
-    const spotTaken = (x, z) => {
+    const spotOccupied = (x, z, reserve = true) => {
       const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         const cell = planted.get(`${cx + i}|${cz + j}`);
         if (cell) for (const q of cell)
           if (Math.hypot(q[0] - x, q[1] - z) < TREE_GAP) return true;
       }
+      if (!reserve) return false;
       const key = `${cx}|${cz}`;
       if (!planted.has(key)) planted.set(key, []);
       planted.get(key).push([x, z]);
       return false;
     };
+    const spotTaken = (x, z) => spotOccupied(x, z);
     // Placed pines' tier-cone facet planes [nx, ny, nz, d], bucketed on a
     // 10 m grid, for pine()'s coplanar guard.
     const PINE_CELL = 10, pineFacetGrid = new Map();
@@ -298,6 +309,77 @@ const SceneryNature = (function () {
           }
       return false;
     };
+    const lobedTree = (k, side, dist, h, col, opts, vr) => {
+      const variant = opts.variant === undefined ? Math.floor(vr * 3) : opts.variant;
+      if (!Number.isFinite(h) || h <= 0 || !Number.isInteger(variant) || variant < 0 || variant > 2 ||
+          (opts.spread !== undefined && opts.spread !== 1) ||
+          !Array.isArray(col) || col.length !== 3 || !col.every(Number.isFinite)) return false;
+      const a = anchor(k, side, dist), b = [a.r, a.u, a.t], s = h / 12;
+      const o = vadd(a.c, a.u, -0.5), lobes = LOBED_CROWNS[variant];
+      const at = (x, y, z) => vadd(vadd(vadd(o, a.r, x * s), a.u, y * s), a.t, z * s);
+      const parts = [{ type: "cyl", c: o, size: [0.8 * s, 6.7 * s, 0.8 * s], b }];
+      for (const [x, z, y, radius, lower, cap] of lobes) {
+        parts.push({ type: "frustum", c: at(x, y, z), size: [radius * 2 * s, lower * s, radius * 2 * s], b });
+        parts.push({ type: "cone", c: at(x, y + lower, z), size: [radius * 2 * s, cap * s, radius * 2 * s], b });
+      }
+      const footprints = parts.map(palmFootprint);
+      // A complete tree or nothing: test the actual tilted part envelopes
+      // before graph replay, including crown terrain on all four rim corners.
+      const clear = footprints.every((f, i) => {
+        if (rejBox(f.c, [f.w, f.maxY - f.minY, f.d], f.b) ||
+            ctx.massBlocked(f.c, f.w, f.d, f.b, 1) || treeOccupied(f, false) ||
+            !ctx.barrierClear(f.c[0], f.c[2], Math.hypot(f.w, f.d) / 2)) return false;
+        if (!i) return true;
+        const p = parts[i], half = p.size[0] / 2;
+        for (const [x, z] of [[0, 0], [-half, -half], [-half, half], [half, -half], [half, half]]) {
+          const q = vadd(vadd(p.c, a.r, x), a.t, z), ground = terrainYAt(q[0], q[2]);
+          if (ground != null && ground > q[1] + 0.02) return false;
+        }
+        return true;
+      });
+      if (!clear) {
+        ctx.noteSuppressed("tree", `lobed tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
+        return false;
+      }
+      if (spotOccupied(a.c[0], a.c[2], false)) return false;
+      const segments = ctx.lod(4, 3), trunkSegments = ctx.lod(5, 4);
+      // Check the same guarded primitive calls graph replay will use. Runtime
+      // dry runs write no vertices; the temporary arrays also suit VM emitters.
+      const trial = { pos: [], nrm: [], col: [], mat: [], idx: [], _dryRun: true };
+      if (addCyl(trial, o, 0.4 * s, 6.7 * s, [0.32, 0.23, 0.13], trunkSegments, b) === false) return false;
+      for (const [x, z, y, radius, lower, cap] of lobes) {
+        if (addFrustum(trial, at(x, y, z), 0.08 * s, radius * s, lower * s, col, segments, b) === false ||
+            addCone(trial, at(x, y + lower, z), radius * s, cap * s, col, segments, b) === false) return false;
+      }
+      const landed = ctx.instance(`tree-lobed|${variant}|${segments}`, {
+        o, r: a.r, u: a.u, t: a.t, s: [s, s, s], col,
+      }, (rec) => {
+        rec.mat(MAT.WOOD);
+        rec.cyl([0, 0, 0], 0.4, 6.7, [0.32, 0.23, 0.13], trunkSegments);
+        rec.mat(MAT.FOLIAGE, [3.5, 12]);
+        for (const [x, z, y, radius, lower, cap] of lobes) {
+          rec.frustum([x, y, z], 0.08, radius, lower, TrackGraph.NODE_COLOR, segments);
+          rec.cone([x, y + lower, z], radius, cap, TrackGraph.NODE_COLOR, segments);
+        }
+      }, { kind: "tree", k, side, h, crown: "lobed", variant }, { roundNormals: true });
+      out._mat = 0; out._matAt = null;
+      if (!landed) return false;
+      spotTaken(a.c[0], a.c[2]);
+      const minX = Math.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = Math.max(...footprints.map((f) => f.c[0] + f.ex));
+      const minZ = Math.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...footprints.map((f) => f.c[2] + f.ez));
+      const minY = Math.min(...footprints.map((f) => f.minY)), maxY = Math.max(...footprints.map((f) => f.maxY));
+      const site = { parts: footprints, relocated: false, c: [(minX + maxX) / 2, 0, (minZ + maxZ) / 2],
+        ex: (maxX - minX) / 2, ez: (maxZ - minZ) / 2, minY, maxY };
+      for (let x = Math.floor(minX / TREE_CELL); x <= Math.floor(maxX / TREE_CELL); x++)
+        for (let z = Math.floor(minZ / TREE_CELL); z <= Math.floor(maxZ / TREE_CELL); z++) {
+          const key = `${x}|${z}`;
+          if (!placedTrees.has(key)) placedTrees.set(key, []);
+          placedTrees.get(key).push(site);
+        }
+      ctx.note("tree", [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+        [maxX - minX, maxY - minY, maxZ - minZ], { k, side, dist, crown: "lobed", variant });
+      return true;
+    };
     const tree = (k, side, dist, h, col, opts) => {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
@@ -305,6 +387,7 @@ const SceneryNature = (function () {
       // Relocation changes the anchor, never this tree's authored shape seed.
       const vr = hash(k * 8.3 + side * 5.1 + initialDist + 4.7);
       const deadAt = 1 - ((opts && opts.deadChance != null) ? opts.deadChance : 0.09);
+      if (crown === "lobed" && vr <= deadAt) return lobedTree(k, side, dist, h, col, opts, vr);
       const j = 0.85 + hash(k * 2.9 + side * 1.7 + initialDist) * 0.3;
       const lean = vr > 0.55 ? (vr - 0.55) * 1.4 : 0;
       const partsAt = (p) => {
@@ -1360,6 +1443,9 @@ const SceneryNature = (function () {
       // quantises to whole nodes (round(stepM / 4)), so the honest grid is
       // multiples of 4 m: spacing 15 → 16 m, spacing 24 → 24 m.
       const step = opts.spacing != null ? Math.max(ds, opts.spacing) : 7 - dens * 4;
+      const detailed = opts.treeOptions && opts.treeOptions.crown === "lobed" ? opts.treeOptions : null;
+      const limit = detailed && detailed.maxDetailed !== undefined ? detailed.maxDetailed : 30;
+      let accepted = 0;
       ctx.along(s0, s1, step, (k) => {
         const s = hash(k * 4.3 + side * 1.1);
         const h = hMin + s * (hMax - hMin);
@@ -1372,7 +1458,11 @@ const SceneryNature = (function () {
         const d = clearTreeDist(k, side, dist + back, canopy);
         if (d == null) return;
         if (isPine) pine(k, side, d, h, pineCol);
-        else        tree(k, side, d, h, treeCol);
+        else if (detailed && Number.isInteger(limit) && limit > 0 && limit <= 60 && accepted < limit) {
+          const result = tree(k, side, d, h, treeCol, detailed);
+          if (result === true) accepted++;
+          else if (result === false) tree(k, side, d, h, treeCol);
+        } else tree(k, side, d, h, treeCol);
       });
     };
     const bush = (k, side, dist, col, opts) => {

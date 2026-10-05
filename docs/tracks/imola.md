@@ -1,6 +1,6 @@
 # Imola — Autodromo Enzo e Dino Ferrari (Italy)
 
-**Game setting:** DAY · green theme (parkland by a river). Render: procedural colored BOXES, no textures. Objects placed by arc-fraction `s` (0.0 at start/finish, increasing in racing direction, wrapping to 1.0), Left/Right side, lateral distance band, tinted `[r,g,b]` 0–1.
+**Game setting:** DAY · green theme (parkland by a river). Scenery uses procedural meshes and the baked material/model pack, with procedural fallbacks. Turn and sector metadata use racing-lap arc fractions; legacy scenery placement fractions below use the authored frame through wrapped helpers. Left/Right and lateral distance bands describe placement, not surveyed footprints.
 
 ## 1. Setting
 An old-school **parkland circuit** opened 1953, running along the right bank of the **Santerno river** at the foot of the wooded **Imola hills**, 40 km east of Bologna. The lap is essentially a road following the river, then looping back up and over a couple of small hills through mature trees and grassy banks — narrow, enclosed, and intimate compared with modern tracks. **4.909 km, 19 turns, anticlockwise.** F1 last raced here in 2025 (Emilia-Romagna GP); the Spanish GP moves to Madrid for 2026, so this is a returning/legacy venue in the game (`classic: true`).
@@ -11,7 +11,11 @@ Bright Italian spring sky `[0.55,0.74,0.95]`, soft warm light. Dominant **parkla
 ## 3. Elevation
 Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00–0.30), then a steady **climb to Piratella** at a blind hill-crest (~s 0.35), a drop and **climb to Acque Minerali** (~s 0.45–0.55), up over the **Variante Alta** crest (~s 0.65), then a **descent into Rivazza** (~s 0.80). Vary ground-box top heights here; keep the first third near-flat. **Do not flatten hills or add knife-edge elevation jolts.**
 
-## 4. Landmarks & surroundings by lap position
+## 4. Landmarks & surroundings by legacy scenery position
+
+These fractions are placement notes in the existing scenery frame, not validated
+FIA corner anchors. Use the racing fractions in §7 for timing and corner labels;
+verify final built placement before changing scenery from these notes.
 | s | Side | Distance | Box-modelling description |
 |------|------|----------|---------------------------|
 | 0.00 | L (−1) | near–mid | **Modern Tilke pit complex** (2006–07 rebuild) — six garage slabs + hall; **Racetrack Tower** (`imola-racetrack-tower`, required) 7 floors over the pits with crimson façade panels |
@@ -40,11 +44,63 @@ Notably **hilly** in the mid-to-late lap. Flat river-side run to Tosa (~s 0.00�
 ## 6. Modelling notes
 - Chain overlapping Santerno water + bank slabs on the right from Variante Bassa through pit → Tamburello so the river reads continuous at race speed.
 - Mid-lap (Piratella / Acque Minerali) is **deciduous hollow** — `pineFrac: 0`, dark broadleaf + mist planes; cypress only as sparse Italian punctuation.
-- Variante Alta needs **tall sausage kerbs** (~1.3 m) and tight wooded crest walls; Rivazza is a grass amphitheatre plunge (tiered hillside stands), not a flat stand.
+- Variante Alta has raised kerb detail and tight wooded crest walls; kerb height is not established by the references here. Do not use the former unsupported 1.3 m estimate. Rivazza is a grass amphitheatre plunge (tiered hillside stands), not a flat stand.
 - Keep the first third flat, then ramp ground-box tops up for Piratella/Acque Minerali and drop them into Rivazza.
 - Thin far mountain rings before stacking hero riverside / hollow / crest geometry.
 - Stands use `grandstandEx` (positive rake, rows rise away from the track). Legacy `grandstand()` is retired here.
 - Racetrack Tower: one continuous shaft + flush glass (no inter-floor air gaps — ground-audit unsupported BFS).
+
+## 7. FIA 2025 timing and nominal corner anchors
+
+The [FIA event circuit map, document 4, version 3, issued 15 May 2025](https://www.fia.com/system/files/decision-document/2025_imola_event_-_circuit_map_-_imola_2025.pdf)
+specifies **S1 115 m before T7** and **S2 190 m before T14**. T7 is Tosa;
+T14 is the first right of Variante Alta/Gresini, followed by the left T15.
+The operator's [car-layout map](https://www.autodromoimola.it/tracciato/)
+corroborates the named shapes but labels 21 bends; the FIA event map's 19
+corner numbers govern this definition. Marshal posts/lights are separate labels.
+
+The current built centreline is **4,871.2493 m**, compared with the FIA's
+**4,909 m** reference. Timing fractions use the built metric, without rescaling
+the road or changing its origin, width or elevation. Sectors are `.33451582`
+and `.65393488`, respectively 115 m and 190 m before the selected game anchors.
+
+| FIA corner | Physical bend | Nominal racing fraction |
+|---|---|---|
+| 1 | Gentle bend before Tamburello | `.0788` |
+| 2 / 3 / 4 | Tamburello left / right / left | `.1529` / `.1639` / `.1844` |
+| 5 / 6 | Villeneuve left / right | `.2804` / `.2969` |
+| 7 | Tosa left hairpin | `.35812372` |
+| 8 | Uphill right sweep before Piratella | `.4392` |
+| 9 | Piratella left | `.4834` |
+| 10 | Left bend on descent to Acque Minerali | `.5204` |
+| 11 / 12 / 13 | Acque Minerali right / right / exit left | `.5674` / `.5904` / `.5999` |
+| 14 / 15 | Variante Alta/Gresini right / left | `.69293924` / `.6984` |
+| 16 | Right kink on descent toward Rivazza | `.8169` |
+| 17 / 18 | Rivazza first / second left | `.8529` / `.8799` |
+| 19 | Final right toward the pit straight | `.9459` |
+
+These are **nominal geometric references, not surveyed apex coordinates**.
+Physical numbering follows the inspected FIA plan and built road topology;
+it is not the ordering of detected curvature peaks. Existing markers were
+retained where they matched the physical bend. T1, T8 and T14 use a local
+signed-curvature peak inside their independently identified bend. Tosa has
+two strong left-curvature peaks within one hairpin, so T7 instead uses half
+the heading change across the complete hairpin. Four reasonable measurement
+windows moved that midpoint by less than 0.11 m on this spline; this measures
+algorithm sensitivity, not real-world survey accuracy. Gentle/broad bends
+especially have uncertain exact apex stations.
+
+The old list omitted the gentle T1, counted both Tosa peaks as T7/T8, and
+shifted Acque Minerali labels into the T14 slot. Correcting the labels and
+timing leaves the road and banking geometry unchanged. Automatically placed
+braking boards follow the corrected corner metadata. Exact as-built runoff
+polygons, surveyed elevation, kerb dimensions and scenery placement accuracy
+remain separate research tasks.
+
+The existing authored gameplay aero window is re-keyed from the old T14/T15
+labels to physical T13/T14, preserving its Acque Minerali–Variante Alta
+approach placement. It is not a reconstruction of the FIA 2025 main-straight
+DRS zone; matching that interval across the gentle T1 needs a separate change.
 
 ## Sourced vs uncertain (wave 6)
 

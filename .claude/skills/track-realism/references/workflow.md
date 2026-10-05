@@ -65,6 +65,14 @@ shared changes rather than quietly editing shared contracts. Do not give two
 authors the same pair. Use the existing frame-aware helpers: control-point
 index fractions and built racing arc fractions are different; apply the
 scenery shift exactly once. Shared new fields must survive definition copying.
+Corner metadata can also affect bank-zone reseating, generated braking boards
+and authored aero-zone turn pairs. Re-key dependent tables when corner numbers
+change and prove their intended runtime intervals. Compare built road/banking
+arrays when correcting labels. Run both aero-table resolution and interval
+equivalence checks: a stale pair can still resolve successfully to the wrong
+straight. Unchanged
+control points alone do not establish unchanged geometry. Number physical
+bends from the event map, since one hairpin can have multiple curvature peaks.
 Do not assume symmetric narrowing-only width zones model asymmetric widening.
 
 First research independent circuits and shared models concurrently. Reconcile
@@ -108,8 +116,14 @@ using it on a mixed pack. Verify loaded baked models and fallback appearance.
 Set **incremental** per-circuit budgets from measured baseline and visibility:
 fused vertices/triangles, canonical model vertices, recipe keys, live batches,
 actual instances, glass/water cost and pack bytes. State replacements/savings.
+Use graph node counts for fused VM instances; an `instancedOnly` batch list
+can legitimately be empty there. Measure actual live batches separately.
 Do not substitute a VM's fallback prop counts for live baked-model upload cost,
 or claim target-GPU frame rate from SwiftShader captures.
+Terrain rail positions alone do not prove that interpolated grounding remains
+unchanged between rails. Check retained foreground tree ranks and complete
+building support bounds in matched views; a lower prop count can mean that
+placement guards dropped scenery rather than that a model became cheaper.
 
 ## Acceptance and handoff
 

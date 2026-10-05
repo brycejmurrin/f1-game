@@ -145,6 +145,11 @@ const TrackDef = (function () {
       street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
+      // Opt-in gradual outer terrain descent; absent/invalid preserves the
+      // legacy definition shape and profile on all other circuits.
+      ...(Number.isFinite(d.terrainFalloffStart) && d.terrainFalloffStart >= 30 &&
+          d.terrainFalloffStart < Math.max(0.5, Number(d.terrainOuter) || (d.street ? 28 : 120))
+        ? { terrainFalloffStart: d.terrainFalloffStart } : {}),
       flatTerrain: !!d.flatTerrain,
       // The terrain's own material layer beyond the runoff verge (js/track/core/mesh.js
       // ribbon()): "SAND" / "SNOW" for the track designer's desert and alpine
