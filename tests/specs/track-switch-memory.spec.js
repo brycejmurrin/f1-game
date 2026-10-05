@@ -26,7 +26,7 @@
 // TLX on purpose: the shared fixtures pin GLX (cheaper under SwiftShader), but
 // the leak lived in TLX and TLX is what players run.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { censusInitScript, censusAfterGc, pickTrack, settle, waitFrames } from "../../tools/lib/mem-census.mjs";
+import { censusInitScript, censusAfterGc, pickTrack, settle, waitFrames, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 // Three CLI runs of the fixed tree (tools/gfx/mem-census.mjs, picker path, TLX,
@@ -51,6 +51,10 @@ test.use({ viewport: { width: 960, height: 540 } });
 // SwiftShader revisit's number with no margin under it, and a floor that
 // trips on a drawn world is not the undrawn-world guard it claims to be. An
 // undrawn world reads 0; 20 keeps the guard and the measured margin.
+// Selected-specs job 111655042275 (run 37274796306) then failed visit 1 to
+// monza at Received 10 with the same "world built and lit" dump — that was
+// the census racing menuFinish (car assets, then hidden warm frames), not a
+// drawn world of 10. waitUntilDrawn holds the floor; do not lower it.
 const MIN_RENDER_OBJECTS = 20;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
@@ -74,6 +78,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
+      await waitUntilDrawn(page, MIN_RENDER_OBJECTS);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
