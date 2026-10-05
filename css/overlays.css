@@ -616,8 +616,7 @@ body:has(dialog[open]) #save-warning { display: none; }
    every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
    z-index outranks, and makes everything outside it inert — the chip sat under
    the ::backdrop, visible and unpressable. A popover would draw above it and
-   still be inert ("except the dialog and its descendants", MDN showModal).
-   It stands down like #save-warning and is back when the dialog closes.
-   https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal */
+   still be inert ("except the dialog and its descendants": MDN, showModal()).
+   It stands down like #save-warning and is back when the dialog closes. */
 body:has(dialog:modal) #update-chip { display: none; }
 } /* @layer overlays */
