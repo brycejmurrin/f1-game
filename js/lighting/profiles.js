@@ -156,7 +156,7 @@ const LightStore = (() => {
 
     // opts.holdRebuild (the weather arc's blended re-apply, js/lighting/atmosphere.js):
     // leave the `rebuild` knobs (lampDensity, poolEnergy, lampRadiusMul, bleedMul,
-    // beamCone, lampGapFill) and the bake inputs at their live values, so a mid-race weather flip never
+    // beamCone, beamCore, lampGapFill) and the bake inputs at their live values, so a mid-race weather flip never
     // nulls track._lights and re-bakes the lamp pools. They stay as the session
     // resolved them (track x time of day x the weather it started in) until the next
     // un-blended apply: a chip, a slider, a track load.

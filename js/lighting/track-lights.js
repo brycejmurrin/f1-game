@@ -344,6 +344,11 @@ function buildTrackLights(track, onlyAlways) {
     // A fill light has no fixture, so it must not draw a lens halo hanging in
     // mid-air; damp its volumetric beam for the same reason.
     if (posts && posts[i].synth) { glareW = 0; volW = Math.min(volW, 0.3); }
+    // BEAM CORE knob: scale the hot core's half-angle (skirt width kept). A tall
+    // mast aimed ~30° off vertical has its own foot inside the 37° flood_bank
+    // core, so the run-off under it lit like the road (qatar/bahrain, 2026-10-05).
+    const core = LT.beamCore || 1;
+    if (core !== 1) { const sk = coneIn - coneOut; coneIn = Math.cos(Math.min(1.55, Math.acos(Math.min(1, coneIn)) * core)); coneOut = coneIn - sk; }
     // BEAM CONE WIDTH knob: scale the soft-skirt angular width (coneIn−coneOut).
     // >1 widens the illuminated cone (lower outer cos), <1 tightens the hotspot.
     coneOut = coneIn - (coneIn - coneOut) * (LT.beamCone || 1);

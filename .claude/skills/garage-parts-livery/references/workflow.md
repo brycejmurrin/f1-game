@@ -3,6 +3,12 @@
 Load this when adding a catalog option, wiring a SIGNATURE mesh, or chasing
 career lock / ERS behaviour.
 
+## Contents
+- ERS is not a low/medium/high tier
+- Career ownership is a write/UI gate
+- Workflow
+- Common mistakes
+
 ## ERS is not a low/medium/high tier
 
 The `ers` category in `js/car/parts.js` is a flat list of named deploy maps.
@@ -68,9 +74,10 @@ resolution.
      --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --plan
    ```
    `--plan` prints the matrix as JSON and exits before Chromium — do that
-   first, the product multiplies fast. (It is `--plan`, not `--dry-run`: the
-   planner validates field names, enum values and part ids before browser launch;
-   a misremembered flag must fail preflight.)
+   first, the product multiplies fast. (It is `--plan`, not `--dry-run`: a
+   bare `--dry-run` is silently ignored and boots Chromium (measured 2026-10-05,
+   no exit in 120 s). The planner validates field names, enum values and part ids
+   before launch, so a misremembered `--field=value` flag fails preflight.)
    Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
    `--part.<category>=all` expanding to the catalog; ids are checked against
    `isOptionAvailable` for the team being shot, because a part locked to

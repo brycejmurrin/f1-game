@@ -48,6 +48,7 @@
     "apex_ui_fit",
     "apex_ui_shot",
     "apex_car_audit",
-    "apex_track_audit"
+    "apex_track_audit",
+    "apex_unit_test"
   ]
 }

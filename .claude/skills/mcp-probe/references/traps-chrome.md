@@ -2,6 +2,11 @@
 
 Load from traps.md when debugging this class of failure.
 
+## Contents
+- THE trap: never render in the MCP browser while Playwright is running
+- A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine
+- A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
+
 ## THE trap: never render in the MCP browser while Playwright is running
 
 A live game page in the MCP browser holds ~20% CPU (survey-ui-matrix measured

@@ -98,7 +98,8 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["career-mode", "references/workflow.md"],
     ["race-incidents-control", "references/workflow.md"],
     ["new-track", "references/workflow.md"],
-    ["webgl-debug", "references/failures.md"],
+    ["renderer-debug", "references/glx-failures.md"],
+    ["renderer-debug", "references/wgx-defects.md"],
     ["garage-parts-livery", "references/workflow.md"],
     ["lighting-tuner", "references/symptoms.md"],
     ["tune-physics", "references/harness.md"],
@@ -158,6 +159,8 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     // makes the workflow unreachable, which is worse than one more directory.
     "car-viewer", "debug-cameras", "debug-tracks", "game-feel",
     "restructure-screens-css",
+    // 2026-10-05: one renderer-debug hub owns TLX, GLX and WGX (step 0 = diag().env.backend).
+    "webgl-debug", "webgpu-debug",
   ]) {
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
@@ -364,7 +367,7 @@ test("review-pass contracts: no stale commands or steal phrases", () => {
   assert.doesNotMatch(av.description, /debug understeer/);
   assert.match(av.description, /telemetry/);
 
-  const gl = frontmatter(fs.readFileSync(path.join(SKILLS, "webgl-debug/SKILL.md"), "utf8"));
+  const gl = frontmatter(fs.readFileSync(path.join(SKILLS, "renderer-debug/SKILL.md"), "utf8"));
   assert.match(gl.description, /black|blank|dark/i);
 
   const cc = frontmatter(fs.readFileSync(path.join(SKILLS, "check-changes/SKILL.md"), "utf8"));
@@ -484,7 +487,7 @@ test("file-family skills keep their file anchors in the body, and `paths` stays 
       assert.match(fm.paths, /^(\[|"|[a-z])/, `${d.name}: paths must be a glob or list, got ${fm.paths}`);
   }
   for (const [name, re] of Object.entries({
-    "webgl-debug": /js\/render\/glx/,
+    "renderer-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
     "scenery-dress": /js\/circuits|scenery\(api\)/,
   })) {

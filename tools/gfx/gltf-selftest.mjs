@@ -1,6 +1,6 @@
 /*
  * @doc Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps).
- * @skill webgl-debug
+ * @skill renderer-debug
  * Self-test for js/render/shared/gltf.js (the GLB loader) — Node ESM, no dependencies.
  *
  * Run:  node tools/gfx/gltf-selftest.mjs

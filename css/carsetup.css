@@ -310,58 +310,115 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
-/* Wrap only on a short WIDE stack (play-shape). Tall sheets have
-   height for the option list — wrapping all 14 tabs there ate
-   #cs-options (measured 393×852 @115%: five tab rows, options
-   height 0). Two wrapped rows beat a sideways pan on play-shape
-   (compact already drops .cs-tab-cur). */
+/* PLAY-SHAPE GARAGE (compact, stacked, not tall): a one-line head, then ONE
+   pan-x category strip with BACK / DONE beside it, then the parts list.
+   MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05, tip
+   a7d27757f): a 306 px sheet (281 own) split head 76 + a two-row 9px tab grid
+   60 + foot 58, which left #cs-options an 80 px box over 1386 px of parts
+   (17.3 screens) and painted fifteen 26-47 x 31 px tabs. Two tab rows at 44
+   would have cost the list another 25 own (80 -> 55), so the strip is ONE row
+   at the coarse floor, and the action bar that took a 58-unit row of its own
+   rides BESIDE it — that row is one button tall either way. Expected budget:
+   head ~52 + strip/bar ~54 + gaps 8 -> #cs-options ~165 own (~2x). The rows
+   flatten into the one strip exactly as the pair rail flattens them (display:
+   contents), so the strip is the scroller and the active tab's scrollIntoView
+   centres it there. The bar is still the last thing in the DOM: Tab order is
+   unchanged. Tall (portrait) sheets keep the stack above — they have height. */
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  row-gap: calc(var(--gap) * 0.5);
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > #cs-body { display: contents; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs { grid-column: 1; grid-row: 2; padding-left: var(--pad); scroll-padding-inline: var(--pad); }
+/* THE ONE STRIP IS EVERY STACKED COMPACT SHEET'S, portrait included; only the
+   grid placement above is play-shape's. MEASURED (layout-audit,
+   ios-iphone-portrait 393x659, 2026-10-05, on 42cb42fbf): the tall garage
+   kept two tab rows of two-line tabs and a roomy head, and #cs-options was a
+   62 px box over 2832 px (50.7 screens). With the portrait --compact-at (the
+   orientation block near the end) the portrait phone takes the compact head and this one 52-tall strip, and the
+   list gets ~280 own. Each tab is floored at 52 painted in BOTH axes: ERS and
+   FUEL measured 44 and 51 wide in the landscape strip on 42cb42fbf. */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs {
+  display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--gap) * 0.5);
+  max-height: none; min-width: 0;
+  padding: 0;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none; scrollbar-gutter: auto;
+  /* SNAP EACH CATEGORY. On play-shape the strip shares a row with BACK /
+     CLOSE: without snap, AERO (and later tabs) parked half-clipped at the
+     strip's right edge and read as "AER" under the foot — measured
+     ios-iphone-landscape-safari 852×344 compact, 2026-10-05, tip 36c84dc8
+     (AERO right 15px past #cs-tabs client edge; BACK clear of the strip box).
+     Modern Web Guidance scroll-snap: mandatory x + align start. */
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--pad);
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs::-webkit-scrollbar { display: none; }
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-row { display: contents; }
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab {
+  /* 52 painted on touch: --tap-paint where the tap-target pass declares it,
+     the full --tap rung otherwise. The label is back at --fs-micro: the old
+     min(9px, ...) label existed only to squeeze seven columns into a grid,
+     and a panning strip has no columns to fit. */
+  flex: 0 0 auto; white-space: nowrap;
+  min-width: var(--tap-paint, var(--tap));
+  min-height: var(--tap-paint, var(--tap));
+  padding: 0 calc(var(--gap) * 0.9);
+  justify-content: center; align-items: center; text-align: center;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+/* Play-shape only: keep a trailing snap pad so the last visible tab can sit
+   fully inside the strip instead of kissing the BACK column. */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
-  display: grid;
-  grid-template-rows: repeat(2, calc(var(--tap-min) + 4px));
-  max-height: calc((var(--tap-min) + 4px) * 2 + var(--gap));
-  align-content: start;
+  padding-inline-end: calc(var(--gap) * 0.5);
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-row {
-  min-height: 0;
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
+  grid-column: 2; grid-row: 2;
+  padding: 0 var(--pad) 0 0;
+  background: none;
+  /* Foot stays tappable at --tap; do not let its content width starve the
+     category strip. Measured 852×344: two 126px buttons left the strip 188px
+     — only TEAM+ENGINE fully fit, AERO clipped to "AER" at the strip edge. */
+  min-width: 0;
+  justify-self: end;
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
-  /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row; centre the
-     label so short codes (TEAM) and long ones (SUSPENSION) share one axis.
-     Never narrower than the tap floor: ERS, the shortest label, measured
-     22px wide at 844x390 (layout audit, 2026-09-30). */
-  min-width: var(--tap-min);
-  min-height: 0;
-  padding: 2px calc(var(--gap) * 0.2);
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
+  /* Prefer a shorter label padding so three category tabs clear fully beside
+     BACK/CLOSE; height stays the sheet foot / --tap floor. */
+  padding-inline: calc(var(--gap) * 0.65);
+  min-width: var(--tap-paint, var(--tap));
+  max-width: 7.5em;
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-lbl {
-  /* Tighter font so the longest label fits the 7-column grid without
-     ellipsis. The arithmetic is CAPPED because it is relative: "-3px" meant
-     8px when --fs-micro was 11px, and when the token later moved to 14px it
-     silently became 11px — wider than the column, so the long labels
-     ellipsised ("SUSPE…"), which is exactly what the subtraction was meant
-     to prevent. 8px is measured, not aesthetic: SUSPENSION is the widest
-     label and at 852x393 it needs 47px against a 47px column interior —
-     9.5px needs 55px and still clips. min() restores the measured size and
-     still shrinks if the token ever drops below 11px.
-     RAISED 8px -> 9px on 2026-09-16, paid for by the `tab:` short label. With
-     SUSPENSION in the rail the widest label needed 46px of a 40px column and 8px
-     was the most that fitted; with SUSP the widest is now GEARBOX, and a sweep
-     across 852x393 / 852x344 / 740x360 puts the clipping threshold between 9.5
-     and 10px (9.5 clean, 10 clips GEARBOX, 10.5 clips EXHAUST too). 9px takes
-     the legibility and leaves ~1px of headroom rather than squeezing the last
-     half-pixel, because the caveat below still stands.
-     The floor has to hold for the narrowest roster and the narrowest sheet that
-     reaches this tier, not for today's count — a roster that grows narrows these
-     columns again, which is exactly how SUSPENSION came to be clipped. min()
-     keeps the token arm, so a --fs-micro below 12px still shrinks this. */
-  font-size: min(9px, calc(var(--fs-micro) - 3px));
-  letter-spacing: 0;
-  text-align: center;
-  width: 100%;
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options {
+  grid-column: 1 / -1; grid-row: 3;
+  padding: 0 var(--pad) calc(var(--pad) * 0.25);
 }
+/* ...AND THE HEAD IS ONE LINE. Same measurement: the head was two lines, the
+   title over a budget row that was itself readout-over-FREE-BUILD, 76 own of
+   the 281. The title stacks GARAGE over the team name in a narrow column, the
+   readout wraps to two lines beside FREE BUILD instead of above it, and the
+   row is as tall as the FREE BUILD chip (~52 own with padding). The budget row
+   asks for 5.5 chips of width, so a team name too long for the title column
+   still wraps the row underneath, as before — nothing truncates.
+   FOLDED WITH #919 (d5eb31183): its compact-tier `#cs-budget-row` nowrap and
+   `#cs-budget` flex: 1 1 0 / min-width: 0 (end of this file, every compact
+   garage) are the readout-beside-FREE-BUILD half of this, so those
+   declarations are no longer repeated here; this tier adds only the title
+   column, the row's width basis and the readout's leading. */
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-header { flex-wrap: wrap; align-items: center; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar {
+  flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: 0;
+  min-width: 0; max-width: calc(var(--label) * 7.5);
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { line-height: 1.2; }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
@@ -1313,18 +1370,29 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    also touch, also thumbs — falls out of the branch and keeps 30px. Measured
    there: #cs-cam 86x31, #cs-aero 157x31, on a device with maxTouchPoints > 0
    and a --tap of 52.
-   --chip-h (48), not --tap: these float over the live car preview and the
-   canvas is the thing the screen exists to show, so they take the documented
-   rung one step below the primary floor rather than the floor itself. Width
-   still decides their PADDING and type above; only the target floor moves here.
+   CAMERA and ACTIVE AERO take the full touch floor, the view chips keep
+   --chip-h. The two were on --chip-h too ("they float over the live car
+   preview, so one rung below the floor"), and measured (layout-audit
+   2026-10-05, both iPhone viewports, with and without the tap-target pass)
+   that rung painted them 100x48 and 221x48 — under the 52 floor on the two
+   controls a player reaches for most while the garage is open. They still
+   float over the preview exactly as before; 4px more of chip costs the car
+   nothing. PLAIN --tap, NOT --tap-paint: #cs-stack sits outside the zoomed
+   .sheet, and --tap-paint pre-divides by --ui-scale to paint 52 INSIDE a
+   zoomed sheet — out here it painted 52 / 1.09 = 48 (layout-audit on the
+   merged tree 2026-10-05: #cs-cam 100x48, #cs-aero 221x48, both iPhone
+   viewports). Un-zoomed, --tap is the floor itself: 52 on touch, 44 with a
+   mouse. The camera panel's view
+   chips are a disclosure opened and left, and stay on --chip-h. Width still
+   decides their PADDING and type above; only the target floor moves here.
    docs/LAYOUT-AUDIT.md states the rule this restores: "Input modality is not
    size. A 1024px iPad is not a desktop." */
 /* .cs-view-btn ALONE covers the zoom pair and the eight arrows: every one of
    them carries that class in the markup, so the two extra selectors this list
    used to name were restating a floor they already had. */
-body:not(.desktop) #cs-cam,
-body:not(.desktop) #cs-aero,
 body:not(.desktop) .cs-view-btn { min-height: var(--chip-h); }
+body:not(.desktop) #cs-cam,
+body:not(.desktop) #cs-aero { min-height: var(--tap); }
 body:not(.desktop) .cs-opt-tag { font-size: var(--fs-micro); }
 body:not(.desktop) .cs-opt-desc { font-size: var(--fs-2); }
 body:not(.desktop) .cs-delta { font-size: var(--fs-micro); }
@@ -1535,7 +1603,21 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      portrait the sheet stacks ABOVE the row: where the band holds the row (any
      taller phone) nothing changes; where it does not, the row tucks under the
      sheet instead of covering the sheet's own buttons. */
-  #cs-inner { position: relative; z-index: 3; }  /* The two-column stat block, by orientation as well as by shape: a 70%
+  #cs-inner { position: relative; z-index: 3; }
+  /* --compact-at 560 IN A PORTRAIT VIEWPORT (480 elsewhere, beside --pair-at):
+     the phone with Safari's bars up (393x659) has 519 own px of room, so it
+     read NORMAL and kept the roomy head and two-line tab rows over a 62 px
+     parts list (layout-audit 2026-10-05; 229 px with this). 393x852 at 100%
+     has 696 and stays normal.
+     ORIENTATION, NOT data-shape="tall". Keyed on the shape (936478f9a) it
+     also caught a 1000x490 desktop window — a 420x490 sheet reads tall — and
+     moved it from normal + pair to compact + stacked, a state no audit had
+     measured; tests/specs/ui-resize.spec.js then saw DONE off screen right
+     after a live resize into exactly that size (ui run 37264681517, passed
+     on retry). A landscape window keeps the 480 it was measured against, and
+     orientation is an outside fact, so this cannot feed its own input. */
+  #cs-inner { --compact-at: 560px; }
+  /* The two-column stat block, by orientation as well as by shape: a 70%
      sheet on a phone is WIDER than it is tall, so data-shape reads "wide" and
      the four bars stacked one per row cost ~110px the list needed. */
   #cs-inner #cs-stats-inner { grid-template-columns: 1fr 1fr; column-gap: calc(var(--gap) * 0.8); }

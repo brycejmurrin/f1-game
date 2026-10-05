@@ -72,7 +72,8 @@ const HudLayout = (function () {
     ["flag", "FLAGS", "#hud-flag", "top left"],
     ["mirror", "MIRROR", "#hud-mirror", "top left"],
     ["announce", "RACE MESSAGES", "#announce", "top left"],
-    ["gearbox", "SPEED & GEAR", "#hud-gearbox", "bottom center"],
+    ["gearbox", "GEAR", "#hud-gearbox", "bottom center"],
+    ["speed", "SPEED", "#hud-speed", "bottom center"],   // its own piece since the HELMET set (visor HUD) lifts it off the wheel
     ["energy", "ENERGY", "#hud-energy", "bottom center"],
     ["tyre", "TYRES", "#hud-tyre", "bottom center"],
     ["ot", "OVERTAKE", "#hud-ot", "bottom center"],
@@ -84,9 +85,10 @@ const HudLayout = (function () {
     ["inputs", "INPUTS", "#hud-inputs", "bottom left"],
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);
-  const SETS = Object.freeze(["cockpit", "other"]);
+  const SETS = Object.freeze(["cockpit", "helmet", "other"]);
   const PROFILES = Object.freeze(["standard", "minimal", "broadcast"]);
   const COCKPIT_CAMS = typeof CamGroups !== "undefined" ? CamGroups.COCKPIT_LAYOUT : Object.freeze({ cockpit: 1 });
+  const LAYOUT_SET = typeof CamGroups !== "undefined" && CamGroups.layoutSet ? CamGroups.layoutSet : (id) => (COCKPIT_CAMS[id] ? "cockpit" : "other");
   const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });
   const DEF = Object.freeze({ x: 0, y: 0, s: 100 });
   const fz = (o) => { for (const k in o) Object.freeze(o[k]); return Object.freeze(o); };
@@ -110,11 +112,35 @@ const HudLayout = (function () {
     aero: { x: 30, y: -14, s: 100 },
     bb: { x: -18, y: 0, s: 100 },
   };
+  // HELMET — the VISOR HUD (js/camera/cam-groups.js HELMET_LAYOUT): the same
+  // wheel, but nothing is left to its LCD. DESKTOP: the cockpit strip plus
+  // GEAR and SPEED stacked left of the wheel above ENERGY / TYRES (1280x720:
+  // gear x-30 y-20 → fit() pins it at the left edge, 4..266 y438-503; speed
+  // 123..210 y366-413; ENERGY from y577 — measured by the hud-survey helmet
+  // cells, docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH,
+  // read through shippedEl while body lacks .desktop): the steer and pedal
+  // columns sit beside the wheel, so ENERGY goes to the dash line above the
+  // wheel's top edge (844x390, dock zoom 0.865: y-37 is 197..212, the wheel
+  // from 215) and TYRES stays in the left corner between STRATEGY (bottom 211)
+  // and the steer buttons (top 289): y-2 is 232..273, where the chase row's
+  // own position sat 8 px over the buttons at this zoom. GEAR takes the LCD's
+  // place and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay
+  // with the touch buttons that carry them (css/track-detail.css, the helmet
+  // touch hide).
+  const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
+  // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
+  // where the wheel's screen is (the chase row's own centre, one step down),
+  // SPEED moves right of it (the owner asked for the chip on the visor,
+  // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
+  const HELMET_TOUCH = { energy: { x: 0, y: -37, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
   const SHIPPED = Object.freeze({
-    standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), other: fz({}) }),
-    minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), other: fz({}) }),
-    broadcast: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), other: fz({}) }),
+    standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
+    minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
+    broadcast: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
   });
+  // Per SET, the shipped layout a TOUCH screen takes instead (every style).
+  const TOUCH_SHIPPED = Object.freeze({ helmet: fz(Object.assign({}, HELMET_TOUCH)) });
   // TOUCH DEVICES keep the cockpit's shipped hide of ENERGY / TYRES / OVERTAKE /
   // AERO / BRAKE BIAS (css/track-detail.css): the OT / AERO / BOOST buttons carry
   // those states, and on a phone the pedal and steer columns leave no room beside
@@ -174,8 +200,11 @@ const HudLayout = (function () {
   const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s;
   const isSet = (s) => SETS.indexOf(s) >= 0;
   const isProf = (p) => PROFILES.indexOf(p) >= 0;
-  /** The shipped {x, y, s} of element `id` in style `pn`, camera set `sn`. */
-  const shippedEl = (id, sn, pn) => normEl(SHIPPED[pn] && SHIPPED[pn][sn] && SHIPPED[pn][sn][id]);
+  /** A touch screen (no body.desktop — js/ui/platform-session.js keeps it live). */
+  const touch = () => !!(doc && doc.body && doc.body.classList && !doc.body.classList.contains("desktop"));
+  /** The shipped {x, y, s} of element `id` in style `pn`, camera set `sn` (a
+   *  touch screen takes TOUCH_SHIPPED's for the sets that have one). */
+  const shippedEl = (id, sn, pn) => normEl(touch() && TOUCH_SHIPPED[sn] ? TOUCH_SHIPPED[sn][id] : SHIPPED[pn] && SHIPPED[pn][sn] && SHIPPED[pn][sn][id]);
   /** One stored layout: only the elements that differ from that set's shipped layout. */
   function normSet(v, sn, pn) {
     const out = {};
@@ -187,7 +216,7 @@ const HudLayout = (function () {
     }
     return out;
   }
-  const normProf = (v, pn) => ({ cockpit: normSet(v && v.cockpit, "cockpit", pn), other: normSet(v && v.other, "other", pn) });
+  const normProf = (v, pn) => Object.fromEntries(SETS.map((sn) => [sn, normSet(v && v[sn], sn, pn)]));
   /** Pure: a raw stored value -> {standard, minimal, broadcast}, each {cockpit,
    *  other} of differences. v3 is per style; v1 / v2 (one {cockpit, other} for
    *  every style) become STANDARD's and the others start shipped (header). */
@@ -205,10 +234,10 @@ const HudLayout = (function () {
     for (const id of IDS) out[id] = st[pn][sn][id] ? normEl(st[pn][sn][id]) : shippedEl(id, sn, pn);
     return out;
   }
-  const emptyProf = (p) => !Object.keys(p.cockpit).length && !Object.keys(p.other).length;
+  const emptyProf = (p) => SETS.every((sn) => !Object.keys(p[sn]).length);
   function all(pn) {
     const p = isProf(pn) ? pn : shownProf(), st = stored();
-    return { cockpit: effective(st, "cockpit", p), other: effective(st, "other", p) };
+    return Object.fromEntries(SETS.map((sn) => [sn, effective(st, sn, p)]));
   }
   function save(st) {
     if (!store) return;
@@ -220,7 +249,7 @@ const HudLayout = (function () {
     }
     store.set(KEY, any ? out : null);
   }
-  const camSet = (modeId) => (COCKPIT_CAMS[modeId] ? "cockpit" : "other");
+  const camSet = (modeId) => LAYOUT_SET(modeId);
   const has = (c) => !!(doc && doc.body && doc.body.classList && doc.body.classList.contains(c));
   /** Is the race HUD up? (#hud carries `hidden` outside a race — js/game.js.) */
   function hudLive() {
@@ -263,6 +292,13 @@ const HudLayout = (function () {
     if (!doc) return;
     const sn = shown(), pn = shownProf(), st = stored(), a = effective(st, sn, pn);
     prof = profile();
+    // body[data-hl-set] names the camera set painted now: css/track-detail.css
+    // keys the TOUCH cockpit hide of the strip on it, not on body.cockpit-cam —
+    // that one means "the wheel's LCD shows gear / speed" and is off for a
+    // wheel with no screen (CLASSIC, NONE), where the strip still sits at the
+    // cockpit offsets over the steer column.
+    const body = doc.body;
+    if (body && body.setAttribute) body.setAttribute("data-hl-set", sn);
     for (const [id, , sel] of ELEMENTS) {
       const el = doc.querySelector(sel);
       if (!el || !el.style) continue;
@@ -302,12 +338,16 @@ const HudLayout = (function () {
     if (hi > size - EDGE) return size - EDGE - hi;
     return 0;
   }
-  // Pieces that share one offset move as ONE BLOCK: clamping each on its own
-  // pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the shipped
-  // cockpit layout moves both +30vw, and at 1280 wide only AERO overran the
-  // edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The block
-  // is clamped by the UNION of its members' rects and every member gets the
-  // same correction, so neighbours keep their spacing.
+  // Pieces that share one NON-ZERO offset move as ONE BLOCK: clamping each on
+  // its own pulled AERO (the right-hand chip) back onto OVERTAKE beside it — the
+  // shipped cockpit layout moves both +30vw, and at 1280 wide only AERO overran
+  // the edge, so it landed on top of OT (measured: visor x 1176 vs 1177). The
+  // block is clamped by the UNION of its members' rects and every member gets
+  // the same correction, so neighbours keep their spacing. A piece whose only
+  // change is SIZE (offset 0,0) is clamped ON ITS OWN: those sit in different
+  // corners, and one union of them spans the screen, so the "bigger than the
+  // screen" branch pinned it (BIG + TOWER SIZE 200 at 844 wide left the tower
+  // ~170 px off the left edge).
   function fit() {
     if (!doc || typeof window === "undefined" || !window.innerWidth) return;
     // The fold is never collapsed when SETTINGS closes (or a race resumes), so
@@ -319,7 +359,7 @@ const HudLayout = (function () {
     }
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
-    const groups = new Map();   // "x,y" offset -> [{ el, e, r }]
+    const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
     for (const [id, , sel] of ELEMENTS) {
       const e = a[id];
       if (!e || isDefEl(e)) continue;
@@ -331,7 +371,7 @@ const HudLayout = (function () {
       el.style.setProperty("--hl-o", originOf(id));
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) continue;                // hidden right now: nothing to keep on screen
-      const k = e.x + "," + e.y;
+      const k = e.x || e.y ? e.x + "," + e.y : "solo:" + id;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push({ el, e, r });
     }
@@ -416,7 +456,10 @@ const HudLayout = (function () {
      The classes are js/ui/hud.js's and the rules css/hud.css's /
      css/track-detail.css's; first match wins. SOFT = the sliders still matter:
      a placed chip shows in a touch cockpit (data-hl-user), and a chip that
-     appears only on an event (flag, limits strike, message) is edited blind. */
+     appears only on an event (flag, limits strike, message) is edited blind.
+     "cockpit-cam" is the wheel's LCD (gear / speed); the touch-cockpit row
+     follows the painted LAYOUT set (shown(), = body[data-hl-set]) instead,
+     whatever the wheel. */
   const BOTTOM = ["gearbox", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
@@ -435,9 +478,10 @@ const HudLayout = (function () {
     [["gearbox"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
     [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
-    [CHIPS.concat(["tyre", "bb"]), (h, a) => h("cockpit-cam") && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
+    [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
+    [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
-    [["rel", "strat", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
+    [["rel", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
     [["announce"], () => true, "shows with a race message", true],
@@ -513,9 +557,10 @@ const HudLayout = (function () {
     const paintHelp = () => {
       help.textContent = "Move and resize each race HUD element. You are editing the " + editingProf.toUpperCase() +
         " style's layout: each HUD STYLE keeps its own, because BROADCAST anchors the timing tower, map and gaps differently. " +
-        "The cockpit cameras (COCKPIT, HELMET) keep their own layout, " +
-        "because the steering wheel covers the bottom of the screen; on a desktop their shipped layout puts OVERTAKE, AERO, ENERGY " +
+        "COCKPIT keeps its own layout, " +
+        "because the steering wheel covers the bottom of the screen; on a desktop its shipped layout puts OVERTAKE, AERO, ENERGY " +
         "and TYRES beside the wheel (on a touch screen there is no room beside it, so they stay hidden until you place them). " +
+        "HELMET is the visor: the same wheel, but GEAR and SPEED paint too, and on a touch screen ENERGY sits above the wheel and TYRES in the left corner. " +
         "An element marked HIDDEN is not drawn in the current mode, so its sliders are off. " +
         "A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page.";
     };
@@ -547,7 +592,7 @@ const HudLayout = (function () {
       body.appendChild(row);
       return pickEl;
     }
-    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAMS"], ["other", "OTHER CAMS"]], (v) => {
+    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], (v) => {
       editing = v; if (fold.open) preview = v; apply(); paintAll(); peek(true, 900);
     });
     const presetPick = stepper("pm-hl-preset", "PRESET",
@@ -649,7 +694,7 @@ const HudLayout = (function () {
   }
 
   return {
-    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, PRESETS,
+    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf,

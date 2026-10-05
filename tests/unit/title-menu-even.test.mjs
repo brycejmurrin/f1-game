@@ -113,3 +113,42 @@ test("title scrollers never paint a ScrollFade thumb", () => {
   assert.match(css, /#overlay\.sf-scroll::before,\s*#menu-buttons\.sf-scroll::before\s*\{\s*display:\s*none/,
     "both title scrollers hide the thumb; fades still say there is more");
 });
+
+// WCAG 2.5.3 (label in name). Lighthouse's label-content-name-mismatch failed all
+// six title doors (2026-10-05): "DAILY TIME TRIAL" was named "Daily challenge —",
+// "2–4" was named "2 to 4", and the label and its sub-line abutted with no space
+// ("RACEONE GRAND PRIX"), so no accessible name could contain the visible text.
+// Normalised the way axe does: case-folded, punctuation dropped, whitespace joined.
+const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const visibleText = (html) => html.replace(/<svg[\s\S]*?<\/svg>/g, "")
+  .replace(/<[^>]+>/g, "").replace(/&ndash;/g, "–").replace(/&middot;/g, "·").replace(/&amp;/g, "&");
+
+test("title doors: the accessible name contains the visible label", () => {
+  const html = read("index.html");
+  for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+    const m = new RegExp(`<button id="${id}"[^>]*aria-label="([^"]*)"[^>]*>([\\s\\S]*?)</button>`).exec(html);
+    assert.ok(m, `#${id} has a static aria-label`);
+    assert.ok(norm(m[1]).includes(norm(visibleText(m[2]))),
+      `#${id}: name "${m[1]}" must contain visible text "${visibleText(m[2]).trim()}"`);
+  }
+});
+
+test("title doors: the label and its sub-line are separated by a space, never abutting", () => {
+  const html = read("index.html");
+  for (const id of ["mb-career", "mb-daily", "mb-continue", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+    const m = new RegExp(`<button id="${id}"[^>]*>([\\s\\S]*?)</button>`).exec(html);
+    assert.ok(m, `#${id} exists in the shell`);
+    assert.doesNotMatch(m[1].replace(/<svg[\s\S]*?<\/svg>/g, ""), /[^\s>]<span[^>]*mb-[a-z-]*sub|<\/span><span[^>]*mb-[a-z-]*sub/,
+      `#${id}: a bare "LABEL<span class=mb-sub>" reads as one word ("RACEONE GRAND PRIX")`);
+  }
+});
+
+test("title menu: the doors the script re-names start with their visible label", () => {
+  const js = read("js/ui/title-menu.js");
+  assert.match(js, /"Career modes — " \+ sub\.textContent/);
+  assert.match(js, /"Daily time trial — " \+ dailySub\.textContent/, "the visible label is DAILY TIME TRIAL, not 'Daily challenge'");
+  assert.match(js, /"Continue — " \+ contSub\.textContent/, "the visible label is CONTINUE");
+  assert.doesNotMatch(js, /Daily challenge — |Continue career — /);
+  // the shell's own label is what the script writes, so there is no first-paint flip
+  assert.match(read("index.html"), /<span class="mb-label">CAREER MODES<\/span>/);
+});

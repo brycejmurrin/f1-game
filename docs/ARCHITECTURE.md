@@ -415,6 +415,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
 | `setup-camera.js` | `SetupCamera` | tag | the GARAGE SETUP-PREVIEW CAMERA for js/game.js (#carsetup): the turntable/orbit rig, its presets, pan and zoom, the active-aero demo, the preview mesh cache… |
+| `prebuild.js` | `GaragePrebuild` | tag | the GARAGE pre-built while the title or race settings sits idle. |
 | `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
@@ -1851,7 +1852,7 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
 (Folded from the `cross-backend-parity` skill, 2026-09.) Use this when a
 look / knob / feature already differs between the three backends, or when
 auditing drift after a lighting or rendering change. Night-looks-wrong is a
-`lighting-tuner` question first; a WGX validation defect is `webgpu-debug`.
+`lighting-tuner` question first; a WGX validation defect is `renderer-debug`.
 
 **The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
 recorded as a gap** in §Parity snapshot above and in the defect inventory
@@ -1866,7 +1867,7 @@ recorded as a gap** in §Parity snapshot above and in the defect inventory
    feeds the uniforms — a knob that reaches one shader family and not the
    others is the usual drift.
 3. WGX: `node tools/gfx/wgx-validate.mjs --static` (real Dawn WGSL validation,
-   ~5 s). A live-device Dawn run is parent-session only → `webgpu-debug`.
+   ~5 s). A live-device Dawn run is parent-session only → `renderer-debug`.
 4. Same-scene shots per backend: `node tools/shot/backend-compare.mjs
    <track> …` (one deterministic framing, N backends, numeric pixel diff —
    MAD and %px changed — plus per-backend console errors), or

@@ -1,6 +1,6 @@
 ---
 name: scenery-dress
-description: "Use when the user asks to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. For a picture-driven accuracy pass (survey first) use survey-track."
+description: "Use when asked to add/edit track scenery, dress a circuit, add buildings/trees/grandstands/barriers/mountains/billboards/floodlights, make Spa denser, fix floating/sunken/missing props, or work in a circuit scenery(api) callback, or migrate scenery emitters to TrackGraph.instance / check graph parity / debug batches()/bakeOnly. Picture-driven accuracy pass (survey first) → survey-track."
 ---
 
 # Dress a circuit's scenery
@@ -38,14 +38,20 @@ shifted circuit, wrapped helpers and `along()` callbacks both expect authored
 - **Terrain/raw:** `mountain`, `addBox`/`addCyl`/`addCone`/`addPrism`/
   `addPyramid`/`addFrustum`.
 - **Utilities:** `every`, `hash`, `anchor`, `groundYAt`, `onTrack`.
+- **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled
+  luminaire uses `lampPost(spec)` (`docs/SCENERY-API.md`). Whether lights FIRE
+  (dusk/dawn/night gate, lamp cap) → **lighting-tuner**.
 
 ```sh
 node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
 node tools/track/float-audit.cjs <id>       # node-VM, ~1 s: floating props; "clean" = none
 node tools/track/ground-audit.cjs <id> --why  # ~12 s: buried / unsupported prims (--all --gate = ratchet)
+node tools/track/clip-audit.cjs <id> --why    # ~3 s: prop-vs-prop clipping; `--all --gate` = tools/track/clip-baseline.json
+node tools/track/props-tris.cjs <id>          # ~3 s: post-strip props tris; tests/unit/props-tri-ratchet.test.mjs fails past +0.5 %
 ```
 
-Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`. Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
+Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`;
+added props must also stay inside the clip and props-tris baselines (a denser circuit raises the tris one in a commit that says why). Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
 accuracy / floating-tree survey → **survey-track** (Montreal already ships
 `flatTerrain`). Instancing migration →
 [references/instancing.md](references/instancing.md).

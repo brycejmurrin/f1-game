@@ -922,29 +922,31 @@
       // breaking the emptiness on that side — a second pale ribbon lying in the
       // sand with its own light tree and its own little stands.
       //
-      // The circuit had no trace of it, which left the whole west side of the
-      // lap reading as untouched desert when the real place is built up out
-      // there. Guarded segment-by-segment with onTrack(): the strip is longer
-      // than the straight it parallels, so its far ends run past the circuit's
-      // own geometry and must not be drawn over tarmac.
+      // Guarded segment-by-segment with onTrack(): the strip is longer than the
+      // straight it parallels, so its far ends run past the circuit's own
+      // geometry and must not be drawn over tarmac.
       //
-      // FRAME: it parallels the REAL pit straight (SF), on the main-grandstand
-      // side (LEFT, outside the lap) out beyond the stands — the circuit's
-      // outer edge, so nothing of the lap is behind it. Until 2026-10 it was
-      // keyed 0.930-0.050 LEFT, i.e. along the old 0.2250 diagonal, where it
-      // curved round the far west of the site instead of lying straight.
+      // FRAME: parallels the REAL pit straight (SF) on the PIT / paddock side
+      // (RIGHT, +1) — OSM way 271528378 "Drag Strip" sits ~175 m east of the
+      // pit-lane axis (Nominatim + OSM API 2026-10-05; Esri World Imagery z16).
+      // Racing N-bound toward T1: grandstand LEFT (west), pits RIGHT, drag
+      // further RIGHT past the paddock. Until 2026-10-05 (PR #917) it was LEFT
+      // behind the main grandstand — OSM was unreachable then, so the side was
+      // never checked. Outward furniture uses +r (away from the lap); inward
+      // floods use −r (toward the pit straight). Palm grove stays closer in
+      // (121–136 m RIGHT) so the strip sits beyond the paddock oasis.
       (function dragStrip() {
         const PREP   = [0.24, 0.23, 0.24];   // rubbered-in launch surface
         const LANE   = [0.30, 0.29, 0.30];
         const STRIPE = [0.88, 0.87, 0.82];
         const WALL   = [0.80, 0.79, 0.74];
-        const GAP    = 178;                  // metres out past the main grandstand
+        const GAP    = 178;                  // metres beyond road edge, pit/paddock side
         const S0 = SF - 0.065, S1 = SF + 0.055, STEPS = 26;
         const span = (S1 - S0 + 1) % 1;
         const pts = [];
         for (let i = 0; i <= STEPS; i++) {
           const sf = (S0 + span * (i / STEPS)) % 1;
-          pts.push(anchor(K(sf), -1, GAP));
+          pts.push(anchor(K(sf), 1, GAP));
         }
         for (let i = 0; i < STEPS; i++) {
           const a = pts[i], nx = pts[i + 1];
@@ -990,7 +992,8 @@
             stage._mat = 0;
           });
         }
-        const tow = vadd(st.c, st.r, -20);
+        // Outward (+r): starter tower and launch bleachers past the strip.
+        const tow = vadd(st.c, st.r, 20);
         if (!onTrack(tow[0], tow[2], 22)) {
           addBox(out, vadd(tow, st.u, 4.0), [7, 8, 9], [0.86, 0.85, 0.80], stb);
           addBox(out, vadd(tow, st.u, 6.6), [7.4, 2.0, 9.4], WIN_COOL, stb);
@@ -998,17 +1001,17 @@
         }
         for (let i = 2; i < 12; i += 2) {
           const p = pts[i], pb = [p.r, p.u, p.t];
-          const sc = vadd(p.c, p.r, -22);
+          const sc = vadd(p.c, p.r, 22);
           if (onTrack(sc[0], sc[2], 20)) continue;
           for (let r = 0; r < 4; r++) {
-            addBox(out, vadd(vadd(sc, p.r, -r * 1.5), p.u, 0.6 + r * 0.75),
+            addBox(out, vadd(vadd(sc, p.r, r * 1.5), p.u, 0.6 + r * 0.75),
               [1.4, 0.3, 40], [0.74, 0.72, 0.66], pb);
           }
         }
-        // Its own flood masts — the strip runs at night like the GP does.
+        // Inward (−r): flood masts between the strip and the pit straight.
         for (const i of [3, 11, 18, 25]) {
           const p = pts[i], pb = [p.r, p.u, p.t];
-          const fc = vadd(p.c, p.r, 18);
+          const fc = vadd(p.c, p.r, -18);
           if (onTrack(fc[0], fc[2], 24)) continue;
           addCyl(out, fc, 0.55, 28, [0.72, 0.72, 0.74], 6, pb);
           addBox(out, vadd(fc, p.u, 28.6), [4.4, 1.0, 1.6], FLOOD, pb);

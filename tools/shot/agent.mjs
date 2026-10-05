@@ -16,6 +16,14 @@
 //   node tools/shot/agent.mjs vegas  survey
 //   node tools/shot/agent.mjs suzuka model --detail sections
 //   node tools/shot/agent.mjs vegas  model --detail full --out artifacts/tmp/vegas.json
+//   node tools/shot/agent.mjs monaco track --what corners --vm      # Node VM, no Chromium (~4 s)
+//
+// --vm boots the REAL js/game.js in a Node VM (tools/lib/game-vm.cjs: renderer
+// and DOM stubbed) and runs the same command there: every JSON surface that
+// needs no pixels (help, world, track, field, atmosphere, objective, describe,
+// query, scene, rollout, survey, model) answers in seconds instead of after a
+// 30-45 s SwiftShader boot. The rasters (render / frame / plan / car / visible)
+// read the last DRAWN frame and are refused with --vm.
 //
 // WHY a CLI on top of __apex.world() and friends: an agent driving this game
 // from a shell otherwise has to hand-roll the same Playwright boot, race/go/jump
@@ -29,12 +37,13 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
-  help: "the agent surface manifest — no track needed",
+  help: "the agent surface manifest (still boots Chromium; browser-free: createGame(...).apex.agentHelp() in tools/lib/game-vm.cjs)",
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
   field: "the grid / standings  --detail brief|full",
@@ -58,7 +67,7 @@ if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
   console.log("usage: node tools/shot/agent.mjs <track> <command> [options]\n");
   for (const [k, v] of Object.entries(COMMANDS)) console.log(`  ${k.padEnd(9)} ${v}`);
   console.log("\nstaging:  --at <frac 0-1>  --speed <m/s>  --lateral <m>  "
-            + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>");
+            + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>  --vm (Node VM, no browser)");
   process.exit(0);
 }
 
@@ -141,8 +150,33 @@ if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) { c
 // Budgets sized off measurements, shared with apex-eval.mjs.
 const BOOT_MS = 45000, TRACK_MS = 45000;
 
+const RASTERS = new Set(["render", "frame", "plan", "car", "visible"]);
+// No top-level await here: tests/unit/capture-tools-regressions.test.mjs
+// compiles this file as a classic script in a VM.
+async function runVm() {
+  if (RASTERS.has(cmd)) {
+    console.error(`agent: "${cmd}" reads the last drawn frame — there is none in the Node VM; drop --vm for it`);
+    process.exit(2);
+  }
+  const { createGame } = createRequire(ROOT + "/package.json")("./tools/lib/game-vm.cjs");
+  console.error(`agent: vm route track=${track} cmd=${cmd}`);
+  let g = null;
+  try {
+    g = await createGame(cmd === "help" ? {} : { track, tod: opts.tod || undefined, wx: opts.weather || undefined });
+    if (cmd === "help") { console.log(JSON.stringify(g.apex.agentHelp(), null, 2)); }
+    else {
+      g.apex.go();
+      g.apex.jump(opts.at, opts.speed, opts.lateral);
+      await printResult(runCommand(g.apex, opts));
+    }
+  } catch (e) {
+    console.error("agent failed:", e.message);
+    process.exitCode = 1;
+  } finally { if (g) g.close(); }
+  process.exit(process.exitCode || 0);
+}
 
-(async () => {
+if (has("vm")) runVm(); else (async () => {
   const srv = await startStaticServer(ROOT);
   try {
     const browser = await launchChromium({
@@ -184,8 +218,19 @@ const BOOT_MS = 45000, TRACK_MS = 45000;
       requestAnimationFrame(tick);
     }));
 
-    const result = await page.evaluate((o) => {
-      const a = window.__apex;
+    const result = await page.evaluate(([src, o]) => (new Function("return " + src)())(window.__apex, o), [runCommand.toString(), opts]);
+    await printResult(result);
+  } catch (e) {
+    console.error("agent failed:", e.message);
+    process.exitCode = 1;
+  } finally {
+    await shutdown();
+  }
+})();
+
+// THE COMMAND, as one plain function over the agent surface `a`: Playwright
+// serialises its source into the page, the VM route calls it directly.
+function runCommand(a, o) {
       switch (o.cmd) {
         case "world":
           return a.world({ detail: o.detail, horizonS: o.horizonS, points: o.points });
@@ -244,8 +289,9 @@ const BOOT_MS = 45000, TRACK_MS = 45000;
         default:
           return { ok: false, error: "UnknownCommand", command: o.cmd };
       }
-    }, opts);
+}
 
+async function printResult(result) {
     if ((opts.cmd === "frame" || opts.cmd === "plan" || opts.cmd === "render")
         && result && result.grid && result.grid.lines && !opts.out) {
       // Printing the raster inside a JSON string array defeats the purpose —
@@ -271,10 +317,4 @@ const BOOT_MS = 45000, TRACK_MS = 45000;
       console.log(json);
     }
     if (result && result.ok === false) process.exitCode = 2;
-  } catch (e) {
-    console.error("agent failed:", e.message);
-    process.exitCode = 1;
-  } finally {
-    await shutdown();
-  }
-})();
+}

@@ -638,7 +638,12 @@
                    { livery: "orange", tiers: 2, roof: "cantilever", suites: true });
       grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16],
                    { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
-      arquibancada("interlagos-arq-subida", 0.86, -1, 16, 6, { rows: 7, roof: false });
+      // 0.885, not 0.86: at 0.86 the outside of the climb falls 15 m in 36 m,
+      // so a terrace anchored 16 m out stood in the hollow with its top row
+      // under the road (hull y -13.5 +/- 6.4 against a road at -5.7) and its
+      // far end in the rising bank: it never showed, and was 100+ of the
+      // circuit's buried prims. 0.875-0.895 is level with the road to 20 m.
+      arquibancada("interlagos-arq-subida", 0.885, -1, 16, 6, { rows: 7, roof: false });
       crowdBank(0.830, -1, 30, 56, 6);
       crowdBank(0.845, -1, 30, 56, 6);
       cameraTower(K(0.8375), 1, 10, { h: 16 });

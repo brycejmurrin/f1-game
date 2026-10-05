@@ -205,14 +205,24 @@ const NetLobby = (function () {
           clearInterval(pumpTimer); pumpTimer = null;
           // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
           const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
+          // Relayed profiles ("g2", "g3"…) are keyed by the host's ids, not
+          // this transport's, so the delete above missed them. Clear them in
+          // BOTH branches: during friend quali QualiNet.waiting() reads
+          // roomState().peers and would wait forever for a lap the gone host
+          // can no longer relay (2p never saw it — no relayed roster).
+          _peers.clear(); _ready.clear(); clashClear();
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else {
-            // The room is over: relayed profiles ("g2", "g3"…) are keyed by the
-            // host's ids, not this transport's, so the delete above missed them.
-            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
+            myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
+            // …and stop ADVERTISING it: the code onConnected reopened (and its
+            // pending transport) would answer the old code and pull us back in.
+            sealRoom();
             show("pick");
+            // inviteAnother() hid these; the pick is a fresh start, as open().
+            if ($("vs-join")) $("vs-join").hidden = false;
+            if ($("vs-code-join")) $("vs-code-join").hidden = false;
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
           }
         } else {
@@ -390,13 +400,37 @@ const NetLobby = (function () {
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
           // else's bad network would be its own bug.
-          // sessions.size > 0 skips teardown() — clear codeReopen here too.
-          codeReopen = null;
+          // sessions.size > 0 skips teardown(), so the pending reopen is
+          // settled HERE: never left set (a later unrelated onConnected
+          // would reopen a dead code), but re-armed for THIS room — onJoiner
+          // closed it for the failed joiner, and only a reopen gets the
+          // guests still in it another arrival on the same code.
           clearTimeout(codeReopenTimer); codeReopenTimer = null;
+          reopenRoom(sessions.size > 0 && sessions.size < MAX_GUESTS);
           dropPending();
           if (sessions.size) { show("room"); renderRoom(); }
           else { teardown(); show("pick"); }   // leave the lobby usable, not dead
         }
+      }, 250);
+    }
+
+    // Consume codeReopen; when `ok`, reopen that code quietly in 250 ms.
+    // OWNED timer + generation guard: with a discarded handle
+    // cancel()/sealRoom() cannot stop it — and the late codeHost() begins
+    // its OWN generation, so invalidateOperations() cannot stale it
+    // either. 250 ms after leaving the lobby it would mint a fresh
+    // RTCPeerConnection and six relay sockets — the exact zombie
+    // sealRoom() exists to kill.
+    function reopenRoom(ok) {
+      const again = codeReopen;
+      codeReopen = null;
+      if (!again || !ok) return;
+      const gen = operationGeneration;
+      clearTimeout(codeReopenTimer);
+      codeReopenTimer = setTimeout(() => {
+        codeReopenTimer = null;
+        if (!operationCurrent(gen)) return;
+        codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
       }, 250);
     }
 
@@ -413,25 +447,7 @@ const NetLobby = (function () {
         if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
       });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
-      if (codeReopen && transports.size < MAX_GUESTS) {
-        const again = codeReopen;
-        codeReopen = null;
-        // OWNED timer + generation guard: with a discarded handle
-        // cancel()/sealRoom() cannot stop it — and the late codeHost() begins
-        // its OWN generation, so invalidateOperations() cannot stale it
-        // either. 250 ms after leaving the lobby it would mint a fresh
-        // RTCPeerConnection and six relay sockets — the exact zombie
-        // sealRoom() exists to kill.
-        const gen = operationGeneration;
-        clearTimeout(codeReopenTimer);
-        codeReopenTimer = setTimeout(() => {
-          codeReopenTimer = null;
-          if (!operationCurrent(gen)) return;
-          codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
-        }, 250);
-      } else {
-        codeReopen = null;
-      }
+      reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
       clearInterval(pumpTimer);
       pumpTimer = setInterval(() => {
@@ -489,6 +505,11 @@ const NetLobby = (function () {
             if (k === id || !prof) continue;
             try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) { /* a dead session must not stop the relay */ }
           }
+          // READY the same way: HELLO catch-up alone left late joiners showing
+          // "choosing" for peers who were already READY (live 3p repro on
+          // github.io, 2026-10-05). Live toggles are relayed below; this is
+          // the snapshot of who is ready RIGHT NOW.
+          catchUpReady(made, id);
         } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
@@ -559,7 +580,11 @@ const NetLobby = (function () {
         }
       });
       made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
-      if (role === "host") publishSettings();
+      if (role === "host") {
+        publishSettings();
+        // Existing READY before this connection opened (host + earlier guests).
+        catchUpReady(made, id);
+      }
       openRoom();
     }
 
@@ -583,6 +608,19 @@ const NetLobby = (function () {
       const ids = [...peerIds()];
       return ids.length > 0 && ids.every((k) => _ready.get(k));
     };
+    // Snapshot READY onto one session (a late joiner). Host's own ready has
+    // no `from` (guests key it as the host peer); each earlier guest carries
+    // `from` like the live READY relay. Skip `exceptId` (the joiner itself).
+    function catchUpReady(sess, exceptId) {
+      if (!sess || !sess.sendEvent) return;
+      try {
+        if (selfReady) sess.sendEvent(NetPlay.EV.READY, { ready: true });
+      } catch (e) { /* dead session */ }
+      for (const [k, ready] of _ready) {
+        if (!ready || k === exceptId) continue;
+        try { sess.sendEvent(NetPlay.EV.READY, { ready: true, from: k }); } catch (e) { /* dead session */ }
+      }
+    }
     let selfReady = false;
 
     function openRoom() {

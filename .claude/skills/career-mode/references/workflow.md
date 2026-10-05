@@ -2,6 +2,11 @@
 
 Load from the SKILL.md index when the task needs this detail.
 
+## Contents
+- Workflow / Implementation
+- Common Mistakes
+- Sponsor payout / double-pay trace (node-only)
+
 ## Workflow / Implementation
 
 1. **Decide whether the save is active.**
@@ -105,8 +110,7 @@ Load from the SKILL.md index when the task needs this detail.
 in THESE lines, not in the DNF path (a DNF changes only `pts`/`dnf`/`clean`, never the pay branch): (1) `settleRound`
 returns null when `career.results` already has row `r === season.round - 1`; (2) `settleSponsor` pushes the window
 `idx` onto `career.paidSponsors` BEFORE checking `met`, so a window pays once. `rollover()` resets `paidSponsors`;
-`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "settleRound is idempotent"
-(prize/salary, no direct sponsor assert), `tests/specs/career.spec.js` ~2215 (browser: no double pay, ledger cleared
-at rollover), `docs/CAREER.md` ~811. No unit test asserts `sponsorPay` twice (the sponsor unit pin, "LAST sponsor window", is pro-rata only): add one to
-career-settle.test.mjs (MY TEAM, season.round on a window end, settle twice, then rewind `results` and settle again).
+`save-migrate.js` normalises it to `[]` on old saves. Pins: `career-settle.test.mjs` "MY TEAM completing a sponsor window through settleRound cannot pay twice" (settle twice, then rewind `results` and settle again: `paidSponsors` blocks it) and "sponsor settlement records one payout even when settlement is retried", `tests/specs/career.spec.js` ~2222 (browser: no double pay, ledger cleared
+at rollover), `docs/CAREER.md` ~839. Those units use `dnf: false` rows only: a window whose rows include a DNF is unpinned.
+"No pay after a DNF" is usually the contract, not a bug: a DNF row scores 0 pts / `double` false / `clean` unmet (`sponsorAt` counts `!r.dnf && r.clean`), so `met` can fail; pay lands only on the window's LAST round (`raced >= sp.end`). To repro: `__apex.retire()` in a driven race, or `careerSim(n)` (its draws include DNFs).
 Hand-off: record which guard the repro defeats (results row vs `paidSponsors`) and the `paidSponsors` value before/after.

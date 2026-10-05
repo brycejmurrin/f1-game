@@ -381,14 +381,18 @@ function garageSeat() {
     ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
   return (seats && seats[G.driverIdx]) || (seats && seats[0]) || null;
 }
+// driverIdx, not drivers[0]: the turntable shows YOUR car, so it wears the
+// helmet of the seat you picked. In the key too, or switching seats keeps
+// the mesh you were already looking at. Career.gridDrivers() is the MY TEAM
+// pair when a second driver is hired.
+function previewKey() {
+  const team = Teams.LIST[G.teamIdx], seat = garageSeat();
+  return team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
+}
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
-  // driverIdx, not drivers[0]: the turntable shows YOUR car, so it wears the
-  // helmet of the seat you picked. In the key too, or switching seats keeps
-  // the mesh you were already looking at. Career.gridDrivers() is the MY TEAM
-  // pair when a second driver is hired.
   const seat = garageSeat();
-  const key = team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
+  const key = previewKey();
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
     // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
@@ -408,8 +412,10 @@ function getSetupPreviewMesh() {
 // The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
 // circuit the next race runs at — the career's calendar, the free-play season's,
 // else the picker's — its weather and hour, and the career's tally for the wall.
-function garageCtx() {
-  const c = Career.inCareer() ? Career.data() : null;
+// `asSetup`: the ctx the SETUP garage will draw with, even while the title's
+// Home session borrows the room (GaragePrebuild keys and builds the room on it).
+function garageCtx(asSetup = false) {
+  const c = Career.inCareer() ? Career.data() : null, h = home.active && !asSetup;
   const t = c ? Tracks.SEASON[c.season.round % Tracks.SEASON.length]
           : (G.seasonMode && G.season) ? SeasonCal.track(G.season.round) : Tracks.LIST[G.trackIdx];
   return { track: t, weather: G.raceWeather, tod: G.raceTimeOfDay,
@@ -418,8 +424,8 @@ function garageCtx() {
            last: c && c.results.length ? c.results[c.results.length - 1] : null,
            sponsor: c ? Career.sponsor() : null, career: !!c, round: c ? c.season.round : 0, spin: setupPreviewSpin,
            achievements: typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null,
-           sceneNow: garageNow(), ambient: !reducedMotion() && (!home.active || home.moving),
-           studio: home.mode === "studio", ...(home.active ? { night: home.mode === "night" } : {}) };
+           sceneNow: asSetup ? ambientClock.value : garageNow(), ambient: !reducedMotion() && (!h || home.moving),
+           studio: h && home.mode === "studio", ...(h ? { night: home.mode === "night" } : {}) };
 }
 function captureCamera() {
   return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
@@ -803,6 +809,15 @@ return {
   get effDist() { return _spEffDist; },
   get effFit() { return _spEffFit; },
   get effPanel() { return _spEffPanel; },
+  // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
+  // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.
+  previewKey, prebuildKey: () => previewKey() + "|" + GarageScene.ctxKey(garageCtx(true)),
+  prebuild(part) {
+    if (part === "car") return !!getSetupPreviewMesh();
+    const team = Teams.LIST[G.teamIdx];
+    return GarageScene.prepare(team, _spLiv(), getTeamParts, G.driverIdx, garageCtx(true));
+  },
+  roomReady() { return GarageScene.prepared(Teams.LIST[G.teamIdx], _spLiv(), getTeamParts, G.driverIdx, garageCtx(true)); },
   get meshKey() { return _spMeshKey; },
   set meshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
 };

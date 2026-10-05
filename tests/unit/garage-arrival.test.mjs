@@ -193,8 +193,12 @@ test('GARAGE ARRIVAL TUNER is an ADVANCED VISUALS tool: opens over the settings 
 test('race settings pre-builds the garage, hidden, so the drive-out\'s first frame compiles nothing', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const pw = game.slice(game.indexOf('async function garagePrewarm(current)'), game.indexOf('function scheduleFlybyTrack('));
-  assert.match(pw, /_menuGate\.garageReady \|\| \$\("race-settings"\)\.hidden \|\| !\(await menuIdle\(current\)\)/, 'once, on race settings, when the sheet is idle');
-  assert.ok(pw.indexOf('gfx.warm()') > 0 && pw.indexOf('gfx.warm()') < pw.indexOf('_menuGate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
+  assert.match(pw, /garagePre\.run\(current, \$\("race-settings"\)\.hidden \? "title" : "settings"\)/, 'race settings, or the idle title, through GaragePrebuild');
+  // The sequence itself (gates, keying, the idle wait) is VM-run in garage-prebuild.test.mjs.
+  const mod = readFileSync(new URL('../../js/garage/prebuild.js', import.meta.url), 'utf8');
+  const run = mod.slice(mod.indexOf('async function run('), mod.indexOf('const titleCurrent'));
+  assert.ok(run.indexOf('await d.menuIdle(current)') > 0 && run.indexOf('await d.menuIdle(current)') < run.indexOf('G.gfx.warm()'), 'only once the menu is idle');
+  assert.ok(run.indexOf('G.gfx.warm()') > 0 && run.indexOf('G.gfx.warm()') < run.indexOf('gate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
   assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
   const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');

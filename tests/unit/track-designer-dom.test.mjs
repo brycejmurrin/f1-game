@@ -1410,11 +1410,11 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (sixteen), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   const T = b.ctx.TrackThemes;
-  assert.equal(T.ORDER.length, 16);
+  assert.equal(T.ORDER.length, 20);
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
   assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
   const blurb = walk(b.root).find((e) => e.classList && e.classList.contains("td-hint") && e.textContent === T.get(b.D.state().design.theme).blurb);
