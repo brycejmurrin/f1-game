@@ -127,10 +127,14 @@
   isolation: isolate;
 }
 /* Head and foot stay opaque even if Appearance › GARAGE › GLASS thins the
-   card — title, budget and the dismiss bar must not composite over 3D type. */
+   card — title, budget and the dismiss bar must not composite over 3D type.
+   Color and image are SEPARATE properties: `background: var(--grad-head),
+   var(--carbon)` can fail to apply the color when --grad-head already holds
+   two layers, and `isolation: isolate` on that translucent wash then
+   composites the live WebGL canvas through BUDGET (LEC / Charles board). */
 #cs-inner > .sheet-head {
-  background: var(--grad-head), var(--carbon);
-  isolation: isolate;
+  background-color: var(--carbon);
+  background-image: var(--grad-head);
   z-index: 1;
 }
 #cs-inner > .sheet-foot {
@@ -1250,17 +1254,19 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 #cs-aero-bar {
   pointer-events: auto;
   display: flex; align-items: stretch;
+  flex: 1 1 auto; width: 100%;
   max-width: 100%; min-width: 0;
 }
 /* WRAPS INSIDE THE STACK, never past it. #cs-stack is capped at the room left
-   of the panel; `flex: 0 0 auto` and a one-line label let the chip ignore that
-   cap. Measured on the landscape iPhone (734x343): stack 137px, chip 221px, so
-   ACTIVE AERO / CORNER MODE painted 84px over the panel's BACK button. Now the
-   value drops under its label and the chip stays in its column. */
+   of the panel; a row chip with two shrinking spans let ACTIVE AERO and
+   CORNER MODE occupy the same line and paint over each other on a ~500px
+   landscape well (survey garage_open_sunlight_narrow500). Column + nowrap
+   keeps both labels readable and the chip inside its column. */
 #cs-aero {
-  flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: wrap; row-gap: 0;
-  display: flex; flex-direction: row; align-items: baseline; gap: 7px;
-  width: auto; margin: 0;
+  flex: 1 1 auto; min-width: 0; max-width: 100%; flex-wrap: nowrap;
+  display: flex; flex-direction: column; align-items: flex-start;
+  justify-content: center; gap: 1px;
+  width: 100%; margin: 0;
   padding: 5px 10px; border-radius: var(--r-sm);
   background: var(--plate-opaque);
   border: 1px solid var(--card-line);
@@ -1278,10 +1284,14 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 .cs-aero-lbl {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   color: rgba(255,255,255,0.42);
+  display: block; white-space: nowrap; max-width: 100%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .cs-aero-val {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
   color: var(--text);
+  display: block; white-space: nowrap; max-width: 100%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
    garage and the track speak the same colour about the same system. */
@@ -1769,6 +1779,13 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 :root[data-look-garage-glass="solid"] #carsetup #cs-inner { background: var(--carbon); }
 :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner {
   background: color-mix(in oklab, var(--panel) 70%, transparent);
+}
+:root[data-look-garage-glass="glass"] #carsetup #cs-inner > .sheet-head {
+  background-color: var(--carbon);
+  background-image: var(--grad-head);
+}
+:root[data-look-garage-glass="glass"] #carsetup #cs-inner > .sheet-foot {
+  background-color: var(--carbon);
 }
 @media (prefers-reduced-transparency: reduce) {
   :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner { background: var(--panel); }

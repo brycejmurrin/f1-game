@@ -91,8 +91,21 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
   const css = rd("css/carsetup.css");
   assert.match(css, /#cs-inner \{[^}]*background:\s*var\(--carbon\)/s,
     "shipped garage card is opaque carbon so 3D type cannot ghost through");
-  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*var\(--carbon\)/s,
-    "header chrome stays opaque under the GLASS look");
+  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
+    "header paint is an opaque color, not a translucent --grad-head shorthand");
+  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*background-image:\s*var\(--grad-head\)/s,
+    "brand wash sits on top of carbon, never instead of it");
+  {
+    const head = css.slice(css.indexOf("#cs-inner > .sheet-head {"),
+      css.indexOf("#cs-inner > .sheet-foot {"));
+    assert.doesNotMatch(head, /isolation:\s*isolate/,
+      "header isolate + translucent wash composites the WebGL canvas through BUDGET");
+  }
+  assert.match(css, /#cs-aero \{[^}]*flex-direction:\s*column/s,
+    "ACTIVE AERO stacks above CORNER MODE so a squeezed stack cannot overlap them");
+  assert.match(css,
+    /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
+    "GLASS thins the card body only — head chrome stays carbon");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*scrollbar-color:/s,
     "pair rail uses a themed scrollbar, not the platform white track");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*padding:[^;]*var\(--pad\)\s+var\(--pad\)/s,
