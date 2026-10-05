@@ -1,0 +1,1 @@
+1791224560	Cursor Agent	HUD overlap fixes (touch cockpit): OWNED css/touch-controls.css css/hud.css (#hud-strat/#hud-inputs/cockpit layout only) js/ui/hud-layout.js js/ui/hud-strategy.js; NOT sectors-dock #967, NOT tokens.css, NOT settings/title/garage, NOT cars/tracks  [claude/f1-game-project-26h3ng; session 25e2ad298b766526fc645eb0]
