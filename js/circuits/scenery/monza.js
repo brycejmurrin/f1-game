@@ -80,7 +80,7 @@
       // Infinity = no tree at all (pit straight; Parabolica outer run-off up
       // to its arc stand and tifosi bowl).
       const minGap = (s, side) => {
-        if (s >= 0.93 || s <= 0.07) return Infinity;                    // pit straight / stands
+        if (s >= 0.93 || s <= 0.07) return 75;                          // pit straight: park woods behind paddock + stands
         if (s >= 0.775 && s <= 0.875) return side < 0 ? Infinity : 34;  // Parabolica (outer = -1)
         if (s >= 0.08 && s <= 0.20) return side < 0 ? 34 : 28;          // Rettifilo + Curva Grande
         if (s >= 0.28 && s <= 0.45) return 30;                          // Roggia, Lesmo 1/2

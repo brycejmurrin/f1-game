@@ -201,7 +201,9 @@ const STRIP = {
   //   zone setbacks pull trees out of the run-off, 306798/280552
   // → barrier body guard (2026-10-05): emission unchanged; the re-shaped
   //   wall coping (flush road side, far-side overhang) strips 2 more, measured
-  monza: { before: 306798, after: 280550 },
+  // → park woods back behind the pit straight at a 75 m setback (2026-10-05:
+  //   pit-complex's crown-over-bays test needs trees along the row), 313412/287164
+  monza: { before: 313412, after: 287164 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
