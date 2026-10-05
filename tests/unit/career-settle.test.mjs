@@ -103,6 +103,33 @@ test("mate classified P5 but RETIRED: a retired car scores nothing — no double
     "mate retired: a retired car scores nothing, so this is NOT a double");
 });
 
+test("MY TEAM: the owner draws no salary or points bonus, and both cars earn prize money", () => {
+  // The guide: "a driver is paid a salary; an owner is paid by sponsors", and
+  // "prize money for both cars … two cars in the points is two payments".
+  const { res } = settle(false);
+  assert.equal(res.salary, 0, "an owner is not on the payroll");
+  assert.equal(res.bonus, 0, "and earns no driver points bonus");
+  assert.equal(res.matePos, 5);
+  assert.ok(res.prize > 0 && res.matePrize > 0, "both cars are paid");
+  assert.ok(res.matePrize < res.prize, "the mate's P5 pays less than the player's P3");
+});
+
+test("DRIVER career: the salary and points bonus still pay, and there is no team-mate prize", () => {
+  const Career = load();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = mk("haas");
+  const order = [mk("custom"), player, mk("haas")];
+  for (let i = 0; i < 17; i++) order.push(mk("custom"));
+  const res = Career.settleRound(order, player);
+  assert.ok(res.salary > 0, "a driver is paid a salary");
+  assert.ok(res.bonus > 0, "and a bonus for P2's points");
+  assert.equal(res.matePrize, 0, "a driver is not paid for the team-mate's car");
+});
+
 test("MY TEAM standings include the hired second driver", () => {
   const Career = load();
   Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
@@ -161,7 +188,7 @@ test("MY TEAM completing a sponsor window through settleRound cannot pay twice",
   career.results = career.results.filter((row) => row.r !== sp.end);
   const rebuilt = Career.settleRound(order, player);
   assert.equal(rebuilt.sponsorPay, 0, "paidSponsors independently guards a rebuilt results row");
-  assert.equal(career.money, cash + rebuilt.prize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS : 0) - rebuilt.wages);
+  assert.equal(career.money, cash + rebuilt.prize + rebuilt.matePrize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS : 0) - rebuilt.wages);
   assert.equal(JSON.stringify(career.paidSponsors), ledger);
 });
 
