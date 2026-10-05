@@ -312,7 +312,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
 
 /* A SPEC EDIT RUNS ITS OWN GROUP (test audit T10, 2026-10-05). `^tests/`
  * routes to `audit` only — the "is every test file grouped" check — so editing
- * tests/specs/x.spec.js never named the group that RUNS x. The owner is read
+ * a browser spec never named the group that RUNS it. The owner is read
  * from tests/groups.json (the source package.json's scripts are generated
  * from), globs expanded, so a regroup moves the route with the spec and no
  * RULE can go stale. Only browser groups own a spec; the multi-group boot
