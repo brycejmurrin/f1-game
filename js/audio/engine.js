@@ -2135,6 +2135,7 @@ const GameAudio = (function () {
     now,
     radioVoice,
     radioVoicesLive: radio.radioVoicesLive,
+    voiceChainsLive: radio.voiceChainsLive,
     ctxGen: () => ctxGen,
     radioSting,
     radioStingStop,
