@@ -178,7 +178,11 @@ const STRIP = {
   //   build-props.js every(34) retail box + skirt no longer emitted where a
   //   neonTower stands — −624 emitted; the tower faces those buried boxes
   //   enclosed now survive the strip, +573 kept)
-  monaco: { before: 280119, after: 259033 },
+  // → landmark re-key (sceneryCoordinates source+reverse: Fairmont/Tabac/
+  //   Rascasse/Casino/square via KRACE + Casino hwZones[0] 0.193–0.308)
+  //   278991/259403 (2026-10-05: −1128 emitted where the re-seated square
+  //   exclusion and Casino narrowing drop generic city scatter)
+  monaco: { before: 278991, after: 259403 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
