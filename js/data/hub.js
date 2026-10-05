@@ -472,12 +472,14 @@ const DataHub = (function () {
 
   function setSelectOptions(selectEl, opts, selectedVal) {
     clear(selectEl);
+    let title = "";
     opts.forEach(function (o) {
       const op = el("option", null, o.label);
       op.value = String(o.value);
-      if (String(o.value) === String(selectedVal)) op.selected = true;
+      if (String(o.value) === String(selectedVal)) { op.selected = true; title = o.label; }
       selectEl.appendChild(op);
     });
+    if (title) selectEl.title = title; else selectEl.removeAttribute("title");
   }
 
   function buildPicker(onPick) {

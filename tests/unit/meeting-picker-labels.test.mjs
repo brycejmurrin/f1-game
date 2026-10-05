@@ -53,3 +53,10 @@ test("duplicate meeting names get a date; unique names stay short", () => {
   assert.equal(labels[2], "Australian Grand Prix · Melbourne");
   assert.ok(labels[3].includes("Bahrain") && labels[4].includes("Sakhir"));
 });
+
+test("data hub tabs can shrink to scroll and wrap when height allows", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
+  assert.match(css, /\.dh-tabs\s*\{[^}]*min-width:\s*0/, "tab strip shrinks inside the overflow-hidden card");
+  assert.match(css, /body:not\(\[data-density="compact"\]\) \.dh-tabs\s*\{[^}]*flex-wrap:\s*wrap/, "non-compact tabs wrap so EXPORT stays a destination");
+  assert.match(css, /\.dh-pick-fields\s*\{[^}]*flex-direction:\s*column/, "GP + session stack so the meeting label is not clipped");
+});

@@ -852,7 +852,9 @@ const DataRealRace = (function () {
     function paint(script, slot) {
       const head = el("div");
       head.appendChild(el("div", "dh-lr-name", (script.year ? script.year + " " : "") + script.name + (script.session !== "Race" ? " · " + script.session : "")));
-      const meta = [script.circuit, script.country].filter(Boolean).join(", ");
+      const meta = (typeof F1API !== "undefined" && F1API.placeLabel)
+        ? F1API.placeLabel(script.circuit, script.country)
+        : [script.circuit, script.country].filter(Boolean).join(", ");
       const winner = script.drivers.find((d) => d.pos === 1);
       head.appendChild(el("div", "dh-lr-meta", [meta, script.dateStart ? fmtDateTime(script.dateStart) : "", script.laps + " laps",
         winner ? "won by " + winner.name : "", script.cautions.filter((c) => c.level < 4).length + " safety car / VSC", script.weather.toUpperCase()].filter(Boolean).join(" · ")));

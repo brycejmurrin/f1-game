@@ -79,7 +79,7 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
-  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
+  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, focus = null, libraryPaint = 0;
   const mk = (tag, props, kids) => {
@@ -145,8 +145,14 @@ function create(G, deps) {
   const say = (s) => { E["ps-message"].textContent = s; };
   function busy(value) {
     st.busy = value;
-    for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background"]) E[id].disabled = value || (id !== "ps-capture" && !last);
-    E["ps-capture"].textContent = value ? "CAPTURING…" : "CAPTURE";
+    const closing = !!st.closing;
+    panel.setAttribute("aria-busy", value || closing ? "true" : "false");
+    root.setAttribute("aria-busy", value || closing ? "true" : "false");
+    for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background", "ps-close"]) {
+      E[id].disabled = value || closing || (id !== "ps-capture" && id !== "ps-close" && !last);
+    }
+    E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
+    E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
   }
   function guides() { root.dataset.aspect = st.aspect; root.dataset.grid = st.grid; }
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
@@ -187,13 +193,29 @@ function create(G, deps) {
     shots.replaceChildren();
     const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"]];
     for (const [id, label] of list) shots.appendChild(button(label, () => setShot(id)));
-    guides(); busy(false); say("Capture the frame, then save or download it."); paintLibrary(); E["ps-close"].focus();
+    st.closing = false; guides(); busy(false); say("Capture the frame, then save or download it."); paintLibrary(); E["ps-close"].focus();
     return true;
   }
   function close(back) {
     if (!st.open) return;
-    const returnTo = st.back; st.generation++; st.open = false; st.back = null;
-    root.hidden = true; document.body.classList.remove("photo-studio-open");
+    if (back) {
+      if (st.closing) return;
+      st.closing = true;
+      const gen = st.generation;
+      busy(true);
+      say("Restoring the scene…");
+      // Paint CLOSING… before garage/home restore takes the main thread (~10s
+      // on software GL). Lifecycle teardown (back=false) stays synchronous.
+      const go = () => { if (st.generation === gen && st.closing) finishClose(true); };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(go);
+      else go();
+      return;
+    }
+    finishClose(false);
+  }
+  function finishClose(back) {
+    if (!st.open && !st.closing) return;
+    const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
     if (isGarage()) { if (deps.garage && deps.garage.restore && st.snapshot) deps.garage.restore(st.snapshot); st.snapshot = null; }
     else {
       const fc = camera(), prior = st.borrowed;
@@ -210,6 +232,8 @@ function create(G, deps) {
     if (deps.onClose) deps.onClose({ restoredPhoto: !!G.photoMode });
     const target = focus, generation = st.generation;
     if (back && returnTo) returnTo();
+    root.hidden = true; document.body.classList.remove("photo-studio-open");
+    busy(false);
     // Let the caller paint its restored visibility after modal isolation settles.
     if (back && target && target.focus) requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!st.open && st.generation === generation && target.isConnected) target.focus();
