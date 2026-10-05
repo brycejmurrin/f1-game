@@ -202,10 +202,16 @@
       // flatCoplanar: 15 spots on the six former continuous hedge() calls).
       // Each chunk is ~one along-step long; gap jitters ±0.8 m between chunks.
       // Still api.hedge() so barrierClear / tyre-wall yield stays intact.
+      // The chicane bowl walls (bowlSeatWall 0.700–0.730 L, 0.742–0.775 R, gap
+      // 24) stand where the 22/26 m hedges run: the hedge chunks were built
+      // straight through the seating mass. The dune grass stops at the bowl.
+      const HEDGE_SKIP = [[0.695, 0.735, -1], [0.737, 0.780, 1]];
       const marramHedge = (s0, s1, side, gap, h, col) => {
         const step = 5 / track.total;
         let i = 0;
         for (let s = s0; s < s1 - step * 0.4; s += step, i++) {
+          const e = Math.min(s + step * 0.88, s1);
+          if (HEDGE_SKIP.some(([a, b, sd]) => sd === side && e > a && s < b)) continue;
           const gJ = gap + (hash(i * 11.3 + side * 7 + s0 * 40) - 0.5) * 1.6;
           const hJ = h * (0.92 + hash(i * 5.1 + side) * 0.16);
           hedge(s, Math.min(s + step * 0.88, s1), side, gJ, hJ, col);
@@ -218,10 +224,17 @@
       marramHedge(0.65, 0.98, -1, 22, 1.5, marramT);
       marramHedge(0.80, 0.95, 1,  28, 1.4, marramG);
 
+      // The orange campsites (modelGroup below, 25 x 34 m at 44 m out) are
+      // reached by the verge bushes of the stretch the lap brings past them:
+      // a bush grew through a tent at 0.188. No bush inside a camp's ground.
+      const CAMPS = [[0, 0.205, -1], [1, 0.815, -1]];
+      const campC = CAMPS.map(([, s, side]) => anchor(K(s), side, 44).c);
       every(8, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 51 + side) > 0.35) continue;   // ~65% density
-          bush(k, side, 7 + hash(k * 52 + side) * 12,
+          const bd = 7 + hash(k * 52 + side) * 12, bp = anchor(k, side, bd).c;
+          if (campC.some((c) => Math.hypot(c[0] - bp[0], c[2] - bp[2]) < 22)) continue;
+          bush(k, side, bd,
                hash(k * 53 + side) < 0.5 ? marramG : marramT);
         }
       });
@@ -328,11 +341,17 @@
         h: 5.5, thick: 2.2, shell: sandDk, step: 9,
         crowdCols: [orange, [1.00, 0.58, 0.08], [0.88, 0.24, 0.02]],
       });
-      bowlSeatWall(0.735, 0.775, -1, 24, {
+      // 0.73–0.76 is a chicane (built curv: R ~20 m right at k766–776, then
+      // R ~33 m left at k779–800). A 24 m-gap wall on a bend's INSIDE sits
+      // ~3 m from the centre of curvature: its 9 m segments fanned into one
+      // another (2.0 m deep). Left wall: the straight approach (curv ~0.001,
+      // ends on the right-hander's OUTSIDE). Right wall: the left-hander's
+      // outside, from its turn-in.
+      bowlSeatWall(0.700, 0.730, -1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });
-      bowlSeatWall(0.735, 0.775, 1, 24, {
+      bowlSeatWall(0.742, 0.775, 1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });
@@ -366,7 +385,7 @@
         });
       }
 
-      for (const [idx, s, side] of [[0, 0.205, -1], [1, 0.815, -1]]) {
+      for (const [idx, s, side] of CAMPS) {
         const a = anchor(K(s), side, 44), b = [a.r, a.u, a.t];
         modelGroup(`zandvoort-orange-camp-${idx}`, {
           center: vadd(a.c, a.u, 3.5),
@@ -396,10 +415,12 @@
         });
       }
 
-      for (const [s0, s1, side] of [[0.255, 0.365, -1], [0.615, 0.745, -1]]) {
+      for (const [s0, s1, side] of [[0.255, 0.365, -1], [0.615, 0.728, -1]]) {   // 0.728: the chicane bowl wall (gap 24) begins at 0.700; bushes sit behind it
         along(s0, s1, 34, (k) => {
           const seed = k * 137 + side;
-          bush(k, side, 30 + hash(seed) * 7,
+          // 32+: the -1 marram hedge runs at 28 m (2.4 m wide, +-0.8 jitter);
+          // a 30 m bush (lobes ~2.3 m) grew into it at 0.316.
+          bush(k, side, 32.5 + hash(seed) * 6,
                hash(seed + 1) < 0.5 ? marramG : marramT);
           if (hash(seed + 2) < 0.46)
             pine(k, side, 42 + hash(seed + 3) * 8,
@@ -577,6 +598,7 @@
         }
       }
 
+      const hutSpots = [];
       every(40, (k) => {
         const lapFrac = k / n;
         const sideProb = lapFrac > 0.3 && lapFrac < 0.7 ? 0.7 : 0.3;
@@ -584,6 +606,11 @@
         const dist = 140 + hash(k * 7) * 35;     // 140–175 m from verge
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 16)) return;
+        // 140–175 m out on a compact lap is back on ANOTHER stretch's verge:
+        // its forest (48–65 m + canopy), hedges, bushes and bowl walls. Each
+        // hut must clear every road by 75 m, and two hut rows from nearby
+        // nodes (they converge on a bend's inside) must not share ground.
+        const hutAt = (off) => vadd(a.c, a.t, off);
         const cols = [[0.88, 0.26, 0.18], [0.18, 0.48, 0.72],
                       [0.92, 0.87, 0.28], [0.20, 0.62, 0.38]];
         const b = [a.r, a.u, a.t];
@@ -592,6 +619,10 @@
         for (let i = 0; i < hutCount; i++) {
           const hutCol = cols[Math.floor(hash(k * 9 + i * 3) * 4) % 4];
           const offset = (i - (hutCount - 1) / 2) * 7.5;
+          const hp = hutAt(offset);
+          if (onTrack(hp[0], hp[2], 75)) continue;
+          if (hutSpots.some(([x, z]) => Math.hypot(x - hp[0], z - hp[2]) < 9)) continue;
+          hutSpots.push([hp[0], hp[2]]);
           // Center at a.c + u*(hutH/2) so base = a.c[1], no floating
           addBox(out, vadd(vadd(a.c, a.u, hutH / 2), a.t, offset),
                  [5.5, hutH, 5.5], hutCol, b);

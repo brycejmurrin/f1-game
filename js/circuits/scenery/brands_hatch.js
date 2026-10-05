@@ -80,6 +80,8 @@
       // The GP loop leaves the bowl at Surtees and rejoins it at Stirlings.
       const WOODS_A = 0.378, WOODS_B = 0.845;
       const inWoods = (s) => s >= WOODS_A && s <= WOODS_B;
+      // Marshal posts inside the woods (blocks 5/6) — the verge scrub yields.
+      const WOOD_POSTS = [[0.430, 1], [0.458, -1], [0.528, -1], [0.630, -1], [0.756, 1]];
 
       /* 0. SHARED HELPERS — the three things the bowl needs a lot of:      */
       /*    parked cars, boundary planting, and a guarded set-back test.    */
@@ -158,8 +160,15 @@
       // Terracing where the banks are steepest — Druids and Graham Hill.
       // Clark no longer gets a terrace (unsupported on the downhill bank).
       // Single Druids flight only (two overlapping flights were coplanar).
-      terrace(0.066, 0.090, -1, 16, { rows: 7, rise: 0.9 });
-      terrace(0.180, 0.205, -1, 16, {});
+      // The -1 bank here is the INSIDE of the hairpin (built R ~40 m over
+      // 0.071..0.084), so a flight through the apex folds its back rows over
+      // each other past the centre of the turn (clip-audit 2026-10-05: ~200
+      // tread-on-tread pairs). Two flights either side of the apex instead.
+      terrace(0.054, 0.069, -1, 16, { rows: 7, rise: 0.9 });
+      terrace(0.085, 0.095, -1, 16, { rows: 7, rise: 0.9 });
+      // No terrace at 0.180..0.205: in the built frame that span is the
+      // Paddock Hill + Hailwoods stand footprints (sl(0.004)..sl(0.050), block
+      // 2) and the Paddock Hill Bar — a terrace there ran through all three.
       // Hailwoods is a required modelGroup in the dip (block 2); no bleacher
       // shell here — a bolted run on this grade measured BACKWARDS on older
       // ship tips and fought the hero footprint.
@@ -191,9 +200,9 @@
       for (const [s, d] of [
         [0.066, 34], [0.074, 34], [0.082, 35], [0.090, 36],
         [0.180, 33], [0.190, 33], [0.200, 34],
-        [0.850, 35], [0.858, 35], [0.866, 36], [0.876, 35],
+        [0.850, 35], [0.858, 35], [0.866, 44], [0.876, 35],
         [0.900, 34], [0.910, 34], [0.922, 35], [0.934, 36],
-        [0.310, 36], [0.340, 37], [0.368, 36],
+        [0.310, 44], [0.340, 37], [0.368, 36],
       ]) {
         const k = K(s);
         if (!clear(k, -1, d, 10)) continue;
@@ -203,7 +212,9 @@
       // Burger vans, awnings and portaloo blocks scattered on the rim.
       for (const [s, d, sz, col] of [
         [0.070, 41, [3.0, 3.2, 7.5], CHALK], [0.086, 42, [2.6, 3.0, 6.5], STEEL],
-        [0.184, 40, [3.0, 3.2, 7.5], CHALK], [0.204, 41, [2.4, 2.8, 6.0], RENDER],
+        // (0.184 burger van dropped: built-frame it lands on the Paddock Hill
+        // catering row, block 2, and stood inside its first hut.)
+        [0.204, 41, [2.4, 2.8, 6.0], RENDER],
         [0.852, 42, [3.0, 3.2, 7.5], STEEL], [0.868, 41, [2.6, 3.0, 6.5], CHALK],
         [0.906, 40, [3.0, 3.2, 7.5], CHALK], [0.930, 42, [2.4, 2.8, 6.0], RENDER],
         [0.326, 43, [2.6, 3.0, 6.5], STEEL],
@@ -464,7 +475,9 @@
 
       // The Paddock Hill Bar, set INTO the grass bank at the bottom of the dip
       // (row 0.025/-1: bank + bar building, standing crowd on grass, no shell).
-      building(K(sl(0.026)), -1, 13, 16, 5.5, 12, {});
+      // Gap 26: at 13 the bar stood inside the Paddock Hill stand's stepped
+      // seating (indexSolid sl(0.004..0.030), gap 10, depth 14) by 1.4 m.
+      building(K(sl(0.026)), -1, 26, 16, 5.5, 12, {});
       building(K(sl(0.036)), -1, 16, 12, 4.5, 10, {});
       // Its decking and the worn standing ground on the lip above the drop.
       groundPatch(K(sl(0.030)), -1, 22, [14, 0.24, 20], WORN);
@@ -473,7 +486,7 @@
       signBoard(K(sl(0.022)), -1, 30, 10, 6, DKGREY);
       signBoard(K(sl(0.052)), -1, 28, 8, 5, DKGREY);
       // Catering and the bank's own toilet block, behind the standing crowd.
-      for (const [s, d] of [[0.020, 30], [0.032, 32], [0.046, 31], [0.058, 33]]) {
+      for (const [s, d] of [[0.020, 35], [0.032, 32], [0.046, 31], [0.058, 33]]) {
         const k = K(sl(s));
         if (clear(k, -1, d, 10)) house(k, -1, d, 7, 3.2, 6, {});
       }
@@ -507,8 +520,9 @@
       if (clear(K(sl(0.950)), 1, 40, 10)) {
         building(K(sl(0.950)), 1, 40, 15, 6.0, 13, {});
       }
-      if (clear(K(sl(0.942)), 1, 38, 10)) {
-        house(K(sl(0.942)), 1, 38, 10, 4.5, 9, {});
+      // Gap 42: the office row above the bays runs 27..41 m (w 14).
+      if (clear(K(sl(0.942)), 1, 42, 10)) {
+        house(K(sl(0.942)), 1, 42, 10, 4.5, 9, {});
       }
 
       // The KENTAGON — circuit bar/clubhouse opposite Paddock Hill Grandstand
@@ -603,6 +617,10 @@
         const k = K(s);
         if (!clear(k, 1, 44, 10)) continue;
         const h = hash(k * 79);
+        // The infield is narrow here: the back of a lock-up reaches the Dingle
+        // Dell forest edge on the far side of the loop. Skip any whose rear
+        // wall lands within the woods' tree band of that other stretch.
+        if (!clear(k, 1, 44 + 10 + h * 4, 24)) continue;
         building(k, 1, 44, 10 + h * 4, 4.5 + h * 2.2, 12, {});
       }
       for (let s = 0.224; s < 0.304; s += 0.0090) {
@@ -619,8 +637,10 @@
       // Paddock entrance beyond Clark Curve (row 0.914/-1 tail).
       building(K(0.905), 1, 30, 15, 6.5, 14, {});
       building(K(0.930), 1, 34, 13, 6.0, 12, {});
+      // Gatehouse yard only: on the inside of this curve the 0.905 and 0.930
+      // blocks converge, and a house between them measured 3.4..3.9 m into
+      // the neighbouring mass at gaps 46 and 52 (clip-audit 2026-10-05).
       if (clear(K(0.918), 1, 46, 10)) {
-        house(K(0.918), 1, 46, 10, 4.2, 9, {});
         groundPatch(K(0.918), 1, 46, [14, 0.22, 22], ASPH);
       }
 
@@ -662,8 +682,12 @@
       /*    0.532, 0.636, 0.760).                                            */
 
       // Closed canopy either side, right up to the verge.
-      forestEdge(0.382, WOODS_B, -1, 13, {});
-      forestEdge(0.382, WOODS_B,  1, 13, {});
+      // Broken at the Pilgrims footbridge (0.430, block 4): its stair towers
+      // stand where the edge row would plant a crown.
+      for (const side of [-1, 1]) {
+        forestEdge(0.382, 0.426, side, 13, {});
+        forestEdge(0.434, WOODS_B, side, 13, {});
+      }
 
       // Standards inside the wood, in two ranks at different set-backs so the
       // edge does not read as a single line of trunks.
@@ -710,7 +734,10 @@
         for (const side of [-1, 1]) {
           const d = 56 + h * 48 + (s > 0.58 && s < 0.72 ? 14 : 0);
           if (h > 0.92 - thin * 0.50) continue;
-          if (!clear(k, side, d, 9)) continue;
+          // 24 m, not 9: at 56..118 m back a crown can reach ANOTHER stretch
+          // of the loop (pit offices across the infield took one); the body of
+          // the wood stays off that stretch's verge and buildings.
+          if (!clear(k, side, d, 24)) continue;
           if (h < 0.44) conifer(k, side, d, 13 + h * 8, CONIF);
           else if (h < 0.74) broadleafFall(k, side, d, 11 + h * 8, OAK_D);
           else tree(k, side, d, 12 + h * 7, OAK);
@@ -723,7 +750,10 @@
         if (!inWoods(s)) return;
         const h = hash(k * 43);
         if (h < 0.42) return;
-        bush(k, h < 0.71 ? -1 : 1, 12 + h * 5, h < 0.6 ? SCRUB : OAK_D);
+        const side = h < 0.71 ? -1 : 1;
+        // Leave the marshal-post stands clear (they sit at 13 m in the scrub).
+        if (WOOD_POSTS.some(([ps, pside]) => pside === side && Math.abs(s - ps) < 0.004)) return;
+        bush(k, side, 12 + h * 5, h < 0.6 ? SCRUB : OAK_D);
       });
       // A second scrub pass further back, where the canopy breaks.
       every(8, (k) => {
