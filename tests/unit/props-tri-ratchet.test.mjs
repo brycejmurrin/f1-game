@@ -34,6 +34,9 @@ const require = createRequire(import.meta.url);
 // woodland/backdrop pass with the shared elevation and registered landmarks.
 // Shared default measures 418801 under its 418845 cap. Compaction remains
 // identical; other default baseline rows are preserved.
+// 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
+// Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
+// chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
