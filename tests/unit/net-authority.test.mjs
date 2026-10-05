@@ -817,6 +817,51 @@ test("strategy events require this race epoch and the sender's own car", () => {
   net.stop();
 });
 
+// ---- the HOST's AI retires on the guest too ------------------------------
+// Bug hunt 2026-10-05 G5. retireCar reported only the LOCAL car, so a guest
+// posed a host-retired AI as running: it counted in the guest's order and
+// contact, the sheet printed "0 pts" for a DNF, and after the host left the
+// guest's own AI drove the parked car off the wall.
+function guestWithHostAi() {
+  const G = stubG(3);                                  // 0 = us, 1 = the host's human, 2 = the host's AI
+  G.retired = [];
+  G.retireCar = (c, why) => { c.retired = true; c.dnf = why; G.retired.push(c.code); };
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  assert.equal(net.start({ role: "guest", session: s }).ok, true);
+  return { G, net, s, ai: G.cars[2] };
+}
+
+test("a GUEST parks the host's AI when the host reports its retirement", () => {
+  const { G, net, s, ai } = guestWithHostAi();
+  assert.equal(net.owns(ai), true, "precondition: the host's AI is posed from the wire");
+  s.deliver("lap", { lap: 4, time: null, best: null, code: ai.code, driverId: ai.driverId, retired: "engine", invalid: true });
+  assert.equal(ai.retired, true, "retired on the guest as on the host");
+  assert.equal(ai.dnf, "engine");
+  assert.deepEqual(G.retired, [ai.code], "through retireCar: parked and announced once");
+  s.deliver("lap", { lap: 4, time: null, best: null, code: ai.code, driverId: ai.driverId, retired: "engine", invalid: true });
+  assert.deepEqual(G.retired, [ai.code], "a repeat changes nothing");
+  s.disconnect("transport");
+  assert.equal(ai.retired, true, "after the host leaves the car stays out (updateCar never drives a retirement)");
+});
+
+test("a HOST ignores a guest's claim that one of the host's AI retired", () => {
+  const G = stubG(3);
+  G.retireCar = () => { throw new Error("a guest cannot retire the host's AI"); };
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  assert.equal(net.start({ role: "host", session: s }).ok, true);
+  const ai = G.cars.find((c) => !c.human);
+  s.deliver("lap", { lap: 4, time: null, best: null, code: ai.code, driverId: ai.driverId, retired: "engine", invalid: true });
+  assert.equal(!!ai.retired, false);
+});
+
+test("retireCar reports the host's own AI retirements on the reliable channel, not only the local car's", () => {
+  const body = fnSource(src("js/game.js"), "function retireCar(c, reason)");
+  assert.match(body, /c\.local \|\| \(!c\.human && netPlay\.ownsRaceControl\(\)\)/, "the host owns its AI's word");
+  assert.match(body, /driverId: c\.driverId/, "the guest finds the AI by driverId");
+});
+
 // ---- a finish is the OWNER's crossing, a retirement the owner's word -------
 // Bug hunt 2026-09-28. A LAPPED car is flagged out at a lap BELOW lapsTarget
 // (RaceControl.lineTransition) and reports its `fin` with that lap; the

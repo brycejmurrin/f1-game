@@ -639,7 +639,8 @@ const NetPlay = (function () {
             // own car is found by `code` (the only id reportLap carries).
             const fin = Number(d.fin);
             const fr = role === "host" ? remotes.get(remoteFor(id))
-              : remoteList().find((x) => x.car.code === d.code);
+              : remoteList().find((x) => x.car.code === d.code)
+                || [...aiRemotes.values()].find((x) => d.driverId != null && x.car.driverId === d.driverId);   // the host's AI
             // The lap time and best too: poseRemote only carries position, so
             // the rival's car kept lastLap 0 and best Infinity all race — the
             // radio handed YOU the fastest lap and never timed their laps.
@@ -665,9 +666,13 @@ const NetPlay = (function () {
             // A RETIREMENT is the owner's word too. The 13 B snapshot has no
             // flag for it, so without this the retired rival stands parked as
             // "still running" and finishDelay holds the other screen to the
-            // hard cap (reliability on). Relayed by the host like the rest.
+            // hard cap (reliability on). Relayed by the host like the rest; the
+            // host's own AI retirements arrive here as well (game.js retireCar).
             const ret = typeof d.retired === "string" && d.retired ? d.retired.slice(0, 32) : null;
             if (fr && ret && !fr.car.finished && !fr.car.retired) {
+              // The host's AI is parked and announced here too (retireCar). Retired,
+              // it stays parked after a hand-back: updateCar never drives it again.
+              if (fr.hostAi && G.retireCar) G.retireCar(fr.car, ret);
               fr.car.retired = true; fr.car.dnf = ret; fr.car.dnfAt = null;
               fr.car._nFin = null; fr.car._nFinLap = null;
             }

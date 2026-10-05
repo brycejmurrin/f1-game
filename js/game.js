@@ -6179,8 +6179,9 @@ function retireCar(c, reason) {
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
   // The owner's word, on the reliable channel: nothing else carries it and a
-  // rival left "running" holds the other screen's result to the hard cap.
-  if (c.local && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, retired: c.dnf, invalid: true });
+  // rival left "running" holds the other screen's result to the hard cap. The
+  // HOST owns its AI too: a guest posed it running, raced into it, scored it.
+  if ((c.local || (!c.human && netPlay.ownsRaceControl())) && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
   Tracks.sample(track, c.s, smp);
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);
