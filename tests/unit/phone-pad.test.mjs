@@ -1250,3 +1250,98 @@ test("host(): private exchange and unreadable-answer failures release their tran
     assert.equal(h.ui.linkedN, 0); h.ctl.cancel();
   }
 });
+
+function wakePad(over = {}) {
+  const events = {}, requests = [], transports = [];
+  const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
+    setInterval: () => 1, clearInterval() {}, setTimeout: () => 1, clearTimeout() {},
+    navigator: { wakeLock: { request: () => {
+      let resolve, reject;
+      const promise = new Promise((a, b) => { resolve = a; reject = b; });
+      requests.push({ resolve, reject }); return promise;
+    } } },
+    document: { visibilityState: "visible", addEventListener(t, fn) { (events[t] ||= []).push(fn); } },
+    addEventListener(t, fn) { (events[t] ||= []).push(fn); },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(read("js/input/phone-pad.js"), ctx);
+  const P = vm.runInContext("PhonePad", ctx);
+  const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl() };
+  const ctl = P.pad(dom, { deps: {
+    privateRelay: () => false, normalise: (c) => c, valid: () => true, prefetchIce: async () => {},
+    rtc: () => {
+      let close;
+      const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onClose(f) { close = f; },
+        close() { t.status = "closed"; if (close) close(); } };
+      transports.push(t); return t;
+    }, swap: async () => ({ ok: true }), ...over,
+  } });
+  const lock = () => {
+    let onRelease;
+    return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
+      release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
+  };
+  return { ctl, dom, requests, transports, lock, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+}
+
+test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
+  for (const late of [false, true]) {
+    let finish;
+    const h = wakePad({ swap: () => new Promise((r) => { finish = r; }) });
+    const connecting = h.ctl.connect("ABC234"); await settle();
+    const lock = h.lock();
+    if (!late) { h.requests[0].resolve(lock); await settle(); }
+    finish({ ok: false, error: "expired" });
+    assert.equal((await connecting).error, "expired");
+    if (late) { h.requests[0].resolve(lock); await settle(); }
+    assert.equal(lock.releases, 1);
+    assert.equal(h.dom.connect.disabled, false);
+  }
+});
+
+test("phone disconnect releases its lock; stale release events cannot clear a reconnect's lock", async () => {
+  const h = wakePad();
+  await h.ctl.connect("ABC234");
+  const first = h.lock(); h.requests[0].resolve(first); await settle();
+  h.transports[0].close(); assert.equal(first.releases, 1);
+  await h.ctl.connect("ABC234");
+  const second = h.lock(); h.requests[1].resolve(second); await settle();
+  first.signal(); h.fire("visibilitychange"); await settle();
+  assert.equal(h.requests.length, 2, "old sentinel event cannot cause a duplicate current acquisition");
+  h.ctl.cancel(); assert.equal(second.releases, 1);
+  assert.equal(h.ctl.state().linked, false);
+});
+
+test("page exit cancels pending pairing; its late lock and answer cannot affect a fresh connection", async () => {
+  let finish; let swaps = 0;
+  const h = wakePad({ swap: () => ++swaps === 1 ? new Promise((r) => { finish = r; }) : Promise.resolve({ ok: true }) });
+  const first = h.ctl.connect("ABC234"); await settle();
+  h.fire("pagehide");
+  assert.equal(h.transports[0].status, "closed");
+  await h.ctl.connect("ABC234");
+  const current = h.lock(); h.requests[1].resolve(current); await settle();
+  const stale = h.lock(); h.requests[0].resolve(stale); finish({ ok: true });
+  assert.equal((await first).error, "cancelled"); await settle();
+  assert.equal(stale.releases, 1); assert.equal(current.releases, 0);
+  assert.equal(h.ctl.state().linked, true);
+  h.ctl.cancel(); assert.equal(current.releases, 1);
+});
+
+test("a refused wake lock does not block pairing or reacquisition on visibility return", async () => {
+  const h = wakePad();
+  await h.ctl.connect("ABC234"); h.requests[0].reject(new Error("denied")); await settle();
+  assert.equal(h.ctl.state().linked, true);
+  h.fire("visibilitychange"); await settle();
+  const lock = h.lock(); h.requests[1].resolve(lock); await settle();
+  h.ctl.cancel(); assert.equal(lock.releases, 1);
+});
+
+test("a transport closing during controller session setup cannot strand its wake lock or reconnect", async () => {
+  const h = wakePad({ rtc: () => ({ status: "closed", onMessage() {}, onClose(f) { f(); }, onOpen() {}, close() {} }) });
+  assert.equal((await h.ctl.connect("ABC234")).error, "cancelled");
+  const lock = h.lock(); h.requests[0].resolve(lock); await settle();
+  assert.equal(lock.releases, 1); assert.equal(h.ctl.state().linked, false);
+  assert.equal(h.dom.connect.disabled, false);
+  assert.equal((await h.ctl.connect("ABC234")).error, "cancelled", "a second attempt is not stuck busy");
+});

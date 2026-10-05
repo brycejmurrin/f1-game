@@ -5,6 +5,10 @@ const DataRealRace = (function () {
   const OPENF1 = "https://api.openf1.org/v1";
   const TTL = 7 * 24 * 60 * 60 * 1000;   // a finished race never changes; the same TTL api.js gives a historic session
   const CACHE_KEY = "apex26.realrace.v1.";   // one compact script per session key (the raw laps body is 480 KB and never cached)
+  // A script is ~45 KB; one per watched session with no eviction filled the 5 MB origin quota
+  // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
+  const CACHE_LRU = "apex26.realrace.lru";
+  const CACHE_MAX = 8;
   const SCRIPT_V = 4;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
@@ -19,6 +23,9 @@ const DataRealRace = (function () {
   const TRACE_V = 1;
   const TRACE_HZ = 2;
   const TRACE_DB = "apex26.replay", TRACE_STORE = "traces";
+  const TRACE_MAX = 8;              // races kept (~1.5 MB each); the newest-first order lives in the store under TRACE_LRU
+  const TRACE_LRU = "__lru";
+  const TRACE_OPEN_MS = 4000;       // a blocked/never-settling open() degrades to "no cache"
   const TRACE_PAD_S = 90;   // seconds of positions before lights out (the grid) and after the last lap
   const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
 
@@ -390,32 +397,61 @@ const DataRealRace = (function () {
   }
 
   // ── The real positions: one /location pull per car, kept in IndexedDB ──
+  // ONE connection per page, memoised (the js/core/store.js mirrorOpen pattern): a get or put
+  // each opened its own and never closed it, and a version bump would block on every one.
+  let _traceDb = null;
   function traceDb() {
-    return new Promise((res) => {
-      let r;
-      try { if (typeof indexedDB === "undefined" || !indexedDB) { res(null); return; } r = indexedDB.open(TRACE_DB, 1); }
-      catch (e) { res(null); return; }
+    if (_traceDb) return _traceDb;
+    _traceDb = new Promise((res) => {
+      let settled = false, timer = null, r = null;
+      const finish = (db) => {
+        if (settled) { if (db) { try { db.close(); } catch (e) { /* late open after a block or timeout: nothing owns it */ } } return; }
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        if (db) db.onversionchange = db.onclose = () => { try { db.close(); } catch (e) { /* already closed */ } _traceDb = null; };
+        res(db || null);
+      };
+      try { if (typeof indexedDB === "undefined" || !indexedDB) { finish(null); return; } r = indexedDB.open(TRACE_DB, 1); }
+      catch (e) { finish(null); return; }
       r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(TRACE_STORE)) db.createObjectStore(TRACE_STORE); };
-      r.onsuccess = () => res(r.result);
-      r.onerror = r.onblocked = () => res(null);
-    });
+      r.onsuccess = () => finish(r.result);
+      r.onerror = r.onblocked = () => finish(null);
+      if (typeof setTimeout === "function") timer = setTimeout(() => finish(null), TRACE_OPEN_MS);
+    }).then((db) => { if (!db) _traceDb = null; return db; });   // never memoise a failure
+    return _traceDb;
   }
-  function traceGet(sessionKey) {
+  function traceGet(sessionKey, script) {
     return traceDb().then((db) => new Promise((res) => {
       if (!db) { res(null); return; }
       try {
         const rq = db.transaction(TRACE_STORE, "readonly").objectStore(TRACE_STORE).get(String(sessionKey));
-        rq.onsuccess = () => { const v = rq.result; res(v && v.v === TRACE_V && v.cars ? v : null); };
+        rq.onsuccess = () => { const v = rq.result; res(v && v.v === TRACE_V && v.cars && (!script || traceFits(v, script)) ? v : null); };
         rq.onerror = () => res(null);
       } catch (e) { res(null); }
     }));
   }
+  /** Store one race's positions and keep only the newest TRACE_MAX races (the photo-studio
+   *  LIMIT pattern: the read, the prune and the put share one readwrite transaction). */
   function tracePut(traces) {
     return traceDb().then((db) => new Promise((res) => {
       if (!db) { res(false); return; }
       try {
-        const t = db.transaction(TRACE_STORE, "readwrite");
-        t.objectStore(TRACE_STORE).put(traces, String(traces.sessionKey));
+        const key = String(traces.sessionKey);
+        const t = db.transaction(TRACE_STORE, "readwrite"), st = t.objectStore(TRACE_STORE);
+        const rq = st.get(TRACE_LRU);
+        rq.onsuccess = () => {
+          try {
+            const prev = Array.isArray(rq.result) ? rq.result.map(String) : [];
+            const order = [key].concat(prev.filter((k) => k !== key)).slice(0, TRACE_MAX);
+            for (const k of prev) if (order.indexOf(k) < 0) st.delete(k);
+            if (typeof st.getAllKeys === "function") {   // races stored before the order existed
+              const all = st.getAllKeys();
+              all.onsuccess = () => { for (const k of all.result || []) if (k !== TRACE_LRU && order.indexOf(String(k)) < 0) st.delete(k); };
+            }
+            st.put(traces, key);
+            st.put(order, TRACE_LRU);
+          } catch (e) { try { t.abort(); } catch (_) { /* already finished */ } }
+        };
         t.oncomplete = () => res(true);
         t.onerror = t.onabort = () => res(false);   // quota: the next visit fetches again
       } catch (e) { res(false); }
@@ -434,29 +470,47 @@ const DataRealRace = (function () {
     }
     return Float32Array.from(out);
   }
+  function traceEnd(script) {
+    let end = 0;
+    for (const d of script.drivers) arr(d.lapStart).forEach((ls, i) => { if (ls != null && d.laps[i] > 0) end = Math.max(end, ls + d.laps[i]); });
+    return end;
+  }
+  // Session identity alone is not coverage: timing can grow after a successful
+  // download. Include its clock, window, roster and completion state; legacy
+  // entries without this stamp must be fetched again rather than trusted.
+  function traceCoverage(script) {
+    return JSON.stringify([script.t0, traceEnd(script), script.complete === true,
+      script.drivers.map((d) => d.num).sort((a, b) => a - b)]);
+  }
+  function traceFits(traces, script) {
+    return !!(traces && traces.v === TRACE_V && traces.sessionKey === script.sessionKey &&
+      traces.coverage === traceCoverage(script));
+  }
   /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
   function fetchTraces(script, onProgress, previous) {
     if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
-    return traceGet(script.sessionKey).then((hit) => {
+    return traceGet(script.sessionKey, script).then((hit) => {
       if (hit) return hit;
       const t0 = script.t0;
-      let end = 0;
-      for (const d of script.drivers) d.lapStart.forEach((ls, i) => { if (ls != null && d.laps[i] > 0 && ls + d.laps[i] > end) end = ls + d.laps[i]; });
+      const end = traceEnd(script);
       const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
-      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ, cars: {}, failed: [] };
-      if (previous && previous.sessionKey === script.sessionKey) {
+      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ,
+        coverage: traceCoverage(script), complete: script.complete === true, cars: {}, failed: [] };
+      if (traceFits(previous, script)) {
         for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k)) traces.cars[k] = previous.cars[k];
       }
       let done = 0, failed = 0;
       const total = script.drivers.length;
       return Promise.all(script.drivers.map((d) => (Object.prototype.hasOwnProperty.call(traces.cars, d.num)
-        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO)
+        // This layer owns coverage-aware caching. A raw HTTP cache entry may
+        // predate the completed timing even when its URL/window is identical.
+        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
           .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
         .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
         .then(() => failed === total ? Promise.reject(new Error("the positions did not load"))
-          : failed ? traces : tracePut(traces).then(() => traces));
+          : failed || !traces.complete ? traces : tracePut(traces).then(() => traces));
     });
   }
 
@@ -464,11 +518,35 @@ const DataRealRace = (function () {
     try {
       const raw = localStorage.getItem(CACHE_KEY + sessionKey);
       const s = raw ? JSON.parse(raw) : null;
-      return s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      if (ok) lruWrite(lruFront(sessionKey));
+      return ok;
     } catch (e) { return null; }
   }
+  function lruRead() {
+    try { const a = JSON.parse(localStorage.getItem(CACHE_LRU) || "[]"); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
+  }
+  function lruFront(sessionKey) {
+    const k = String(sessionKey);
+    return [k].concat(lruRead().filter((x) => x !== k)).slice(0, CACHE_MAX);
+  }
+  function lruWrite(order) { try { localStorage.setItem(CACHE_LRU, JSON.stringify(order)); } catch (e) { /* quota: the order is advisory */ } }
+  /** Drop every cached script not in `keep` — indexed ones and any written before the index existed. */
+  function pruneScripts(keep) {
+    try {
+      const drop = new Set(lruRead().filter((k) => keep.indexOf(k) < 0).map((k) => CACHE_KEY + k));
+      const n = typeof localStorage.length === "number" && typeof localStorage.key === "function" ? localStorage.length : 0;
+      for (let i = 0; i < n; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(CACHE_KEY) === 0 && keep.indexOf(k.slice(CACHE_KEY.length)) < 0) drop.add(k);
+      }
+      for (const k of drop) localStorage.removeItem(k);
+    } catch (e) { /* no storage */ }
+  }
   function remember(script) {
-    try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); } catch (e) { /* quota: the next open refetches */ }
+    const order = lruFront(script.sessionKey);
+    pruneScripts(order);   // before the write, so the room it frees is there for it
+    try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); lruWrite(order); } catch (e) { /* quota: the next open refetches */ }
   }
 
   function create(deps) {
@@ -486,7 +564,8 @@ const DataRealRace = (function () {
     // A download in flight leaves ~20 queued /location requests in the transport's
     // FIFO that every other tab would wait behind; drop them (showTab cancels this
     // tab BEFORE it starts the next tab's load).
-    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; }
+    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
+    function releaseIncomplete() { partialTraces = null; if (traces && !traces.complete) traces = null; }
 
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
@@ -529,6 +608,7 @@ const DataRealRace = (function () {
 
     function renderBody(meta, body) {
       ++requestGen;
+      releaseIncomplete();
       loading = null; replayUi = null; driveAction = null; traceError = "";
       const myGen = ++bodyGen;
       clear(body);
@@ -605,7 +685,7 @@ const DataRealRace = (function () {
      *  where it really was. Until they load, the WATCH buttons load them first. */
     function replayRow(script, slot) {
       const row = el("div", "dh-rounds");
-      const have = traces && traces.sessionKey === script.sessionKey;
+      const have = traceFits(traces, script);
       const canReplay = !!script.t0 && typeof RealRace !== "undefined" && !!RealRace.replay;
       if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
       const state = el("span", "dh-lr-meta"); state.setAttribute("role", "status");
@@ -624,14 +704,14 @@ const DataRealRace = (function () {
       replayUi = { script, slot, state, progress, load, highlights, full, cancel };
       updateReplayRow();
       const generation = requestGen;
-      if (!have && !loading) traceGet(script.sessionKey).then((hit) => {
+      if (!have && !loading) traceGet(script.sessionKey, script).then((hit) => {
         if (generation === requestGen && (!isOpen || isOpen()) && hit && replayUi && replayUi.slot === slot && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
       });
       return row;
     }
     function updateReplayRow() {
       if (!replayUi) return;
-      const u = replayUi, sk = u.script.sessionKey, tr = traces && traces.sessionKey === sk ? traces : null;
+      const u = replayUi, sk = u.script.sessionKey, tr = traceFits(traces, u.script) ? traces : null;
       const busy = loading && loading.sessionKey === sk, failed = tr && tr.failed ? tr.failed : [];
       u.state.textContent = busy ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total + " CARS"
         : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
@@ -649,7 +729,7 @@ const DataRealRace = (function () {
       fetchTraces(script, (done, total, tr) => {
         if (!current()) return;
         partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
-      }, traces && traces.sessionKey === script.sessionKey ? traces : partialTraces)
+      }, traceFits(traces, script) ? traces : partialTraces)
         .then((tr) => {
           if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();
@@ -673,7 +753,7 @@ const DataRealRace = (function () {
         if (close) close();
         return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
-      if (traces && traces.sessionKey === script.sessionKey) return go(traces);
+      if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);
     }
 
@@ -846,8 +926,8 @@ const DataRealRace = (function () {
     function jumpIn(script, code) {
       if (typeof RealRace === "undefined" || !RealRace.launch) { Log.warn("data", "RealRace is not loaded"); return false; }
       Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
+      const tr = traceFits(traces, script) ? traces : null;
       if (close) close();
-      const tr = traces && traces.sessionKey === script.sessionKey ? traces : null;
       return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
@@ -859,7 +939,7 @@ const DataRealRace = (function () {
              setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached,
-           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, DISTANCES, CACHE_KEY };
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
+           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);

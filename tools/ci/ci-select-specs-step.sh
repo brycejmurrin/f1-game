@@ -67,6 +67,8 @@ node -e '
     console.log(`::warning::DROPPED (declares ${s.ownTimeoutSec}s/test; the over-budget pool is full): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of (r.coveredByManualOptIn || []))
+    console.log(`COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.overflow || []))

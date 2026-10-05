@@ -11,6 +11,21 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
   readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
 
+test("replay location downloads bypass the raw cache while telemetry retains it", async () => {
+  const cached = JSON.stringify({ t: Date.now(), data: [{ date: "2026-10-04T12:00:00Z", x: 10, y: 20 }] });
+  let fetches = 0, writes = 0;
+  const ctx = vm.createContext({ Date, AbortController, setTimeout, clearTimeout,
+    localStorage: { getItem: () => cached, setItem() { writes++; } },
+    fetch: async () => { fetches++; return { ok: true, json: async () => [{ date: "2026-10-04T12:00:01Z", x: 30, y: 40 }] }; },
+  });
+  seedLog(ctx); vm.runInContext(apiSource, ctx);
+  const api = vm.runInContext("F1API", ctx);
+  assert.equal((await api.locationData(123, 1, null, null))[0].x, 10);
+  assert.equal(fetches, 0, "ordinary telemetry keeps its cache");
+  assert.equal((await api.locationData(123, 1, null, null, { cache: false }))[0].x, 30);
+  assert.equal(fetches, 1); assert.equal(writes, 0, "coverage-aware replay owns its persistence");
+});
+
 function lockoutHarness(status, body) {
   const url = "https://api.openf1.org/v1/weather?session_key=7";
   const key = "apex26.api." + url;
@@ -488,6 +503,17 @@ test("a full quota drops the disposable api cache and the save lands", async () 
   assert.equal(r.durable, true);
   assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.api.")).length, 0);
   assert.equal(run("GameStore.store.rawSet('apex26.x', 'y'.repeat(300000))"), true);
+});
+
+test("a quota full of real-race scripts is freed too, and the career save lands", async () => {
+  const { m, run } = await quotaCtx();
+  m.set("apex26.career", JSON.stringify({ money: 1 }));
+  for (let i = 0; i < 115; i++) m.set("apex26.realrace.v1." + (9000 + i), "s".repeat(45_000));
+  m.set("apex26.realrace.lru", "[]");
+  const r = run("GameStore.store.write('settings', {blob: 'y'.repeat(300000)})");
+  assert.equal(r.durable, true);
+  assert.equal([...m.keys()].filter((k) => k.startsWith("apex26.realrace.")).length, 0);
+  assert.equal(m.get("apex26.career"), JSON.stringify({ money: 1 }), "only disposable keys are dropped");
 });
 
 

@@ -100,7 +100,7 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed > 0",
-    code: "const axEstTarget = braking ? (c.speed > 0 ? -surfaceBrake * brakeLvl : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
     why: "sign test — brake held at a standstill is reverse (REVERSE_ACCEL), not a stop; REVERSE_MAX is the flat reverse crawl",
   },
   {

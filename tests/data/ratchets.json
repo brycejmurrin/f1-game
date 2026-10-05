@@ -9,12 +9,12 @@
       "lines": 3289
     },
     "js/car/car3d.js": {
-      "lines": 3483
+      "lines": 3490
     },
     "js/game.js": {
-      "codeLines": 4821,
+      "codeLines": 4838,
       "gMembers": 287,
-      "lines": 8982,
+      "lines": 9009,
       "topLets": 148
     },
     "js/lighting/presets.js": {
@@ -74,7 +74,7 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 93,
+    "waitForTimeout": 92,
     "waitNoPolling": {
       "ceiling": 57,
       "slack": 39
