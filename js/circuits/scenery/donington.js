@@ -456,9 +456,11 @@
         const c = [a.c[0], a.c[1] + alt, a.c[2]];
         const bn = [a.r, a.u, a.t];
         const bf = [a.r, a.t, a.u];                 // cylinder axis along fuselage
-        const FUSE = [0.78, 0.80, 0.83];             // pale airliner skin
-        const DARK = [0.30, 0.32, 0.34];
-        const TAIL = [0.16, 0.38, 0.55];             // cool EMA-ish fin
+        // Mid-grey fuselage (Mexico pattern): pale skin disappears into the
+        // overcast English sky on the soft blit; dark reads as a sky silhouette.
+        const FUSE = [0.58, 0.60, 0.64];
+        const DARK = [0.28, 0.29, 0.32];
+        const TAIL = [0.14, 0.34, 0.52];             // cool EMA-ish fin
         modelGroup("donington-ema-airliner", {
           center: c, size: [48, 16, 48], basis: bn,
         }, (stage) => {
