@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["suzuka"] =
   function (api) {
-      const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
+      const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every,
               hash, mountain, pine, tree, bush, grandstandEx, spectatorHill, terrace,
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
@@ -65,12 +65,82 @@
       }
 
       const wheelK = Math.round(n * 0.02) % n;
-      // Terrain pad under the Circuit Wheel first so legs seat into a slab
-      // (closed-form groundYAt left a 2.2 m unsupported gap on the Motopia drop).
-      // Silhouette unchanged — 38 m radius
-      // (https://ikidane-nippon.com/en/spots/suzuka-circuit-motopia — Circuit Wheel).
-      place(wheelK, -1, 62, [14, 1.2, 14], [0.42, 0.44, 0.48]);
-      ferrisWheel(wheelK, -1, 62, 38);     // 38 m radius — tall main-straight silhouette
+      // Circuit Wheel (Motopia) — 38 m radius silhouette (ikidane-nippon Circuit
+      // Wheel notes). Shared ferrisWheel still left legs 2.21 m clear of the
+      // Motopia drop (ground-audit 2026-10-05); Zandvoort pattern: local
+      // modelGroup seated on max terrainYAt across the footpad, required id for
+      // landmarks/suzuka.json. Teal rim from Motopia photo (Commons Jupiter
+      // Motopia); cabins stay red/white so the rim owns the Motopia read.
+      // seg=12 (not shared 16) keeps props-tris growth under the 0.5 % ratchet.
+      place(wheelK, -1, 62, [16, 1.4, 16], [0.42, 0.44, 0.48]);
+      {
+        const radius = 38;
+        const a0 = anchor(wheelK, -1, 62);
+        let hi = a0.c[1];
+        for (const alongT of [-5, -2, 0, 2, 5]) {
+          for (const sideOff of [-3, 0, 3]) {
+            const q = vadd(vadd(a0.c, a0.t, alongT), a0.r, sideOff);
+            const g = terrainYAt(q[0], q[2]);
+            if (g != null) hi = Math.max(hi, g);
+          }
+        }
+        // Seat on the high point of the Motopia drop; +0.04 bites the pad.
+        const lift = hi - a0.c[1] > 0.02 ? hi - a0.c[1] + 0.04 : 0.04;
+        const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
+        const hub = vadd(a.c, a.u, radius + 5);
+        const TEAL = [0.22, 0.62, 0.58];
+        const TEAL_DK = [0.16, 0.48, 0.46];
+        const RIM = [0.70, 0.78, 0.80];
+        const buildWheel = (stage) => {
+          const rim = [];
+          const seg = 12;
+          stage._mat = MAT.METAL;
+          for (const alongT of [-4, 4]) {
+            const foot = vadd(a.c, a.t, alongT);
+            addBox(stage, vadd(foot, a.u, (radius + 5) / 2),
+              [1.6, radius + 5, 1.6], [0.30, 0.32, 0.36], [a.r, a.u, a.t]);
+          }
+          // ±6 cm axis offset — shared ferrisWheel coplanar note (structures.js).
+          const strut = (p0, p1, thick, col, ax) => {
+            const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const len = Math.hypot(d[0], d[1], d[2]) || 1;
+            const axis = [d[0] / len, d[1] / len, d[2] / len];
+            const face = [
+              a.r[1] * axis[2] - a.r[2] * axis[1],
+              a.r[2] * axis[0] - a.r[0] * axis[2],
+              a.r[0] * axis[1] - a.r[1] * axis[0],
+            ];
+            const o = ax || 0;
+            addBox(stage,
+              [(p0[0] + p1[0]) / 2 + a.r[0] * o,
+               (p0[1] + p1[1]) / 2 + a.r[1] * o,
+               (p0[2] + p1[2]) / 2 + a.r[2] * o],
+              [thick, len, thick], col, [a.r, axis, face]);
+          };
+          for (let i = 0; i < seg; i++) {
+            const ang = i / seg * 6.2832;
+            rim.push(vadd(vadd(hub, a.t, Math.cos(ang) * radius), a.u, Math.sin(ang) * radius));
+          }
+          const HUB_R = 2.0;
+          for (let i = 0; i < seg; i++) {
+            const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
+            const L = Math.hypot(d[0], d[1], d[2]) || 1;
+            const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
+                          hub[2] + d[2] / L * HUB_R];
+            strut(root, rim[i], 0.30, RIM, i % 2 ? 0.06 : -0.06);
+            strut(rim[i], rim[(i + 1) % seg], 0.40, TEAL, i % 2 ? -0.06 : 0.06);
+            addBox(stage, vadd(rim[i], a.u, -1.2), [2.3, 2.1, 2.3],
+              i % 2 ? [0.92, 0.22, 0.22] : [0.96, 0.96, 0.98], [a.r, a.u, a.t]);
+          }
+          addBox(stage, hub, [3.4, 3.4, 3.4], TEAL_DK, [a.r, a.u, a.t]);
+          stage._mat = 0;
+        };
+        modelGroup("suzuka-circuit-wheel", {
+          center: hub,
+          size: [12, radius * 2 + 14, radius * 2 + 14],
+          basis: [a.r, a.u, a.t],
+        }, buildWheel, { required: true });
+      }
 
       // Single flanking accent tower (aft of wheel) — keeps Motopia colour without crowding
       tower(Math.round(n * 0.038) % n, -1, 105, 7, 42, { col: [0.80, 0.82, 0.86], seg: 7, cap: true, capCol: neonBlue, mast: 5 });
@@ -844,9 +914,11 @@
             addBox(stage, vadd(a.c, a.u, 5.72), [0.56, 0.26, 8.9], [0.60, 0.14, 0.10], b);
             addBox(stage, vadd(a.c, a.u, 4.15), [0.34, 0.32, 6.6], VERM, b);
             // Stone steps climbing away from the torii to the honden.
+            // +0.12 lift: ground-audit buried the bottom tread 0.08 m into the
+            // Spoon-side rise (pre-pass shrine steps in this file).
             stage._mat = MAT.STONE;
             for (let i = 0; i < 6; i++) {
-              addBox(stage, vadd(vadd(a.c, a.r, 2.2 + i * 1.5), a.u, 0.22 + i * 0.42),
+              addBox(stage, vadd(vadd(a.c, a.r, 2.2 + i * 1.5), a.u, 0.34 + i * 0.42),
                      [1.5, 0.44, 4.2], [0.72, 0.71, 0.66], b);
             }
             // A pair of stone lanterns flanking the approach.

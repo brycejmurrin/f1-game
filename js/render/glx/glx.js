@@ -114,6 +114,7 @@ const GLXBackend = (function () {
   let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let particleProg = null, particleU = null, particleVAO = null, particleVBO = null, particleCap = 0;
+  let _partLastAdd = -1, _partLastN = 0;   // shared VBO: skip SubData only when same blend group
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -2612,8 +2613,12 @@ const GLXBackend = (function () {
   // the scene alpha channel (the SSR car-paint tag — see draw()) is masked.
   // Must be called while the HDR scene target is bound (before present) so
   // particles tone-map and bloom with the scene.
-  function drawParticles(data, floatCount, additive) {
-    if (ctxGone() || !particleProg || !data || !(floatCount > 0) || !frameEye) return;
+  // `dirty` mirrors drawSkidBatch: false skips bufferSubData when the VBO still
+  // holds this blend group's last upload (shared VBO — re-upload if the other
+  // group drew last). particles.js passes false on a clean rain-cell hold.
+  function drawParticles(data, floatCount, additive, dirty) {
+    if (ctxGone() || !particleProg || !(floatCount > 0) || !frameEye) return;
+    if (dirty !== false && !data) return;
     useProg(particleProg);
     gl.uniformMatrix4fv(particleU.uViewProj, false, frameViewProj);
     gl.uniform3fv(particleU.uEye, frameEye);
@@ -2626,11 +2631,18 @@ const GLXBackend = (function () {
     gl.uniform1f(particleU.uFogDensity, _particleFog.density);
     bindVAO(particleVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
-    if (floatCount > particleCap) {
-      particleCap = floatCount;
-      gl.bufferData(gl.ARRAY_BUFFER, particleCap * 4, gl.DYNAMIC_DRAW);
+    const addBit = additive ? 1 : 0;
+    const needUpload = dirty !== false || _partLastAdd !== addBit || _partLastN !== floatCount;
+    if (needUpload) {
+      if (!data) return;
+      if (floatCount > particleCap) {
+        particleCap = floatCount;
+        gl.bufferData(gl.ARRAY_BUFFER, particleCap * 4, gl.DYNAMIC_DRAW);
+      }
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
+      _partLastAdd = addBit;
+      _partLastN = floatCount;
     }
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
     setDepthMask(false);

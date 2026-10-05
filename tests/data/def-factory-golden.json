@@ -1,5 +1,5 @@
 {
-  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. Re-captured 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture). The other 49 hashes are unchanged.",
+  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. Re-captured 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture). The other 49 hashes are unchanged; Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
   "hashes": {
     "abudhabi": "dee912e2a0c0788d",
     "albert_park": "1fde6db9dea54c22",
@@ -16,8 +16,8 @@
     "estoril": "0246b2730eeb729c",
     "fuji": "d6dbc5a50eac4a6f",
     "hockenheim": "b86f610d38dd6cf6",
-    "hungaroring": "bfc708c49d712ea8",
-    "imola": "4333b4f290001abd",
+    "hungaroring": "bd41d256eb1ac1d2",
+    "imola": "f92cd65677ae6fc5",
     "indianapolis": "951d5b13e98cdd98",
     "interlagos": "325198d1c6e044f3",
     "istanbul": "d7b8f267beb31093",
@@ -47,7 +47,7 @@
     "silverstone": "271302c1d8c159e6",
     "singapore": "61eed1f77ae9cfa1",
     "sochi": "8520706146c98bb7",
-    "spa": "220c5c2436ae8ab1",
+    "spa": "2d5e6ee3f18b3863",
     "suzuka": "6b65395f96a705a2",
     "vegas": "4ab3e799c7e8f5db",
     "watkins_glen": "5a05b867419cd70c",

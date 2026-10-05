@@ -85,6 +85,19 @@ test("every circuit's authored turn table resolves — an unread table is a sile
     "fix the pair against the built centreline, or drop the entry and let ZONE_COUNT own it");
 });
 
+test("Imola corner renumbering retains its authored Alta approach aero window", () => {
+  const def = Tracks.LIST.find((t) => t.id === "imola");
+  const tr = Tracks.buildCenterline(def, { line: false });
+  const zones = AeroZones.zonesFor(tr);
+  assert.equal(zones.length, 1);
+  const zone = zones[0];
+  assert.ok(zone.start > def.turns[12] * tr.total && zone.end < def.turns[13] * tr.total);
+  assert.ok(zone.start < .65 * tr.total && zone.end > .65 * tr.total,
+    "the existing window stays on the approach to Alta");
+  assert.ok(zone.start > .03 * tr.total,
+    "this metadata repair does not move the gameplay window to FIA's main-straight DRS zone");
+});
+
 test("a resolved table is the one zonesFor() actually returns", () => {
   // The check above rebuilds the runs itself, so it could drift from the module
   // and start proving something about its own copy. This pins the two together

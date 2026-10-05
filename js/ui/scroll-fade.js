@@ -77,11 +77,21 @@ window.ScrollFade = (function () {
     // the clipped sheet body plus the real list. The same
     // trap is why a sideways strip (#cs-tabs stacked, #sel-track-filter) used
     // to skip the fade entirely: overflow-y is hidden there on purpose.
+    // Zero-box early out: display:none / not-yet-laid-out nodes still match
+    // SEL and used to pay getComputedStyle + scrollHeight (ForcedReflow ~49 ms
+    // on a live boot trace, build 13830) for a thumb that cannot paint.
+    const track = el.clientHeight, trackW = el.clientWidth;
+    if (!track && !trackW) {
+      return {
+        el, max: 0, scrollable: false, top: 0, thumb: 0, track: 0, pr: 0,
+        maxX: 0, xScrollable: false, left: 0,
+      };
+    }
     const cs = getComputedStyle(el);
     const yOk = axisOk(cs.overflowY);
     const xOk = axisOk(cs.overflowX);
-    const scrollH = el.scrollHeight, track = el.clientHeight;
-    const scrollW = el.scrollWidth, trackW = el.clientWidth;
+    const scrollH = el.scrollHeight;
+    const scrollW = el.scrollWidth;
     const max = yOk ? scrollH - track : 0;
     const maxX = xOk ? scrollW - trackW : 0;
     const scrollable = max > EDGE;
