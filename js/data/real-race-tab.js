@@ -23,6 +23,9 @@ const DataRealRace = (function () {
   const TRACE_V = 1;
   const TRACE_HZ = 2;
   const TRACE_DB = "apex26.replay", TRACE_STORE = "traces";
+  const TRACE_MAX = 8;              // races kept (~1.5 MB each); the newest-first order lives in the store under TRACE_LRU
+  const TRACE_LRU = "__lru";
+  const TRACE_OPEN_MS = 4000;       // a blocked/never-settling open() degrades to "no cache"
   const TRACE_PAD_S = 90;   // seconds of positions before lights out (the grid) and after the last lap
   const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
 
@@ -394,15 +397,28 @@ const DataRealRace = (function () {
   }
 
   // ── The real positions: one /location pull per car, kept in IndexedDB ──
+  // ONE connection per page, memoised (the js/core/store.js mirrorOpen pattern): a get or put
+  // each opened its own and never closed it, and a version bump would block on every one.
+  let _traceDb = null;
   function traceDb() {
-    return new Promise((res) => {
-      let r;
-      try { if (typeof indexedDB === "undefined" || !indexedDB) { res(null); return; } r = indexedDB.open(TRACE_DB, 1); }
-      catch (e) { res(null); return; }
+    if (_traceDb) return _traceDb;
+    _traceDb = new Promise((res) => {
+      let settled = false, timer = null, r = null;
+      const finish = (db) => {
+        if (settled) { if (db) { try { db.close(); } catch (e) { /* late open after a block or timeout: nothing owns it */ } } return; }
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        if (db) db.onversionchange = db.onclose = () => { try { db.close(); } catch (e) { /* already closed */ } _traceDb = null; };
+        res(db || null);
+      };
+      try { if (typeof indexedDB === "undefined" || !indexedDB) { finish(null); return; } r = indexedDB.open(TRACE_DB, 1); }
+      catch (e) { finish(null); return; }
       r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(TRACE_STORE)) db.createObjectStore(TRACE_STORE); };
-      r.onsuccess = () => res(r.result);
-      r.onerror = r.onblocked = () => res(null);
-    });
+      r.onsuccess = () => finish(r.result);
+      r.onerror = r.onblocked = () => finish(null);
+      if (typeof setTimeout === "function") timer = setTimeout(() => finish(null), TRACE_OPEN_MS);
+    }).then((db) => { if (!db) _traceDb = null; return db; });   // never memoise a failure
+    return _traceDb;
   }
   function traceGet(sessionKey) {
     return traceDb().then((db) => new Promise((res) => {
@@ -414,12 +430,28 @@ const DataRealRace = (function () {
       } catch (e) { res(null); }
     }));
   }
+  /** Store one race's positions and keep only the newest TRACE_MAX races (the photo-studio
+   *  LIMIT pattern: the read, the prune and the put share one readwrite transaction). */
   function tracePut(traces) {
     return traceDb().then((db) => new Promise((res) => {
       if (!db) { res(false); return; }
       try {
-        const t = db.transaction(TRACE_STORE, "readwrite");
-        t.objectStore(TRACE_STORE).put(traces, String(traces.sessionKey));
+        const key = String(traces.sessionKey);
+        const t = db.transaction(TRACE_STORE, "readwrite"), st = t.objectStore(TRACE_STORE);
+        const rq = st.get(TRACE_LRU);
+        rq.onsuccess = () => {
+          try {
+            const prev = Array.isArray(rq.result) ? rq.result.map(String) : [];
+            const order = [key].concat(prev.filter((k) => k !== key)).slice(0, TRACE_MAX);
+            for (const k of prev) if (order.indexOf(k) < 0) st.delete(k);
+            if (typeof st.getAllKeys === "function") {   // races stored before the order existed
+              const all = st.getAllKeys();
+              all.onsuccess = () => { for (const k of all.result || []) if (k !== TRACE_LRU && order.indexOf(String(k)) < 0) st.delete(k); };
+            }
+            st.put(traces, key);
+            st.put(order, TRACE_LRU);
+          } catch (e) { try { t.abort(); } catch (_) { /* already finished */ } }
+        };
         t.oncomplete = () => res(true);
         t.onerror = t.onabort = () => res(false);   // quota: the next visit fetches again
       } catch (e) { res(false); }
@@ -888,6 +920,6 @@ const DataRealRace = (function () {
   }
 
   return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
-           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, DISTANCES, CACHE_KEY, CACHE_MAX };
+           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);
