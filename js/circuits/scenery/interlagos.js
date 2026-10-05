@@ -383,9 +383,14 @@
             // The lip rests on the upper block's 13.75 m top and projects
             // 0.5 m beyond its track-facing wall.
             addBox(stage, vadd(vadd(a.c, a.r, 2.5), a.u, 14.05), [13, 0.6, 92], [0.72, 0.74, 0.78], b);
-            // DETAIL 2026-10-05: crowd cubes seated on the upper deck (seat.box
-            // so float/ground audits see the lip as support — bare addBox floated
-            // ~15 m over terrain). Keep lateral offsets inside the 12 m deck.
+            stage._mat = 0;
+          }, { required: true });
+          // DETAIL: crowd cubes on the tribuna deck — separate group so the
+          // landmark's `{ required: true }` stays inside the 2200-char BATCH-01
+          // window and Sector M's 5-part facade pin stays exact.
+          modelGroup("interlagos-main-tribuna-crowd", {
+            center: vadd(a.c, a.u, 15), size: [16, 6, 100], basis: b,
+          }, (stage) => {
             stage._mat = MAT.FABRIC;
             for (let row = 0; row < 2; row++)
               for (let c = 0; c < 36; c++) {
@@ -395,14 +400,8 @@
                        a.u, 14.45),
                   [0.55, 0.95, 0.45], crowdCols[(row * 5 + c) % crowdCols.length], b);
               }
-            // Extra Brazilian fascia on the track-facing upper wall (attached).
-            stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, 8.52), a.u, 11.0),
-              [0.10, 0.85, 86], RAIL_Y, b);
-            addBox(stage, vadd(vadd(a.c, a.r, 8.52), a.u, 10.0),
-              [0.10, 0.85, 86], RAIL_G, b);
             stage._mat = 0;
-          }, { required: true });
+          });
         }
       }
       // Open steel truss roof for a different silhouette along the same tier
