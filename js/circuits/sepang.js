@@ -71,6 +71,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.382, 0.636],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0712, 0.0822, 0.0997, 0.2457, 0.3632, 0.4257, 0.4437, 0.5312, 0.5537, 0.5967, 0.6552, 0.7027, 0.7207, 0.8852, 0.8947],
     furniture: { tree: "palm",  fol: [0.16, 0.40, 0.18], lamp: "arm",   lc: [1.0, 0.94, 0.72] },  // ordered oil-palm plantation
     kit: { marshal: "kiosk",     rail: "armco",       fence: "mesh",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },

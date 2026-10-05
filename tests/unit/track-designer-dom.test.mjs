@@ -198,17 +198,19 @@ test("share out / in: a code, a link and an exported file all load back as the s
   assert.equal(replaced.length, 2);
 });
 
-test("the terrain material knob: desert and alpine presets name it, shipped defs never carry it", () => {
+test("the terrain material knob: desert and alpine presets name it, shipped defs carry only the allowlisted ones", () => {
   const b = bootScreen();
   assert.equal(b.T.defFields("alpine").terrainMat, "SNOW");
   assert.equal(b.T.defFields("oasis").terrainMat, "SAND");
   assert.equal(b.T.defFields("desertnight").terrainMat, "SAND");
   assert.equal("terrainMat" in b.T.defFields("parkland"), false);
-  for (const t of b.Tracks.LIST) if (!t.custom) assert.equal("terrainMat" in t, false, t.id + " carries no terrainMat (its golden hash holds)");
+  // Shipped circuits that name their ground: Vegas's desert lots, Singapore's paved verges.
+  const SHIPPED = { vegas: "SAND", singapore: "CONCRETE" };
+  for (const t of b.Tracks.LIST) if (!t.custom) assert.equal(t.terrainMat, SHIPPED[t.id], t.id + " terrainMat");
   const def =b.ctx.TrackDef.fromRaw(Object.assign({ id: "t", name: "T", gp: "T", country: "", lengthKm: 4, path: { len: 4000, pts: [[0, 0], [100, 0], [100, 100], [0, 100]] }, baseHW: 7, theme: "green", pal: {}, terrainMat: "SNOW" }));
   assert.equal(def.terrainMat, "SNOW");
   const bad = b.ctx.TrackDef.fromRaw(Object.assign({ id: "t2", name: "T", gp: "T", country: "", lengthKm: 4, path: { len: 4000, pts: [[0, 0], [100, 0], [100, 100], [0, 100]] }, baseHW: 7, theme: "green", pal: {}, terrainMat: "LAVA" }));
-  assert.equal("terrainMat" in bad, false, "only SAND / SNOW are honoured");
+  assert.equal("terrainMat" in bad, false, "only SAND / SNOW / CONCRETE are honoured");
 });
 
 test("DesignerCanvas: fit() frames the loop; an arrow nudge comes back as a lattice-aligned edit", () => {
@@ -402,7 +404,9 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
   const first = b.D.save();
   assert.equal(first.ok, true);
   const item = b.C.get(first.id);
-  b.D.load(item, "library", item.id);
+  // The picker entry point must retain edit identity just like library EDIT.
+  assert.match(read("js/ui/select-screen.js"), /TrackDesigner\.open\(\{ design: CustomTracks\.get\(t\.id\), originId: t\.id \}\)/);
+  b.D.open({ design: item, originId: item.id });
   b.D.setStart(3); b.D.preview();
   const second = b.D.save();
   assert.equal(second.ok, true); assert.notEqual(second.id, first.id);
@@ -410,6 +414,8 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
   b.D.setWidth(6); b.D.preview();
   const third = b.D.save();
   assert.deepEqual(plain(b.D.state().library), [third.id], "…on every later SAVE too");
+  b.D.open({ design: b.C.get(third.id), originId: third.id, shared: true });
+  assert.equal(b.D.state().design.originId, undefined, "a shared import never replaces a local design");
   // A full library: RACE on a NEW design is refused with the limit named.
   for (let i = 0; b.C.list().length < b.C.LIMITS.items; i++) assert.equal(b.C.upsert(Object.assign({}, b.C.get(third.id), { seed: 1000 + i })).ok, true);
   b.D.randomise(23); b.D.preview();

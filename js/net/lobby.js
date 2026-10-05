@@ -99,8 +99,7 @@ const NetLobby = (function () {
       return {
         team: team.id,
         driver: G.driverIdx || 0,
-        parts: setup,
-        livery: (G.getLiveryId ? G.getLiveryId(team.id) : null),
+        parts: setup,   // no livery: no peer ever read it, and a custom one cannot be built from an id
       };
     }
 
@@ -196,7 +195,7 @@ const NetLobby = (function () {
         const s = sessions.get(id);
         if (s) { try { s.close(); } catch (e) { /* already gone */ } }
         sessions.delete(id);
-        _peers.delete(id); _ready.delete(id);
+        _peers.delete(id); _ready.delete(id); _verify.delete(id);
         clashDrop(id);
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
@@ -211,7 +210,7 @@ const NetLobby = (function () {
           } else {
             // The room is over: relayed profiles ("g2", "g3"…) are keyed by the
             // host's ids, not this transport's, so the delete above missed them.
-            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+            _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
             show("pick");
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
@@ -277,7 +276,7 @@ const NetLobby = (function () {
       sessions.clear();
       session = null;
       for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
-      transports.clear();
+      transports.clear(); _verify.clear();
       if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
       transport = null;
       pendingId = null;
@@ -410,6 +409,9 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
+      if (typeof NetRendezvous !== "undefined" && NetRendezvous.verifyFor) NetRendezvous.verifyFor(t.pc).then((v) => {
+        if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
+      });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
@@ -572,6 +574,7 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
     const _peers = new Map();
     const _ready = new Map();
+    const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
     const firstPeer = () => (_peers.size ? [..._peers.values()][0] : null);
     const peerIds = () => new Set([..._peers.keys(), ..._ready.keys()]);
     // Everyone has to be ready, and there has to BE somebody: an empty room
@@ -602,12 +605,14 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
+    const CUSTOM_MSG = "Custom circuits can't be raced online yet — pick a built-in circuit.";
+    const customPicked = () => !!(Tracks.LIST && Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom);
     function publishSettings() {
       if (!sessions.size || role !== "host") return false;
       // A CUSTOM circuit lives only in this player's storage: the guest cannot
       // build it from an index. Publish the first shipped circuit instead.
-      const customPick = Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].custom;
-      if (customPick) say("Custom circuits can't be raced online yet — pick a built-in circuit.");
+      const customPick = customPicked();
+      if (customPick) say(CUSTOM_MSG);
       return broadcast(NetPlay.EV.SETTINGS, {
         track: customPick ? 0 : G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
@@ -617,6 +622,8 @@ const NetLobby = (function () {
         // own saved choice: the host's tyres wore while the guest's never did,
         // and the guest's own car could DNF under a level nobody picked.
         tyres: G.raceTyreWear, reliab: G.raceReliability,
+        // DIRTY AIR and AI PACE change every AI car's grip and vmax: same argument.
+        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace,
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -695,6 +702,14 @@ const NetLobby = (function () {
         if (typeof d.reliab !== "string" || (typeof Reliability !== "undefined" && !Reliability.isLevel(d.reliab))) return null;
         out.reliab = d.reliab;
       }
+      if (own(d, "dirtyAir") && d.dirtyAir != null) {
+        if (typeof d.dirtyAir !== "string" || (typeof PhysicsConsts !== "undefined" && !PhysicsConsts.DirtyAir.isLevel(d.dirtyAir))) return null;
+        out.dirtyAir = d.dirtyAir;
+      }
+      if (own(d, "aiPace") && d.aiPace != null) {
+        if (typeof d.aiPace !== "string" || (typeof AiBand !== "undefined" && !AiBand.isMode(d.aiPace))) return null;
+        out.aiPace = d.aiPace;
+      }
       // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
       // exactly the values the setter would keep.
       if (own(d, "seed")) {
@@ -722,12 +737,33 @@ const NetLobby = (function () {
       else if (st.set) st.set(key, before);
     }
 
+    // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
+    // host's overwrote them in memory and nothing put them back. [wire key, G prop, store key]
+    // for each rule; wxArc restores to "no plan" (its getter would draw one).
+    const RULES = [["track", "trackIdx"], ["laps", "raceLaps"], ["quali", "raceQuali"], ["grid", "raceGrid"],
+      ["changeable", "raceChangeable"], ["weather", "raceWeather"], ["tod", "raceTimeOfDay"], ["difficulty", "difficulty"],
+      ["tyres", "raceTyreWear", "tyreWear"], ["reliab", "raceReliability", "reliability"],
+      ["dirtyAir", "raceDirtyAir", "dirtyAir"], ["aiPace", "aiPace", "aiPace"], ["seed", "seed"], ["round", "raceRound"]];
+    let ownRules = null;
+    function restoreOwnRules() {
+      const snap = ownRules;
+      if (!snap || (G.netPlay && G.netPlay.active && G.netPlay.active())) return false;   // never mid-race
+      ownRules = null;
+      for (const [, prop, key] of RULES) {
+        if (!own(snap, prop) || snap[prop] === undefined) continue;
+        if (key) roomOnly(key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
+      }
+      G.wxArcPlan = null;
+      return true;
+    }
+
     function applySettings(d) {
       const next = normaliseSettings(d);
       if (!next) {
         say("The host sent invalid race settings. Your current setup was kept.", true);
         return false;
       }
+      if (!ownRules) { ownRules = {}; for (const [, prop] of RULES) ownRules[prop] = G[prop]; }
       if (own(next, "track")) G.trackIdx = next.track;
       if (own(next, "laps")) G.raceLaps = next.laps;
       if (own(next, "quali")) G.raceQuali = next.quali;
@@ -739,6 +775,8 @@ const NetLobby = (function () {
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
       if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
       if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
+      if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
+      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
@@ -1029,9 +1067,9 @@ const NetLobby = (function () {
           return el;
         };
         const rows = document.createDocumentFragment();
-        if (ids.length) ids.forEach((k, i) => rows.appendChild(row(driverLine(
+        if (ids.length) ids.forEach((k, i) => rows.appendChild(verifyRow(row(driverLine(
               willYield(k) ? null : (_peers.get(k) || null),
-              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k)))));
+              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k))), k)));
         else rows.appendChild(row(driverLine(null, "Them", false)));
         replace(e.them, rows);
       }
@@ -1047,14 +1085,43 @@ const NetLobby = (function () {
       }
       if (e.start) {
         e.start.hidden = !host;
-        e.start.disabled = !(selfReady && peersReady());
+        e.start.disabled = !(selfReady && peersReady()) || customPicked();
+        e.start.title = customPicked() ? CUSTOM_MSG : "";
       }
+    }
+
+    // The verification code on a DIRECT connection's row; the host also gets
+    // REMOVE, for a guest whose screen shows a different code (a middleman).
+    function verifyRow(el, id) {
+      const v = _verify.get(id);
+      if (!v) return el;
+      const tag = span("", v);
+      tag.dataset.verify = v;
+      tag.title = "Verification code: it must match the code on their screen";
+      el.appendChild(tag);
+      if (role === "host") {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.verifyRemove = id; b.textContent = "REMOVE";
+        b.setAttribute("aria-label", "Remove this player — their code is not " + v);
+        b.addEventListener("click", () => removeGuest(id));
+        el.appendChild(b);
+      }
+      return el;
+    }
+    function removeGuest(id) {
+      const t = role === "host" ? transports.get(id) : null;
+      if (!t) return false;
+      Log.info("net", "host removed " + id);
+      try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
+      return true;
     }
 
     function startFromRoom() {
       if (role !== "host" || !session) return false;
       // "Everyone", not "both" — the sentence has to survive a third player.
       if (!(selfReady && peersReady())) { say("Everyone needs to be ready.", true); return false; }
+      // The guests were sent circuit 0 for a custom pick (publishSettings): racing it would desync.
+      if (customPicked()) { say(CUSTOM_MSG, true); return false; }
       publishSettings();
       broadcast(NetPlay.EV.GO, {});
       beginRace();
@@ -1136,6 +1203,7 @@ const NetLobby = (function () {
         peerProfile: firstPeer(),
         peerMods: modsFromProfile(firstPeer()),
         peers: [..._peers.entries()].map(([id, p]) => ({ id, profile: p, mods: modsFromProfile(p) })),
+        onStop: restoreOwnRules,   // the guest's own rules come back when the race ends
       });
       friendQualifying = false;
       clearInterval(pumpTimer);          // the game loop pumps it from here on
@@ -1165,6 +1233,12 @@ const NetLobby = (function () {
 
     async function host() {
       const gen = beginOperation();
+      // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
+      // stayed advertised (six relay sockets, the dead offer reposted every
+      // 5 s) while this generation ignored its answers — a friend told the
+      // code sat on Connecting... and got a NAT error. codeHost does the same.
+      stopCodeWait(); codeReopen = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
       show("hosting");
@@ -1339,6 +1413,13 @@ const NetLobby = (function () {
       if (e.codeHint) e.codeHint.textContent = hint || "";
       if (e.codeShow) e.codeShow.hidden = mode !== "show";
       if (e.codeInputWrap) e.codeInputWrap.hidden = mode !== "input";
+      const privateRelay = NetRendezvous.usingPrivateRelay();
+      if (e.codeIn) {
+        e.codeIn.maxLength = privateRelay ? 64 : 8;
+        e.codeIn.placeholder = privateRelay ? "Paste their 32-character token" : "ABC234";
+        e.codeIn.setAttribute("aria-label", privateRelay ? "Private room token" : "Room code");
+      }
+      if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
     // HOST: make a code, publish the invite under it, wait for the answer.
@@ -1353,12 +1434,15 @@ const NetLobby = (function () {
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const initialTransport = transport;
       const code = opts.code || NetRendezvous.makeCode();
+      if (!code) { say("This browser cannot create a secure room token. Use the invite link instead.", true); return { ok: false, error: "crypto" }; }
       // The room is CLOSED while our own ICE runs and reopened afterwards (see
       // onJoiner), so this path runs twice per guest. The second time we are
       // already in the waiting room and must not drag the player back to the
       // code screen.
       if (!opts.quiet) {
-        showCodeStep("show", "Your room code", "Read this to your friend.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("show", privateRelay ? "Your private room token" : "Your room code",
+          privateRelay ? "Copy or share this token with your friend, who needs the same private relay configured. Keep it private." : "Read this to your friend.");
         const e = els();
         if (e.codeValue) e.codeValue.textContent = code;
         say("Preparing… (this can take a few seconds)");
@@ -1452,9 +1536,12 @@ const NetLobby = (function () {
               // A rejected answer must not stay blacklisted either: the guest
               // may repost the same string against a transport that is by then
               // ready for it.
+              // EXCEPT wrong_offer: guest 2's repost of an answer to offer A (dropped
+              // in flight above) landing after the reopen minted offer B. No later
+              // transport can take it, so it stays seen and silent, like guest 1's.
               answerInFlight = false;
-              answersSeen.delete(answer);
-              if (acc.error !== "already_answered") say(acc.message || "That answer could not be read.", true);
+              if (acc.error !== "wrong_offer") answersSeen.delete(answer);
+              if (acc.error !== "already_answered" && acc.error !== "wrong_offer") say(acc.message || "That answer could not be read.", true);
               return;
             }
             if (acc.peer) _peers.set(id, acc.peer);
@@ -1514,7 +1601,9 @@ const NetLobby = (function () {
       const raw = codeIn != null ? codeIn : (e.codeIn ? e.codeIn.value : "");
       const code = NetRendezvous.normalise(raw);
       if (!NetRendezvous.valid(code)) {
-        say("That is not a room code — six letters and numbers.", true);
+        say(NetRendezvous.usingPrivateRelay()
+          ? "Private rooms need a new 32-character token. Ask the host to share a new token, or use the invite link."
+          : "That is not a room code — six letters and numbers.", true);
         return { ok: false, error: "bad_code" };
       }
       await readyIce();
@@ -1708,7 +1797,7 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
       // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
       if (G.setNetRoom) G.setNetRoom(false);
       close();
@@ -1751,7 +1840,9 @@ const NetLobby = (function () {
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
-        showCodeStep("input", "Enter their code", "Six letters and numbers.");
+        const privateRelay = NetRendezvous.usingPrivateRelay();
+        showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
+          privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");
         const box = $("vs-code-in");
         if (box) { box.value = ""; box.focus(); }
       });
@@ -1759,7 +1850,7 @@ const NetLobby = (function () {
       on("vs-code-copy", () => copy(($("vs-code-value") || {}).textContent || ""));
       on("vs-code-share", () => {
         const c = ($("vs-code-value") || {}).textContent || "";
-        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — room code " + c }, c);
+        return handOff({ title: "Apex 26", text: "Race me on Apex 26 — " + (NetRendezvous.usingPrivateRelay() ? "private room token " : "room code ") + c }, c);
       });
       on("vs-start", tiltToo(startFromRoom));
       on("vs-close", () => {
@@ -1848,7 +1939,8 @@ const NetLobby = (function () {
       scan, stopScan, pasteInto, deliver,
       codeHost, codeJoin, stopCodeWait,
       watchForOpen: waitForOpen,
-      roomChanged, setReady, startFromRoom, renderRoom,
+      roomChanged, setReady, startFromRoom, renderRoom, removeGuest,
+      verifyCodes: () => Object.fromEntries(_verify),
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
       peerSeats,

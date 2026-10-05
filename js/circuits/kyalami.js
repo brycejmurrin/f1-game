@@ -1,5 +1,8 @@
 /* Apex 26 — KYALAMI GRAND PRIX CIRCUIT definition (data only).
-   Retired circuit (`classic: true`): last South African GP 1993.
+   Retired from F1 (`classic: true`): last South African GP 1993, on the 1992
+   layout. The trace below is the 2016 rebuild's 4.5 km layout, run clockwise
+   (`reverse: true` on this source; built lap's net turning is -360°, T1
+   Crowthorne a right-hander).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
@@ -17,6 +20,12 @@
     lengthKm: 4.5,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
+    // The pit complex (TrackPit): LEFT of the main straight in the (clockwise)
+    // racing direction — the OUTSIDE of the lap, as the 2016 pit building
+    // stands (IGTC 9 Hour briefing pit-lane map: pit wall and exit on the left,
+    // T1 Crowthorne a right-hander). Engine -1 here is scenery side +1, where
+    // the circuit's own paddock (scenery/kyalami.js) is built.
+    pit: { side: -1 },
     terrainOuter: 120,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
@@ -60,6 +69,7 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.333, 0.646],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.1055, 0.1650, 0.2260, 0.3910, 0.4115, 0.5255, 0.5395, 0.5475, 0.6140, 0.7020, 0.8180, 0.8625, 0.8975],
     furniture: { tree: "acacia", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
     kit: { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },

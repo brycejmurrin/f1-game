@@ -226,12 +226,22 @@
       avenue(0.04, 0.14, -1, 17, 30);
 
       // Mid-lap park (T1 → Horquilla approach) — Mixhuca before skyline
-      forestEdge(0.14, 0.30,  1, 26, { density: 0.28, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
+      // 0.14-0.30 is the sports-city PARK (the def's dressingExclusions keep the
+      // generic city pass out of it): planted at the 0.48-0.68 park's density,
+      // with low club/sports podiums behind the trees instead of towers.
+      forestEdge(0.14, 0.30,  1, 26, { density: 0.32, hMin: 7, hMax: 13, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
       forestEdge(0.14, 0.50, -1, 26, { density: 0.24, hMin: 8, hMax: 14, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
+      // Second, deeper park belt on the left where the generic towers stood.
+      forestEdge(0.14, 0.30, -1, 48, { density: 0.20, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.15 });
       forestEdge(0.30, 0.48,  1, 26, { density: 0.24, hMin: 7, hMax: 12, col: TREEGRN, col2: PARKGRN, pineFrac: 0.20 });
-      avenue(0.14, 0.30,  1, 15, 32);
+      avenue(0.14, 0.30,  1, 13, 26);
       avenue(0.16, 0.50, -1, 16, 36);
       avenue(0.30, 0.48,  1, 15, 34);
+      for (const s of [0.150, 0.180, 0.226, 0.268]) {   // left: clear of SOLID arcs
+        const k = K(s);
+        building(k, -1, 34 + hash(k * 7) * 18, 22, 8 + hash(k * 3) * 5, 20,
+                 { kind: "podium", wall: [0.86, 0.85, 0.80], window: [0.40, 0.46, 0.50], floor: 2 });
+      }
 
       grandstandEx(0.12, 1,  9, 80, null, GREEN,
                    { livery: "navy", tiers: 2, roof: "cantilever", endWalls: true });
@@ -247,9 +257,13 @@
       kerb(0.20, -1, 7); kerb(0.205, 1, 7);
       cameraTower(K(0.20), 1, 30, { h: 18 });
 
-      cityFront(0.24, 0.48, -1, 72, {
+      // Was 0.24: its first 7 units stood 72-94 m off the Mixiuhca park
+      // (0.24-0.30). 0.305 = node 327, the 8th unit of the old 10-node lattice,
+      // and the palette is rotated by 7, so every facade past 0.30 is the same
+      // unit, height and colour as before.
+      cityFront(0.305, 0.48, -1, 72, {
         minH: 14, maxH: 36, depth: 18, lit: true,
-        palette: [[0.64, 0.62, 0.58], [0.70, 0.68, 0.62], [0.58, 0.56, 0.54], [0.66, 0.60, 0.56]],
+        palette: [[0.66, 0.60, 0.56], [0.64, 0.62, 0.58], [0.70, 0.68, 0.62], [0.58, 0.56, 0.54]],
         windowCol: [0.96, 0.88, 0.58], step: 38
       });
       cityFront(0.58, 0.68, -1, 80, {
@@ -541,12 +555,10 @@
       cameraTower(K(0.92), -1, 18, { h: 20 });
       sponsorHoarding(0.895, 0.935, -1, 9, { palette: fiesta });
 
-      // Banked kerb edges through the Peraltada/Estadio corners
-      for (const s of [0.89, 0.92, 0.95]) {
-        const k = K(s);
-        place(k, 1, 2.2, [2.4, 0.6, 9], [0.80, 0.76, 0.72]);
-        place(k, 1, 1.8, [0.6, 0.16, 9], [0.88, 0.12, 0.12]);
-      }
+      // (The Peraltada "banked kerb edges" were place() boxes 0.6 and 0.16 m
+      // tall: place() sinks every box 0.8 m, so both stood wholly underground
+      // and drew nothing — ground-audit's buried count. The corner's kerbs are
+      // kerb()'s, above.)
 
       // Mexican flag strip accents at the Peraltada outer bank
       for (let i = 0; i < 6; i++) {
@@ -767,6 +779,16 @@
       }
 
       // Mid/far city tower ring — thinned + pushed so mountains win the horizon
+      // A ring tower is 380+ m off ITS leg, but the lap folds: two landed
+      // 91/143 m off the Mixiuhca park stretch (0.10-0.30, T1 -> Esses) and one
+      // (h 44) 30 m off the 0.48-0.68 park. The ring is the FAR skyline, so it
+      // keeps >= 150 m from every leg of the lap, not only the one it hangs off.
+      const nearAnyLeg = (x, z) => {
+        for (let k = 0; k < n; k++) {
+          if (Math.hypot(px[k] - x, pz[k] - z) < 150) return true;
+        }
+        return false;
+      };
       for (let i = 0; i < 10; i++) {
         const f = i / 10;
         const k = K(f);
@@ -775,7 +797,7 @@
         const h = 32 + hash(i * 37) * 58;
         const w = 18 + hash(i * 53) * 16;
         const p = anchor(k, side, d);
-        if (!onTrack(p.c[0], p.c[2], 20)) {
+        if (!onTrack(p.c[0], p.c[2], 20) && !nearAnyLeg(p.c[0], p.c[2])) {
           const tone = 0.60 + hash(i * 41) * 0.10;
           building(k, side, d - w / 2, w, h, w,
             { wall: [tone * 0.98, tone, tone * 1.02],

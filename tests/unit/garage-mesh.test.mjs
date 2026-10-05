@@ -261,6 +261,9 @@ test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
   const scene = read("js/garage/scene.js");
   assert.match(scene, /hullKey/);
   assert.match(scene, /previewHulls\.delete\(victim\.hullKey\)/);
+  // dropPreviewMeshes keeps the hulls: a cap, sparing live meshes' hulls, bounds them.
+  assert.match(scene, /if \(previewHulls\.size > HULL_SLOTS\)/);
+  assert.match(scene, /if \(!live\.has\(k\)\) previewHulls\.delete\(k\);/);
 });
 
 // The engineers' traces re-upload the live atlas every 1.5 s. The catch around

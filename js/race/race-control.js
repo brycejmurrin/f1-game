@@ -37,9 +37,39 @@ const RaceControl = (function () {
   // THE CHEQUERED FLAG IS OUT once any classified car has taken it: every
   // other car finishes at its NEXT line crossing (a lapped car does not drive
   // the leader's distance), and classification is laps completed, then time.
-  function flagOut(cars) {
-    for (const c of cars || []) if (c && c.finished && !c.retired) return true;
+  function flagOut(cars, at = Infinity) {
+    for (const c of cars || []) if (c && c.finished && !c.retired && (c.finishT || 0) <= at) return true;
     return false;
+  }
+
+  // Motion owners integrate independently, but the flag follows the CLOCK,
+  // never roster order. Keep lap clocks immediate; settle finishes and their
+  // presentation after every owner has reported its crossings for this step.
+  let lineCars = null;
+  const lineEntries = [];
+  function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; }
+  function settleLine(e) {
+    const { c, cross, time, target, cars } = e;
+    cross.flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
+    if (cross.flagged) { c.finished = true; c.finishT = time; }
+  }
+  function deferLine(c, cross, newS, callback) {
+    if (!lineCars || !cross || cross.direction < 0) return false;
+    const e = lineEntries.find((e) => e.cross === cross);
+    if (!e) return false;
+    e.callback = callback; e.newS = newS;
+    return true;
+  }
+  function settleLineStep() {
+    // At an exact tie the full-distance crossing raises the flag first.
+    lineEntries.sort((a, b) => (a.time - b.time) || ((b.c.lap > b.target) - (a.c.lap > a.target)));
+    for (const e of lineEntries) settleLine(e);
+  }
+  function endLineStep() {
+    lineCars = null;
+    settleLineStep();
+    for (const e of lineEntries) if (e.callback) e.callback(e.c, e.cross, e.newS);
+    lineEntries.length = 0;
   }
 
   // One line-crossing transition for every motion owner. updateCar normally
@@ -74,13 +104,12 @@ const RaceControl = (function () {
       c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
       c._lapTimeAtLine = lapDone;
       c.lapTime = (c.lapTime || 0) - lapDone;   // the post-line remainder (0 without dt)
-      const target = Number(lapsTarget);
-      const flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars)));
-      if (flagged) {
-        c.finished = true;
-        c.finishT = Number.isFinite(raceT) ? Math.max(0, raceT - over) : 0;
-      }
-      return { direction: 1, changed: true, lapDone, flagged, recross };
+      const cross = { direction: 1, changed: true, lapDone, flagged: false, recross };
+      const e = { c, cross, target: Number(lapsTarget), cars,
+        time: Number.isFinite(raceT) ? Math.max(0, raceT - over) : 0 };
+      if (lineCars === cars) lineEntries.push(e);
+      else settleLine(e);
+      return cross;
     }
     if (ds < 0 && oldS < total * 0.5 && newS > total * 0.5) {
       if (!(c.lap > 0)) return { direction: -1, changed: false, lapDone: null, flagged: false };
@@ -279,7 +308,13 @@ const RaceControl = (function () {
         publish();
         return;
       }
-      if (!enabled) return;
+      // CAUTIONS off: no hazard loop, but a flag already flying (a host's,
+      // applied before the guest took race control back on a disconnect) must
+      // still age out at the hard cap, or its safety car stays out forever.
+      if (!enabled) {
+        if (!(held && caution.level <= held)) capDropIfExpired();
+        return;
+      }
       if (!DebrisWorld.active()) {
         // Debris inactive mid-flag: the LEVEL freezes (test-asserted — see
         // "debris going inactive mid-race freezes a flying flag") but it keeps
@@ -459,10 +494,19 @@ const RaceControl = (function () {
   // Returns a FRACTION of vTop() — the caller multiplies, so it rides PACE.
   const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
   function scQueueFrac(c, cars, total, leader, vTop, skip) {
+    const out = (o) => o.finished || o.retired || (skip && skip(o));
+    // A leader in the pit lane (or out) is not the front of the queue: the
+    // first car still on track by cumulative prog is. Otherwise that car's
+    // forward gap search wrapped to the tail of the field a lap away and it
+    // ran SC_CATCH while it should be setting the SC pace.
+    if (leader && out(leader)) {
+      leader = null;
+      for (const o of cars) if (!out(o) && (!leader || o.prog > leader.prog)) leader = o;
+    }
     if (!c || c === leader || !(total > 0)) return SC_PACE;
     let gap = Infinity;
     for (const o of cars) {
-      if (o === c || o.finished || o.retired || (skip && skip(o))) continue;
+      if (o === c || out(o)) continue;
       const d = ((o.prog - c.prog) % total + total) % total;   // forward, on the road
       if (d > 0 && d < gap) gap = d;
     }
@@ -494,6 +538,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

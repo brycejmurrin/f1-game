@@ -225,17 +225,36 @@ const NetHandshake = (function () {
   // guest: acceptInvite(theirCode) -> code, send it back, done.
   //
   // `profile` is whatever the lobby needs to build the rival's car: team,
-  // driver, livery, and the parts SETUP IDS. Ids, never resolved multipliers —
+  // driver and the parts SETUP IDS. Ids, never resolved multipliers —
   // a peer declaring `{cornering: 9}` should be impossible, not merely rude.
   // Gather fully, then emit. Shared by both halves so the two can never drift.
-  async function makeCode(pc, kind, profile, opts) {
+  async function makeCode(pc, kind, profile, opts, offer) {
     await waitForIce(pc, opts && opts.gatherTimeoutMs);
-    return encodeCode({
+    const payload = {
       b: await localBuild(), k: kind,
       p: profile || null,
       s: normaliseSdp(pc.localDescription.sdp),
-    });
+    };
+    if (offer) payload.o = offer;
+    return encodeCode(payload);
   }
+
+  // WHICH OFFER AN ANSWER ANSWERS. An SDP answer carries only the answerer's
+  // own ICE credentials and fingerprint, so an answer built for invite A is
+  // accepted by setRemoteDescription on a newer pending invite B — and then ICE
+  // can never pair (the guest's agent is bound to A's ufrag): 60 s of
+  // "Connecting…" and a failure message that blames the network. The answer
+  // therefore names its offer: a 32-bit hash of the offer's ICE ufrag + DTLS
+  // fingerprint, both fresh per RTCPeerConnection. It rides in the JSON tail
+  // of the code (`o`), which every decoder already ignores when unknown, so an
+  // answer without it still decodes and is judged as before.
+  function offerId(sdp) {
+    const id = NetSdp.identity ? NetSdp.identity(sdp) : null;
+    if (!id || typeof Hash32 === "undefined") return null;
+    return Hash32.fnv1a(id.ufrag + "|" + id.fp).toString(16).padStart(8, "0");
+  }
+  const WRONG_OFFER = { ok: false, error: "wrong_offer",
+    message: "That answer is for an older invite. Ask your friend to answer the latest one." };
 
   async function createInvite(transport, profile, opts) {
     const pc = transport && transport.pc;
@@ -272,7 +291,7 @@ const NetHandshake = (function () {
     const took = await setRemote(pc, "offer", parsed.payload.s);
     if (!took) return hsLog("accept", CORRUPT);
     await pc.setLocalDescription(await pc.createAnswer());
-    const out = await makeCode(pc, "answer", profile, opts);
+    const out = await makeCode(pc, "answer", profile, opts, offerId(parsed.payload.s));
     return hsLog("accept", { ok: true, code: out, peer: parsed.payload.p || null });
   }
 
@@ -286,6 +305,13 @@ const NetHandshake = (function () {
     if (!build.ok) return hsLog("answer", build);
     const pc = transport && transport.pc;
     if (!pc) return hsLog("answer", NO_TRANSPORT);
+    // Offer identity BEFORE the state check: an answer to a different offer is
+    // wrong whatever this one's state, and saying so beats "already used".
+    const wants = parsed.payload.o;
+    if (wants != null) {
+      const mine = offerId(pc.localDescription && pc.localDescription.sdp);
+      if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
+    }
     if (pc.signalingState !== "have-local-offer") {
       return hsLog("answer", { ok: false, error: "already_answered",
                message: "That answer was already used, or arrived too late." });
@@ -340,7 +366,7 @@ const NetHandshake = (function () {
   return {
     MAGIC,
     encodeCode, decodeCode, peekCode, normaliseSdp,
-    localBuild, metaBuild, checkBuild, waitForIce,
+    localBuild, metaBuild, checkBuild, waitForIce, offerId,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
     INVISIBLE,

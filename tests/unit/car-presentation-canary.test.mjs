@@ -71,7 +71,9 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
   const game = read("js/game.js");
   const fn = game.match(/function updateCar\([\s\S]*?\nfunction rescuePlayer/);
   assert.ok(fn, "updateCar body present");
-  const adv = fn[0].indexOf("if (!c.human) c.s = wrapS(c.s + c.speed * dt);");
+  // The advance pays the Frenet stretch since 2026-10-04 (verify-physics #2): ground ÷ h.
+  const adv = fn[0].indexOf("if (!c.human) c.s = wrapS(c.s + c.speed * dt / hAi);");
+  assert.match(fn[0], /const hAi = c\.human \? 1 : frenetH\(c\.s, c\.x\);/);
   const mirror = fn[0].lastIndexOf("if (!c.human) {\n    const w = worldFromTrack(c.s, c.x, smp);");
   assert.ok(adv >= 0, "AI advances s in Frenet");
   assert.ok(mirror > adv, "px/pz mirror must follow the s advance (and rescue)");
@@ -271,7 +273,7 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.match(cd, /return \{[\s\S]*?drawMirrorCar,[\s\S]*?\};/, "exported");
   // BARE: rotating wheels only and no Particles flare, at any distance.
   assert.match(cd, /function drawPlayerWheels\(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare\)/);
-  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2\)\);/);
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\);/);
   assert.match(cd, /const flareA = !bare && /);
   // The wheels' material is the main pass's: TLX keys materials by VALUE, so
   // equal opts are the one material (and pipeline) the race already compiled.
@@ -453,6 +455,40 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
       assert.equal(v.rec.freed, 0, "no live mesh evicted, menu -> race -> mirror");
     }
   }
+});
+
+// putBoundedMesh promotes a hit by STAMP (one Map write) instead of indexOf +
+// splice + push. The contract the counts above rely on is unchanged: a hit
+// promotes, the least recently used is evicted, each victim freed once. Checked
+// against the old array implementation over a long random sequence.
+test("putBoundedMesh's stamp LRU evicts exactly what the old reorder-on-hit LRU did", () => {
+  const src = fnSource(read("js/car/car-draw.js"), "function putBoundedMesh(");
+  const body = src.slice(src.indexOf("{") + 1, src.lastIndexOf("}"));
+  const freedNew = [];
+  const make = new Function("G", "_lruStamp",
+    "let _lruTick = 0; return function (cache, order, key, create, max, freeOne) {" + body + "};");
+  const put = make({ gfx: { freeMesh: (m) => freedNew.push(m) } }, new WeakMap());
+  function oldPut(cache, order, key, create, max, free) {
+    if (cache[key]) {
+      if (order[order.length - 1] !== key) { const i = order.indexOf(key); if (i >= 0) order.splice(i, 1); order.push(key); }
+      return cache[key];
+    }
+    const mesh = create(); cache[key] = mesh; order.push(key);
+    while (order.length > max) { const old = order.shift(); const v = cache[old]; delete cache[old]; free(v); }
+    return mesh;
+  }
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const cNew = {}, oNew = [], cOld = {}, oOld = [], freedOld = [];
+  for (let i = 0; i < 4000; i++) {
+    const key = "k" + Math.floor(rnd() * 12);
+    const a = put(cNew, oNew, key, () => ({ key, i }), 5);
+    const b = oldPut(cOld, oOld, key, () => ({ key, i }), 5, (m) => freedOld.push(m));
+    assert.deepEqual(a, b, `step ${i}: the same mesh for ${key}`);
+    assert.deepEqual(Object.keys(cNew).sort(), Object.keys(cOld).sort(), `step ${i}: the same resident keys`);
+  }
+  assert.deepEqual(freedNew, freedOld, "the same victims, in the same order");
+  assert.ok(freedNew.length > 100, "the sequence exercised eviction");
 });
 
 // THE PLAYER'S CASTER IN A FIRST-PERSON VIEW (2026-10-04). Cockpit, helmet and

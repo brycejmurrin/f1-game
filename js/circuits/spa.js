@@ -23,12 +23,26 @@
     dressingExclusions: [{ kind: "foliage", s0: 0, s1: 1 }],
     // Cool damp Ardennes overcast (ATM.dampArdennes) — grey sky/fog, no warm sun.
     pal: { zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34], fog: [0.55, 0.60, 0.62], fogDensity: 0.0032, sunDir: [0.7141470886878855, 0.44326371022006683, 0.5417667569356373], sun: [0.88, 0.90, 0.92], sunColor: [0.88, 0.90, 0.92], ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26] },
-    elevations: [
-      { s: 0.075, halfM: 360, rise: -18 }, // Eau Rouge compression
-      { s: 0.155, halfM: 920, rise: 84 },  // Raidillon crest / Kemmel plateau
-      { s: 0.46, halfM: 760, rise: 24 },   // rolling high ground before the descent
-      { s: 0.72, halfM: 680, rise: -18 },  // Stavelot valley
-    ],
+    // Elevation: 64 raised-cosine knots, one every 1/64 lap (≈109 m) with
+    // halfM = 2 × spacing (≈217 m). At that overlap the bumps sum to a
+    // constant, so the road is a smooth (C1, no flat at each knot) blend of
+    // the knot rises and the lap closes on itself. Knot j sits at s = j/64 in
+    // this def's AUTHORING frame — tracks.js / def.js remap it (fmap about
+    // sceneryStartFrac, then + _sceneryShift): racing ≈ s − 0.0298.
+    // Rises are a least-squares fit to SRTM 30 m over the bacinger trace
+    // (Open Topo Data, 2026-10-04, 5-tap smoothed for canopy noise), with the
+    // Eau Rouge/Raidillon section authored where 30 m pixels blunt the climb:
+    // La Source (+5 m) → DESCENT to the Eau Rouge floor (racing ≈0.14, −25 m)
+    // → Raidillon peaks ≈18 % (racing ≈0.165) → Kemmel climbs to Les Combes
+    // (≈0.36, +51 m, the summit) → down through Bruxelles/Pouhon to Stavelot
+    // (≈0.71, −49 m) → back up via Blanchimont to the Bus Stop. Relief ≈101 m.
+    // Refit: scratch tooling, not shipped — re-derive from SRTM, keep 64 knots.
+    // Knots 12/13 eased by 1-2 m (-11/3 → -10/1) so the steepest 20 m of
+    // Raidillon reads 17.7 %, under the 18 % the real climb tops out at
+    // (circuit-def-fields pins it).
+    elevations: [-3, -1, 0, 2, 4, 2, -1, -4, -8, -10, -10, -16, -10, 1, 5, 8, 10, 13, 16, 17, 19, 20, 23, 24, 25, 27, 25, 22, 20, 15, 12, 9,
+      5, 1, -2, -5, -10, -15, -18, -20, -20, -19, -19, -20, -21, -21, -23, -25, -25, -23, -22, -20, -17, -16, -15, -13, -11, -10, -7, -5, -5, -2, -3, -5]
+      .map((rise, j) => ({ s: j / 64, halfM: 217, rise })),
     bankZones: [
       { frac: 0.1854, angleDeg: 5.0, widthM: 130 },   // Raidillon
       { frac: 0.3685, angleDeg: 3.0, widthM: 80 },    // Les Combes

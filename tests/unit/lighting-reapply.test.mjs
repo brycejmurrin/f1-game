@@ -110,6 +110,22 @@ test("every apply-only knob is registered in APPLY_RACE_IDS", () => {
   }
   const nightBand = gsrc.slice(nbStart, bend + 1);
 
+  // The reverse case: Atmosphere.floodEmit() lives in atmosphere.js but game.js's
+  // frame calls it EVERY frame, so a knob read inside it is per-frame, not
+  // apply-only. Carve its body out into its own (per-frame) source, and assert
+  // the premise — the frame call — rather than assume it.
+  assert.match(gsrc, /_atmo\.floodEmit\(/, "game.js's frame no longer calls _atmo.floodEmit — re-check APPLY_RACE_IDS");
+  const asrc = sources.get("js/lighting/atmosphere.js");
+  const feStart = asrc.indexOf("function floodEmit(");
+  assert.ok(feStart >= 0, "function floodEmit not found in js/lighting/atmosphere.js");
+  let fi = asrc.indexOf("{", feStart), fdepth = 0, fend = -1;
+  for (; fi < asrc.length; fi++) {
+    if (asrc[fi] === "{") fdepth++;
+    else if (asrc[fi] === "}") { fdepth--; if (fdepth === 0) { fend = fi; break; } }
+  }
+  sources.set("js/lighting/atmosphere.js", asrc.slice(0, feStart) + asrc.slice(fend + 1));
+  sources.set("js/lighting/atmosphere.js floodEmit() (per frame)", asrc.slice(feStart, fend + 1));
+
   const missing = [];
   for (const d of defs) {
     if (registered.has(d.id)) continue;

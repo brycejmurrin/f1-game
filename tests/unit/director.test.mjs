@@ -204,3 +204,82 @@ test("Photo and foreign debug cameras keep ownership through TV ticks, reset and
   api.tick(1);
   assert.ok(G.dbgCam, "TV resumes after the tool releases its camera");
 });
+
+/* THE SIDE FLIP (2026-10-04). applyShot solved every frame with no dt, so the
+ * corner-side follow in vantage.js (CamFeel.follow "bendSide"/"bendHeli") returned
+ * the raw ±1 and a curvature sign change mid-shot moved the TV SIDE eye the
+ * whole flip (2 x its side offset: ~50 m on the shipped pose) in one frame. The real vantage.js + CamFeel solve it here, on a
+ * straight whose curvature the test flips under a parked subject. */
+function realCamScene() {
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const total = 4000, n = 1000, hw = 6;
+  const py = new Float64Array(n).fill(7.5), pz = new Float64Array(n), px = new Float64Array(n);
+  for (let k = 0; k < n; k++) pz[k] = k * total / n;
+  const track = { total, n, px, py, pz, rx: new Float64Array(n).fill(1), ry: new Float64Array(n), rz: new Float64Array(n),
+    hw: new Float64Array(n).fill(hw), def: {}, surface: { heightAt: () => 7.5 - 0.12 } };
+  const bend = { k: 0.01 };   // +k = LEFT turn; the test flips it
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n; return lerp(arr[i], arr[(i + 1) % n], fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, out) { out.p[0] = at(px, s); out.p[1] = at(py, s); out.p[2] = at(pz, s); out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; out.hw = hw; return out; },
+    curvature: () => bend.k,
+    banking: (t, s, lat, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite, parseFloat, parseInt, Float64Array,
+    Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+    Tracks, CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv" }] },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const f of ["js/core/mat4.js", "js/camera/drive-chase.js", "js/camera/drive-broadcast.js", "js/camera/drive-onboard.js",
+    "js/camera/feel.js", "js/camera/vantage.js", "js/camera/director.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  const [Director, GameCams, CamFeel] = ["Director", "GameCams", "CamFeel"].map((g) => vm.runInContext(g, ctx));
+  // A parked subject: nothing moves but the bend under it.
+  const car = { code: "VER", prog: 100, s: 1000, x: 0, speed: 50, px: 0, pz: 1000, head: 0 };
+  const G = {
+    state: "race", paused: false, photoMode: false, camMode: 1, player: car, cars: [car], track, dbgCam: null,
+    netPlay: { active: () => false }, setCamMode(i) { G.camMode = i; },
+    camVantage: (mode, s, x, spd, now, extra) => GameCams.vantage(track, mode, s, x, spd, now, extra),
+  };
+  return { Director, CamFeel, G, bend, api: Director.create(G) };
+}
+
+test("a side-of-the-bend flip mid-shot pans the TV eye: a few % of the flip a frame, never a teleport", () => {
+  const { G, bend, api, CamFeel } = realCamScene();
+  const dt = 1 / 60;
+  api.tick(dt);
+  assert.equal(api.status().shot, "side", "the fallback rotation opens on TV SIDE");
+  const opened = G.dbgCam.eye.slice();
+  assert.ok(opened[0] > 10, "a cut lands whole on the outside of a left bend (+right): " + opened[0]);
+  for (let i = 0; i < 30; i++) api.tick(dt);
+  bend.k = -0.01;   // the bend ahead turns right: the outside is now -right
+  let prev = G.dbgCam.eye.slice(), worst = 0;
+  for (let i = 0; i < 180; i++) {
+    api.tick(dt);
+    const e = G.dbgCam.eye;
+    worst = Math.max(worst, Math.hypot(e[0] - prev[0], e[1] - prev[1], e[2] - prev[2]));
+    prev = e.slice();
+  }
+  assert.equal(api.status().shot, "side", "still the same shot: this is a pan inside it, not a cut");
+  // Relative to the shot's own flip (2 x the side offset: ~50 m on the shipped
+  // 25 m TV SIDE, ~28 m on #867's 14 m), so the bound holds on either pose. A
+  // dt-less solve covers ALL of it in one frame; eased at lambda 2.6 a 60 Hz frame
+  // covers 1 - e^(-2.6/60) = 4.2 % of it (2.1 m on 25 m, 1.2 m on 14 m).
+  const flip = 2 * Math.abs(opened[0]);
+  assert.ok(worst < 0.1 * flip, `the eye moved ${worst.toFixed(2)} m in one frame of a ${flip.toFixed(1)} m flip (a dt-less solve jumps all of it)`);
+  assert.ok(G.dbgCam.eye[0] < -10, "and it arrives on the new outside: " + G.dbgCam.eye[0]);
+  // The director's follows are its own: the player's rig keys are untouched.
+  assert.equal(CamFeel.follow("bendSide", 1, 2.6, dt), 1, "an unscoped 'bendSide' was never written by the director");
+});
+
+test("the director ticks after the physics step, on the pose the car is drawn at", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = game.slice(game.indexOf("function tickBody("));
+  const step = body.indexOf("update(PHYS_DT)"), alpha = body.indexOf("renderAlpha = clamp(physAcc / PHYS_DT"),
+    tick = body.indexOf("director.tick(dt)");
+  assert.ok(step > 0 && alpha > step, "fixture: the fixed-step loop, then renderAlpha");
+  assert.ok(tick > alpha, "director.tick(dt) runs after the step and renderAlpha, not before the physics");
+  assert.match(game, /function camPoseOf\(c\) \{\n  const pa = playerAnchor\(c\), rp = renderPosOf\(c\);/, "the subject pose is the interpolated render pose");
+  const dir = fs.readFileSync(path.join(ROOT, "js/camera/director.js"), "utf8");
+  assert.match(dir, /G\.camPoseOf \? G\.camPoseOf\(car\)/);
+});

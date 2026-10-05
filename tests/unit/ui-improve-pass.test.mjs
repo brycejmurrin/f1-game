@@ -587,7 +587,7 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   }
   assert.ok(ruleFor(tuner, /#lt-head h2, #ct-head/), "tuner heads share one rule");
   assert.ok(decl(career, /^#cr-inner\[data-density="compact"\] #cr-foot\b/, "grid-template-columns"));
-  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-min)");
+  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-paint)");
   assert.ok(ruleFor(data, /^body\[data-density="compact"\] \.dh-overlay\b/));
   assert.ok(!data.some((r) => r.context.some((c) => /orientation:\s*landscape\) and \(max-height:/.test(c))),
     "data hub short-height chrome must use body[data-density], not viewport max-height");
@@ -1080,6 +1080,36 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
     "sideways strips get .sf-l / .sf-r, not only overflow-y thumbs");
+});
+
+// ONLY THE ROOT THAT CHANGED. One observer per root, and a batch re-syncs the
+// roots whose records arrived: a slider dragged in SETTINGS re-walked every
+// button, fold and range in every observed screen at the input rate.
+test("AriaState re-syncs only the root a mutation landed in", () => {
+  const dom = makeDom({ readyState: "complete" });
+  const mk = (rootId) => {
+    const g = dom.document.createElement("div");
+    const a = dom.document.createElement("button"), b = dom.document.createElement("button");
+    a.classList.add("active"); g.append(a, b); dom.byId(rootId).appendChild(g);
+    return [a, b];
+  };
+  const [o1, o2] = mk("overlay"), [c1, c2] = mk("career");
+  const observers = [];
+  const sb = uiSandbox(dom, { MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(root) { this.root = root; } } });
+  const flush = () => { while (sb.__timers.length) sb.__timers.shift()(); };
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb);
+  assert.ok(observers.length >= 2, "one observer per observed root");
+  assert.equal(c1.getAttribute("aria-pressed"), "true");
+  o1.classList.remove("active"); o2.classList.add("active");
+  c1.classList.remove("active"); c2.classList.add("active");
+  const over = observers.find((x) => x.root === dom.byId("overlay"));
+  over.fn([{ type: "attributes", target: o2 }]);
+  flush();
+  assert.equal(o2.getAttribute("aria-pressed"), "true", "the root that changed is re-synced");
+  assert.equal(c2.getAttribute("aria-pressed"), "false", "a root with no records is left alone until its own change");
+  observers.find((x) => x.root === dom.byId("career")).fn([{ type: "attributes", target: c2 }]);
+  flush();
+  assert.equal(c2.getAttribute("aria-pressed"), "true");
 });
 
 test("dense sheets preserve a functional content height at extreme UI size", () => {
@@ -1586,6 +1616,9 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), null,
     "race settings inherit the one .sel-chip.active look — no per-screen restatement");
   assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
+  // Same layer and specificity as the tap-target floor in css/components.css,
+  // and later: a `min-width: 0` here silently cancelled that WCAG 2.5.8 floor.
+  assert.equal(decl(carsetup, ".cs-tab", "min-width"), "var(--tap-min)", "the garage tabs keep the 24px width floor");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");

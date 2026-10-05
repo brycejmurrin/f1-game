@@ -236,3 +236,20 @@ test("the module reads reports only — no Tracks, no curvature, no car writes",
   assert.doesNotMatch(SRC, /\bp\.[a-zA-Z]+\s*=[^=]/, "never assigns to the car");
   assert.doesNotMatch(SRC, /G\.player\.[a-zA-Z]+\s*=[^=]/, "…through any spelling");
 });
+
+// THE TWO-RACE BUDGET OUTLIVES THE PAGE. `races` was session memory while the
+// bitmask persisted, so RACES_MAX restarted at every load and an unseen mark
+// could still appear many sessions in. It is stored beside the bitmask now.
+test("the race budget survives a reload: two races in one session, a third start in the next, done", () => {
+  const first = load();
+  const run = (o) => { o.G.state = "count"; o.on.tick(1 / 60); o.G.state = "race"; o.on.tick(9); };
+  run(first); run(first);
+  assert.equal(first.on.state().races, 2);
+  assert.equal(first.stored.get("onboardRaces"), 2, "persisted as it counts");
+  const next = load({ stored: Object.fromEntries(first.stored) });
+  assert.equal(next.on.state().races, 2, "a new page load starts from the stored count, not 0");
+  run(next);
+  assert.equal(next.on.state().done, true, "past RACES_MAX: no more marks, in any session");
+  next.on.reset();
+  assert.equal(next.stored.get("onboardRaces"), 0, "reset() gives the marks their two races back");
+});

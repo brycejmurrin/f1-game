@@ -111,7 +111,7 @@ const { $, photoCam } = G;
 // editor's FREE CAMERA button, enterFrom below). DONE then returns to that tool
 // rather than to the pause menu, and the tool's pose actions show in #fc-shot.
 const st = { open: false, speed: SPD_DEF, roll: 0, lens: "race", corner: 0, anchor: "—", poseErr: null, statusT: 0,
-  back: null, actions: null, grid: "off", dofFocus: 0.4, dofBlur: 0 };
+  back: null, actions: null, overlays: true, grid: "off", dofFocus: 0.4, dofBlur: 0 };
 const rk = { q: false, e: false };
 // Composition grid + soft DoF overlays (js/camera/photo-kit.js) — viewport, not panel.
 const kitOverlays = (typeof PhotoKit !== "undefined" && typeof document !== "undefined")
@@ -273,7 +273,7 @@ function decorate(cam, dt) {
   if (st.lens === "flyby" && typeof FlybySeq !== "undefined") {
     cam.cine = true; cam.far = FlybySeq.FAR; cam.fog = FlybySeq.FOG;
   }
-  if (typeof PhotoKit !== "undefined") {
+  if (st.overlays && typeof PhotoKit !== "undefined") {
     PhotoKit.applyDof(cam, st.dofFocus, st.dofBlur, kitOverlays.dof);
     PhotoKit.setGrid(kitOverlays.grid, st.grid);
   }
@@ -293,8 +293,16 @@ function key(code, down, focused) {
 }
 function releaseKeys() { rk.q = rk.e = false; }
 function onWheel(e) {
-  if (!st.open || (inner && e.target && inner.contains(e.target))) return;
+  if (!st.open || e.ctrlKey || e.defaultPrevented || (inner && e.target && inner.contains(e.target))
+    || (e.target && e.target.closest && e.target.closest("#ps-panel"))) return;
   st.speed = wheelSpeed(st.speed, e.deltaY); paint();
+}
+
+function setOverlaysVisible(on) {
+  st.overlays = !!on;
+  if (typeof PhotoKit === "undefined") return;
+  if (!on || !st.open) PhotoKit.showOverlays(false, kitOverlays.grid, kitOverlays.dof);
+  else { PhotoKit.setGrid(kitOverlays.grid, st.grid); PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof); }
 }
 
 // ---- open / close ----
@@ -332,7 +340,7 @@ function close(showPauseMenu, keepPhotoMode) {
   if (!st.open) return;
   Log.info("game", "FreeCam.close");
   const back = st.back;
-  st.open = false; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null;
+  st.open = false; st.overlays = true; st.roll = 0; st.lens = "race"; st.back = null; st.actions = null;
   paintActions();
   releaseKeys();
   if (root) root.hidden = true;
@@ -469,7 +477,7 @@ on(E["fc-dof-blur"], "input", (e) => {
 paint();
 
 const api = { open, close, isOpen, onPhotoExit, enterFrom, speed, decorate, key, releaseKeys, cmd, state,
-  place, snapCar, snapCorner, copyView, copyPose, flybyPose, panel: () => inner };
+  place, snapCar, snapCorner, copyView, copyPose, flybyPose, setOverlaysVisible, panel: () => inner };
 live = api;
 return api;
 }

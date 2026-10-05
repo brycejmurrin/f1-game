@@ -963,3 +963,26 @@ test("replayEvent outside a WATCH, with commentary OFF, or after the WATCH ends 
   assert.equal(w.radio.replayEvent({ kind: "out", pos: 3 }, w.cars[0], null), false);
   assert.equal(w.radio.debug().watch, false);
 });
+
+// observe() runs every physics step; it now reuses its answer (`f`, the `ev`
+// array, the wrapper) instead of minting them per step. The contract race-radio
+// relies on: read `f` and walk `ev` before the next observe — `f` is always the
+// LATEST facts (so radio's `last` snapshot is still current), and `ev` holds only
+// this tick's events.
+test("observe reuses one answer: f is the latest facts, ev only this tick's events", () => {
+  const facts = RF.create();
+  const a = car("AAA", 1000, 60, { lastLap: 0 }), p = car("PLY", 900, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 0, cars: [a, p], player: p, track: { total: LAP }, cautionLevel: () => 0 };
+  G.raceT = 0.1; const o1 = facts.observe(G, 0.1);
+  const f1 = o1.f;
+  assert.ok(f1 && o1.ev.some((e) => e.type === "start"), "the start fires once");
+  a.lastLap = 88.5;
+  G.raceT = 0.2; const o2 = facts.observe(G, 0.1);
+  assert.equal(o2, o1); assert.equal(o2.f, f1, "the same facts object, updated");
+  assert.equal(f1.t, 0.2);
+  assert.ok(!o2.ev.some((e) => e.type === "start"), "last tick's events are gone");
+  assert.ok(o2.ev.some((e) => e.type === "lap"), "this tick's are there");
+  assert.deepEqual({ ...f1.fastest }, { car: a, time: 88.5 });
+  const none = facts.observe({ cars: G.cars, track: G.track }, 0.1);   // no player: no facts
+  assert.equal(none.f, null); assert.equal(none.ev.length, 0);
+});

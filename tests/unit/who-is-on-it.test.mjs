@@ -153,6 +153,16 @@ test("against real git: two sessions claim on one board, one releases, and a sta
     g(B, "fetch", "-q", "origin", `+refs/heads/${CLAIMS_BOARD}:refs/remotes/origin/${CLAIMS_BOARD}`);
     assert.deepEqual(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`, B).map((x) => x.slug), ["b-s2"], "A released, B's claim survived");
     assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "ONE branch, however many claims");
+    // A failing plumbing step yields no object id; pushing `:<board>` would
+    // DELETE the board. pushBoard must refuse and leave the board alone.
+    const saved = process.env.GIT_OBJECT_DIRECTORY;
+    process.env.GIT_OBJECT_DIRECTORY = path.join(dir, "no-such-objects");
+    let bad;
+    try { bad = pushBoard("a-s1", `${at}\tA\tagain\n`, { cwd: A, tries: 1 }); }
+    finally { if (saved === undefined) delete process.env.GIT_OBJECT_DIRECTORY; else process.env.GIT_OBJECT_DIRECTORY = saved; }
+    assert.equal(bad.ok, false, "a failed hash-object/mktree/commit-tree is not a successful claim");
+    assert.match(bad.err, /failed/);
+    assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "the board survives a failed write");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

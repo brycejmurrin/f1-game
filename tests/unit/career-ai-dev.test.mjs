@@ -74,6 +74,7 @@ test("an era ban prevents fitting a banned option", () => {
   const { CareerAiDev, Teams, Parts, Regulations } = boot();
   const team = Teams.LIST.find((t) => t.id === "ferrari");
   const era = Regulations.ERAS.find((e) => e.id === "powertrain");
+  const works = Parts.getFactorySetup(team);
   Parts.setLegality(Regulations.legalityFor(era.id), era.id);
   const career = { year: 2030, aiParts: {} };
   const tStand = [{ id: "ferrari", pos: 1 }];
@@ -82,8 +83,14 @@ test("an era ban prevents fitting a banned option", () => {
   const fitted = CareerAiDev.fittedOf(career, team);
   if (!fitted) return; // no step found under the ban — fine
   const banned = Regulations.bannedIds(era.id);
-  for (const id of Object.values(fitted)) {
-    assert.equal(banned.has(id), false, `banned ${id} must not be fitted`);
+  // The bag is seeded with the WORKS build (a banned works part stays owned and
+  // resolves to its fallback at race time); the STEP itself is never banned,
+  // and nothing banned survives resolution.
+  for (const [cat, id] of Object.entries(fitted)) {
+    if (id !== works[cat]) assert.equal(banned.has(id), false, `banned ${id} must not be bought`);
+  }
+  for (const id of Object.values(Parts.resolveSetup(fitted, team).setup)) {
+    assert.equal(banned.has(id), false, `banned ${id} must not resolve`);
   }
   Parts.setLegality(null, "");
 });
@@ -99,7 +106,7 @@ test("pickStep never exceeds the team cap", () => {
   if (step) assert.ok(Parts.getCost(step.trial, team) <= cap);
 });
 
-test("scrubFitted replaces a banned fitted id with the factory row", () => {
+test("scrubFitted fits the best legal OWNED part over a banned one, shelves it, and restores it after the era", () => {
   const { CareerAiDev, Teams, Parts, Regulations } = boot();
   const team = Teams.LIST.find((t) => t.id === "ferrari");
   const era = Regulations.ERAS.find((e) => e.id === "powertrain");
@@ -107,20 +114,85 @@ test("scrubFitted replaces a banned fitted id with the factory row", () => {
   const banned = Regulations.bannedIds(era.id);
   let bannedId = null, catId = null;
   for (const cat of Parts.CATALOG) {
+    if (banned.has(factory[cat.id])) continue;       // a category whose works part stays legal
     for (const opt of cat.options) {
-      if (banned.has(opt.id) && opt.id !== factory[cat.id]) { bannedId = opt.id; catId = cat.id; break; }
+      if (banned.has(opt.id) && Parts.isOptionAvailable(opt, team)) { bannedId = opt.id; catId = cat.id; break; }
     }
     if (bannedId) break;
   }
-  assert.ok(bannedId, "the powertrain era bans something other than Ferrari's factory row");
-  const career = { aiParts: { ferrari: { owned: [bannedId, factory[catId]], fitted: Object.assign({}, factory, { [catId]: bannedId }) } } };
+  assert.ok(bannedId, "the powertrain era bans an upgrade in a category where Ferrari's works part stays legal");
+  const career = { aiParts: { ferrari: { owned: Object.values(factory).concat(bannedId), fitted: Object.assign({}, factory, { [catId]: bannedId }) } } };
   Parts.setLegality(Regulations.legalityFor(era.id), era.id);
-  const legalFactory = Parts.getFactorySetup(team);
   CareerAiDev.scrubFitted(career);
-  assert.notEqual(legalFactory[catId], bannedId);
-  assert.equal(career.aiParts.ferrari.fitted[catId], legalFactory[catId]);
-  assert.equal(career.aiParts.ferrari.owned.indexOf(bannedId), -1);
+  const bag = career.aiParts.ferrari;
+  assert.equal(bag.fitted[catId], factory[catId], "the owned legal works part replaces the banned upgrade");
+  assert.equal(bag.shelved[catId], bannedId, "the banned upgrade is shelved, not lost");
+  assert.ok(bag.owned.includes(bannedId), "the banned upgrade stays owned");
+  Parts.setLegality(Regulations.legalityFor("aero"), "aero");
+  CareerAiDev.scrubFitted(career);
+  assert.equal(bag.fitted[catId], bannedId, "the upgrade returns the winter its era lapses");
+  assert.equal(bag.shelved, undefined);
   Parts.setLegality(null, "");
+});
+
+test("a works part banned by an era is the works part again once the era lapses", () => {
+  const { CareerAiDev, Teams, Parts, Regulations } = boot();
+  const team = Teams.LIST.find((t) => t.id === "ferrari");
+  const works = Parts.getFactorySetup(team);
+  const engine = works.engine;
+  assert.ok(Regulations.bannedIds("powertrain").has(engine), `the powertrain era bans Ferrari's works engine ${engine}`);
+  const career = { year: 2026, aiParts: {} };
+  const tStand = [{ id: "ferrari", pos: 1 }];
+  const expect = new Map([["ferrari", 8]]);
+  const winter = (eraId, year) => {
+    Parts.setLegality(Regulations.legalityFor(eraId), eraId);
+    CareerAiDev.scrubFitted(career);
+    CareerAiDev.developWinter(career, tStand, expect, () => 0, year);
+  };
+  winter("open", 2026);                       // a bag exists before the era
+  assert.equal(career.aiParts.ferrari.fitted.engine, engine);
+  for (let y = 2027; y <= 2030; y++) winter("powertrain", y);   // four winters under the ban
+  const bag = career.aiParts.ferrari;
+  assert.ok(bag.owned.includes(engine), "the works engine is never dropped from owned");
+  assert.notEqual(Parts.resolveSetup(bag.fitted, team).setup.engine, engine, "the ban is enforced at resolution");
+  winter("aero", 2031);                       // the era lapses
+  assert.equal(bag.fitted.engine, engine, "after the era the fitted engine is the works engine again");
+  assert.equal(Parts.resolveSetup(bag.fitted, team).setup.engine, engine);
+  Parts.setLegality(null, "");
+});
+
+test("ensureSeed under an era seeds the works build and leaves the ruleset installed", () => {
+  const { CareerAiDev, Teams, Parts, Regulations } = boot();
+  const team = Teams.LIST.find((t) => t.id === "ferrari");
+  const works = Parts.getFactorySetup(team);
+  const legal = Regulations.legalityFor("powertrain");
+  Parts.setLegality(legal, "powertrain");
+  assert.notEqual(Parts.getFactorySetup(team).engine, works.engine, "the era-resolved factory drops the works engine");
+  assert.deepEqual({ ...CareerAiDev.worksSetup(team) }, { ...works });
+  assert.equal(Parts.legalityKey(), "powertrain");
+  assert.equal(Parts.legality(), legal, "the exact predicate is put back");
+  const career = { year: 2030, aiParts: {} };
+  CareerAiDev.developWinter(career, [{ id: "ferrari", pos: 1 }], new Map([["ferrari", 8]]), () => 0);
+  const bag = career.aiParts.ferrari;
+  assert.ok(bag && bag.owned.includes(works.engine), "a bag first seeded under the era still owns the works engine");
+  Parts.setLegality(null, "");
+});
+
+test("scrubFitted is a no-op without a ban or a shelf, and heals a pre-fix scar", () => {
+  const { CareerAiDev, Teams, Parts } = boot();
+  const team = Teams.LIST.find((t) => t.id === "ferrari");
+  const works = Parts.getFactorySetup(team);
+  const career = { aiParts: { ferrari: { owned: Object.values(works), fitted: { ...works } } } };
+  const before = JSON.stringify(career);
+  CareerAiDev.scrubFitted(career);
+  assert.equal(JSON.stringify(career), before, "no era, nothing shelved: byte-identical");
+  // A save scrubbed by the old code: works engine spliced out of owned, the
+  // DEFAULT fitted in its place.
+  const scarred = { aiParts: { ferrari: { owned: Object.values(works).filter((id) => id !== works.engine),
+    fitted: { ...works, engine: Parts.DEFAULTS.engine } } } };
+  CareerAiDev.scrubFitted(scarred);
+  assert.equal(scarred.aiParts.ferrari.fitted.engine, works.engine);
+  assert.ok(scarred.aiParts.ferrari.owned.includes(works.engine));
 });
 
 test("developWinter rolls the dice on diceYear, not career.year", () => {

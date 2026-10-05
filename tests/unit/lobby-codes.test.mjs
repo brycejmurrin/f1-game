@@ -107,3 +107,57 @@ test("codeFrom lifts a code out of a LINK inside a sentence, wrapped or followed
   assert.equal(LobbyCodes.codeFrom(code.slice(0, 20) + "\u200B" + code.slice(20) + "\u00AD"), code);
   assert.equal(LobbyCodes.codeFrom("https://x.test/#vs=" + code.slice(0, 20) + "\u2060" + code.slice(20)), code);
 });
+
+test("codeFrom lifts a BARE code out of brackets, quotes and a sentence's end", () => {
+  // The link path trimmed trailing punctuation (inviteFromUrl); a bare code in
+  // "(APEX1.\u2026)." or "\"APEX1.\u2026\"," started with a bracket, so it was never
+  // found and the whole paste read as "not an invite code".
+  const { LobbyCodes } = boot();
+  const code = "APEX1.s." + "Q".repeat(60) + "_-" + "z".repeat(58);
+  assert.equal(LobbyCodes.codeFrom("(" + code + ")."), code);
+  assert.equal(LobbyCodes.codeFrom("Here: \"" + code + "\", thanks"), code);
+  assert.equal(LobbyCodes.codeFrom("[" + code + "]"), code);
+  assert.equal(LobbyCodes.codeFrom(code + "."), code);
+  // Punctuation ends the code: a long word after it is not a fragment.
+  assert.equal(LobbyCodes.codeFrom(code + ". " + "w".repeat(30)), code);
+  // A bracketed, hard-wrapped code keeps its short tail without the bracket.
+  const wrapped = code.slice(0, 76) + "\n" + code.slice(76, 152) + "\n" + code.slice(152);
+  assert.equal(LobbyCodes.codeFrom("(" + wrapped + ")."), code);
+  // \u2026an unbracketed one does not glue on a punctuated last word.
+  assert.equal(LobbyCodes.codeFrom(code.slice(0, 76) + "\n" + code.slice(76, 152) + "\nok!"), code.slice(0, 152));
+});
+
+// L8-e: a share sheet that fails (not cancelled) has SPENT the tap; Safari then
+// refuses a clipboard write. Try the copy once, and if it fails say which tap
+// will work instead of "Could not copy".
+function bootShare({ shareError, clipboardOk }) {
+  const said = [];
+  const sb = {
+    console, Object, Array, String, Promise,
+    navigator: { share: async () => { const e = new Error("x"); e.name = shareError; throw e; } },
+    NetHandshake: { inviteFromUrl: () => null, inviteUrl: (c) => "https://x.test/#vs=" + c },
+    NetQr: { draw: () => true },
+    NetScan: { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) },
+  };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "lobby-codes.js" });
+  ctx.ApexClipboard = { write: async () => clipboardOk };
+  const codes = vm.runInContext("LobbyCodes", ctx).create({
+    els: () => ({}), $: () => null, say: (m, err) => said.push([m, !!err]),
+    makeAnswer() {}, acceptAnswer() {}, cancelledResult: () => ({ ok: false }),
+    has: () => false, focusInto() {}, shownStep: () => null,
+  });
+  return { codes, said };
+}
+
+test("a failed share copies if it still can, else asks for the COPY tap", async () => {
+  const lost = bootShare({ shareError: "NotAllowedError", clipboardOk: false });
+  assert.equal(await lost.codes.handOff({ url: "u" }, "CODE"), false);
+  assert.deepEqual(lost.said.at(-1), ["Sharing failed — tap COPY to copy the code.", true]);
+  const kept = bootShare({ shareError: "DataError", clipboardOk: true });
+  assert.equal(await kept.codes.handOff({ url: "u" }, "CODE"), true);
+  assert.match(kept.said.at(-1)[0], /copied instead/);
+  const cancelled = bootShare({ shareError: "AbortError", clipboardOk: true });
+  assert.equal(await cancelled.codes.handOff({ url: "u" }, "CODE"), false);
+  assert.equal(cancelled.said.length, 0, "a cancelled sheet is the player's choice: nothing said, nothing copied");
+});

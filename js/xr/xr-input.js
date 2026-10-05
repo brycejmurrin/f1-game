@@ -32,13 +32,17 @@ const XrInput = (function () {
    * Map one XRFrame's input sources into a remote sample + edge events.
    * `prev` is the previous latch { primary: bool, secondary: bool } (mutated).
    * Returns { sample: {roll, thr, brk, held}, events: string[], recenter: bool }.
-   * `roll` is a steer command in −1..1; the session maps it through
-   * Input.steerToTilt before remoteSample.
+   * `roll` is a steer command in −1..1 (the name is historical); inject()
+   * hands it to Input as a STICK (`steer`), never through the tilt pipeline.
    */
   function mapFrame(sources, prev) {
     let thr = 0, brk = 0, stickX = 0, held = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
+    // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
+    let hasLeft = false;
+    for (let i = 0; i < list.length; i++)
+      if (list[i] && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
       const src = list[i];
       if (!src || src.targetRayMode === "gaze") continue;
@@ -55,7 +59,7 @@ const XrInput = (function () {
       const sx = axis(gp, AXIS_STICK_X);
       // Prefer left stick for steer when both present; else any.
       if (hand === "left" || (hand !== "right" && !stickX)) stickX = sx;
-      else if (hand === "right" && !list.some((s) => s && s.handedness === "left")) stickX = sx;
+      else if (hand === "right" && !hasLeft) stickX = sx;
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
       // Squeeze on either hand = look-back hold bit (Input.remoteSample.held).
@@ -79,15 +83,13 @@ const XrInput = (function () {
     };
   }
 
-  /** Apply a mapFrame result to Input (remoteSample / remoteEvent). */
+  /** Apply a mapFrame result to Input (remoteSample / remoteEvent). The stick
+   *  goes in as `steer`, an analog command: dressed as a roll (steerToTilt) it
+   *  rode the phone's One-Euro filter, tilt slew and lamp-1 recalibration. */
   function inject(input, mapped) {
     if (!input || !mapped) return false;
     const s = mapped.sample;
-    let roll = s.roll;
-    if (typeof input.steerToTilt === "function" && typeof roll === "number") {
-      roll = input.steerToTilt(roll);
-    }
-    input.remoteSample({ roll: roll, thr: s.thr, brk: s.brk, held: s.held | 0 });
+    input.remoteSample({ steer: typeof s.roll === "number" ? s.roll : 0, thr: s.thr, brk: s.brk, held: s.held | 0 });
     const ev = mapped.events || [];
     for (let i = 0; i < ev.length; i++) input.remoteEvent(ev[i]);
     return true;

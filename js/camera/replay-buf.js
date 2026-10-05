@@ -1,5 +1,5 @@
 /* Apex 26 — INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s /
- * 30 Hz Float32 ring of the live field (~0.7 MB / 22 cars). Pause-card scrub
+ * 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). Pause-card scrub
  * restores captured pose fields bit-exactly and never touches netplay authority
  * or career settlement. RAM only — never writes the Ghost best-lap store
  * (512 KiB budget). Sampling mirrors Ghost's cadence; tags come from car
@@ -10,7 +10,7 @@ const ReplayBuf = (function () {
   const WINDOW_S = 20;
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
   const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
-  const MAX_CARS = 22;
+  const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
   const MAX_BYTES = 720 * 1024;               // 0.7 MB hard cap
   const TAG_CAP = 64;
   const RATES = [0.25, 0.5, 1];
@@ -111,7 +111,7 @@ const ReplayBuf = (function () {
     function sample(raceT, cars) {
       if (scrubbing || !allowed()) return false;
       if (!cars || !cars.length) return false;
-      if (!data || cars.length !== nCars) reset(cars);
+      if (!data || Math.min(MAX_CARS, cars.length) !== nCars) reset(cars);   // >MAX_CARS must not reset every sample
       discardTimeline(raceT);   // Practice rewind or a mid-race JUMP IN starts a new timeline.
       // Slot gate (not wall-delta): FP-safe at exact 1/HZ spacing.
       const slot = Math.floor((+raceT || 0) * HZ);

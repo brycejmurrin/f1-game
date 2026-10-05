@@ -106,7 +106,9 @@
       // wrap defaults to ClampToEdge — matches GLX
       const opts = { depthTexture };
       if (hdrColor) {
-        opts.type = THREE.HalfFloatType;
+        // R32F: the blocker reads this copy of the depth, and a half float
+        // steps 2^-11 in [0.5,1) — a ~0.28 m PCSS error at a 570 m span.
+        opts.type = THREE.FloatType;
         opts.format = THREE.RedFormat;
       }
       const rt = new THREE.RenderTarget(size, size, opts);
@@ -146,9 +148,11 @@
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
 
-    // PCSS blocker map (header note): 512² R16F min-of-4 downsample.
+    // PCSS blocker map (header note): 512² R32F, the MIN over each dest
+    // texel's whole k x k source footprint (k = SUN_SIZE / 512: 16 texels at
+    // 2048 — the old lo/hi pair read 4 of them and missed thin casters).
     // WebGPU: textureLoad the compare-mode depth texture (no sampler).
-    // Desktop WebGL2: textureLoad the R16F color attachment the sun pass
+    // Desktop WebGL2: textureLoad the R32F color attachment the sun pass
     // writes TSL.depth into. Guarded: any construction failure leaves the
     // fixed-R look.
     const BLOCKER_SIZE = 512;
@@ -156,7 +160,7 @@
     if (sunRT && (isWebGPU || colorPcss)) {
       try {
         blockerRT = new THREE.RenderTarget(BLOCKER_SIZE, BLOCKER_SIZE, {
-          format: THREE.RedFormat, type: THREE.HalfFloatType,
+          format: THREE.RedFormat, type: THREE.FloatType,
           depthBuffer: false, generateMipmaps: false,
           minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
         });
@@ -165,8 +169,7 @@
         bmat.fog = false;
         bmat.lights = false;
         bmat.customProgramCacheKey = () => colorPcss ? "tlx-blocker-gl" : "tlx-blocker";
-        const k = SUN_SIZE / BLOCKER_SIZE;
-        const lo = (k >> 1) - 1, hi = (k >> 1) + 1;
+        const k = Math.max(1, (SUN_SIZE / BLOCKER_SIZE) | 0);
         const srcTex = colorPcss ? sunRT.texture : sunRT.depthTexture;
         bmat.colorNode = TSL.Fn(() => {
           const ip = TSL.ivec2(TSL.screenCoordinate.xy).mul(TSL.int(k)).toVar();
@@ -174,8 +177,8 @@
             const raw = TSL.textureLoad(srcTex, ip.add(TSL.ivec2(x, y)), TSL.int(0));
             return colorPcss ? raw.x : raw;
           };
-          const d = TSL.min(TSL.min(tap(lo, lo), tap(hi, lo)),
-                            TSL.min(tap(lo, hi), tap(hi, hi)));
+          let d = tap(0, 0);
+          for (let y = 0; y < k; y++) for (let x = 0; x < k; x++) if (x || y) d = TSL.min(d, tap(x, y));
           return TSL.vec4(d, 0.0, 0.0, 1.0);
         })();
         blockerQuad = new THREE.QuadMesh(bmat);

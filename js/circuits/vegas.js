@@ -28,7 +28,13 @@
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],
-    pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12] },
+    // Strip streets and parking lots in the Mojave, not lawns: the verge band
+    // (pal.runoff, MAT.ROCK at the road edge) is sidewalk/lot concrete, and the
+    // ground beyond it (pal.grass under terrainMat SAND, plus the far ground
+    // plane, which reads pal.grass) is dusty desert tan. The night pal default
+    // grass [0.14, 0.18, 0.14] on MAT.GRASS rendered as green lawn (survey 2026-10-05).
+    terrainMat: "SAND",
+    pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12], runoff: [0.30, 0.29, 0.28], grass: [0.38, 0.33, 0.26] },
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
     hwZones: [
       { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // arc 0.400-0.432 T7

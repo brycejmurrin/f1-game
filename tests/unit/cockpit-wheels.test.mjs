@@ -180,11 +180,11 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   const gate = rig.indexOf("if (!CockpitOpts.wheelHasScreen(wheelStyle)) return;"), gear = rig.indexOf("getGearDigit(");
   assert.ok(none > 0 && none < wheel, "NONE (and VISOR) return with the column and bulkhead before any wheel");
   assert.ok(wheel < gate && gate < gear, "no screen, no gear/LED/speed/ERS/OT draws");
-  // The forearms ride with the hands: after the wheel (so NONE and VISOR, which
-  // return before it, have no arms) and before the screen gate (so every wheel
-  // with gloves, screen or not, has them).
-  const arms = rig.indexOf("CarMesh.drawForearms(_rigB, base, lay, ");
-  assert.ok(wheel < arms && arms < rig.indexOf('if (wheelStyle === "retro")') && arms < gate, "both sleeves draw with every gloved wheel, and only then");
+  // No forearm sleeves in the cockpit (removed 2026-10-04): the tubes from the
+  // cuffs to the bottom of the frame read as pipes meeting the wheel. The
+  // gloves stay on the grips; neither the race cockpit nor the preview draws arms.
+  assert.ok(!/CarMesh\.drawForearms\(/.test(rig), "the race cockpit draws no forearm sleeves");
+  assert.ok(!/CarMesh\.drawForearms\(/.test(read("js/camera/cockpit-preview.js")), "the cockpit preview draws none either");
   // The lock: progressive, through the shared roll curve, behind a λ12 damp (was a flat 0.80 rad behind λ6).
   assert.match(rig, /deps\.damp\(c\._whlVis == null \? 0 : c\._whlVis, M4\.clamp\(c\.steerVis \|\| 0, -1, 1\), CarMesh\.WHEEL_ROLL_LAMBDA, dt\);/);
   assert.match(rig, /const a = CarMesh\.cockpitWheelRoll\(c\._whlVis\);/);

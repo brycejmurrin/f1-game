@@ -5,13 +5,13 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
-function load(initial = {}, durable = true, reduced = false, document) {
+function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
   const values = structuredClone(initial), writes = [], owners = [];
   const store = { get: (k, d) => k in values ? values[k] : d, set: (k, v) => { values[k] = v; writes.push(k); return durable; },
     write: (k, v) => { values[k] = v; return { ok: true, durable, reason: durable ? null : "QuotaExceededError" }; } };
   const context = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     AppearanceOpts: { restore: (v) => owners.push(v) }, ScreenLooks: { normalize: (_id, v) => ({ ...v }), apply() {}, refresh() {} },
-    window: { matchMedia: () => ({ matches: reduced }) }, document });
+    window: { matchMedia: () => ({ matches: reduced }) }, document, ...globals });
   vm.runInContext(source, context); return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -223,4 +223,29 @@ test("Home scoped reset includes camera and environment while undo preserves oth
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before);
   studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "auto");
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light");
+});
+
+test("profile apply, reset and Undo disclose session-only restoration when storage is unavailable", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio } = load({}, false, false, dom.document);
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  const status = descendants(dom.byId("appearance-studio")).find(node => node.dataset.as === "status");
+  studio.saveProfile("Night"); studio.applyPreset("sunlight"); studio.loadProfile("profile-1");
+  assert.match(status.textContent, /applied.*for this session; browser storage is unavailable/);
+  studio.reset(); assert.match(status.textContent, /reset for this session; browser storage is unavailable/);
+  studio.undo(); assert.match(status.textContent, /restored for this session; browser storage is unavailable/);
+});
+
+test("Studio retains quarter-percent scales and previews independent HUD accent and contrast precedence", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio } = load({ uiScale: 109.25, hudPanelOpacity: 20 }, true, false, dom.document,
+    { getComputedStyle: () => ({ getPropertyValue: key => key === "--accent" ? "#00a3e0" : "" }) });
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  const nodes = descendants(dom.byId("appearance-studio")), input = nodes.find(node => node.getAttribute("aria-label") === "UI size");
+  const preview = nodes.find(node => node.dataset.as === "preview");
+  assert.equal(input.step, .25); assert.equal(input.value, 109.25);
+  assert.equal(preview.style.getPropertyValue("--preview-hud-accent"), "#00a3e0");
+  assert.equal(preview.style.getPropertyValue("--preview-panel-opacity"), "0.2");
+  studio.applySnapshot({ ...studio.snapshot(), uiContrast: "high" });
+  assert.equal(preview.style.getPropertyValue("--preview-panel-opacity"), "1");
 });

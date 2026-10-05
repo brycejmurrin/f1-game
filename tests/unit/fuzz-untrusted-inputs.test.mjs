@@ -494,16 +494,21 @@ test("fuzz suite stays under 10 s wall clock", async (t) => {
   // cumulative work (measured from process uptime of this file via a marker)
   // does not silently grow past the budget. We re-run a thin slice to measure
   // steady-state cost of one surface.
-  const t0 = Date.now();
+  // CPU time, not wall time (2026-10-04): this runs in the parallel
+  // tooling-fast gate beside other agents' work, where a wall clock measures
+  // the box. process.cpuUsage() covers every thread of this process, the
+  // zlib pool included, and only while it actually runs.
+  const t0 = process.cpuUsage();
   const GhostShare = bootGhostShare();
   const rng = makeRng("budget-check-v1");
   for (let i = 0; i < 200; i++) {
     await GhostShare.decode(mutate(rng.pick(GHOST_CORPUS), rng));
   }
-  const slice = Date.now() - t0;
+  const used = process.cpuUsage(t0);
+  const slice = Math.round((used.user + used.system) / 1000);
   // 200 trials of one surface ≪ 10 s; scale: 2000 * ~8 surfaces ≈ 80× this slice.
   // Cap the slice itself so a sudden regression (inflate loops, etc.) fails here.
-  assert.ok(slice < 2000, `200 GhostShare trials took ${slice} ms (budget 2000 ms)`);
+  assert.ok(slice < 2000, `200 GhostShare trials took ${slice} ms of CPU (budget 2000 ms)`);
   t.diagnostic(`budget slice: ${slice} ms for 200 GhostShare.decode trials`);
   void BUDGET_MS;
 });

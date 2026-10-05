@@ -1,7 +1,7 @@
 // marshal-panels — the posts' light panels show what race control is showing.
 //
-// js/race/marshal-panels.js re-spawns one additive glow per lit panel each race
-// frame: a waved yellow at the posts of the sector under a local yellow, a
+// js/race/marshal-panels.js issues one additive one-frame flare per lit panel
+// each race frame: a waved yellow at the posts of the sector under a local yellow, a
 // steady yellow everywhere under VSC / safety car, a waved red under a red
 // flag, a green everywhere for GREEN_S after a caution clears, dark otherwise;
 // capped to the nearest NEAREST_N posts to the eye. Until 2026-10-01 the post
@@ -29,7 +29,7 @@ function track(splits) {
   list.push({ kind: "gantry", k: 0, side: 0, x: 0, y: 4, z: 0, w: 16, h: 9, d: 1 });
   return { n, props: { list }, def: splits ? { sectors: splits } : {} };
 }
-const stub = () => { const calls = []; return { calls, glow: (...a) => calls.push(a) }; };
+const stub = () => { const calls = []; return { calls, flare: (...a) => calls.push(a) }; };
 const G = (level, sector, over = {}) => ({
   state: "race", frame: { eye: [0, 2, 0] }, track: track(over.splits),
   cautionLevel: () => level, cautionInfo: () => ({ level, sector }), ...over,
@@ -171,4 +171,54 @@ test("game.js wires MarshalPanels after the gantry lamps", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /const marshalPanels = MarshalPanels\.create\(G\)/);
   assert.match(game, /startLights\.update\(\);[^\n]*\n\s*marshalPanels\.update\(dt\);[^\n]*\n\s*Particles\.update\(dt\);/);
+});
+
+// The REAL pool and the real panels in one VM, driven the way game.js's render
+// loop does (panels, Particles.update, Particles.draw). Brightness = Σ alpha ×
+// green over the additive quads of a drawn frame. The pooled glow (life 0.05 s)
+// summed 0.38 / 1.14 / 3.5 copies a panel at 30 / 60 / 144 Hz, and at 120 Hz
+// sixteen panels held 96 slots: the whole mobile pool.
+function runAt(hz, seconds, { mobile = false, brakeFlares = 0 } = {}) {
+  const ctx = vm.createContext({ Math, Float32Array, Uint8Array, Array, Object });
+  seedLog(ctx);
+  const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx);
+  let frameB = 0, frameQ = 0;
+  P.init({ mobileTier: mobile, drawParticles: (data, floats, additive) => {
+    if (!additive) return;
+    for (let o = 0; o < floats; o += 60) { frameB += data[o + 9] * data[o + 6]; frameQ++; }   // alpha × green (blue is ~0 on a far flare)
+  } });
+  const g = G(3, -1); g.track.props.list = [];
+  for (let k = 0; k < 90; k += 2) g.track.props.list.push({ kind: "marshalPost", k, side: 1, x: k, y: 1.2, z: 0, w: 1.2, h: 2.4, d: 1.2 });
+  const mp = MP_load().create(g, { Particles: P });
+  const dt = 1 / hz, frames = Math.round(seconds * hz);
+  let sum = 0, maxPool = 0, minQ = Infinity;
+  for (let f = 0; f < frames; f++) {
+    // The cars' far brake flares are drawn BEFORE the race lamps each frame (car-draw.js).
+    for (let i = 0; i < brakeFlares; i++) P.flare(500, 1, i, 0.2, 2.4, 0.85, 0.22, 0.9);
+    mp.update(dt);
+    P.update(dt);
+    maxPool = Math.max(maxPool, P.count());
+    frameB = 0; frameQ = 0;
+    P.draw();
+    sum += frameB; minQ = Math.min(minQ, frameQ);
+  }
+  return { mean: sum / frames, maxPool, minQ };
+}
+
+test("a steady caution is equally bright at 30, 60 and 144 Hz, uses no pool slot, and the cars' flares cannot starve it", () => {
+  const r = { 30: runAt(30, 1), 60: runAt(60, 1), 144: runAt(144, 1) };
+  for (const hz of [30, 144]) {
+    const k = r[hz].mean / r[60].mean;
+    assert.ok(Math.abs(k - 1) <= 0.05, `${hz} Hz frame brightness is ${k.toFixed(3)}× the 60 Hz one (the pooled glow gave ${hz === 30 ? "0.33" : "3.1"}×)`);
+  }
+  for (const hz of [30, 60, 144]) assert.equal(r[hz].maxPool, 0, `${hz} Hz: the panels never occupy a pool slot`);
+  // 16 yellow panels × alpha 0.9 × green 0.78 × GAIN 1.14 — the pooled glow's 60 Hz look.
+  assert.ok(Math.abs(r[60].mean - 16 * 0.9 * 0.78 * 1.14) < 0.05, `60 Hz brightness ${r[60].mean}`);
+  // A full field of hot brakes spends the cars' share (24 mobile, 48 desktop) first;
+  // the lamp reserve still lights all 16 panels.
+  for (const mobile of [true, false]) {
+    const busy = runAt(120, 0.2, { mobile, brakeFlares: 60 });
+    assert.equal(busy.minQ, (mobile ? 24 : 48) + 16, `${mobile ? "mobile" : "desktop"}: every panel drawn beside a full set of brake flares`);
+    assert.equal(busy.maxPool, 0);
+  }
 });

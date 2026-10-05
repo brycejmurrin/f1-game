@@ -80,6 +80,7 @@
     // below land at 0.1817, 0.3117, 0.4817, 0.8817 and 0.9183. Five named
     // corners, five matches inside ~20 m, which is the geometry validating
     // itself rather than a curve-fit hoping to be right.
+    sectors: [0.334, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0183, 0.0467, 0.1483, 0.1817, 0.2800, 0.3117, 0.4817, 0.8017, 0.8817, 0.9183],
     furniture: { tree: "broad", fol: [0.22, 0.40, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },

@@ -1341,9 +1341,10 @@ const PitLane = (function () {
         const fresh = right.filter(function (r) { return !ran.has(r.code); });
         if (fresh.length) right = fresh;
       }
+      // pitStops already counts this box; until fitting, it is THIS stint.
       // …and THE PLAN'S LETTER, when it names one: the HUD and the engineer say
       // "BOX L12 H", so the crew fits an H unless the rule above forbids it.
-      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       const code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : null;
       const planned = code ? right.filter(function (r) { return r.code === code; }) : [];
       if (planned.length) right = planned;
@@ -1547,7 +1548,7 @@ const PitLane = (function () {
     function nextCode(c) {
       const plan = c && c.pitPlan;
       if (c && c.local) { const r = nextFor(c); if (r && r.code) return r.code; }
-      const cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      const cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       return cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
     }
     /** A rival's window, for the gap chips: "IN" while it is stopping, "P<lap>"
@@ -1703,10 +1704,15 @@ const PitLane = (function () {
       if (onSet == null || onSet * 1.1 >= left) return 99;
       return Math.max(0, Math.round(((G.lapsTarget - fresh) + (lap + onSet)) / 2) - lap);
     }
+    const _pitCtx = { stopsLeft: 0, lapsToStop: 0, rivalBehindBoxed: false, stuckBehind: false, rivalUsed: false, fits: true,
+      react: 0, attack: 0, cautionLevel: 0, wear: 0, wrongTread: false, lapsLeft: 0, pitLossLaps: 0, scripted: false };
     function think(c) {
       const plan = c && c.pitPlan;
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
       if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // The flying-start run-up hands the player's car to the AI for a few
+      // seconds (js/race/flying-start.js); its plan is still the player's.
+      if (G.flyingStart && G.flyingStart.owns(c)) return "";
       // The last lap, or the leader already flagged: no stop pays (the player's
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";
@@ -1751,21 +1757,23 @@ const PitLane = (function () {
         const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
         fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
       }
-      const why = AiDrive.pitNow({
-        stopsLeft,
-        lapsToStop,
-        rivalBehindBoxed: !!(near && near.behind), stuckBehind: !!(near && near.stuck && stuckLong),
-        rivalUsed: !!c._rivalStop, fits,
-        react: temper ? temper.react : 0, attack: temper ? temper.attack : 0,
-        cautionLevel: caution,   // per AI per tick: the allocation-free read
-        wear,
-        wrongTread,
-        // …so the worn rule can ask whether the stop has laps left to pay for
-        // itself (AiDrive.wornPays).
-        lapsLeft: Math.max(0, (G.lapsTarget || 0) - (c.lap || 0)),
-        pitLossLaps: plan.pitLossLaps,
-        scripted: !!plan.scripted,   // a real race's plan (js/race/real-race.js planFor)
-      });
+      // ONE context, every field rewritten per call (pitNow is pure and keeps nothing):
+      // a 13-field literal per AI per tick was ~1.3k objects/s of garbage.
+      const q = _pitCtx;
+      q.stopsLeft = stopsLeft;
+      q.lapsToStop = lapsToStop;
+      q.rivalBehindBoxed = !!(near && near.behind); q.stuckBehind = !!(near && near.stuck && stuckLong);
+      q.rivalUsed = !!c._rivalStop; q.fits = fits;
+      q.react = temper ? temper.react : 0; q.attack = temper ? temper.attack : 0;
+      q.cautionLevel = caution;   // per AI per tick: the allocation-free read
+      q.wear = wear;
+      q.wrongTread = wrongTread;
+      // …so the worn rule can ask whether the stop has laps left to pay for
+      // itself (AiDrive.wornPays).
+      q.lapsLeft = Math.max(0, (G.lapsTarget || 0) - (c.lap || 0));
+      q.pitLossLaps = plan.pitLossLaps;
+      q.scripted = !!plan.scripted;   // a real race's plan (js/race/real-race.js planFor)
+      const why = AiDrive.pitNow(q);
       if (!why) return "";
       // A weather stop fits what the WEATHER wants; any other stop follows the
       // plan. Without the first branch a car pits, fits another slick, is still
@@ -1839,6 +1847,11 @@ const PitLane = (function () {
      *  these, by construction cannot fire while the car is inside it. */
     function clearArm(c) {
       if (!c) return;
+      // A stop is counted at the box latch but the set is fitted mid-hold: a
+      // re-grid before the fit leaves on the OLD set, so that stop never
+      // happened — keeping it spent the plan's next stop (think() reads
+      // lapsAt[pitStops]) and left the car one stop short of its strategy.
+      if (c.pitState === "box" && !c.pitFitted) c.pitStops = Math.max(0, (c.pitStops | 0) - 1);
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
       c.pitFitted = false;

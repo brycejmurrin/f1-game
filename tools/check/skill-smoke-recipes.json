@@ -783,6 +783,33 @@
         }
       ],
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "track-realism",
+      "task": "Exercise the frozen scenery API used by delegated circuit upgrades",
+      "fixture": "tests/unit/scenery-api-contract.test.mjs",
+      "pattern": "^buildProps sceneryApi surface matches the frozen contract$",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and installed repository dependencies; offline Node VM fixture"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized before/after circuit captures and targeted foundation specification"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target GPU/device for renderer and performance claims"
+        }
+      ],
+      "evidenceScope": "Only the frozen offline scenery API contract; excludes campaign execution, real-world accuracy, browser and hardware verification"
     }
   ]
 }

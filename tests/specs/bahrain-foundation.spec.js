@@ -129,10 +129,12 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
       sceneryCoordinates: definition.sceneryCoordinates,
       exclusions: definition.dressingExclusions,
       relief: Math.max(...elevations) - Math.min(...elevations),
-      t8: profile[Math.round(0.42 * profile.length)].y,
-      t9: profile[Math.round(0.50 * profile.length)].y,
+      // Racing fracs re-located +0.2702 by #878's start-line move (same world
+      // points, 0.88 m, same heights): T8 dip 0.42->0.6902, T9 rise 0.50->0.7704.
+      t8: profile[Math.round(0.6902 * profile.length)].y,
+      t9: profile[Math.round(0.7704 * profile.length)].y,
       walls: window.__apex.wallStats(),
-      ground: [0.42, 0.50, 0.78, 0.82, 0.86].flatMap((frac) =>
+      ground: [0.6902, 0.7704, 0.0505, 0.0906, 0.1308].flatMap((frac) =>
         [-12, -8, 8, 12].map((lateral) => window.__apex.groundY(frac, lateral).gap)
       ),
       geometry: window.__apex.geometryDiagnostics(),

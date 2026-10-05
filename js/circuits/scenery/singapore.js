@@ -788,26 +788,50 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 7);
       }
 
-      for (const [s0, s1, side] of [
-        [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
-        [0.00, 0.16,  1], [0.30, 0.44,  1], [0.582, 0.66,  1], [0.92, 0.99,  1],
-      ]) {
-        // Sit behind the 1.2 m concrete wall rather than sharing its edge.
-        fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
-      }
-      // The +1 (authored = racing -1, the pit side) fences end at the pit
+      // CATCH FENCE over the street wall, all lap. The engine draws the wall
+      // itself (def.street: a 0.4 m x 1.1 m concrete panel run at barrierGap
+      // 1.2, back face 1.4 m out); the fence stands right behind it, not
+      // 1.8 m back over open verge as it did at gap 3.0. The kit's
+      // "chainlink" style draws only a 7 cm top rail on its posts — the
+      // 2026-10-05 survey shots read it as no fence at all — so this run uses
+      // "panelled" (posts + two rails): Marina Bay carries ~4 m debris
+      // fencing over its walls the whole lap. NOT "mesh": fence() sizes each
+      // 5 m panel at CENTRELINE spacing and lays it straight on the node
+      // tangent, so on the inside of a bend the solid sheet's ends swing
+      // into the wall and overlap the next sheet — measured 11 -> 28
+      // coplanar-audit spots (21 fence x street-barrier pairs at gap 1.7).
+      // A true mesh panel here needs an engine fix to that spacing.
+      //
+      // TecPro stacks (1.5 m deep at gap 1.6, so 0.85-2.35 m out) sit in
+      // front of the wall at five corners; across them the fence steps back
+      // to 2.6 m so its posts stand behind the blocks, not through them.
+      const SG_FENCE_GAP = 1.7, SG_FENCE_BACK = 2.6, SG_FENCE_COL = [0.56, 0.60, 0.66];
+      const SG_FENCE = { style: "panelled", postCol: [0.30, 0.32, 0.36] };
+      const SG_TYRES = [
+        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
+        [0.66, 0.675,  1], [0.82, 0.835,  -1],
+      ];
+      const sgFence = (s0, s1, side) => {
+        let a = s0;
+        for (const [t0, t1, ts] of SG_TYRES) {
+          if (ts !== side || t1 <= s0 || t0 >= s1) continue;
+          if (t0 > a) fence(a, t0, side, SG_FENCE_GAP, 3.4, SG_FENCE_COL, SG_FENCE);
+          fence(Math.max(a, t0), Math.min(s1, t1), side, SG_FENCE_BACK, 3.4, SG_FENCE_COL, SG_FENCE);
+          a = Math.min(s1, t1);
+        }
+        if (s1 > a) fence(a, s1, side, SG_FENCE_GAP, 3.4, SG_FENCE_COL, SG_FENCE);
+      };
+      // Side +1 (authored = racing -1, the pit side) ends at the pit
       // complex's window (authored .4850-.5816): 101 posts measured
       // superseded across it, and a fence that visibly ends at the pit wall
       // reads right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
+      // The old runs left ~50 m holes every tenth of the lap; they are closed
+      // now (side -1 whole, side +1 everything but the pit window).
       for (const [s0, s1, side] of [
-        [0.17, 0.29,  1], [0.45, 0.485,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
-        [0.185, 0.195, -1], [0.405, 0.415, -1], [0.625, 0.635, -1],
-      ]) fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
+        [0.00, 0.998, -1], [0.00, 0.485, 1], [0.582, 0.998, 1],
+      ]) sgFence(s0, s1, side);
 
-      for (const [s0, s1, side] of [
-        [0.085, 0.10, 1], [0.235, 0.25, -1], [0.475, 0.49, -1],
-        [0.66, 0.675,  1], [0.82, 0.835,  -1],
-      ]) {
+      for (const [s0, s1, side] of SG_TYRES) {
         tyreWall(s0, s1, side, 1.6, NEON[K(s0) % 4]);
       }
 

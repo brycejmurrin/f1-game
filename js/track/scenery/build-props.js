@@ -2221,7 +2221,6 @@ const TrackBuildProps = (function () {
       for (const off of [-18, -9, 9, 18]) {
         const k = ((kc + off) % n + n) % n;
         const deckY = py[k];
-        if (deckY < 1) continue;
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const tg = [track.tx[k], 0, track.tz[k]];
         for (const side of [-1, 1]) {
@@ -2233,8 +2232,18 @@ const TrackBuildProps = (function () {
           // crossover one stood 4 m inside the lower road's tarmac (frac 0.439,
           // lateral -3.0), a 9 m column the lower road drove straight through.
           if (onTrack(x, z, 0.8)) continue;
-          RAW.addBox(out, [x, deckY / 2 - 0.3, z],
-                 [1.6, deckY + 0.4, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
+          // From the GROUND under the pillar, not y = -0.5: the deck height is
+          // absolute, so on raised terrain a 0-based column stood mostly
+          // underground (Suzuka's crossover sits on ~11.5 m of terrain, burying
+          // that much of every pillar) and `deckY < 1` tested the deck against
+          // sea level, not against the ground beneath it. 0.5 m of footing
+          // below grade; no pillar where the deck is under 1 m above ground.
+          const gy = terrainYAt(x, z);
+          const base = Number.isFinite(gy) ? gy : 0;
+          if (deckY - base < 1) continue;
+          const top = deckY - 0.1, bot = base - 0.5;
+          RAW.addBox(out, [x, (top + bot) / 2, z],
+                 [1.6, top - bot, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
           blockAt(k, side, 2.0, 1);   // solid pillar at the deck edge
         }
       }
@@ -2267,7 +2276,7 @@ const TrackBuildProps = (function () {
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (typeof SceneryPits !== "undefined" && track.pit) {
-      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
                                        night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.

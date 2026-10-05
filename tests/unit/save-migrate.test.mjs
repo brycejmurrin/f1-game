@@ -137,6 +137,21 @@ test("finite numeric strings retain career money and contract values", () => {
   assert.deepEqual(c.deal, { salary: 25, bonusPt: 12, left: 1, years: 2 });
 });
 
+test("MY TEAM roster numbers are sanitised like the contract's: wageBill cannot turn money into NaN", () => {
+  const c = load().migrateCareer({ flavour: "myteam", money: 100, roster: [
+    { code: "AAA", salary: "x", left: "1e400", pending: { kind: "renew", ask: "nope" } },
+    { code: "BBB", salary: "7", left: 2, pending: "junk" },
+  ] });
+  assert.equal(c.roster[0].salary, 0);
+  assert.equal(c.roster[0].left, 0);
+  assert.equal(c.roster[0].pending.ask, 0);
+  assert.equal(c.roster[1].salary, 7);
+  assert.equal(c.roster[1].left, 2);
+  assert.equal(c.roster[1].pending, null);
+  const bill = c.roster.reduce((n, d) => n + (d.salary || 0), 0);   // career.js wageBill()
+  assert.equal(c.money - bill, 93);
+});
+
 test("invalid driver points and overflowing legacy aliases stay finite and idempotent", () => {
   const SM = load();
   const s = SM.remapPoints(JSON.parse(`{"pts":{"AAA":1e309,"BBB":"Infinity","haas:0":25},"teamPts":{"haas":1e309}}`));
@@ -186,4 +201,21 @@ test("each rung climbed is logged once; a newer-build or junk save warns; a miss
   SM.migrateCareer(null);
   assert.deepEqual(lines.map((l) => l[0]), ["warn", "warn"], "newer build + array warn; a missing save (null) is silent");
   assert.ok(lines.every((l) => l[1] === "game"));
+});
+
+// review-race-career-data #5: `career.seat | 0` let `seat: 5` / `-1` through,
+// game.js copies it into driverIdx, and makeCars then marks no car as the
+// player. The seat is clamped to the team's grid row; MY TEAM's is always 0.
+test("the career seat is clamped to the team's grid row (MY TEAM: seat 0)", () => {
+  const SM = load();
+  const seatOf = (o) => SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), o)).seat;
+  assert.equal(seatOf({ seat: 1 }), 1, "a valid seat is kept");
+  assert.equal(seatOf({ seat: 5 }), 1, "past the row: the last seat");
+  assert.equal(seatOf({ seat: -1 }), 0);
+  assert.equal(seatOf({ seat: "x" }), 0);
+  assert.equal(seatOf({ seat: 1e309 }), 1, "overflow clamps, never wraps");
+  assert.equal(seatOf({ team: "nobody", seat: 3 }), 1, "an unknown team still has two seats");
+  assert.equal(seatOf({ flavour: "myteam", team: "custom", seat: 1 }), 0);
+  const once = JSON.stringify(SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { seat: 9 })));
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
 });

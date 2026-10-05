@@ -7,12 +7,12 @@
 (window.TrackScenery = window.TrackScenery || {})["qatar"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
-        place, backdrop, anchor, addBox, addCyl, addFrustum,
+        place, backdrop, anchor, addBox, addCyl, addFrustum, seat,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
         bankedKerbStrip, sponsorHoarding, bleacher, acacia,
-        spectatorHill, terrainYAt } = api;
+        spectatorHill, terrainYAt, onTrack } = api;
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -193,11 +193,24 @@
       // https://tilke.de/portfolio/lusail-race-track-qatar/
       // https://www.qatar-tribune.com/article/86488/front/ashghal-sets-guinness-world-record-for-longest-motorsport-pitlane-building-at-lusail-intl-circuit
       // https://visitqatar.com/intl-en/things-to-do/adventure-sports/sports-venues/lusail-international-circuit
+      //
+      // THE PIT-STRAIGHT FRONTAGE IS RE-KEYED THROUGH sl() (the brands_hatch
+      // idiom). This file's s = 0 is the scenery origin (sceneryStartFrac 0.80),
+      // not the start line — bankZones' 0.0415 apex is a corner in this frame —
+      // so K(0.00) stood the 402 m slab at engine frac ~0.695, in the T12-T14
+      // complex, 0.3 of a lap from the engine pit lane (0.94-0.04, left) and
+      // the start gantry. sl(f) lands at engine frac f: the slab, offices,
+      // halls, pit wall, timing mast, media centre and the main stand opposite
+      // now stand on the real pit straight. The rest of the file keeps its
+      // authoring frame. 1 - def._sceneryShift at the 4 dp brands_hatch uses.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
       (function pitSlab() {
-        // Anchor gap must clear half the footprint width (rejBox). Half of 18 m
-        // is 9 m; 10.5 m leaves a small shoulder so the 402 m slab never clips
-        // the pit-lane tarmac.
-        const a = anchor(K(0.00), -1, 10.5), b = [a.r, a.u, a.t];
+        // BEHIND the engine pit complex (TrackPit), which owns the lane and the
+        // bays: its keep-out reaches 30.1 m past the road edge along the row
+        // (measured), and at the old 10.5 m gap the slab stood in it and was
+        // superseded whole. 40 m = 30.1 + half the 18 m footprint + a shoulder.
+        const a = anchor(K(sl(0.00)), -1, 40), b = [a.r, a.u, a.t];
         const PIT_LEN = 402; // Guinness: 402.1 m — nearest whole metre
         const PIT_H = 12;
         const c = vadd(a.c, a.u, PIT_H * 0.55);
@@ -243,24 +256,24 @@
       })();
       // Secondary hospitality / team offices behind the pit face (not the
       // Guinness slab — that is qatar-pit-slab above).
-      building(K(0.01), -1, 24, 12, 8, 80,
+      building(K(sl(0.01)), -1, 24, 12, 8, 80,
         { kind: "slab", wall: [0.90, 0.90, 0.88], window: WIN_COOL, floor: 3.2 });
       // Pit-lane keep-out wall; garage doors are modelled on the slab above.
-      wall(0.96, 0.08, -1, 3, 1.0, [0.85, 0.85, 0.85]);
+      wall(sl(0.96), sl(0.08), -1, 3, 1.0, [0.85, 0.85, 0.85]);
 
       for (let i = 0; i < 6; i++) {
         const s = (0.965 + i * 0.024) % 1;
         const hf = hash(i * 11 + 7);
         const hallH = 6 + hf * 3;
-        building(K(s), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
+        building(K(sl(s)), -1, 42 + (i % 2) * 8, 12 + hf * 4, hallH, 18 + hf * 8,
           { kind: "hall", wall: WHITE, window: WIN_COOL, floor: 3.0 });
         const roofTop = hallH * 0.5;
-        const a = anchor(K(s), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(s)), -1, 46 + (i % 2) * 8), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, roofTop - 0.05), [14, 0.55, 16], WHITE, b);
       }
 
       (function paddockMediaCentre() {
-        const a = anchor(K(0.925), -1, 72), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.925)), -1, 72), b = [a.r, a.u, a.t];
         modelGroup("qatar-paddock-media-centre", {
           center: vadd(a.c, a.u, 5.5), size: [30, 12, 76], basis: b,
         }, (stage) => {
@@ -278,11 +291,9 @@
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
       // alone put gantry(0.012) — and the start lamps it carries — 1.6 km away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       gantry(sl(0.0), 7.5, [0.12, 0.12, 0.14]);
       // Slim timing mast at S/F (race control lives on qatar-pit-slab).
-      tower(K(0.985), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
+      tower(K(sl(0.985)), -1, 6, 4, 18, { col: [0.18, 0.18, 0.21], cap: true, capCol: FLOOD });
 
       // Main grandstand (R): long covered stand along the pit straight —
       // upgraded capacity ~40,000 (racingcircuits.info / PlanetF1). A continuous
@@ -294,7 +305,7 @@
       (function mainGrandstand() {
         for (let i = 0; i < 5; i++) {
           const s = 0.950 + i * 0.020;
-          qatarStand(`qatar-main-stand-${i}`, s % 1, 1, 15, 80,
+          qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, 15, 80,
             [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
       })();
@@ -591,15 +602,113 @@
       // Each patch is the walk's own step long (less 10 cm), not 14 m: the 2 m
       // overlap between consecutive patches draped the same terrain twice, one
       // lift slot apart — 41 flat-coplanar spots (ground-audit).
+      //
+      // Lusail's signature sandwich is artificial grass then warm sand runoff
+      // (Wikipedia / F1 destination guide / brief §1). Green band first; sand
+      // band immediately outside it. Sand uses a longer step + shorter chord
+      // than the green band: at ~7 m out, inside-curve neighbours would otherwise
+      // share faces (flatCoplanar) even when green at 1.5 m is clean.
+      // Sources: https://en.wikipedia.org/wiki/Lusail_International_Circuit
+      // https://www.formula1.com/en/latest/article/destination-guide-what-fans-can-eat-see-and-do-when-they-visit-qatar-for.6w898BzkTVMpvoYbQ9BHqJ
       const vergeStep = 14;
       const vergeLen = Math.max(1, Math.round(vergeStep / api.ds)) * api.ds - 0.4;
+      const GREEN_GAP = 1.55, GREEN_W = 3.4;
       every(vergeStep, (k) => {
         const s = ((k % n) + n) % n / n;
         for (const side of [-1, 1]) {
           // Pit keep-out wall owns the left shoulder on the S/F (gap 3).
           if (side === -1 && (s >= 0.94 || s <= 0.10)) continue;
-          groundPatch(k, side, 1.55 + side * 0.08, [3.4, 0.15, vergeLen], GRASS,
+          groundPatch(k, side, GREEN_GAP + side * 0.08, [GREEN_W, 0.15, vergeLen], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });
+      {
+        // Discrete sand bay spans (not a full-lap every()): at 7 m out, a
+        // continuous chord ring flat-coplanars itself on every inside curve.
+        // Hero runoff windows keep the green→sand sandwich where the camera
+        // reads it; open desert beyond stays the dune ring.
+        const SAND_W = 8.0, SAND_COL = [0.72, 0.58, 0.38];
+        const SAND_GAP = GREEN_GAP + GREEN_W * 0.5 + SAND_W * 0.5 + 0.6; // ~8.3 m
+        const bays = [
+          // [s0, s1, side, step]
+          [0.10, 0.22, 1, 16],   // T2/T3 outer
+          [0.10, 0.22, -1, 16],
+          [0.26, 0.38, 1, 16],   // flowing mid-lap outer
+          [0.26, 0.38, -1, 16],
+          [0.52, 0.66, 1, 16],
+          [0.52, 0.66, -1, 16],
+          [0.78, 0.90, 1, 16],   // late complex → T16 approach
+          [0.78, 0.90, -1, 16],
+        ];
+        for (const [s0, s1, side, step] of bays) {
+          const bayLen = Math.max(1, Math.round(step / api.ds)) * api.ds - 1.6;
+          along(s0, s1, step, (k) => {
+            groundPatch(k, side, SAND_GAP + side * 0.12, [SAND_W, 0.12, bayLen], SAND_COL,
+              { id: `qatar-sand-apron-${k}-${side}`, samples: 2 });
+          });
+        }
+      }
+
+      // Team hospitality villas — Tilke 2023 rebuild: sixteen villas in four
+      // groups of four, curved fronts contrasting the rectilinear 402 m pit
+      // slab, with first-floor LED brand panels.
+      // https://tilke.de/portfolio/lusail-race-track-qatar/
+      (function hospitalityVillas() {
+        const LED = [
+          [0.85, 0.18, 0.16], [0.16, 0.42, 0.78], [0.92, 0.74, 0.14], [0.10, 0.62, 0.42],
+        ];
+        // Four clusters behind the pit / paddock face (left of S/F), spaced
+        // along the Guinness slab so they read as one paddock ensemble.
+        const emitVillaCluster = (stage, a0, b, g) => {
+          for (let v = 0; v < 4; v++) {
+            const dz = (v - 1.5) * 10.2;
+            const base = vadd(a0.c, a0.t, dz);
+            const wall = (v & 1) ? [0.93, 0.93, 0.91] : WHITE;
+            // Seated plinth so BFS support reaches the villa stack.
+            stage._mat = MAT.STONE;
+            if (seat && seat.box) {
+              seat.box(stage, base, [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            } else {
+              addBox(stage, vadd(base, a0.u, 0.35), [11.0, 0.7, 9.2], [0.82, 0.82, 0.80], b);
+            }
+            // Body + set-back upper storey (curved-front read via frustum).
+            addFrustum(stage, vadd(base, a0.u, 0.7), 9.2, 7.0, 7.6, wall, 8, b);
+            addBox(stage, vadd(vadd(base, a0.r, 1.0), a0.u, 5.0),
+              [7.6, 3.8, 7.8], wall, b);
+            // First-floor LED brand screen (Tilke: "Imposing LED Screens") —
+            // sits on the body face, not floating free.
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(vadd(base, a0.r, -4.4), a0.u, 5.0),
+              [0.20, 2.8, 6.4], LED[(g + v) % LED.length], b);
+            stage._mat = MAT.STONE;
+            // Roof slab bottom touches the upper storey top (5.0+1.9=6.9).
+            addBox(stage, vadd(base, a0.u, 7.15), [9.6, 0.5, 8.6], WHITE, b);
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(base, a0.r, -4.8), a0.u, 3.6),
+              [2.2, 0.20, 6.6], LAMP, b);
+            stage._mat = 0;
+          }
+        };
+        // Literal modelGroup("…") ids — scenery-api-contract scans the source.
+        {
+          const a0 = anchor(K(0.955), -1, 56), b = [a0.r, a0.u, a0.t];
+          if (!(typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16))) {
+            modelGroup("qatar-hospitality-villas-1", {
+              center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+            }, (stage) => emitVillaCluster(stage, a0, b, 0), { required: true });
+          }
+        }
+        for (const [g, s0, id] of [
+          [1, 0.975, "qatar-hospitality-villas-2"],
+          [2, 0.995, "qatar-hospitality-villas-3"],
+          [3, 0.025, "qatar-hospitality-villas-4"],
+        ]) {
+          const a0 = anchor(K(s0), -1, 56);
+          if (typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16)) continue;
+          const b = [a0.r, a0.u, a0.t];
+          modelGroup(id, {
+            center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
+          }, (stage) => emitVillaCluster(stage, a0, b, g));
+        }
+      })();
     };

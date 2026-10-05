@@ -205,3 +205,130 @@ test("settings export lists the new camera-feel keys", () => {
   assert.match(src, /lookBackLatch/);
   assert.match(src, /speedVignette/);
 });
+
+/* CAMERA FEEL PASS (2026-10-04): trauma shake that does not depend on the frame
+ * rate and never leaves the tub; LOOK BACK as a cut for the aim; a held RMB
+ * holds the glance; snapGameCam as a real reset. */
+test("trauma shake is frame-rate independent through the chase damper (was 2.2x at 30 vs 144 fps)", () => {
+  const { CamFeel } = loadCamFeel();
+  const rmsAt = (hz) => {
+    const dt = 1 / hz, lam = 18;
+    let y = 0, s = 0, k = 0;
+    for (let t = 0; t < 20; t += dt) {
+      const eye = [0, 0, 0], tgt = [0, 0, 10];
+      CamFeel.shake(eye, tgt, 1, t, false);
+      y += (eye[0] - y) * (1 - Math.exp(-lam * dt));
+      if (t > 2) { s += y * y; k++; }
+    }
+    return Math.sqrt(s / k);
+  };
+  const r30 = rmsAt(30), r60 = rmsAt(60), r144 = rmsAt(144);
+  assert.ok(r30 / r144 < 1.15, `30 vs 144 fps: ${r30.toFixed(4)} vs ${r144.toFixed(4)}`);
+  // The old per-frame Math.random() gave 0.111 rms at 60 Hz; the feel at 60 is kept.
+  assert.ok(Math.abs(r60 - 0.111) < 0.02, "60 Hz rms stays near the shipped 0.111: " + r60.toFixed(4));
+  for (let ch = 0; ch < 4; ch++) for (let t = 0; t < 5; t += 0.013) {
+    const n = CamFeel.shakeNoise(ch, t);
+    assert.ok(n >= -0.5 && n <= 0.5, "channels stay in the old Math.random() - 0.5 range");
+  }
+});
+
+test("onboard shake stays inside the tub and becomes aim rotation", () => {
+  const { CamFeel } = loadCamFeel();
+  let maxEye = 0, maxAim = 0;
+  for (let t = 0; t < 10; t += 0.007) {
+    const eye = [0, 1, 0], tgt = [0, 1, 20];
+    CamFeel.shake(eye, tgt, 0.9, t, true);          // full trauma: CamTune.shakeOffset(1) = 0.9 m
+    maxEye = Math.max(maxEye, Math.abs(eye[0]), Math.abs(eye[1] - 1));
+    maxAim = Math.max(maxAim, Math.abs(Math.atan2(tgt[0] - eye[0], tgt[2] - eye[2])));
+  }
+  assert.ok(maxEye <= CamFeel.TUB_EYE_MAX + 1e-12, "the eye moves at most TUB_EYE_MAX: " + maxEye);
+  assert.ok(maxAim > 1 * Math.PI / 180, "the crash still reads, as rotation: " + (maxAim * 180 / Math.PI).toFixed(2) + "°");
+  const eye = [0, 1, 0], tgt = [0, 1, 20];
+  CamFeel.shake(eye, tgt, 0, 1.234, true);
+  assert.deepEqual(eye, [0, 1, 0], "no trauma, no shake");
+});
+
+test("LOOK BACK flips are a cut for the aim: one snap per edge, and the state game.js mirrors the roll by", () => {
+  const { CamFeel } = loadCamFeel();
+  CamFeel.resetLatch();
+  CamFeel.tick({ mode: "chase", dt: 0.016, racing: true, lookHeld: false });
+  assert.equal(CamFeel.consumeAimSnap(), false, "nothing flipped");
+  CamFeel.tick({ mode: "chase", dt: 0.016, racing: true, lookHeld: true });
+  assert.equal(CamFeel.lookingBackNow(), true);
+  assert.equal(CamFeel.consumeAimSnap(), true, "pressing LOOK BACK snaps the aim");
+  assert.equal(CamFeel.consumeAimSnap(), false, "once");
+  CamFeel.tick({ mode: "chase", dt: 0.016, racing: true, lookHeld: true });
+  assert.equal(CamFeel.consumeAimSnap(), false, "holding is not a new cut");
+  CamFeel.tick({ mode: "chase", dt: 0.016, racing: true, lookHeld: false });
+  assert.equal(CamFeel.lookingBackNow(), false);
+  assert.equal(CamFeel.consumeAimSnap(), true, "releasing snaps back");
+  CamFeel.tick({ mode: "reverse", dt: 0.016, racing: true, lookHeld: true });
+  assert.equal(CamFeel.consumeAimSnap(), false, "reverse never flips, so never cuts");
+  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  assert.match(game, /CamFeel\.consumeAimSnap\(\)\) \{ for \(let i = 0; i < 3; i\+\+\) camTgt\[i\] = tgtT\[i\]; camRoll = -camRoll; \}/,
+    "game.js snaps the target (not the eye) and mirrors the roll on the edge");
+  assert.match(game, /lookingBackNow\(\) \? -1 : 1/, "and keeps the roll target mirrored while looking back");
+});
+
+test("mouse free-look holds while the right button is held still", () => {
+  const { CamFeel } = loadCamFeel();
+  CamFeel.resetFreeLook();
+  CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseDx: 200, mouseHeld: true });
+  const a = CamFeel.freeLookState().yaw;
+  assert.ok(a > 10, "the drag looked right");
+  for (let i = 0; i < 30; i++) CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseHeld: true });
+  assert.equal(CamFeel.freeLookState().yaw, a, "held still for half a second: the glance holds");
+  for (let i = 0; i < 30; i++) CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseHeld: false });
+  assert.ok(CamFeel.freeLookState().yaw < a * 0.2, "released: it recentres");
+  const input = fs.readFileSync(path.join(root, "js/input/input.js"), "utf8");
+  assert.match(input, /function lookMouseHeld\(\)/);
+  const feel = fs.readFileSync(path.join(root, "js/camera/feel.js"), "utf8");
+  assert.match(feel, /Input\.lookMouseHeld\(\)/, "tickRace passes it");
+});
+
+test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", () => {
+  const { CamFeel } = loadCamFeel();
+  CamFeel.setLookBackLatch(true);
+  CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, lookHeld: true });
+  assert.equal(CamFeel.shouldLookBack("cockpit", false), true, "latched at the flag");
+  CamFeel.follow("sp:chase", 1, 4, 0);
+  CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch();
+  assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
+  assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
+  CamFeel.setLookBackLatch(false);
+  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  const snap = game.slice(game.indexOf("function snapGameCam("), game.indexOf("function snapGameCam(") + 1200);
+  for (const call of ["CamFeel.resetFollow()", "CamFeel.resetFreeLook()", "CamFeel.resetLatch()", "GameCams.resetSmoothing()"])
+    assert.ok(snap.includes(call), "snapGameCam calls " + call);
+  const vant = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
+  assert.match(vant, /function resetSmoothing\(\) \{\n  for \(const k in _hangOut\) delete _hangOut\[k\];\n  for \(const k in _hangFast\) delete _hangFast\[k\];/);
+});
+
+// A snap (startRace / restart → snapGameCam) must also zero the eased bend
+// hang: the first live frame used to ease from the previous race's hairpin
+// and pop the chase eye ~4 m sideways off a straight grid.
+test("a snapped chase frame clears the bend hang the next live frame eases from", () => {
+  let K = 0;
+  const n = 1000, total = 4000;
+  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
+    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
+    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
+    surface: { heightAt: () => -0.12 } };
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
+    curvature: () => K,
+    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
+    GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
+    Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
+  vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
+  const live = (s) => ctx.GC.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, dt: 1 / 60, att: {} }).eye[0];
+  K = 0.06; for (let i = 0; i < 180; i++) live(500);       // sit in a left hairpin
+  K = 1e-5;
+  const snap = ctx.GC.vantage(track, "chase", 100, 0, 0, 0, { carPos: [0, 100], carHead: 0, snap: true, att: {} }).eye[0];
+  const first = live(100);
+  assert.ok(Math.abs(first - snap) < 0.1, `first live frame ${first.toFixed(3)} vs snap ${snap.toFixed(3)}`);
+});

@@ -64,8 +64,10 @@ test.describe("Imola track-owned foundation", () => {
     // the complex over-claiming and eating real scenery — it has reported a
     // Monaco fountain 308 m from the nearest pit node — shows up here as a new
     // id, not as a count that quietly grows.
+    // Since the engine pit moved to Imola's real (left) side, the complex no
+    // longer lands on the Acque Minerali mist emitters: nothing is superseded.
     expect(result.models.suppressed.map((entry) => entry.id).sort())
-      .toEqual(["acque-mist-0", "acque-mist-2"]);
+      .toEqual([]);
     expect(result.models.unsafe).toEqual([]);
     const required = result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
     expect(required).toEqual(expect.arrayContaining([

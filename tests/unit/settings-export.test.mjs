@@ -31,7 +31,7 @@ function boot(opts = {}) {
   if (opts.store) Object.assign(store, opts.store);
   const sb = {
     Math, Object, Array, Number, JSON, Map, Set, Date, String, Blob: class {},
-    setTimeout: () => 0,
+    setTimeout: () => 0, clearTimeout() {},
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     GameStore: { store },
     GameAudio: { tuneDefaults: () => ({ gain: 1, bass: 0.5, air: 0.2 }), layerDefaults: () => ({ wind: true, turbo: true }) },
@@ -59,6 +59,9 @@ function boot(opts = {}) {
     if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
     vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: "js/career/save-migrate.js" });
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
+  }
+  if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
+    vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: "js/ui/" + file + ".js" });
   }
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
@@ -790,6 +793,40 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
 });
 
+test("Home settings and bounded visual profiles survive settings backup without carrying unrelated state", () => {
+  const profiles = [{ id: "profile-1", name: "Night", values: { homeScene: "night", homeCamera: "rear", uiScale: 109.25,
+    titleLayout: { v: 2, wide: { btns: { x: 18 } } }, lookCareer: { density: "roomy" }, steering: "pro", account: "secret" } }];
+  const a = boot({ appearance: true, disk: { "apex26.homeScene": '"pitlane"', "apex26.backgroundMotion": '"ambient"',
+    "apex26.homeCamera": '"front"', "apex26.appearanceProfiles": JSON.stringify(profiles) } });
+  for (const mode of ["all", "changes"]) {
+    const file = a.collect(mode), b = boot({ appearance: true });
+    assert.equal(b.loadSettings(file).skipped, 0);
+    assert.equal(JSON.parse(b.disk.get("apex26.homeScene")), "pitlane");
+    assert.equal(JSON.parse(b.disk.get("apex26.backgroundMotion")), "ambient");
+    assert.equal(JSON.parse(b.disk.get("apex26.homeCamera")), "front");
+    const values = JSON.parse(b.disk.get("apex26.appearanceProfiles"))[0].values;
+    assert.equal(values.uiScale, 109.25); assert.equal(values.homeCamera, "rear");
+    assert.equal(values.titleLayout.wide.btns.x, 18); assert.equal(values.lookCareer.density, "roomy");
+    assert.equal(values.steering, undefined); assert.equal(values.account, undefined);
+  }
+  const file = a.collect("all");
+  assert.equal(JSON.stringify(file).includes("secret"), false, "profile export must not leak unknown values");
+});
+
+test("appearance import rejects malformed bags and enums and clamps profile contents", () => {
+  const b = boot({ appearance: true });
+  const settings = appearance => ({ format: b.SettingsExport.FORMAT, settings: { appearance } });
+  assert.equal(b.loadSettings(settings({ homeScene: "unknown", homeCamera: {}, backgroundMotion: "fast", appearanceProfiles: {} })).skipped, 4);
+  const rows = [{ id: "safe", name: "A".repeat(100), values: { uiScale: 999, hudBtnOpacity: 0, homeScene: "unknown", lookCareer: { density: "bad" }, career: { money: 100 } } },
+    { id: "safe", name: "Duplicate" }, { id: "<script>", name: "Bad" }, ...Array.from({ length: 20 }, (_, i) => ({ id: "p-" + i, name: "Profile " + i }))];
+  assert.equal(b.loadSettings(settings({ appearanceProfiles: rows })).applied, 1);
+  const saved = JSON.parse(b.disk.get("apex26.appearanceProfiles"));
+  assert.ok(saved.length <= 12); assert.equal(new Set(saved.map(p => p.id)).size, saved.length);
+  assert.equal(saved[0].name.length, 40); assert.equal(saved[0].values.uiScale, 200);
+  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "garage");
+  assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
+});
+
 // ── THE CAREER FILE ──────────────────────────────────────────────────────────
 
 const CAREER_SAVE = {
@@ -879,7 +916,7 @@ test("career round-trip: export then import restores the slot through migrateCar
   assert.equal(JSON.parse(dst.disk.get("apex26.careerSlot")), "driver:0");
 });
 
-test("careerRow injects two buttons without a static shell id in index.html", () => {
+test("careerRow injects file controls without a static shell id in index.html", () => {
   const src = read("js/ui/settings-export.js");
   assert.match(src, /function careerRow\(/);
   assert.match(src, /cr-career-save/);
@@ -887,6 +924,43 @@ test("careerRow injects two buttons without a static shell id in index.html", ()
   assert.equal(/id="cr-career-file"/.test(read("index.html")), false,
     "career file controls are injected — they must not add shellNodes");
   assert.match(read("js/career/career-ui.js"), /SettingsExport\.careerRow/);
+});
+
+function protectionUI(storage) {
+  const dom = makeDom();
+  const b = boot({ globals: { document: dom.document, navigator: { storage } } });
+  b.SettingsExport.create(b.G);
+  const row = b.SettingsExport.careerRow();
+  return { button: row.children[2], status: row.children[3] };
+}
+
+test("save protection only requests persistence on a click and reports the actual grant", async () => {
+  let requests = 0;
+  const { button, status } = protectionUI({ persisted: async () => false,
+    persist: async () => { requests++; return requests > 1; } });
+  await new Promise(setImmediate);
+  assert.equal(requests, 0);
+  assert.match(status.textContent, /not enabled/);
+  button.click(); await new Promise(setImmediate);
+  assert.equal(requests, 1);
+  assert.equal(button.disabled, false, "a denied request must not claim protection");
+  assert.match(status.textContent, /not enabled/);
+  button.click(); await new Promise(setImmediate);
+  assert.equal(button.disabled, true);
+  assert.match(status.textContent, /protection is enabled/);
+  assert.match(status.textContent, /Clearing site data still removes saves/);
+});
+
+test("unsupported and rejected persistence APIs retain an actionable backup reminder", async () => {
+  const unavailable = protectionUI(undefined);
+  assert.equal(unavailable.button.disabled, true);
+  assert.match(unavailable.status.textContent, /Save a career file/);
+  const broken = protectionUI({ persisted() { throw Error("blocked"); }, persist() { throw Error("blocked"); } });
+  await Promise.resolve();
+  assert.equal(broken.button.disabled, false);
+  broken.button.click(); await Promise.resolve();
+  assert.match(broken.status.textContent, /could not be confirmed/);
+  assert.match(broken.status.textContent, /separate backup/);
 });
 
 test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {

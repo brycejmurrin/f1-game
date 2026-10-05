@@ -141,6 +141,7 @@ function boot() {
     performance: { now: () => 1000 },
   };
   sb.window = sb;
+  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: "js/ui/hud-readouts.js" });
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
@@ -167,7 +168,8 @@ function boot() {
     dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true, cssCol: () => "#f00",
   };
   const hud = sb.GameHud.create(G);
-  return { dom, $, els, player, rival, G, hud, tick: () => hud.updateHud(true), frame: (ms) => hud.updateHud(false, ms) };
+  const flush = () => { while (timers.length) timers.shift()(); };
+  return { dom, $, els, player, rival, G, hud, sb, timers, flush, tick: () => hud.updateHud(true), frame: (ms) => hud.updateHud(false, ms) };
 }
 
 test("hud.js: a car a lap up reads +1L, not distance ÷ speed", () => {
@@ -175,7 +177,7 @@ test("hud.js: a car a lap up reads +1L, not distance ÷ speed", () => {
   tick();
   assert.equal(els.gapA.textContent, "▲ BEA +1L");
   rival.prog = player.prog + 100; tick();
-  assert.match(els.gapA.textContent, /^▲ BEA \+2\.0s$/, "back to seconds, with no EMA carried from the lap");
+  assert.match(els.gapA.textContent, /^▲ BEA 2\.0s$/, "back to seconds, with no EMA carried from the lap");
 });
 
 test("hud.js: gear, tach and speed update every frame; the clock stays at 10 Hz", () => {
@@ -206,10 +208,14 @@ test("hud.js: race DELTA appears once a best lap exists, without a ghost", () =>
   player.lap = 1;
   for (let s = 0; s <= 995; s += 5) { player.s = s; player.lapTime = s / 50; frame(16); }
   tick();
-  assert.equal($("hud-delta").hidden, true, "nothing to compare against on the opening lap");
+  // The slot is RESERVED on the opening lap (invisible, data-pending), so the
+  // centred tower does not re-centre when the first number arrives.
+  assert.equal($("hud-delta").hidden, false, "the DELTA box keeps its place in the tower");
+  assert.equal($("hud-delta").dataset.pending, "", "…invisible while nothing compares against it");
   player.lap = 2; player.s = 1; player.lapTime = 0.02; player.best = 20; player.lastLap = 20; frame(16);
   player.s = 500; player.lapTime = 10.5; tick();
   assert.equal($("hud-delta").hidden, false);
+  assert.equal($("hud-delta").dataset.pending, undefined, "a number: visible");
   assert.equal($("hud-delta-n").textContent, "+0.500");
   assert.equal($("hud-delta").dataset.ref, "best");
 });
@@ -221,4 +227,123 @@ test("shell: every .hud-top box has an id the hide rules key on; no nth-child le
   assert.doesNotMatch(css, /\.hud-box:nth-child/);
   assert.match(css, /body\[data-hud-hide~="best"\] #hud-box-best/);
   assert.doesNotMatch(hud, /innerHTML/, "#hud-delta is static markup now");
+});
+
+// ── #announce-live has ONE writer (js/ui/live-region.js) ─────────────────────
+// Three voices each did "clear, then write 60 ms later" on their own timer, so
+// two in one tick landed ~1 ms apart and the first was replaced before any
+// reader saw it. One timer and a priority queue: flag > penalty > save > radio > HUD.
+function loadRegion() {
+  const timers = [];
+  let t = 0;
+  const live = { textContent: "" };
+  let id = 0;
+  const ctx = { Math, String, Object, setTimeout: (fn, ms) => { timers.push({ fn, ms, id: ++id }); return id; },
+    clearTimeout: (h) => { const i = timers.findIndex((x) => x.id === h); if (i >= 0) timers.splice(i, 1); },
+    performance: { now: () => t }, document: { getElementById: (id) => (id === "announce-live" ? live : null) } };
+  vm.createContext(ctx);
+  vm.runInContext(src("js/ui/live-region.js") + "; this.LiveRegion = LiveRegion;", ctx);
+  // Run the next timer; returns the region's text after it.
+  const step = () => { const x = timers.shift(); if (x) { t += x.ms; x.fn(); } return live.textContent; };
+  return { L: ctx.LiveRegion, live, step, timers, advance: (ms) => { t += ms; } };
+}
+
+test("LiveRegion: a flag and a radio call in one tick are BOTH read, the flag first", () => {
+  const { L, live, step } = loadRegion();
+  assert.equal(L.say("ENGINEER: BOX THIS LAP", "race"), true, "an idle region starts the line at once");
+  assert.equal(live.textContent, "", "cleared first, so a repeat is still a change");
+  assert.equal(L.say("RACE CONTROL: SAFETY CAR", "flag"), true, "the flag jumps a radio line that is not yet written");
+  assert.equal(step(), "RACE CONTROL: SAFETY CAR", "the radio's beat was cancelled; the flag is written after its own");
+  assert.deepEqual([...L.state().queued], ["radio:ENGINEER: BOX THIS LAP"], "the radio waits its turn — not lost");
+  assert.equal(step(), "", "after the hold, the region clears for the next line");
+  assert.equal(step(), "ENGINEER: BOX THIS LAP");
+});
+
+test("LiveRegion: a lower-priority line waits out the hold; stale HUD lines are dropped", () => {
+  const { L, live, step, advance } = loadRegion();
+  L.say("RACE CONTROL: YELLOW FLAG", "flag");
+  step();                                            // written
+  assert.equal(L.say("Position 3 of 20", "hud"), false, "the HUD waits behind a flag");
+  assert.equal(L.say("Position 2 of 20", "hud"), false);
+  assert.deepEqual([...L.state().queued], ["hud:Position 2 of 20"], "a newer HUD line supersedes the queued one");
+  assert.equal(live.textContent, "RACE CONTROL: YELLOW FLAG", "the flag holds the region");
+  step(); step();
+  assert.equal(live.textContent, "Position 2 of 20");
+  // A penalty arriving while a HUD line HOLDS cuts the hold short: the HUD line was already read.
+  assert.equal(L.say("RACE CONTROL: 5 SECOND PENALTY", "penalty-hit"), true);
+  step();
+  assert.equal(live.textContent, "RACE CONTROL: 5 SECOND PENALTY");
+  L.say("Position 1 of 20", "hud");
+  advance(6000);                                     // read too late to mean anything
+  step();
+  assert.equal(L.state().phase, "idle", "a HUD line queued past its shelf life is dropped, not read late");
+  assert.equal(live.textContent, "RACE CONTROL: 5 SECOND PENALTY", "the region is left as it was");
+  L.say("ENGINEER: PUSH", "race"); L.reset();
+  assert.deepEqual(JSON.parse(JSON.stringify(L.state())), { phase: "idle", current: null, queued: [] }, "a new session starts empty");
+});
+
+test("hud.js: the flag and the radio go through the one writer", () => {
+  const hud = read("js/ui/hud.js"), game = read("js/game.js"), ro = read("js/ui/hud-readouts.js");
+  const sel = read("js/ui/select-screen.js");   // the SESSION ONLY warning, the fourth voice
+  for (const [name, code] of [["hud.js", hud], ["game.js", game], ["hud-readouts.js", ro], ["select-screen.js", sel]]) {
+    assert.doesNotMatch(code, /setTimeout\(\(\) => \{ live\.textContent =/, `${name} must not time its own #announce-live write`);
+    assert.match(code, /LiveRegion\.say\(/, `${name} speaks through LiveRegion`);
+  }
+  assert.match(hud, /LiveRegion\.say\(said, "flag"\)/);
+  assert.match(game, /LiveRegion\.say\(said, kind\)/);
+  assert.match(ro, /LiveRegion\.say\(said, "hud"\)/);
+  assert.match(sel, /LiveRegion\.say\(text, "save"\)/);
+});
+
+// ── the timing tower and its chips ────────────────────────────────────────────
+test("hud.js: POS is session-aware — TT, Q in qualifying, PRAC in practice, rank/field in a race", () => {
+  const { els, G, tick } = boot();
+  tick();
+  assert.equal(els.pos.textContent, "2/2");
+  G.session = "quali"; G.cars = [G.player]; tick();
+  assert.equal(els.pos.textContent, "Q", "qualifying's field is the player alone: never 1/1");
+  G.session = "race"; G.practice = true; G.cars = [G.rival || G.cars[0], G.player]; tick();
+  assert.equal(els.pos.textContent, "PRAC", "practice ranks road order with nothing at stake");
+  G.practice = false; G.timeTrial = true; tick();
+  assert.equal(els.pos.textContent, "TT");
+});
+
+test("hud.js: the gap chips carry no sign — the arrow is the direction, as RELATIVE agrees", () => {
+  const { els, rival, player, tick } = boot();
+  rival.prog = player.prog + 100; tick();
+  assert.match(els.gapA.textContent, /^▲ BEA \d+\.\ds$/, "no '+' on the ahead chip (RELATIVE reads ahead as '-')");
+  rival.prog = player.prog + 1000 + 300; tick();
+  assert.equal(els.gapA.textContent, "▲ BEA +1L", "laps keep RELATIVE's own '+1L' (a lap up)");
+});
+
+test("hud.js: the same car lapping the player AGAIN is a new blue flag, spoken again", () => {
+  const { els, rival, player, G, tick, flush } = boot();
+  const live = els.announceLive;
+  G.track.total = 1000; player.prog = 2000; player.speed = 60; rival.speed = 70;
+  rival.prog = player.prog + 1000 - 20;              // 20 m behind on the road, a lap up
+  tick(); flush();
+  assert.equal(els.flag.textContent, "BLUE FLAG BEA");
+  assert.equal(live.textContent, "RACE CONTROL: BLUE FLAG, LET BEA THROUGH");
+  live.textContent = "";
+  tick(); flush();
+  assert.equal(live.textContent, "", "a steady blue flag is not re-spoken every tick");
+  rival.prog = player.prog + 1000 + 200; tick(); flush();   // it is through
+  assert.equal(els.flag.hidden, true);
+  rival.prog = player.prog + 2000 - 20; tick(); flush();    // a lap later it comes round again
+  assert.equal(live.textContent, "RACE CONTROL: BLUE FLAG, LET BEA THROUGH", "the second lapping is called too");
+});
+
+test("hud.js: resetRace clears the chips' carried state — team bar, tow, pit window, ghost tint", () => {
+  const { els, G, player, rival, hud, tick } = boot();
+  G.pits = { windowOf: () => "P12" };
+  player.towing = 1; rival.prog = player.prog + 100;
+  tick();
+  assert.notEqual(els.gapA.style.getPropertyValue("--gap-team"), "");
+  assert.equal(els.gapA.dataset.tow, "1");
+  assert.equal(els.gapA.dataset.pit, "P12");
+  hud.resetRace();
+  assert.equal(els.gapA.style.getPropertyValue("--gap-team"), "", "the last race's neighbour bar is gone");
+  assert.equal(els.gapA.dataset.tow, undefined);
+  assert.equal(els.gapA.dataset.pit, undefined);
+  assert.equal(els.gapA.style.color || "", "", "and no time-trial ghost tint survives into a race");
 });

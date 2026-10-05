@@ -156,7 +156,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
-| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily). |
+| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
@@ -196,6 +196,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
 | `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
 | `hud-damage.js` | `HudDamage` | tag | HUD DAMAGE CHIP: paints Damage (js/race/damage.js) on #hud-damage, a small car-outline glyph whose parts are tinted by level, with a short text fallback ("FW… |
+| `live-region.js` | `LiveRegion` | tag | LiveRegion: the ONE writer of #announce-live, the always-present polite region screen readers hear the race through. |
 | `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
 | `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
@@ -217,6 +218,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 | `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
+| `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
 
 **`js/track/core/`**
 
@@ -431,6 +433,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
 | `extra-rigs.js` | `ExtraRigs` | tag | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
+| `flyby-sight.js` | `FlybySight` | tag | FLYBY SIGHTLINES: what a flyby eye can actually SEE. |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
@@ -439,7 +442,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.7 MB / 22 cars). |
+| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). |
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
@@ -1649,13 +1652,26 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   reflection read it — the diffuse `NoL` above the block is untouched, a
   ripple being a specular event. Constant for constant across the three
   (`light-grid.test.mjs` pins the constants and the plumbing).
-- **SCENE MSAA (2026-10-01):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
-  4× on its desktop WebGL2 backend (`tlx.js` passes `sceneSamples` into
+- **SCENE MSAA (2026-10-01; preset-driven on TLX 2026-10-04):** GLX desktop 2×/4× (HIGH/ULTRA, `glx/post.js`), TLX
+  the same rule on its desktop WebGL2 backend (`tlx.js` `sceneSamplesFor` passes `sceneSamples` into
   `tlx-post.js`'s scene target; r186's WebGL backend resolves the depth texture
-  by blit, so SSAO/SSR/godray read a resolved depth), **TLX-WebGPU and WGX gap**:
+  by blit, so SSAO/SSR/godray read a resolved depth). Neither WebGL2 backend asks
+  for canvas MSAA: the canvas only receives the FXAA quad. **TLX-WebGPU and WGX gap**:
   core WebGPU cannot resolve a depth attachment, so the native path stays
   single-sample with FXAA alone (`docs/research/WEBGPU-PARITY.md`). Phones: no
   scene MSAA on any backend (the mobile recipe).
+- **Decals, bloom, inset, blocker (2026-10-04), all three backends:** car decal
+  atlases upload PREMULTIPLIED and blend ONE / ONE_MINUS_SRC_ALPHA; the decal
+  shader takes a 4-tap box PCF on the static sun map and the baked lamp pools
+  (GLX units 0/12/13, TLX `lit.decalLight`, WGX group 1 = the lit frame group).
+  The bloom bright pass tests EXPOSED luminance (`present` threshold is in
+  exposed units; game.js multiplies the per-TOD value by the TOD exposure). The
+  rear-view mirror / PiP inset takes the composite's colour grade + dither
+  (GLSL `COLOUR_GRADE`/`DITHER_LSB`, TSL `colourGradeT`/`ditherT`, WGSL
+  `colourGradeP`/`ditherLSB`). The PCSS blocker is 32-bit float, the min over
+  each 4×4 source footprint. No soft particles yet: every backend draws them in
+  the scene pass with its depth attachment bound, so the depth is not sampleable
+  there without a copy.
   (`light-grid.test.mjs` pins the constants and the plumbing). Wet-road SSR
   itself is also live on all three (GLX/TLX composite, WGX half-res pass →
   composite); analytic `envBlend` is the plain-gloss fallback when SSR sheds

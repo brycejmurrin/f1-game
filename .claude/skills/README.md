@@ -42,12 +42,12 @@ stayed separate in the 2026-09-03 pass.
 | **slim-bloat** | Fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates. |
 | **steward** | Driving a PR to green here — CI/Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: the draft/ready dedupe that makes `cancelled` normal, `sync-pr.mjs` over a hand merge, `who-is-on-it.mjs` before a red on the shared deploy branch, the gate a fix push clears, and what "live" means. |
 | **survey-track** | Browser-free track-surveyor analysis + parent captures for end-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile). |
+| **track-realism** | Reusable or parallel multi-circuit realism campaign: dated web evidence, exclusive circuit pairs, geometry/scenery/model budgets, parent-owned captures and verification. |
 | **survey-ui-matrix** | Parent-owned review of the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — `playwright-official` `browser_*` resize/DOM/CSS or `layout-audit.mjs`; enumerate screens from source, measure each cell, capture. |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; game feel / juice — shake, hit-stop, kerb and collision feedback that must not touch determinism (`references/game-feel.md`). |
 | **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
 | **webgl-debug** | Blank/dark GLX canvas (GLX is the explicit/fallback backend, not the default), shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL compile/validation failures, device lost, silent fallback to WebGL2. |
-
 | **replay-camera** | WATCH/HIGHLIGHTS camera seeks, follow/exit/reentry anchors; offline fixture then serialized rendered lifecycle probe. |
 | **f1-animation-cameras** | Garage/Flyby/WATCH/replay motion, framing, shot transitions and camera tuners; local game guide and deterministic evidence. |
 
@@ -66,6 +66,7 @@ hashes while staging: nothing to bump after a `js/`/`css/` edit; after a
 description is loaded every turn; this table is not): hook catalogs →
 agent-view; a live canvas → mcp-probe; live `version.json` → deploy-research;
 editing a circuit → new-track; a picture-driven accuracy pass → survey-track;
+reusable or parallel multi-track realism → track-realism;
 whole-UI review → survey-ui-matrix; a single layout bug → ui-menu-a11y;
 canvas/3D shots → playwright-probe; restructure decisions → css-play; a new
 lighting knob across backends → `../../docs/ARCHITECTURE.md` §Cross-backend

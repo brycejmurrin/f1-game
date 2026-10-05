@@ -96,17 +96,17 @@ const PhonePad = (function () {
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
-  // {t:"hi", side} once on open from each end.
+  // {t:"hi", side, haptics} once on open; only a capable phone enables rumble.
   function encodeEvent(k) { return JSON.stringify({ t: "ev", k }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
-  function encodeHello(side) { return JSON.stringify({ t: "hi", side, p: PROTO }); }
+  function encodeHello(side, haptics) { return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true }); }
   function decodeEvent(text) {
     let o;
     try { o = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!o || typeof o !== "object") return null;
     if (o.t === "ev") return EVENTS.includes(o.k) ? { t: "ev", k: o.k } : null;
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
-    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0 };
+    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.
@@ -123,13 +123,22 @@ const PhonePad = (function () {
   }
 
   // The URL the QR carries. The code is a FRAGMENT: it never reaches a server log.
-  function padUrl(code, base) {
+  function relayUrl(value) {
+    try {
+      const u = new URL(value), local = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+      if (u.username || u.password || u.search || u.hash || !(u.protocol === "https:" || (u.protocol === "http:" && local))) return null;
+      return u.href.replace(/\/+$/, "");
+    } catch (_) { return null; }
+  }
+  function padUrl(code, base, relay) {
     let root = base;
     if (!root) {
       try { root = location.origin + location.pathname; } catch (e) { root = ""; }
     }
     root = String(root).replace(/[^/]*$/, "");      // …/index.html → …/
-    return root + "controller.html#pad=" + code;
+    const endpoint = relay ? relayUrl(relay) : null;
+    if (relay && !endpoint) throw new Error("Invalid private pairing relay URL");
+    return root + "controller.html#pad=" + encodeURIComponent(code) + (endpoint ? "&relay=" + encodeURIComponent(endpoint) : "");
   }
   function codeFromUrl(href) {
     try {
@@ -137,6 +146,16 @@ const PhonePad = (function () {
       const m = h.match(/[#&]pad=([^&\s]+)/);
       return m ? decodeURIComponent(m[1]) : null;
     } catch (e) { return null; }
+  }
+  function pairingFromUrl(href) {
+    const code = codeFromUrl(href);
+    if (!code) return null;
+    try {
+      const text = href != null ? String(href) : location.hash;
+      const m = text.slice(text.indexOf("#")).match(/(?:^#|&)relay=([^&]*)/);
+      const relay = m ? relayUrl(decodeURIComponent(m[1])) : null;
+      return { code, relay, invalid: !!m && !relay };
+    } catch (_) { return { code, relay: null, invalid: true }; }
   }
 
   // ── desktop: the focus ring the phone moves ──────────────────────────────
@@ -200,6 +219,7 @@ const PhonePad = (function () {
     let raf = 0;
     let hudAt = -1e9;
     const ring = ringer(opts.doc !== undefined ? opts.doc : (typeof document !== "undefined" ? document : null));
+    input.setRemoteHaptics(null);  // clear the previous peer before any hello can arrive
 
     transport.onMessage((channel, data) => {
       if (closed) return;
@@ -216,6 +236,9 @@ const PhonePad = (function () {
       }
       const ev = decodeEvent(data);
       if (!ev) { junk++; return; }
+      if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
+        input.setRemoteHaptics(ev.haptics ? (ms) => transport.send(T.EVENT, encodeHaptic(ms)) : null);
+      }
       if (ev.t === "ev") {
         events++;
         const nav = ev.k.startsWith("nav") && ring;
@@ -237,7 +260,6 @@ const PhonePad = (function () {
 
     const armed = () => {
       if (closed) return;
-      input.setRemoteHaptics((ms) => { transport.send(T.EVENT, encodeHaptic(ms)); });
       transport.send(T.EVENT, encodeHello("host"));
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
     };
@@ -281,6 +303,9 @@ const PhonePad = (function () {
       createInvite: (t, p) => NetHandshake.createInvite(t, p),
       acceptAnswer: (t, c) => NetHandshake.acceptAnswer(t, c),
       hostRoom: (o) => NetRendezvous.hostRoom(o),
+      usingPrivateRelay: () => typeof NetRendezvous !== "undefined" && NetRendezvous.usingPrivateRelay(),
+      relayUrl: () => NetRendezvous.baseUrl(),
+      swap: (o) => NetRendezvous.swap(o),
       makeCode: () => NetRendezvous.makeCode(),
     }, deps || {});
     const say = (t, bad) => { if (ui.say) { try { ui.say(t, !!bad); } catch (e) { /* ui's problem */ } } };
@@ -318,12 +343,12 @@ const PhonePad = (function () {
         if (phase !== "preparing") return;
         if (!invite.ok) { phase = "failed"; say(invite.message || "Could not prepare the pairing.", true); return; }
         code = deps.makeCode();
-        const url = padUrl(code);
+        const url = padUrl(code, null, deps.usingPrivateRelay() ? deps.relayUrl() : null);
         phase = "waiting";
         qr(url, code);
         say("Scan the code with your phone's camera, or open the link and type the room code.");
         let accepted = false;
-        const sub = await deps.hostRoom({
+        const roomOptions = {
           code, mine: invite.code, token,
           onTick: () => { if (phase === "waiting") say("Waiting for your phone… (room code " + code + ")"); },
           onFail: (r) => {
@@ -362,7 +387,21 @@ const PhonePad = (function () {
               },
             });
           },
-        });
+        };
+        // A private relay has one offer/answer mailbox, exactly what one phone
+        // needs. hostRoom is the public relay's multi-guest subscription only.
+        if (deps.usingPrivateRelay()) {
+          const got = await deps.swap({ code, mine: invite.code, slot: "offer", want: "answer", token, onTick: roomOptions.onTick });
+          if (phase !== "waiting") return;
+          if (got.ok) await roomOptions.onJoiner(null, got.payload);
+          if (phase === "waiting") {
+            phase = "failed";
+            if (!got.ok) say(got.message || "Could not open a room — check the connection.", true);
+            dropRoom(); transport.close(); transport = null;
+          }
+          return;
+        }
+        const sub = await deps.hostRoom(roomOptions);
         if (!["waiting", "connecting"].includes(phase)) {
           if (sub && sub.stop) { try { sub.stop(); } catch (e) { /* already stopped */ } }
           return;
@@ -374,7 +413,11 @@ const PhonePad = (function () {
         room = sub;
       } catch (e) {
         Log.warn("input", "phone pad host failed: " + ((e && e.message) || e));
-        if (phase !== "cancelled") { phase = "failed"; say("Pairing failed — try again.", true); }
+        if (phase !== "cancelled") {
+          phase = "failed"; dropRoom();
+          if (transport) { try { transport.close(); } catch (_) { /* failed startup */ } transport = null; }
+          say("Pairing failed — try again.", true);
+        }
       }
     })();
 
@@ -431,7 +474,8 @@ const PhonePad = (function () {
     transport.onClose(close);
     const armed = () => {
       if (closed) return;
-      transport.send(T.EVENT, encodeHello("pad"));
+      const canVibrate = typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
+      transport.send(T.EVENT, encodeHello("pad", canVibrate));
       if (opts.heartbeat !== false) {
         beat = setInterval(() => send(true), HEARTBEAT_MS);
         if (beat && typeof beat.unref === "function") beat.unref();   // node harness: never the thing keeping the process alive
@@ -514,7 +558,17 @@ const PhonePad = (function () {
       swap: (o) => NetRendezvous.swap(o),
       normalise: (c) => NetRendezvous.normalise(c),
       valid: (c) => NetRendezvous.valid(c),
+      privateRelay: () => typeof NetRendezvous !== "undefined" && NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay(),
+      setSessionUrl: (url) => typeof NetRendezvous !== "undefined" && NetRendezvous.setSessionUrl ? NetRendezvous.setSessionUrl(url) : url === null,
     }, opts.deps || {});
+    let pairing = pairingFromUrl(opts.href);
+    function paintCodeInput() {
+      if (!dom.codeIn) return;
+      const privateCode = pairing ? !!pairing.relay : deps.privateRelay();
+      dom.codeIn.maxLength = privateCode ? 32 : 8;
+      dom.codeIn.placeholder = privateCode ? "PRIVATE ROOM TOKEN" : "ABC123";
+    }
+    paintCodeInput();
     const say = (t, bad) => {
       if (!dom.status) return;
       dom.status.textContent = t;
@@ -732,8 +786,14 @@ const PhonePad = (function () {
     let connecting = false;
     async function connect(codeIn) {
       if (connecting || session) return { ok: false, error: "busy" };
+      const incoming = pairingFromUrl(codeIn);
+      if (incoming) { pairing = incoming; codeIn = incoming.code; if (dom.codeIn) dom.codeIn.value = codeIn; paintCodeInput(); }
+      if (pairing && (pairing.invalid || !deps.setSessionUrl(pairing.relay))) {
+        say("That pairing link has an invalid relay address. Scan a new code from the game.", true);
+        return { ok: false, error: "bad_relay" };
+      }
       const code = deps.normalise(codeIn);
-      if (!deps.valid(code)) { say("That is not a room code — six letters and numbers.", true); return { ok: false, error: "bad_code" }; }
+      if (!deps.valid(code)) { say(deps.privateRelay() ? "That is not a private room token — copy the full 32-character token." : "That is not a room code — six letters and numbers.", true); return { ok: false, error: "bad_code" }; }
       connecting = true;
       if (dom.connect) dom.connect.disabled = true;
       // The sensor prompt rides the CONNECT tap: iOS shows it only inside a gesture.
@@ -815,7 +875,9 @@ const PhonePad = (function () {
       say("Point the camera at the QR code on the game's screen.");
       const r = await scanner.start(dom.video, (text) => {
         showScan(false);
-        const code = codeFromUrl(text) || String(text || "").trim();
+        pairing = pairingFromUrl(text);
+        paintCodeInput();
+        const code = pairing ? pairing.code : String(text || "").trim();
         if (dom.codeIn) dom.codeIn.value = code;
         connect(code);
       });
@@ -832,7 +894,7 @@ const PhonePad = (function () {
     if (typeof document !== "undefined" && document.addEventListener) {
       document.addEventListener("visibilitychange", () => { if (document.hidden) stopScan(); });
     }
-    const fromUrl = codeFromUrl();
+    const fromUrl = pairing && pairing.code;
     if (fromUrl && dom.codeIn) dom.codeIn.value = fromUrl;
     say(fromUrl ? "Tap CONNECT to pair with the game." : Scan && Scan.supported() ? "Scan the game's QR code, or type its room code and CONNECT." : "Type the room code the game shows, then CONNECT.");
 

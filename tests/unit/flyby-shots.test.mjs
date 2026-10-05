@@ -15,6 +15,7 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -723,6 +724,15 @@ test("the loading screen flies only the world built for THIS selection", () => {
     assert.match(body, new RegExp("if \\(world\\) " + call.replace(/[()|]/g, "\\$&")), call + " waits for the right world");
 });
 
+// CPU TIME, NOT WALL TIME (2026-10-04). The two "every shot was pre-planned"
+// legs below tell a cache hit (well under a millisecond) from a cold plan
+// (150-380 ms on a built-up circuit) by timing one solve. Wall time measured
+// the box too: tooling-fast runs files in parallel next to other agents' work,
+// and a descheduled cache hit read as a cold plan. process.cpuUsage() counts
+// only the time this process actually ran, so the same 20/25 ms bounds now
+// measure the work.
+const cpuMs = (since) => { const d = process.cpuUsage(since); return (d.user + d.system) / 1000; };
+
 test("warm() plans the opening shots at once and the rest in slices, never through solve()", async () => {
   await withTrack("monza", async (track, g) => {
     const F = g.sandbox.FlybySeq, list = F.vary(F.DEFAULT, 11);
@@ -735,7 +745,7 @@ test("warm() plans the opening shots at once and the rest in slices, never throu
     // Everything is planned: a solve at each shot's middle is a cache hit (fast).
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0;
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 20, `every shot was pre-planned (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   }, { fresh: true });   // a COLD plan cache, and its own timer queue to flush
@@ -771,7 +781,7 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
     assert.ok(b1.every((s, i) => s === b2[i]), "a re-made list binds to the SAME shot objects");
     let total = 0; for (const s of list) total += s.dur;
     let acc = 0, worst = 0; F.reset();
-    for (const s of list) { const t0 = process.hrtime.bigint(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, Number(process.hrtime.bigint() - t0) / 1e6); acc += s.dur; }
+    for (const s of list) { const t0 = process.cpuUsage(); F.solve(track, (acc + s.dur / 2) / total, list); worst = Math.max(worst, cpuMs(t0)); acc += s.dur; }
     assert.ok(worst < 25, `every shot was planned in the menu (worst solve ${worst.toFixed(1)} ms)`);
     return null;
   });
@@ -1459,4 +1469,165 @@ test("menu planning rechecks ownership after its final warm rendering opportunit
   assert.equal(h.steps(), 11);
   assert.equal(h.yields(), 1);
   assert.equal(h.c._menuFly, null, "the old plan is not published after a new request takes ownership");
+});
+
+// ---- the FRAMING judge (js/camera/flyby-sight.js) ---------------------------
+//
+// The planner kept the eye OUT of scenery but never asked what stood between
+// the eye and the subject: the node frame report (tools/shot/frame-report.mjs,
+// 2026-10-04) found Monza's turn-first framing a grandstand across the whole
+// left third at 7 m (score 9), the grid walk keeping 20-26 % of the field in
+// frame, and corner shots panning 34-40 deg/s. FlybySight is the one box model
+// the report and the planner share; these pin it and what the planner does with it.
+
+test("FlybySight: a box between the eye and a point hides it; a box the point sits in hides only the DRAWN share", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight;
+    const fake = { total: 100, props: { list: [
+      { kind: "building", x: 0, y: 5, z: 20, w: 10, h: 10, d: 2 },
+      { kind: "bush", x: 50, y: 1, z: 0, w: 4, h: 2, d: 4 },
+    ], spans: [] } };
+    const hidden = S.transmit(fake, [0, 5, 0], [0, 5, 40]);
+    assert.equal(hidden.T, 0, "an opaque building between eye and point leaves nothing");
+    assert.ok(hidden.near > 0.99, "and it stands within NEAR_M of the eye, so the loss is a NEAR one");
+    assert.equal(S.transmit(fake, [0, 5, 0], [30, 5, 0]).T, 1, "a clear sightline keeps everything");
+    const inBush = S.transmit(fake, [0, 1, 0], [50, 1, 0]);
+    assert.equal(inBush.T, 1, "a point inside a box is not hidden by it (a car on a kerb box)…");
+    assert.ok(Math.abs(inBush.Tdrawn - 0.4) < 1e-9, "…but a frame draws the 60 %-opaque bush over it");
+    // The near-thirds raster: a wall filling the left of the frame at 5 m.
+    const cam = S.camera([0, 5, 0], [0, 5, 100], 40, 16 / 9);
+    const th = S.nearThirds(fake, cam, null);
+    assert.ok(th[1] > 0.3 && th[0] < th[1], `the building ahead fills the centre third (${th.map((v) => v.toFixed(2))})`);
+    return null;
+  });
+});
+
+test("frame-report casts the planner's own box model (FlybySight), not a copy", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/shot/frame-report.mjs"), "utf8");
+  assert.ok(/FlybySight\.propBoxes\(T\)/.test(src) && /FlybySight\.spanBoxes\(T\)/.test(src), "frame-report builds its boxes through FlybySight");
+  assert.ok(/FlybySight\.offRoad\(/.test(src), "frame-report clears the road through FlybySight.offRoad, as the planner's sceneOf does");
+  assert.ok(!/function offRoad/.test(src), "no second copy of the road-clear filter in frame-report");
+  assert.ok(!/function propBoxes|function spanBoxes/.test(src), "no second copy of the box model in frame-report");
+});
+
+test("FlybySight.offRoad: a box across the road at running height is dropped, a bridge-height one and a tree part kept; the planner's scene applies it", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight, Tr = g.sandbox.Tracks;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    Tr.sample(track, track.total * 0.3, smp);
+    const [x, y, z] = smp.p;
+    const low = { kind: "building", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1 };
+    const high = { kind: "building", x, y: y + 10, z, w: 10, h: 4, d: 10, op: 1 };
+    const trunk = { kind: "tree", x, y: y + 2, z, w: 10, h: 4, d: 10, op: 1, part: "trunk" };
+    const kept = S.offRoad([low, high, trunk], track);
+    assert.deepEqual(kept.map((b) => b === low ? "low" : b === high ? "high" : "trunk"), ["high", "trunk"],
+      "the road-level box goes, the one floating 8 m over the road and the tree part stay");
+    assert.equal(kept.droppedOverRoad, 1);
+    const props = S.propBoxes(track), clear = S.offRoad(props, track);
+    assert.ok(clear.droppedOverRoad > 0, "Monza's registry has boxes over the road to drop");
+    assert.equal(S.sceneOf(track).boxes.length, clear.length + S.spanBoxes(track).length,
+      "sceneOf (the planner) holds exactly the report's boxes: offRoad(propBoxes) + spanBoxes");
+    return null;
+  });
+});
+
+test("the planner frames its subject: Monza's turn-first clears the grandstand, the grid walk holds the field", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq, S = g.sandbox.FlybySight, Tr = g.sandbox.Tracks;
+    const list = F.bindCorners(track, F.DEFAULT);
+    let total = 0; for (const s of list) total += s.dur;
+    F.reset();
+    const at = (id, t) => {
+      let acc = 0;
+      for (const s of list) { if (s.id === id) return F.solve(track, (acc + s.dur * t) / total); acc += s.dur; }
+      throw new Error(id);
+    };
+    for (const t of [0.03, 0.5, 0.97]) {
+      const v = at("turn-first", t);
+      const th = S.nearThirds(track, S.camera(v.eye.slice(), v.tgt.slice(), v.fov, 16 / 9), null);
+      assert.ok(Math.max(...th) <= 0.4, `turn-first t=${t}: nearest 30 m fills ${(Math.max(...th) * 100).toFixed(0)} % of a third (was 100 %)`);
+    }
+    // Every slot's car centre: >= 60 % of the 22 in frame through the walk.
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+    for (const t of [0.03, 0.5, 0.97]) {
+      const v = at("grid-walk", t), cam = S.camera(v.eye.slice(), v.tgt.slice(), v.fov, 16 / 9);
+      let inF = 0;
+      for (let k = 0; k < 22; k++) {
+        const s = F.anchorS(track, { at: "slot", n: k, off: 0 });
+        Tr.sample(track, s, smp);
+        const p = F.posePoint(track, { at: "slot", n: k, off: 0, x: 0, y: 0.8 }, [0, 0, 0]);
+        const q = S.project(cam, p);
+        if (q && Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1) inF++;
+      }
+      assert.ok(inF / 22 >= 0.6, `grid-walk t=${t}: ${inF} of 22 cars in frame (was 5-6)`);
+    }
+    assert.ok(Math.abs(F.PAN_MAX * 180 / Math.PI - 25) < 1e-9 && Math.abs(F.PARA_MAX * 180 / Math.PI - 30) < 1e-9,
+      "pan and parallax budgets are the frame report's FAST_PAN 25 / FAST_MOVE 30 deg/s");
+    return null;
+  });
+});
+
+// ---- the three measured cases (frame report, 2026-10-05) --------------------
+//
+// tools/shot/frame-report.mjs on the tip found: Spa's landmark shots 52-62 with
+// SUBJECT_SMALL 0 % (the report's road clear had dropped the grandstand it was
+// filming — FlybySight.offRoad — so its box was never in the scene), Spa's wide
+// shots 70-77 with 34-44 % of the lap visible through the pines, Monza's wide
+// shots 72-80 % flat lawn (EMPTY_GROUND), and Monaco's grid walk with a barrier
+// across 31-32 % of its left third. These run the report itself, as a child,
+// so the numbers pinned are the report's own.
+
+function frameReport(id) {
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, [path.join(ROOT, "tools/shot/frame-report.mjs"), "--track", id, "--json", "--thumb", "0"],
+      { cwd: ROOT, maxBuffer: 64 * 1024 * 1024, timeout: 240000 }, (err, out) => {
+        if (err) return reject(err);
+        const byShot = {};
+        for (const f of JSON.parse(out).frames) (byShot[f.shot] = byShot[f.shot] || []).push(f);
+        resolve(byShot);
+      });
+  });
+}
+const minScore = (fs) => Math.min(...fs.map((f) => f.score));
+const flagged = (fs, re) => fs.flatMap((f) => f.flags).filter((s) => re.test(s));
+
+test("frame report: the subject landmark stays in the scene (Spa's stands framed, not 0 %); Spa's wide shots see more lap", async () => {
+  const spa = await frameReport("spa");
+  for (const id of ["landmark1", "landmark2"]) {
+    assert.deepEqual(flagged(spa[id], /SUBJECT_SMALL/), [], `spa ${id}: the grandstand is in frame (was SUBJECT_SMALL 0.0 %)`);
+    assert.ok(spa[id].every((f) => f.subject.coverPct > 20), `spa ${id}: ${spa[id].map((f) => f.subject.coverPct)} % of the frame is the stand`);
+    assert.ok(minScore(spa[id]) >= 80, `spa ${id}: worst frame ${minScore(spa[id])} (was 52-62)`);
+  }
+  // The wide shots: the crest eye sees down into the forest.
+  for (const id of ["wide", "wide2"]) assert.ok(minScore(spa[id]) >= 75, `spa ${id}: worst frame ${minScore(spa[id])} (was 70)`);
+  assert.deepEqual(flagged(spa.wide2, /SUBJECT_OCCLUDED/), [], "spa wide2: the lap is no longer hidden by the pines (was 34-35 % visible)");
+  assert.ok(spa.wide.every((f) => f.subject.visiblePct >= 44), `spa wide: ${spa.wide.map((f) => f.subject.visiblePct)} % of the lap visible (was 34-44)`);
+});
+
+test("frame report: Monza's wide shots tilt the horizon down out of the lawn; Monaco's grid walk steps off its barrier", async () => {
+  const [monza, monaco] = await Promise.all([frameReport("monza"), frameReport("monaco")]);
+  for (const id of ["wide", "wide2"]) {
+    assert.deepEqual(flagged(monza[id], /EMPTY_GROUND/), [], `monza ${id}: under groundMaxPct (was 72-80 % ground)`);
+    assert.ok(minScore(monza[id]) >= 77, `monza ${id}: worst frame ${minScore(monza[id])} (was 76)`);
+  }
+  assert.deepEqual(flagged(monaco["grid-walk"], /NEAR_OBSTRUCTION/), [], "monaco grid-walk: no barrier across a third (was 31-32 %)");
+  assert.ok(minScore(monaco["grid-walk"]) >= 80, `monaco grid-walk: worst frame ${minScore(monaco["grid-walk"])} (was 77)`);
+  assert.ok(minScore(monaco.wide2) >= 76, `monaco wide2: worst frame ${minScore(monaco.wide2)} (was 73)`);
+  for (const id of ["landmark1", "landmark2", "turn-first", "turn-mid", "grid-crane", "grid-front", "grid-mine"]) {
+    assert.ok(minScore(monza[id]) >= 78 && minScore(monaco[id]) >= 78, `${id}: untouched shots hold (monza ${minScore(monza[id])}, monaco ${minScore(monaco[id])})`);
+  }
+});
+
+test("FlybySight.mix: the frame's sky / ground / prop shares and their cost", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight, F = g.sandbox.FlybySeq, b = F.bounds(track);
+    const up = S.mix(track, S.camera([b.x, b.y + 400, b.z], [b.x + 100, b.y + 500, b.z], 40, 16 / 9));
+    assert.ok(up.sky > 0.99, `looking up from 400 m is sky (${up.sky})`);
+    const down = S.mix(track, S.camera([b.x, b.y + 300, b.z], [b.x + 300, b.y, b.z], 40, 16 / 9));
+    assert.ok(down.ground + down.prop > 0.6 && Math.abs(down.sky + down.ground + down.prop - 1) < 1e-6, `looking down 45 degrees is mostly world (${JSON.stringify(down)})`);
+    assert.ok(S.GROUND_OK < 0.7, "the planner's ground limit sits under the report's groundMaxPct 70");
+    assert.equal(S.mixCost({ ground: 0.5, sky: 0.2 }), 0, "a frame well inside both limits costs nothing");
+    assert.ok(S.mixCost({ ground: 0.8, sky: 0 }) >= 15, "a lawn frame pays the report's rate and the flag");
+    return null;
+  });
 });

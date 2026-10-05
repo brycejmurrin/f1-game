@@ -285,7 +285,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
     "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
-  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?renderer\.dispose/,
+  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?disposeKeepingContext\(renderer\)/,
     "failed renderer.init must dispose before AUTO WebGPU→WebGL2 retry");
   assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
@@ -470,7 +470,7 @@ test("TLX frame uniforms share one render-group buffer (setGroup loop after the 
   const fxLast = fx.indexOf("ambGround: uniform(");
   const fxLoop = fx.indexOf("if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);");
   assert.ok(fxLast > 0 && fxLoop > fxLast, "the decal setGroup loop follows the last U member");
-  assert.match(tlx, /TLXShaders\.fx\(THREE, TSL, \{ chunks, sharedUniforms: _sharedUniforms \}\)/, "the pin reaches the fx factory too");
+  assert.match(tlx, /TLXShaders\.fx\(THREE, TSL, \{ chunks, sharedUniforms: _sharedUniforms, lit \}\)/, "the pin reaches the fx factory too");
 });
 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
@@ -3182,7 +3182,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
 // RendererBoot.start() itself, booted in a VM: the canary's strike ledger
 // across cold boots that share one localStorage. `bindPick` = the deferred
 // backend's create() succeeds; GLX always attaches.
-function rendererBootRun(ls, { bindPick = true } = {}) {
+function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [] } = {}) {
   const ss = new Map();
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
@@ -3194,20 +3194,41 @@ function rendererBootRun(ls, { bindPick = true } = {}) {
       getItem: (k) => (ss.has(k) ? ss.get(k) : null),
       setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
     },
-    navigator: {}, location: { reload() { throw new Error("no reload expected"); } },
+    ApexXR: { bootPick: () => xrPick },
+    navigator: { gpu: {} }, location: { reload() { throw new Error("no reload expected"); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
-    GLX: { init: () => true },
+    GLX: { init: () => { calls.push("GLX.init"); return true; } },
     Gfx: { create: async () => (bindPick ? { api: "three" } : null) },
   });
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
   seedLog(ctx);
+  if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx);
   vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
   return vm.runInContext("RendererBoot", ctx).create({
-    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async () => {},
+    $: () => null, els: {}, canvas: {}, ensureDataHub() {}, loadBackendScripts: async (files) => {
+      calls.push(...files);
+      if (files.includes("tlx.js")) ctx.TLX = { create: async () => { calls.push("TLX.create"); return { api: "three" }; } };
+    },
   });
 }
+
+test("XR's resolved backend reaches Gfx without changing the saved 2D renderer", async () => {
+  for (const saved of [null, "webgl2", "webgpu", "three"]) {
+    const ls = new Map(saved ? [["apex26.gfxBackend", saved]] : []), calls = [];
+    const rb = rendererBootRun(ls, { xrPick: "three", realGfx: true, calls });
+    const boot = await rb.start();
+    assert.equal(boot.bound, true, "XR binds TLX over saved " + saved);
+    assert.equal(boot.gfx.api, "three");
+    assert.deepEqual(calls, ["tlx.js", "TLX.create"]);
+    assert.equal(ls.get("apex26.gfxBackend") ?? null, saved, "the 2D choice survives XR");
+  }
+  const ls = new Map([["apex26.gfxBackend", "three"]]), calls = [];
+  assert.equal((await rendererBootRun(ls, { xrPick: "webgl2", realGfx: true, calls }).start()).bound, false);
+  assert.deepEqual(calls, ["GLX.init"], "ordinary VR still selects GLX without loading TLX");
+  assert.equal(ls.get("apex26.gfxBackend"), "three");
+});
 
 test("a GLX fallback boot that proves itself does not erase the pick's crash strike", async () => {
   // A phone whose THREE dies inside its first ~5 s (before PROVE_FRAMES). The
@@ -3575,8 +3596,10 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
-  assert.match(cd, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
+  // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
+  assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
+  assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyEntry invalidates on store.rev");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -3723,7 +3746,7 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(forces, /c\.wheelLock = braking && axFracF > 0\.60/, "a lock-up fires inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
+  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && axFracF > 0\.60/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
@@ -4057,7 +4080,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // ALL of them, not just the one we came to change. Today ours is three's set
   // byte for byte except alpha:
   //   three: { antialias: currentSamples > 0, alpha: !0, depth: e.depth, stencil: e.stencil }
-  //   ours:  { antialias: !isMobile,           alpha: false, depth: true,  stencil: false }
+  //   ours:  { antialias: false,               alpha: false, depth: true,  stencil: false }
   // and those agree only because TLX overrides neither depth nor stencil, so
   // the renderer holds three's defaults — depth true, stencil false. Should a
   // three bump default stencil back to true, its passes would want a stencil
@@ -4073,9 +4096,12 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   // Not cosmetic either: three's antialias becomes samples>0 on the DEFAULT
   // canvas target, so a context that disagrees with the renderer gets a
   // multisample resolve mismatch on the very path this fix exists to protect.
-  assert.match(ctx[1], /antialias:\s*!isMobile/, "context AA must track the renderer's forceWebGL path");
-  assert.match(tlx, /antialias:\s*forceWebGL\s*\?\s*!isMobile\s*:\s*!_liteGpu\b/,
-    "lite WebGPU (phone / WebKit / software) must not ask for canvas MSAA 4");
+  // 2026-10-04: false on BOTH (GLX parity, glx.js antialias:false). The canvas
+  // only receives the FXAA quad; a 4x multisampled default framebuffer there
+  // was ~75 MB at 1080p of resolve bought for nothing.
+  assert.match(ctx[1], /antialias:\s*false/, "context AA must track the renderer's forceWebGL path (off)");
+  assert.match(tlx, /antialias:\s*forceWebGL\s*\?\s*false\s*:\s*!_liteGpu\b/,
+    "the WebGL2 path asks for no canvas MSAA; lite WebGPU (phone / WebKit / software) must not ask for MSAA 4");
 });
 
 test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
@@ -4957,6 +4983,9 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
+  // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
+  let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+  const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
@@ -5559,7 +5588,7 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   assert.equal(opened, 2);
 });
 
-test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolved", () => {
+test("TLX scene MSAA: preset-driven on the desktop WebGL2 backend only, depth resolved", () => {
   // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
   // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
   // samples now go to the scene target, on the desktop WebGL2 backend only:
@@ -5567,8 +5596,8 @@ test("TLX scene MSAA: 4 samples on the desktop WebGL2 backend only, depth resolv
   // resolve a depth attachment (docs/ARCHITECTURE.md §Parity, SCENE MSAA).
   const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(tlx, /sceneSamples:\s*\(forceWebGL && !isMobile\) \? 4 : 0/,
-    "tlx.js decides the scene sample count: 4 on desktop WebGL2, 0 on phones and native WebGPU");
+  assert.match(tlx, /sceneSamples:\s*\(_sceneSamples = sceneSamplesFor\(renderer, forceWebGL, isMobile\)\)/,
+    "tlx.js decides the scene sample count through the preset rule (GLX post.js parity)");
   assert.match(post, /samples:\s*ctx\.sceneSamples \|\| 0,\s*resolveDepthBuffer:\s*true/,
     "the scene target takes the caller's samples and resolves its depth texture (SSAO/SSR/godray read it)");
 });
@@ -5709,4 +5738,153 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
   assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
   assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
+});
+
+// 2026-10-04 (L4-b): the preset rule GLX applies in glx/post.js — 4x only on
+// GRAPHICS: ULTRA, 2x below, 0 on phones and native WebGPU, clamped to what
+// the HDR format supports. Executed, not pattern-matched.
+function tlxSceneSamples({ store = {}, forceWebGL = true, isMobile = false, cMax = 8, dMax = 8, hdr = true } = {}) {
+  const body = fnBody(code("js/render/three/tlx.js"), "sceneSamplesFor");
+  const localStorage = { getItem: (k) => (k in store ? store[k] : null) };
+  const gl = { RENDERBUFFER: 1, RGBA16F: 2, RGBA8: 3, DEPTH_COMPONENT24: 4, SAMPLES: 5,
+    getExtension: (n) => (hdr && n === "EXT_color_buffer_float" ? {} : null),
+    getInternalformatParameter: (t, fmt) => {
+      assert.equal(fmt === 2 || fmt === 3 || fmt === 4, true);
+      if (fmt !== 4) assert.equal(fmt, hdr ? 2 : 3, "the colour query follows the HDR format");
+      return fmt === 4 ? [dMax] : [cMax];
+    } };
+  const fn = new Function("localStorage", "renderer", "forceWebGL", "isMobile", body);
+  return fn(localStorage, { backend: { gl } }, forceWebGL, isMobile);
+}
+test("TLX scene MSAA follows the GRAPHICS preset like glx/post.js (ULTRA 4x, else 2x, phones/WebGPU 0)", () => {
+  assert.equal(tlxSceneSamples(), 2, "unset preset = desktop HIGH = 2x");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("high") } }), 2);
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") } }), 4);
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": "ultra" } }), 4, "a raw probe string still compares");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxHigh": "1" } }), 4, "legacy gfxHigh=1 with no preset = ULTRA");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") }, cMax: 2 }), 2, "clamped to the format");
+  assert.equal(tlxSceneSamples({ store: { "apex26.gfxPreset": JSON.stringify("ultra") }, dMax: 1 }), 0, "1x is no MSAA");
+  assert.equal(tlxSceneSamples({ hdr: false }), 2, "an RGBA8 scene queries RGBA8");
+  assert.equal(tlxSceneSamples({ isMobile: true, store: { "apex26.gfxPreset": JSON.stringify("ultra") } }), 0, "phones: FXAA alone");
+  assert.equal(tlxSceneSamples({ forceWebGL: false }), 0, "native WebGPU cannot resolve a depth attachment");
+});
+
+// 2026-10-04 (L4-b): r186 WebGLBackend.dispose() ends with
+// WEBGL_lose_context.loseContext(). On the forceWebGL path that is #game's own
+// context, and the GLX fallback _fail() boots next gets the same object back
+// from getContext("webgl2"). The abort path must dispose three without it.
+test("TLX abort path disposes three without losing #game's WebGL2 context", () => {
+  const tlx = code("js/render/three/tlx.js");
+  const body = fnBody(tlx, "disposeKeepingContext");
+  const run = new Function("r", body);
+  // three's WebGLBackend shape: dispose() reaches extensions.get("WEBGL_lose_context").
+  function webglRenderer() {
+    const log = [];
+    const ext = { get(name) { log.push("get:" + name); return name === "WEBGL_lose_context" ? { loseContext() { log.push("LOST"); } } : { name }; } };
+    const backend = { isWebGPUBackend: false, extensions: ext };
+    return { log, backend, dispose() {
+      log.push("dispose");
+      const e = backend.extensions.get("WEBGL_lose_context");
+      if (e) e.loseContext();
+      assert.deepEqual(backend.extensions.get("OES_x"), { name: "OES_x" }, "other lookups still reach three");
+      return Promise.resolve();
+    } };
+  }
+  const gl = webglRenderer();
+  run(gl);
+  assert.ok(gl.log.includes("dispose"), "three still frees its own objects");
+  assert.ok(!gl.log.includes("LOST"), "the shared context must survive the dispose");
+  // No extensions object to neuter: skip the dispose rather than lose the context.
+  const bare = { backend: { isWebGPUBackend: false }, dispose() { throw Error("must not dispose"); } };
+  run(bare);
+  // The WebGPU backend has no loseContext: it disposes as before.
+  let gpuDisposed = 0;
+  run({ backend: { isWebGPUBackend: true }, dispose() { gpuDisposed++; return Promise.reject(Error("device lost")); } });
+  assert.equal(gpuDisposed, 1);
+  // Both teardown sites route through it; no raw renderer.dispose() remains there.
+  assert.match(tlx, /disposeKeepingContext\(_abortRenderer\)/, "the create() catch uses the context-keeping dispose");
+  assert.match(tlx, /disposeKeepingContext\(renderer\);[^\n]*\n\s*throw e;/, "the init() failure path uses it too");
+  assert.doesNotMatch(tlx, /_abortRenderer\.dispose\(\)/, "no raw dispose on the abort path");
+});
+
+// L4-c (2026-10-04): car decals. The atlas uploads PREMULTIPLIED and blends
+// ONE / ONE_MINUS_SRC_ALPHA (a straight upload let generateMipmap average the
+// transparent black surround into logo edges), and DECAL_FS reads the sun map
+// already on unit 0 plus the lamp bake on 12/13. Driven on the recording mock.
+test("GLX decals: premultiplied upload, premultiplied blend restored after, shadow + lamp-pool uniforms", () => {
+  const h = bootGlx();
+  const gl = h.gl;
+  h.reset();
+  const tex = h.GLX.createTexture({ width: 2, height: 2 });
+  const store = h.calls.filter((c) => c[0] === "pixelStorei" && c[1][0] === gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL).map((c) => c[1][1]);
+  assert.deepEqual(store, [true, false], "premultiplied for the atlas, then back to false (texSubImage3D from a buffer rejects it)");
+  const iUp = h.calls.findIndex((c) => c[0] === "texImage2D");
+  const iOn = h.calls.findIndex((c) => c[0] === "pixelStorei" && c[1][0] === gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL && c[1][1] === true);
+  assert.ok(iOn >= 0 && iOn < iUp, "the flag is set before the upload");
+  const mesh = h.GLX.createTexMesh({ pos: [0, 0, 0, 1, 0, 0, 1, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], uv: [0, 0, 1, 0, 1, 1], idx: [0, 1, 2] });
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const lampBake = { data: new Uint16Array(4 * 4 * 2 * 4), indir: new Uint16Array(4), x0: -50, z0: -40, tilesX: 1, tilesY: 1, T: 4, cell: 2, atlasW: 4, atlasH: 4 };
+  h.GLX.begin(h.frame({ lampBake, lampBakeScale: [1, 1, 1] }));
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, {});
+  const blends = h.calls.filter((c) => c[0] === "blendFunc").map((c) => c[1]);
+  assert.deepEqual(blends[0], [gl.ONE, gl.ONE_MINUS_SRC_ALPHA], "premultiplied blend for the decal");
+  assert.deepEqual(blends.at(-1), [gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA], "the frame's blend invariant comes back");
+  const named = (fn, name) => h.calls.filter((c) => c[0] === fn && c[1][0] && c[1][0].name === name).map((c) => c[1].slice(1));
+  assert.deepEqual(named("uniform1i", "uShadowMap"), [[0]], "the sun map stays on unit 0");
+  assert.deepEqual(named("uniform1i", "uLampBake"), [[12]]);
+  assert.deepEqual(named("uniform1i", "uLampBakeIdx"), [[13]]);
+  assert.equal(named("uniform4fv", "uShadowP").length, 1, "shadow strength / texel / bias / range");
+  assert.deepEqual(named("uniform1f", "uBakeOn"), [[1]], "a live bake lights the decal's pool");
+  assert.deepEqual(named("uniform4f", "uBakeA"), [[-50, -40, 1 * 4 * 2, 1 * 4 * 2]], "origin + size in metres (lit.js uBakeOrigin/uBakeSize)");
+  // A second decal in the same frame re-sends none of the frame block.
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, {});
+  assert.equal(named("uniform4fv", "uShadowP").length, 0, "frame-constant: once per frame token");
+});
+
+test("decal shaders: sun-map PCF + lamp pools in GLSL, TSL and WGSL; TLX premultiplied", () => {
+  const glsl = read("js/render/glx/shaders/glsl-fx.js");
+  const fs = /const DECAL_FS = `([\s\S]*?)`;/.exec(glsl)[1];
+  assert.match(fs, /uniform sampler2DShadow uShadowMap;/);
+  assert.match(fs, /float sh = ndl > 0\.0 \? decalShadow\(vWorldPos, N\) : 1\.0;/);
+  assert.equal((fs.match(/texture\(uShadowMap,/g) || []).length, 4, "a 4-tap box PCF");
+  assert.match(fs, /texelFetch\(uLampBakeIdx, ivec2\(bTile\), 0\)/, "the bake indirection (lit.js parity)");
+  assert.match(fs, /vec3 lit = t\.rgb \* \(amb \+ uSunColor \* \(ndl \* sh\) \+ decalPool\(vWorldPos, N\)\) \+ t\.rgb \* uGlow;/);
+  const lit = read("js/render/three/tsl-lit.js");
+  assert.match(lit, /decalLight: \{ shadow: decalShadow, pool: decalPool \}/, "tsl-lit hands the decal terms to tsl-fx");
+  const fx = read("js/render/three/tsl-fx.js");
+  assert.match(fx, /const sh = DL && DL\.shadow \? DL\.shadow\(wp, N\) : float\(1\.0\);/);
+  assert.match(fx, /const pool = DL && DL\.pool \? DL\.pool\(wp, N\) : vec3\(0\.0\);/);
+  assert.match(fx, /m\.blendSrc = THREE\.OneFactor;\s*\/\/ premultiplied atlas/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /t\.premultiplyAlpha = true;/, "TLX createTexture uploads premultiplied");
+});
+
+// L4-d (2026-10-04): the PCSS blocker map. R16F stepped 2^-11 in [0.5,1) (a
+// ~0.28 m receiver-blocker error at a 570 m span) and the 4 taps at +/-1 source
+// texel read texels {1,3} of each 4-texel axis — 12 of 16 never seen.
+test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint (GLX + TLX)", () => {
+  const post = read("js/render/glx/shaders/glsl-post.js");
+  const blk = /const BLOCKER_FS = `([\s\S]*?)`;/.exec(post)[1];
+  assert.match(blk, /ivec2 k = max\(textureSize\(uDepthTex, 0\) \/ 512, ivec2\(1\)\);/);
+  assert.match(blk, /for \(int y = 0; y < 4; y\+\+\) \{\s*for \(int x = 0; x < 4; x\+\+\) \{/);
+  assert.match(blk, /texelFetch\(uDepthTex, base \+ ivec2\(x, y\), 0\)\.r/);
+  const sh = read("js/render/glx/shadow.js");
+  assert.match(sh, /gl\.texImage2D\(gl\.TEXTURE_2D, 0, gl\.R32F, 512, 512, 0, gl\.RED, gl\.FLOAT, null\);/);
+  assert.doesNotMatch(sh, /gl\.R16F, 512, 512/);
+  const tsh = read("js/render/three/tlx-shadow.js");
+  assert.match(tsh, /format: THREE\.RedFormat, type: THREE\.FloatType,\s*depthBuffer: false/, "TLX blocker target is R32F");
+  assert.match(tsh, /opts\.type = THREE\.FloatType;\s*opts\.format = THREE\.RedFormat;/, "and so is the colour copy of the sun depth it reads");
+  // The tap loop is JS: execute it to count the taps it emits.
+  const loop = /let d = tap\(0, 0\);\s*(for \(let y = 0; y < k; y\+\+\) for \(let x = 0; x < k; x\+\+\) if \(x \|\| y\) d = TSL\.min\(d, tap\(x, y\)\);)/.exec(tsh);
+  assert.ok(loop, "the k x k min loop");
+  const seen = [];
+  const TSL = { min: (a, b) => a + b };
+  const tap = (x, y) => { seen.push(x + "," + y); return 1; };
+  const k = 2048 / 512;
+  let d = tap(0, 0);
+  eval(loop[1]);
+  assert.equal(new Set(seen).size, 16, "16 distinct source texels at 2048 -> 512");
+  assert.equal(d, 16);
 });

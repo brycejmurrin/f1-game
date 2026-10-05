@@ -13,6 +13,11 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "korea",
+    // The pit complex (TrackPit) on the LEFT of the main straight, the side
+    // scenery/korea.js builds its pit wall, garages and paddock on (harbour
+    // side; the main grandstand faces it from the right). Without this the
+    // engine built lane and garages on the default right, under the stand.
+    pit: { side: -1 },
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -63,6 +68,7 @@
     // turns: the 18 strongest curvature peaks of THIS centreline in lap order,
     // 18 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
+    sectors: [0.334, 0.68],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0653, 0.0823, 0.2998, 0.4298, 0.4572, 0.4748, 0.5487, 0.5893, 0.6292, 0.6627, 0.7103, 0.7228, 0.7378, 0.7602, 0.7973, 0.8387, 0.8642, 0.8848],
     furniture: { tree: "broad", fol: [0.24, 0.40, 0.22], lamp: "post", lc: [0.90, 0.96, 1.0] },
     kit: { marshal: "kiosk", rail: "wArmco", fence: "panelled", tyre: "stack", board: "monopole", gantry: "truss", camera: "monopole", hoarding: "panel" },

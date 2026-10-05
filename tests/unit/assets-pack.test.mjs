@@ -27,6 +27,8 @@ const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
 const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/gen/assets.mjs
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
+// What every pack-strip createImageBitmap must ask for (see the P1 test below).
+const STRAIGHT_BITMAP = { premultiplyAlpha: "none", colorSpaceConversion: "none" };
 
 const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), "utf8");
 const hasPack = fs.existsSync(MANIFEST);
@@ -146,7 +148,8 @@ test("material strips download together, then preserve sequential decode and upl
       assert.deepEqual(Object.keys(images), ["1", "3"]);
       for (const id of [1, 3]) {
         assert.equal(images[id].closed, 0, "upload must precede bitmap release");
-        assert.deepEqual(images[id].crop, [0, id * 4, 4, 4]);
+        assert.deepEqual(images[id].crop.slice(0, 4), [0, id * 4, 4, 4]);
+        assert.deepEqual({ ...images[id].crop[4] }, STRAIGHT_BITMAP);
         assert.strictEqual(images[id].pixels, kind === "albedo" ? albedo.pixels : normal.pixels);
       }
       return { kind };
@@ -185,7 +188,8 @@ test("an albedo-only material variant never requests or decodes a normal strip",
     },
     async createImageBitmap(source, ...crop) {
       assert.strictEqual(source, blob);
-      assert.deepEqual(crop, [0, 2, 2, 2]);
+      assert.deepEqual(crop.slice(0, 4), [0, 2, 2, 2]);
+      assert.deepEqual({ ...crop[4] }, STRAIGHT_BITMAP, "the crop decodes straight, un-colour-managed");
       decoded++;
       return { close() {} };
     },
@@ -199,7 +203,7 @@ test("an albedo-only material variant never requests or decodes a normal strip",
   assert.equal(assets.state().bytes, blob.size);
 });
 
-test("an early normal fetch failure observes a later albedo rejection without decoding", async () => {
+test("a normal fetch failure is not the pack's failure: a later albedo rejection still decides", async () => {
   const downloads = { "a.png": deferredAssetDownload(), "n.png": deferredAssetDownload() };
   let decodes = 0, uploads = 0;
   const assets = assetLoader({
@@ -214,17 +218,36 @@ test("an early normal fetch failure observes a later albedo rejection without de
   const pending = assets.load();
   await new Promise(setImmediate);
   downloads["n.png"].resolve({ ok: false });
-  assert.equal(await pending, false);
-  assert.equal(assets.state().error, "fetch n.png");
-  downloads["a.png"].reject(Error("albedo offline after normal failure"));
   await new Promise(setImmediate); // node:test reports an unhandled rejection as a failure
+  downloads["a.png"].reject(Error("albedo offline after normal failure"));
+  assert.equal(await pending, false);
+  assert.equal(assets.state().error, "albedo offline after normal failure");
   assert.equal(decodes, 0);
   assert.equal(uploads, 0);
   assert.equal(assets.state().uploaded, false);
   assert.equal(assets.state().bytes, 0);
 });
 
-test("a normal decode failure frees the albedo upload and closes its bitmaps", async () => {
+test("a missing normal strip still ships the albedo pack (normal = null)", async () => {
+  const maps = [];
+  const assets = assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json"))
+        return { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }] } }) };
+      return url.endsWith("n.png") ? { ok: false } : { ok: true, blob: async () => ({ size: 16 }) };
+    },
+    async createImageBitmap() { return { close() {} }; },
+  });
+  assets.init({ createTextureArray() { return { id: "albedo" }; }, setMaterialMaps(v) { maps.push(v); } });
+  assert.equal(await assets.load(), true);
+  assert.equal(maps.length, 1);
+  assert.equal(maps[0].albedo.id, "albedo");
+  assert.equal(maps[0].normal, null);
+  assert.equal(assets.state().uploaded, true);
+  assert.equal(assets.state().error, null);
+});
+
+test("a normal decode failure keeps the albedo upload and closes its bitmaps", async () => {
   const bitmaps = [], freed = [], maps = [];
   const assets = assetLoader({
     async fetch(url) {
@@ -244,12 +267,14 @@ test("a normal decode failure frees the albedo upload and closes its bitmaps", a
     freeTexture(t) { freed.push(t.id); },
     setMaterialMaps(v) { maps.push(v); },
   });
-  assert.equal(await assets.load(), false);
-  assert.equal(assets.state().error, "normal decode failed");
+  assert.equal(await assets.load(), true);
+  assert.equal(assets.state().error, null);
   assert.equal(assets.state().bytes, 32);
-  assert.deepEqual(freed, ["albedo"]);
+  assert.deepEqual(freed, []);
   assert.deepEqual(bitmaps.map(b => b.closed), [1]);
-  assert.deepEqual(maps, []);
+  assert.equal(maps.length, 1);
+  assert.equal(maps[0].albedo.id, "albedo");
+  assert.equal(maps[0].normal, null);
 });
 
 test("unload during parallel downloads rejects the stale generation before any decode", async () => {
@@ -310,21 +335,20 @@ for (const failFallback of [true, false]) {
     const bitmaps = [];
     function bitmap() { const b = { closed: 0, close() { this.closed++; } }; bitmaps.push(b); return b; }
     let crops = 0, fallbackCrops = 0, uploads = 0;
+    const blob = { size: 100 };
     const assets = assetLoader({
       async fetch(url) {
         return url.endsWith("manifest.json")
           ? { ok: true, json: async () => ({ materials: { size: 8, albedo: "a.png", layers: [{ mat: 1, scale: 1 }, { mat: 2, scale: 1 }] } }) }
-          : { ok: true, blob: async () => ({ size: 100 }) };
+          : { ok: true, blob: async () => blob };
       },
-      async createImageBitmap(source, ...crop) {
-        if (crop.length && ++crops === 2) throw Error("crop unsupported");
-        if (source.canvas && ++fallbackCrops === 2 && failFallback) throw Error("fallback failed");
+      async createImageBitmap(source, ...args) {
+        const crop = args.length > 1;
+        if (crop && source === blob && ++crops === 2) throw Error("crop unsupported");
+        // The fallback crops the full-strip BITMAP, never a canvas.
+        if (crop && source !== blob && ++fallbackCrops === 2 && failFallback) throw Error("fallback failed");
         return bitmap();
       },
-      OffscreenCanvas: class {
-        constructor() { this.canvas = true; }
-        getContext() { return { clearRect() {}, drawImage() {} }; }
-      }
     });
     assets.init({
       createTextureArray(size, images) {
@@ -340,6 +364,104 @@ for (const failFallback of [true, false]) {
     for (const b of bitmaps) assert.equal(b.closed, 1, "every bitmap is released exactly once");
   });
 }
+
+// P1 2026-10-04: the albedo strip's alpha is ROUGHNESS. createImageBitmap's
+// default premultiplyAlpha is UA-chosen and Chromium premultiplies: the metal
+// layer (mean alpha 104) uploaded at 40 % brightness (artifacts/probe/
+// run-premul.mjs: meanR 152.6 straight vs 61.5 default). Every decode — the
+// crop, the full-strip fallback and its crops — must ask for straight,
+// un-colour-managed pixels, and no path may route through a 2D canvas (its
+// backing store premultiplies in every engine).
+for (const path of ["crop", "fallback"]) {
+  test(`every material-strip createImageBitmap passes straight-alpha options (${path} path)`, async () => {
+    const calls = [];
+    const blob = { size: 64 };
+    const touched = [];
+    const assets = assetLoader({
+      async fetch(url) {
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: { size: 4, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }, { mat: 16, scale: 2 }] } }) }
+          : { ok: true, blob: async () => blob };
+      },
+      async createImageBitmap(source, ...args) {
+        calls.push({ source, args });
+        if (path === "fallback" && source === blob && args.length > 1) throw Error("crop unsupported");
+        return { close() {} };
+      },
+      OffscreenCanvas: class { constructor() { touched.push("OffscreenCanvas"); } getContext(k) { touched.push(k); return null; } },
+      document: { createElement(t) { touched.push(t); return { getContext() { return null; } }; } },
+    });
+    assets.init({ createTextureArray() { return {}; }, setMaterialMaps() {} });
+    assert.equal(await assets.load(), true);
+    assert.ok(calls.length >= (path === "crop" ? 4 : 6), `decoded ${calls.length}`);
+    for (const c of calls) {
+      const opts = c.args[c.args.length - 1];
+      assert.equal(typeof opts, "object", "the options object is the last argument");
+      assert.deepEqual({ ...opts }, STRAIGHT_BITMAP);
+      assert.ok(c.args.length === 1 || c.args.length === 5, `full decode or 4-arg crop + options, got ${c.args.length}`);
+    }
+    if (path === "fallback") {
+      const fullDecodes = calls.filter(c => c.source === blob && c.args.length === 1);
+      assert.equal(fullDecodes.length, 2, "albedo and normal each fall back to one full-strip decode");
+      assert.ok(calls.some(c => c.source !== blob && c.args.length === 5), "layers are cropped from the decoded bitmap");
+    }
+    assert.deepEqual(touched, [], "no canvas is created on either decode path");
+  });
+}
+
+test("readLayerBytes reads layers straight through a scratch WebGL2 context, never a 2D canvas", () => {
+  const pixelStore = new Map(), uploaded = [], contexts = [];
+  let lost = 0;
+  const GL = { UNPACK_FLIP_Y_WEBGL: 1, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 2, UNPACK_COLORSPACE_CONVERSION_WEBGL: 3,
+    NONE: 0, TEXTURE_2D: 10, FRAMEBUFFER: 11, COLOR_ATTACHMENT0: 12, FRAMEBUFFER_COMPLETE: 13, RGBA: 14, UNSIGNED_BYTE: 15 };
+  const gl = { ...GL,
+    pixelStorei(k, v) { pixelStore.set(k, v); },
+    createTexture() { return {}; }, createFramebuffer() { return {}; },
+    bindTexture() {}, bindFramebuffer() {}, framebufferTexture2D() {},
+    checkFramebufferStatus() { return GL.FRAMEBUFFER_COMPLETE; },
+    texImage2D(...a) { uploaded.push(a[a.length - 1]); },
+    readPixels(x, y, w, h, f, t, dst) { dst.fill(uploaded[uploaded.length - 1].fill); },
+    deleteFramebuffer() {}, deleteTexture() {},
+    getExtension(n) { return n === "WEBGL_lose_context" ? { loseContext() { lost++; } } : null; },
+  };
+  const assets = assetLoader({
+    OffscreenCanvas: class { getContext(kind, attrs) { contexts.push({ kind, attrs }); return kind === "webgl2" ? gl : null; } },
+  });
+  const size = 2, page = size * size * 4, n = 4;
+  const data = new Uint8Array(page * n);
+  const direct = new Uint8Array(page).fill(7);
+  const images = [];
+  images[1] = { fill: 41 };            // an ImageBitmap stand-in
+  images[2] = direct;                  // already bytes: copied, not uploaded
+  images[3] = { fill: 99 };
+  const done = assets.readLayerBytes(size, images, n, data);
+  assert.deepEqual([...done], [1, 2, 3]);
+  assert.equal(contexts.length, 1);
+  assert.equal(contexts[0].kind, "webgl2");
+  assert.deepEqual({ ...contexts[0].attrs }, { premultipliedAlpha: false, antialias: false });
+  assert.equal(pixelStore.get(GL.UNPACK_PREMULTIPLY_ALPHA_WEBGL), false);
+  assert.equal(pixelStore.get(GL.UNPACK_COLORSPACE_CONVERSION_WEBGL), GL.NONE);
+  assert.equal(pixelStore.get(GL.UNPACK_FLIP_Y_WEBGL), false);
+  assert.equal(uploaded.length, 2, "byte layers skip the GPU round trip");
+  assert.equal(data[page], 41); assert.equal(data[2 * page], 7); assert.equal(data[3 * page], 99);
+  assert.equal(data[0], 0, "an absent layer is left untouched");
+  assert.equal(lost, 1, "the scratch context is released");
+});
+
+test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas getImageData", () => {
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const fnBody = (src, sig) => {
+    const at = src.indexOf(sig);
+    assert.ok(at >= 0, `missing ${sig}`);
+    return src.slice(at, src.indexOf("\n    }\n", at));
+  };
+  const wgxBytes = fnBody(wgx, "function _matLayerBytes(");
+  assert.match(wgxBytes, /Assets\.readLayerBytes\(/);
+  assert.doesNotMatch(wgxBytes, /getImageData|getContext\("2d"/, "WGX layer bytes must not round-trip a premultiplied canvas");
+  assert.match(wgx, /premultipliedAlpha: false \}/, "the no-WebGL2 copyExternalImageToTexture keeps straight alpha");
+  assert.match(tlx, /Assets\.readLayerBytes\(size, images, n, data\)/);
+});
 
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
   let releaseNormal, normalStarted;
@@ -1066,14 +1188,39 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
   assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
 });
 
-test("ensureScenery awaits Assets.modelsReady before any build", () => {
+test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
   const i = src.indexOf("function ensureScenery(");
   assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
   const fn = src.slice(i, src.indexOf("\n}\n", i));
-  assert.match(fn, /Assets\.modelsReady\(\)/, "ensureScenery no longer waits for the baked model pack");
-  assert.match(fn, /Promise\.all\(\[p, models\]\)/, "the scenery script and the model pack must be awaited together");
-  assert.match(fn, /return models\.then/, "a resident or inline scenery must still wait for the pack");
+  const h = src.indexOf("function sceneryModels(");
+  assert.ok(h >= 0, "sceneryModels(def) is ensureScenery's model wait");
+  assert.match(fn, /sceneryModels\(def\)/, "ensureScenery no longer waits for the circuit's baked models");
+  assert.match(src.slice(h, src.indexOf("\n}\n", h)), /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "sceneryModels no longer reads the closure source");
+  assert.match(fn, /return p\.then\(models\)/, "the models are resolved from the closure once the scenery script lands");
+  assert.match(fn, /return models\(\)\.then/, "a resident or inline scenery must still wait for its models");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.doesNotMatch(game, /Assets\.loadModels\(\)/, "boot must not prefetch the whole model pack again");
+});
+
+test("modelsReady(ms, src) fetches only the models a scenery closure names", async () => {
+  const urls = [];
+  const fetch = async (url) => {
+    urls.push(url);
+    if (/manifest\.json$/.test(url)) return { ok: true, json: async () => ({ models: {
+      a_one: { file: "models/a_one.bin" }, b_two: { file: "models/b_two.bin" }, c_three: { file: "models/c_three.bin" } } }) };
+    return { ok: true, arrayBuffer: async () => MODEL_V2() };
+  };
+  const assets = assetLoader({ setTimeout, clearTimeout, fetch });
+  const scenery = function (api) { const { bakedModel } = api; for (const [id] of [["a_one"], ["c_three"]]) bakedModel(id); bakedModel('a_one'); bakedModel("not_in_pack"); };
+  assert.equal(await assets.modelsReady(1000, String(scenery)), 2);
+  assert.ok(assets.modelSync("a_one") && assets.modelSync("c_three"));
+  assert.equal(assets.modelSync("b_two"), null, "a model no closure names is never fetched");
+  assert.deepEqual(urls.filter((u) => /\.bin$/.test(u)).sort(), ["assets/pack/models/a_one.bin", "assets/pack/models/c_three.bin"]);
+  const n = urls.length;
+  assert.equal(await assets.modelsReady(1000, ""), 0, "a circuit that names no model resolves at once");
+  assert.equal(await assets.modelsReady(1000, "function(){ building(); }"), 0);
+  assert.equal(urls.length, n, "no model fetch for a closure without models (the manifest is cached)");
 });
 
 test("unknown bake flag is refused before rewriting the pack", () => {
@@ -1088,4 +1235,58 @@ test("assets.mjs --help prints usage and exits 0", () => {
     { encoding: "utf8" });
   assert.equal(r.status, 0);
   assert.match(r.stdout, /bake-synthetic/);
+});
+
+// ── verify against a BAD manifest (2026-10-04) ─────────────────────────────
+// `verify` joined a model's file onto the pack with no confinement (materials
+// already had one), accepted a model with no md5 at all, and never opened the
+// AX26 body, so an index past the vertex count or a material id past the
+// array's last layer shipped silently. Each case below is one defect in an
+// otherwise-good pack; the good model alone must pass.
+test("verify refuses model files outside the pack, unhashed, or with out-of-range indices/layers", async () => {
+  const os = require("node:os");
+  const crypto = require("node:crypto");
+  const { writeAX26 } = await import("../../tools/gen/assets.mjs");
+  const tri = { pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), idx: new Uint32Array([0, 1, 2]) };
+  const md5 = (b) => crypto.createHash("md5").update(b).digest("hex");
+  const meta = { licence: "CC0", author: "t", source: "t", mat: "CONCRETE" };
+  const run = (models, files) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verify-"));
+    try {
+      fs.mkdirSync(path.join(dir, "models"), { recursive: true });
+      for (const [f, b] of Object.entries(files)) fs.writeFileSync(path.join(dir, f), b);
+      fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ version: 1, materials: null, models, env: {}, credits: [] }));
+      const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "gen", "assets.mjs"), "verify"],
+        { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
+      return { status: r.status, out: r.stdout + r.stderr };
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  };
+  const good = writeAX26(tri, "CONCRETE");
+  assert.equal(good.readUInt32LE(4), 2, "precondition: the compact layout");
+  const ok = run({ good: { ...meta, file: "models/good.bin", md5: md5(good), verts: 3, tris: 1 } }, { "models/good.bin": good });
+  assert.equal(ok.status, 0, "the good pack passes:\n" + ok.out);
+
+  // An index past nv: the last u16 is the last index of the v2 body.
+  const badIdx = Buffer.from(good); badIdx.writeUInt16LE(7, badIdx.length - 2);
+  // A material layer past the array: the v2 per-vertex material bytes sit at 20 + nv*21.
+  const badMat = Buffer.from(good); badMat[20 + 3 * 21] = 40;
+  // A v1 body (an emissive colour > 1 forces it) with an out-of-range index too.
+  const v1 = writeAX26({ ...tri, col: new Float32Array(9).fill(2) }, "CONCRETE");
+  assert.equal(v1.readUInt32LE(4), 1, "precondition: the wide layout");
+  const v1Bad = Buffer.from(v1); v1Bad.writeUInt32LE(3, v1Bad.length - 4);
+  const cases = [
+    ["outside the pack", { ...meta, file: "../escape.bin", md5: md5(good) }, {}, /file outside pack/],
+    ["no md5", { ...meta, file: "models/good.bin" }, { "models/good.bin": good }, /md5 missing/],
+    ["index past nv (v2)", { ...meta, file: "models/b.bin", md5: md5(badIdx) }, { "models/b.bin": badIdx }, /indices reach past the 3 vertices/],
+    ["index past nv (v1)", { ...meta, file: "models/b.bin", md5: md5(v1Bad) }, { "models/b.bin": v1Bad }, /indices reach past the 3 vertices/],
+    ["material layer past the array", { ...meta, file: "models/b.bin", md5: md5(badMat) }, { "models/b.bin": badMat }, /material layer 40, outside 0\.\.16/],
+    ["truncated body", { ...meta, file: "models/b.bin", md5: md5(good.subarray(0, good.length - 2)) }, { "models/b.bin": good.subarray(0, good.length - 2) }, /bytes, header says/],
+    ["unknown material name", { ...meta, mat: "PLUTONIUM", file: "models/good.bin", md5: md5(good) }, { "models/good.bin": good }, /not a MAT id/],
+    ["manifest counts drift", { ...meta, file: "models/good.bin", md5: md5(good), verts: 4, tris: 2 }, { "models/good.bin": good }, /manifest says 4 verts/],
+  ];
+  for (const [name, rec, files, want] of cases) {
+    const r = run({ bad: rec }, files);
+    assert.equal(r.status, 1, `${name}: verify must fail\n${r.out}`);
+    assert.match(r.out, want, `${name}: names the defect`);
+  }
 });

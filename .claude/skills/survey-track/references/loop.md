@@ -3,6 +3,10 @@
 Load this when reading a probe table, editing terrain `def` flags, or deciding
 whether a visual baseline should move.
 
+This reference describes the combined parent/worker loop. All browser-backed
+commands below belong to the parent, never the fork. The track-surveyor reads
+the supplied artifacts, edits only its circuit pair and runs offline audits.
+
 ## The loop
 
 ### 1 · Read the brief
@@ -10,7 +14,7 @@ whether a visual baseline should move.
 `docs/tracks/<id>.md`. List the 3–5 highest-leverage fixes from the landmark
 table and palette.
 
-### 2 · Survey — one command
+### 2 · Parent survey — one command
 
 ```sh
 node tools/track/survey-track.mjs <id> before
@@ -39,7 +43,8 @@ pre-present frame. Real = a `--` sandwiched at lat 4-24 or a >1 m step in a late
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
 (flag may sit anywhere; `monaco --oblique 0.1,0.5` is valid).
-Numbers-only: `node .claude/skills/survey-track/ground-profile.mjs <id>`.
+Parent numbers-only probe (still boots Chromium):
+`node .claude/skills/survey-track/ground-profile.mjs <id>`.
 One bespoke frame: **playwright-probe** `tools/shot/shot.mjs`. Deeper hooks:
 **agent-view** (`references/track-geometry.md`). `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
@@ -53,8 +58,8 @@ terrain-over-road class.
   `def.terrainOuter` and the sag/ease model. A flat man-made island wants a
   **wide, level** shelf out to the shoreline. New per-track terrain behaviour
   is a **`def` flag** read in `buildTerrain` **and** mirrored in `groundYAt`.
-  A `def` key only reaches the engine if it is copied in the
-  `LIST = DEFS.map` block near the bottom of `js/track/tracks.js`.
+  This shared engine work belongs to the parent. A `def` key only reaches the
+  engine if `TrackDef.fromRaw` in `js/track/core/def.js` copies it.
 
 ### 4 · Verify the build
 
@@ -64,15 +69,16 @@ node tools/track/verify-track.cjs <id>
 
 A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
 
-### 5 · Re-survey
+### 5 · Parent re-survey
 
 ```sh
 node tools/track/survey-track.mjs <id> after
 ```
 
-Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
+Compare matching `before-*.png` vs `after-*.png`; attribute each flag to a
+confirmed defect, intended slope or probe artifact rather than forcing zero flags.
 
-### 6 · Test & ship
+### 6 · Parent test & ship
 
 - Geometry: `node tools/track/verify-track.cjs <id>` (default). Optional fleet: `node tools/ci/test-bg.mjs circuits`.
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
@@ -93,10 +99,10 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
    (−2.15 at 110 m); beyond it `terrainY` was `--`, so trees fell back to the
    sunk `groundYAt`. Root cause: a flat island modelled with a *sloping*
    terrain ribbon.
-3. Edit: `flatTerrain` def flag (wide, dead-level shelf out to
+3. Historical edit: `flatTerrain` def flag (wide, dead-level shelf out to
    `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
    whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` (tags stay `?v=dev`).
+4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Gotchas
 
@@ -106,4 +112,5 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
   terrain; a one-sided lake means one side reads `--` legitimately.
 - Intentional visual change ≠ regression — regenerate parked goldens; don't
   chase the diff.
-- One circuit at a time, picture-driven.
+- One circuit per worker, picture-driven; parent campaigns may delegate
+  disjoint pairs in parallel through **track-realism**.

@@ -126,7 +126,22 @@ function makeGpuHarness(opts = {}) {
   const deviceRequests = [];
   let loseDevice = null;
   let failEncoder = false;
+  // Optional error scopes (opts.errorScopes): a real stack. Pops resolve clean
+  // at once (create() awaits its own boot scopes) until the test calls
+  // holdPops(): then each verdict waits for settlePops — a GPUError is
+  // reported asynchronously, never thrown, so it must be able to arrive late.
+  const scopeStack = [], pendingPops = [];
+  let holdPops = false;
   const device = {
+    ...(opts.errorScopes ? {
+      pushErrorScope(filter) { scopeStack.push(filter); },
+      popErrorScope() {
+        const filter = scopeStack.pop();
+        if (!filter) return Promise.reject(new Error("OperationError: empty error scope stack"));
+        if (!holdPops) return Promise.resolve(null);
+        return new Promise((resolve) => pendingPops.push({ filter, resolve }));
+      },
+    } : {}),
     // Three distinct states, because they fail differently: a healthy device
     // whose `lost` never settles, one the test can lose LATER via loseDevice()
     // (the escalation ladder), and one that arrives ALREADY lost — which is what
@@ -384,6 +399,16 @@ function makeGpuHarness(opts = {}) {
     fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
+    scopeDepth: () => scopeStack.length,
+    holdPops() { holdPops = true; },
+    pendingPops: () => pendingPops.map((p) => p.filter),
+    // Resolve every queued pop with errFor(filter) (null = clean), then let the
+    // promise callbacks run.
+    async settlePops(errFor = () => null) {
+      const q = pendingPops.splice(0);
+      for (const p of q) p.resolve(errFor(p.filter));
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    },
     // This VM's Log ring (seedLog): what a phone's COPY DIAG would carry.
     logs: (filter) => context.Log.records(filter),
   };
@@ -590,6 +615,120 @@ test("the same target size retries after the allocation cooldown", async () => {
   h.advanceTime(1001);
   assert.equal(gfx.begin({}), true);
   assert.ok(h.textureCount() > callsAfterFailure, "same dimensions must recover after cooldown");
+});
+
+// TARGET REALLOCATION UNDER ERROR SCOPES (2026-10-04). createTexture never
+// throws on out-of-memory — it returns an invalid texture and reports a
+// GPUOutOfMemoryError (W3C WebGPU §22) — so the catch above never saw memory
+// pressure and the invalid set was swapped in. A resize now builds inside
+// "out-of-memory" + "validation" scopes and swaps only on a clean verdict.
+async function scopedResized() {
+  const h = makeGpuHarness({ errorScopes: true });
+  const gfx = await h.create();
+  h.holdPops();
+  gfx.resize();
+  const start = h.textures.length;
+  assert.equal(gfx.begin({}), true);
+  assert.deepEqual(h.pendingPops(), [], "the FIRST build has no set to keep, so it is not deferred");
+  const old = h.textures.slice(start);   // the first target set
+  assert.ok(old.length > 0);
+  h.canvas.clientWidth = 640;
+  gfx.resize();
+  const before = h.textures.length;
+  assert.equal(gfx.begin({}), true, "the frame still renders, through the old set");
+  const fresh = h.textures.slice(before);
+  assert.ok(fresh.length > 0, "the new size was built");
+  assert.deepEqual(h.pendingPops().sort(), ["out-of-memory", "validation"], "both scopes popped, verdict pending");
+  assert.equal(h.scopeDepth(), 0, "no scope left pushed");
+  return { h, gfx, old, fresh };
+}
+
+test("a resize's targets swap in only when both error scopes pop clean", async () => {
+  const { h, gfx, old, fresh } = await scopedResized();
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.equal(h.textureCount(), n, "no rebuild while the verdict is pending");
+  assert.ok(old.every((t) => !t.destroyed) && fresh.every((t) => !t.destroyed), "nothing swapped or freed yet");
+  await h.settlePops();
+  assert.equal(gfx.begin({}), true);
+  assert.ok(fresh.every((t) => !t.destroyed), "the clean set is live");
+  assert.ok(old.every((t) => t.destroyed), "the previous target set was released");
+});
+
+test("an out-of-memory verdict keeps the old set, frees the new one and waits out the cooldown", async () => {
+  const { h, gfx, old, fresh } = await scopedResized();
+  await h.settlePops((f) => (f === "out-of-memory" ? { message: "injected GPUOutOfMemoryError" } : null));
+  assert.equal(gfx.begin({}), true, "still rendering");
+  assert.ok(fresh.every((t) => t.destroyed), "every texture of the failed set is destroyed");
+  assert.ok(old.every((t) => !t.destroyed), "the previous set survives");
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.equal(h.textureCount(), n, "same size inside the cooldown: no rebuild every frame");
+  assert.ok(h.logs().some((r) => /target realloc 640x\d+ failed \(out-of-memory\)/.test(r.msg || r.message || String(r))),
+    "the failure is logged for COPY DIAG");
+  h.advanceTime(1001);
+  assert.equal(gfx.begin({}), true);
+  assert.ok(h.textureCount() > n, "after the cooldown the size is retried");
+});
+
+test("a verdict for a size the canvas already left is discarded and the current size rebuilt", async () => {
+  const { h, gfx, fresh } = await scopedResized();
+  h.canvas.clientWidth = 800;
+  gfx.resize();
+  await h.settlePops();
+  const n = h.textureCount();
+  assert.equal(gfx.begin({}), true);
+  assert.ok(fresh.every((t) => t.destroyed), "the stale 640 set is freed, never swapped");
+  assert.ok(h.textureCount() > n, "the 800 set is built at once (a moved size skips the cooldown)");
+});
+
+test("SGSR: the gather variant commits only on a clean scope; a failed one falls to the 4-tap", async () => {
+  let h = makeGpuHarness({ errorScopes: true });
+  let gfx = await h.create();
+  h.holdPops();
+  gfx.setSpatialUpscale(true);
+  assert.equal(gfx.getSpatialUpscaleGather(), false, "not committed before its verdict");
+  assert.deepEqual(h.pendingPops(), ["validation"]);
+  await h.settlePops();
+  assert.equal(gfx.getSpatialUpscaleGather(), true, "a clean gather pipeline is the one in use");
+
+  h = makeGpuHarness({ errorScopes: true });
+  gfx = await h.create();
+  h.holdPops();
+  gfx.setSpatialUpscale(true);
+  await h.settlePops(() => ({ message: "injected WGSL error in textureGather" }));
+  assert.ok(h.logs().some((r) => /SGSR gather variant failed/.test(r.msg || r.message || String(r))));
+  assert.deepEqual(h.pendingPops(), ["validation"], "the 4-tap variant is tried next — the fallback is reachable");
+  await h.settlePops();
+  assert.equal(gfx.getSpatialUpscaleGather(), false, "the 4-tap pipeline committed");
+  assert.ok(!h.logs().some((r) => /no variant compiled/.test(r.msg || r.message || String(r))));
+});
+
+// LAMP FLICKER vs THE BAKED TRACK SET (2026-10-04). frame-lights.js bumps
+// allLightsGen every frame the shipped flicker runs (rgb only), and WGX re-sent
+// the whole tn × 64 B track-light SBO each time: 144 uploads a second at
+// 144 Hz for a ≤ 2.4 Hz shimmer. Values-only changes are now paced to 30 Hz on
+// the frame clock; a new set uploads at once; a frozen clock is never paced.
+test("flicker re-uploads the baked track set at most 30 times a second; a new set uploads at once", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const sbo = h.buffers.find((b) => b.desc.size === 1024 * 64);
+  assert.ok(sbo, "the runtime-sized track-light SBO exists");
+  const uploads = () => h.writes.filter((w) => w.buffer === sbo).length;
+  const set = (n) => { const a = new Array(n * 15).fill(0); for (let i = 0; i < n; i++) { a[i * 15 + 3] = 1; a[i * 15 + 6] = 10; } return a; };
+  let AL = set(40), gen = 0;
+  const frame = (t) => { AL[3] = 1 + 0.01 * Math.sin(t * 15); gfx.begin({ perChunkLights: 1, allLights: AL, allLightsGen: ++gen, time: t }); };
+  for (let i = 0; i < 144; i++) frame(i / 144);   // one second at 144 Hz, gen moving every frame
+  const n144 = uploads();
+  assert.ok(n144 >= 29 && n144 <= 31, `${n144} uploads in a second of 144 Hz flicker (was 144)`);
+  const before = uploads();
+  AL = set(41);                                   // a NEW set (re-bake / track change)
+  frame(144 / 144 + 1 / 144);
+  assert.equal(uploads(), before + 1, "a new set is uploaded on its first frame, never paced");
+  const held = uploads();
+  for (let i = 0; i < 10; i++) gfx.begin({ perChunkLights: 1, allLights: AL, allLightsGen: ++gen, time: 5 });
+  assert.equal(uploads(), held + 10, "a frozen clock (renderClock hold) is never paced — a slider move must land");
 });
 
 test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads", async () => {
@@ -1877,8 +2016,9 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
 test("MAT array upload is byte-exact like GLX texSubImage3D, not sRGB-converted", () => {
   // copyExternalImageToTexture into rgba8unorm linearises sRGB. The pack is
   // mean-normalised to 128 so albedo*tex*2 is a no-op — a linearised 128
-  // (~0.22) crushes tarmac vs WebGL2. writeTexture of 2D-canvas bytes matches
-  // GLX's raw RGBA8 upload.
+  // (~0.22) crushes tarmac vs WebGL2. writeTexture of the straight bytes from
+  // Assets.readLayerBytes (scratch WebGL2, never a premultiplied 2D canvas)
+  // matches GLX's raw RGBA8 upload.
   assert.match(WGX_SOURCE, /function _matLayerBytes\(/);
   assert.match(WGX_SOURCE, /device\.queue\.writeTexture\(\{ texture: tex, origin: \[0, 0, i\] \}/);
   assert.match(WGX_SOURCE, /placePx\[i \* bpr\] = placePx\[i \* bpr \+ 1\] = placePx\[i \* bpr \+ 2\] = 128/);
@@ -2160,14 +2300,17 @@ test("WGX post parity: SSAO normal, haze plume space, bloom order, mirror tone c
   assert.doesNotMatch(bright, /\bw0\b|1\.0 \+ max/, "no Karis on the bright pass");
   assert.doesNotMatch(down, /U\.threshold > 0\.0/, "the mode lane picks the pass, not the threshold");
   assert.match(WGX_SOURCE, /s\[2\] = i === 0 \? threshold : 0; s\[3\] = i === 0 \? 2 : i === 1 \? 1 : 0;/);
+  assert.match(WGX_SOURCE, /s\[4\] = o\.exposure != null \? o\.exposure : 1\.0; s\[5\] = s\[6\] = s\[7\] = 0;/,
+    "the bright pass tests EXPOSED luminance (GLX BRIGHT_FS uExposure)");
   // 4. The mirror takes the frame's white point + five ACES knobs (GLX
-  //    MIRROR_FS, TLX mirror); the fallback blit + smoke tests the stand-in.
+  //    MIRROR_FS, TLX mirror) AND, when the post chain graded the frame, its
+  //    colour grade + dither (params.w); the fallback blit + smoke tests the stand-in.
   assert.match(glsl, /acesTonemap\(c \* uExposure \/ uWhitePoint\)/, "the GLX reference");
-  assert.match(CHUNKS_SOURCE, /struct BlitU \{ params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32> \};/);
+  assert.match(CHUNKS_SOURCE, /struct BlitU \{ params : vec4<f32>, aces : vec4<f32>, tone : vec4<f32>,\s*grade : vec4<f32>, shadowStr : vec4<f32>, hiLift : vec4<f32> \};/);
   assert.match(CHUNKS_SOURCE, /acesTonemap\(hdr \/ max\(B\.tone\.y, 1e-3\), B\.aces\.x, B\.aces\.y, B\.aces\.z, B\.aces\.w, B\.tone\.x\)/);
   assert.doesNotMatch(CHUNKS_SOURCE, /acesTonemap\(hdr, 2\.51/, "hard-coded coefficients");
-  assert.match(CHUNKS_SOURCE, /BLIT_UNIFORM_BYTES:\s*48/);
-  assert.match(WGX_SOURCE, /_mirrorComposite\(exposure, _postReady \? o\.tune : _TONE_STANDIN\);/);
+  assert.match(CHUNKS_SOURCE, /BLIT_UNIFORM_BYTES:\s*96/);
+  assert.match(WGX_SOURCE, /_mirrorComposite\(exposure, _postReady \? o\.tune : _TONE_STANDIN, _postReady \? o : null\);/);
   assert.match(WGX_SOURCE, /_tonemapBlit\(exposure\);\s*_mirrorComposite\(exposure, _TONE_STANDIN\);/);
   assert.equal((WGX_SOURCE.match(/writeBuffer\(blitUBO, 0, _blitParams\([^)]*\), 1, _TONE_STANDIN\)\)/g) || []).length, 2,
     "both boot smoke tests write the whole BlitU (zero tone lanes = a 0/0 curve = 'rendered black')");
@@ -2184,16 +2327,19 @@ test("WGX post parity: SSAO normal, haze plume space, bloom order, mirror tone c
   gfx.present({ exposure: 2, threshold: 0.875, bloom: 0.5, tune: { bloomSpread: 0.5,
     whitePoint: 1.25, acesA: 3, acesB: 0.25, acesC: 3.5, acesD: 0.75, acesE: 0.5 } });
   const ws = h.writes.slice(mark);
-  const i0 = ws.findIndex((w) => w.values.length === 4 && w.values[2] === 0.875);
+  const i0 = ws.findIndex((w) => w.values.length === 8 && w.values[2] === 0.875);
   assert.ok(i0 >= 0, "the bloom level-0 upload");
+  assert.equal(ws[i0].values[4], 2, "level 0 carries the exposure (threshold in exposed units)");
   const modes = [];
-  for (let i = i0; i < ws.length && ws[i].values.length === 4 && (i === i0 || ws[i].values[2] === 0); i++) modes.push(ws[i].values[3]);
+  for (let i = i0; i < ws.length && ws[i].values.length === 8 && (i === i0 || ws[i].values[2] === 0); i++) modes.push(ws[i].values[3]);
   assert.ok(modes.length >= 3, `a 3+ level chain at 320x180, got ${modes.length}`);
   assert.deepEqual(modes, [2, 1, ...modes.slice(2).map(() => 0)], "bright pass, Karis, then plain");
-  const mir = ws.filter((w) => w.buffer.desc.size === 48 && w.values[1] === 1).at(-1);
+  const mir = ws.filter((w) => w.buffer.desc.size === 96 && w.values[1] === 1).at(-1);
   assert.ok(mir, "the mirror composite's BlitU upload (flip = 1)");
   assert.equal(mir.values[0], 2, "exposure");
   assert.deepEqual(mir.values.slice(4, 10), [3, 0.25, 3.5, 0.75, 0.5, 1.25], "aces a..e + whitePoint from the tune");
+  assert.equal(mir.values[3], 1, "the graded frame grades its mirror inset too");
+  assert.ok(mir.values[12] > 0 && mir.values[14] > 0, "contrast / saturation knobs reach the inset (TUNE_DEFS defaults)");
 });
 
 test("shadow model UBO flushes once per pass (not per cast)", () => {
@@ -2669,4 +2815,36 @@ test("WGX live mirror glass: pGlass carries _fxMS, the group dies with the targe
   gfx.present({});
   assert.match(WGX_SOURCE, /mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null;/,
     "_mirrorFree drops the glass group with the views");
+});
+
+test("WGX car decals: premultiplied atlas + blend, and the lit frame group as group 1 (sun shadow, lamp pools)", () => {
+  // L4-c 2026-10-04 (GLX glsl-fx.js DECAL_FS parity). The decal module reads the
+  // lit pass's own FrameU + bindings 2/3/5/17/18, so its pipeline layout carries
+  // g0Layout as group 1 and drawDecal binds _activeFrameBG there.
+  assert.match(WGX_SOURCE, /bindGroupLayouts: \[fxDecalLayout, g0Layout\]/);
+  assert.match(WGX_SOURCE, /entryPoint: "fs_main", targets: \[\{\s*format: SCENE_FORMAT, blend: PREMUL_BLEND,/);
+  assert.match(WGX_SOURCE, /color: \{ srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" \}/);
+  assert.match(WGX_SOURCE, /litPass\.setBindGroup\(1, _activeFrameBG\);/);
+  assert.match(WGX_SOURCE, /\{ texture: tex, premultipliedAlpha: true \}/, "canvas atlases copy premultiplied");
+  assert.match(FX_SOURCE, /const DECAL = FRAME_U \+ `/, "the decal reads the lit FrameU, not a copy");
+  assert.match(CHUNKS_SOURCE, /const LIT = `\$\{FRAME_U\}/);
+  for (const re of [/@group\(1\) @binding\(2\) var shadowTex  : texture_depth_2d;/, /@group\(1\) @binding\(17\) var lampBakeTex/,
+    /fn decalShadow\(/, /fn decalPool\(/, /textureSampleCompareLevel\(shadowTex, shadowSamp/,
+    /let lit = base \* \(amb \+ U\.sunColor\.xyz \* \(ndl \* sh\) \+ decalPool\(in\.wpos, N\)\) \+ base \* U\.tint\.w;/])
+    assert.match(FX_SOURCE, re);
+});
+
+test("WGX PCSS blocker: r32float, the full 16-texel footprint min, read with textureLoad", () => {
+  // L4-d 2026-10-04 (GLX shadow.js / BLOCKER_FS parity). r32float is not
+  // filterable in core WebGPU: binding 7 is unfilterable-float and the lit
+  // pass textureLoads it (NEAREST — what GLX's blocker sampler does).
+  const SH = WGX_SHADOW_SOURCE;
+  assert.match(SH, /size: \[512, 512\], format: "r32float"/);
+  assert.match(SH, /targets: \[\{ format: "r32float" \}\]/);
+  assert.match(WGX_SOURCE, /binding: 7, visibility: GPUShaderStage\.FRAGMENT,\s*texture: \{ sampleType: "unfilterable-float" \}/);
+  assert.match(CHUNKS_SOURCE, /return textureLoad\(blockerTex, px, 0\)\.r;/);
+  assert.doesNotMatch(CHUNKS_SOURCE, /textureSampleLevel\(blockerTex/, "a filtering sample of an r32float map is a validation error");
+  const blk = /BLOCKER = `([\s\S]*?)`;/.exec(CHUNKS_SOURCE)[1];
+  assert.match(blk, /for \(var y = 0; y < 4; y\+\+\)[\s\S]*for \(var x = 0; x < 4; x\+\+\)/);
+  assert.match(blk, /m = min\(m, textureLoad\(depthTex, min\(base \+ vec2<i32>\(x, y\), dims - vec2<i32>\(1\)\), 0\)\);/);
 });

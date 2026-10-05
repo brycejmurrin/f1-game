@@ -49,9 +49,11 @@ const RaceEngineer = (function () {
   // is shared with flags, penalties and the caution, and an engineer that talks
   // over a red flag is worse than one that says nothing.
   const QUIET_S = 9;
-  // …and no single line repeats inside this many, so a car sitting exactly on a
-  // threshold does not get the same sentence every ten seconds.
-  const REPEAT_S = 45;
+  // …and no single line is said twice for the SAME STATE (stateOf below): a
+  // 45 s per-line timer re-said every steady-state line ("MANAGE THE TYRES",
+  // "CHEAPER STOP") about twice a lap for a whole stint or caution. A line
+  // whose state moved (the lap, the rival, the count) is news, and may be said
+  // as soon as the quiet window allows.
   // ONE VOICE. The pit cue (js/race/pit-lane.js cue) and the engineer write to
   // the same driver; while the cue is giving a DIRECTION — hold the lane, keep
   // left, stop here, merge — the engineer waits, and the line it owes is not
@@ -83,11 +85,31 @@ const RaceEngineer = (function () {
     // should not — a hook back would make the wear model depend on the HUD.
     function bag(c) {
       let b = c._eng;
-      if (!b) b = c._eng = { t: 0, said: {}, step: -1, set: c.tyreStints || 0 };
+      if (!b) b = c._eng = { t: 0, said: {}, step: -1, set: c.tyreStints || 0, cEp: 0, cLvl: 0 };
       if (b.set !== (c.tyreStints || 0)) {
         b.set = c.tyreStints || 0; b.step = -1; b.said = {};
       }
       return b;
+    }
+
+    // WHAT A LINE REPORTS, so "the same advice" means the same state, not the
+    // same key. A line names a lap, a rival or a count — when that moves, the
+    // line is news again; while it holds, saying it twice is nagging. Lines
+    // with no state of their own (a defect, an axle, a wear step, the one-
+    // compound warning) are said once per set: the bag resets with the set.
+    function stateOf(key, s, b) {
+      switch (key) {
+        case "tread": return (s.wet ? "w" : "d") + s.lap;      // a box call: once a lap
+        case "caution": return "c" + b.cEp;                     // once per caution
+        case "undercut": return s.rivalBoxed;
+        case "threat": return s.threat;
+        case "rain": case "rainplan": return s.rainInLaps;
+        case "plan0": case "plan1": return s.lap + ":" + s.nextCode;
+        case "gone": return s.lap;
+        case "manage": return s.stintLeft;
+        case "push": return s.ahead;
+        default: return "";
+      }
     }
 
     /** Clear a car's engineer state. Called from gridUp with the rest. */
@@ -179,8 +201,17 @@ const RaceEngineer = (function () {
       return "";
     }
 
-    /** Build the pure state `callFor` reads, from one car. */
-    function senseOf(c) {
+    /** Build the pure state `callFor` reads, from one car (a fresh object). */
+    function senseOf(c) { return senseInto(c, {}); }
+    // update() reads it every step and lets go before the next: one scratch.
+    // NOT throttled onto a clock: callFor's level calls (tread, box, cheap
+    // stop) and the per-tick b.stops/b.undercut latches read it per step.
+    const _sense = {};
+    function anyFlagged(cars) {   // the leader already flagged — a loop, not a .some() closure per step
+      for (let i = 0; i < cars.length; i++) { const o = cars[i]; if (o.finished && !o.retired) return true; }
+      return false;
+    }
+    function senseInto(c, out) {
       const tyres = G.tyres;
       if (!tyres || !tyres.on() || !c || !c.tyre || c.retired || c.finished) return null;
       const b = bag(c);
@@ -206,7 +237,7 @@ const RaceEngineer = (function () {
       // sight is the one call that must not be obeyed.
       // A lapped car's last lap starts when the leader takes the flag, a lap
       // before its own counter says so.
-      const finalLap = (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (G.cars || []).some((o) => o.finished && !o.retired);
+      const finalLap = (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (!!G.cars && anyFlagged(G.cars));
       const noStop = armed || finalLap;
       if (armed) b.undercut = null;   // our own stop answers the undercut: never "BOX NOW" on the out-lap
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
@@ -266,57 +297,66 @@ const RaceEngineer = (function () {
         b.stops.set(o, now);
       }
       if (b.undercut && !noStop) rivalBoxed = b.undercut.code;
-      return {
-        wear, step,
-        lap: c.lap || 0,
-        lapsToStop,
-        nextCode, rivalBoxed,
-        threat: rivalBoxed || noStop ? null : threat,
-        rejoin, planned: !!plan,
-        ahead: noStop ? null : ahead, aheadGap: ahead ? aheadGap : null,
-        setLaps: tyres.lapsLeft ? tyres.lapsLeft(c) : null,
-        stintLeft: noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (G.lapsTarget || 0) - lap + 1),
-        marginS: pit ? pit.marginS : null,
-        axle: wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0,
-        front: c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r,
-        // `graining`/`blistering`, not `grain`/`blister`: a property access
-        // named `.grain` is how tools/gen/gen-slider-doc.mjs finds the readers
-        // of the FILM GRAIN lighting slider, and this module reads no sliders.
-        graining: c.tyreGrain || 0,
-        blistering: c.tyreBlister || 0,
-        belowWindow,
-        outLap: (c.lap || 0) - (c.tyreLap0 || 0) <= OUTLAP_LAPS,
-        // Nothing about stopping is worth saying to a driver who has already
-        // called one — the banner said BOX THIS LAP when they pressed it.
-        wrongTread: !noStop && (c.tyre.tread || 0) !== wantTread,
-        oneCompound: !noStop && !!(G.pits && G.pits.compoundDue && G.pits.compoundDue(c)),
-        // A discounted stop needs something to gain: a part-used set.
-        // The estimate includes lane travel and stationary service time — it is
-        // advice with a tilde, never a promise of a free stop.
-        pitLoss: pit ? pit.lossS : null,
-        cheapStop: !noStop && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35,
-        wet: wantTread > 0,
-        noStop, finalLap,
-        rainInLaps: !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
-          ? Math.max(1, Math.round(left / lapS)) : null,
-      };
+      // Every field written, in the literal's old order (callFor reads them all).
+      out.wear = wear; out.step = step;
+      out.lap = c.lap || 0;
+      out.lapsToStop = lapsToStop;
+      out.nextCode = nextCode; out.rivalBoxed = rivalBoxed;
+      out.threat = rivalBoxed || noStop ? null : threat;
+      out.rejoin = rejoin; out.planned = !!plan;
+      out.ahead = noStop ? null : ahead; out.aheadGap = ahead ? aheadGap : null;
+      out.setLaps = tyres.lapsLeft ? tyres.lapsLeft(c) : null;
+      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (G.lapsTarget || 0) - lap + 1);
+      out.marginS = pit ? pit.marginS : null;
+      out.axle = wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0;
+      out.front = c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r;
+      // `graining`/`blistering`, not `grain`/`blister`: a property access
+      // named `.grain` is how tools/gen/gen-slider-doc.mjs finds the readers
+      // of the FILM GRAIN lighting slider, and this module reads no sliders.
+      out.graining = c.tyreGrain || 0;
+      out.blistering = c.tyreBlister || 0;
+      out.belowWindow = belowWindow;
+      out.outLap = (c.lap || 0) - (c.tyreLap0 || 0) <= OUTLAP_LAPS;
+      // Nothing about stopping is worth saying to a driver who has already
+      // called one — the banner said BOX THIS LAP when they pressed it.
+      out.wrongTread = !noStop && (c.tyre.tread || 0) !== wantTread;
+      out.oneCompound = !noStop && !!(G.pits && G.pits.compoundDue && G.pits.compoundDue(c));
+      // A discounted stop needs something to gain: a part-used set.
+      // The estimate includes lane travel and stationary service time — it is
+      // advice with a tilde, never a promise of a free stop.
+      out.pitLoss = pit ? pit.lossS : null;
+      // …and a stop still to make: a planned one, or a set that cannot reach
+      // the flag. With neither, "box under the caution" is a stop the race
+      // does not need, however cheap.
+      const stopDue = lapsToStop != null
+        || (out.setLaps != null && G.lapsTarget > 0 && out.setLaps + 0.5 < G.lapsTarget - lap + 1);
+      out.cheapStop = !noStop && stopDue && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35;
+      out.wet = wantTread > 0;
+      out.noStop = noStop; out.finalLap = finalLap;
+      out.rainInLaps = !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
+        ? Math.max(1, Math.round(left / lapS)) : null;
+      return out;
     }
 
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
       if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
-      const s = senseOf(c);
+      const s = senseInto(c, _sense);
       if (!s) return "";
       const b = bag(c);
       b.t = Math.max(0, b.t - dt);
-      for (const k in b.said) b.said[k] = Math.max(0, b.said[k] - dt);
+      // A caution EPISODE: the cheap-stop line is news once per caution.
+      const lvl = G.cautionLevel ? G.cautionLevel() : 0;
+      if (lvl >= 2 && !(b.cLvl >= 2)) b.cEp++;
+      b.cLvl = lvl;
       if (b.undercut && (b.undercut.left -= dt) <= 0) b.undercut = null;
       const call = callFor(s);
       if (!call) return "";
       const cue = G.pits && G.pits.lastCue ? G.pits.lastCue() : null;
       if (cue && DIRECTIONAL.indexOf(cue.phase) >= 0) return "";
       const [msg, key] = call;
-      if (b.t > 0 || b.said[key] > 0) return "";
+      const sig = String(stateOf(key, s, b));
+      if (b.t > 0 || b.said[key] === sig) return "";
       // "info", so an engineer never talks over a flag, a penalty or the lights
       // (js/game.js ANN_PRI) — EXCEPT the pit call, which is not a report but an
       // instruction with a lap to act on it, and rides "box" (rank 4) with the
@@ -331,13 +371,13 @@ const RaceEngineer = (function () {
       // rather than silently spent.
       if (key.indexOf("wear") === 0) b.step = s.step;
       if (key === "undercut") b.undercut = null;
-      b.t = QUIET_S; b.said[key] = key === "compound" ? Infinity : REPEAT_S;
+      b.t = QUIET_S; b.said[key] = sig;
       return msg;
     }
 
     return { update, reset, callFor, senseOf };
   }
 
-  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, REPEAT_S, DIRECTIONAL, BOX_CALLS };
+  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };
 })();
 Object.freeze(RaceEngineer);

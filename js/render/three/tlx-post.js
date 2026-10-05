@@ -27,7 +27,7 @@
  *   armed state that present() then retires.
  *
  * SCENE MSAA (2026-10-01; was a documented deviation): the scene target takes
- *   ctx.sceneSamples (4 on the desktop WebGL2 backend, 0 elsewhere — tlx.js
+ *   ctx.sceneSamples (desktop WebGL2: 2, or 4 on ULTRA, as GLX; 0 elsewhere — tlx.js
  *   decides). r186's WebGL backend resolves the colour attachments AND the
  *   depth texture by blitFramebuffer when resolveDepthBuffer is set, so the
  *   SSAO/SSR/godray blocks read a resolved depth. The old note ("three's MSAA
@@ -481,6 +481,7 @@
       const haveBloom = bloomAmt > 0 && ensureBloom();
       if (haveBloom) {
         P.bright.U.threshold.value = threshold;
+        P.bright.U.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;   // threshold is in exposed units
         runPass(P.bright.mat, bloomLv[0].rt);
         for (let i = 1; i < nLv; i++) {
           P.down.tex.value = bloomLv[i - 1].rt.texture;

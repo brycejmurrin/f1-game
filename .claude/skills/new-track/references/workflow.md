@@ -38,7 +38,7 @@ Load from the SKILL.md index when the task needs this detail.
 2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
    `tools/manifest.cjs` (load-order source of truth), then run
    `node tools/gen/gen-shell.mjs` so the `@gen-shell` script block in `index.html`
-   picks it up. Never hand-edit a `?v=` tag — committed tags stay `?v=dev`.
+   picks it up. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
    `tests/unit/load-order.test.mjs` fails if manifest and shell diverge.
    Tag order == `Tracks.LIST` == picker/season order:
 
@@ -89,8 +89,7 @@ Load from the SKILL.md index when the task needs this detail.
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
 4. **Shell sync** — `node tools/gen/gen-shell.mjs --check` (or `gen-shell.mjs`
-   after a `tools/manifest.cjs` change). Committed tags stay `?v=dev`; deploy
-   stamps hashes. Do not hand-bump numeric `?v=N`.
+   after a `tools/manifest.cjs` change) ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js
@@ -146,8 +145,9 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
   per circuit). A def without `turns` falls back to **curvature-peak**
   `__apex.corners()` for corner boards — not the curated FIA apexes. The 28
   `classic: true` circuits carry `turns` (the N strongest curvature peaks,
-  N = the real turn count) but mostly no researched `sectors`; those consumers
-  fall back to thirds. (The 16 in `import-circuit-path --classics` are the
+  N = the real turn count). Every def now carries `sectors`; where no FIA
+  split was researched they sit at ~1/3 and ~2/3, snapped to the nearest
+  straight (a missing key still falls back to thirds). (The 16 in `import-circuit-path --classics` are the
   subset that tool holds traces for, not the classic roster.)
 - **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
   `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —

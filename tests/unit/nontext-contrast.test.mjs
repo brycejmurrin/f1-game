@@ -43,7 +43,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -115,30 +115,41 @@ function mixOklab(A, pA, B, pB) {
   return { rgb: a === 0 ? [0, 0, 0] : fromOklab(L), a: a * (total < 1 ? total : 1) };
 }
 
-/** Resolve one token value: a hex, `var(--x)`, `rgba(…)`, or a two-operand color-mix. */
-function resolve(value, seen = new Set()) {
+/** Resolve one token value: a hex, `var(--x)`, `rgba(…)`, or a two-operand color-mix.
+ *  `get` looks a custom property up — `token` (the :root block) unless a caller
+ *  resolves inside a scope that re-declares some of them (section 4). */
+function resolve(value, seen = new Set(), get = token) {
+  if (value && typeof value === "object") return value;   // already computed (an inherited value)
   const v = String(value).trim();
   let m;
   if (v === "transparent") return TRANSPARENT;
+  if (v === "black") return { rgb: [0, 0, 0], a: 1 };
+  if (v === "white") return { rgb: [255, 255, 255], a: 1 };
   if (v.startsWith("#")) return { rgb: hex(v), a: 1 };
   if ((m = v.match(/^var\((--[\w-]+)\)$/))) {
     assert.ok(!seen.has(m[1]), `token cycle at ${m[1]}`);
-    return resolve(token(m[1]), new Set(seen).add(m[1]));
+    return resolve(get(m[1]), new Set(seen).add(m[1]), get);
   }
   if ((m = v.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)$/))) {
     return { rgb: [+m[1], +m[2], +m[3]], a: m[4] == null ? 1 : +m[4] };
   }
-  if ((m = v.match(/^color-mix\(\s*in oklab\s*,\s*(.+)\)$/i))) {
-    const [a, b] = splitTop(m[1]);
+  if ((m = v.match(/^color-mix\(\s*in (oklab|srgb)\s*,\s*(.+)\)$/i))) {
+    const [a, b] = splitTop(m[2]);
     const one = (s) => {
       const p = s.trim().match(/^(.*?)\s+([\d.]+)%$/);
-      return p ? { c: resolve(p[1], seen), p: +p[2] / 100 } : { c: resolve(s, seen), p: null };
+      return p ? { c: resolve(p[1], seen, get), p: +p[2] / 100 } : { c: resolve(s, seen, get), p: null };
     };
     const A = one(a), B = one(b);
     // CSS: one omitted percentage is 100% minus the other; both omitted is 50/50.
     const pA = A.p != null ? A.p : (B.p != null ? 1 - B.p : 0.5);
     const pB = B.p != null ? B.p : 1 - pA;
-    return mixOklab(A.c, pA, B.c, pB);
+    if (m[1].toLowerCase() === "oklab") return mixOklab(A.c, pA, B.c, pB);
+    // sRGB with `transparent`: premultiplied, so the colour keeps its channels
+    // and only the alpha scales (the damage chip's black plate).
+    if (B.c.a === 0 && A.c.a === 1) return { rgb: A.c.rgb, a: pA };
+    // sRGB: only the opaque-operand case is used (the damage chip's level 2).
+    assert.ok(A.c.a === 1 && B.c.a === 1 && pA + pB === 1, `srgb mix with alpha is not modelled: ${v}`);
+    return { rgb: A.c.rgb.map((x, i) => x * pA + B.c.rgb[i] * pB), a: 1 };
   }
   assert.fail(`cannot resolve colour: ${v}`);
 }
@@ -311,16 +322,17 @@ test("every team's --accent-ink is READABLE on that team's --accent, and is the 
   // #f5f5f5. 4.5:1 is asserted rather than the 3:1 large-text allowance the
   // 26px plate would earn, so the plate can shrink without this going quiet.
   //
-  // The ink is also not a free choice: only --text and --bg are on offer, and
+  // The ink is also not a free choice: only the fixed dark-HUD neutrals are on offer, and
   // the test recomputes both and insists the sheet named the winner. That is
   // what makes adding a team mechanical instead of a judgement call.
   const skins = [...read("css/tokens.css").matchAll(/:root\[data-team="([\w-]+)"\]\s*\{([^}]*)\}/g)];
-  const CANDIDATES = { "var(--text)": resolve(token("--text")), "var(--bg)": resolve(token("--bg")) };
+  // Root --text/--bg reverse in Light/System; inherited ink must not follow them.
+  const CANDIDATES = { "var(--hud-ink-light)": resolve(token("--hud-ink-light")), "var(--hud-ink-dark)": resolve(token("--hud-ink-dark")) };
   for (const [, team] of skins) {
     const sel = `:root[data-team="${team}"]`;
     const accent = resolve(decl(tokens, sel, "--accent"));
     const inkName = decl(tokens, sel, "--accent-ink");
-    assert.ok(CANDIDATES[inkName], `${sel} sets --accent-ink to ${inkName}; only var(--text) and var(--bg) are on offer`);
+    assert.ok(CANDIDATES[inkName], `${sel} sets --accent-ink to ${inkName}; only theme-independent HUD neutrals are on offer`);
     const scored = Object.entries(CANDIDATES)
       .map(([name, c]) => [name, ratio(accent, c)])
       .sort((a, b) => b[1] - a[1]);
@@ -332,4 +344,199 @@ test("every team's --accent-ink is READABLE on that team's --accent, and is the 
       `${team}: --accent-ink is ${inkName} (${got.toFixed(2)}:1) but ${scored[0][0]} measures ` +
       `${scored[0][1].toFixed(2)}:1 — the ink is whichever is further, not a preference`);
   }
+});
+
+/* ── 4. the race chrome is dark in EVERY theme ─────────────────────────────
+ *
+ * LIGHT (opt-in) and SUNLIGHT (which ships LIGHT + HIGH CONTRAST) re-point the
+ * surface ladder on :root. Custom properties resolve where they are DECLARED,
+ * so a light --plate-opaque reached #hud already computed from the light
+ * --carbon (#fbfbfc), and #announce / #game-metrics — siblings of #hud — took
+ * the light --text / --dim straight onto their dark plates. Measured before
+ * the one scope in css/tokens.css: RELATIVE / STRATEGY / INPUTS / the MIRROR
+ * chip 1.05:1, the blue flag 1.67:1, the metrics panel 1.46:1, the radio card
+ * 1.03-1.49:1 — and no test resolved a single light-theme HUD pair.
+ *
+ * This section is a small cascade: the :root rules a theme switches on (by
+ * specificity, then source order, honouring the prefers-color-scheme block
+ * SYSTEM lives in), then the rules that re-declare tokens on an overlay root.
+ * A var() inside a scope declaration resolves against the scope; anything the
+ * scope does not declare arrives as the :root's COMPUTED value — which is the
+ * exact trap the light theme fell into, so the model has to get it right.
+ *
+ * Grounds: the overlays' plates are translucent, composited over the scene.
+ * Black, asphalt and the mid-grey (128) scene the CVD test in
+ * apca-timing.test.mjs already uses for this plate. A bright sky behind a 74%
+ * plate is weaker in EVERY theme; that is the dark design's own budget, and
+ * the DARK row below holds it to the same bar as the light ones.
+ */
+const hud = cssRules(read("css/hud.css"));
+const ROOT_SEL = {
+  light: ':root[data-ui-theme="light"]', system: ':root[data-ui-theme="system"]',
+  high: ':root[data-ui-contrast="high"]',
+  deutan: ':root[data-cvd="deutan"]', protan: ':root[data-cvd="protan"]', tritan: ':root[data-cvd="tritan"]',
+};
+const LIGHT_MQ = "@media (prefers-color-scheme: light)";
+const OVERLAY_ROOTS = ["#hud", "#announce", "#game-metrics"];
+
+function splitAt(s, ch) {
+  const out = []; let d = 0, last = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "(" || s[i] === "[") d++;
+    else if (s[i] === ")" || s[i] === "]") d--;
+    else if (s[i] === ch && d === 0) { out.push(s.slice(last, i).trim()); last = i + 1; }
+  }
+  out.push(s.slice(last).trim());
+  return out.filter(Boolean);
+}
+const ctxOk = (rule, flags) => rule.context.every((c) => c.startsWith("@layer") || (c === LIGHT_MQ && flags.includes("system")));
+// Specificity of a root compound for this theme: :root 10, :root[attr] 20, else no match.
+const rootSpec = (item, flags) => (item === ":root" ? 10 : flags.some((f) => ROOT_SEL[f] === item) ? 20 : -1);
+function scopeSpec(item, flags, id) {
+  const parts = splitAt(item, " ");
+  const target = parts[parts.length - 1];
+  const list = target === id ? [id] : (target.match(/^:is\((.*)\)$/) || [])[1];
+  if (!list || !(Array.isArray(list) ? list : splitAt(list, ",")).includes(id)) return -1;
+  if (parts.length === 1) return 100;
+  if (parts.length !== 2) return -1;
+  const r = rootSpec(parts[0], flags);
+  return r < 0 ? -1 : 100 + r;
+}
+/** The custom properties `match` selects, cascaded: specificity, then source order. */
+function cascade(rules, match, flags) {
+  const hits = [];
+  rules.forEach((r, i) => {
+    if (!ctxOk(r, flags)) return;
+    const sp = Math.max(-1, ...splitAt(r.selector, ",").map(match));
+    if (sp >= 0) hits.push({ sp, i, decls: r.decls });
+  });
+  hits.sort((a, b) => a.sp - b.sp || a.i - b.i);
+  const out = new Map();
+  for (const h of hits) for (const [k, v] of h.decls) if (k.startsWith("--")) out.set(k, v);
+  return out;
+}
+/** A token getter for an element directly under the root that is `id` (or inside it). */
+function themeGetter(flags, id, { keep = null } = {}) {
+  const root = cascade(tokens, (it) => rootSpec(it, flags), flags);
+  const rootGet = (n) => { assert.ok(root.has(n), `${n} is not declared on :root`); return root.get(n); };
+  const scope = cascade(tokens, (it) => scopeSpec(it, flags, id), flags);
+  if (keep) for (const n of [...scope.keys()]) if (!keep(id, n)) scope.delete(n);
+  const get = (n) => (scope.has(n) ? scope.get(n) : resolve(rootGet(n), new Set([n]), rootGet));
+  return { get, root, scope };
+}
+// A plate's alpha follows PANEL OPACITY (--hud-panel-a-eff): 1 at the shipped
+// setting, and HIGH CONTRAST pins it there. The slider's 0.45 floor is the
+// player's own choice of see-through, not a theme, so it is not modelled.
+const panelAt1 = (v) => v.replace(/calc\(([\d.]+%?) \* var\(--hud-panel-a-eff\)\)/g, "$1");
+const SCENES = { black: "#000000", asphalt: "#3a3a40", "mid-grey": "#808080" };
+const HC_PLATE = [hud, ':root[data-ui-contrast="high"] :is(.hud-box, #announce)', "background"];
+const SCOPE_SEL = ":is(#hud, #announce, #game-metrics)";
+const CASES = [
+  { what: "radio card words", id: "#announce", ink: [hud, "#announce", "color"], plate: [hud, "#announce", "background"], hc: HC_PLATE },
+  { what: "radio card WHO line", id: "#announce", ink: [hud, "#announce-who", "color"], plate: [hud, "#announce", "background"], hc: HC_PLATE },
+  { what: "RELATIVE / STRATEGY / INPUTS", id: "#hud", ink: [hud, "#hud-rel, #hud-strat, #hud-inputs", "color"], plate: [hud, "#hud-rel, #hud-strat, #hud-inputs", "background"] },
+  { what: "STRATEGY row label", id: "#hud", ink: [hud, "#hud-strat > div > span", "color"], plate: [hud, "#hud-rel, #hud-strat, #hud-inputs", "background"] },
+  { what: "MIRROR chip (a button)", id: "#hud", ink: [tokens, "button", "color"], plate: [hud, "#hud-mirror-chip", "background"] },
+  { what: "blue flag", id: "#hud", ink: [hud, '#hud-flag[data-flag="blue"]', "color"], plate: [hud, '#hud-flag[data-flag="blue"]', "background"] },
+  { what: "red flag", id: "#hud", ink: [hud, "#hud-flag.flag-red", "color"], plate: [hud, "#hud-flag.flag-red", "background"] },
+  { what: "broadcast tower (inherited ink)", id: "#hud", ink: [tokens, SCOPE_SEL, "color"], plate: [hud, "body.hud-prof-broadcast .hud-top", "background"] },
+  { what: "metrics panel", id: "#game-metrics", ink: [hud, "#game-metrics", "color"], plate: [hud, "#game-metrics", "background"] },
+  { what: "metrics bar buttons", id: "#game-metrics", ink: [hud, "#game-metrics-bar > button", "color"], plate: [hud, "#game-metrics", "background"] },
+  // NON-TEXT (1.4.11, 3:1): the parts of a chip that carry its state.
+  { what: "blue flag edge", nonText: true, id: "#hud", ink: [hud, '#hud-flag[data-flag="blue"]', "border-left", (v) => v.split(" ").pop()], plate: [hud, '#hud-flag[data-flag="blue"]', "background"] },
+  { what: "red flag keyline", nonText: true, id: "#hud", ink: [hud, "#hud-flag.flag-red", "outline", (v) => v.split(" ").pop()], plate: [hud, "#hud-flag.flag-red", "background"] },
+  ...[1, 2, 3].map((n) => ({ what: `damage level ${n}`, nonText: true, id: "#hud", ink: [hud, `#hud-damage [data-lvl="${n}"]`, "fill"], plate: [hud, "#hud-damage", "background"] })),
+];
+function src([rules, sel, prop, pick]) {
+  const v = decl(rules, sel, prop);
+  assert.ok(v, `${sel} must declare ${prop} (the overlay contrast table reads it)`);
+  return pick ? pick(v) : v;
+}
+/** Every case's worst ratio over the scenes, for one theme. */
+function measure(flags, opts) {
+  const rows = [];
+  for (const c of CASES) {
+    const { get } = themeGetter(flags, c.id, opts);
+    const plateVal = panelAt1(src(flags.includes("high") && c.hc ? c.hc : c.plate));
+    const plate = resolve(plateVal, new Set(), get);
+    const ink = resolve(src(c.ink), new Set(), get);
+    let worst = Infinity, at = "";
+    for (const [scene, h] of Object.entries(SCENES)) {
+      const ground = over(plate, { rgb: hex(h), a: 1 });
+      const r = ratio(over(ink, ground), ground);
+      if (r < worst) { worst = r; at = scene; }
+    }
+    rows.push({ what: c.what, need: c.nonText ? 3 : 4.5, r: worst, at });
+  }
+  return rows;
+}
+const THEMES = {
+  dark: [], light: ["light"], "system-light": ["system"],
+  "light + high (SUNLIGHT)": ["light", "high"], "system-light + high": ["system", "high"], "dark + high": ["high"],
+  "light + deutan": ["light", "deutan"], "light + tritan": ["light", "tritan"], "light + high + protan": ["light", "high", "protan"],
+};
+
+test("every token LIGHT re-points is restated, at its :root value, on every in-race overlay", () => {
+  const light = ruleFor(tokens, ':root[data-ui-theme="light"]');
+  assert.ok(light, "css/tokens.css must declare the LIGHT block");
+  const scope = ruleFor(tokens, SCOPE_SEL);
+  assert.ok(scope, `css/tokens.css must declare the race-chrome scope ${SCOPE_SEL}`);
+  const missing = [], drift = [];
+  for (const name of light.decls.keys()) {
+    if (!scope.decls.has(name)) { missing.push(name); continue; }
+    if (scope.decls.get(name) !== decl(tokens, ":root", name)) drift.push(`${name}: ${scope.decls.get(name)} vs :root ${decl(tokens, ":root", name)}`);
+  }
+  assert.deepEqual(missing, [], "LIGHT re-points these, and the race chrome does not restate them, so the light value leaks onto a dark plate");
+  assert.deepEqual(drift, [], "the race chrome restates these with a value other than the :root (dark) one");
+  // HIGH CONTRAST's :root block re-points some of the same tokens; the scope
+  // restatement would undo it on the HUD unless the scoped HC block repeats it.
+  const hcRoot = ruleFor(tokens, ':root[data-ui-contrast="high"]');
+  const hcScope = ruleFor(tokens, `:root[data-ui-contrast="high"] ${SCOPE_SEL}`);
+  assert.ok(hcRoot && hcScope, "css/tokens.css must declare HIGH CONTRAST on :root and inside the race-chrome scope");
+  const undone = [...hcRoot.decls.keys()].filter((n) => scope.decls.has(n) && hcScope.decls.get(n) !== hcRoot.decls.get(n));
+  assert.deepEqual(undone, [], "HIGH CONTRAST re-points these on :root; the scope must repeat the same expression or the HUD loses HIGH CONTRAST");
+});
+
+test("the radio card, readouts, chips, flags and metrics clear 4.5:1 (text) / 3:1 (state) in every theme", () => {
+  const bad = [];
+  for (const [theme, flags] of Object.entries(THEMES)) {
+    for (const row of measure(flags)) {
+      if (row.r < row.need) bad.push(`${theme}: ${row.what} ${row.r.toFixed(2)}:1 over ${row.at} (needs ${row.need})`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
+test("anti-vacuity: the scope as it shipped before fails LIGHT the way it was reported", () => {
+  // Before: #hud alone restated its INK (--text --dim --bg, the halo and the
+  // hairlines) and no plate; #announce and #game-metrics restated nothing.
+  // The same cascade cut back to that must reproduce the reported numbers, or
+  // the test above could pass on a resolver that never looked at the theme.
+  const INK_ONLY = new Set(["--text", "--dim", "--bg", "--hud-halo", "--plate-line", "--card-line"]);
+  const keep = (id, n) => id === "#hud" && INK_ONLY.has(n);
+  const rows = Object.fromEntries(measure(["light"], { keep }).map((r) => [r.what, r.r]));
+  assert.ok(rows["RELATIVE / STRATEGY / INPUTS"] < 1.2, `RELATIVE without the scope measures ${rows["RELATIVE / STRATEGY / INPUTS"].toFixed(2)}:1; expected the shipped ~1.05:1`);
+  assert.ok(rows["radio card words"] < 1.6, `the radio card without the scope measures ${rows["radio card words"].toFixed(2)}:1; expected the shipped 1.03-1.49:1`);
+  assert.ok(rows["metrics panel"] < 1.6, `the metrics panel without the scope measures ${rows["metrics panel"].toFixed(2)}:1; expected the shipped ~1.46:1`);
+});
+
+test("colour vision: a WARNING never reads as a HIT, and damage levels 1 / 2 / 3 stay three colours", () => {
+  // Lightness is the one channel every dichromacy keeps, so it is what is
+  // asserted (OKLab L). deutan / protan once set --sec-slow and --slower to
+  // the same #ee7733: penalty WARN looked like penalty HIT on the radio card,
+  // and damage level 2 (an sRGB 50/50 of the two) collapsed onto both.
+  const L = (c) => toOklab(c.rgb)[0];
+  const lvl2 = decl(hud, '#hud-damage [data-lvl="2"]', "fill");
+  const bad = [];
+  for (const flags of [[], ["deutan"], ["protan"], ["tritan"]]) {
+    const { get } = themeGetter(flags, "#hud");
+    const warn = resolve("var(--sec-slow)", new Set(), get), hit = resolve("var(--slower)", new Set(), get);
+    const mid = resolve(lvl2, new Set(), get);
+    const name = flags[0] || "default";
+    if (Math.abs(L(warn) - L(hit)) < 0.1) bad.push(`${name}: --sec-slow / --slower differ by ${Math.abs(L(warn) - L(hit)).toFixed(3)} L`);
+    for (const [n, c] of [["1", warn], ["3", hit]]) {
+      if (Math.abs(L(mid) - L(c)) < 0.05) bad.push(`${name}: damage level 2 is ${Math.abs(L(mid) - L(c)).toFixed(3)} L from level ${n}`);
+    }
+  }
+  assert.deepEqual(bad, []);
 });

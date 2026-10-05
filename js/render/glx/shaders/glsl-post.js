@@ -24,15 +24,22 @@ void main() {
 
   // Bright-pass: keep only the portion of each pixel above the threshold (the
   // sun, floodlights, specular hotspots, bright markings) for the bloom blur.
+  // The threshold is in EXPOSED (display-referred) units: the luminance test
+  // runs on c * uExposure, the value the composite actually tone-maps, so an
+  // EXPOSURE change moves what blooms with what the player sees. The output
+  // stays scene-referred (the composite multiplies bloom by uExposure).
+  // game.js passes threshold x the time-of-day exposure, so the shipped look
+  // at default knobs is unchanged: (l*E vs T*E) == (l vs T), knee included.
   const BRIGHT_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
 uniform sampler2D uScene;
 uniform float uThreshold;
+uniform float uExposure;
 out vec4 outColor;
 void main() {
   vec3 c = texture(uScene, vUV).rgb;
-  float l = max(max(c.r, c.g), c.b);
+  float l = max(max(c.r, c.g), c.b) * uExposure;
   // Quadratic soft knee (half-width = threshold/2) instead of a hard
   // max(0, l-t) cut: pixels ramp smoothly into the bloom as they approach the
   // threshold, so a small lamp crossing it at distance FADES in over a few
@@ -449,6 +456,54 @@ void main() {
 
   // Composite: scene + bloom, filmic ACES tone-map, colour grading, sun shafts,
   // lens flare, and a soft vignette.
+  // The post-ACES COLOUR GRADE, shared by COMPOSITE_FS and MIRROR_FS so the
+  // rear-view mirror / broadcast PiP sit in the same look as the frame around
+  // them (uniforms: uContrast uVibrance uSaturation uTint uGradeShadow uGradeHi
+  // uGradeStr uBlackLift — post.js uploads the same values to both programs).
+  const COLOUR_GRADE = `// Lifts shadows slightly (warm), crushes a tiny bit of the blue channel in
+// mid-tones, and boosts green just a hint — gives an F1 broadcast look.
+vec3 colourGrade(vec3 c) {
+  // Gain (per-channel linear scale in highlights)
+  c *= vec3(1.015, 1.008, 0.992);
+  // Soft S-curve: deepen contrast for punch (less washed-out / flat)
+  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
+  // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
+  // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
+  // rolloff is preserved — turns the flat "video-game bright" image filmic.
+  c = pow(max(c, vec3(1e-6)), vec3(uContrast));   // pow(0, n) NaNs on mobile GPUs; black stays black
+  // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
+  // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
+  // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
+  // main fix for the "boring / washed-out" daytime look.
+  float luma = dot(c, vec3(0.299, 0.587, 0.114));
+  float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
+  float sat = mx - mn;
+  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * uVibrance);
+  // Global saturation (uniform, after vibrance): a plain luma<->colour lerp.
+  c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
+  // White-balance tint: warm tilts red up / blue down, cool the reverse. 0.07
+  // per unit so the tuner ±6 range stays natural rather than a colour cast.
+  c *= vec3(1.0 + 0.07 * uTint, 1.0, 1.0 - 0.07 * uTint);
+  // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
+  // other (warm amber), blended by luma. A staple of the teal-orange film look —
+  // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
+  // (default) leaves the image untouched, so day stays neutral unless driven.
+  float gl2 = dot(c, vec3(0.299, 0.587, 0.114));
+  vec3 toneTint = mix(uGradeShadow, uGradeHi, smoothstep(0.0, 0.85, gl2));
+  c = mix(c, c * toneTint, uGradeStr);
+  // BLACK LIFT: raised (slightly warm) black floor — prevents pure blacks and,
+  // pushed up, gives a matte faded-film base. Default 0.005 = the shipped floor.
+  c = max(c, vec3(uBlackLift, uBlackLift * 0.8, uBlackLift * 0.6));
+  return c;
+}`;
+  // The output DITHER (needs ignoise + uGrainTime): ~1 LSB triangular-PDF
+  // noise on pixel coords, re-seeded per frame — breaks 8-bit banding.
+  const DITHER_LSB = `vec3 ditherLSB(vec3 c) {
+  vec2 dc = gl_FragCoord.xy + 5.588238 * mod(floor(uGrainTime * 60.0), 64.0);
+  float d0 = ignoise(dc);
+  float d1 = fract(52.9829189 * fract(dot(dc + 17.31, vec2(0.00583715, 0.06711056))));
+  return c + (d0 + d1 - 1.0) / 255.0;
+}`;
   const COMPOSITE_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -602,43 +657,8 @@ vec3 applyHdrGrade(vec3 c) {
 
 ${GLXChunks.ignoise}
 ${GLXChunks.tonemap}
-// Lifts shadows slightly (warm), crushes a tiny bit of the blue channel in
-// mid-tones, and boosts green just a hint — gives an F1 broadcast look.
-vec3 colourGrade(vec3 c) {
-  // Gain (per-channel linear scale in highlights)
-  c *= vec3(1.015, 1.008, 0.992);
-  // Soft S-curve: deepen contrast for punch (less washed-out / flat)
-  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
-  // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
-  // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
-  // rolloff is preserved — turns the flat "video-game bright" image filmic.
-  c = pow(max(c, vec3(1e-6)), vec3(uContrast));   // pow(0, n) NaNs on mobile GPUs; black stays black
-  // Vibrance: pull colour away from its luma. Weighted by how UNsaturated the
-  // pixel already is, so pale, washed-out areas (hazy sky, dull grass, gray
-  // asphalt) gain the most while vivid neon/kerbs don't over-cook. This is the
-  // main fix for the "boring / washed-out" daytime look.
-  float luma = dot(c, vec3(0.299, 0.587, 0.114));
-  float mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
-  float sat = mx - mn;
-  c = mix(vec3(luma), c, 1.0 + (1.0 - clamp(sat * 1.5, 0.0, 1.0)) * uVibrance);
-  // Global saturation (uniform, after vibrance): a plain luma<->colour lerp.
-  c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, uSaturation);
-  // White-balance tint: warm tilts red up / blue down, cool the reverse. 0.07
-  // per unit so the tuner ±6 range stays natural rather than a colour cast.
-  c *= vec3(1.0 + 0.07 * uTint, 1.0, 1.0 - 0.07 * uTint);
-  // Cinematic split-tone: tint shadows one way (cool teal) and highlights the
-  // other (warm amber), blended by luma. A staple of the teal-orange film look —
-  // gives dusk/dawn richer separation and night a cool moody cast. uGradeStr 0
-  // (default) leaves the image untouched, so day stays neutral unless driven.
-  float gl2 = dot(c, vec3(0.299, 0.587, 0.114));
-  vec3 toneTint = mix(uGradeShadow, uGradeHi, smoothstep(0.0, 0.85, gl2));
-  c = mix(c, c * toneTint, uGradeStr);
-  // BLACK LIFT: raised (slightly warm) black floor — prevents pure blacks and,
-  // pushed up, gives a matte faded-film base. Default 0.005 = the shipped floor.
-  c = max(c, vec3(uBlackLift, uBlackLift * 0.8, uBlackLift * 0.6));
-  return c;
-}
-
+${COLOUR_GRADE}
+${DITHER_LSB}
 void main() {
   // EXHAUST HEAT HAZE: a small rising shimmer plume anchored just above the
   // player's tailpipe screen position — refracts (UV-warps) the scene fetch
@@ -1275,10 +1295,7 @@ void main() {
   // white noise — a frozen speckle welded to the panel), stepped each
   // frame by the golden-ratio IGN offset so the pattern re-randomises in time
   // like real sensor noise. Two decorrelated hashes → triangular in [-1,1].
-  vec2 dc = gl_FragCoord.xy + 5.588238 * mod(floor(uGrainTime * 60.0), 64.0);
-  float d0 = ignoise(dc);
-  float d1 = fract(52.9829189 * fract(dot(dc + 17.31, vec2(0.00583715, 0.06711056))));
-  c += (d0 + d1 - 1.0) / 255.0;
+  c = ditherLSB(c);
   // FILM GRAIN: luminance-weighted per-pixel noise (mid-tones grain most, blacks
   // and clipped whites least — where real sensor grain lives). 0 = off.
   if (uGrain > 0.001) {
@@ -1480,31 +1497,35 @@ void main() {
   const DEPTH_FS = `#version 300 es
 void main() {}`;
 
-  // PCSS blocker map: conservative min-of-4 downsample of the sun shadow map
-  // (SHADOW_SIZE² -> 512²), one tap at the centre of each quadrant of this dest
-  // texel's source footprint. uSrcTexel = 1/SHADOW_SIZE, not a hardcoded
-  // 1/512*0.25 offset: that equals one source texel only on the desktop 2048
-  // map and under-samples blockers on the 1024 mobile map (optimistic penumbra).
+  // PCSS blocker map: the conservative MIN over the dest texel's WHOLE source
+  // footprint (SHADOW_SIZE / 512 = 4 -> all 16 source texels on desktop, the
+  // only tier that builds it). The old 4 taps at +/-1 source texel landed on
+  // texels {1,3} of each axis under NEAREST and missed a thin caster on the
+  // other 12. Stored R32F (shadow.js): a half float steps 2^-11 in [0.5,1), a
+  // ~0.28 m receiver-blocker error at a 570 m span.
   const BLOCKER_FS = `#version 300 es
 precision highp float;
-in vec2 vUV;
-uniform sampler2D uDepthTex;
-uniform vec2 uSrcTexel;
+uniform highp sampler2D uDepthTex;   // the sun map, compare mode NONE (blockerSampler)
 out vec4 o;
 void main() {
-  vec2 t = uSrcTexel;
-  float d0 = texture(uDepthTex, vUV + t * vec2(-1.0, -1.0)).r;
-  float d1 = texture(uDepthTex, vUV + t * vec2( 1.0, -1.0)).r;
-  float d2 = texture(uDepthTex, vUV + t * vec2(-1.0,  1.0)).r;
-  float d3 = texture(uDepthTex, vUV + t * vec2( 1.0,  1.0)).r;
-  o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
+  ivec2 k = max(textureSize(uDepthTex, 0) / 512, ivec2(1));
+  ivec2 base = ivec2(gl_FragCoord.xy) * k;
+  float m = 1.0;
+  for (int y = 0; y < 4; y++) {
+    for (int x = 0; x < 4; x++) {
+      if (x < k.x && y < k.y) m = min(m, texelFetch(uDepthTex, base + ivec2(x, y), 0).r);
+    }
+  }
+  o = vec4(m, 0.0, 0.0, 1.0);
 }`;
   // REAR-VIEW MIRROR composite (post.js mirrorComposite): the mirror camera's
   // own small target drawn into the HUD mirror's rect of the finished frame,
   // FLIPPED left-right here rather than by a negative-x projection (that would
   // invert winding and back-face cull the world). Same exposure and ACES curve
-  // as COMPOSITE_FS so the mirror sits in the frame's exposure; the colour
-  // grade is left out. uHdr 0: the target is already LDR (post off) — copy.
+  // as COMPOSITE_FS so the mirror sits in the frame's exposure, then the same
+  // COLOUR_GRADE and output dither — an ungraded inset read as a different
+  // camera next to the graded frame (and banded on smooth sky). uHdr 0: the
+  // target is already LDR (post off, so the frame has no grade either) — copy.
   const MIRROR_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -1518,11 +1539,23 @@ uniform float uAcesC;
 uniform float uAcesD;
 uniform float uAcesE;
 uniform float uFlip;   // 1 = the mirror (left-right like glass); 0 = the broadcast PiP (a straight picture)
+uniform vec3 uGradeShadow;
+uniform vec3 uGradeHi;
+uniform float uGradeStr;
+uniform float uContrast;
+uniform float uVibrance;
+uniform float uSaturation;
+uniform float uTint;
+uniform float uBlackLift;
+uniform float uGrainTime;
 out vec4 outColor;
+${GLXChunks.ignoise}
 ${GLXChunks.tonemap}
+${COLOUR_GRADE}
+${DITHER_LSB}
 void main() {
   vec3 c = texture(uTex, vec2(mix(vUV.x, 1.0 - vUV.x, uFlip), vUV.y)).rgb;
-  if (uHdr > 0.5) c = acesTonemap(c * uExposure / uWhitePoint);
+  if (uHdr > 0.5) c = ditherLSB(colourGrade(acesTonemap(c * uExposure / uWhitePoint)));
   outColor = vec4(c, 1.0);
 }`;
   // THE COCKPIT'S LIVE MIRROR GLASS (post.js mirror.glass, behind DECAL_VS):

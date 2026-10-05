@@ -6,8 +6,9 @@ const Assets = (function () {
   // the shell's own script/link tags), so these fetches use DEFAULT caching
   // rather than force-cache: force-cache would serve a stale pack out of the
   // HTTP cache indefinitely, and a rebaked pack would never reach anyone who
-  // had already loaded the old one. Normal revalidation plus sw.js's
-  // build-numbered cache generation is what makes a rebake actually land.
+  // had already loaded the old one. sw.js serves assets/pack/ NETWORK-FIRST
+  // (cache only as the offline / slow fallback), so normal revalidation is
+  // what makes a rebake land — from the first boot after the deploy.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
   const MAT_LAYERS = 17;                 // MAT.FLAT(0) … MAT.ASPHALT(16)
@@ -35,8 +36,8 @@ const Assets = (function () {
 
   function manifest() {
     if (_manifest !== null) return Promise.resolve(_manifest);
-    // Material arrays and model prefetch start together at boot. Cache the
-    // pending request too, so they share both the fetch and its JSON parse.
+    // Material arrays and the first circuit's models can ask together. Cache
+    // the pending request too, so they share both the fetch and its JSON parse.
     if (!_manifestPromise) _manifestPromise = _fetchManifest().finally(() => { _manifestPromise = null; });
     return _manifestPromise;
   }
@@ -65,33 +66,39 @@ const Assets = (function () {
     return blob;
   }
 
+  // Every strip decode passes these. The albedo strip's ALPHA is roughness,
+  // not coverage, so the bitmap must stay straight: `premultiplyAlpha:
+  // "default"` is UA-chosen and Chromium premultiplies it (MEASURED 2026-10-04,
+  // artifacts/probe/run-premul.mjs: layer 4 meanR 152.6 straight vs 61.5
+  // default — the metal layer at 40 %). WebGL ignores UNPACK_PREMULTIPLY_ALPHA
+  // for an ImageBitmap, so construction is the only place to say it. The PNG
+  // is untagged; "none" keeps the bytes the bake wrote (GLX texSubImage3D,
+  // TLX/WGX readLayerBytes all see the same values).
+  // https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#imagebitmapoptions
+  const BITMAP_OPTS = Object.freeze({ premultiplyAlpha: "none", colorSpaceConversion: "none" });
+
   async function _decodeStrip(blob, size, present) {
     const out = new Array(MAT_LAYERS);
     try {
       for (let i = 0; i < MAT_LAYERS; i++) {
         if (!present[i]) continue;
-        out[i] = await createImageBitmap(blob, 0, i * size, size, size);
+        out[i] = await createImageBitmap(blob, 0, i * size, size, size, BITMAP_OPTS);
       }
       return out;
     } catch (_) {
       // The cropping overload of createImageBitmap has a patchy history on
-      // Safari. Fall back to one full-strip decode plus canvas crops, which
-      // every engine supports — slower and it allocates, but it is the
-      // difference between iOS getting baked materials and not.
+      // Safari with a Blob source. Fall back to one full-strip decode and crop
+      // each layer out of that ImageBitmap — the same overload on an already
+      // decoded source, with the same options. NOT a 2D canvas: a canvas
+      // backing store is premultiplied (and colour-managed) in every engine,
+      // so a drawImage crop quantises or darkens every low-alpha layer.
       _releaseStrip(out);
-      const full = await createImageBitmap(blob);
+      const full = await createImageBitmap(blob, BITMAP_OPTS);
       const alt = new Array(MAT_LAYERS);
       try {
-        const cv = (typeof OffscreenCanvas !== "undefined")
-          ? new OffscreenCanvas(size, size)
-          : Object.assign(document.createElement("canvas"), { width: size, height: size });
-        const c2d = cv.getContext("2d");
-        if (!c2d) throw new Error("no-2d-context");
         for (let i = 0; i < MAT_LAYERS; i++) {
           if (!present[i]) continue;
-          c2d.clearRect(0, 0, size, size);
-          c2d.drawImage(full, 0, i * size, size, size, 0, 0, size, size);
-          alt[i] = await createImageBitmap(cv);
+          alt[i] = await createImageBitmap(full, 0, i * size, size, size, BITMAP_OPTS);
         }
         return alt;
       } catch (e) {
@@ -101,6 +108,61 @@ const Assets = (function () {
         if (full.close) { try { full.close(); } catch { /* already closed/detached: nothing left to free */ } }
       }
     }
+  }
+
+  // Raw RGBA8 bytes of each layer, straight alpha, no colour management — the
+  // bytes GLX's texSubImage3D samples. For backends that need pixels rather
+  // than a TexImageSource (TLX's DataArrayTexture, WGX's writeTexture).
+  // A 2D canvas cannot do this: drawImage()+getImageData() premultiplies
+  // through the backing store and colour-manages (tlx.js createTextureArray
+  // has the 2026-08-17 measurement). One scratch WebGL2 context uploads each
+  // layer with every unpack conversion off and reads it back from an FBO.
+  // `data` holds n pages of size*size*4; returns the indices it wrote.
+  function readLayerBytes(size, images, n, data) {
+    const page = size * size * 4;
+    const done = [];
+    const pending = [];
+    for (let i = 0; i < n; i++) {
+      const img = images[i];
+      if (!img) continue;
+      // ArrayBuffer.isView, not instanceof: a byte layer may come from another realm.
+      const raw = (ArrayBuffer.isView(img) && img.BYTES_PER_ELEMENT === 1) ? img
+        : (typeof ImageData !== "undefined" && img instanceof ImageData) ? img.data : null;
+      if (raw) {
+        if (raw.length >= page) { data.set(raw.subarray(0, page), i * page); done.push(i); }
+      } else pending.push(i);
+    }
+    if (!pending.length) return done;
+    let cv = null;
+    try {
+      cv = (typeof OffscreenCanvas !== "undefined")
+        ? new OffscreenCanvas(size, size)
+        : Object.assign(document.createElement("canvas"), { width: size, height: size });
+    } catch (_) { return done; }
+    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+    if (!gl) return done;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    const tex = gl.createTexture();
+    const fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    for (const i of pending) {
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
+        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
+          new Uint8Array(data.buffer, data.byteOffset + i * page, page));
+        done.push(i);
+      } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
+    }
+    gl.deleteFramebuffer(fbo);
+    gl.deleteTexture(tex);
+    const lose = gl.getExtension("WEBGL_lose_context");
+    if (lose) { try { lose.loseContext(); } catch (_) { /* already lost */ } }
+    return done.sort((a, b) => a - b);
   }
 
   function _releaseStrip(imgs) {
@@ -163,11 +225,12 @@ const Assets = (function () {
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
       // Start both downloads together; decode and upload remain sequential.
-      // Promise.all observes either rejection immediately, including a normal
-      // fetch that fails while the albedo request is still pending.
+      // The NORMAL strip is optional: its fetch and decode fail on their own
+      // (normal = null, albedo still ships) — sharing the albedo's Promise.all
+      // let a missing normal strip discard the whole pack (_tier "off").
       const [albedoBlob, normalBlob] = await Promise.all([
         _fetchStrip(variant.albedo),
-        variant.normal ? _fetchStrip(variant.normal) : null,
+        variant.normal ? _fetchStrip(variant.normal).catch(() => null) : null,
       ]);
       if (generation !== _loadGeneration) return false;
       albedo = await _decodeStrip(albedoBlob, size, present);
@@ -177,13 +240,14 @@ const Assets = (function () {
       }
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
-      if (variant.normal) {
-        normal = await _decodeStrip(normalBlob, size, present);
+      if (normalBlob) {
+        try { normal = await _decodeStrip(normalBlob, size, present); }
+        catch (_) { normal = null; }   // undecodable normal strip: albedo alone
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
         }
-        normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
+        if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
     } catch (e) {
@@ -260,8 +324,8 @@ const Assets = (function () {
   //       idx u16                                    — 22 B a vertex + 2 B an index
   //
   // v2 is what the shipped pack uses: the 36 baked models went from 2.95 MB to
-  // 1.60 MB, and every one of them is fetched at boot (loadModels() in
-  // js/game.js). The quantisation is chosen against what the models actually
+  // 1.60 MB (each circuit's own set is fetched before its build: modelsReady
+  // in js/core/lazy-bundles.js ensureScenery). The quantisation is chosen against what the models actually
   // contain, not against the format's limits — measured over the whole pack,
   // colours live in [0.1, 1] and are palette-derived so a byte is within half a
   // display level; normals are unit, so a signed short is 0.001° off; material
@@ -341,10 +405,41 @@ const Assets = (function () {
 
   function modelSync(id) { return _models[id] || null; }
 
-  // Prefetch every model in the pack. Resolves to the number now resident.
-  // Cheap by construction: `tools/gen/assets.mjs verify` caps the whole pack at
-  // 8 MB, so this is never a large download.
-  // Memoised: boot calls it once, and modelsReady() below joins the same run.
+  // Ids of pack models a scenery closure's SOURCE names as a quoted literal
+  // ("kenney_ind_building-a"). Every bakedModel caller spells its ids that way
+  // (the circuit files are data, served unminified), so scanning the closure's
+  // own text is the per-circuit model list without a generated table to drift.
+  // Over-inclusion only costs a fetch; a computed id would be missed and keep
+  // its procedural fallback.
+  function _idsNamedIn(m, src) {
+    const out = [];
+    if (!m || !m.models || !src) return out;
+    const seen = Object.create(null);
+    const re = /["'`]([^"'`\s\\]+)["'`]/g;
+    let r;
+    while ((r = re.exec(src)) !== null) {
+      const id = r[1];
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(m.models, id)) { seen[id] = 1; out.push(id); }
+    }
+    return out;
+  }
+
+  // Fetch the models one scenery closure needs (src = its source text).
+  // Resolves to how many of them are resident. No pack, or a closure that names
+  // no model, resolves 0 without a model fetch.
+  async function loadModelsFor(src) {
+    if (!src) return 0;
+    const m = await manifest();
+    const ids = _idsNamedIn(m, String(src));
+    if (!ids.length) return 0;
+    const got = await Promise.all(ids.map((id) => model(id)));
+    return got.reduce((n, g) => n + (g ? 1 : 0), 0);
+  }
+
+  // Prefetch EVERY model in the pack. Resolves to the number now resident.
+  // The game no longer calls this (a build loads its own circuit's set through
+  // modelsReady(ms, src)); tools/shot/* still do, to frame any baked model.
+  // Memoised: one run, joined by every caller.
   let _modelsPromise = null;
   function loadModels() {
     if (_modelsPromise) return _modelsPromise;
@@ -365,8 +460,12 @@ const Assets = (function () {
   // boot or a deep link reached the first build in well under the fetch time.
   // Never rejects; a missing or failing pack resolves 0 at once, a hanging
   // fetch resolves at the timeout so an offline boot still builds the track.
-  function modelsReady(timeoutMs) {
-    const run = loadModels().catch(() => 0);
+  // With `src` (a scenery closure's source text, see loadModelsFor) it waits on
+  // only the models that closure names: 29 of 77 across five circuits, none
+  // for the rest, which resolve at once. Without it, the whole pack.
+  function modelsReady(timeoutMs, src) {
+    if (src !== undefined && !src) return Promise.resolve(0);
+    const run = (src !== undefined ? loadModelsFor(src) : loadModels()).catch(() => 0);
     const ms = timeoutMs > 0 ? timeoutMs : 4000;
     let timer = null;
     const late = new Promise((resolve) => { timer = setTimeout(() => resolve(-1), ms); });
@@ -407,8 +506,8 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, unload, adopt, state,
-           model, modelSync, models, loadModels, modelsReady, env, credits, MAT_LAYERS };
+  return { init, supported, manifest, load, unload, adopt, state, readLayerBytes,
+           model, modelSync, models, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 
 // No-build global export.

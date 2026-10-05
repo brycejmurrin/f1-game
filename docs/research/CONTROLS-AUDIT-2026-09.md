@@ -339,8 +339,10 @@ Four of those are real defects rather than missing luxuries:
 
 **Things we already get right**, worth stating so they are not "improved" away:
 the standard-mapping indices all match the W3C spec; the analog brake path reads
-`.value` (`brakeLvl = max(0.15, Input.brakeLevel())`) so trail braking survives
-and the 0.12 is edge-detection only, exactly as the research recommends; the menu
+`.value` so trail braking survives — since 2026-10-04 the 0.12 is a RESCALED dead
+zone (`(v − 0.12)/0.88`, no step), and the old `max(0.15, …)` brake floor is a
+coast-drag floor on the live pedal in game.js (a light touch never slows less than
+lifting), exactly as the research recommends; the menu
 stick deadzone (0.22) is deliberately larger than the driving one; `padPrevButtons`
 is kept across a blur so a held button is not re-read as a fresh edge;
 `clearEdges()` stops a mashed pause menu from spending boost and grabbing a gear

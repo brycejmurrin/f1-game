@@ -144,6 +144,43 @@ test("lineTransition times the lap to the crossing inside the step, not the step
   assert.equal(inc.lapTime, 0);
 });
 
+test("same-step chequered crossings follow time in every roster order, including incident motion", () => {
+  for (const reversed of [false, true]) for (const offset of [-0.25, 0, 0.25]) {
+    const R = load({ active: () => false });
+    const leader = { lap: 3, lapTime: 50, finished: false };
+    const human = { lap: 2, lapTime: 60, finished: false, human: true };
+    const cars = reversed ? [human, leader] : [leader, human];
+    const presented = [];
+    R.beginLineStep(cars);
+    for (const c of cars) {
+      const frac = c === leader ? 0.5 : 0.5 + offset;
+      const cross = R.lineTransition(c, 1000 - frac, 1 - frac, 1, 1000, 3, cars, 100, 1 / 60);
+      assert.equal(R.deferLine(c, cross, c === leader ? 0.5 : 0.5 - offset,
+        (car, event) => presented.push({ car, flagged: event.flagged, time: car.finishT })), true);
+    }
+    R.settleLineStep();
+    assert.equal(leader.finished, true, "the winner is protected before collision/incident promotion");
+    assert.equal(presented.length, 0, "presentation waits for incident crossings too");
+    R.endLineStep();
+    assert.equal(leader.finished, true);
+    assert.equal(human.finished, offset >= 0, "only a crossing at/after the winner takes the flag");
+    assert.equal(presented.length, 2, "each lap callback runs exactly once");
+    assert.equal(presented.find((e) => e.car === human).flagged, offset >= 0);
+    assert.equal(R.finishDelay(cars, 100, 3), offset >= 0 ? 2.2 : 0, "a lapped human is done at the correct crossing");
+    if (human.finished) assert.ok(Math.abs(human.finishT - (100 - (0.5 - offset) / 60)) < 1e-12);
+  }
+  // IncidentSim omits dt: its crossing is step-end, after any timed crossing.
+  const R = load({ active: () => false });
+  const winner = { lap: 3, lapTime: 50 }, incident = { lap: 2, lapTime: 60 };
+  const cars = [incident, winner];
+  R.beginLineStep(cars);
+  R.lineTransition(incident, 999, 1, 2, 1000, 3, cars, 100);
+  R.lineTransition(winner, 999, 1, 2, 1000, 3, cars, 100, 1 / 60);
+  R.endLineStep();
+  assert.equal(incident.finished, true);
+  assert.equal(incident.finishT, 100);
+});
+
 test("lineTransition undoes a backward crossing and restores the lap clock", () => {
   const R = load({ active: () => false, hazards: () => hazards(0, 0) });
   const c = { lap: 3, lapTime: 0.4, _lapTimeAtLine: 81.7, finished: false };
@@ -359,6 +396,22 @@ test("switching the layer off DROPS a flag already flying", () => {
   assert.equal(rc.info().enabled, false);
   run(rc, 2);
   assert.equal(rc.info().level, 0, "and stays clear while disabled, hazards or not");
+});
+
+test("CAUTIONS off: a host's safety car a guest inherits on disconnect still ages out", () => {
+  // A guest with the switch off adopts the host's SC; the host drops, netplay
+  // stops and the guest owns race control again. update() returned on
+  // !enabled before the cap, so that SC stayed out for the rest of the race.
+  let owns = false;
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({
+    netPlay: { active: () => !owns, ownsRaceControl: () => owns, reportCaution() {} },
+  }, false));
+  rc.apply({ level: 3, cause: "SAFETY CAR", sinceT: 0 });
+  owns = true;
+  run(rc, 2);
+  assert.equal(rc.info().level, 3, "no hazard loop lowers it early");
+  run(rc, 95);                     // > SC_MAX (90 s)
+  assert.equal(rc.info().level, 0, "the hard cap drops it");
 });
 
 test("the enabled flag reads BOTH storage formats", () => {

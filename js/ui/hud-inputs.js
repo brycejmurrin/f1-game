@@ -60,7 +60,7 @@ const HudInputs = (function () {
   const doc = typeof document !== "undefined" ? document : null;
   const win = typeof window !== "undefined" ? window : null;
   let root = null, cv = null, ctx2 = null, gearEl = null, lastGear = null;
-  const mKey = [0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s of the last measure
+  const mKey = [0, 0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
   let cssW = 128, cssH = 48, ratio = 1;
   const _rmq = win && win.matchMedia ? win.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const reduced = () => !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce");
@@ -78,10 +78,11 @@ const HudInputs = (function () {
     const dpr = (win && win.devicePixelRatio) || 1;
     const hl = parseFloat(root.style.getPropertyValue("--hl-s")) || 1;
     const iw = win ? win.innerWidth : 0, ih = win ? win.innerHeight : 0;
-    if (iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3]) return;
-    mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl;
+    const z = cv.currentCSSZoom || 1;
+    if (iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
+    mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z;
     cssW = cv.clientWidth || 128; cssH = cv.clientHeight || 48;
-    ratio = Math.max(1, Math.min(4, (cv.currentCSSZoom || 1) * dpr * hl));
+    ratio = Math.max(1, Math.min(4, z * dpr * hl));
     const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   }

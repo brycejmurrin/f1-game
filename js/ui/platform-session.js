@@ -91,6 +91,34 @@ if ($("pm-fullscreen")) {
   if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) dismiss(); });
   setTimeout(dismiss, 15000);
 })();
+// INSTALL APP where the browser offers it (Android / desktop Chromium): the
+// iOS nudge above was the only install door, so those players met at most a
+// mini-infobar. https://web.dev/articles/customize-install — preventDefault,
+// stash the event, call prompt() from a tap (once: the event is single-use),
+// and appinstalled covers every other route in. A suggestion, like the nudge.
+(function installChip() {
+  const chip = $("install-chip");
+  if (!chip) return;
+  let deferred = null;
+  const hide = () => { chip.hidden = true; };
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferred = e;
+    if (store.get("installChipSeen", false) || UiLayers.inRace()) return;
+    chip.hidden = false;
+    setTimeout(hide, 20000);
+  });
+  chip.addEventListener("click", async () => {
+    hide(); store.set("installChipSeen", true);
+    const e = deferred; deferred = null;
+    if (!e) return;
+    try { await e.prompt(); const c = await e.userChoice; Log.info("game", "install prompt " + ((c && c.outcome) || "?")); }
+    catch (err) { Log.warn("game", "install prompt failed: " + ((err && err.message) || err)); }
+  });
+  window.addEventListener("appinstalled", () => { hide(); deferred = null; store.set("installChipSeen", true); });
+  const ov = $("overlay");
+  if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) hide(); });
+})();
 }
 
 function wirePhone() {
@@ -98,6 +126,7 @@ function wirePhone() {
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
 let phonePad = null;
+let phonePadLoading = false, phonePadGeneration = 0;
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
 // screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
 // it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
@@ -126,15 +155,21 @@ function phonePadDash() {
 }
 $("pm-phonepad").onclick = () => {
   const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad) {
-    phonePad.cancel(); phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
+  if (phonePad || phonePadLoading) {
+    phonePadGeneration++; phonePadLoading = false;
+    if (phonePad) phonePad.cancel();
+    phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
     if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
     phonePadCam = -1;
     return;
   }
   box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+  const generation = ++phonePadGeneration;
+  phonePadLoading = true;
   ensureNet().then((ok) => {
-    if (!ok) { status.textContent = "Could not load the pairing stack — check the connection."; return; }
+    if (generation !== phonePadGeneration) return;
+    phonePadLoading = false;
+    if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
     $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
     phonePad = PhonePad.host({
       hud: phonePadDash,
@@ -142,6 +177,7 @@ $("pm-phonepad").onclick = () => {
       qr: (url, code) => {
         LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
         $("pm-phonepad-code").textContent = code || "";
+        $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
         $("pm-phonepad-pair").hidden = !code;
         // The code appears below the button: bring it into view on the sheet,
         // or a short screen shows "scan the code" with nothing to scan.
@@ -162,6 +198,18 @@ $("pm-phonepad").onclick = () => {
 }
 
 function wireLifecycle() {
+// UPDATE READY: re-read version.json when the tab comes back (≤ 1 per 10 min)
+// and when a newer worker takes control; the chip shows outside races only and
+// reloads once the store and ghosts are flushed.
+const updates = UpdateCheck.create({
+  inRace: () => UiLayers.inRace(),
+  chip: () => $("update-chip"),
+  persist: () => { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); return store.mirrorFlush && store.mirrorFlush(); },
+});
+const chip = $("update-chip");
+if (chip) chip.addEventListener("click", () => { updates.apply(); });
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => updates.newerActive());
+document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();
   if (document.hidden && cancelMirrorPrep) cancelMirrorPrep();   // rAF stops; optional warm must not hold entry

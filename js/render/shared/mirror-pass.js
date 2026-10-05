@@ -53,7 +53,11 @@ const MirrorPass = (function () {
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
-  const MEASURE_EVERY = 30;           // frames between #hud-mirror layout reads
+  // ms between #hud-mirror layout reads — on the CLOCK, not a frame count
+  // (docs/notes/PERF-FINDINGS.md §2n: 30 frames was ~0.5 s at 60 fps and
+  // 0.25 s at 120, and never at all on a software frame that runs at 1 Hz).
+  const MEASURE_MS = 500;
+  const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   // SUPERSAMPLED, then mip-filtered down by the composite (every backend builds
   // the target's mip chain after the pass). A small image with no anti-aliasing
   // of its own shimmers as the car moves — kerb stripes, fences, grandstand
@@ -83,7 +87,7 @@ const MirrorPass = (function () {
     const _bank = { dy: 0, roll: 0 };
     const _P = [0, 0, 0], _F = [0, 0, 1], _R = [1, 0, 0], _U = [0, 1, 0];
     // Canvas fractions [x, y, w, h], top-left origin, of the #hud-mirror frame.
-    let _rect = null, _measureIn = 0, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
+    let _rect = null, _measureAt = -Infinity, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
     // COLLAPSED: tapped away this session. Not persisted — the next page load
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
@@ -100,7 +104,7 @@ const MirrorPass = (function () {
     let _cssW = 0, _cssH = 0;
     let _preparation = null, _prepared = null;
     // THE PiP: the subject car and its TV shot (broadcast.js via G.setPip), the frame, its rect and CSS box.
-    let _sub = null, _subMode = "tcam", _pipEl = null, _pipShown = false, _pipRect = null, _pipMeasureIn = 0;
+    let _sub = null, _subMode = "tcam", _pipEl = null, _pipShown = false, _pipRect = null, _pipMeasureAt = -Infinity;
     let _pipCssW = 0, _pipCssH = 0;
     let pipMode = G.store.get("bcPip", "auto");
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
@@ -145,8 +149,15 @@ const MirrorPass = (function () {
       const e = el(), c = chip();
       if (!e || !c || !e.addEventListener) return;
       _wired = true;
-      e.addEventListener("click", () => { _collapsed = true; _measureIn = 0; });
-      c.addEventListener("click", () => { _collapsed = false; _measureIn = 0; });
+      e.addEventListener("click", () => { _collapsed = true; _measureAt = -Infinity; });
+      c.addEventListener("click", () => { _collapsed = false; _measureAt = -Infinity; });
+      // A rotation or resize moves the frame NOW; the MEASURE_MS clock alone
+      // painted the old rect for up to half a second after a phone turned.
+      const remeasure = () => { _measureAt = -Infinity; _pipMeasureAt = -Infinity; };
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("resize", remeasure);
+        window.addEventListener("orientationchange", remeasure);
+      }
     }
     function canvasEl() { return _canvas || (_canvas = document.getElementById("game")); }
 
@@ -220,6 +231,7 @@ const MirrorPass = (function () {
     // own zoom — and only when a card fits; otherwise the card stacks under
     // the mirror (--mir-bot).
     const SIDE_MIN = 190, SIDE_GAP = 8;
+    let _sideFits = null, _sideX = "", _sideW = "";   // what side() last wrote (null: unknown)
     function side(er) {
       const b = document.body;
       let right = typeof innerWidth === "number" ? innerWidth - 10 : 0;
@@ -234,10 +246,13 @@ const MirrorPass = (function () {
       if (past(c) && c.bottom > er.top) right = Math.min(right, c.left);
       const x = er.right + SIDE_GAP, w = right - SIDE_GAP - x;
       const fits = w >= SIDE_MIN;
-      b.classList.toggle("hud-mirror-side", fits);
+      // Compare before writing: a <body> class or custom-property write
+      // invalidates style page-wide even when the value is the same.
+      if (fits !== _sideFits) { _sideFits = fits; b.classList.toggle("hud-mirror-side", fits); }
       if (fits && b.style) {
-        b.style.setProperty("--mir-side-x", x.toFixed(1) + "px");
-        b.style.setProperty("--mir-side-w", w.toFixed(1) + "px");
+        const sx = x.toFixed(1) + "px", sw = w.toFixed(1) + "px";
+        if (sx !== _sideX) { _sideX = sx; b.style.setProperty("--mir-side-x", sx); }
+        if (sw !== _sideW) { _sideW = sw; b.style.setProperty("--mir-side-w", sw); }
       }
     }
 
@@ -426,22 +441,23 @@ const MirrorPass = (function () {
         const e = el();
         if (e) e.hidden = !want;
         document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag clear it (css/hud.css)
-        if (!want) document.body.classList.toggle("hud-mirror-side", false);
-        _measureIn = 0;
+        if (!want) { document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
+        _measureAt = -Infinity;
       }
       const pip = pipWanted();
       if (pip !== _pipShown) {
         _pipShown = pip;
         const e = pipEl();
         if (e) e.hidden = !pip;
-        _pipMeasureIn = 0;
+        _pipMeasureAt = -Infinity;
       }
       if (!want) {
         if (pip) { renderPip(frame, frameSky, night, wet, floodEmit); return; }
         if (g && g.mirrorRect) g.mirrorRect(null);
         return;
       }
-      if (--_measureIn <= 0) { measure(); _measureIn = MEASURE_EVERY; }
+      const nowT = nowMs();
+      if (nowT >= _measureAt) { measure(); _measureAt = nowT + MEASURE_MS; }
       if (!_rect) { g.mirrorRect(null); return; }
       g.mirrorRect(_rect);
       // Every frame — a mirror that updates at half rate reads as lag — except
@@ -470,12 +486,13 @@ const MirrorPass = (function () {
     // holds the same arrays) — at the cheapest tier, into #bc-pip, unflipped.
     function renderPip(frame, frameSky, night, wet, floodEmit) {
       const g = G.gfx;
-      if (--_pipMeasureIn <= 0) {
+      const nowT = nowMs();
+      if (nowT >= _pipMeasureAt) {
         checkDead();
         const e = pipEl();
         _pipRect = rectOf(e);
         if (_pipRect) { const er = e.getBoundingClientRect(); _pipCssW = er.width; _pipCssH = er.height; }
-        _pipMeasureIn = MEASURE_EVERY;
+        _pipMeasureAt = nowT + MEASURE_MS;
       }
       if (!_pipRect) { g.mirrorRect(null); return; }
       g.mirrorRect(_pipRect, false);
@@ -560,7 +577,7 @@ const MirrorPass = (function () {
       if (MODES.indexOf(v) < 0) v = "auto";
       mode = v;
       G.store.set("hudMirror", mode);
-      _measureIn = 0;
+      _measureAt = -Infinity;
       if (onModeChange) onModeChange(mode);
     }
     // The MIRROR key: whatever is showing now goes off, anything else goes ON.
@@ -577,10 +594,10 @@ const MirrorPass = (function () {
     // the car. Hides the frame, the chip and the PiP and clears the rect.
     function standDown() {
       cancelPreparation();
-      if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); }
+      if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
       if (_chipShown) { _chipShown = false; const c = chip(); if (c) c.hidden = true; }
       if (_pipShown) { _pipShown = false; const e = pipEl(); if (e) e.hidden = true; }
-      _measureIn = 0;
+      _measureAt = -Infinity;
       const g = G.gfx;
       if (g && g.mirrorRect) g.mirrorRect(null);
     }

@@ -145,3 +145,38 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
   assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
   assert.match(mm, /classList.contains\("hud-hidden"\)/);
 });
+
+// ONE DEFAULT. The store default is "full" (and settings-export.js's def), but
+// an unknown stored value and the façade setter fell back to "auto": a garage
+// file listed it as CHANGED, and the appearance studio — which offered no AUTO
+// chip — showed no layout selected (review 2026-10-04, verify-core #16).
+test("an unknown HUD layout falls back to the shipped FULL, and the studio can show AUTO", () => {
+  const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio.js"), "utf8");
+  const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
+  assert.match(game, /store\.get\("hudMetricsLayout", "full"\)/);
+  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
+  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(v\) < 0\) v = "full";\s*\n\s*hudMetricsLayout = v;/);
+  assert.match(exp, /k: "hudMetricsLayout", lane: "json", group: "hud", def: "full"/);
+  assert.match(studio, /choice\(hud, "Layout", "hudMetricsLayout", \[\["auto", "Auto"\]/,
+    "AUTO is a pause-menu choice, so the studio row must be able to show it selected");
+});
+
+// A LAYOUT hides READOUTS, never a CUE. TIMING and COMPACT once hid #hud-pit
+// (the only thing that makes the hold-to-pit gesture discoverable) and every
+// state of #hud-tyre, whose data-pit commit / lane / box fill is the only sign
+// the dwell is registering — so in those layouts a stop could not be called
+// on purpose.
+test("TIMING and COMPACT drop the tyre readout but never the pit cue or the dwell feedback", () => {
+  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
+  for (const name of ["timing", "compact"]) {
+    assert.equal(new RegExp("body\\.hud-met-" + name + " #hud-pit").test(css), false,
+      `LAYOUT ${name} must not hide #hud-pit — it is already hidden unless a cue is live`);
+    assert.match(css, new RegExp("body\\.hud-met-" + name + " #hud-tyre"), `LAYOUT ${name} still drops the idle tyre chip`);
+  }
+  const back = css.match(/body:is\(\.hud-met-timing, \.hud-met-compact\)([^{]*)#hud-tyre\[data-pit\]([^{]*)\{([^}]*)\}/);
+  assert.ok(back, "a pit state brings the tyre chip back in TIMING / COMPACT");
+  assert.match(back[3], /display:\s*flex\s*!important/, "…over the layout's own !important hide");
+  assert.match(back[1], /:not\(\[data-hud-hide~="tyre"\]\)/, "the player's own TYRE toggle still wins");
+  assert.match(back[2], /:not\(\[hidden\]\)/, "and a chip hidden because TYRE WEAR is off stays hidden");
+});

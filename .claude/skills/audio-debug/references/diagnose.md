@@ -53,7 +53,7 @@ engine idle still hums on the **sfx** bus. That is correct.
 Search `js/audio/engine.js` for `setEngine(rev01, boost01, offroad, speed01,
 gear)`. The sample core sets `playbackRate`; the synth fallback sets
 oscillator frequencies. After an edit, reload — WebAudio does not hot-reload
-(no cache bump: tags read `?v=dev`). Confirm with `GameAudio.rate()` at the
+([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump). Confirm with `GameAudio.rate()` at the
 same speed. A player-side complaint about the SHAPE of the curve (idle too
 high, top not high enough) is a tune question first: `__apex.audioTune({ idle,
 revRange, curve, pitch })` covers a 50:1 spread before any code changes.

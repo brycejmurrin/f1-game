@@ -5,6 +5,9 @@ const TrackMesh = (function () {
   const __M = Math;
 
   const { cross, MAT } = TrackGeom;
+  // The ground material a def names (def.terrainMat), else GRASS.
+  const GROUND_MATS = { SAND: MAT.SAND, SNOW: MAT.SNOW, CONCRETE: MAT.CONCRETE };
+  const groundMatOf = (def) => GROUND_MATS[def.terrainMat] != null ? GROUND_MATS[def.terrainMat] : MAT.GRASS;
   const { curvature, cr: catmull } = TrackSpline;
   const lerp = M4.lerp;
 
@@ -293,6 +296,41 @@ const TrackMesh = (function () {
     return lift * (frac - 0.5);
   }
 
+  // The banked running surface's NORMAL at node k, lateral offset `o`.
+  // Across the lap the surface leans: bankOffsetAt is linear in o over the
+  // tarmac (slope g = bsign·lift / 2w), so it runs along r + u·g — the roll
+  // banking() reports. Along the lap it twists wherever the bank ramps in and
+  // out, so the along-lap tangent is THIS column's own chord through the two
+  // neighbouring banked points (not t: on the inside of a hairpin the rail at
+  // `o` is a fraction of the centreline's length and curls away from it —
+  // Indianapolis T1, 0.55 m a node at o = 7.75). The normal is their cross
+  // product, on the u side. Away from any bank it is u, exactly as before, and
+  // the kerbs keep u: both of their rails sit outside the tarmac, on the one
+  // clamped edge height, so the strip between them is level across. Before
+  // this the road pushed u everywhere and shaded a 19° bowl (Zandvoort 0.911)
+  // as flat road.
+  function bankNormalAt(track, k, o, u, r) {
+    const bp = track.bankP;
+    if (!bp) return u;
+    const n = track.n, kp = (k - 1 + n) % n, kn = (k + 1) % n, lift = bp.lift;
+    if (!(lift[k] > 0) && !(lift[kp] > 0) && !(lift[kn] > 0)) return u;
+    const w = track.hw[k];
+    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? bp.bsign[k] * lift[k] / (2 * w) : 0;
+    const { px, py, pz, rx, ry, rz } = track;
+    const at = (j) => {
+      const uj = upOf(track, j), b = bankOffsetAt(track, j, o);
+      return [px[j] + rx[j] * o + uj[0] * b, py[j] + ry[j] * o + uj[1] * b, pz[j] + rz[j] * o + uj[2] * b];
+    };
+    const A = at(kp), B = at(kn);
+    const L = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];              // along the lap
+    const X = [r[0] + u[0] * g, r[1] + u[1] * g, r[2] + u[2] * g];  // across, +right
+    let nx = X[1] * L[2] - X[2] * L[1], ny = X[2] * L[0] - X[0] * L[2], nz = X[0] * L[1] - X[1] * L[0];
+    const len = __M.hypot(nx, ny, nz);
+    if (!(len > 1e-9)) return u;
+    const sg = (nx * u[0] + ny * u[1] + nz * u[2]) < 0 ? -1 / len : 1 / len;
+    return [nx * sg, ny * sg, nz * sg];
+  }
+
   function buildKerbs(track, out) {
     const { n, px, py, pz, hw } = track;
     const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
@@ -440,11 +478,18 @@ const TrackMesh = (function () {
     return 0;
   }
 
+  // The road's ROLL at arc s (radians, signed as banking().roll: + = the
+  // right edge raised). It read the per-control-point tilt `track.bank[]`,
+  // which no circuit sets (realPoints writes 0), so it was 0 everywhere — and
+  // the AI brake planner (game.js pushLook) took its bank grip from here while
+  // the executor took banking(): every AI planned Zandvoort's 19° bowl as flat
+  // and arrived ~11 % under the speed it could carry. Same maths and the same
+  // node lerp as banking() at x = 0, so the executor's max(|banking().roll|,
+  // |bankAngle|) is bit-for-bit what it was.
+  const _bankAngleScratch = { dy: 0, roll: 0 };
   function bankAngle(track, s) {
-    if (!track.bank) return 0;
-    const n = track.n, L = track.total;
-    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
-    return track.bank[k] || 0;
+    const b = banking(track, s, 0, _bankAngleScratch);
+    return b ? b.roll : 0;
   }
 
   // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
@@ -561,6 +606,7 @@ const TrackMesh = (function () {
     const _gWarm = (hash(_idn * 4.4) - 0.5) * 0.07;
     const _bG = pal.grass || [0.30, 0.42, 0.22];
     const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
+    const edgeMat = groundMatOf(track.def);
     // RACING-LINE WEAR FOLLOWS THE BAKED LINE. TrackLine.bake runs before
     // buildRoad (js/track/tracks.js), so track.line — the line's lateral offset
     // per node, +right metres, the same frame as the column offsets — is here:
@@ -646,7 +692,8 @@ const TrackMesh = (function () {
           }
         }
         pos.push(wx, wy, wz);
-        nrm.push(u[0], u[1], u[2]);
+        const nv = bankNormalAt(track, k, o, u, r);
+        nrm.push(nv[0], nv[1], nv[2]);
         // The start/finish line is a separate chequered decal mesh (buildStartLine)
         // laid just above the asphalt here at s=0 — far cleaner than painting a
         // whole road segment solid white, which read as a sprayed-on blob.
@@ -670,7 +717,9 @@ const TrackMesh = (function () {
             c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
             m = MAT.ASPHALT;
           } else {
-            c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
+            // kerb ribbons added separately by buildKerbs; a def that names its
+            // ground material (terrainMat) carries it onto these edge columns too
+            c = grass; m = edgeMat;
           }
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
@@ -782,7 +831,7 @@ const TrackMesh = (function () {
     // The ground beyond the runoff verge: GRASS unless the def names SAND or
     // SNOW (the designer's desert / alpine themes; no shipped def does, so the
     // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
-    const groundMat = track.def.terrainMat === "SAND" ? MAT.SAND : track.def.terrainMat === "SNOW" ? MAT.SNOW : MAT.GRASS;
+    const groundMat = groundMatOf(track.def);
     const outerW = surface.outerW;
     const latsL = surface.rails.map((d) => -d);
     const latsR = surface.rails.slice();

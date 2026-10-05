@@ -27,7 +27,8 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, bc = false, pipMode } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, bc = false, pipMode, clock = { t: 0 } } = {}) {
+  const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
   if (pipMode) stored.bcPip = pipMode;
@@ -50,12 +51,12 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     document: {
       getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl
         : boxes[id] ? { hidden: false, getBoundingClientRect: () => boxes[id] } : null),
-      body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
-        style: { setProperty: (k, v) => { props[k] = v; } } },
+      body: { classList: { contains: (c) => classes.has(c), toggle: (c, on) => { writes.cls++; return on ? classes.add(c) : classes.delete(c); } },
+        style: { setProperty: (k, v) => { writes.prop++; props[k] = v; } } },
     },
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
     PerfGov: { tier: () => tier },
-    performance: { now: () => 0 },
+    performance: { now: () => clock.t },
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
     CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
@@ -105,7 +106,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, stored, classes, props, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
+  return { mp, G, gfx, calls, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
 
@@ -608,4 +609,38 @@ test("the shipped-before path, for contrast: teamMesh per mirror rival builds a 
   const whole = v.rec.builds.slice(warm);
   assert.equal(whole.length, 6, "6 Car3D builds on the first mirror frame");
   assert.ok(whole.every(b => b.kind === "whole"));
+});
+
+// The layout re-read runs on the CLOCK (500 ms), not every 30 frames — a frame
+// count is not a clock (docs/notes/PERF-FINDINGS.md §2n) — and side() writes the
+// <body> class and custom properties only when they change: each write
+// invalidates style page-wide, and the layout is still almost every time.
+test("the mirror re-measures on a 500 ms clock and leaves <body> alone when the side layout has not moved", () => {
+  const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const h = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44) } });
+  let reads = 0;
+  const raw = h.frameEl.getBoundingClientRect;
+  h.frameEl.getBoundingClientRect = () => { reads++; return raw(); };
+  h.render();
+  const first = reads;
+  assert.ok(first > 0, "the first frame measures");
+  assert.ok(h.classes.has("hud-mirror-side"));
+  const w0 = { ...h.writes };
+  for (let i = 0; i < 60; i++) h.render();
+  assert.equal(reads, first, "60 frames inside 500 ms: no layout read (it was one every 30 FRAMES)");
+  h.clock.t = 499; h.render();
+  assert.equal(reads, first, "still inside the window");
+  h.clock.t = 500; h.render();
+  assert.ok(reads > first, "the clock re-measures");
+  assert.deepEqual(h.writes, w0, "same layout: no class toggle, no custom-property write");
+  // The layout moves: the new values are written.
+  h.frameEl.getBoundingClientRect = () => { reads++; return { left: 400, top: 70, width: 400, height: 114, right: 800, bottom: 184 }; };
+  h.clock.t = 1000; h.render();
+  assert.equal(h.props["--mir-side-x"], "808.0px");
+  assert.ok(h.writes.prop > w0.prop);
+  // A state change still measures on the very next frame (no 500 ms wait).
+  h.mp.setMode("off"); h.render();
+  h.mp.setMode("on"); const r = reads; h.render();
+  assert.ok(reads > r, "re-shown: measured at once");
+  assert.ok(h.classes.has("hud-mirror-side"), "hiding cleared the class; showing re-applies it");
 });

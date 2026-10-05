@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// @doc Shoot every menu/popup plus the Display survey into one preview HTML page.
+// @doc Every menu and popup, then the Display survey, into one HTML preview.
 // show-menus.mjs — every menu and popup, then the Display survey, into the preview.
+// @doc Shoot every menu/popup plus the Display survey into one preview HTML page.
+// @skill playwright-probe
 //
 //   node tools/shot/show-menus.mjs
 //
