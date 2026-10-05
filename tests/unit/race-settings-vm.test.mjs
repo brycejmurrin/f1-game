@@ -307,6 +307,16 @@ test("STANDINGS (champ) grids a no-qualifying championship in points order (FIA 
   assert.equal(gridRule("champ", { cars, season })(null), null, "a one-off never reaches the championship rule");
 });
 
+test("REVERSE STANDINGS on round 1 (nobody scored) grids on pace order, as STANDINGS does", () => {
+  // The all-zero table sorted by SeasonCal.rank's last resort — the driver-id
+  // STRING — and reversed: pole to williams:1, the player P10 (bug hunt 2026-10-05 G7).
+  const cars = carsOf(4);
+  let draws = 0;
+  assert.equal(gridRule("revchamp", { cars, champ: true, season: { pts: { d0: 0 } }, rnd: () => { draws++; return 0.5; } })(null), null,
+    "gridUp's own default grid");
+  assert.equal(draws, 0, "...which draws its own jitter");
+});
+
 test("a qualifying championship and a time trial ignore the rule; RANDOM spends one draw per car", () => {
   const cars = carsOf(4);
   const q = cars.slice().reverse();

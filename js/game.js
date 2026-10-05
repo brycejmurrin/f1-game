@@ -1770,7 +1770,8 @@ function gridOrderFor(base) {
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
-  if (rule === "revchamp" && isChampionship() && season && !base) {
+  // Round 1 (nobody scored) falls through to gridUp's pace order, as STANDINGS does: the all-zero table sorted by driver id.
+  if (rule === "revchamp" && isChampionship() && season && !base && Object.values(season.pts || {}).some((p) => p > 0)) {
     // SPEND THE JITTER ANYWAY. gridUp() draws one simRnd() per car when it
     // builds its own order, so a rule that returns a full order without
     // drawing leaves every later consumer (the AI overtake fire, the start
