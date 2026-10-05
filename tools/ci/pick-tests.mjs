@@ -249,6 +249,11 @@ export const RULES = [
   // them back, and this is the gate that noticed the first time.
   [/^js\/data\/settings-defaults\.js/, ["steering-unit", "physics-core"],
    "settings-defaults.test.mjs, plus the driving model: a steering default moves the characterization baseline"],
+  // Shipped GARAGE defaults (parts / liveries / team). Same miss-path as
+  // settings-defaults; the default team's parts kit moves the characterization
+  // baseline the same way a steering default would.
+  [/^js\/data\/garage-defaults\.js/, ["steering-unit", "physics-core"],
+   "garage-defaults.test.mjs; default parts/team move the characterization baseline"],
   [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
   [/^js\/ui\/onboard\.js/, ["steering-unit"], "onboard.test.mjs"],
   [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],

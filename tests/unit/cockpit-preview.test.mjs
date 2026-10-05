@@ -10,7 +10,13 @@ function setup() {
   const race = { paused: true, clock: 122.5, camera: "chase", input: "tilt" };
   const store = { raw: (key) => disk.get(key), rawSet: (key,val) => disk.set(key,val), get: (_,val) => val };
   const ctx = vm.createContext({ GameStore: {store}, location: {search:""}, Log: {info(){},warn(){}},
-    Teams: { LIST: [null,null,{id:"mclaren",color:[1,.3,0],color2:[.1,.1,.1]}] },
+    // Index 0 is the shipped garage default (Mercedes); keep a McLaren at 2
+    // so older call-site assumptions in the harness still resolve.
+    Teams: { LIST: [
+      {id:"mercedes",color:[0,.5,.5],color2:[.05,.05,.08]},
+      null,
+      {id:"mclaren",color:[1,.3,0],color2:[.1,.1,.1]},
+    ] },
     Liveries: {forTeam: (team) => [{c1:team.color,c2:team.color2}]}, AppearanceOpts: {units:()=>"mph"},
     MutationObserver: class { constructor(fn){mutations.push(fn);} observe(){} }, race });
   vm.runInContext(read("js/camera/cockpit-opts.js") + ";this.opts=CockpitOpts",ctx);

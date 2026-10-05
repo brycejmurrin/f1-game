@@ -72,7 +72,11 @@ function planesFromVP(m, out) {
 }
 const meshBufs = [];                  // every buffer Tracks.build handed createMesh / createChunkedMesh
 before(async () => {
-  g = await createGame({});           // boot only — wrap the stub, THEN build the circuit
+  // Pin the player seat to the pre-GarageDefaults car (McLaren, empty sheet).
+  // Shipped garage defaults (js/data/garage-defaults.js) change the miss-path
+  // team/parts and the player mesh draw count; this file measures frustum
+  // culling maths, not the garage.
+  g = await createGame({ storage: { team: 2, "parts.mclaren": {} } });
   const GLX = g.sandbox.GLX;
   for (const n of ["createMesh", "createChunkedMesh"]) {
     const orig = GLX[n];
