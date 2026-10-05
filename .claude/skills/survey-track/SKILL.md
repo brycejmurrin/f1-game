@@ -55,7 +55,13 @@ circuit's pair — def + scenery closure; no browser runs).
    wrapped helpers; never pre-shift `K(s)`. A wrong LAYOUT → **new-track**.
    Probe flags are NOT findings until confirmed off lat 0
    ([loop.md](references/loop.md), "Artefacts" paragraph).
-3. Parent-supplied real-place photos/maps and numerical sources: retain URLs,
+3. Captures from THIS container miss instanced scenery: TLX on a software
+   WebGPU adapter skips every `TrackGraph.batches()` draw (`skipBatches()`,
+   js/render/three/tlx.js) — walls, fences, crowds, tyre stacks, billboards.
+   A wall absent from an `apex_track` shot is not a defect until
+   `__apex.trackGraph().batches({instancedOnly:true})` lacks it too
+   (2026-10-05: Montreal's 1067 walls, built and fine on a real GPU).
+4. Parent-supplied real-place photos/maps and numerical sources: retain URLs,
    document year and uncertainty. Distinguish source claims from measurements;
    a photograph's perspective does not establish a metre dimension or camber.
 
