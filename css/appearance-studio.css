@@ -54,6 +54,7 @@
   max-width: 100%;
   min-width: 0;
   align-self: end;
+  padding-block: 0.15em 0.25em;
 }
 #appearance-studio [data-as="preset-list"] button[aria-pressed="true"] {
   background: color-mix(in oklab, var(--red) 16%, var(--plate));

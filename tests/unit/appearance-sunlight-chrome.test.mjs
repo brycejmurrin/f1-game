@@ -33,7 +33,7 @@ test("LIGHT remaps --gold to a dark amber and race chrome restates bright gold",
 
 test("LIGHT themes the shared sheet-foot away from the hard-coded dark gradient", () => {
   const foot = decl(tokens, ':root[data-ui-theme="light"] .sheet-foot', "background");
-  assert.ok(foot && foot.includes("var(--surf-3)") && foot.includes("var(--carbon)"),
+  assert.ok(foot && foot.includes("var(--surf-1)") && foot.includes("var(--surf-3)"),
     "Sunlight Settings BACK must sit on a light surface ladder, not rgba(8,8,13)");
   assert.ok(!/rgba\(\s*8\s*,\s*8\s*,\s*13/.test(foot),
     "light foot must not keep the dark plate literal");
