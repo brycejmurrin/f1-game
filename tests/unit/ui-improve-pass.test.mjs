@@ -631,6 +631,14 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
     "data hub short-height chrome must use body[data-density], not viewport max-height");
   assert.ok(ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/),
     "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
+  // Live survey ~500px: TELEMETRY (7.1em) used to be the widest label; WATCH &
+  // DRIVE overflows that column with nowrap. Size the grid for the new widest
+  // and let the chip wrap instead of painting past its plate.
+  const tallTabs = ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/);
+  assert.match(tallTabs.decls.get("grid-template-columns") || "", /11\.2 \* var\(--fs-micro\)/,
+    "tall+narrow hub columns size to WATCH & DRIVE, not TELEMETRY");
+  assert.equal(decl(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tab\b/, "white-space"), "normal",
+    "WATCH & DRIVE wraps inside the chip instead of overflowing the plate");
   assert.equal(decl(css("css/menus.css"), /^#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row/, "flex-wrap"), "wrap");
 });
 

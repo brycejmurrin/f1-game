@@ -328,6 +328,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   align-content: center;
   align-content: safe center;
   /* .bigbtn skewX(-6deg) hangs past the column AABB. overflow-x:hidden then
@@ -370,9 +371,30 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Native thumb is light-on-dark and sits on the doors. ScrollFade fades
+     already say "more below"; hide the OS bar the way .dh-tabs does. */
+  scrollbar-width: none;
   align-content: center;
   align-content: safe center;
   padding-inline: var(--gap);
+  /* HOW TO PLAY / GARAGE sat under ANIMATE BACKGROUND at ~500px: the
+     leftover row clipped the last utility with no scroll padding. One
+     --tap clears the live-scene toggle; two chips get a second tap below. */
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
+:where(body[data-shape="tall"]) #menu-buttons::-webkit-scrollbar { display: none; }
+/* experience.css's live-scene `padding: var(--gap)` is a shorthand that
+   would wipe the inset above. These two beat it (extra attrs / :has) so
+   HOW TO PLAY still scrolls clear of ANIMATE / INSTALL. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
 }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */

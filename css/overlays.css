@@ -633,6 +633,13 @@ body:has(dialog[open]) #save-warning { display: none; }
   background: var(--plate-opaque);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
 }
+/* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
+   (#home-motion, css/experience.css). Lift this chip one --tap so the
+   two never share a hit target (survey ~500px, 2026-10-05). --safe-b
+   already includes --sab, matching the toggle's dock. */
+body:has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above every
    menu sheet, bottom-right clear of the safe area, a full tap target; never
    shown in a race (the module hides it there). The HUD chip's plate, not the

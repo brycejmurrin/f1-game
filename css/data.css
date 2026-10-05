@@ -204,7 +204,7 @@ body[data-density="compact"] .dh-race-sub {
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(7.1 * var(--fs-micro))), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(11.2 * var(--fs-micro))), 1fr));
   overflow-x: hidden;
   overscroll-behavior-x: auto;
   touch-action: pan-y;
@@ -214,15 +214,19 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
-/* 7.1 fonts above is TELEMETRY, the widest label, at this padding (measured:
-   91px of text at a 14px font + 2 x 4px) — the column must never be narrower
-   than the label it holds. */
+/* 11.2 fonts above is WATCH & DRIVE, the widest label (TELEMETRY was 7.1
+   and overflowed the plate at ~500px). The column must never be narrower
+   than the label it holds; white-space:normal is the fallback if a cell
+   still shrinks. */
 /* --tap-paint, not --tap-min: the portrait tabs painted 110x38 on a 393x659
    phone (layout-audit 2026-10-05), under the 52 touch floor. */
 body[data-shape="tall"][data-width="narrow"] .dh-tab {
   width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
   min-height: var(--tap-paint);
   font-size: var(--fs-micro);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 
 .dh-content {

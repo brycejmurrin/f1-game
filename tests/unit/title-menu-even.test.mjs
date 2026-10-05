@@ -114,6 +114,47 @@ test("title scrollers never paint a ScrollFade thumb", () => {
     "both title scrollers hide the thumb; fades still say there is more");
 });
 
+test("narrow title column hides the native bar and reserves a tap under the last door", () => {
+  // Live survey ~500px: #menu-buttons is the leftover-row scroller. A light
+  // native thumb sat on the doors, and HOW TO PLAY / GARAGE died under
+  // ANIMATE BACKGROUND + INSTALL APP with no scroll padding.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*scrollbar-width:\s*none/,
+    "tall leftover column hides the native bar; ScrollFade fades still say more",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*scroll-padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "scroll-padding keeps the last utility on the --tap floor above bottom chrome",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "padding-bottom lets HOW TO PLAY scroll fully into the leftover row",
+  );
+  assert.match(
+    menus,
+    /has\(#home-motion:not\(\[hidden\]\)\):has\(#install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
+    "two bottom chips share one :has so INSTALL cannot cover the last door",
+  );
+  assert.match(
+    menus,
+    /padding-bottom:\s*calc\(\(var\(--tap\) \+ var\(--gap\)\) \* 2\)/,
+    "two chips reserve a second --tap under the leftover column",
+  );
+});
+
+test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
+  const overlays = readCssSource("css/overlays.css");
+  assert.match(
+    overlays,
+    /#home-motion:not\(\[hidden\]\)\)[^{]*#install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
+    "fixed INSTALL APP sits one --tap above the live-scene toggle, not on top of it",
+  );
+});
+
 // WCAG 2.5.3 (label in name). Lighthouse's label-content-name-mismatch failed all
 // six title doors (2026-10-05): "DAILY TIME TRIAL" was named "Daily challenge —",
 // "2–4" was named "2 to 4", and the label and its sub-line abutted with no space
