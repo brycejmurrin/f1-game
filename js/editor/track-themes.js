@@ -375,7 +375,7 @@ const TrackThemes = (function () {
       const f = p.k / sv.n, out = p.left ? 1 : -1;   // +k = LEFT turn: the outside of the bend is the right-hand side
       const half = 0.011 + h("hill", i) * 0.006;
       if (opts.stand && i === 0) grandstandEx(f, out, 20, 90, null, null, { tiers: 1, h: 11, livery: opts.livery });
-      else spectatorHill(f - half, f + half, out, 24 + h("hillGap", i) * 8, { rows: 4 + Math.round(h("rows", i) * 2), density: 0.4 + h("dens", i) * 0.2, grass: opts.grass });
+      else spectatorHill(f - half, f + half, out, 24 + h("hillGap", i) * 8, { rows: 4 + Math.round(h("rows", i) * 2), density: 0.4 + h("dens", i) * 0.2, grass: opts.grass, riser: opts.riser });
     });
   }
   /** Forest belts along the longest straights (and a sprinkling of corners), ≤ coverage of the lap. */
@@ -514,11 +514,11 @@ const TrackThemes = (function () {
     ],
     canyon: [
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 12, hills: 2, livery: "terracotta", livery2: "orange", grass: [0.58, 0.34, 0.20] })],
-      ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 14, rMin: 500, rMax: 1000, w0: 400, w1: 300, h0: 120, h1: 160, rough: 0.5, snowline: 1.6, rock: [0.62, 0.30, 0.18], forest: [0.56, 0.28, 0.16] })],
+      ["buttes", (api, sv, h) => buttes(api, sv, h, { count: 14, rMin: 500, rMax: 1100 })],
     ],
     winter: [
       ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.45, gap: 30, col: [0.10, 0.22, 0.14], col2: [0.14, 0.26, 0.18], pineFrac: 0.95, hMin: 12, hMax: 22, density: 0.3, second: true })],
-      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson", grass: [0.84, 0.86, 0.90] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 2, livery: "darkSteel", livery2: "crimson", grass: [0.84, 0.86, 0.90], riser: [0.72, 0.74, 0.78] })],
       ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 12, rMin: 900, rMax: 1500, w0: 700, w1: 400, h0: 280, h1: 180, rough: 0.3, snowline: 0.2, snow: [0.96, 0.97, 1.0], rock: [0.40, 0.42, 0.46], forest: [0.12, 0.22, 0.16] })],
     ],
     twilight: [
@@ -528,15 +528,58 @@ const TrackThemes = (function () {
       ["floods", (api, sv, h) => floods(api, sv, h, { cool: false })],
     ],
   };
-  /** Three low hangars set well back on the outside of the second-longest
-   *  straight (the longest is the pit straight, its pits and stands). */
+  /** Three hangars (corrugated-metal box, gable roof, dark door facing the
+   *  track) and a control tower on the outside of the second-longest straight
+   *  (the longest is the pit straight, its pits and stands). Primitives, not
+   *  building(): that draws office windows. Each footprint is checked against
+   *  the tarmac first (onTrack), and the guarded addBox / addPrism cull any
+   *  piece that would still reach the road. */
   function hangars(api, sv, h) {
-    if (!api.building || !sv.straights.length) return;
+    const { anchor, addBox, addPrism, out, MAT, onTrack } = api;
+    if (!anchor || !addBox || !addPrism || !sv.straights.length) return;
     const st = sv.straights[1] || sv.straights[0], side = sv.outward(st.k0);
-    for (let i = 0; i < 3; i++) {
-      const f = st.s0 + ((st.s1 - st.s0 + 1) % 1) * (0.25 + i * 0.25);
-      api.building(api.K(f % 1), side, 90 + h("hangar", i) * 30, 48, 14, 36, { wall: [0.56, 0.58, 0.60] });
+    const span = (st.s1 - st.s0 + 1) % 1;
+    const W = 40, H = 12, D = 30, ROOF = 7;   // W: away from the road, D: along it
+    const prev = out._mat;
+    const piece = (k, gap, w, hh, d, col, roof, lift = 0) => {
+      const a = anchor(k, side, gap + w / 2), b = [a.r, a.u, a.t];
+      if (onTrack && onTrack(a.c[0], a.c[2], Math.hypot(w, d) / 2 + 6)) return;
+      const at = (dr, du) => [a.c[0] + a.r[0] * dr + a.u[0] * du, a.c[1] + a.r[1] * dr + a.u[1] * du, a.c[2] + a.r[2] * dr + a.u[2] * du];
+      out._mat = MAT.METAL;
+      addBox(out, at(0, lift + hh / 2), [w, hh, d], col, b);
+      if (roof) {
+        out._mat = MAT.ROOF;
+        addPrism(out, at(0, hh), [d, roof, w], [0.42, 0.46, 0.50], [a.t, a.u, a.r]);
+        out._mat = MAT.FLAT;   // the door: a dark panel on the track-facing wall
+        addBox(out, at(-side * (w / 2 + 0.15), hh * 0.4), [0.3, hh * 0.8, d * 0.7], [0.14, 0.15, 0.17], b);
+      }
+    };
+    for (let i = 0; i < 3; i++) piece(api.K((st.s0 + span * (0.22 + i * 0.22)) % 1), 55 + h("hangar", i) * 15, W, H, D, [0.60, 0.62, 0.64], ROOF);
+    piece(api.K((st.s0 + span * 0.82) % 1), 60, 8, 22, 8, [0.84, 0.84, 0.80], 0);           // tower
+    piece(api.K((st.s0 + span * 0.82) % 1), 58, 12, 4, 12, [0.30, 0.42, 0.48], 0, 22);      // its glass cab, on top
+    out._mat = prev;
+  }
+  /** Flat-topped sandstone buttes on a ring beyond the lap: a tapered wall, a
+   *  flat cap and a scree skirt (mountain() always comes to a peak). */
+  function buttes(api, sv, h, opts) {
+    const { addFrustum, out, MAT, pyMin, onTrack } = api;
+    const count = Math.min(28, opts.count || 14), r0 = sv.radius + (opts.rMin || 500), r1 = sv.radius + (opts.rMax || 1100);
+    const rock = [0.62, 0.30, 0.18], band = [0.70, 0.38, 0.22], scree = [0.56, 0.32, 0.20];
+    const prev = out._mat;
+    out._mat = MAT ? MAT.ROCK : prev;
+    for (let i = 0; i < count; i++) {
+      const a = (i + (h("butteA", i) - 0.5) * 0.6) / count * Math.PI * 2;
+      const rr = r0 + h("butteR", i) * (r1 - r0);
+      const x = sv.cx + Math.cos(a) * rr, z = sv.cz + Math.sin(a) * rr;
+      const base = 90 + h("butteW", i) * 170, hh = 80 + h("butteH", i) * 130, top = base * (0.72 + h("butteT", i) * 0.14);
+      if (onTrack && onTrack(x, z, base * 1.5 + 40)) continue;
+      const y = pyMin - 2, seg = 9;
+      addFrustum(out, [x, y, z], base * 1.45, base, hh * 0.22, scree, seg, null);             // scree skirt
+      addFrustum(out, [x, y + hh * 0.22, z], base, (base + top) / 2, hh * 0.45, rock, seg, null); // lower wall
+      addFrustum(out, [x, y + hh * 0.67, z], (base + top) / 2, top, hh * 0.33, band, seg, null);  // upper band
+      addFrustum(out, [x, y + hh, z], top, top * 0.02, 1.5, band, seg, null);                   // flat cap
     }
+    out._mat = prev;
   }
 
   /** The preset's dressers plus what the scenery options add: flood masts at
