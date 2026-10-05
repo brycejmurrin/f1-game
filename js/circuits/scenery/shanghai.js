@@ -687,44 +687,48 @@
         const TECH = [0.72, 0.74, 0.76];
         const TECH_D = [0.58, 0.60, 0.64];
         // Service road ribbons cutting the infield (racing mid-lap, inside).
+        // Wide enough to read from the high-overview panel camera.
         for (const [sf, side, gap, len, wid] of [
-          [0.22, -1, 55, 90, 6.5],
-          [0.28, -1, 72, 70, 5.5],
-          [0.34,  1, 48, 80, 6.0],
-          [0.40, -1, 60, 95, 6.5],
-          [0.52, -1, 70, 85, 5.5],
-          [0.18,  1, 65, 60, 5.0],
+          [0.22, -1, 55, 110, 12],
+          [0.28, -1, 72, 95, 11],
+          [0.34,  1, 48, 100, 12],
+          [0.40, -1, 60, 120, 13],
+          [0.52, -1, 70, 100, 11],
+          [0.18,  1, 65, 80, 10],
+          [0.30, -1, 95, 70, 10],
+          [0.44,  1, 80, 85, 11],
         ]) {
-          groundPatch(K(sf), side, gap, [wid, 0.18, len], TARMAC, {
-            id: `shanghai-svc-${Math.round(sf * 1000)}`, samples: 4,
+          groundPatch(K(sf), side, gap, [wid, 0.22, len], TARMAC, {
+            id: `shanghai-svc-${Math.round(sf * 1000)}-${side > 0 ? "r" : "l"}`, samples: 4,
           });
         }
-        // Grass variety patches — break the flat plate.
-        for (let i = 0; i < 10; i++) {
-          const sf = 0.18 + i * 0.038;
+        // Grass variety patches — break the flat plate. Kept clear of the
+        // service-road ribbons so flatCoplanar does not fire on shared Y.
+        for (let i = 0; i < 8; i++) {
+          const sf = 0.195 + i * 0.048;
           const side = (i % 2) ? -1 : 1;
-          const gap = 40 + hash(i * 17) * 50;
+          const gap = 105 + hash(i * 17) * 45;
           const col = i % 3 === 0 ? GRASS_A : (i % 3 === 1 ? GRASS_B : GRASS_C);
           groundPatch(K(sf), side, gap,
-            [18 + hash(i * 5) * 22, 0.16, 22 + hash(i * 9) * 28], col, {
+            [16 + hash(i * 5) * 18, 0.16, 18 + hash(i * 9) * 22], col, {
               id: `shanghai-mid-grass-${i}`, samples: 3,
             });
         }
         // Low tech / paddock support buildings — solid seat.box cores, far
         // enough out that plantTree cannot land inside them; indexSolid reserves
-        // the footprint for the deferred foliage pass.
-        for (let i = 0; i < 8; i++) {
-          const sf = 0.20 + i * 0.042;
+        // the footprint for the deferred foliage pass. Sized to read from overview.
+        for (let i = 0; i < 10; i++) {
+          const sf = 0.20 + i * 0.035;
           const side = (i % 3 === 0) ? 1 : -1;
-          const gap = 88 + hash(i * 11) * 36;
+          const gap = 78 + hash(i * 11) * 40;
           const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
-          if (onTrack(a.c[0], a.c[2], 22)) continue;
+          if (onTrack(a.c[0], a.c[2], 24)) continue;
           const foot = a.c.slice();
           const gy = groundUnder(foot[0], foot[2]);
           if (gy !== null) foot[1] = gy;
-          const w = 10 + hash(i * 7) * 8;
-          const h = 4.5 + hash(i * 13) * 3.5;
-          const d = 12 + hash(i * 19) * 10;
+          const w = 14 + hash(i * 7) * 10;
+          const h = 5.5 + hash(i * 13) * 4.5;
+          const d = 16 + hash(i * 19) * 12;
           const hf = (d / 2 + 4) / track.total;
           indexSolid(sf - hf, sf + hf, side, gap - w / 2 - 2, w + 6);
           out._mat = MAT.CONCRETE;
