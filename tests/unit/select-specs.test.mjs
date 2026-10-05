@@ -16,7 +16,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource } from "../../tools/ci/select-specs.mjs";
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -898,6 +898,26 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\)\) \? 2 : 3/,
     "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
+});
+
+test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
+  // #878 moved Bahrain's startFrac; steering.spec (races bahrain) went red on
+  // six unrelated PRs because a bahrain edit never selected it.
+  const bahrain = specsRacing(["bahrain"]);
+  assert.ok(bahrain.includes("tests/specs/steering.spec.js"), "the #878 regression must now be routed");
+  assert.ok(bahrain.length >= 10, `only ${bahrain.length} specs race bahrain — the scan broke`);
+  for (const f of bahrain) assert.ok(circuitsOf(f)?.has("bahrain"), `${f} does not build bahrain`);
+  assert.ok(specsRacing(["monza"]).length > bahrain.length, "monza is the fixtures' default circuit");
+  assert.deepEqual(specsRacing([]), [], "no circuit touched routes nothing");
+  // A roster walker is the circuits group's business, not this route's.
+  const walker = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
+    .find((f) => f.endsWith(".spec.js") && circuitsOf(f) === null);
+  if (walker) assert.ok(!specsRacing(["monza"]).includes(walker), `${walker} walks the roster`);
+  // Wiring: routed (rank 3, budgeted), never forced past fit() as affected.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.match(src, /const racing = specsRacing\(circ\.ids\);/);
+  assert.match(src, /\.\.\.specs, \.\.\.racing\]\)\]/, "racing specs join the routed candidates");
+  assert.doesNotMatch(src, /racing\.includes\(f\)\) \? [012]/, "a racing spec must not out-rank group routing");
 });
 
 test("a per-circuit data file resolves to the circuits whose rows changed", () => {

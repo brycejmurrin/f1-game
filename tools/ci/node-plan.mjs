@@ -32,9 +32,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
-import { TRACKED, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
+import { TRACKED, circuitsOf, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED } from "./twinned-specs.mjs";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
@@ -118,40 +117,10 @@ export function adaptedGroups(scripts = pkgScripts()) {
 
 const pkgScripts = () => JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
 
-/* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
- * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
- * bahrain, zandvoort, jeddah, shanghai, singapore, redbull — so a circuit-only
- * diff to imola ran both halves (4 min of runner) for nothing. Read from the
- * files, never listed: the circuit ids a file (or a tests/helpers module it
- * imports) names as a string literal, plus every foundation circuit for a file
- * that globs the `*-foundation.spec.js` twins. A file that walks the whole
- * roster (the manifest's CIRCUITS, a loop over Tracks.LIST) builds EVERY
- * circuit and keeps its script in the plan — fail safe, as everything here. */
-const CIRCUIT_IDS = () => require_cjs("../manifest.cjs").CIRCUITS;
-const require_cjs = (rel) => createRequire(import.meta.url)(rel);
-const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
-  /readdirSync\([^)]*circuits/];
-const FOUNDATION_GLOB = /-foundation\.spec\.js/;
-const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
-  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
-
-/** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
-export function circuitsOf(file, seen = new Set()) {
-  if (seen.has(file)) return new Set();
-  seen.add(file);
-  let text;
-  try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
-  if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
-  const ids = new Set();
-  if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
-  for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
-  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
-    const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
-    if (sub === null) return null;
-    for (const id of sub) ids.add(id);
-  }
-  return ids;
-}
+/* WHICH CIRCUITS DOES A SCRIPT BUILD? circuitsOf() lives in select-specs.mjs
+ * since 2026-10-05 (it also routes a circuit edit to the specs that race it)
+ * and is re-exported here for the plan and its test. */
+export { circuitsOf };
 
 /** Does any file of `script` build one of `circuits`? Unknown script or an
  *  unreadable file reads as yes. */

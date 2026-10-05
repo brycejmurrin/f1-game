@@ -25,6 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
@@ -640,6 +641,64 @@ const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
 export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
 
+/* WHICH CIRCUITS DOES A SCRIPT BUILD? (2026-09-30) Every game-vm-b twin races
+ * a fixed circuit — monza for 30 of 40, a handful on spa, baku, monaco,
+ * bahrain, zandvoort, jeddah, shanghai, singapore, redbull — so a circuit-only
+ * diff to imola ran both halves (4 min of runner) for nothing. Read from the
+ * files, never listed: the circuit ids a file (or a tests/helpers module it
+ * imports) names as a string literal, plus every foundation circuit for a file
+ * that globs the `*-foundation.spec.js` twins. A file that walks the whole
+ * roster (the manifest's CIRCUITS, a loop over Tracks.LIST) builds EVERY
+ * circuit and keeps its script in the plan — fail safe, as everything here. */
+const CIRCUIT_IDS = () => require_cjs("../manifest.cjs").CIRCUITS;
+const require_cjs = (rel) => createRequire(import.meta.url)(rel);
+const WHOLE_ROSTER = [/manifest\.cjs"\)\.CIRCUITS/, /for\s*\([^)]*\bof\s+[\w.]*Tracks\.LIST\b/, /Tracks\.LIST\.(map|forEach|filter|some|every|reduce|flatMap)\(/,
+  /readdirSync\([^)]*circuits/];
+const FOUNDATION_GLOB = /-foundation\.spec\.js/;
+const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith("-foundation.spec.js"))
+  .map((f) => f.replace("-foundation.spec.js", "").replace(/-/g, "_"));
+
+/** The circuit ids one test file can build: a Set, or `null` for the whole roster. */
+export function circuitsOf(file, seen = new Set()) {
+  if (seen.has(file)) return new Set();
+  seen.add(file);
+  let text;
+  try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
+  if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
+  const ids = new Set();
+  if (FOUNDATION_GLOB.test(text) && /readdirSync\(/.test(text)) for (const id of foundationIds()) ids.add(id);
+  for (const id of CIRCUIT_IDS()) if (new RegExp(`["'\`]${id}["'\`]`).test(text)) ids.add(id);
+  for (const m of text.matchAll(/(?:from|require\()\s*["'](\.\.\/helpers\/[^"']+)["']/g)) {
+    const sub = circuitsOf(path.posix.join(path.posix.dirname(file), m[1]), seen);
+    if (sub === null) return null;
+    for (const id of sub) ids.add(id);
+  }
+  return ids;
+}
+
+/* THE HIDDEN CIRCUIT DEPENDENCY (test audit T2, 2026-10-05). A circuit edit
+ * routes to `circuits` and its own foundation spec, but most specs RACE a
+ * fixed circuit — monza is the fixtures' default, a score of others race
+ * bahrain or monaco — and read targets off its geometry. #878 moved Bahrain's
+ * startFrac and steering.spec's racing-line assist went red on six unrelated
+ * PRs, because no ship run had selected it. circuitsOf() already reads which
+ * circuits a test file builds (literals, its helper imports one hop), so a
+ * touched circuit routes every spec that names it, generated at run time from
+ * the files, never listed. They join the ROUTED candidates (rank 3) and
+ * compete for the budget like a group's specs: a monza edit may route most of
+ * the tree, and fit() cuts and names the rest exactly as it always has. A
+ * roster walker (circuitsOf null) is the `circuits` group's business. */
+export function specsRacing(ids, root = ROOT) {
+  if (!ids.length) return [];
+  const out = [];
+  for (const name of fs.readdirSync(path.join(root, "tests", "specs")).filter((f) => f.endsWith(".spec.js")).sort()) {
+    const rel = `tests/specs/${name}`;
+    const built = circuitsOf(rel);
+    if (built && ids.some((id) => built.has(id))) out.push(rel);
+  }
+  return out;
+}
+
 /** Circuit ids a per-circuit data file's rows changed for, or null when the
  *  diff cannot be read (then the file stays infra). */
 export function dataCircuits(file, ref, root = ROOT) {
@@ -839,7 +898,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     const m = FOUNDATION.exec(f);
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
-  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs])]
+  // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
+  const racing = specsRacing(circ.ids);
+  const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
@@ -861,7 +922,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // also touches the engine must leave it empty (the whole fleet runs).
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
-              changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
+              changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
   return r;
@@ -894,6 +955,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
+  if (r.racing?.length) console.error(
+    `RACES A TOUCHED CIRCUIT (${r.circuitsTouched.join(", ")}): ${r.racing.length} spec(s) routed, budgeted like a group's`);
   for (const s of r.failedDropped || []) console.error(
     `CARRY-FORWARD DROPPED (not routed by this change): ${s}`);
   console.error(`budget fits ${r.secFit} s — ${r.testsFit} tests at the ${MEASURED.secPerTest} s fallback, measured specs at ` +
