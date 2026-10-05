@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 450+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 500+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1363,6 +1363,7 @@ what it covers.
 | `garage-panel-side.test.mjs` | APPEARANCE › GARAGE › PANEL SIDE: `SetupCamera.panelCover` (js/garage/setup-camera.js, pure) returns the shipped right-dock fraction unchanged and a NEGATIVE one for a left dock, the fit uses its magnitude, portrait is untouched; css/carsetup.css carries the side / panel width / panel / stat-bar rules, the width cap keeps the 410px floor and the car reserve. |
 | `garage-interior-gate.test.mjs` | the garage capture gate rejects flat team-tint wall frames (uniform teal when WGX off-axis view decomposition drifts) and accepts a varied car+floor+ceiling gap sample — pure node, no browser |
 | `car-multi-shot-tools.test.mjs` | one Chromium multi-angle car/garage capture: `render-car --preset=spine` / repeatable `--shot`, soft `#game-soft` path in `screenshotGameCanvas`, `garage-angles` `--team=` flags + numeric `store.team` pin, batched `settleGarage` |
+| `garage-before.test.mjs` | durable garage BEFORE pack: `tools/shot/garage-before.mjs` shards (11 teams / 4 jobs / 7 views, hero=3q), MANIFEST.json (team/preset/file/sha/timestamp), change-gate vs last pack, `garage-angles-fetch.mjs` `--help` and no-pack exit 2, `.github/workflows/garage-before.yml` is macos garage-angles (not Car shot / carview) and is not a required check |
 | `harness-display.test.mjs` | headless shot tools: `clearDeadDisplay` drops a stale local `DISPLAY=:N` with no `/tmp/.X11-unix/XN` so SwiftShader WebGL can start; `chromiumArgsForBackend` pins `--enable-unsafe-swiftshader`; `gotoGame` names WebGL/DISPLAY on boot timeout |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `lobed-trees.test.mjs` | Opt-in crown recipes: desktop/mobile geometry budgets, canonical/fused normals and sway, atomic primitive rejection and planting reservation fallback |
