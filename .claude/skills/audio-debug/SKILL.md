@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers, or audio in Apex 26. Not for game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
+description: "Use when the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or debugging WebAudio, engine pitch, sfx, sound, music layers. Not game-feel polish that must not change physics (tune-physics), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
 ---
 
 # Debug and tune the audio engine

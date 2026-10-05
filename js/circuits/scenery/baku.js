@@ -129,7 +129,7 @@
       // s 0.22–0.58: main straight + old city — glass towers R, open air haze L
       for (let i = 0; i < 10; i++) {
         const kM = K(0.22 + i / 10 * 0.36);
-        backdrop(kM, 1,  160 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 44 + hash(i * 11 + 22) * 76, 22], DARK2);
+        backdrop(kM, 1,  160 + i * 0.37 + hash(i * 5 + 22) * 80, [30 + hash(i * 7 + 22) * 22, 44 + hash(i * 11 + 22) * 76, 22], DARK2);
         backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
         backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
       }
@@ -296,7 +296,7 @@
           addBox(stage, vadd(aF.c, aF.u, 5.0), [88, 2.0, 32], [0.22, 0.20, 0.19], b);
           for (let t = 0; t < 3; t++) {
             const tc = vadd(aF.c, aF.r, (t - 1) * 50);
-            addBox(stage, vadd(tc, aF.u, 0.2), [30, 0.5, 30], [0.30, 0.12, 0.03], b);
+            addBox(stage, vadd(tc, aF.u, 0.2), [28, 0.5, 30], [0.30, 0.12, 0.03], b);
           }
         }, { required: true });
       }
@@ -771,8 +771,8 @@
         addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
         addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
         out._mat = 0;
-        addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.5], WIN_WARM, b);
-        addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.32], WIN_COOL, b);
+        addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.52], WIN_WARM, b);
+        addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.34], WIN_COOL, b);
         out._mat = MAT.METAL;
         // Stepped from the upper deck's roof (7.6 sc): at 8.2 sc the mast and
         // its beacon hung 0.6 sc clear of the yacht (ground-audit).

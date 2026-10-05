@@ -1141,3 +1141,16 @@ player's `driverDelta` from own-state only (`vLat`, yaw rate, speed, `muF`)
 behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
+
+**The incident handback heading reset** (`js/physics/incident-sim.js`, the
+settled-backwards branch of the Rapier takeover's handback, fbaf18822) is a
+classified exception, not a table row, because it reads no curvature (the
+no-ghosts check above would reject the row): when a HUMAN car comes back from
+the takeover settled and facing against the track, `c.head` is snapped to the
+centreline TANGENT from `Tracks.sample(G.track, c.s)`. Channel: **surface** — a
+one-shot recovery reset onto the road's own direction, the same move
+`rescuePlayer()` in `js/game.js` makes, fired by an incident rather than per
+frame, with no curvature, racing line or `kCur` input and nothing applied while
+the player is driving. Ruled 2026-10-05 from the physics-contract sweep at
+`934e8b2cb`; a curvature or line read added to that branch would make it a
+table row and need its own ruling.

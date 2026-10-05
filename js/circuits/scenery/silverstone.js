@@ -8,7 +8,7 @@
   function (api) {
       const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
               indexSolid,
-              grandstandEx, building, motorhome, hedge, billboard, mountain, anchor, vadd, addBox,
+              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
@@ -28,6 +28,29 @@
       };
 
       const k = (s) => Math.round(s * n) % n;
+      // Footprints the free-standing oaks must stay out of (marquees, barns):
+      // [x, z, radius]. oak() is placed by lateral distance alone, and from a
+      // neighbouring stretch its canopy grew through a roof.
+      const OAK_KEEPOUT = [];
+      // Every hedge row's node anchors, binned on a 16 m grid, so the campsite
+      // fields can keep their tents and caravans off the hedgerows.
+      const HEDGE_GRID = new Map();
+      const hedge = (s0, s1, side, gap, h, col) => {
+        hedgeApi(s0, s1, side, gap, h, col);
+        for (let kk = k(s0); kk <= k(s1); kk++) {
+          const c = anchor(kk, side, gap).c, key = Math.floor(c[0] / 16) + "|" + Math.floor(c[2] / 16);
+          if (!HEDGE_GRID.has(key)) HEDGE_GRID.set(key, []);
+          HEDGE_GRID.get(key).push(c);
+        }
+      };
+      const nearHedge = (c, r) => {
+        const gx = Math.floor(c[0] / 16), gz = Math.floor(c[2] / 16);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++)
+          for (const q of HEDGE_GRID.get((gx + dx) + "|" + (gz + dz)) || [])
+            if (Math.hypot(q[0] - c[0], q[2] - c[2]) < r) return true;
+        return false;
+      };
+      const BARN_SITES = [[0.30, -1, 165], [0.62, -1, 170], [0.86, 1, 160]];
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -93,7 +116,11 @@
 
       hedge(0.60, 0.615, -1, 30, 2.6, COPSE);  // Village/Loop boundary (stops before Village, where it folded)
       hedge(0.86, 0.94, -1, 32, 2.4, COPSE);   // Woodcote infield
-      hedge(0.08, 0.12,  1, 38, 2.4, COPSE);   // Maggotts outer enclosure
+      // Maggotts outer enclosure, split around the bend apex: 38 m out on the
+      // inside of that turn the anchors bunch to 0.2 m apart (0.105-0.111) and
+      // the hedge folded back through itself; a field gate there is honest.
+      hedge(0.08, 0.104,  1, 38, 2.4, COPSE);
+      hedge(0.112, 0.12,  1, 38, 2.4, COPSE);
       hedge(0.34, 0.38,  1, 36, 2.4, COPSE);   // Vale/Club outer
       hedge(0.70, 0.76,  1, 30, 2.4, COPSE);   // Aintree / Wellington
       hedge(0.76, 0.80, -1, 33, 2.4, COPSE);   // Brooklands infield (stops short of the apex, where it folded)
@@ -112,7 +139,10 @@
       hedge(0.02, 0.08, -1, 95, 2.2, COPSE);
       hedge(0.28, 0.32, -1, 165, 2.2, COPSE);
       hedge(0.48, 0.52, -1, 155, 2.2, COPSE);
-      hedge(0.66, 0.70, -1, 160, 2.2, COPSE);
+      // 160 m out, 0.66-0.689 lies inside the Village/Loop complex: its anchors
+      // jumped back and forth (0.1-42 m steps) and the row crossed itself nine
+      // times. Only the coherent run past the Loop stays.
+      hedge(0.689, 0.70, -1, 160, 2.2, COPSE);
       // Cross-field hedgerows (grid perpendicular lines — deeper farmland patchwork)
       hedge(0.10, 0.20, -1, 150, 2.2, COPSE2);
       hedge(0.42, 0.52, -1, 140, 2.2, COPSE2);
@@ -490,6 +520,9 @@
         [0.86, 54, [0.92, 0.91, 0.90]],  // extra tent
       ]) {
         const a = anchor(k(s), 1, d);
+        OAK_KEEPOUT.push([a.c[0], a.c[2], 11.5]);
+        // Book the marquee (14 x 18) so the deferred forest belts keep out of it.
+        { const hf = (18 / 2 + 2) / (n * ds); indexSolid(s - hf, s + hf, 1, d - 7 - 2, 14 + 4); }
         addBox(out, vadd(a.c, a.u, 1.8), [14, 3.5, 18], tCol, [a.r, a.u, a.t]);
         seat.prism(out, vadd(a.c, a.u, 3.55), [14, 2.6, 18], [0.96, 0.97, 0.98], [a.r, a.u, a.t]);
         // marquee lit interior
@@ -507,16 +540,19 @@
       guardrail(0.16, 0.22, -1, 5, [0.82, 0.82, 0.84]);
       guardrail(0.50, 0.56,  1, 6, [0.82, 0.82, 0.84]);
       guardrail(0.72, 0.78,  1, 5, [0.82, 0.82, 0.84]);  // The Loop exit
-      tyreWall(0.038, 0.05,  1, 3.5, RED);
-      tyreWall(0.295, 0.31,  1, 3.5, [0.2, 0.4, 0.8]);
-      tyreWall(0.395, 0.41,  1, 3.5, [0.9, 0.6, 0.1]);
-      tyreWall(0.655, 0.67, -1, 3.5, RED);
-      tyreWall(0.84, 0.855, -1, 3.5, [0.2, 0.4, 0.8]);
+      const APEX_TYRES = [
+        [0.038, 0.05,  1, RED], [0.295, 0.31, 1, [0.2, 0.4, 0.8]], [0.395, 0.41, 1, [0.9, 0.6, 0.1]],
+        [0.655, 0.67, -1, RED], [0.84, 0.855, -1, [0.2, 0.4, 0.8]],
+      ];
+      for (const [s0, s1, side, col] of APEX_TYRES) tyreWall(s0, s1, side, 3.5, col);
 
       for (const [s, side] of [[0.05, 1], [0.13, -1], [0.20, -1], [0.31, 1], [0.41, 1],
                                [0.55, 1], [0.66, -1], [0.78, 1], [0.86, -1], [0.95, 1],
                                [0.22, 1], [0.48, -1], [0.60, 1]]) {
-        marshalPost(k(s), side, 4);
+        // A post on a tyre-wall span stands BEHIND the stack (3.5 m, ~1.9 m
+        // deep), not inside it: at 4 m its hut was half buried in the tyres.
+        const onTyres = APEX_TYRES.some(([s0, s1, ts]) => ts === side && s > s0 - 0.004 && s < s1 + 0.004);
+        marshalPost(k(s), side, onTyres ? 6.5 : 4);
       }
 
       billboard(k(0.04),  1, 20, 12, 4.5, [0.18, 0.52, 0.28]);
@@ -684,9 +720,20 @@
         }
       }
 
-      const oak = (kk, side, dist, h, col) =>
+      for (const [s, side, d] of BARN_SITES) {
+        const a = anchor(k(s), side, d);
+        OAK_KEEPOUT.push([a.c[0], a.c[2], 10]);                       // body 10x16
+        const sc = vadd(a.c, a.r, -side * 8);
+        OAK_KEEPOUT.push([sc[0], sc[2], 2.6]);                        // silo
+      }
+      const oak = (kk, side, dist, h, col) => {
+        const p = anchor(kk, side, dist).c;
+        // Canopy reach ~0.45 h (spread 1.35, three lobes).
+        for (const [x, z, r] of OAK_KEEPOUT)
+          if (Math.hypot(p[0] - x, p[2] - z) < r + h * 0.45) return;
         broadleafFall(kk, side, dist, h, col,
                       { lobes: 3, spread: 1.35, barkCol: [0.33, 0.30, 0.26] });
+      };
       {
         for (let j = 0; j < 4; j++) {
           const kk = (k(0.04) + j) % n;
@@ -738,10 +785,10 @@
         out._mat = MAT.CONCRETE;
         addBox(out, vadd(a.c, a.u, bodyH / 2), [w, bodyH, ln], [0.84, 0.85, 0.86], b);   // re-clad hall
         out._mat = MAT.RUST;
-        addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2), w / 2, ln,
+        addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2 - 0.2), w / 2, ln,
                [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
         out._mat = MAT.METAL;
-        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln], [0.10, 0.20, 0.44], b);
+        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln + 0.8], [0.10, 0.20, 0.44], b);
         // Glazed entrance gable + canopy at the trackside end.
         const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
         out._mat = MAT.GLASS;
@@ -806,9 +853,7 @@
         out._mat = 0;
       }
 
-      barn(k(0.30), -1, 165);
-      barn(k(0.62), -1, 170);
-      barn(k(0.86),  1, 160);
+      for (const [s, side, d] of BARN_SITES) barn(k(s), side, d);
       heritageMuseum(k(0.95), 1, 115);
       heritagePlane(k(0.953), 1, 92);
       // Rich start-light gantry cluster spanning the National straight.
@@ -934,7 +979,7 @@
         [0.86, 0.96, -1],
       ]) fence(s0, s1, side, 11.5, 5.0, [0.74, 0.76, 0.80]);
 
-      for (const [s0, s1, side, gap, rise] of [
+      const HILLS = [
         [0.024, 0.042, -1, 20, 3.6],   // Copse infield bank
         [0.068, 0.084,  1, 24, 3.2],   // Copse exit outer
         [0.108, 0.124, -1, 26, 3.4],   // Becketts infield (between the S-bends: on the apex its rows met)
@@ -946,7 +991,8 @@
         [0.726, 0.746, -1, 20, 3.4],   // Aintree / Wellington infield
         [0.796, 0.814,  1, 22, 3.4],   // Brooklands outer
         [0.915, 0.935, -1, 22, 3.4],   // Woodcote infield
-      ]) spectatorHill(s0, s1, side, gap, {
+      ];
+      for (const [s0, s1, side, gap, rise] of HILLS) spectatorHill(s0, s1, side, gap, {
         rows: 3, rise: rise / 3, depth: 3.4, step: 7, density: 0.7,
         grass: BANK2, riser: BANK, crowd: CROWD_C,
       });
@@ -1012,15 +1058,22 @@
         addBox(out, vadd(a.c, a.u, 1.7), [w - 1.6, 2.6, ln - 2], LIT_WIN, b);
       }
 
-      for (const [s, side, d, w, h, ln] of [
+      for (let [s, side, d, w, h, ln] of [
         [0.060,  1, 30, 6, 3.2, 12], [0.135, -1, 32, 6, 3.2, 10],
         [0.300,  1, 34, 7, 3.4, 14], [0.410,  1, 26, 6, 3.2, 12],
         [0.560,  1, 34, 6, 3.2, 12], [0.670, -1, 26, 6, 3.2, 10],
         [0.810, -1, 30, 7, 3.4, 14], [0.890, -1, 30, 6, 3.2, 12],
         [0.955,  1, 28, 6, 3.2, 12],
       ]) {
+        // Stand clear of a spectator bank on the same side: its three 3.4 m
+        // rows start at `gap`, and at 0.300 / 0.560 the block sat on the treads.
+        const hf = (ln / 2 + 2) / (n * ds);
+        for (const [s0, s1, hs, gap] of HILLS)
+          if (hs === side && s > s0 - hf && s < s1 + hf) d = Math.max(d, gap + 3 * 3.4 + 1 + w / 2 + 1.5);
         const a = anchor(k(s), side, d), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 10)) continue;
+        // Book the footprint so the deferred forest belts do not grow through it.
+        indexSolid(s - hf, s + hf, side, d - w / 2 - 2, w + 4);
         out._mat = MAT.CONCRETE;
         seat.box(out, a.c, [w, h, ln], [0.80, 0.80, 0.78], b);
         out._mat = MAT.METAL;
@@ -1124,6 +1177,16 @@
           // Monza's park wall from 8 coplanar spots to 22. Measure the real
           // step and drop a column that lands too close to the one before it.
           let prevC = null;
+          // Pitches already taken in this field: [x, z, radius]. The 7 m column
+          // check only measures row 0; the outer rows compress further on the
+          // inside of a bend and their tents grew through each other.
+          const pitched = [];
+          const pitch = (pc, r) => {
+            for (const [x, z, pr] of pitched) if (Math.hypot(pc[0] - x, pc[2] - z) < r + pr) return false;
+            if (nearHedge(pc, r + 2.5)) return false;
+            pitched.push([pc[0], pc[2], r]);
+            return true;
+          };
           for (let c = 0; c < cols; c++) {
             const sf = (s0 + span * (c / cols)) % 1;
             const kk = k(sf);
@@ -1136,6 +1199,8 @@
               const a = anchor(kk, side, gap + r * 11 + (c % 2) * 3.5);
               if (onTrack(a.c[0], a.c[2], 26)) continue;
               const b = [a.r, a.u, a.t];
+              // Caravan + awning reach ~4 m from the anchor; a tent half its diagonal.
+              if (!pitch(a.c, hv > 0.86 ? 4.2 : 0.5 * Math.hypot(2.2 + hv * 1.6, 2.6 + hv * 2.2))) continue;
               if (hv > 0.86) {
                 // Caravan / camper with a pull-out awning beside it.
                 addBox(out, vadd(a.c, a.u, 1.35), [2.4, 2.7, 6.2],

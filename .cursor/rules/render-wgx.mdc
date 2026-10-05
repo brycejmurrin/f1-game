@@ -38,5 +38,5 @@ alwaysApply: false
   COPY_SRC texture and never call `getCurrentTexture()`, whose first call breaks
   `mapAsync` device-wide in headless). Not a performance oracle; MSAA paths
   never run on software (forced MSAA 1).
-- Skill: `webgpu-debug`. Live probe: `mcp-probe`. Never probe github.io from
+- Skill: `renderer-debug`. Live probe: `mcp-probe`. Never probe github.io from
   Chrome in this container — the deployed build is `deploy-research`.

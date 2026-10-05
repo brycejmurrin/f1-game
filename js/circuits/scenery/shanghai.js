@@ -146,81 +146,80 @@
       // Lamp post warm sodium glow (very bright amber for day-lit contrast)
       const LAMP_GLOW = [0.98, 0.86, 0.52];
 
+      // RACING-frame fractions. This file's s = 0 is the scenery origin
+      // (sceneryStartFrac), not the start line: sl(r) maps a racing-lap
+      // fraction r (0 = the real start line) onto it — the brands_hatch idiom.
+      // Measured 2026-10-05 (track-build-vm): raw K(0.004..0.08) sits INSIDE
+      // the T1-T3 snail. Pit complex, Yu lakes, snail runoff and the lotus
+      // secondary stand must go through sl() or they land a sector late.
+      // Engine pit complex on side +1; main stand on side -1.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (((f + SL) % 1) + 1) % 1;
+
       (function pitBuilding() {
+        // Re-keyed 2026-10-05 onto the pit straight (side +1), matching the
+        // engine pits and the Wikimedia start-straight read (glass hospitality
+        // over the garage line). Raw authored 0.004..0.05 was the T1 snail.
         const GAR = 9;
         for (let i = 0; i < GAR; i++) {
-          const s = 0.004 + (i + 0.5) / GAR * 0.052;
-          const aB = anchor(K(s), -1, 11), bB = [aB.r, aB.u, aB.t];
+          const s = sl(-0.028 + (i + 0.5) / GAR * 0.056);
+          const aB = anchor(K(s), 1, 14), bB = [aB.r, aB.u, aB.t];
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(aB.c, aB.u, 4.2), [16, 8.4, 15.4], WHITE, bB);
-          const aD = anchor(K(s), -1, 2.4), bD = [aD.r, aD.u, aD.t];
+          const aD = anchor(K(s), 1, 3.2), bD = [aD.r, aD.u, aD.t];
           for (const off of [-5.2, 0, 5.2])
             addBox(out, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off), [0.5, 4.4, 3.8], DARK, bD);
           out._mat = MAT.METAL;
           addBox(out, vadd(aD.c, aD.u, 7.0), [8, 0.5, 15.8], [0.84, 0.86, 0.89], bD);
           out._mat = 0;
           // Glazed hospitality storey set back above the garage roof.
-          const aG = anchor(K(s), -1, 13), bG = [aG.r, aG.u, aG.t];
+          const aG = anchor(K(s), 1, 16), bG = [aG.r, aG.u, aG.t];
           addBox(out, vadd(aG.c, aG.u, 10.5), [11, 3.8, 14.8], GLASS_HAZE, bG);
           out._mat = MAT.METAL;
-          // Stepped white wing slabs behind the garages (decorative cantilevers —
-          // posts that reach grade clipped the bay; a few unsupported prims are
-          // cheaper than a severe clip raise). The d20 / d27 pair rested on the
-          // old seven-box main stand, now moved to the pit straight; alone
-          // they read +12 unsupported (ground-audit, 2026-10-05), and the d13
-          // slab then floated 13.3 m (float-audit), so all three retired.
-          for (const [d, y, w] of [[6, 12.8, 8]]) {
-            const aW = anchor(K(s), -1, d);
+          // One cantilever slab (deeper rows floated after the main stand moved).
+          for (const [d, y, w] of [[8, 12.8, 8]]) {
+            const aW = anchor(K(s), 1, d);
             addBox(out, vadd(aW.c, aW.u, y), [w, 0.55, 15.6], WHITE, [aW.r, aW.u, aW.t]);
           }
           out._mat = 0;
         }
 
-        // Two pit lagoons — offset laterally and in thickness so their water
-        // plates are not one flatCoplanar pair (was 50 m² at the same Y).
-        waterSurface(K(0.020), -1, 24, [26, 0.18, 40], WATER,
-          { id: "shanghai-pit-lagoon-a" });
-        waterSurface(K(0.040), -1, 32, [20, 0.22, 30], WATER,
-          { id: "shanghai-pit-lagoon-b" });
+        // Pit lagoons retired here — they flatCoplanar'd the Yu lakes once both
+        // sat on the racing-frame paddock (ground-audit). Yu lakes carry the
+        // sourced water read alone.
 
-        const sp = anchor(K(0.030), -1, 26), bs = [sp.r, sp.u, sp.t];
+        const sp = anchor(K(sl(0.000)), 1, 28), bs = [sp.r, sp.u, sp.t];
         out._mat = MAT.CONCRETE;
         addBox(out, vadd(sp.c, sp.u, 12.0), [30, 5.6, 15], [0.88, 0.89, 0.91], bs);
         out._mat = 0;
         addBox(out, vadd(sp.c, sp.u, 9.6), [29, 1.8, 15.4], GLASS_HAZE, bs);
         out._mat = MAT.METAL;
         addBox(out, vadd(sp.c, sp.u, 15.1), [33, 0.7, 17], WHITE, bs);
-        // Colonnade standing in the lagoon — the spine is a bridge, not a berm.
-        for (const d of [18, 26, 34, 40]) {
-          const aC = anchor(K(0.030), -1, d), bC = [aC.r, aC.u, aC.t];
+        for (const d of [22, 30, 38, 46]) {
+          const aC = anchor(K(sl(0.000)), 1, d), bC = [aC.r, aC.u, aC.t];
           for (const off of [-5.5, 5.5])
             seat.cyl(out, vadd(aC.c, aC.t, off), 0.5, 9.2, STEEL, 8, bC);
         }
         out._mat = 0;
 
+        // Far hospitality — seat.box so roofs BFS-ground (addBox roofs at
+        // dist 48 read unsupported after the pit-side move).
         for (let i = 0; i < 3; i++) {
-          const a = anchor(K(0.016 + i * 0.014), -1, 46), b = [a.r, a.u, a.t];
+          const a = anchor(K(sl(-0.020 + i * 0.016)), 1, 48), b = [a.r, a.u, a.t];
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
           out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, 5.5), [15, 11, 17], [0.84, 0.86, 0.88], b);
+          seat.box(out, foot, [15, 11, 17], [0.84, 0.86, 0.88], b);
           out._mat = 0;
-          addBox(out, vadd(a.c, a.u, 7.4), [15.4, 2.4, 16], WIN_TOWER, b);
+          addBox(out, vadd(foot, a.u, 7.4), [15.4, 2.4, 16], WIN_TOWER, b);
           out._mat = MAT.METAL;
-          addBox(out, vadd(a.c, a.u, 11.6), [18, 0.6, 18], WHITE, b);
+          addBox(out, vadd(foot, a.u, 11.2), [18, 0.6, 18], WHITE, b);
           out._mat = 0;
         }
       })();
-      building(K(0.98), -1, 14, 16, 11, 55,
+      building(K(sl(0.985)), 1, 16, 16, 11, 55,
         { kind: "slab", wall: [0.84, 0.85, 0.87], window: WIN_LIT, floor: 3 });
-
-      // RACING-frame fractions. This file's s = 0 is the scenery origin
-      // (sceneryStartFrac), not the start line: sl(r) maps a racing-lap
-      // fraction r (0 = the real start line) onto it — the brands_hatch idiom.
-      // Measured 2026-10-05 (track-build-vm): K(0.004..0.08) sits INSIDE the
-      // T1-T3 snail, so the pit-straight set dressed there read as a bare start
-      // straight; the pit straight is racing ~0.932 -> 0.030 (pit lane sA/sB),
-      // engine pit complex on side +1, so the main stand is side -1.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (((f + SL) % 1) + 1) % 1;
 
       (function mainGrandstand() {
         // Main grandstand opposite the pits — ~29-30k seats, raked tiers under
@@ -302,6 +301,21 @@
           modelGroup("shanghai-wing-west", bounds, emit, { required: true });
         });
         wingDeck("shanghai-wing-west-deck", W2, 36, 7.0, [0.86, 0.88, 0.90]);
+        // Aerofoil tip fins — the real decks read as aircraft wings (Wikimedia
+        // 4H Shanghai 2018 start shot), not a plain rectangular portal.
+        for (const [frac, hgt, tipD] of [[W1, 38, 11], [W2, 36, 10]]) {
+          const aL = anchor(K(frac), -1, 22), aR = anchor(K(frac), 1, 22);
+          const mid = [
+            (aL.c[0] + aR.c[0]) * 0.5,
+            (aL.c[1] + aR.c[1]) * 0.5 + hgt + 1.1,
+            (aL.c[2] + aR.c[2]) * 0.5,
+          ];
+          const bR = [aR.r, aR.u, aR.t];
+          out._mat = MAT.METAL;
+          addBox(out, mid, [tipD, 0.45, 3.2], WHITE, bR);
+          addBox(out, vadd(mid, aR.u, 0.55), [tipD * 0.72, 0.35, 2.2], GLASS_HAZE, bR);
+          out._mat = 0;
+        }
       })();
 
       building(K(0.042), -1, 70, 20, 28, 34, {
@@ -336,12 +350,14 @@
         }
       });
 
-      waterSurface(K(0.88), -1,  95, [180, 0.18, 130], WATER,
+      // Yu lakes — racing-frame behind the main stand / paddock (OSM + Wikipedia).
+      // Raw 0.88 / 0.01 landed at T14 and the snail after sceneryStartFrac drift.
+      waterSurface(K(sl(0.975)), -1,  95, [180, 0.18, 130], WATER,
         { id: "shanghai-yu-lake-south", required: true });
-      waterSurface(K(0.01), -1, 98, [28, 0.18, 110], WATER,
+      waterSurface(K(sl(0.020)), -1, 98, [28, 0.18, 110], WATER,
         { id: "shanghai-yu-lake-north", required: true });
-      place(K(0.90), -1,  85, [10, 1.0, 5], CONC);
-      place(K(0.02), -1, 115, [11, 0.9, 5], [0.65, 0.68, 0.72]);
+      place(K(sl(0.990)), -1,  85, [10, 1.0, 5], CONC);
+      place(K(sl(0.030)), -1, 115, [11, 0.9, 5], [0.65, 0.68, 0.72]);
       waterSurface(K(0.62), -1, 120, [70, 0.18, 80], [0.36, 0.48, 0.56],
         { id: "shanghai-marsh-pool", required: true });
 
@@ -353,12 +369,12 @@
       // pavilions sit on grade beside the water surfaces instead.
       (function yuGarden() {
         const cluster = [
-          [0.885, -1, 100, 10, 5.0, 8],
-          [0.905, -1, 118,  8, 4.5, 7],
-          [0.925, -1,  98,  9, 5.5, 8],
-          [0.955, -1, 112,  8, 4.0, 7],
+          [sl(0.970), -1, 100, 10, 5.0, 8],
+          [sl(0.990), -1, 118,  8, 4.5, 7],
+          [sl(0.010), -1,  98,  9, 5.5, 8],
+          [sl(0.040), -1, 112,  8, 4.0, 7],
         ];
-        const a0 = anchor(K(0.915), -1, 108), b0 = [a0.r, a0.u, a0.t];
+        const a0 = anchor(K(sl(0.005)), -1, 108), b0 = [a0.r, a0.u, a0.t];
         modelGroup("shanghai-yu-pavilions", {
           center: vadd(a0.c, a0.u, 5),
           size: [55, 14, 70],
@@ -368,42 +384,45 @@
             const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
             addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
             seat.prism(stage, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+            addBox(stage, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                    [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
           }
         }, { required: true });
         for (const [s, sd, d, w, h, len] of [
-          [0.985, -1, 108, 11, 5.5, 9],
-          [0.010, -1, 122,  9, 5.0, 8],
-          [0.025, -1, 105,  8, 4.2, 7],
-          [0.040, -1, 128, 10, 5.5, 8],
+          [sl(0.055), -1, 108, 11, 5.5, 9],
+          [sl(0.075), -1, 122,  9, 5.0, 8],
+          [sl(0.095), -1, 105,  8, 4.2, 7],
+          [sl(0.115), -1, 128, 10, 5.5, 8],
         ]) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len], WHITE, b);
           seat.prism(out, vadd(a.c, a.u, h), [w * 1.2, 2.2, len * 1.2], RED, b);
-          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.48),
+          addBox(out, vadd(vadd(a.c, a.u, h * 0.55), a.r, w * 0.5 + 0.1),
                  [0.35, h * 0.35, len * 0.55], WIN_LIT, b);
         }
       })();
 
-      grandstandEx(0.032, -1, 20, 28, null, null,
+      // Start-straight outer tiers (racing frame) — brief s≈0.04 L.
+      grandstandEx(sl(0.032), -1, 20, 28, null, null,
         { livery: "darkSteel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.052, -1, 24, 28, null, null,
+      grandstandEx(sl(0.052), -1, 24, 28, null, null,
         { livery: "alu", roof: "flat", pylons: true });
-      billboard(K(0.045), -1, 14, 16, 4.5, YELLOW);
+      billboard(K(sl(0.045)), -1, 14, 16, 4.5, YELLOW);
 
       (function snailRunoff() {
-        // Stepped apron pads outside the decreasing-radius right — spiral read at speed
+        // Stepped apron pads outside the decreasing-radius right — spiral read
+        // at speed. Racing-frame T1–T3 (turns 0.037 / 0.088 / 0.129); raw
+        // authored 0.05..0.11 sat past T3 after sceneryStartFrac drift.
         const pads = [
-          [0.050,  1, 3.5, [22, 0.32, 38]],
-          [0.058,  1, 4.5, [28, 0.32, 44]],
-          [0.068,  1, 6.0, [34, 0.32, 50]],
-          [0.078,  1, 8.0, [30, 0.32, 42]],
-          [0.088,  1, 10,  [26, 0.32, 36]],
-          [0.098,  1, 12,  [22, 0.32, 30]],
-          [0.108,  1, 14,  [18, 0.32, 26]],
-          [0.072, -1, 4.0, [14, 0.30, 28]],
-          [0.090, -1, 5.5, [16, 0.30, 24]],
+          [sl(0.040),  1, 3.5, [22, 0.32, 38]],
+          [sl(0.050),  1, 4.5, [28, 0.32, 44]],
+          [sl(0.060),  1, 6.0, [34, 0.32, 50]],
+          [sl(0.072),  1, 8.0, [30, 0.32, 42]],
+          [sl(0.084),  1, 10,  [26, 0.32, 36]],
+          [sl(0.096),  1, 12,  [22, 0.32, 30]],
+          [sl(0.108),  1, 14,  [18, 0.32, 26]],
+          [sl(0.068), -1, 4.0, [14, 0.30, 28]],
+          [sl(0.090), -1, 5.5, [16, 0.30, 24]],
         ];
         for (const [s, sd, gap, sz] of pads) {
           runoffApron(K(s), sd, gap, sz, PALE);
@@ -411,17 +430,17 @@
         // (The kerb + verge place() rhythm here was 0.26-0.35 m tall under
         // place()'s 0.8 m sink — 62 boxes, all buried, never visible.)
       })();
-      grandstandEx(0.05,  1, 95, 30, null, null,
+      grandstandEx(sl(0.05),  1, 95, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      grandstandEx(0.085, 1, 85, 28, null, null,
+      grandstandEx(sl(0.085), 1, 85, 28, null, null,
         { livery: "crimson", roof: "flat" });
-      grandstandEx(0.10,  -1, 45, 28, null, null,
+      grandstandEx(sl(0.10),  -1, 45, 28, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      grandstandEx(0.13,  1, 72, 26, null, null,
+      grandstandEx(sl(0.13),  1, 72, 26, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(0.064, 1, 112, 28, null, null,
+      grandstandEx(sl(0.064), 1, 112, 28, null, null,
         { livery: "alu", roof: "none" });
-      grandstandEx(0.098, 1, 104, 30, null, null,
+      grandstandEx(sl(0.098), 1, 104, 30, null, null,
         { livery: "darkSteel", roof: "none", endWalls: true });
 
       // Secondary grandstand with overlapping-circles / lotus-leaf roof.
@@ -480,13 +499,15 @@
           modelGroup(id, bounds, emit);
         }
       };
-      circlesStand("shanghai-circles-stand", 0.082, 1, 125, 5, true);
+      // Outside T1–T3 (racing ~0.075), SE secondary stand — lotus / overlapping
+      // circles roof. Raw 0.082 was racing ~0.17 (past T3).
+      circlesStand("shanghai-circles-stand", sl(0.075), 1, 125, 5, true);
       // Infield lotus terraces retired — their overlapping cones were the two
       // worst clip pairs (8.2 m / 5.9 m); the required SE circles stand carries
       // the sourced secondary-stand roof identity alone.
-      billboard(K(0.07),  1, 56, 16, 5, YELLOW);
-      billboard(K(0.095), 1, 44, 16, 5, RED);
-      marshalPost(K(0.08), -1, 14);
+      billboard(K(sl(0.07)),  1, 56, 16, 5, YELLOW);
+      billboard(K(sl(0.095)), 1, 44, 16, 5, RED);
+      marshalPost(K(sl(0.08)), -1, 14);
       // Snail-side sail canopies retired — they clipped the secondary stands.
 
       const fanTerraces = (spots) => {
@@ -503,8 +524,8 @@
         }
       };
       fanTerraces([
-        [0.060, 1, 120],   // snail (existing)
-        [0.098, 1, 110],   // snail (existing)
+        [sl(0.060), 1, 120],   // snail outside
+        [sl(0.098), 1, 110],   // snail outside
         [0.470, 1,  58],   // mid-sector run
         [0.800, 1,  74],   // back-straight run
         [0.905, -1, 60],   // T14 hairpin
@@ -596,7 +617,7 @@
           frustum(swC, 10, 7, 114, [0.58, 0.66, 0.74], 6);
           box(vadd(vadd(swC, u, 132), a.r, -5), [4, 36, 11], GLASS);
           box(vadd(vadd(swC, u, 132), a.r,  5), [4, 36, 11], GLASS);
-          box(vadd(swC, u, 149), [14, 3, 11], STEEL);
+          box(vadd(swC, u, 149), [14.4, 3, 11.4], STEEL);
         }, { required: true });
       })();
 
@@ -729,7 +750,7 @@
       marshalPost(K(0.90), 1, 14);
 
       (function lakeBoardwalk() {
-        const a = anchor(K(0.915), -1, 112), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.005)), -1, 112), b = [a.r, a.u, a.t];
         modelGroup("shanghai-lake-boardwalk", {
           center: vadd(a.c, a.u, 3.2),
           size: [12, 7, 82],
@@ -750,9 +771,9 @@
       })();
 
       for (const [i, s, gap, size] of [
-        [0, 0.885, 122, [18, 0.24, 24]],
-        [1, 0.905, 142, [14, 0.24, 19]],
-        [2, 0.945, 118, [16, 0.24, 21]],
+        [0, sl(0.970), 122, [18, 0.24, 24]],
+        [1, sl(0.990), 142, [14, 0.24, 19]],
+        [2, sl(0.030), 118, [16, 0.24, 21]],
       ]) {
         groundPatch(K(s), -1, gap, size, MARSH_N, {
           id: `shanghai-lake-islet-${i}`,
@@ -809,7 +830,7 @@
 
       // Tyre walls protecting the heavy corners.
       tyreWall(0.885, 0.915, 1, 4, RED);
-      tyreWall(0.06,  0.09,  1, 4, YELLOW);
+      tyreWall(sl(0.06),  sl(0.09),  1, 4, YELLOW);
       tyreWall(0.305, 0.325, -1, 10, RED);
 
       // (The 0.24 m red/white kerb-edge markers that stood here never rendered:
@@ -829,8 +850,8 @@
 
       (function crowds() {
         const spots = [
-          [0.045, -1, 18], [0.06,  1, 70], [0.46, 1, 16],
-          [0.80,   1, 22], [0.10,-1, 30],
+          [sl(0.045), -1, 18], [sl(0.06),  1, 70], [0.46, 1, 16],
+          [0.80,   1, 22], [sl(0.10), -1, 30],
         ];
         // [0.905, -1, 20] retired 2026-10-05: it is racing ~-0.006, inside the
         // footprint of the main grandstand (mainGrandstand above) — clip 2.56 m.
@@ -838,10 +859,10 @@
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
             const off = (i - 2) * 12;
-            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.45), a.r, 2),
-                   [9, 4.9, 5], [0.42, 0.43, 0.47], b);
+            addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 2.55), a.r, 2),
+                   [9, 4.8, 5], [0.42, 0.43, 0.47], b);
             addBox(out, vadd(vadd(vadd(a.c, a.t, off), a.u, 6), a.r, 2),
-                   [9, 2.2, 5], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
+                   [9, 2.2, 5.4], i % 2 ? CROWD : [0.50, 0.34, 0.40], b);
           }
         }
       })();
@@ -859,7 +880,7 @@
       }
 
       (function formalGardens() {
-        const topiaryFracs = [0.060, 0.090, 0.120];
+        const topiaryFracs = [sl(0.060), sl(0.090), sl(0.120)];
         const topiarySides = [-1, 1, -1];
         for (let i = 0; i < topiaryFracs.length; i++) {
           const tk = K(topiaryFracs[i]);

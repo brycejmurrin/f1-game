@@ -3952,17 +3952,21 @@ const TLX = (function () {
           _fxFrame.glow = nDraw;
         },
         // Transient FX particle batch: glx.js drawParticles — `data` is the
-        // particles.js interleaved stream, copied wholesale into the group's
-        // slot (one call per blend group per frame; a second same-group call
-        // in one frame would overwrite — particles.js never does).
-        drawParticles(data, floatCount, additive) {
-          if (!fx || !data || !(floatCount > 0) || !frameEye) return;
+        // particles.js interleaved stream. `dirty===false` skips set/uploadStream
+        // when the slot still holds this blend group's last payload (skidmarks
+        // pattern; audit 2026-10-05 #4).
+        drawParticles(data, floatCount, additive, dirty) {
+          if (!fx || !(floatCount > 0) || !frameEye) return;
+          if (dirty !== false && !data) return;
           const slot = partStreams[additive ? 1 : 0];
           const verts = (floatCount / 10) | 0;
-          ensureStream(slot, verts);
-          // Per-frame: set() the source whole when it is exactly the payload; a subarray view only when it is longer.
-          slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
-          uploadStream(slot, floatCount);
+          const fresh = ensureStream(slot, verts);
+          if (dirty !== false || fresh) {
+            if (!data) return;
+            // set() the source whole when it is exactly the payload; a subarray view only when it is longer.
+            slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
+            uploadStream(slot, floatCount);
+          }
           slot.geo.setDrawRange(0, verts);
           pushRec(slot.geo, null, fx.particleMats[additive ? 1 : 0], undefined, undefined, 0, null, null);
           _fxFrame.particles += verts / 6;

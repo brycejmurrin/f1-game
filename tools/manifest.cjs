@@ -430,10 +430,20 @@ const CSS_PRELOAD = [
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
+// Title paints #overlay / #title / #menu-buttons (tokens, components, title,
+// menus, responsive). Everything below is a [hidden] screen or dialog at
+// first paint — defer it. Settings/dialogs stay in CSS_PRELOAD so a fast
+// SETTINGS tap still has bytes in flight (FOUC guard). Live census after
+// #958 still had race-setup/select/settings*/dialogs* blocking (~139 KB).
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
+  "css/appearance-studio.css", "css/watch-transport.css",
+  "css/career-experience.css", "css/garage-experience.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
+  "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
+  "css/dialog-platform.css", "css/select.css", "css/race-setup.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.

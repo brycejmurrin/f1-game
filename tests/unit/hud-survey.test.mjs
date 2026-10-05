@@ -304,8 +304,8 @@ test("expected-visible rules", () => {
   // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
   // OT / AERO to their buttons; a desktop helmet shows the lot.
   const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
-  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, false, true],
-    "touch helmet: the visor keeps ENERGY / TYRES / speed");
+  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
+    "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
   const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
   assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
   assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");
@@ -611,6 +611,9 @@ test("hud-live-sample: argv parsing — defaults, overrides, and every refusal",
   assert.ok(d.jumps.length >= 4 && d.ids === null, "several jumps, every moved piece");
   assert.equal(d.keep, false, "by default every HUD piece is switched on first, like hud-survey");
   assert.equal(parseLive(["--keep"]).keep, true, "--keep is a flag: it takes no value");
+  assert.deepEqual(parseLive(["--jumps", "none"]).jumps, [null], "--jumps none: one trial, no teleport");
+  assert.deepEqual(parseLive(["--jumps=none"]).jumps, [null]);
+  assert.match(parseLive(["--jumps", "0.2,none"]).error, /lap fractions/, "none is the whole list, not one entry of it");
   assert.deepEqual(parseLive(["--keep", "--ids", "aero"]).ids, ["aero"], "and it does not swallow the next option");
   const o = parseLive(["--ids", "aero,ot", "--jumps=0.1,0.9", "--device", "phone-landscape-844x390", "--tolerate", "0", "--cam=chase"]);
   assert.deepEqual(o.ids, ["aero", "ot"]);

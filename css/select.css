@@ -444,6 +444,17 @@
 @container sel-hero (max-height: 110px) {
   #sel-preview-map { visibility: hidden; }
 }
+/* NO BOX UNTIL THE FIRST DRAW. The shell's canvas carries width="520"
+   height="300" (the attribute default), and js/ui/select-screen.js only fits
+   and draws it once the hero has a size — after the open's double-rAF /
+   ResizeObserver refit. Until then it painted as an EMPTY 520x300 box inside
+   the hero (567x327 at the coarse-pointer zoom), measured holding for up to
+   3.5 s on a loaded box before it jumped to its fitted size (181x267 on an
+   iPad). Zero-sized and invisible until the draw stamps data-drawn: the hero
+   shows its still, then the outline appears at its final size, with no jump
+   between. The map button keeps its own box (it is absolutely inset over the
+   still), so a tap on the still opens CIRCUIT DETAIL either way. */
+#sel-preview-map:not([data-drawn]) { visibility: hidden; width: 0; height: 0; }
 @media (hover: hover) {
   .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
 }

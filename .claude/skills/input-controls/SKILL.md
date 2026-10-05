@@ -1,6 +1,6 @@
 ---
 name: input-controls
-description: "Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, or input.js / steer-tuning.js are being changed or debugged. For handling forces (understeer/grip/pace) use tune-physics; for menu Escape/focus use ui-menu-a11y."
+description: "Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, GRIP STEER, or input.js / steer-tuning.js change. Handling forces (understeer/grip/pace) → tune-physics; menu Escape/focus → ui-menu-a11y."
 ---
 
 # Driving input — devices, not forces
@@ -8,6 +8,10 @@ description: "Use when steering, gamepad (stick dead zone, saturation, drift, ca
 `js/input/input.js` owns **how a device becomes a steer/throttle/brake
 command**. `tune-physics` owns the bicycle model those commands hit.
 Mixing the two is the usual miss: a sticky gamepad is not understeer.
+The STEER LOCK / LINEARITY / SPEED STEER sliders (`maxSlip` / `expo` / `speedRef`)
+are owned HERE as player settings; **tune-physics** owns them only as `setPhysics`
+A/B knobs. Phone pairing/connection (QR, room code) → **multiplayer-debug**; the
+roll once paired stays here.
 
 ## Source priority (`Input.steer()`)
 
@@ -33,6 +37,7 @@ together resolve last-key-wins.
 | `raceLine` (slider id `pm-line`) | pull to line / push wide; 0 = off. `G.raceLineAssist = raceLine / 5` |
 | `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**. Schema 4. Not the stick / tilt / drag |
 | `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 1. Never writes throttle/brake |
+| `gripSteer` (slider `pm-gripsteer`) | GRIP STEER: notch 1 = OFF; own-state steering cap at the front's peak slip, `js/physics/grip-steer.js`. Its maths and A/B are **tune-physics** |
 | `STEER_SCHEMA` | per-version migration ladder in `steer-tuning.js` — do not flatten to one gate |
 
 Changing an assist **default** does not reach existing players

@@ -13,7 +13,7 @@
 // the lap: TrackThemes.cityGaps / BELT_REF_M / LAMP_BUDGET); survey() lists
 // the start straight once; and one dresser that throws leaves the others.
 //
-// Run: node --test tests/unit/track-themes-build.test.mjs   (16 presets × 2 full builds + 16 at 6.9 km + 18 scenery-option builds at 6.9 km)
+// Run: node --test tests/unit/track-themes-build.test.mjs   (every preset × 2 full builds + each at 6.9 km + the scenery-option builds at 6.9 km)
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";

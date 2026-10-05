@@ -354,6 +354,22 @@
       cameraTower(K(0.115), 1, 30, { h: 18 });
       cameraTower(K(0.500), -1, 26, { h: 15 });
 
+      // Oval flood-light towers — the tallest things for miles at the real
+      // Speedway (docs/tracks/indianapolis.md §4; IMS facility / OSM views).
+      // The #928 side rewrite kept the import but dropped the ring; without
+      // them the outer bank reads as a grey terrace, not a stadium. Sit
+      // OUTSIDE behind the stand bank (gap 18), cool day banks, no night
+      // pool (this circuit is day-only).
+      for (let i = 0; i < 10; i++) {
+        const s = (0.780 + i * 0.038) % 1;
+        if (s > 0.985 || s < 0.015) continue;   // SF window: Pagoda / main stands
+        floodMast(K(s), OUT, 48, { h: 34, cool: true, arms: 3, light: false, pool: false });
+      }
+      // Infield viewing mound at the banked oval Turn 1 sector (OSM spectator
+      // mounds; Stand H / South Vista road-course seating).
+      spectatorHill(0.085, 0.145, IN, 28,
+        { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
+
       // Brickyard Crossing: four of its holes lie inside the oval, on the
       // back half of the infield (side -1 of the 0.43-0.65 infield run,
       // toward the back stretch), with water hazards. Greens are above.

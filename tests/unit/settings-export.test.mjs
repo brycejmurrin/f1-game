@@ -59,6 +59,7 @@ function boot(opts = {}) {
     if (!opts.teams) vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
     vm.runInContext(read("js/career/save-migrate.js"), ctx, { filename: "js/career/save-migrate.js" });
     vm.runInContext(`GameStore.migrateCareer = SaveMigrate.migrateCareer; GameStore.CAREER_V = SaveMigrate.CAREER_V;`, ctx);
+    vm.runInContext(read("js/career/career-backup.js"), ctx, { filename: "js/career/career-backup.js" });
   }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: "js/ui/" + file + ".js" });
@@ -896,6 +897,9 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
 test("a career file of the wrong shape is refused whole", () => {
   assert.equal(boot({ career: true }).loadCareer({ format: "apex26-garage-v1", careers: {} }).ok, false);
   assert.equal(boot({ career: true }).loadCareer(null).ok, false);
+  for (const careers of [null, [], "bad", 3]) {
+    assert.equal(boot({ career: true }).loadCareer({ format: "apex26-career-v1", careers }).ok, false);
+  }
   assert.equal(boot({ career: true }).loadCareer({ format: "apex26-settings-v1", careers: {} }).ok, false);
 });
 

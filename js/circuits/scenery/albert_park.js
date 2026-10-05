@@ -472,8 +472,8 @@
         const a = anchor(k(0.62), 1, 34 + j * 8);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         // White tent body + coloured prism ridge roof
-        addBox(out, vadd(a.c, a.u, 2.2), [11.0, 4.0, 11.0], WHITE, [a.r, a.u, a.t]);
-        seat.prism(out, vadd(a.c, a.u, 4.2), [11.0, 2.0, 11.0],
+        addBox(out, vadd(a.c, a.u, 2.2 + j * 0.075), [11.0, 4.0 + j * 0.15, 11.0 + j * 0.3], WHITE, [a.r, a.u, a.t]);
+        seat.prism(out, vadd(a.c, a.u, 4.2 + j * 0.15), [11.0, 2.0, 11.0],
                  [[0.20, 0.44, 0.72], [0.86, 0.28, 0.18], [0.90, 0.78, 0.24]][j % 3],
                  [a.r, a.u, a.t]);
       }
@@ -660,7 +660,7 @@
                      a.r, shadeLat), a.u, shadeY), [7.6, 1.5, pitch - 0.3],
                      [0.94, 0.94, 0.92], b);
           // Printed hoarding wrapping the frame's trackside face.
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.5), a.u, 1.1),
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 4.7), a.u, 1.1),
                  [0.12, 2.0, len], opts.fascia || [0.20, 0.42, 0.66], b);
           stage._mat = 0;
         });

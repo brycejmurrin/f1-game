@@ -70,3 +70,53 @@ present.
   Hungarian forest. Scattered, not rowed, and deliberately **airy**: a bare
   trunk forking low, carrying two or three *offset* crown lobes with sky
   between them. Nothing like the solid cone the generic scatter plants.
+
+## 2025 circuit-change detail
+
+The [FIA's 30 July 2025 preview](https://www.fia.com/news/f1-2025-hungarian-grand-prix-preview)
+and [Doc 10, Race Director's Event Notes V2, dated 1 August 2025 (printed p7; PDF p8)](https://www.fia.com/system/files/decision-document/2025_hungarian_grand_prix_-_race_directors_event_notes_v2.pdf)
+state that the grass strip at Turn 5 exit was changed to gravel. Turn 5 is
+the long **right-hand** bend after the left-hand Turn 4, so the outside exit
+margin is **racing-left**. Matching the FIA map to the built centreline places
+T4 near racing fraction `0.3602`, T5 near `0.4225`, and this local exit detail
+near `0.447`. The turn list now follows all 14 physical corners: repeated
+curvature peaks within T2/T14 are not additional corners, and both T6/T7
+chicane corners and the distinct left-hand T10 are retained.
+
+The dependent aero table now names T1/T2, T3/T4, T11/T12 and T14/T1.
+These references preserve the existing four gameplay intervals exactly;
+they do not claim surveyed 2025 DRS activation boundaries.
+
+The scenery uses six short terrain-draped patches with the existing rock
+material to show a narrow gravel margin. Its roughly **48 m length, 3 m width,
+and 2.2 m road-edge gap are bounded visual estimates**, not surveyed 2025
+dimensions. This is a bounded gravel-band representation over the generic
+beige rock verge; it leaves the existing narrow grass/kerb separation and
+surrounding terrain intact. It does not claim to reproduce the exact 2025
+grass-strip footprint. The existing scenery origin is preserved; this racing
+anchor is converted to authored coordinates once before the wrapped helper.
+
+The [21 July 2024 F1i report and FIA photograph](https://f1i.com/news/514518-fia-replaces-turn-5-grass-strip-with-gravel-after-tsunoda-crash.html)
+show a small gravel rectangle between kerb-side concrete and an outer drainage
+channel, with asphalt beyond. Its quoted "last four metres" describes the
+2024 overnight repair; it does not establish the 2025 strip's width or extent.
+A dated 2025 photograph showing both endpoints is still needed for exact sizing.
+The [FIA's Doc 4 map annexes, issued 31 July 2025](https://www.fia.com/system/files/decision-document/2025_hungarian_grand_prix_-_event_notes_-_circuit_map_pit_lane_emergency_exits_map_quarantine_zone_and_red_zones.pdf)
+confirm the physical corner sequence but do not specify the gravel dimensions.
+
+The 2025 FIA preview also specifies concrete blocks with fencing on the
+left-hand side of Turn 14 until a bridge. The final right-hand corner is
+physically identified near racing `0.865–0.901`, but the relevant bridge and
+barrier endpoints have not been located. No bridge or guessed barrier stretch
+is added. The modern pit building, main tribune, pit side, road width,
+elevation profile and existing Pannonian planting remain the reference for
+this bounded surface-detail pass.
+
+The inspected Doc 4 circuit, emergency-exit, ERS-area and red-zone plans do
+not identify a labelled bridge endpoint suitable for this barrier placement.
+Avoid substituting the old main-straight bridge: [Károly Méhes's report dated
+19 June 2025](https://gpdestinations.com/exploring-the-new-look-hungaroring/)
+states that the old Marlboro bridge had gone and pedestrian traffic would use
+a new tunnel under the main straight. That secondary report describes the
+renovation; it does not locate the separate bridge mentioned in the FIA's
+Turn 14 change note.

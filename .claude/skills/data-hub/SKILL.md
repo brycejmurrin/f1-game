@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs are being changed or a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not for standalone Season configuration (season-mode), menu layout of the hub (ui-menu-a11y) or in-race physState telemetry (agent-view)."
+description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs change, a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not standalone Season setup (season-mode), hub menu layout (ui-menu-a11y) or in-race physState telemetry (agent-view)."
 ---
 
 # Data Hub / F1API
@@ -8,6 +8,9 @@ description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetr
 `js/data/hub.js` is the overlay (`#datahub`). Tab loaders live in the
 split `js/data/*` modules. Styles in `css/data.css` (`dh-` prefix).
 In-race slip/grip/timing is **agent-view** (`references/state.md`), not this overlay.
+WATCH/HIGHLIGHTS loading the wrong driver/race after a picker change is here; a camera
+that snaps or keeps an old anchor after a SEEK, follow change or exit/re-entry is
+follow-owner state → **replay-camera** (new camera motion → **f1-animation-cameras**).
 
 ## Tabs
 

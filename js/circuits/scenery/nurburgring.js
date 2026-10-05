@@ -242,7 +242,7 @@
           addBox(stage, vadd(a.c, a.u, 17.6), [1.1, 3.2, 60], [0.90, 0.90, 0.88], b);
           addBox(stage, vadd(vadd(a.c, a.r, 0.3), a.u, 17.6), [0.9, 1.9, 52],
             [0.16, 0.18, 0.22], b);                                     // lettering band
-          addCyl(stage, vadd(vadd(a.c, a.r, 0.4), a.u, 19.6), 3.0, 0.35,
+          addCyl(stage, vadd(vadd(a.c, a.r, 0.5), a.u, 19.6), 3.0, 0.35,
             [0.20, 0.21, 0.24], 8, discB);
           addCyl(stage, vadd(vadd(a.c, a.r, 0.8), a.u, 19.6), 2.5, 0.3,
             [0.82, 0.83, 0.85], 8, discB);
