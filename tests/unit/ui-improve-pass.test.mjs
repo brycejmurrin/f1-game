@@ -1502,6 +1502,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SETTINGS matches the career hub width, not a 760 postcard");
   assert.equal(decl(css("css/settings.css"), "#pm-settings-body", "scrollbar-width"), "none",
     "DISPLAY uses the themed .sf-scroll thumb, not a white native gutter");
+  const hubGrid = rulesFor(css("css/settings-controls.css"), /^#pm-settings-index$/).find((r) =>
+    r.context.includes("@container sheet (min-width: 24rem)"));
+  assert.ok(hubGrid, "SETTINGS doors become a 2-col grid once two --balance-basis tiles fit");
+  assert.equal(hubGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(hubGrid.decls.get("align-items"), "stretch",
+    "APPEARANCE wrap stretches the pair so DISPLAY is not a short neighbour");
+  assert.equal(decl(css("css/career.css"), /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents a,/, "white-space"), "nowrap",
+    "How My Team Works topic chips stay one line");
+  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents, #career-history .sheet-body, #career-history .sheet[data-shape=\"wide\"] > #ch-contents", "scrollbar-width"), "none",
+    "How My Team Works keeps the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
     "1px solid var(--card-line)",
     "DISPLAY fold rules span the sheet, not a fading --grad-rule");

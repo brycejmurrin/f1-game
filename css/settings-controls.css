@@ -205,6 +205,23 @@
   margin: 0;
 }
 #pm-settings-index { --balance-basis: max(12rem, calc(50% - var(--gap) * 0.25)); }
+/* Seven doors: a 50% flex-basis still lets the odd last tile (BACKUP) grow
+   into a full-width orphan, and a wrapping APPEARANCE blurb makes that row
+   taller than DISPLAY beside it. From 24rem (two --balance-basis) the index
+   is a 2-col grid: the seventh sits half-width, and stretch evens a pair. */
+@container sheet (min-width: 24rem) {
+  #pm-settings-index {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  #pmsettings-inner #pm-settings-index > button {
+    min-width: 0;
+    width: auto;
+    height: 100%;
+    align-self: stretch;
+  }
+}
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
    Each option button shrinks from full-sheet width (~717px) to half-width

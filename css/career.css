@@ -742,7 +742,9 @@
    row and the foot keeps an auto track. */
 #career-guide .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #cg-contents),
 #career-history .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #ch-contents) {
-  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
+  /* max-content: "THE DRIVER YOU HIRE" / "NOBODY CAN SIGN YOU" wrapped inside
+     an 11rem rail (apex7). Size the rail to the chip, not the other way. */
+  grid-template-columns: minmax(11rem, max-content) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-content: start;
 }
@@ -770,11 +772,26 @@
 }
 #career-guide .sheet[data-shape="wide"] > #cg-contents a,
 #career-history .sheet[data-shape="wide"] > #ch-contents a {
-  white-space: normal; text-align: left; justify-content: flex-start;
+  white-space: nowrap; text-align: left; justify-content: flex-start;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-body,
 #career-history .sheet[data-shape="wide"] > .sheet-body {
   grid-column: 2; grid-row: 2; min-width: 0; min-height: 0;
+}
+/* Native gutter + grey overlay stacked a second indicator beside the red
+   .sf-scroll thumb (apex7 How My Team Works). Same hide as NEW CAREER. */
+#career-guide .sheet-body,
+#career-guide .sheet[data-shape="wide"] > #cg-contents,
+#career-history .sheet-body,
+#career-history .sheet[data-shape="wide"] > #ch-contents {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+#career-guide .sheet-body::-webkit-scrollbar,
+#career-guide .sheet[data-shape="wide"] > #cg-contents::-webkit-scrollbar,
+#career-history .sheet-body::-webkit-scrollbar,
+#career-history .sheet[data-shape="wide"] > #ch-contents::-webkit-scrollbar {
+  display: none;
 }
 #career-guide .sheet[data-shape="wide"] > .sheet-foot,
 #career-history .sheet[data-shape="wide"] > .sheet-foot {
