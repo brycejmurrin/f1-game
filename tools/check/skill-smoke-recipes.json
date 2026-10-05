@@ -407,6 +407,33 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
+      "skill": "phone-browser",
+      "task": "Exercise a live local server and a live public host is reused",
+      "fixture": "tests/unit/browser-http-up.test.mjs",
+      "pattern": "a\\ live\\ local\\ server\\ and\\ a\\ live\\ public\\ host\\ is\\ reused",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
       "skill": "playwright-probe",
       "task": "Exercise cellRecorded requires both png and dom",
       "fixture": "tests/unit/menu-capture.test.mjs",
