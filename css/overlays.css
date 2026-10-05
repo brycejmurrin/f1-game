@@ -157,11 +157,17 @@ body:has(dialog[open]) #save-warning { display: none; }
    chips stay `--text` while career guide/history stay `--dim`. */
 #htp-contents a { color: var(--text); }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"],
-#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"],
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
 #howtoplay:has(#htp-pits:target) #htp-contents a[href="#htp-pits"],
-#howtoplay:has(#htp-driving:target) #htp-contents a[href="#htp-driving"],
+#howtoplay:has(#htp-driving:target) #htp-contents a[href="#htp-driving"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
 #howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"],
-#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"],
+#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
