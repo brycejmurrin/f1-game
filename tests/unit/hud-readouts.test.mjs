@@ -282,6 +282,19 @@ test("LiveRegion: a lower-priority line waits out the hold; stale HUD lines are 
   assert.deepEqual(JSON.parse(JSON.stringify(L.state())), { phase: "idle", current: null, queued: [] }, "a new session starts empty");
 });
 
+// UI-05 (hunt2): a flag preempting a HUD line mid-beat re-queues that older
+// line, and the re-queue used to delete the NEWER HUD line already waiting.
+test("LiveRegion: a HUD line pushed back by a flag never supersedes a newer queued one", () => {
+  const { L, step } = loadRegion();
+  L.say("P5", "hud");                                // written (beat)
+  L.say("P4", "hud");                                // newer, queued
+  assert.equal(L.say("YELLOW FLAG", "flag"), true, "the flag preempts the beat");
+  assert.deepEqual([...L.state().queued], ["hud:P4"], "the newer position waits; the stale P5 is dropped");
+  assert.equal(step(), "YELLOW FLAG");
+  step();
+  assert.equal(step(), "P4", "after the flag the reader hears the current position");
+});
+
 test("hud.js: the flag and the radio go through the one writer", () => {
   const hud = read("js/ui/hud.js"), game = read("js/game.js"), ro = read("js/ui/hud-readouts.js");
   const sel = read("js/ui/select-screen.js");   // the SESSION ONLY warning, the fourth voice
