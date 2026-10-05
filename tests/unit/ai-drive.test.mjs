@@ -1324,12 +1324,15 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
   const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
   const b = src.indexOf(endMark, a);
   assert.ok(a > 0 && b > a, "the scan is where this test expects it");
-  const scan = new Function("c", "ranked", "track", "OT_GAP",
+  const scan = new Function("c", "ranked", "track", "OT_GAP", "pits",
     src.slice(a, b + endMark.length) + "\nreturn { ahead, gapAhead };");
+  // A car in the pit lane or retired is not the car ahead ON THE ROAD
+  // (verify-physics #15); the reference applies the same skip.
+  const pits = { inLane: (o) => !!o.inLane };
   const ref = (c, ranked, track, OT_GAP) => {   // the unfiltered scan, as it was
     let ahead = null, gapAhead = Infinity;
     for (const o of ranked) {
-      if (o === c || o.finished) continue;
+      if (o === c || o.finished || o.retired || pits.inLane(o)) continue;
       const d = ((o.prog - c.prog + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
     }
@@ -1348,10 +1351,10 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
       const r = rnd();
       const prog = r < 0.02 ? NaN
         : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;   // 0-2 laps up
-      return { prog, _snapProg: prog, finished: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
+      return { prog, _snapProg: prog, finished: rnd() < 0.05, retired: rnd() < 0.03, inLane: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
     });
     for (const c of cars) {
-      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP);
+      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP, pits);
       const wantArmed = want.gapAhead < OT_GAP, gotArmed = got.gapAhead < OT_GAP;
       assert.equal(gotArmed, wantArmed, `trial ${trial}: armed differs`);
       if (wantArmed) {

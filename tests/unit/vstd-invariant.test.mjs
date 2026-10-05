@@ -126,16 +126,9 @@ const ALLOWED = [
   // player-forces.js dirS was `c.speed < 0 ? -1 : 1` (sign test, approved here);
   // soft-blended to clamp(c.speed / DIR_BLEND, -1, 1) — a division, not a
   // speed-literal comparison, so no ALLOWED row.
-  {
-    file: "js/physics/incident-sim.js", expr: "c.speed < 0",
-    code: "const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;",
-    // The magnitude beside it is clamped into [inV*RETAIN_FLOOR, inV*RETAIN_MAX],
-    // both fractions of the car's own entry speed and so already pace-relative.
-    // This line reads nothing but the sign: the handback used to run the whole
-    // value through Math.abs, which turned a car the incident left rolling
-    // backwards into one accelerating forwards.
-    why: "sign test — the direction the incident sim ended on, restored to a magnitude clamped relative to entry speed",
-  },
+  // incident-sim.js handback `dir = c.speed < 0 ? -1 : 1` removed 2026-10-04
+  // (verify-physics #5): the handback no longer keeps a settled roll's sign;
+  // its tests compare a local `v` against 0 and REVERSE_MAX, no speed literal.
   {
     file: "js/physics/wall-clamp.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);",
