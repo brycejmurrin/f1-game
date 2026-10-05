@@ -248,17 +248,17 @@
       grandstandEx(0.028, -1, 12, 42, null, null,
         { livery: "alu", tiers: 1, roof: "flat", endWalls: true });
       {
-        const FR_BLUE = [0.20, 0.34, 0.64];
-        const SEAT_B = [0.22, 0.38, 0.70], SEAT_W = [0.86, 0.86, 0.84];
         // Build the hero shell OUTSIDE the stand (gap 22) so elevated S/F
         // cameras see stepped rear + roof + blue eaves instead of the
         // grandstandEx back slab (sheet-07 solid-blue read).
+        // Emit is a named fn so `{ required: true }` stays inside the
+        // scenery-api-contract 2200-char BATCH-01 window.
+        const FR_BLUE = [0.20, 0.34, 0.64];
+        const SEAT_B = [0.22, 0.38, 0.70], SEAT_W = [0.86, 0.86, 0.84];
         const a = anchor(K(0.005), -1, 22);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
-          modelGroup("magny-cours-main-tribuna", {
-            center: vadd(a.c, a.u, 10), size: [18, 24, 130], basis: b,
-          }, (stage) => {
+          const emitMainTribuna = (stage) => {
             const foot = a.c.slice();
             const ty = terrainYAt(foot[0], foot[2]);
             if (ty != null) foot[1] = Math.max(foot[1], ty);
@@ -304,7 +304,10 @@
             addBox(stage, vadd(vadd(a.c, a.r, 8.8), a.u, 14.5), [0.35, 2.6, 90],
               [0.20, 0.28, 0.38], b);
             stage._mat = 0;
-          }, { required: true });
+          };
+          modelGroup("magny-cours-main-tribuna", {
+            center: vadd(a.c, a.u, 10), size: [18, 24, 130], basis: b,
+          }, emitMainTribuna, { required: true });
         }
       }
       for (let i = 0; i < 4; i++) {
