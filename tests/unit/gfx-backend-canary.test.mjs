@@ -117,15 +117,19 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
 });
 
 test("no stored renderer means Three.js on touch and desktop alike", () => {
-  const game = code("js/game.js");
-  const select = game.slice(game.indexOf("function backendPreference()"), game.indexOf("const PROBE_KEY"));
+  // Preference lives in renderer-boot.js (extracted); unset still names THREE,
+  // and start() may downgrade to GLX only when requestAdapter() is null.
+  const boot = code("js/render/renderer-boot.js");
+  const select = boot.slice(boot.indexOf("function storedBackendPreference()"), boot.indexOf("function backendPreference()"));
   assert.ok(select.length > 0, "renderer preference selection block found");
   assert.doesNotMatch(select, /matchMedia\s*\([^)]*pointer:\s*coarse/,
     "touch and desktop must use the same default");
-  assert.match(select, /pref\s*==\s*null\s*\?\s*"three"\s*:\s*pref/,
-    "an absent stored preference resolves to THREE");
-  assert.match(select, /pref\s*=\s*backendPreference\(\)/,
-    "the boot selection must resolve an absent preference to THREE");
+  assert.match(select, /pref\s*==\s*null\)\s*return\s*\{\s*pref:\s*"three"/,
+    "an absent stored preference resolves to THREE (adapter gate is separate)");
+  assert.match(boot, /storedBackendPreference\(\)/,
+    "the boot selection must read the stored preference");
+  assert.match(boot, /gpuAdapterAvailable/,
+    "unset THREE must gate on a resolved GPU adapter before fetching three.webgpu");
   const picker = code("js/perf/renderer-picker.js");
   const def = picker.slice(picker.indexOf("function defaultBackend()"), picker.indexOf("function readBackend()"));
   assert.doesNotMatch(def, /matchMedia\s*\([^)]*pointer:\s*coarse/,
@@ -524,9 +528,10 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // self-healed and no test saw it. The gate below is what stops the throw and
   // the "never presented a frame" warning about a backend that was never
   // fetched. Nothing here executes the boot block, so this is a source pin.
-  assert.match(game, /const group = pref === "three" \? BACKEND_FILES\.three/,
+  const bootSrc = code("js/render/renderer-boot.js");
+  assert.match(bootSrc, /const group = pref === "three" \? BACKEND_FILES\.three/,
     "the opt-in must resolve its DEFERRED group before arming anything");
-  assert.match(game, /const optIn = [^;]*group && group\.length/,
+  assert.match(bootSrc, /optIn = [^;]*group && group\.length/,
     "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
 
   const wgx = code("js/render/webgpu/wgx.js");
@@ -1649,11 +1654,11 @@ test("the metrics panel reports what is DRAWING, not what is stored", () => {
 });
 
 test("boot and picker normalize invalid renderer preferences to WEBGL2", () => {
-  const game = fnBody(code("js/game.js"), "backendPreference");
-  assert.match(game, /normalized\s*===\s*"webgl2"/);
-  assert.match(game, /normalized\s*===\s*"three"/);
-  assert.match(game, /normalized\s*===\s*"webgpu"/);
-  assert.match(game, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/,
+  const stored = fnBody(code("js/render/renderer-boot.js"), "storedBackendPreference");
+  assert.match(stored, /pref === "webgl2"/);
+  assert.match(stored, /pref === "three"/);
+  assert.match(stored, /pref === "webgpu"/);
+  assert.match(stored, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/,
     "boot must scrub invalid persisted values instead of carrying raw garbage");
 
   const picker = bootPicker({ ls: { "apex26.gfxBackend": "garbage" }, gpu: {} });
@@ -3195,7 +3200,9 @@ function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, 
       setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
     },
     ApexXR: { bootPick: () => xrPick },
-    navigator: { gpu: {} }, location: { reload() { throw new Error("no reload expected"); } },
+    // requestAdapter must resolve: unset default skips three.webgpu when it is null.
+    navigator: { gpu: { requestAdapter: async () => ({}) } },
+    location: { reload() { throw new Error("no reload expected"); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
     GLX: { init: () => { calls.push("GLX.init"); return true; } },
@@ -3213,6 +3220,41 @@ function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, 
     },
   });
 }
+
+test("unset default skips three.webgpu when requestAdapter is null", async () => {
+  const ls = new Map(), calls = [];
+  const ss = new Map();
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
+    localStorage: {
+      getItem: (k) => (ls.has(k) ? ls.get(k) : null),
+      setItem: (k, v) => { ls.set(k, String(v)); }, removeItem: (k) => { ls.delete(k); },
+    },
+    sessionStorage: {
+      getItem: (k) => (ss.has(k) ? ss.get(k) : null),
+      setItem: (k, v) => { ss.set(k, String(v)); }, removeItem: (k) => { ss.delete(k); },
+    },
+    ApexXR: { bootPick: () => null },
+    navigator: { gpu: { requestAdapter: async () => null } },
+    location: { reload() { throw new Error("no reload expected"); } },
+    document: { createElement: () => ({}), head: { appendChild() {} } },
+    Event: class { constructor(type) { this.type = type; } },
+    GLX: { init: () => { calls.push("GLX.init"); return true; } },
+    Gfx: { create: async () => ({ api: "three" }) },
+  });
+  ctx.window = ctx;
+  ctx.dispatchEvent = () => true;
+  seedLog(ctx);
+  vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx);
+  const rb = vm.runInContext("RendererBoot", ctx).create({
+    $: () => null, els: {}, canvas: {}, ensureDataHub() {},
+    loadBackendScripts: async (files) => { calls.push(...files); },
+  });
+  const boot = await rb.start();
+  assert.equal(boot.bound, false, "no-adapter unset boot stays on GLX");
+  assert.deepEqual(calls, ["GLX.init"], "must not fetch TLX / three.webgpu");
+  assert.equal(ls.has("apex26.gfxBackend"), false, "must not persist webgl2 over unset");
+});
 
 test("XR's resolved backend reaches Gfx without changing the saved 2D renderer", async () => {
   for (const saved of [null, "webgl2", "webgpu", "three"]) {
