@@ -136,10 +136,12 @@
    min-content is the label's longest word plus the icon and padding: where it
    fits the 2x2 nothing moves (every 100 % layout, both goldens), and where it
    does not, the balanced row wraps that door onto a line of its own at full
-   width instead of clipping it. The rooms other than USE AS CONTROLLER keep
-   min-width: 0 — their labels already fit the cell they get. */
-#menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
-#menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
+   width instead of clipping it. Rooms used to keep min-width: 0 — at
+   ~752–768px a 5-across row then wrapped TRACK DESIGNER / HOW TO PLAY
+   onto two lines while DATA HUB stayed one (apex9). nowrap + min-content
+   keeps every label one line and lets the leftover door wrap the row. */
+#menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
+#menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -403,6 +405,12 @@ body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]
 body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
   padding-bottom: calc((var(--tap) + var(--gap)) * 2);
   scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+/* Mid-wide (~752–768) 5-across rooms sat flush on the viewport floor
+   (apex9). Same --tap air the tall leftover-row already keeps. */
+:where(body[data-shape="wide"]) #overlay #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
 }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */

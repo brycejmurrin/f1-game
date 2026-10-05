@@ -175,6 +175,28 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   );
 });
 
+test("mid-wide title rooms keep one-line labels and air under the utility row", () => {
+  // apex9 ~752–768px: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
+  // onto two lines while DATA HUB stayed one; WATCH REAL RACES wrapped
+  // inside its tile; the row sat flush on the viewport floor.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ min-width: min-content/,
+    "rooms wrap the leftover door, not the label, once TRACK DESIGNER no longer fits",
+  );
+  assert.match(
+    menus,
+    /#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
+    "WATCH REAL RACES / TRACK DESIGNER / HOW TO PLAY stay one line",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "wide title keeps --tap air under the utility row",
+  );
+});
+
 test("tall Classic docks ANIMATE BACKGROUND to the bottom, not under the wordmark", () => {
   // Live-scene rules used :not([data-home-scene="static"]), so Classic
   // left #home-motion at top-left under APEX 26. Narrow Classic then

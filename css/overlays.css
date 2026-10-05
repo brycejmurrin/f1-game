@@ -669,6 +669,10 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   padding-bottom: calc((var(--tap) + var(--gap)) * 2);
   scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
 }
+body[data-shape="wide"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
    non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
    of the safe area, a full tap target; never shown in a race (the module hides
