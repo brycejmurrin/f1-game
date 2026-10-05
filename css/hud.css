@@ -1811,10 +1811,11 @@ body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibil
    BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04 HUD survey,
    844x390 cockpit), so on a touch screen they show once MOVE & SIZE places
    them, the same deal as BRAKE BIAS (js/ui/hud-layout.js HIDE_RULES).
-   STRATEGY has a touch home instead: the left column under the minimap
-   (128px at the same top-band zoom, + 8px), clear of both button columns. */
+   STRATEGY has a touch home instead: the left column under the minimap and
+   the TRACK LIMITS chip that drops under it (map 128 + chip ~22 at the same
+   top-band zoom, measured 126..147 at 844x390), clear of both button columns. */
 body:not(.desktop) :is(#hud-rel, #hud-inputs):not([data-hl-user]) { display: none; }
-body:not(.desktop) #hud-strat { top: calc(144px + var(--sat) / var(--hud-z)); }
+body:not(.desktop) #hud-strat { top: calc(152px + var(--sat) / var(--hud-z)); }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
    the car) to the left column, sitting on top of the left dock (the steer
    group, whatever the STEERING INPUT sized it to, wherever DOCK EDIT dragged
