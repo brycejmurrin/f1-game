@@ -447,7 +447,7 @@ const Parts = (function () {
     {
       id: "floor", label: "FLOOR",
       options: [
-        { id: "standard",    label: "Standard",       cost:   0, desc: "Regulation floor with the stock fence array",                                 visual: { fences: 5, fenceH: 1, skid: 0, edgeLip: 0 }, visualTier: 1 },
+        { id: "standard",    label: "Standard",       cost:   0, desc: "Regulation floor with the stock fence array",                                 visual: { fences: 3, fenceH: 1.15, skid: 0, edgeLip: 0.45 }, visualTier: 1 },
         { id: "stripped",    label: "Stripped",       cost:   0, desc: "Fences removed for minimum drag — quick in a straight line, loose in a corner", speed: 1.04, accel: 0.97, cornering: 0.90, visual: { fences: 0, fenceH: 1, skid: 0, edgeLip: 0 }, visualTier: 0 },
         { id: "sealed_edge", label: "Sealed Edge",    cost:  55, desc: "Sealed floor edge — steadier underbody load through medium-speed corners",     speed: 0.99, accel: 1.02, cornering: 1.06, visual: { fences: 4, fenceH: 1.15, skid: 0, edgeLip: 0.5 , gurney: 1}, visualTier: 1 },
         { id: "ti_skids",    label: "Titanium Skids", cost:  60, desc: "Titanium skid blocks — run the plank lower without wearing it through",        accel: 1.01, cornering: 1.04, braking: 1.04, visual: { fences: 5, fenceH: 1, skid: 2, edgeLip: 0 }, visualTier: 1 },
