@@ -1,5 +1,5 @@
 // mem-census.mjs — the page half of the memory census, shared by
-// @doc Page-side memory census (WeakRef track census, decoded-audio bytes, three render objects, forced-GC read) for mem-census.mjs and its spec.
+// @doc Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec.
 // tools/gfx/mem-census.mjs (the CLI) and tests/specs/track-switch-memory.spec.js
 // (the gate), so a number the spec asserts is the number the CLI prints.
 //

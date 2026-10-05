@@ -2065,8 +2065,9 @@ Browser (harness Chromium; lock + occupancy first):
 ${browser}
 
 Everything else is a plain tools/ CLI (tools/README.md) — the 2026-09 trim
-dropped 18 wraps (verify-track, survey-track, carshot, wgx-shot, the audits,
-startline, …); run those CLIs directly.
+dropped 18 wraps (verify-track, survey-track, carshot, wgx-shot, clip-audit,
+coplanar-audit, startline-snap/-probe, …); run those CLIs directly. Two audits
+came back on 2026-10-03: apex_track_audit (float-audit) and apex_car_audit.
 Local working tree only — no github.io. Deploy checks: deploy-research subagent.
 Mock: APEX_MCP_MOCK=1  Design: docs/research/APEX-TOOLS-MCP.md
 `);
