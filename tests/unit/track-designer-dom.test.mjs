@@ -922,6 +922,20 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.startFrom("custom-nope"), false);
 });
 
+// START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
+// once the panel opened; a card strokes a 160×110 outline, so only that is kept.
+test("START FROM… memoises a small outline per circuit, not its whole centreline", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const design = panes(b)[0], from = chipsIn(design, "START FROM…")[0];
+  from.click();
+  const shipped = b.Tracks.LIST.filter((t) => !t.custom).length;
+  for (let i = 0; i < shipped * 4 && b.D.state().thumbs.cached < shipped; i++) await new Promise((r) => setTimeout(r, 0));
+  const th = b.D.state().thumbs;
+  assert.equal(th.cached, shipped, "every card drew");
+  assert.ok(th.maxPts > 32 && th.maxPts <= 256, "an outline of at most 256 points: " + th.maxPts);
+});
+
 // ── Authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ──
 const rowOf = (root, label) => walk(root).find((e) => e.classList.contains("td-row") && e.children[0] && e.children[0].textContent === label);
 const stepBy = (row, n) => { const b = row.children[n > 0 ? 3 : 1]; for (let i = 0; i < Math.abs(n); i++) b.click(); };

@@ -145,6 +145,22 @@ test("every art group carries its reveal stage and order", () => {
   }
 });
 
+test("the tablet wing nudge does not land on the desktop golden", () => {
+  // The 72px #tc-frame translate was measured on ios-ipad-landscape 1194x834.
+  // Unguarded inside (min-width: 900px) landscape it also moved 1440x900
+  // title-desktop.png (menu-baseline, CI 2026-10-05, 50758 px).
+  const resp = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
+  const m = resp.match(/@media([^{]+)\{[^}]*#tc-frame\s*\{\s*transform:\s*translate\(72px,\s*0\)/);
+  assert.ok(m, "the iPad-landscape #tc-frame 72px nudge is gone");
+  const cond = m[1];
+  assert.match(cond, /max-width:\s*1366px/,
+    `@media ${cond.trim()} must cap at tablet width so 1440 desktop does not shift`);
+  assert.match(cond, /pointer:\s*coarse/,
+    `@media ${cond.trim()} must require a coarse pointer so a mouse laptop keeps the shipped car`);
+  assert.match(cond, /orientation:\s*landscape/,
+    `@media ${cond.trim()} must stay landscape-only`);
+});
+
 test("no path carries pathLength", () => {
   // The outlines reveal with a clip-path wipe on their GROUP (css/menus.css).
   // A dash draw-on was tried and cannot trace these paths: each is many

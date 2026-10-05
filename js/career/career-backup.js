@@ -375,8 +375,14 @@ const CareerBackup = (function () {
       : (focus && !o.otherFlavourConfirmed ? [focus] : FLAVOURS.slice());
     const pendingOther = !!(focus && !o.otherFlavourConfirmed && otherFlavourPending(envelope, focus));
 
+    const s = store();
+    const selected = o.liveSlot;
+    if (selected != null && !/^(driver|myteam):[0-2]$/.test(selected)) return { ok: false, reason: "bad-slot" };
+    if (selected != null && o.expectedSelectionRevision != null && s && s.keyRevision
+        && o.expectedSelectionRevision !== s.keyRevision("careerSlot")) return { ok: false, reason: "conflict" };
     const expected = o.expectedRevisions || {};
     const written = [];
+    let failed = 0;
     const skipped = [];
 
     // Snapshot disk first so a mid-apply conflict can leave nothing half-done
@@ -417,10 +423,17 @@ const CareerBackup = (function () {
       if (!result.ok || result.reason === "conflict") {
         return { ok: false, reason: result.reason || "write-failed", slot: id, written: written };
       }
+      if (result.durable === false) failed++;
       written.push(id);
     }
 
-    const s = store();
+    // The legacy all-careers file also restores its selected slot. Preflight
+    // that revision above, before any slot writes; keep selection on failure.
+    let selectionWritten = false;
+    if (selected != null && s && !failed) {
+      selectionWritten = s.set("careerSlot", selected) !== false;
+      if (!selectionWritten) failed++;
+    }
     const identity = [];
     // The second mode confirmation must not replay already-restored global progress.
     // MY TEAM identity still accompanies its slot on that confirmation.
@@ -465,6 +478,8 @@ const CareerBackup = (function () {
     return {
       ok: true,
       written: written,
+      failed: failed,
+      selectionWritten: selectionWritten,
       skipped: skipped,
       identity: identity,
       reason: null,

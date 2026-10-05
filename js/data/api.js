@@ -384,12 +384,12 @@ const F1API = (function () {
     });
   }
 
-  function windowed(path, sessionKey, driverNumber, startISO, endISO) {
+  function windowed(path, sessionKey, driverNumber, startISO, endISO, options) {
     let url = OPENF1 + path + "?session_key=" + encodeURIComponent(sessionKey) +
       "&driver_number=" + encodeURIComponent(driverNumber);
     if (startISO) url += "&date>=" + encodeURIComponent(startISO);
     if (endISO) url += "&date<=" + encodeURIComponent(endISO);
-    return request(url, sessionTtl(sessionKey));
+    return request(url, sessionTtl(sessionKey), options);
   }
 
   // car telemetry samples within a time window: speed/throttle/brake/gear/rpm/drs
@@ -412,8 +412,8 @@ const F1API = (function () {
   }
 
   // x/y track positions within a window (arbitrary track-local units)
-  function locationData(sessionKey, driverNumber, startISO, endISO) {
-    return windowed("/location", sessionKey, driverNumber, startISO, endISO).then(function (list) {
+  function locationData(sessionKey, driverNumber, startISO, endISO, options) {
+    return windowed("/location", sessionKey, driverNumber, startISO, endISO, options).then(function (list) {
       return arr(list).map(function (p) {
         p = p || {};
         return { x: num(p.x), y: num(p.y), date: Date.parse(p.date) };

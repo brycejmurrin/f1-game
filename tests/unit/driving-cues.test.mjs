@@ -247,3 +247,54 @@ test("a rewind behind lastCallS does not re-arm and double-call the same turn", 
   for (let i = 0; i < 300; i++) { ctx._t = 6000 + i * 1000 / 60; G.player.s = 350 + i; ctx.DrivingCues.tick(); }
   assert.deepEqual(ctx._calls, ["L"], "same sweeper is not called again after rewind, got " + JSON.stringify(ctx._calls));
 });
+
+test("crawling through a chicane: opposite-side flips are spaced, not machine-gunned", () => {
+  // Was: an opposite-side call had no cooldown, so a car nearly stopped in a
+  // chicane, whose window peak flipped side every few ticks, fired a blip per
+  // flip (8 calls in ~3 s at Monza T1). The fine L/R alternation stands in for
+  // that near-tie peak jitter.
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 500 && u < 600) return (Math.floor(u / 0.75) % 2 ? 0.03 : -0.03) * (1 + u / 1e4);
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 480, speed: 2, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  let flips = 0, prev = 0;
+  for (let i = 0; i < 180; i++) {               // 3 s at 60 Hz, 2 m/s
+    ctx._t = i * 1000 / 60; G.player.s = 480 + i * 2 / 60;
+    const side = ctx.DrivingCues.cornerSide(G.track, G.player.s, 28 * 0.85, 4);
+    if (side && side !== prev) { flips++; prev = side; }
+    ctx.DrivingCues.tick();
+  }
+  assert.ok(flips >= 6, "fixture must flip side repeatedly, got " + flips);
+  assert.ok(ctx._calls.length <= Math.ceil(flips / 3),
+    flips + " flips must not yield " + ctx._calls.length + " calls: " + JSON.stringify(ctx._calls));
+});
+
+test("a race-pace chicane still gets both calls (1.4 s / 69 m apart)", () => {
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 1000 && u < 1040) return 0.03;    // left
+    if (u > 1069 && u < 1110) return -0.03;   // right, 69 m on
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 800, speed: 50, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  for (let i = 0; i < 400; i++) { ctx._t = i * 1000 / 60; G.player.s = 800 + i * 50 / 60; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L", "R"], "both chicane calls, got " + JSON.stringify(ctx._calls));
+});

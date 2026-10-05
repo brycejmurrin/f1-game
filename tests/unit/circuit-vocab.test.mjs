@@ -85,7 +85,7 @@ test("every furniture.tree names a species the scatter dispatch honours", () => 
   // js/track/scenery/build-props.js: `SPECIES[fz.tree] ? fz.tree : fz.tree === "palm" ? "palm"
   //                    : fz.tree === "fir" ? "fir" : … : "broad"`
   const valid = literalKeys(src, "SPECIES = ");
-  for (const alias of ["palm", "fir", "broad"]) valid.add(alias);
+  for (const alias of ["palm", "fir", "broad", "none"]) valid.add(alias);
 
   const Tracks = buildContext();
   const bad = [];
@@ -103,7 +103,7 @@ test("every furniture.tree names a species the scatter dispatch honours", () => 
 // next real typo of the same word.
 test("nothing in KNOWN_UNHANDLED is a species the engine now honours", () => {
   const valid = literalKeys(read("js/track/scenery/build-props.js"), "SPECIES = ");
-  for (const alias of ["palm", "fir", "broad"]) valid.add(alias);
+  for (const alias of ["palm", "fir", "broad", "none"]) valid.add(alias);
   for (const k of Object.keys(KNOWN_UNHANDLED))
     assert.ok(!valid.has(k), `"${k}" is handled now — drop it from KNOWN_UNHANDLED`);
 });

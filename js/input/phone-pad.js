@@ -770,20 +770,47 @@ const PhonePad = (function () {
     }
     menuStick(dom.stick, dom.nub, dom.arrows);
 
-    let wake = null;
+    let wake = null, wakeRequest = null, wakeGeneration = 0;
+    function releaseWake(lock) {
+      if (!lock) return;
+      try { const p = lock.release(); if (p && p.catch) p.catch(() => {}); } catch (_) { /* already released */ }
+    }
+    function dropWake() {
+      wakeGeneration++; wakeRequest = null;
+      const lock = wake; wake = null;
+      releaseWake(lock);
+    }
     async function keepAwake() {
+      if ((!connecting && !session) || wake || wakeRequest) return;
+      const generation = wakeGeneration, request = {};
+      wakeRequest = request;
       try {
-        if (typeof navigator !== "undefined" && navigator.wakeLock && !wake) {
-          wake = await navigator.wakeLock.request("screen");
-          wake.addEventListener("release", () => { wake = null; });
+        if (typeof navigator !== "undefined" && navigator.wakeLock) {
+          const lock = await navigator.wakeLock.request("screen");
+          if (generation !== wakeGeneration || (!connecting && !session)) { releaseWake(lock); return; }
+          wake = lock;
+          lock.addEventListener("release", () => { if (wake === lock) wake = null; });
         }
       } catch (e) { /* not granted: the page dims like any other */ }
+      finally { if (wakeRequest === request) wakeRequest = null; }
     }
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && session) keepAwake(); });
     }
 
-    let connecting = false;
+    let connecting = false, attempt = null;
+    function cancel() {
+      const old = attempt; attempt = null;
+      if (old) old.cancelled = true;
+      connecting = false;
+      const active = session; session = null;
+      if (active) active.close();
+      else if (old && old.transport) { try { old.transport.close(); } catch (_) { /* already closed */ } }
+      dropWake(); releaseAll();
+      if (dom.body) dom.body.classList.remove("linked");
+      if (dom.connect) dom.connect.disabled = false;
+    }
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", cancel);
     async function connect(codeIn) {
       if (connecting || session) return { ok: false, error: "busy" };
       const incoming = pairingFromUrl(codeIn);
@@ -795,27 +822,33 @@ const PhonePad = (function () {
       const code = deps.normalise(codeIn);
       if (!deps.valid(code)) { say(deps.privateRelay() ? "That is not a private room token — copy the full 32-character token." : "That is not a room code — six letters and numbers.", true); return { ok: false, error: "bad_code" }; }
       connecting = true;
+      const owner = attempt = { cancelled: false, transport: null };
       if (dom.connect) dom.connect.disabled = true;
       // The sensor prompt rides the CONNECT tap: iOS shows it only inside a gesture.
       const sensor = await requestSensor();
+      if (attempt !== owner) return { ok: false, error: "cancelled" };
       if (!sensor) say("No motion sensor here — the pedals and buttons still work.", true);
       else say("Looking for the game…");
       keepAwake();
       try {
         await deps.prefetchIce();
-        const transport = deps.rtc({ role: "guest", name: "pad" });
+        if (attempt !== owner) return { ok: false, error: "cancelled" };
+        const transport = owner.transport = deps.rtc({ role: "guest", name: "pad" });
         if (!transport) { say("WebRTC is unavailable in this browser.", true); return { ok: false, error: "no_transport" }; }
         let answered = null;
         const done = await deps.swap({
-          code, slot: "answer", want: "offer", token: { cancelled: false },
-          onTick: () => { if (!session) say("Looking for the game… (room code " + code + ")"); },
+          code, slot: "answer", want: "offer", token: owner,
+          onTick: () => { if (attempt === owner && !session) say("Looking for the game… (room code " + code + ")"); },
           reply: async (invite) => {
+            if (attempt !== owner) return null;
             say("Found it — connecting…");
             const res = await deps.acceptInvite(transport, invite, { pad: PROTO }, { gatherTimeoutMs: 2500 });
+            if (attempt !== owner) return null;
             answered = res;
             return res.ok ? res.code : null;
           },
         });
+        if (attempt !== owner) return { ok: false, error: "cancelled" };
         if (!done.ok) {
           const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
           // The handshake's own words are for two friends racing; here the
@@ -827,7 +860,7 @@ const PhonePad = (function () {
           return why;
         }
         say("Connecting…");
-        session = padSession(transport, src, {
+        const active = padSession(transport, src, {
           now: opts.now || null,   // test seam: the harness's stepped clock, so both wire ends agree
           onHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
           onOpen: () => {
@@ -836,19 +869,27 @@ const PhonePad = (function () {
             if (opts.onOpen) opts.onOpen();
           },
           onClose: () => {
+            if (attempt !== owner) return;
+            attempt = null; owner.cancelled = true; connecting = false;
             session = null;
+            dropWake(); releaseAll();
             if (dom.body) dom.body.classList.remove("linked");
             if (dom.connect) dom.connect.disabled = false;
             say("Disconnected — the game closed the link. Pair again from its Settings.", true);
             if (opts.onClose) opts.onClose();
           },
         });
-        const tick = () => { if (!session) return; session.pump(); requestAnimationFrame(tick); };
+        if (attempt !== owner) { active.close(); return { ok: false, error: "cancelled" }; }
+        session = active;
+        const tick = () => { if (session !== active) return; active.pump(); requestAnimationFrame(tick); };
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(tick);
         return { ok: true };
       } finally {
-        connecting = false;
-        if (dom.connect && !session) dom.connect.disabled = false;
+        if (attempt === owner) {
+          connecting = false;
+          if (!session) { attempt = null; owner.cancelled = true; dropWake(); }
+          if (dom.connect && !session) dom.connect.disabled = false;
+        }
       }
     }
     if (dom.connect) dom.connect.addEventListener("click", () => connect(dom.codeIn ? dom.codeIn.value : ""));
@@ -900,6 +941,7 @@ const PhonePad = (function () {
 
     return {
       connect,
+      cancel,
       scan,
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).

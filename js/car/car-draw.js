@@ -428,6 +428,7 @@ const CarDraw = (function () {
           if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
           getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
           if (casters) teamMesh(c.team, c, true);
+          if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
           // What the LAUNCH first draws (FieldLod): the planted field wheels and
           // the exhaust flame quad — each was built on its first draw, after the
           // lights, in the frame the field pulled away. (The caster silhouette is
@@ -492,6 +493,7 @@ const CarDraw = (function () {
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
         const at = performance.now(), c = step.caster || step;
         try {
+          if (step.caster && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c, visualKey);
           if (step.caster) teamMesh(c.team, c, true);
           else {
             if (c.isPlayer) {
@@ -594,31 +596,52 @@ const CarDraw = (function () {
     const cockpitBodyOrder = [];
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
-    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
     function buildPendingCockpitBody() {
       const team = _cbTeam, liv = deps.resolveLivery(team);
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
           parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
     }
-    function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
+    // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine
+    // cover/airbox, fin, rear wing) as a depth silhouette minus only what made
+    // #840's blobs — no driver (helmet crown ~0.83 m), and the player's OWN halo
+    // in place of the factory hoop and its head-surround attachments (Car3D
+    // ownHalo). Casting the cockpit build itself (no wheels, no rear assembly)
+    // left a hollow, wheelless half-car on the road.
+    function buildPendingCockpitShadow() {
+      const team = _cbTeam, liv = deps.resolveLivery(team);
+      return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
+        { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
+          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
+    }
+    function cockpitKey(team, car, visualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
       const body = CockpitOpts.body();
       if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
         _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+        _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key
         _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
       }
       _cbTeam = team;
+    }
+    function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
+      cockpitKey(team, car, visualKey);
       return putBoundedMesh(cockpitBodies, cockpitBodyOrder, _cbKey, buildPendingCockpitBody, COCKPIT_BODY_CACHE_MAX);
     }
+    function cockpitShadowMesh(team, car, visualKey = playerVisualKey) {
+      cockpitKey(team, car, visualKey);
+      return putBoundedMesh(cockpitBodies, cockpitBodyOrder, _cbShKey, buildPendingCockpitShadow, COCKPIT_BODY_CACHE_MAX);
+    }
     // THE PLAYER'S SHADOW CASTER IN A FIRST-PERSON VIEW (ShadowPass.resolvePlayer,
-    // deps.cockpitCaster): in cockpit, helmet and visor, the mesh and matrix the
-    // car loop's cockpit branch draws the body with — the same mode test, and
-    // GameCams.cockpitViewmodelAxes over the same inputs (the player's road
-    // sample and interpolated yawVis, the final eye, the mode's seat), written
-    // into `out`. null in every other view: the exterior silhouette casts.
+    // deps.cockpitCaster): in cockpit, helmet and visor, cockpitShadowMesh at the
+    // matrix the car loop's cockpit branch draws the body with — the same mode
+    // test, and GameCams.cockpitViewmodelAxes over the same inputs (the player's
+    // road sample and interpolated yawVis, the final eye, the mode's seat),
+    // written into `out`, so the body's self-shadow lines up with the body the
+    // player sees. null in every other view: the exterior silhouette casts.
     // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
     function cockpitCaster(c, smp, yv, out) {
@@ -630,7 +653,7 @@ const CarDraw = (function () {
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
       out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
       out[12] = _ckP[0]; out[13] = _ckP[1]; out[14] = _ckP[2]; out[15] = 1;
-      return cockpitBodyMesh(c.team, c);
+      return cockpitShadowMesh(c.team, c);
     }
     // Hub transform (translate + upscale) + scratch matrices for the steering roll
     // and per-element LCD offsets. The rig z is NOT cosmetic: the cockpit near
@@ -1220,7 +1243,7 @@ const CarDraw = (function () {
     }
 
     return (_instance = {
-      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitCaster,
+      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
