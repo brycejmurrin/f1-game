@@ -105,8 +105,24 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
   const experience = read("css/experience.css");
-  assert.match(experience, /#menu-brand \{[\s\S]*var\(--scrim-heavy\)/,
-    "live Home brand sits on a --scrim so 3D garage boards cannot bleed through the wordmark");
+  assert.match(experience, /#menu-brand \{[\s\S]*background:\s*var\(--scrim-heavy\)/,
+    "live Home brand sits on a solid --scrim-heavy plate so bright liveries cannot wash the wordmark");
+  assert.doesNotMatch(experience, /#menu-brand \{[\s\S]*?background:\s*linear-gradient\([^;]*transparent\)/,
+    "brand plate must not fade to transparent over Ferrari white / SIDE wordmarks");
+  assert.match(
+    experience,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) \{\s*background:\s*linear-gradient\(90deg,\s*color-mix\(in oklab, var\(--carbon\)/,
+    "live Home wash starts on --carbon/--scrim, never a clear left edge",
+  );
+  assert.doesNotMatch(experience, /linear-gradient\(90deg,\s*transparent/,
+    "no home-scene wash may start transparent — that is the Ferrari overexposure");
+  assert.match(
+    experience,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\)::before/,
+    "upper-left veil covers the stacked D_WORD team banners without a second badge node",
+  );
+  assert.match(experience, /#menu-brand :is\(#soundbtn, #disclaimer\) \{[\s\S]*background:\s*var\(--carbon\)/,
+    "Sound and the disclaimer stay on solid --carbon over a bright livery");
   assert.match(experience, /body:has\(#home-motion:not\(\[hidden\]\)\) #install-chip/,
     "INSTALL APP lifts above ANIMATE BACKGROUND instead of sharing the same corner");
 });
