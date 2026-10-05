@@ -174,7 +174,11 @@ const STRIP = {
   // → elevation on the real corners 280743/258460 (2026-10-04: the crest
   //   moved from arc 0.12 to Massenet/Casino, so props re-seat on new ground
   //   and the scenery's height-gated emitters place fewer prims)
-  monaco: { before: 280743, after: 258460 },
+  // → barrier body guard (2026-10-05): 4 wall nodes whose coping the guard
+  //   culled alone now keep it (coping flush on the road side, +48 emitted,
+  //   +47 after the strip); the 7 guardrails and 68 walls that were wholly
+  //   culled already emitted nothing and are now counted as suppressed
+  monaco: { before: 280791, after: 258507 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -195,7 +199,9 @@ const STRIP = {
   //   so corner board 7 and its footing stand at Lesmo 2's apex)
   // → run-off clearance (2026-10-05): the lap-wide foliage exclusion and the
   //   zone setbacks pull trees out of the run-off, 306798/280552
-  monza: { before: 306798, after: 280552 },
+  // → barrier body guard (2026-10-05): emission unchanged; the re-shaped
+  //   wall coping (flush road side, far-side overhang) strips 2 more, measured
+  monza: { before: 306798, after: 280550 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
