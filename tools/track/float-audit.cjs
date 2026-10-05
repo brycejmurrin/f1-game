@@ -452,6 +452,10 @@ function audit(id) {
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("usage: node tools/track/float-audit.cjs <trackId>|--all [--json] [--all-clusters] [--top N]\n  Exhaustive floating-scenery detector: builds the circuit in a VM and reports prop clusters above/under the ground.");
+  process.exit(0);
+}
 const asJson = args.includes("--json");
 const allClusters = args.includes("--all-clusters");
 const topN = (() => { const i = args.indexOf("--top"); return i >= 0 ? +args[i + 1] : 6; })();

@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright failures caused by bumping version.json mid-run in Apex 26."
+description: "Use when editing sw.js, version.json, PWA offline install, stale shell, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright hangs from a mid-run version.json bump."
 ---
 
 # PWA cache and service worker
@@ -25,6 +25,8 @@ deployed build is newer reloads once with `?b=<build>` (hash and query kept;
 `sessionStorage` `apex26.shellReloadedTo` stops loops). It also registers
 `sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
 Stale installed shell = this guard did not fire or `version.json` did not move.
+The deploy stamps the build (`2000 + commit count`, `pages.yml`) into `version.json` and the meta; the
+committed numbers are not what is live. Live check: `tools/ci/pages-live-sha.sh` / **deploy-research**.
 
 **In-session generation check.** A registration's `scriptURL` is not its cache
 identity: the browser can install changed worker bytes at the same URL.

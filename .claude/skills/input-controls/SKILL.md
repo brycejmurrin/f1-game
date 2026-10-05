@@ -46,12 +46,14 @@ Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`
 applied through `Input.setPadDeadzone` / `setPadSaturation` (`js/input/input.js`,
 `padAxisShape`): store `padDeadzone` (slider `pm-paddz`, 0-30 %,
 **default 5**, was a fixed 0.14), `padSaturation` (`pm-padsat`, default 0),
-per-pad centre via `calibratePad()` / `padRest()`, stored as `padRest` and
+per-pad centre via `calibratePad()` / `padRest()` (the CALIBRATE STICK button `pm-pad-calib`
+already exists; it refuses a stick held past 0.5, `padAxisShape` subtracts the rest BEFORE the
+dead zone, and an axis-map change resets it), stored as `padRest` and
 reloaded through `setPadRest()` by `js/ui/key-binds.js`. `padCurve` (`pm-padcurve`) is
 the separate response curve. Menu sticks use fixed `PAD_NAV_DEADZONE` 0.22 — do
 not conflate. Tilt dead zone is a different, fixed 2.5 deg. Pins: node,
 `tests/unit/ui-improve-pass.test.mjs` "stick dead zone and saturation are
-adjustable" (`node --test` on that file); browser, `tests/specs/gamepad.spec.js`
+adjustable" (`node --test` on that file) and `tests/unit/key-binds.test.mjs` (calibrate persists, still full lock both sides); browser, `tests/specs/gamepad.spec.js`
 "centre dead zone" (0.03 -> 0, 0.07 ramps) and `sliders.spec.js`. A new default
 reaches fresh installs only; a stored `padDeadzone` needs a STEER_SCHEMA step.
 

@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit screenshots (survey-ui-matrix) or a live canvas (mcp-probe)."
+description: "Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
 ---
 
 # Headless Playwright probing
@@ -41,11 +41,19 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/shot/apex-eval.mjs monaco "a.camera()"
 node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
+# apex-eval/flicker-gate default to TLX; pin a renderer with --backend three|webgl2|webgpu
+# (apex-eval) / --backend three (flicker-gate; default webgl2 = GLX). A GLX.*() read under
+# the TLX default answers for TLX. shot.mjs has NO --backend (boots the TLX default) and the
+# apex_eval/apex_shot MCP wraps pass none.
+node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
 node tools/shot/apex-capture.mjs cameras [track] [outdir]
 node tools/shot/apex-capture.mjs modes   [outdir]
 node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
+
+# SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
+node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
 
 # ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
 node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
@@ -75,9 +83,15 @@ node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] \
 `<5KB` (blank) and `free-cam inactive`. Find `frac` first (no browser: `turns:`
 in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
 
+`trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
+`turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
+racing 0.449-0.524) or `flicker-gate.mjs --list` (sites carry racing/scenery fracs).
+
 **Before/after:** the tools serve the working tree, so shoot A to `artifacts/…/before.png`,
 apply the edit (or `git stash`), shoot B to `…/after.png` with the SAME args, then
-compare. Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
+compare. Per renderer (GLX AND TLX) use `backend-compare.mjs` once per side with
+`--out`/`--label` (its default label rounds frac to a percent, so two close fracs collide).
+Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
 
 ## Motion and profiling (still this harness)
 
@@ -105,7 +119,7 @@ both references say what the numbers mean before you A/B on them.
   [references/car-studio.md](references/car-studio.md), preset views and the
   `CARVIEW` API in
   [references/car-viewer-presets.md](references/car-viewer-presets.md).
-- **Camera semantics** — the 13 built-in modes, `orbit()` vs `snapCam()` (the
+- **Camera semantics** — the 20 built-in modes, `orbit()` vs `snapCam()` (the
   trap that costs a shot), `camState()`/`viewState()` →
   [references/cameras.md](references/cameras.md), free-cam table and framing
   recipes in

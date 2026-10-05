@@ -25,10 +25,14 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/shot/apex-eval.mjs <trackId> "<expr>" [--raw] [--backend three|webgl2|webgpu]
+  \`a\` is window.__apex inside the expr (async is awaited); default output is shape-compacted, --raw dumps it.
+  Boots its own static server + Chromium. Examples in the header of this file.`);
 const raw = argv.includes("--raw");
 // WHICH RENDERER ANSWERED. This tool pinned no backend, so it booted whatever
 // `backendPreference()` defaults to — and that default is now THREE (TLX), not

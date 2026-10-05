@@ -168,12 +168,17 @@ body[data-density="compact"] .dh-card {
   border-radius: var(--r-md);
 }
 body[data-density="compact"] .dh-card .sheet-head h2 { font-size: var(--fs-4); }
+/* --tap-paint, not --tap-min (css/tokens.css): on a landscape iPhone (734x343,
+   layout-audit 2026-10-05) --tap-min painted the ✕ — here and on the circuit
+   card, which shares the recipe — at 26x26 and every destination tab 26 tall.
+   --tap-paint is 52 PAINTED px on touch at every UI SIZE (56.7 at full --tap,
+   104 at 200%) and stays --tap-min with a mouse. */
 body[data-density="compact"] .dh-close {
-  width: var(--tap-min); height: var(--tap-min); min-height: var(--tap-min);
+  width: var(--tap-paint); height: var(--tap-paint); min-height: var(--tap-paint);
 }
 body[data-density="compact"] .dh-tabs { gap: var(--gap); padding: 0 var(--gap); }
 body[data-density="compact"] .dh-tab {
-  min-height: var(--tap-min); padding: 0 var(--gap); font-size: var(--fs-micro);
+  min-height: var(--tap-paint); padding: 0 var(--gap); font-size: var(--fs-micro);
 }
 body[data-density="compact"] .dh-content { padding: var(--gap); }
 body[data-density="compact"] .dh-loading,
@@ -195,17 +200,20 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   overflow-x: hidden;
   overscroll-behavior-x: auto;
   touch-action: pan-y;
-  /* Compact-size tabs in the grid, so its rows cost var(--tap-min) each
-     instead of var(--tap): the space goes to the content on a portrait phone. */
+  /* Compact-size tabs in the grid, so its rows cost var(--tap-paint) each
+     instead of var(--tap): 52 painted on touch, not 56.7 — the space goes to
+     the content on a portrait phone. */
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
 /* 7.1 fonts above is TELEMETRY, the widest label, at this padding (measured:
    91px of text at a 14px font + 2 x 4px) — the column must never be narrower
    than the label it holds. */
+/* --tap-paint, not --tap-min: the portrait tabs painted 110x38 on a 393x659
+   phone (layout-audit 2026-10-05), under the 52 touch floor. */
 body[data-shape="tall"][data-width="narrow"] .dh-tab {
   width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
-  min-height: var(--tap-min);
+  min-height: var(--tap-paint);
   font-size: var(--fs-micro);
 }
 

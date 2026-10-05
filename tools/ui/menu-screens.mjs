@@ -38,6 +38,14 @@ export const VIEWPORTS = [
       deviceScaleFactor: 2, viewport: { width: 852, height: 344 } },
     "landscape Safari with the toolbar collapsed — the shortest real viewport",
     { t: 0, r: 59, b: 21, l: 59 }],
+  // iPhone 12-14 and most Android phones in landscape: 844x390 full screen. The
+  // 852x344 / 852x393 cells above straddle it but never land ON it, and a
+  // title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here
+  // (found by hand in Chrome DevTools emulation, 2026-10-05).
+  ["ios-iphone-landscape-844", { ...devices["iPhone 15 Pro landscape"],
+      deviceScaleFactor: 3, viewport: { width: 844, height: 390 } },
+    "iPhone 12-14 / common Android landscape, full screen — 844x390",
+    { t: 0, r: 47, b: 21, l: 47 }],
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },

@@ -1,6 +1,6 @@
 ---
 name: f1-animation-cameras
-description: "Builds and validates Apex 26 animation and camera changes, including garage pit-work arrivals, Flyby, Data Hub WATCH, replay seeks and camera tuners. Use when motion, framing, shot transitions or camera controls in f1-game need improvement; exclude unrelated video editing and generic websites."
+description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, WATCH broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump. Replay snaps after a seek → replay-camera; still shots/camera modes → playwright-probe."
 ---
 
 # Animation and cameras in f1-game

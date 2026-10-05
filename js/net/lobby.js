@@ -212,7 +212,13 @@ const NetLobby = (function () {
             // host's ids, not this transport's, so the delete above missed them.
             _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
+            // …and stop ADVERTISING it: the code onConnected reopened (and its
+            // pending transport) would answer the old code and pull us back in.
+            sealRoom();
             show("pick");
+            // inviteAnother() hid these; the pick is a fresh start, as open().
+            if ($("vs-join")) $("vs-join").hidden = false;
+            if ($("vs-code-join")) $("vs-code-join").hidden = false;
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
           }
         } else {
@@ -390,13 +396,37 @@ const NetLobby = (function () {
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
           // else's bad network would be its own bug.
-          // sessions.size > 0 skips teardown() — clear codeReopen here too.
-          codeReopen = null;
+          // sessions.size > 0 skips teardown(), so the pending reopen is
+          // settled HERE: never left set (a later unrelated onConnected
+          // would reopen a dead code), but re-armed for THIS room — onJoiner
+          // closed it for the failed joiner, and only a reopen gets the
+          // guests still in it another arrival on the same code.
           clearTimeout(codeReopenTimer); codeReopenTimer = null;
+          reopenRoom(sessions.size > 0 && sessions.size < MAX_GUESTS);
           dropPending();
           if (sessions.size) { show("room"); renderRoom(); }
           else { teardown(); show("pick"); }   // leave the lobby usable, not dead
         }
+      }, 250);
+    }
+
+    // Consume codeReopen; when `ok`, reopen that code quietly in 250 ms.
+    // OWNED timer + generation guard: with a discarded handle
+    // cancel()/sealRoom() cannot stop it — and the late codeHost() begins
+    // its OWN generation, so invalidateOperations() cannot stale it
+    // either. 250 ms after leaving the lobby it would mint a fresh
+    // RTCPeerConnection and six relay sockets — the exact zombie
+    // sealRoom() exists to kill.
+    function reopenRoom(ok) {
+      const again = codeReopen;
+      codeReopen = null;
+      if (!again || !ok) return;
+      const gen = operationGeneration;
+      clearTimeout(codeReopenTimer);
+      codeReopenTimer = setTimeout(() => {
+        codeReopenTimer = null;
+        if (!operationCurrent(gen)) return;
+        codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
       }, 250);
     }
 
@@ -413,25 +443,7 @@ const NetLobby = (function () {
         if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
       });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
-      if (codeReopen && transports.size < MAX_GUESTS) {
-        const again = codeReopen;
-        codeReopen = null;
-        // OWNED timer + generation guard: with a discarded handle
-        // cancel()/sealRoom() cannot stop it — and the late codeHost() begins
-        // its OWN generation, so invalidateOperations() cannot stale it
-        // either. 250 ms after leaving the lobby it would mint a fresh
-        // RTCPeerConnection and six relay sockets — the exact zombie
-        // sealRoom() exists to kill.
-        const gen = operationGeneration;
-        clearTimeout(codeReopenTimer);
-        codeReopenTimer = setTimeout(() => {
-          codeReopenTimer = null;
-          if (!operationCurrent(gen)) return;
-          codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
-        }, 250);
-      } else {
-        codeReopen = null;
-      }
+      reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
       clearInterval(pumpTimer);
       pumpTimer = setInterval(() => {

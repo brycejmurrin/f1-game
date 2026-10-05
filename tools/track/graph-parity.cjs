@@ -89,6 +89,10 @@ function compareGeo(name, a, b) {
 
 function main({ args = process.argv.slice(2), baseRef = process.env.BASE || "HEAD",
                 explicitBase = !!process.env.BASE, materialise = materialiseBaseline, loadContext = buildContext } = {}) {
+  if (args.includes("--help") || args.includes("-h")) {
+    process.stdout.write("usage: BASE=<git-ref> node tools/track/graph-parity.cjs <id>|--all\n  TrackGraph vertex parity of the working tree against BASE (required: HEAD vs itself passes vacuously). No browser.\n");
+    return 0;
+  }
   // The default baseline is HEAD vs the WORKING TREE — meaningful only while
   // there are uncommitted engine/circuit edits. On a clean tree it diffs HEAD
   // against itself and "passes" vacuously, which has been mistaken for a real

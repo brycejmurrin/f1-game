@@ -1,6 +1,7 @@
 ---
 name: track-realism
-description: "Use when requesting reusable or parallel multi-track realism workflows. Coordinates research, geometry, scenery and models; single-circuit accuracy → survey-track."
+argument-hint: "<circuit ids…> [target year]"
+description: "Use when a reusable or parallel realism campaign spans several circuits (/track-realism spa monza silverstone): dated evidence, geometry, scenery, exclusive circuit ownership. One circuit's accuracy pass → survey-track."
 ---
 
 # Track realism campaign
@@ -11,6 +12,10 @@ captures, integration and shared-file decisions belong to the parent.
 Use `/track-realism spa monza silverstone` with an explicit target year/layout
 when known, or ask for a reusable track research and detail campaign. Start
 with one pilot, then batches of two or three circuits once the approach works.
+
+Arguments: `$ARGUMENTS` — the circuit ids (and an optional target year) typed
+after `/track-realism`; every id must be in `Tracks.LIST`. Empty → ask for the
+ids and era before step 1 rather than guessing a calendar.
 
 1. Read repository and nested circuit guidance, current briefs and source.
    Pin the starting SHA; select circuit ids, target era and 3–5 observable

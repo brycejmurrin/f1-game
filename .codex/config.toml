@@ -15,8 +15,8 @@ args = ["tools/mcp/apex-tools-mcp.sh", "serve"]
 tool_timeout_sec = 900
 
 [mcp_servers.playwright-official]
-command = "npx"
-args = ["-y", "@playwright/mcp@0.0.79"]
+command = "bash"
+args = ["tools/mcp/playwright-mcp.sh", "run"]
 startup_timeout_sec = 60
 
 [mcp_servers.chrome-devtools]

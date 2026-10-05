@@ -139,6 +139,10 @@ async function checkSteer(browser) {
 
 const CHECKS = { bank: checkBank, grip: checkGrip, roadfollow: checkRoadfollow, steer: checkSteer };
 const which = process.argv[2];
+if (which === "--help" || which === "-h") {
+  console.log(`usage: node tools/check/check-physics.mjs <${Object.keys(CHECKS).join("|")}>   (boots Chromium)`);
+  process.exit(0);
+}
 if (!CHECKS[which]) {
   console.error(`usage: node tools/check/check-physics.mjs <${Object.keys(CHECKS).join("|")}>`);
   process.exit(1);

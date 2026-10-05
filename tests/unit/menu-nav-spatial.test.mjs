@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC_PATH = path.join(ROOT, "js/ui/menu-nav.js");
@@ -34,14 +35,14 @@ function extractFn(src, name) {
   throw new Error(`unbalanced braces reading ${name}()`);
 }
 
-function loadMenuNav() {
+function loadMenuNav({ document, layer } = {}) {
   const ctx = {
     window: null,
-    document: { readyState: "loading", addEventListener() {} },
+    document: document || { readyState: "loading", addEventListener() {} },
     Log: { info() {} },
   };
   ctx.window = ctx;
-  ctx.window.UiLayers = { shown: () => true, top: () => null };
+  ctx.window.UiLayers = { shown: () => true, top: () => layer || null };
   ctx.window.Log = ctx.Log;
   ctx.window.addEventListener = () => {};
   vm.runInNewContext(SRC, ctx, { filename: "menunav.js" });
@@ -58,6 +59,62 @@ function el(id, left, top, width, height, extra = {}) {
     ...extra,
   };
 }
+
+test("MenuNav leaves owned listbox option keys to the widget without exempting unrelated buttons or grids", () => {
+  const { ownsArrows } = loadMenuNav();
+  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+  const option = { tagName: "BUTTON", dataset: { arrows: "listbox" }, getAttribute: key => key === "role" ? "option" : null,
+    closest: selector => selector === '[role="listbox"]' ? {} : null };
+  for (const key of keys) assert.equal(ownsArrows(option, key), true, key);
+  for (const key of keys) {
+    assert.equal(ownsArrows(option, key, { isTrusted: true }), true, key + " belongs to the keyboard listbox");
+    assert.equal(ownsArrows(option, key, { isTrusted: false }), key !== "ArrowUp" && key !== "ArrowDown", key + " uses the pad's axis");
+  }
+  assert.equal(ownsArrows(option, "PageDown"), false);
+  assert.equal(ownsArrows(option, "Tab"), false);
+  for (const plain of [{ ...option, dataset: {} }, { ...option, getAttribute: () => null }, { ...option, closest: () => null }]) {
+    for (const key of keys) assert.equal(ownsArrows(plain, key), false, key + " belongs to spatial navigation");
+  }
+});
+
+test("spatial entry uses the selected listbox stop; synthetic vertical keys leave and keyboard keys stay", () => {
+  const dom = makeDom({ readyState: "loading" });
+  const layer = dom.byId("overlay"), listbox = dom.makeElement("div");
+  listbox.setAttribute("role", "listbox");
+  const add = (parent, id, x, y) => {
+    const node = dom.makeElement("button"); node.id = id;
+    node._rect = { left: x, top: y, right: x + 100, bottom: y + 30, width: 100, height: 30 };
+    parent.appendChild(node); return node;
+  };
+  const above = add(layer, "above", 0, 0); above._rect.width = 300; above._rect.right = 300;
+  layer.appendChild(listbox);
+  const first = add(listbox, "first", 0, 50), selected = add(listbox, "selected", 100, 50);
+  for (const node of [first, selected]) { node.dataset.arrows = "listbox"; node.setAttribute("role", "option"); }
+  selected.tabIndex = 0; selected.setAttribute("aria-selected", "true");
+  const below = add(layer, "below", 0, 100); below._rect.width = 300; below._rect.right = 300;
+  const plainOption = add(layer, "plain-option", 0, 160); plainOption.setAttribute("role", "option");
+  const orphan = add(layer, "orphan", 0, 210); orphan.dataset.arrows = "listbox"; orphan.setAttribute("role", "option");
+  const nav = loadMenuNav({ document: dom.document, layer });
+  assert.deepEqual([...nav.items(layer)].map(node => node.id), ["above", "selected", "below", "plain-option", "orphan"]);
+  const key = (name, isTrusted) => {
+    const e = { key: name, isTrusted, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    nav.onKeyDown(e); return e;
+  };
+  above.focus(); key("ArrowDown", false);
+  assert.equal(dom.document.activeElement, selected, "the nearer unselected option is skipped on spatial entry");
+  assert.equal(key("ArrowDown", true).defaultPrevented, false, "trusted Down reaches the option handler");
+  assert.equal(dom.document.activeElement, selected);
+  key("ArrowDown", false); assert.equal(dom.document.activeElement, below, "pad Down exits the list");
+  key("ArrowUp", false); assert.equal(dom.document.activeElement, selected, "pad Up re-enters at selection");
+  key("ArrowUp", false); assert.equal(dom.document.activeElement, above, "pad Up exits above");
+
+  // Pane-scoped Home has its own candidate path; it must apply the same filter.
+  const pane = dom.makeElement("div"); pane.className = "pane"; pane.scrollHeight = 400; pane._client = 100;
+  layer.appendChild(pane); listbox.remove(); pane.appendChild(listbox); below.remove(); pane.appendChild(below);
+  below.focus(); key("Home", true); assert.equal(dom.document.activeElement, selected);
+  below.remove(); pane.insertBefore(below, listbox);
+  below.focus(); key("End", true); assert.equal(dom.document.activeElement, selected);
+});
 
 test("step() fallback order: in-band, then dx sideways, then dy wrap, then DOM wrap", () => {
   const stepSrc = extractFn(SRC, "step");

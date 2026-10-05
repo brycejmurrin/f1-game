@@ -3,6 +3,15 @@
 Load from the SKILL.md index when opening a non-catalog screen, reading a
 `dom.json`, or a swap "did nothing".
 
+## Contents
+- 1. Host + open
+- 2. DOM dump (`dom.json`)
+- 3. Hot-swap
+- 4. Screenshot
+- 5. Ship
+- Mistakes
+- Input and wait contract
+
 ## 1. Host + open
 
 `tools/ui/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
@@ -40,7 +49,7 @@ garage, `help` → howtoplay, `vs` → vsfriend.
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
 (`--click` replaces the catalog path, so include `#mb-settings`).
 Reach through the player's door. The authoritative inventory is `SCREENS`
-in `tools/ui/layout-audit.mjs`.
+in `tools/ui/menu-screens.mjs` (imported by `layout-audit.mjs`).
 
 Wait for the open transition (`opacity !== 0`, no running animations) before
 measuring. `#pmsettings` can take ~1.2 s.
@@ -73,7 +82,7 @@ node tools/ui/css-play.mjs --screen settings --css css/menus.css
 
 The tool finds the `<link rel="stylesheet">` whose href contains that path
 and sets `href` to `css/menus.css?play=<mtime>`. Same cascade / `@layer`
-order as boot. The `?v=dev` on the shell tag is left alone.
+order as boot. The shell tag is left alone ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 `--inject ".sheet{max-height:80vh}"` writes `#apex-css-play` for a snippet
 that is not a file yet. Prefer `--css` once the rule belongs in a sheet.

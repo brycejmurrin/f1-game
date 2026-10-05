@@ -7,6 +7,11 @@ This reference describes the combined parent/worker loop. All browser-backed
 commands below belong to the parent, never the fork. The track-surveyor reads
 the supplied artifacts, edits only its circuit pair and runs offline audits.
 
+## Contents
+- The loop
+- Worked example — Montreal floating trees
+- Gotchas
+
 ## The loop
 
 ### 1 · Read the brief
@@ -102,7 +107,7 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
 3. Historical edit: `flatTerrain` def flag (wide, dead-level shelf out to
    `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
    whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` (tags stay `?v=dev`).
+4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Gotchas
 

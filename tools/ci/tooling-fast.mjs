@@ -349,6 +349,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
+  // the keyed car/room/frames sequence and the tap-to-first-frame measure. VM, ~0.3 s.
+  "tests/unit/garage-prebuild.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.

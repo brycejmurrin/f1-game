@@ -25,6 +25,10 @@ absolute magnitudes.
 | `yawInertia` (`YAW_INERTIA` 0.58; 1.0 on a coarse pointer) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
 
+There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip / (1 + vStd(speed)/speedRef)`,
+so A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+moves with `frontGrip` and `yawInertia`.
+
 Boot-effective defaults come from `js/input/steer-tuning.js`
 `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) — game.js
 literals (`3.2 m` / `PACE 1.0`) are dead.
