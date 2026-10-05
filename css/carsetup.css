@@ -1351,8 +1351,12 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    that rung painted them 100x48 and 221x48 — under the 52 floor on the two
    controls a player reaches for most while the garage is open. They still
    float over the preview exactly as before; 4px more of chip costs the car
-   nothing. --tap-paint (css/tokens.css, #921) is 52 painted on touch and
-   --tap-min with a mouse; --tap is only a fallback. The camera panel's view
+   nothing. PLAIN --tap, NOT --tap-paint: #cs-stack sits outside the zoomed
+   .sheet, and --tap-paint pre-divides by --ui-scale to paint 52 INSIDE a
+   zoomed sheet — out here it painted 52 / 1.09 = 48 (layout-audit on the
+   merged tree 2026-10-05: #cs-cam 100x48, #cs-aero 221x48, both iPhone
+   viewports). Un-zoomed, --tap is the floor itself: 52 on touch, 44 with a
+   mouse. The camera panel's view
    chips are a disclosure opened and left, and stay on --chip-h. Width still
    decides their PADDING and type above; only the target floor moves here.
    docs/LAYOUT-AUDIT.md states the rule this restores: "Input modality is not
@@ -1362,7 +1366,7 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    used to name were restating a floor they already had. */
 body:not(.desktop) .cs-view-btn { min-height: var(--chip-h); }
 body:not(.desktop) #cs-cam,
-body:not(.desktop) #cs-aero { min-height: var(--tap-paint, var(--tap)); }
+body:not(.desktop) #cs-aero { min-height: var(--tap); }
 body:not(.desktop) .cs-opt-tag { font-size: var(--fs-micro); }
 body:not(.desktop) .cs-opt-desc { font-size: var(--fs-2); }
 body:not(.desktop) .cs-delta { font-size: var(--fs-micro); }
