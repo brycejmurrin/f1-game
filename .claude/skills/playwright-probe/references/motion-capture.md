@@ -38,7 +38,7 @@ Record: p90 per side (2 runs each), the commit A/B'd, the clip path.
 ## When to reach for something else
 
 - Static look / framing → **playwright-probe** (`shot.mjs`, `apex-capture.mjs`).
-- Shader / GL state → **webgl-debug**.
+- Shader / GL state → **renderer-debug**.
 - Frame-time / GC / build spikes → [perf-profile.md](perf-profile.md).
 
 Editing `js/`/`css/` needs no cache bump (`node tools/gen/gen-shell.mjs --check` only after a manifest change — [shell/cache](../../check-changes/references/bump.md)).

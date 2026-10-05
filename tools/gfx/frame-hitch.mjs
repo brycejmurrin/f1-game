@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // frame-hitch.mjs — PERIODIC frame-hitch detector for the render backends.
 // @doc Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation).
-// @skill playwright-probe / webgpu-debug
+// @skill playwright-probe / renderer-debug
 //
 // Why this and not profile-gameloop.mjs: a sampling CPU profile answers "what
 // is expensive on average". A report of "it lags every few seconds" is about

@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as GPU/shader defect is webgl-debug; adding or moving floodlight masts is scenery-dress."
+description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as GPU/shader defect is renderer-debug; adding or moving floodlight masts is scenery-dress."
 
 ---
 
@@ -36,14 +36,14 @@ before/after; don't guess from AGENTS.md.
 ## When NOT to Use
 
 - Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
-  knob). Renderer compile / GL errors → **webgl-debug** / **webgpu-debug**.
+  knob). Renderer compile / GL errors → **renderer-debug**.
 
 ```sh
 node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
-Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
+Related: **renderer-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 
