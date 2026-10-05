@@ -185,7 +185,7 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // (bandLM=1) saturates at 1; 3 is last live for the core band (bandLM>=1/3).
   assert.ok(get("daySkyBlue").max <= 3 + 1e-9,
     `daySkyBlue max ${get("daySkyBlue").max} is past 3× the peak-band clamp`);
-  // game.js: Math.min(1, floodEmitMul * factor); dusk factor tops at 0.70.
+  // Atmosphere.floodEmit: Math.min(1, floodEmitMul * factor); dusk factor tops at 0.70.
   assert.ok(get("floodEmitMul").max <= 1 / 0.70 + 0.01,
     `floodEmitMul max ${get("floodEmitMul").max} is past the min(1) emit cap at dusk 0.70`);
   // sky.js: clamp(pow(sd,5)*0.22*horizon*mieDamp*uMieScatter, 0, 1). Peak

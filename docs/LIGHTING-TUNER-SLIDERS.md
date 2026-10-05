@@ -580,7 +580,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `floodEmitMul` | LIT GEOMETRY | 0 … 1.425 | 1 | — | ✓ | game.js |
+| `floodEmitMul` | LIT GEOMETRY | 0 … 1.425 | 1 | — | ✓ | atmosphere.js |
 | `glowAmp` | EMISSIVE GLOW | 0 … 6 | 2.3 | `uGlowAmp` | ✓ | glx.js×2 |
 | `neonBoost` | NEON & LENS BLOOM | 0 … 1.5 | 0.6 | `uBloomBoost` | ✓ | glx.js×2 |
 | `cityGlowMul` | CITY SKYGLOW | 0 … 2.75 | 1 | — | ✓ | atmosphere.js×2 |

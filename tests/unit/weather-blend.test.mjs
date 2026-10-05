@@ -274,3 +274,27 @@ test("the sun is keyed by track x time of day: a weather never moves it, and the
   b.G.raceWeather = "fog"; b.ltStore.apply();
   assert.equal(b.LT.sunElev, 7.5, "and every weather at that time of day reads it");
 });
+
+// qatar-foundation.spec (2026-10-05): a night→day rebuild read lightState()
+// before the first day frame rendered — stars came from applyRaceSettings,
+// floodEmit only from the frame, so the day reported the night's 0.0858. The
+// resolve now writes floodEmit itself, from the same formula the frame calls.
+test("applyRaceSettings resolves floodEmit with the session, not on the next frame", () => {
+  const { G, atmo, LT } = boot("qatar");
+  G.raceTimeOfDay = "night";
+  atmo.applyRaceSettings();
+  const night = G._lastFloodEmit;
+  assert.equal(G.frameSky.stars, 1);
+  assert.ok(night > 0, `night floodEmit ${night} must be lit`);
+  assert.equal(night, atmo.floodEmit(G.frame.sunDir[1]), "the resolve and the frame share one formula");
+  assert.equal(night, Math.min(1, LT.floodEmitMul * 0.78));
+
+  G.raceTimeOfDay = "day";
+  atmo.applyRaceSettings();   // no frame in between, exactly the spec's window
+  assert.equal(G.frameSky.stars, 0);
+  assert.equal(G._lastFloodEmit, 0, "day must not inherit the night's prop emissive");
+
+  G.raceTimeOfDay = "default"; G.track.def.night = true;   // a night circuit's default session is night
+  atmo.applyRaceSettings();
+  assert.ok(G._lastFloodEmit > 0);
+});
