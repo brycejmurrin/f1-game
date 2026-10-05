@@ -72,9 +72,14 @@
 
       const openParkland = (s) =>
         (s >= 0.19 && s <= 0.28) || (s >= 0.36 && s <= 0.42) || (s >= 0.58 && s <= 0.66);
+      // Ascari Sopraelevata flyover + banking ruin — keep trees out of the
+      // concrete (clip-audit severe cone×box at ~0.70 / 0.74).
+      const flyoverClear = (s) => s >= 0.685 && s <= 0.775;
       every(24, (k) => {
         const h = hash(k * 31);
-        const thin = openParkland(k / n);
+        const s = k / n;
+        if (flyoverClear(s)) return;
+        const thin = openParkland(s);
         if (h < (thin ? 0.78 : 0.08)) return;
         const side = h < 0.5 ? -1 : 1;
         stonePine(k, side, 10 + h * 6, 15 + h * 6, h < 0.3 ? PINE_D : PINE,
@@ -85,7 +90,9 @@
       // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
       every(28, (k) => {
         const h = hash(k * 53 + 9);
-        const thin = openParkland(k / n);
+        const s = k / n;
+        if (flyoverClear(s)) return;
+        const thin = openParkland(s);
         if (h < (thin ? 0.80 : 0.15)) return;
         const side = h < 0.5 ? -1 : 1;
         tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
@@ -94,7 +101,9 @@
       // Rank C — set-back taller pines (deep-park wall).
       every(36, (k) => {
         const h = hash(k * 41 + 3);
-        const thin = openParkland(k / n);
+        const s = k / n;
+        if (flyoverClear(s)) return;
+        const thin = openParkland(s);
         if (h < (thin ? 0.82 : 0.20)) return;
         const side = h < 0.5 ? -1 : 1;
         const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
@@ -104,7 +113,9 @@
       // Rank D — outermost broadleaf rank blending to backdrop.
       every(55, (k) => {
         const h = hash(k * 67 + 17);
-        const thin = openParkland(k / n);
+        const s = k / n;
+        if (flyoverClear(s)) return;
+        const thin = openParkland(s);
         if (h < (thin ? 0.85 : 0.35)) return;
         tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
         if (!thin && h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
@@ -113,6 +124,7 @@
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
+        if (flyoverClear(k / n)) return;
         bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
              h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
         if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
@@ -137,12 +149,15 @@
       });
 
       // ── Tribuna Centrale — wave-3 hero: stepped grey-blue slabs + red trim ─
-      // Research: stepped stack of long grey-blue boxes [0.55,0.58,0.62] with a
-      // red trim row. The crimson grandstandEx below keeps crowd/roof mass; this
-      // atomic facade is the Italian-park identity read from the pit straight.
+      // Research: covered main grandstand on the LEFT of the start/finish,
+      // mid-straight, facing the grid (Oversteer48 / Trackside Seats Centrale).
+      // Gap was 12 with onTrack margin 28 — centre at hw+12 sat inside hw+28 so
+      // the required group never called modelGroup (silent skip, no diagnostic).
+      // Gap 22 / margin 10 clears the road and seats beside grandstandEx@18.
+      // https://oversteer48.com/monza-grandstand-1-centrale/
       {
-        const a = anchor(K(0.005), -1, 12);
-        if (!onTrack(a.c[0], a.c[2], 28)) {
+        const a = anchor(K(0.005), -1, 22);
+        if (!onTrack(a.c[0], a.c[2], 10)) {
           const b = [a.r, a.u, a.t];
           const GREY_A = [0.55, 0.58, 0.62], GREY_B = [0.50, 0.53, 0.58], GREY_C = [0.46, 0.49, 0.54];
           const RED_TRIM = [0.82, 0.14, 0.14];
@@ -191,12 +206,8 @@
 
       {
         const winLit = [0.98, 0.88, 0.52];  // warm amber glow
-        const gsA = anchor(K(0.005), -1, 17.5);
-        // Upper window band
-        addBox(out, vadd(gsA.c, gsA.u, 10.5), [0.22, 1.6, 158], winLit, [gsA.r, gsA.u, gsA.t]);
-        // Lower window band
-        addBox(out, vadd(gsA.c, gsA.u, 5.5),  [0.22, 1.2, 158], winLit, [gsA.r, gsA.u, gsA.t]);
-
+        // Main Tribuna facade is now monza-tribuna-centrale — window bands here
+        // shared its plane (coplanar 101 m²). Keep secondary stands only.
         const gsB = anchor(K(0.955), -1, 17.5);
         addBox(out, vadd(gsB.c, gsB.u, 10.0), [0.22, 1.4, 108], winLit, [gsB.r, gsB.u, gsB.t]);
 
@@ -210,64 +221,78 @@
         building(K(s), 1, 14, 16, 9, 11,
           { kind: "chevron", wall: pitWall, window: [0.30, 0.34, 0.40], floor: 4.5, roof: true });
       }
-      // New permanent tensile roofing structure over the pit building.
-      // Atomic hero group: preflight the complete 72 m footprint before emitting
-      // any roof geometry, so a foldback can never leave a partial canopy.
+      // New permanent tensile roofing — hospitality terrace cue behind the
+      // engine pit complex (MonzaNet: 4,500 sq m terrace over the pit building).
+      // Was s=0.99 gap=18 len=72: modelGroup preflight → "superseded by the pit
+      // complex" (keep≈14 at 0.99, keep≈30 from 0.995; the 72 m span reached the
+      // wide keep). Seat at 0.975 / gap 26 / 40 m so the footprint stays in the
+      // keep=14 band and outside the garages — visible from Tribuna, not inside
+      // the pits. Columns live INSIDE the group so ground-audit BFS reaches grade
+      // (a floating roof alone was unsupported). Same Jerez Ovni pattern.
       {
-        const aPit = anchor(K(0.99), 1, 18);
-        const canopyCenter = vadd(aPit.c, aPit.u, 10.7);
+        const aPit = anchor(K(0.975), 1, 26);
+        const b = [aPit.r, aPit.u, aPit.t];
         modelGroup("monza-pit-canopy", {
-          center: canopyCenter,
-          size: [5.4, 1.3, 72],
-          basis: [aPit.r, aPit.u, aPit.t],
+          center: vadd(aPit.c, aPit.u, 6.0),
+          size: [5.4, 12, 40],
+          basis: b,
         }, (stage) => {
-          addBox(stage, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 72],
-            [0.86, 0.84, 0.80], [aPit.r, aPit.u, aPit.t]);
-          addBox(stage, vadd(aPit.c, aPit.u, 10.2), [4.8, 0.25, 70],
-            [0.96, 0.88, 0.56], [aPit.r, aPit.u, aPit.t]);
+          stage._mat = MAT.METAL;
+          for (const t of [-14, -5, 5, 14]) {
+            const foot = vadd(aPit.c, aPit.t, t);
+            // Embed into the roof slab so ground-audit BFS links foot → deck.
+            addCyl(stage, foot, 0.35, 11.2, [0.72, 0.70, 0.68], 8, b);
+          }
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(aPit.c, aPit.u, 11), [5.2, 0.8, 40],
+            [0.86, 0.84, 0.80], b);
+          addBox(stage, vadd(aPit.c, aPit.u, 10.2), [4.8, 0.25, 38],
+            [0.96, 0.88, 0.56], b);
+          stage._mat = 0;
         }, { required: true });
-
-        // Terrain-anchored columns remain wholly behind the pit building.
-        for (let j = 0; j < 4; j++) {
-          const s2 = 0.965 + j * 0.025;
-          const a2 = anchor(K(s2), 1, 16);
-          addCyl(out, a2.c, 0.35, 9, [0.72, 0.70, 0.68], 8, null);
-        }
       }
       // ── Slim white podium tower + red cap — wave-3 hero ────────────────────
-      // Research: pit wall + tall slim white box [0.90,0.90,0.88] with red cap.
-      // Replaces the generic tower() so the pit-straight silhouette is Monza.
+      // Research: pit-side silhouette opposite Tribuna (docs/tracks/monza.md).
+      // Gap 13 / onTrack(10) was always true — pit keep at the line is ~30 m, so
+      // the required group never ran (silent skip). Gap 36 clears keep≈30.1 and
+      // sits inside the museum hall at gap 40 (ceremony tower, not the hall).
+      // Continuous shaft + overlapping cap/mast (Imola tower pattern) so
+      // ground-audit BFS does not strand the crown as unsupported.
       {
-        const a = anchor(K(0.0), 1, 13);
-        if (!onTrack(a.c[0], a.c[2], 10)) {
+        const a = anchor(K(0.0), 1, 36);
+        if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const WHITE = [0.90, 0.90, 0.88], RED_CAP = [0.78, 0.14, 0.12];
           const GLASS = [0.55, 0.72, 0.88];
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const baseY = Number.isFinite(gy) ? gy : a.c[1];
+          const base = [a.c[0], baseY, a.c[2]];
           modelGroup("monza-podium-tower", {
-            center: vadd(a.c, a.u, 24), size: [8, 50, 8], basis: b,
+            center: vadd(base, a.u, 24), size: [8, 52, 8], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            // Slim shaft — ~46 m, slightly tapered via two stacked boxes.
-            addBox(stage, vadd(a.c, a.u, 18), [5.6, 36, 5.6], WHITE, b);
-            addBox(stage, vadd(a.c, a.u, 40), [4.8, 10, 4.8], WHITE, b);
-            // Observation deck band with cool glass.
+            // Continuous shaft from grade — no inter-storey air gap.
+            addBox(stage, vadd(base, a.u, 22), [5.6, 44, 5.6], WHITE, b);
+            addBox(stage, vadd(base, a.u, 40), [4.8, 12, 4.8], WHITE, b);
             stage._mat = MAT.GLASS;
-            addBox(stage, vadd(a.c, a.u, 36), [6.2, 3.2, 6.2], GLASS, b);
-            // Red cap + mast.
+            addBox(stage, vadd(base, a.u, 36), [6.2, 3.2, 6.2], GLASS, b);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(a.c, a.u, 46.2), [6.4, 1.4, 6.4], RED_CAP, b);
-            addCyl(stage, vadd(a.c, a.u, 47.0), 0.22, 8, [0.55, 0.56, 0.60], 5, b);
-            addBox(stage, vadd(a.c, a.u, 55.2), [0.9, 0.5, 0.9], RED_CAP, b);
+            // Cap overlaps shaft top (was 0.5 m air gap → unsupported crown).
+            addBox(stage, vadd(base, a.u, 45.4), [6.4, 1.6, 6.4], RED_CAP, b);
+            addCyl(stage, vadd(base, a.u, 45.0), 0.22, 9.5, [0.55, 0.56, 0.60], 5, b);
+            addBox(stage, vadd(base, a.u, 54.2), [0.9, 0.6, 0.9], RED_CAP, b);
+            stage._mat = 0;
           }, { required: true });
         }
       }
       // Podium base platform (marble-look step for award ceremony).
+      // Gap 32 — clear of the tower shaft at 36 (shared vertical face was a
+      // flatCoplanar hit against the required modelGroup).
       {
-        const aPod = anchor(K(0.0), 1, 11);
-        if (!onTrack(aPod.c[0], aPod.c[2], 8)) {
-          addBox(out, vadd(aPod.c, aPod.u, 1), [14, 0.8, 12], [0.88, 0.88, 0.90], [aPod.r, aPod.u, aPod.t]);
-          // Low pit-wall strip in front of the podium.
-          addBox(out, vadd(aPod.c, aPod.u, 0.55), [1.2, 1.1, 28], [0.86, 0.86, 0.84],
+        const aPod = anchor(K(0.0), 1, 32);
+        if (!onTrack(aPod.c[0], aPod.c[2], 6)) {
+          addBox(out, vadd(aPod.c, aPod.u, 1), [10, 0.8, 12], [0.88, 0.88, 0.90], [aPod.r, aPod.u, aPod.t]);
+          addBox(out, vadd(aPod.c, aPod.u, 0.55), [1.2, 1.1, 20], [0.86, 0.86, 0.84],
             [aPod.r, aPod.u, aPod.t]);
         }
       }
@@ -278,9 +303,18 @@
       // Pit-straight furniture: armco both sides, debris fence behind left stand.
       guardrail(0.93, 0.07, 1, 3.5, [0.85, 0.85, 0.88]);
       fence(0.95, 0.06, -1, 8, 4, [0.74, 0.76, 0.80]);
-      // Sponsor billboards lining the main straight.
-      for (const s of [0.94, 0.97, 0.015, 0.04]) billboard(K(s), -1, 7, 11, 4.5, [0.92, 0.88, 0.30]);
-      for (const s of [0.95, 0.03]) billboard(K(s), 1, 26, 12, 5, [0.88, 0.84, 0.80]);
+      // Hoarding panels on grounded plinths (billboard() posts were unsupported
+      // after pit/tribuna reseats — panels hung with no footing).
+      for (const [s, side, gap] of [
+        [0.94, -1, 12], [0.97, -1, 12], [0.015, -1, 14], [0.04, -1, 14],
+        [0.95, 1, 26], [0.03, 1, 36],
+      ]) {
+        const a = anchor(K(s), side, gap);
+        if (onTrack(a.c[0], a.c[2], 6)) continue;
+        addBox(out, vadd(a.c, a.u, 0.4), [0.8, 0.8, 3.2], [0.55, 0.55, 0.52], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 3.2), [0.35, 4.8, 10],
+          side < 0 ? [0.92, 0.88, 0.30] : [0.88, 0.84, 0.80], [a.r, a.u, a.t]);
+      }
 
       along(0.93, 0.07, 28, (k) => {
         for (const side of [-1, 1]) {
@@ -590,11 +624,8 @@
         }
       }
 
-      // 8d. Italian tifosi atmosphere — red banners near the start/finish.
-      billboard(K(0.01), 1, 32, 16, 7, [0.92, 0.14, 0.12]);
-      billboard(K(0.02), 1, 32, 16, 7, [0.92, 0.14, 0.12]);
-      billboard(K(0.005), 1, 30, 15, 6, [0.94, 0.18, 0.16]);
-      billboard(K(0.01), -1, 28, 12, 8, [0.90, 0.12, 0.10]);
+      // 8d. (tifosi banner boards removed — coplanared with facing grandstand
+      // crowd banks and left unsupported panels before the plinth rewrite.)
 
       // 8e. Pine silhouette ring — adds natural texture to near canopy.
       for (let i = 0; i < 26; i++) {
@@ -634,7 +665,9 @@
         cypress(K(s), 1, 46 + (i % 2) * 3, 15 + hash(i * 9) * 5, CYP);
       }
       // Cypress rank punctuating the pit-straight backdrop and Parabolica bank.
-      for (const [s0, side, gap] of [[0.955, -1, 30], [0.02, 1, 40], [0.90, 1, 34]]) {
+      // Pit-straight row was gap 40 at s=0.02 — clipped structures (clip-audit
+      // severe cypress×box @frac 0.026). Push to 48 / skip the Rettifilo mouth.
+      for (const [s0, side, gap] of [[0.955, -1, 30], [0.028, 1, 48], [0.90, 1, 34]]) {
         for (let i = 0; i < 5; i++)
           cypress(K(s0 + i * 0.006), side, gap + (i % 2) * 4,
                   14 + hash(i * 5 + s0 * 50) * 6, CYP);
@@ -652,7 +685,7 @@
         tieredBowl(s - half, s + half, side, gap, {
           tiers, tierDepth: 5.6, base: 3, rise: 3.3,
           shell: SHELL_SETS[livery] || SHELL_SETS.concrete,
-          crowd: TIFOSI, density: 0.55, roof: true, roofCol: [0.19, 0.19, 0.23],
+          crowd: TIFOSI, density: 0.55, roof: false,
           step: 11,
         });
       };
