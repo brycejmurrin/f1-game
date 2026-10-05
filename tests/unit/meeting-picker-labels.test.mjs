@@ -30,6 +30,11 @@ function meetingPickerOptions(ms) {
   });
 }
 
+test("the hub panel drops native titles on scroll", () => {
+  assert.match(HUB, /contentEl\.addEventListener\("scroll"/);
+  assert.match(HUB, /querySelectorAll\("\[title\]"\)/);
+});
+
 test("hub.js still hosts meetingPickerOptions with circuit + date disambiguation", () => {
   assert.match(HUB, /function meetingPickerOptions\s*\(/);
   assert.match(HUB, /m\.circuit && label\.indexOf\(m\.circuit\) < 0/);
@@ -57,6 +62,7 @@ test("duplicate meeting names get a date; unique names stay short", () => {
 test("data hub tabs can shrink to scroll and wrap when height allows", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
   assert.match(css, /\.dh-tabs\s*\{[^}]*min-width:\s*0/, "tab strip shrinks inside the overflow-hidden card");
-  assert.match(css, /body:not\(\[data-density="compact"\]\) \.dh-tabs\s*\{[^}]*flex-wrap:\s*wrap/, "non-compact tabs wrap so EXPORT stays a destination");
+  assert.match(css, /\.dh-tabs\s*\{[^}]*flex-wrap:\s*wrap/, "tabs wrap so EXPORT stays a destination");
+  assert.doesNotMatch(css, /\.dh-tabs\s*\{[^}]*flex-wrap:\s*nowrap/, "a nowrap strip clips EXPORT on the 760px card");
   assert.match(css, /\.dh-pick-fields\s*\{[^}]*flex-direction:\s*column/, "GP + session stack so the meeting label is not clipped");
 });

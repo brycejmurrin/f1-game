@@ -118,33 +118,19 @@ body[data-width="wide"][data-density="normal"] .dh-card {
 }
 .dh-close:active { color: var(--text); }
 
-/* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
-   declarations decide whether a thumb-drag actually pans it, and this strip had
-   neither — while the three other strips in the app (the garage's category rail,
-   the tuner's chips in both its tiers) had one or both. Four hand-rolled copies
-   of one pattern, disagreeing.
-   `touch-action: pan-x` claims the horizontal gesture. Without it the browser is
-   free to give a diagonal drag to an ancestor, so the strip feels dead or the
-   panel behind it moves instead.
-   `overscroll-behavior-x: contain` stops a flick past the last chip from
-   CHAINING outward — and on iOS the thing it chains into is the back-navigation
-   gesture, so overscrolling the tab strip can leave the page. That is the worst
-   failure mode any of these four can have and it was on the widest screen in the
-   app.
-   Neither is visible to the layout audit: this is behaviour, not geometry, and
-   nothing about the boxes is wrong. tests/unit/scroll-strips.test.mjs is what
-   keeps the four in step from here. */
+/* Destinations wrap. A nowrap strip + overflow:hidden card clipped EXPORT
+   to EXPOR… on the 760px desktop card (WATCH & DRIVE is the long label).
+   Year chips (`.dh-pick-years`) stay the hub's sideways strip. */
 .dh-tabs {
   display: flex; gap: calc(var(--gap) * 0.5); padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
-  /* min-width:0: the card is overflow:hidden and this strip is a column
-     flex child. Without the 0 floor it grows to the seven labels, the card
-     clips EXPORT to EXPOR…, and ScrollFade never sees an x-scroller. */
   min-width: 0; max-width: 100%;
-  overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overscroll-behavior-x: auto;
+  touch-action: pan-y;
   scrollbar-width: none;
-  flex-wrap: nowrap;
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
 .dh-tab {
@@ -207,15 +193,6 @@ body[data-density="compact"] .dh-race-sub {
    is scarce there, not width). Uses body[data-shape="tall"] (zoom-corrected,
    set by SheetShape classifyBody) instead of @media (orientation: portrait)
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
-/* Height is available: wrap so EXPORT is a destination, not a fade. Short
-   landscape (compact+wide) keeps the sideways strip; min-width:0 above is
-   what lets ScrollFade paint .sf-r on that remaining strip. */
-body:not([data-density="compact"]) .dh-tabs {
-  flex-wrap: wrap;
-  overflow-x: hidden;
-  overscroll-behavior-x: auto;
-  touch-action: pan-y;
-}
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(7.1 * var(--fs-micro))), 1fr));

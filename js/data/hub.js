@@ -166,6 +166,13 @@ const DataHub = (function () {
     contentEl = el("div", "dh-content");
     contentEl.id = "dh-panel";
     contentEl.setAttribute("role", "tabpanel");
+    // Native title tooltips do not dismiss on scroll — a hovered schedule
+    // row leaves its tip painted over the next one. Drop titles on the
+    // panel scroller; overflow tips re-attach on the next mouseenter.
+    contentEl.addEventListener("scroll", function () {
+      const titled = contentEl.querySelectorAll("[title]");
+      for (let i = 0; i < titled.length; i++) titled[i].removeAttribute("title");
+    }, { passive: true });
     card.appendChild(contentEl);
 
     root.appendChild(card);

@@ -460,6 +460,8 @@ test("high-scale settings and Last Race retain useful local width", () => {
   assert.equal(desk.decls.get("max-height"), "var(--dh-desk-h)");
   assert.equal(decl(data, ".dh-export-status", "font-family"), "inherit",
     "export status is the hub face, not a monospace dump");
+  assert.equal(decl(data, ".dh-tabs", "flex-wrap"), "wrap",
+    "EXPORT must wrap, not clip, on the 760px card");
 });
 
 test("compact title column scrolls instead of clipping at high UI SIZE", () => {
