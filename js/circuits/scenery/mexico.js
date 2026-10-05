@@ -763,8 +763,25 @@
       // silhouette, gear down, set far beyond the Esses/back straight so it
       // reads as a distant hazed shape crossing the sky, never as a trackside
       // prop. Flat-shaded fuselage + wing + tail — cheap, placed once.
+      // Off the RIGHT of the Esses the whole lap lies ahead: the fixed 820 m
+      // anchor crossed the infield and hung the airliner 12 m off the T6 leg
+      // (racing frac 0.523), 206 m straight over the road — an overhead
+      // prop, not the distant shape this block promises (float-audit's one
+      // mexico cluster). Walk out along the same bearing until EVERY leg of
+      // the lap is >= 400 m away (measured: ~1.3 km out, beyond T4-T6). It is
+      // still airborne by design: float-audit counts it, capped at 1 in
+      // tools/track/float-baseline.json.
       {
-        const a = anchor(K(0.20), 1, 820);           // ~700 m beyond the Esses
+        const clearOfLap = (x, z) => {
+          for (let k = 0; k < n; k++) {
+            if (Math.hypot(px[k] - x, pz[k] - z) < 400) return false;
+          }
+          return true;
+        };
+        let a = anchor(K(0.20), 1, 820);
+        for (let d = 820; d <= 2400 && !clearOfLap(a.c[0], a.c[2]); d += 40) {
+          a = anchor(K(0.20), 1, d);
+        }
         const c = [a.c[0], a.c[1] + 210, a.c[2]];     // low final-approach altitude
         const bn = [a.r, a.u, a.t];                   // normal box basis
         const bf = [a.r, a.t, a.u];                   // cylinder axis along fuselage
