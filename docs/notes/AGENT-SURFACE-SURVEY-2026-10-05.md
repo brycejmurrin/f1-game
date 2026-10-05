@@ -154,6 +154,57 @@ Not worth doing (measured or superseded): `paths:` on skills (routing eval);
 `PreCompact` hooks (covered); per-skill `hooks:` (global matcher is stronger);
 `isolation: worktree` on `track-surveyor` until two surveyors run at once.
 
+## 8. Landed the same day (branch `claude/agent-surface-survey`, PR #922)
+
+Items 1–7 of §7, in one commit after the survey:
+
+1. **apex-tools annotations + outputSchema.** `tools/mcp/apex-tools-mcp.mjs`
+   now lists every tool with `title`, the four `ToolAnnotations` hints derived
+   from the catalog (tree → read-only + idempotent; `apex_job_start`,
+   `apex_job_cancel`, `apex_verify_change_fast` not read-only; `apex_job_cancel`
+   destructive; `apex_ci_status` / `apex_who_is_on_it` open-world) and an
+   `outputSchema` (the CLI summary shape; the HUD pair adds the keys
+   `hudResult` builds). `toolResult` mirrors every object body as
+   `structuredContent`, which the spec requires once a schema is advertised.
+   `apex-tools-mcp.test.mjs` asserts the hint sets and the mirror.
+2. **Routing queries and descriptions.** 8 queries each for
+   `f1-animation-cameras` and `replay-camera` (5 fire, 3 near-misses owned by
+   `playwright-probe`, `replay-camera`/`f1-animation-cameras`, `tune-physics`,
+   `data-hub`); the three descriptions rewritten in the house form. Measured
+   on the three skills' 24 queries (`artifacts/skill-routing-subset*.json`):
+   the first, longer draft scored 22/24 and the budget-trimmed set 20/24 —
+   the two queries lost named "follow-target" and "serialized", words the trim
+   had dropped, so both went back in and the final text scored **22/24**
+   (`artifacts/skill-routing-subset-3.json`; one `claude -p` per query, so a
+   single run is a point estimate, not a rate). The 16 queries of the two new
+   files all routed correctly in that run. Every miss in every run was a
+   `track-realism` should-fire query (two of its five each time, varying among
+   queries 1, 2 and 4) — each asks to *create a reusable workflow / skill* or
+   to *set up a campaign*, and the model opened with Bash before any skill, as
+   it did in the 2026-09-30 baseline: a pre-existing meta-request miss, not a
+   description regression. The always-on budget test
+   (`agent-config.test.mjs`, 1600 words over all descriptions) caught the
+   first draft at 1744 words: the final set is 1599, with
+   `survey-ui-matrix` and `playwright-probe` trimmed by a few words each.
+3. **Skills README table** rejoined (the blank line before `replay-camera`).
+4. **`docs/AGENT-SURFACE.md`** no longer quotes a CLI count; the wrap map is the count.
+5. **TOCs** on `mcp-probe/references/recipes.md` and
+   `garage-parts-livery/references/garage-angles.md`; `mcp-probe/SKILL.md` links
+   the three `traps-*.md` slices directly, so every reference is one hop away.
+6. **Restated cache rule** trimmed to the `bump.md` link in the eight prose
+   restatements (new-track, asset-pack, survey-track, css-play, lighting-tuner ×2,
+   audio-debug); the ones left are the rule's own home (`check-changes`), the
+   service-worker skill whose subject it is, hard-reload instructions in
+   `survey-ui-matrix`, and code comments in the bake scripts.
+7. **`$ARGUMENTS`** and an `argument-hint` on `track-realism`, whose body already
+   documented `/track-realism spa monza silverstone`. `!command` injection was
+   NOT added: it executes a shell command on every skill load and nothing here
+   measures that cost yet — a measured experiment, not a fix.
+8. **Not done here**, by nature: `/doctor prompt-audit` and `/context` are
+   interactive slash commands, and `claude plugin details` takes an installed
+   plugin name, not a skills directory (`--plugin-dir` loads a plugin, not
+   `.claude/skills/`). Run the two slash commands once in a local session.
+
 ## Sources
 
 - https://code.claude.com/docs/en/skills.md — frontmatter fields, 1536-char description cap, 500-line body, `!command`, `$ARGUMENTS`, `context: fork`, `disallowed-tools`, `hooks:`

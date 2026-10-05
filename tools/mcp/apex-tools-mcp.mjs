@@ -77,6 +77,9 @@ function toolResult(body, { isError = false } = {}) {
   const result = {
     content: [{ type: "text", text: JSON.stringify(body) }],
   };
+  // MCP 2025-06-18: a tool that advertises an outputSchema MUST return
+  // structuredContent conforming to it, mirrored as serialized text (above).
+  if (body && typeof body === "object" && !Array.isArray(body)) result.structuredContent = body;
   if (isError || body.ok === false) result.isError = true;
   return result;
 }
@@ -1874,11 +1877,72 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   return runSpawn(argv, { timeoutMs, allowExit, env, signal });
 }
 
+// Tool annotations (MCP 2025-06-18 ToolAnnotations). The spec's defaults are
+// destructiveHint: true and openWorldHint: true, which misdescribe nearly every
+// wrap here; derive honest hints from the catalog instead of restating them per
+// tool. Clients treat these as untrusted hints, so they are self-description,
+// not a permission boundary — the pins and the lock remain the real guards.
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+const DESTRUCTIVE = new Set(["apex_job_cancel"]);
+const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
+function toolAnnotations(entry) {
+  const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
+  return {
+    title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "),
+    readOnlyHint: readOnly,
+    destructiveHint: DESTRUCTIVE.has(entry.name),
+    idempotentHint: readOnly || DESTRUCTIVE.has(entry.name),
+    openWorldHint: OPEN_WORLD.has(entry.name),
+  };
+}
+
+// Every result body is the CLI's JSON summary (ok / error / message / fix /
+// argv / durationMs / out) — toolResult mirrors it as structuredContent. The
+// race-HUD pair adds the keys hudResult builds.
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    error: { type: "string" },
+    message: { type: "string" },
+    fix: { type: "string" },
+    tool: { type: "string" },
+    dryRun: { type: "boolean" },
+    argv: { type: "array", items: { type: "string" } },
+    durationMs: { type: "number" },
+    out: {},
+  },
+  additionalProperties: true,
+};
+const HUD_RESULT_SCHEMA = {
+  ...RESULT_SCHEMA,
+  properties: {
+    ...RESULT_SCHEMA.properties,
+    counts: { type: "object" },
+    report: { type: "string" },
+    findingsMd: { type: "string" },
+    indexHtml: { type: "string" },
+    cell: { type: "string" },
+    shot: { type: ["string", "null"] },
+    findings: { type: "array" },
+    measurements: { type: "array" },
+    cells: { type: "array" },
+    top: { type: "array" },
+    sheets: { type: "array" },
+  },
+};
+function toolOutputSchema(entry) {
+  return /^apex_hud_(shot|survey)$/.test(entry.name) ? HUD_RESULT_SCHEMA : RESULT_SCHEMA;
+}
+
 function listTools() {
   return CATALOG.map((t) => ({
     name: t.name,
+    title: toolAnnotations(t).title,
     description: t.description,
     inputSchema: t.inputSchema,
+    outputSchema: toolOutputSchema(t),
+    annotations: toolAnnotations(t),
   }));
 }
 
