@@ -1,0 +1,1 @@
+1791223535	Cursor Agent	mixed/dynamic weather survey + MIXED arc duration cap; OWNED js/race/weather-arc.js tests/unit/weather-arc-rain.test.mjs docs/notes MIXED-DYNAMIC-WEATHER; NOT particles/game.js emit, NOT HUD, NOT spatial wetness  [cursor/mixed-weather-survey-69f2; session 745bfe796934a9aeff15a17e]
