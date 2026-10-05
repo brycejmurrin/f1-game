@@ -72,15 +72,44 @@
 
       const openParkland = (s) =>
         (s >= 0.19 && s <= 0.28) || (s >= 0.36 && s <= 0.42) || (s >= 0.58 && s <= 0.66);
+      // Run-off setback (metres beyond the road edge) for the near-road woods.
+      // Real Monza: the royal-park trees stand BEHIND the barriers, >= 15-25 m
+      // off the edge, with wide gravel/asphalt run-off at the chicanes, Curva
+      // Grande, Lesmo, Ascari and Parabolica, and nothing between the straight
+      // and Tribuna Centrale. Racing fracs (startFrac 0, no scenery shift).
+      // Infinity = no tree at all (pit straight; Parabolica outer run-off up
+      // to its arc stand and tifosi bowl).
+      const minGap = (s, side) => {
+        if (s >= 0.93 || s <= 0.07) return Infinity;                    // pit straight / stands
+        if (s >= 0.775 && s <= 0.875) return side < 0 ? Infinity : 34;  // Parabolica (outer = -1)
+        if (s >= 0.08 && s <= 0.20) return side < 0 ? 34 : 28;          // Rettifilo + Curva Grande
+        if (s >= 0.28 && s <= 0.45) return 30;                          // Roggia, Lesmo 1/2
+        if (s >= 0.60 && s <= 0.67) return 32;                          // Ascari
+        return 20;                                                      // behind the barriers
+      };
+      // gap g pushed back to the zone setback, jittered so it is no ruled line.
+      const setback = (k, side, g, h) => {
+        const m = minGap(k / n, side);
+        if (m === Infinity) return null;
+        const gap = Math.max(g, m + h * 8);
+        // A chicane (Rettifilo, Roggia, Ascari) bends its other leg back
+        // toward a gap measured off this station: drop the tree if any tarmac
+        // lies within 0.7 x the zone setback of its trunk.
+        const a = anchor(k, side, gap);
+        return a && !onTrack(a.c[0], a.c[2], m * 0.7) ? gap : null;
+      };
       every(24, (k) => {
         const h = hash(k * 31);
         const thin = openParkland(k / n);
         if (h < (thin ? 0.78 : 0.08)) return;
         const side = h < 0.5 ? -1 : 1;
-        stonePine(k, side, 10 + h * 6, 15 + h * 6, h < 0.3 ? PINE_D : PINE,
-                  { spread: 0.68 + h * 0.14, lean: 0.3 });
-        if (!thin && h > 0.25)
-          stonePine(k, -side, 11 + h * 7, 14 + h * 6, PINE, { spread: 0.70, lean: 0.25 });
+        const g1 = setback(k, side, 10 + h * 6, h);
+        if (g1 != null)
+          stonePine(k, side, g1, 15 + h * 6, h < 0.3 ? PINE_D : PINE,
+                    { spread: 0.68 + h * 0.14, lean: 0.3 });
+        const g2 = setback(k, -side, 11 + h * 7, 1 - h);
+        if (!thin && h > 0.25 && g2 != null)
+          stonePine(k, -side, g2, 14 + h * 6, PINE, { spread: 0.70, lean: 0.25 });
       });
       // Rank B — broadleaf trees interleaved with pines (oaks, maples, ashes).
       every(28, (k) => {
@@ -88,8 +117,10 @@
         const thin = openParkland(k / n);
         if (h < (thin ? 0.80 : 0.15)) return;
         const side = h < 0.5 ? -1 : 1;
-        tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
-        if (!thin && h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
+        const g1 = setback(k, side, 12 + h * 8, h);
+        if (g1 != null) tree(k, side, g1 + 4, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
+        const g2 = setback(k, -side, 13 + h * 9, 1 - h);
+        if (!thin && h > 0.48 && g2 != null) tree(k, -side, g2 + 4, 10 + h * 7, LEAF_L);
       });
       // Rank C — set-back taller pines (deep-park wall).
       every(36, (k) => {
@@ -98,42 +129,61 @@
         if (h < (thin ? 0.82 : 0.20)) return;
         const side = h < 0.5 ? -1 : 1;
         const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
-        pine(k, side, 24 + h * 18, hVar, PINE_D);
-        if (!thin && h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+        const g1 = setback(k, side, 24 + h * 18, h);
+        if (g1 != null) pine(k, side, g1 + 8, hVar, PINE_D);
+        const g2 = setback(k, -side, 30 + h * 16, 1 - h);
+        if (!thin && h > 0.55 && g2 != null) pine(k, -side, g2 + 8, 24 + h * 14, PINE_D);
       });
       // Rank D — outermost broadleaf rank blending to backdrop.
       every(55, (k) => {
         const h = hash(k * 67 + 17);
         const thin = openParkland(k / n);
         if (h < (thin ? 0.85 : 0.35)) return;
-        tree(k, h < 0.5 ? -1 : 1, 42 + h * 30, 13 + h * 10, LEAF_D);
-        if (!thin && h > 0.7) tree(k, h > 0.85 ? -1 : 1, 55 + h * 22, 11 + h * 8, LEAF);
+        const s1 = h < 0.5 ? -1 : 1;
+        const g1 = setback(k, s1, 42 + h * 30, h);
+        if (g1 != null) tree(k, s1, g1 + 16, 13 + h * 10, LEAF_D);
+        const s2 = h > 0.85 ? -1 : 1;
+        const g2 = setback(k, s2, 55 + h * 22, h);
+        if (!thin && h > 0.7 && g2 != null) tree(k, s2, g2 + 16, 11 + h * 8, LEAF);
       });
-      // Low underbrush / shrubs along the verge for ground texture.
+      const HEDGES = [
+        [0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]],
+        [0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]],
+        [0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]],
+        [0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]],
+        [0.88, 0.93, -1, 24, 5, [0.12, 0.33, 0.16]],
+        [0.19, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]],   // west park lake
+        [0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]],   // Villa lake
+        [0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]],   // Villa Reale approach
+      ];
+      // Shrubs stay off a hedge line (a bush pushed back onto one interpenetrates it).
+      const hedged = (s, side) => HEDGES.some(([s0, s1, sd]) => sd === side && s >= s0 - 0.004 && s <= s1 + 0.004);
+      // Low underbrush at the foot of the woods (was 5-10.5 m: shrubs in the
+      // run-off). Mown grass verge in front of it.
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
-        bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
-             h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
-        if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
+        const sd1 = h < 0.77 ? -1 : 1;
+        const g1 = setback(k, sd1, 6.5 + h * 4, h);
+        if (g1 != null && !hedged(k / n, sd1)) bush(k, sd1, g1 - 3, h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
+        const sd2 = h > 0.91 ? -1 : 1;
+        const g2 = setback(k, sd2, 5 + h * 3, h);
+        if (h > 0.82 && g2 != null && !hedged(k / n, sd2)) bush(k, sd2, g2 - 5.5, [0.18, 0.40, 0.17]);
       });
-      // Clipped park hedge banding through several sweeps for a manicured edge.
-      hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
-      hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
-      hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
-      hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
-      hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
-      hedge(0.19, 0.28, -1, 18, 4.5, [0.13, 0.35, 0.17]);   // west park lake
-      hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
-      hedge(0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]);   // Villa Reale approach
+      // Clipped park hedge banding through several sweeps for a manicured edge:
+      // the line the woods stand behind. The Parabolica outer one now starts
+      // past the run-off (was 0.82 at 24 m: across the gravel trap).
+      for (const [s0, s1, side, gap, hh, col] of HEDGES) hedge(s0, s1, side, gap, hh, col);
       every(14, (k) => {
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
         const h = hash(k * 13 + 7);
-        pine(k, -1, 12 + h * 2, 14 + h * 10, PINE_D);
-        pine(k,  1, 11 + h * 2, 13 + h *  9, PINE);
-        if (h > 0.55) tree(k, -1, 16 + h * 3, 13 + h * 9, LEAF_D);
-        if (h > 0.70) tree(k,  1, 15 + h * 3, 12 + h * 8, LEAF);
+        // Lesmo 2 exit -> Serraglio: woods behind the run-off (were 11-19 m).
+        const gL = setback(k, -1, 12, h), gR = setback(k, 1, 11, 1 - h);
+        if (gL != null) pine(k, -1, gL, 14 + h * 10, PINE_D);
+        if (gR != null) pine(k,  1, gR, 13 + h *  9, PINE);
+        if (h > 0.55 && gL != null) tree(k, -1, gL + 5, 13 + h * 9, LEAF_D);
+        if (h > 0.70 && gR != null) tree(k,  1, gR + 5, 12 + h * 8, LEAF);
       });
 
       // ── Tribuna Centrale — wave-3 hero: stepped grey-blue slabs + red trim ─
@@ -760,10 +810,13 @@
         const s = k / n;
         if (s < 0.08 || s > 0.18) return;
         const h = hash(k * 19 + 11);
-        stonePine(k, -1, 10 + h * 3, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
-        stonePine(k,  1, 10 + h * 3.5, 13 + h * 6, h < 0.5 ? PINE : PINE_D, { spread: 0.70 });
-        if (h > 0.40) pine(k, -1, 20 + h * 4, 18 + h * 10, PINE_D);
-        if (h > 0.50) pine(k,  1, 21 + h * 4, 17 + h * 9, PINE);
+        // Rettifilo / Curva Grande: behind the run-off (were 10-13.5 m).
+        const gL = setback(k, -1, 10, h), gR = setback(k, 1, 10, 1 - h);
+        if (gL != null) stonePine(k, -1, gL, 14 + h * 6, h < 0.4 ? PINE_D : PINE, { spread: 0.72 });
+        // (Inside stone-pine rank dropped: rank A already stands there, and its
+        // 14 m-pitch crowns abutted at one underside height — coplanar-audit.)
+        if (h > 0.40 && gL != null) pine(k, -1, gL + 10, 18 + h * 10, PINE_D);
+        if (h > 0.50 && gR != null) pine(k,  1, gR + 11.7, 17 + h * 9, PINE);
       });
 
       spectatorHill(0.08, 0.18, -1, 13, { rows: 3, rise: 1.0, depth: 1.8, density: 0.40, step: 9 });
@@ -776,7 +829,8 @@
         if (s < 0.09 || s > 0.17) return;
         const h = hash(k * 19 + 11);
         if (h < 0.5) return;
-        const gap = 28 + h * 6;
+        const gap = setback(k, -1, 28 + h * 6, h);
+        if (gap == null) return;
         const a = anchor(k, -1, gap);
         if (!a || onTrack(a.c[0], a.c[2], 8)) return;
         pine(k, -1, gap, 14 + h * 6, PINE_D);
@@ -788,8 +842,9 @@
         const lesmo = s >= 0.445 && s <= 0.525;
         if (!grande && !lesmo) return;
         const h = hash(k * 23 + 41);
-        pine(k, -1, 30 + h * 6, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
-        tree(k, 1, 32 + h * 6, 13 + h * 7, h < 0.45 ? LEAF_D : LEAF);
+        const gP = setback(k, -1, 30 + h * 6, h), gT = setback(k, 1, 32 + h * 6, h);
+        if (gP != null) pine(k, -1, gP + 4, 16 + h * 8, h < 0.5 ? PINE_D : PINE);
+        if (gT != null) tree(k, 1, gT + 4, 13 + h * 7, h < 0.45 ? LEAF_D : LEAF);
         if (lesmo && h > 0.58)
           pine(k, h > 0.78 ? -1 : 1, 38 + h * 5, 18 + h * 7, PINE_D);
       });

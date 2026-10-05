@@ -18,12 +18,14 @@
     sceneryCoordinates: "racing",
     // Keep the royal-park terrain under the deep forest ranks and hero models.
     terrainOuter: 120,
+    // Lap-wide: the generic roadside scatter plants 8-22 m off the edge, i.e.
+    // IN Monza's run-off (T1, Curva Grande, Lesmo, Ascari, Parabolica) and
+    // between the straight and Tribuna Centrale. The royal-park woods stand
+    // behind the barriers; scenery/monza.js plants them with a per-zone
+    // setback (minGap) instead. Replaces five partial windows (pits, both
+    // lakes, banking sightline, flyover) that this rule subsumes.
     dressingExclusions: [
-      { kind: "foliage", s0: 0.93, s1: 0.07 },          // pits / Tribuna Centrale
-      { kinds: ["foliage"], s0: 0.20, s1: 0.27, side: -1 }, // west lake
-      { kinds: ["foliage"], s0: 0.37, s1: 0.43, side: 1 },  // Villa lake
-      { kind: "foliage", s0: 0.49, s1: 0.59, side: -1 }, // banking ruin sightline
-      { kind: "foliage", s0: 0.69, s1: 0.77 },           // flyover approaches
+      { kind: "foliage" },
     ],
     sunAzimBias: 0.16,   // royal-park afternoon: western sun raking through the trees onto the Curva Grande
     baseHW: 8,
@@ -37,6 +39,9 @@
       ambientGround: [0.24, 0.23, 0.17],
       fog:           [0.70, 0.78, 0.82],
       grass:         [0.20, 0.44, 0.18],
+      // Verge band: mown park grass, a shade drier than the field — not the
+      // default tan dirt [0.55,0.42,0.28]. Gravel traps are authored patches.
+      runoff:        [0.27, 0.43, 0.19],
       sunDir:        [0.5, 0.55, 0.3],
     },
     // elevations/bankZones re-keyed to the start line (startFrac 0) when the
