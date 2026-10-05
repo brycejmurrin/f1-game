@@ -5,7 +5,7 @@ const SceneryStructures = (function () {
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
             indexBarrier,
-            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, post, recordBarrier,
+            addBox, addCyl, addFrustum, addPrism, RAW, blockAt, post, recordBarrier, rejRad,
             groundYAt, terrainYAt, onTrack, overheadSpan, hash, cross, norm, vadd,
             anchor, rejBox } = ctx;
     Log.info("scenery", "scenery-structures dress " + (def && def.id));
@@ -116,6 +116,29 @@ const SceneryStructures = (function () {
         fn(k, step * ds);
       }
     };
+    // THE GUARD'S OWN TEST, ON THE BODY. The centre-point onTrack() pre-checks
+    // below pass a placement whose every primitive the road guard (rejBox /
+    // rejRad, run per op inside ctx.instance) then culls — 112 walls, 28 fences
+    // and 11 guardrails fleet-wide vanished with no noteSuppressed (Monaco 68
+    // walls). Running the guard's predicate on the model's BODY, in the frame
+    // and scale ctx.instance will use, turns those into a counted suppression
+    // and keeps a top member or a panel from shipping over a missing body.
+    const bodyCulled = (p, s, lc, sz) => {
+      const x = lc[0] * s[0], y = lc[1] * s[1], z = lc[2] * s[2];
+      const c = [0, 1, 2].map((i) => p.c[i] + p.r[i] * x + p.u[i] * y + p.t[i] * z);
+      return rejBox(c, [sz[0] * Math.abs(s[0]), sz[1] * Math.abs(s[1]), sz[2] * Math.abs(s[2])], [p.r, p.u, p.t]);
+    };
+    const footCulled = (o, p, rad, h) => rejRad(o, rad, h, [p.r, p.u, p.t]);
+    // A TOP MEMBER (coping, cap) wider than its body is culled ALONE where the
+    // road reaches its overhang — 19 nodes shipped a wall or hoarding with no
+    // cap. Keep its road-side face `inset` behind the body's (1 cm by default:
+    // flush without a coplanar pair where the two overlap in height) and put
+    // the whole overhang on the FAR side; local -x*side is toward the road
+    // (anchor's r is the track's right). Returns [cx, width].
+    const flushTop = (body, top, side, inset) => {
+      const near = body / 2 - (inset == null ? 0.01 : inset), far = top / 2;
+      return [side * (far - near) / 2, far + near];
+    };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
       const a = thick || 0.5;
@@ -124,17 +147,25 @@ const SceneryStructures = (function () {
       recordBarrier(s0, s1, side, gap);
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], a / 2)) {
+        const scale = [1, 1, spacing];
+        if (onTrack(p.c[0], p.c[2], a / 2)
+            || bodyCulled(p, scale, [0, (h - 0.48) / 2, 0], [a, h + 0.32, 1])) {
+          // recordBarrier above still holds the driving limit here: the limit
+          // is the authored line (hw + gap), not a mesh — see the PR note.
           ctx.noteSuppressed("wall", `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
-        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
-          { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
+        // Exactly flush: the slab stops where the coping starts, so the two
+        // road faces meet edge to edge (no overlap to fight) and the coping
+        // still covers the slab's whole top face (hidden-faces strips it).
+        const cope = flushTop(a, a * 1.1, side, 0);
+        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}|${side}`,
+          { o: p.c, r: p.r, u: p.u, t: p.t, s: scale },
           (rec) => {
-            rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol);   // slab
-            rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
+            rec.box([0, (h - 0.48) / 2, 0], [a, h + 0.32, 1], wallCol); // slab, up to the coping
+            rec.box([cope[0], h, 0], [cope[1], 0.16, 1], capCol);      // coping, overhang on the far side
           },
           { kind: "wall", k, side });
       }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
@@ -169,7 +200,15 @@ const SceneryStructures = (function () {
       // side-independent, and the duplicate-string note above is why they keep
       // sharing one key instead of paying for a second family.
       const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`
-        + (st === "leaning" ? `|${side}` : "");
+        + (st === "leaning" || st === "hoarding" ? `|${side}` : "");
+      // The member that carries the panel, for the body pre-check.
+      const body = st === "chainlink" ? [[0, h * 0.95, 0], [0.07, 0.07, 1]]
+        : st === "panelled" ? [[0, h * 0.30, 0], [0.09, 0.14, 1]]
+          : st === "hoarding" ? [[0, h * 0.52, 0], [0.09, h * 0.95, 1]]
+            : st === "palisade" ? [[0, h * 0.55, 0], [0.06, h * 0.9, 0.09]]
+              : st === "leaning" ? [[0, h * 0.50, 0], [0.05, h * 0.80, 1]]
+                : [[0, h * 0.55, 0], [0.05, h * 0.9, 1]];
+      const hoardCap = flushTop(0.09, 0.14, side);
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -189,6 +228,13 @@ const SceneryStructures = (function () {
           ? Math.max(0, (p.c[1] - ground) / uy - 0.4) : 0;
         const postPlace = { o: vadd(p.c, p.u, -0.4 - extra),
                             r: p.r, u: p.u, t: p.t, s: [1, h + 0.4 + extra, 1] };
+        // A panel without its post hangs in the air; a post without its
+        // panel is the guard doing its job on one member, and stays.
+        if (footCulled(postPlace.o, p, 0.13, h + 0.4 + extra)
+            || bodyCulled(p, [1, 1, spacing], body[0], body[1])) {
+          ctx.noteSuppressed("fence", `fence SUPPRESSED at k=${k} side=${side}: gap=${gap} (body)`);
+          return;
+        }
         ctx.instance(postKey, postPlace,                                       // grounded footing; top unchanged
           (rec) => {
             rec.cyl([0, 0, 0], 0.13, 1, postCol, 5);
@@ -205,7 +251,7 @@ const SceneryStructures = (function () {
             } else if (st === "hoarding") {
               // Solid printed sheet — street circuits screen the public road.
               rec.box([0, h * 0.52, 0], [0.09, h * 0.95, 1], meshCol);
-              rec.box([0, h * 1.00, 0], [0.14, 0.10, 1], postCol);
+              rec.box([hoardCap[0], h * 1.00, 0], [hoardCap[1], 0.10, 1], postCol);   // cap, overhang far side
             } else if (st === "palisade") {
               for (let i = 0; i < 3; i++)
                 rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], meshCol);
@@ -229,7 +275,17 @@ const SceneryStructures = (function () {
       const postCol = (opts && opts.postCol) || [0.5, 0.5, 0.52];
       const railCol = col || [0.82, 0.82, 0.85];
       const postKey = `guardrail-post|${st}|${postCol.join(",")}`;
-      const railKey = `guardrail-rail|${st}|${railCol.join(",")}`;
+      const railKey = `guardrail-rail|${st}|${railCol.join(",")}` + (st === "safer" ? `|${side}` : "");
+      // The rail's load-bearing member (the lower rail of a double), and the
+      // post that carries it, for the body pre-check.
+      const body = st === "doubleArmco" ? [[0, 0.62, 0], [0.18, 0.38, 1]]
+        : st === "wArmco" ? [[0, 0.72, 0], [0.20, 0.44, 1]]
+          : st === "jersey" ? [[0, 0.26, 0], [0.60, 0.52, 1]]
+            : st === "cable" ? [[0, 0.58, 0], [0.07, 0.07, 1]]
+              : st === "safer" ? [[0, 0.70, 0], [0.34, 0.62, 1]]
+                : [[0, 0.7, 0], [0.18, 0.45, 1]];
+      const postH = st === "doubleArmco" ? 1.45 : st === "cable" ? 1.35 : 1.05;
+      const saferCap = flushTop(0.34, 0.38, side);
       // The on-track margin must stay BELOW the gap: a post anchored at hw+gap
       // sits (hw+gap)·cos(θ/2) from the neighbouring chord, so a fixed 0.5
       // against gap 0.5 failed for ANY curvature and dropped every post of
@@ -242,6 +298,13 @@ const SceneryStructures = (function () {
           ctx.noteSuppressed("guardrail", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
+        // The rail ships only over its own post and only with its body; a post
+        // whose rail the guard takes stands on its own, as it always did (it
+        // is the footing a neighbouring prop may already rest on).
+        const postOk = st === "jersey" || !footCulled(vadd(p.c, p.u, -0.35), p, 0.09, postH);
+        const railOk = postOk && !bodyCulled(p, [1, 1, spacing], body[0], body[1]);
+        if (!railOk) ctx.noteSuppressed("guardrail", `guardrail SUPPRESSED at k=${k} side=${side}: gap=${gap} (${postOk ? "rail" : "post"})`);
+        if (!postOk) return;
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
         // A jersey barrier has no posts at all — it is a poured profile.
         if (st !== "jersey")
@@ -249,9 +312,9 @@ const SceneryStructures = (function () {
             // Tall enough to carry its top rail: the cable's upper rope runs at
             // 0.95 m, and a 0.70 m post left it hanging 0.2 m clear of every
             // post (978 floating rails, buenos_aires/jacarepagua/kyalami).
-            (rec) => rec.cyl([0, -0.35, 0], 0.09, st === "doubleArmco" ? 1.45 : st === "cable" ? 1.35 : 1.05, postCol, 4),
+            (rec) => rec.cyl([0, -0.35, 0], 0.09, postH, postCol, 4),
             { kind: "guardrail", k, side });
-        ctx.instance(railKey,
+        if (railOk) ctx.instance(railKey,
           Object.assign({ s: [1, 1, spacing] }, place),
           (rec) => {
             if (st === "doubleArmco") {                    // old European two-rail
@@ -259,7 +322,10 @@ const SceneryStructures = (function () {
               rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
             } else if (st === "wArmco") {                  // the W cross-section
               rec.box([0, 0.72, 0], [0.20, 0.44, 1], railCol);
-              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], railCol);
+              // The bead stands 1.5 cm proud of BOTH faces, so its footprint
+              // contains the beam's: the guard can no longer cull the beam
+              // and keep a floating bead (magny_cours k~1068/1077).
+              rec.box([0, 0.72, 0], [0.23, 0.16, 1], railCol);
             } else if (st === "jersey") {                  // poured concrete profile
               rec.box([0, 0.26, 0], [0.60, 0.52, 1], railCol);
               rec.box([0, 0.72, 0], [0.30, 0.46, 1], railCol);
@@ -268,7 +334,7 @@ const SceneryStructures = (function () {
                 rec.box([0, y, 0], [0.07, 0.07, 1], railCol);
             } else if (st === "safer") {                   // smooth tube over foam
               rec.box([0, 0.70, 0], [0.34, 0.62, 1], railCol);
-              rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
+              rec.box([saferCap[0], 1.04, 0], [saferCap[1], 0.10, 1], postCol);   // cap, overhang far side
             } else {
               rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol);                   // armco (default)
             }

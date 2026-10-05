@@ -29,7 +29,13 @@ const counts = (Tracks, id) => {
 test("Monaco's armco keeps its posts: the guardrail guard margin stays below the gap", () => {
   const Tracks = buildContext();
   const c = counts(Tracks, "monaco");
-  assert.equal(c.guardrail || 0, 0, `monaco guardrail suppressed=${c.guardrail}`);
+  // Not 0 since 2026-10-05: 7 Monaco armco placements always lost every
+  // primitive to the road guard's box test, but the centre-point pre-check
+  // passed them, so they vanished UNCOUNTED. structures.js now runs the
+  // guard's own predicate on the rail body and post first and counts them
+  // here. The margin bug this test pins dropped 220; a bound of 7 still
+  // catches any return of it.
+  assert.ok((c.guardrail || 0) <= 7, `monaco guardrail suppressed=${c.guardrail}`);
 });
 
 test("billboards with a normal gap are built: Qatar and Monaco lose none to the guard", () => {
