@@ -14,7 +14,7 @@ quirk — the measured list is [references/do-not.md](references/do-not.md).
 ```sh
 node tools/check/bloat-scan.mjs --json              # size + ratchet slack (evidence, NOT candidates)
 node tools/check/ratchets.mjs --json                # per-metric lines/codeLines/gMembers/topLets slack
-node tools/check/extract-module.mjs js/game.js 186 207   # analyse free refs (= ensureDataHub, one whole function)
+node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
 ```
 
 Slack 0 on every row = saturated: the scan names no block. Candidates come

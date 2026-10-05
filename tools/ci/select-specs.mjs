@@ -972,8 +972,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
+  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   if (si < 0 || !argv[si + 1]) {
-    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--stale-first] [--json]");
+    console.error(usage);
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");
