@@ -106,20 +106,28 @@ const AppearanceOpts = (function () {
     const hi = Math.max(L1, L2), lo = Math.min(L1, L2);
     return (hi + 0.05) / (lo + 0.05);
   }
-  function readCssRgb(prop) {
-    const el = root();
-    if (!el || typeof getComputedStyle !== "function") return null;
-    const raw = getComputedStyle(el).getPropertyValue(prop).trim();
+  // ONE getComputedStyle flush for both token reads (ForcedReflow insight 2026-10-05:
+  // readCssRgb was the top frame at 34 ms boot reflow; pickInk called it twice).
+  function readCssRgbFrom(cs, prop) {
+    if (!cs) return null;
+    const raw = cs.getPropertyValue(prop).trim();
     const hex = raw.match(/^#([0-9a-fA-F]{6})$/);
     if (hex) return hexRgb("#" + hex[1]);
     const rgb = raw.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
     if (rgb) return [+rgb[1] / 255, +rgb[2] / 255, +rgb[3] / 255];
     return null;
   }
+  function readCssRgb(prop) {
+    const el = root();
+    if (!el || typeof getComputedStyle !== "function") return null;
+    return readCssRgbFrom(getComputedStyle(el), prop);
+  }
   function pickInk(accentHex) {
     const a = hexRgb(accentHex);
-    const text = readCssRgb("--text") || [0.965, 0.965, 0.976];
-    const bg = readCssRgb("--bg") || [0.047, 0.047, 0.078];
+    const el = root();
+    const cs = el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+    const text = readCssRgbFrom(cs, "--text") || [0.965, 0.965, 0.976];
+    const bg = readCssRgbFrom(cs, "--bg") || [0.047, 0.047, 0.078];
     if (!a) return "var(--text)";
     return wcag(a, text) >= wcag(a, bg) ? "var(--text)" : "var(--bg)";
   }
