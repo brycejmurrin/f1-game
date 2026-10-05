@@ -163,3 +163,12 @@ test("--github-output writes any_node / driving / slices", () => {
     NODE_SLICES,
   );
 });
+
+test("an ADAPTED spec edit schedules the page slice; a plain spec edit does not (2026-10-05)", () => {
+  // vm-page runs the ADAPTED specs as themselves and select-specs counts them
+  // VM-covered, so without `page` an edit to one ran nowhere on the PR.
+  const adapted = new Set(pick(["tests/specs/logging.spec.js"]).slices.keys());
+  assert.ok(adapted.has("page") && adapted.has("guards"), [...adapted].join(","));
+  const plain = new Set(pick(["tests/specs/hud-mirror.spec.js"]).slices.keys());
+  assert.deepEqual([...plain], ["guards"]);
+});

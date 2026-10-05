@@ -102,6 +102,17 @@ It powers the blocking change-aware CI gate and is just as useful interactively;
 single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
 its whole group when the change touches that spec's subject and nothing else.
 
+Two routes go past the group RULES (2026-10-05). A circuit edit
+(`js/circuits/<id>.js`) also routes every spec that RACES that circuit
+(`specsRacing`, read from each spec's string literals and helper imports by
+`circuitsOf`): most specs race monza, a score race bahrain, and #878's Bahrain
+`startFrac` move turned steering.spec red on six unrelated PRs because no
+ship run had selected it. They are budgeted candidates like a group's specs.
+And `pick-tests` names an edited spec's own browser group(s) as advice, which
+both CI selectors strip (`stripSpecOwner`): select-specs already runs the
+edited spec first, alone; an edited ADAPTED spec schedules the `page` slice
+instead, since that is the only place it runs on a pull request.
+
 A routed spec that loses the budget to smaller ones rides as **overflow** —
 up to six more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
 instead of being skipped. A routed spec that declares a per-test timeout at or
