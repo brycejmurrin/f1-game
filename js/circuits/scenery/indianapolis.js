@@ -75,11 +75,9 @@
         const a0 = anchor(K(0.0), side, gap0 + DEPTH * 0.4);
         if (onTrack(a0.c[0], a0.c[2], FACE * 0.3)) return;
         const b0 = [a0.r, a0.u, a0.t];
-        modelGroup("indy-main-stands", {
-          center: vadd(a0.c, a0.u, 9),
-          size: [DEPTH * 0.8, 22, FACE + 6], basis: b0,
-        }, (stage) => {
-          // Three long bays along the tangent so the wall reads continuous.
+        // Emit body kept out of the modelGroup call so `{ required: true }`
+        // stays inside the landmark contract's 2200-char window (BATCH-01).
+        const emitMain = (stage) => {
           for (let bay = -1; bay <= 1; bay++) {
             const along = bay * (FACE * 0.34);
             for (let t = 0; t < 4; t++) {
@@ -88,12 +86,8 @@
               const h = 1.8 + t * 2.2;
               const len = FACE * 0.30 - t * 1.0;
               const c = vadd(a.c, a.t, along);
-              // seat.box takes the FOOT point: tier on grade, seat band on
-              // the tier, sun deck on the band (a centre point here lifted
-              // each piece by half its height).
               stage._mat = MAT.CONCRETE;
               seat.box(stage, c, [3.6, h, len], t % 2 ? SHELL : SHELL2, b);
-              // Bucket-seat bands: blue / white / red — the Speedway read.
               stage._mat = MAT.FABRIC;
               seat.box(stage, vadd(c, a.u, h),
                 [3.0, 0.95, len - 2.2], SEAT[(bay + t + 3) % 3], b);
@@ -102,7 +96,6 @@
                 [3.3, 0.16, len - 0.8], ROOF, b);
             }
           }
-          // Rear spine + cantilever lip (outer grandstand roof silhouette).
           const aR = anchor(K(0.0), side, gap0 + DEPTH * 0.55);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aR.c, aR.u, 8.5), [2.4, 16, FACE * 0.9], SHELL2,
@@ -110,22 +103,23 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(aR.c, aR.u, 14.8), [DEPTH * 0.5, 0.6, FACE + 1], ROOF,
             [aR.r, aR.u, aR.t]);
-          // Fascia on the roof lip (footed on the metal deck) — navy run with
-          // crimson centre and checkered ends (IMS brand). Do not hang free
-          // under-soffit bands: those fail unsupported.
+          // Fascia on the roof lip — navy + crimson + checkered IMS cue.
           addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.3), aR.u, 15.2),
             [0.3, 0.55, FACE * 0.85], IMS_NAVY, [aR.r, aR.u, aR.t]);
           addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.4), aR.u, 15.55),
             [0.28, 0.4, FACE * 0.35], IMS_RED, [aR.r, aR.u, aR.t]);
           for (let c = 0; c < 8; c++) {
             const alongC = (c - 3.5) * (FACE * 0.1);
-            // Seated on the navy fascia top (fascia centre 15.2, h 0.55 → top 15.475).
             addBox(stage, vadd(vadd(vadd(aR.c, aR.r, -side * 4.5), aR.t, alongC), aR.u, 15.65),
               [0.22, 0.32, FACE * 0.05],
               c & 1 ? [0.08, 0.08, 0.09] : [0.94, 0.94, 0.92], [aR.r, aR.u, aR.t]);
           }
           stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("indy-main-stands", {
+          center: vadd(a0.c, a0.u, 9),
+          size: [DEPTH * 0.8, 22, FACE + 6], basis: b0,
+        }, emitMain, { required: true });
       })();
 
       {
