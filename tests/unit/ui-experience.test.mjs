@@ -42,6 +42,9 @@ test('task doors retain canonical close and settings destinations', () => {
   assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
+  assert.match(html,/id="mb-photo"[\s\S]*CAPTURE/);
+  assert.match(code,/function setDoorLabel/);
+  assert.doesNotMatch(code,/photoButton\.textContent\s*=/);
   assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
   assert.match(code,/openSettingsPage\("driving", "pm-pit-panel"\)/);
   assert.match(code,/openSettingsPage\("driving", "pm-session-review"\)/);
