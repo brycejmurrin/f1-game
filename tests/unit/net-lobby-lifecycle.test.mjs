@@ -388,9 +388,13 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
   const teardownBody = SOURCE.slice(teardownAt, SOURCE.indexOf("function failureMsg", teardownAt));
   assert.match(teardownBody, /codeReopen = null/,
     "teardown() must clear codeReopen, not only codeReopenTimer");
+  // The fail path settles it through reopenRoom(), which nulls it first
+  // (and re-arms the reopen only for a room still holding guests).
   assert.match(SOURCE,
-    /connect fail[\s\S]{0,800}?codeReopen = null[\s\S]{0,120}?dropPending\(\)/,
-    "a failed ICE/timeout must clear codeReopen before dropPending/teardown");
+    /connect fail[\s\S]{0,900}?reopenRoom\([^)]*\);\s*\n\s*dropPending\(\)/,
+    "a failed ICE/timeout must settle codeReopen before dropPending/teardown");
+  assert.match(SOURCE, /function reopenRoom\(ok\) \{\s*\n\s*const again = codeReopen;\s*\n\s*codeReopen = null;/,
+    "reopenRoom() consumes codeReopen whether or not it reopens");
   // waitForOpen: the deadline applies even while the transport is still being
   // built — the old early return skipped the timeout check and the poll spun
   // at 4 Hz forever with no message.
@@ -1015,4 +1019,106 @@ test("private room entry accepts a full shared token and public entry still asks
       assert.match(input.placeholder, privateRelay ? /32-character token/ : /ABC234/);
     } finally { h.lobby.cancel(); }
   }
+});
+
+// ── code room: a failed joiner and the last guest leaving (2026-10-05) ──────
+// A host with a code room and a controllable transport per offer: each
+// transport's status and close handler are the test's to drive.
+function codeRoomHarness() {
+  const made = [], rooms = [], ts = [], flags = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: { acceptAnswer: async () => ({ ok: true, peer: null }) },
+    rendezvous: {
+      usingPrivateRelay: () => false, makeCode: () => "ABC234",
+      hostRoom: async (o) => {
+        const room = { code: o.code, onJoiner: o.onJoiner, stopped: 0, stop() { room.stopped++; }, rotate() {} };
+        rooms.push(room);
+        return { ok: true, stop: () => room.stop(), rotate: () => {} };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "new", closers: [], onClose(fn) { t.closers.push(fn); }, close() { t.status = "closed"; } };
+    ts.push(t);
+    return t;
+  });
+  h.G.setNetRoom = (v) => flags.push(!!v);
+  const until = async (fn, what) => {
+    for (let i = 0; i < 60 && !fn(); i++) await new Promise((r) => setTimeout(r, 50));
+    assert.ok(fn(), what);
+  };
+  // codeHost, then guest 1 answers, connects, and the room is reopened quietly.
+  async function withGuest() {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(rooms.length, 1);
+    await rooms[0].onJoiner("g", "answer-1");
+    assert.equal(rooms[0].stopped, 1, "the room closes while guest 1 negotiates");
+    ts[0].status = "open";
+    await until(() => made.length === 1, "guest 1's session was bound");
+    await until(() => rooms.length === 2, "onConnected reopened the code for the next guest");
+    assert.equal(rooms[1].code, "ABC234");
+  }
+  return { h, made, rooms, ts, flags, until, withGuest };
+}
+
+test("a joiner whose ICE fails while a guest is in the room reopens the SAME code", async () => {
+  // onJoiner closes the code while the joiner's ICE runs; only onConnected
+  // reopened it. When that ICE failed with a guest already in, the fail path
+  // dropped codeReopen and returned to the room — nothing ever reopened the
+  // code, so guest 2's retries went unanswered and the host had to mint a new one.
+  const { h, rooms, ts, until, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    await rooms[1].onJoiner("g2", "answer-2");
+    assert.equal(rooms[1].stopped, 1, "the room closes while guest 2 negotiates");
+    ts[ts.length - 1].status = "closed";            // guest 2's ICE fails (NAT)
+    await until(() => rooms.length === 3, "the failed attempt reopened the room");
+    assert.equal(rooms[2].code, "ABC234", "…under the same code, so guest 2 can retry");
+    assert.equal(rooms[2].stopped, 0);
+    assert.equal(h.lobby.status().guests, 1, "guest 1 is still in");
+    assert.equal(h.elements.get("vs-room").hidden, false, "the host stays in the waiting room");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a failed joiner with NOBODY in the room does not reopen it later", async () => {
+  // The other half of the same branch: teardown() owns the empty room, and a
+  // stale codeReopen must not reopen it on some later, unrelated connect.
+  const { h, rooms, ts } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    await rooms[0].onJoiner("g", "answer-1");
+    ts[0].status = "closed";
+    await new Promise((r) => setTimeout(r, 900));
+    assert.equal(rooms.length, 1, "no reopen for an empty room");
+    assert.equal(h.elements.get("vs-pick").hidden, false, "back to the pick");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the last guest leaving the ROOM seals the reopened code and restores every route", async () => {
+  // The !racing branch sent the host to the pick with its peers cleared, but
+  // the code onConnected reopened (and its pending transport) stayed live:
+  // anyone entering the old code was answered and pulled the host back into a
+  // room. And INVITE ANOTHER's hidden JOIN routes stayed hidden.
+  const { h, rooms, ts, flags, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    const pending = ts[ts.length - 1];
+    assert.notEqual(pending, ts[0], "the reopened room minted its own pending transport");
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    assert.equal(h.elements.get("vs-join").hidden, true, "INVITE ANOTHER hid JOIN");
+    assert.equal(h.elements.get("vs-code-join").hidden, true);
+    ts[0].closers[0]("remote");                       // guest 1 leaves
+    assert.match(h.status.textContent, /left the room/i);
+    assert.equal(rooms[1].stopped, 1, "the reopened code stopped advertising");
+    assert.equal(pending.status, "closed", "…and its half-built transport was dropped");
+    assert.equal(h.lobby.status().pending, false);
+    assert.equal(flags[flags.length - 1], false, "the room flag is dropped");
+    assert.equal(h.elements.get("vs-pick").hidden, false, "back to HOST / JOIN");
+    assert.equal(h.elements.get("vs-join").hidden, false, "JOIN A FRIEND is offered again");
+    assert.equal(h.elements.get("vs-code-join").hidden, false, "ENTER A CODE is offered again");
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(rooms.length, 2, "nothing reopens the room afterwards");
+  } finally { h.lobby.cancel(); }
 });
