@@ -990,6 +990,31 @@ test("a moved (data-hl) piece that unhides after the fit re-runs it, so HudLayou
   assert.equal(fits, 1, "and only once");
 });
 
+test("a moved (data-hl) piece whose words change width re-fits on the next tick, not on the 3 s timer", () => {
+  // The AERO chip's text changes all lap and the cockpit strip parks it +30vw
+  // from centre, so a longer string pushed its right edge past the viewport
+  // (survey 2026-10-05, 1280x720 cockpit: right edge 1297) until the same-key
+  // safety re-measure came round. hlKey carried `hidden` and nothing else.
+  const h = fitHarness();
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  const aero = h.dom.byId("hud-aero");
+  aero.setAttribute("data-hl", ""); aero.style.setProperty("--hl-x", "30");
+  aero.textContent = "CORNER MODE";
+  h.refit();
+  fits = 0;
+  h.tick(); h.tick();
+  assert.equal(fits, 0, "same words: the same-key backoff holds");
+  aero.textContent = "STRAIGHT MODE"; h.tick();
+  assert.equal(fits, 1, "a longer string re-fits on the next tick");
+  h.tick();
+  assert.equal(fits, 1, "and only once");
+  aero.textContent = "AERO 523m"; h.tick();
+  assert.equal(fits, 2, "a shorter one re-fits too (the clamp it was given may now be too much)");
+  aero.textContent = "AERO 522m"; h.tick();
+  assert.equal(fits, 2, "a countdown that keeps its length costs nothing");
+});
+
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));

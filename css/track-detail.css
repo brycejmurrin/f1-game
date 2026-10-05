@@ -290,6 +290,16 @@ body.cockpit-cam #hud-speed { display: none; }
    or NONE wheel the strip still moves to the cockpit offsets over the steer
    column. */
 body[data-hl-set="cockpit"]:not(.desktop) :is(#hud-energy, #hud-tyre, #hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
+/* HELMET (data-hl-set="helmet", js/camera/cam-groups.js HELMET_LAYOUT) is the
+   VISOR: no body.cockpit-cam, so gear and speed paint, and ENERGY / TYRES show
+   on a touch screen too, at the helmet touch offsets (hud-layout.js
+   HELMET_TOUCH: ENERGY above the wheel's top edge, TYRES in the left corner).
+   Reported 2026-10-05 from a phone: HELMET showed the top row alone. What a
+   touch helmet still leaves out: the gearbox chip (the LCD's one large gear
+   glyph survives the shrink, and the chip is the HUD's widest piece), OVERTAKE
+   and AERO (the touch buttons carry those states) and BRAKE BIAS (hidden on
+   every touch screen) — each comes back the moment the player places it. */
+body[data-hl-set="helmet"]:not(.desktop) :is(#hud-gearbox, #hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
 
 /* …but the LCD only carries the read when it is big enough to READ. The wheel
    is drawn in world space, so it shrinks with the viewport: measured at phone

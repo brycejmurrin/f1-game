@@ -21,6 +21,7 @@
 // check (survey-track.mjs has the same idiom).
 
 import { fileURLToPath } from "node:url";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
@@ -48,6 +49,9 @@ function has(argv, name) {
 }
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] [--team <id>]
+  One deterministic framed screenshot via the __apex camera hooks (boots its own server + Chromium; TLX unless pinned).
+  cam: park | eye | orbit | cinematic | trackside. Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`);
 const TEAM = flag(argv, "--team", null);
 // Team ORDER is the roster order in js/data/teams.js, which is what the stored
 // index means. Read from the source rather than duplicated here.

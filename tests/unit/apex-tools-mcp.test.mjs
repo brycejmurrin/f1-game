@@ -79,8 +79,13 @@ test("playwright-official pin matches the wrapper's audited package and never @l
   const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
   const pw = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8")
     .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
-  assert.equal(cfg.mcpServers["playwright-official"].command, "npx");
-  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", pw]);
+  // The catalog launches the wrapper's `run` (2026-10-05: the bare package
+  // cannot launch in the cloud container), and the wrapper is what pins the
+  // audited package — so the pin is asserted on the wrapper, the launch line
+  // on the catalog.
+  assert.equal(cfg.mcpServers["playwright-official"].command, "bash");
+  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["tools/mcp/playwright-mcp.sh", "run"]);
+  assert.equal(pw, "@playwright/mcp@0.0.79");
   assert.deepEqual(cursorCfg.mcpServers["playwright-official"], cfg.mcpServers["playwright-official"]);
   // chrome-devtools-official (bare npx, no WebGPU flags) left the catalog 2026-09;
   // the wrapper server keeps the same pinned package as its network fallback.
@@ -226,6 +231,18 @@ test("apex_bump_cache_check argv never contains --apply", () => {
   assert.ok(!body.argv.includes("--apply"), body.argv);
   assert.ok(!body.argv.includes("--at"), body.argv);
   assert.ok(!body.argv.includes("--merge"), body.argv);
+});
+
+test("apex_shot: a directory `out` becomes the CLI's default file inside it", () => {
+  // shot.mjs's 4th positional is `[out.png]`; the wrap used to pass the
+  // directory through and the CLI died with "unsupported mime type null".
+  const r = callCli("apex_shot", { track: "monaco", frac: 0.52, cam: "trackside", out: "artifacts/mcp-track-test", dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  const outArg = body.argv.find((a) => a.includes("mcp-track-test"));
+  assert.match(outArg, /mcp-track-test\/monaco-52-trackside\.png$/, body.argv);
+  const r2 = callCli("apex_shot", { track: "monza", out: "artifacts/mcp-track-test/x.png", dryRun: true });
+  assert.match(JSON.parse(r2.stdout).argv.find((a) => a.includes("mcp-track-test")), /x\.png$/);
 });
 
 test("apex_pick_tests argv never contains --bg; includes --json", () => {

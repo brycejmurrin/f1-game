@@ -93,46 +93,117 @@
       const CONC = [0.76, 0.74, 0.70];
 
       const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.30 && s <= 0.42);
-      every(32, (k) => {
-        const s = k / n;
-        if (openArea(s)) return;
-        const h = hash(k * 31);
-        if (h < 0.45) return;
-        pine(k, h < 0.5 ? -1 : 1, 16 + h * 14, 9 + h * 6, h < 0.6 ? PINE : PINE_D);
+      // Built footprints the scattered vegetation must not grow through
+      // (clip-audit): [s0, s1, side, nearDist, farDist]. Terraces span the
+      // retaining wall at `gap` out to the escarpment prism (~46 m); the two
+      // groundedSegments cut banks sit at dist 20, 9 m wide.
+      const KEEP_OUT = [
+        [0.035, 0.095,  1, 15.5, 46], [0.470, 0.530, -1, 17.5, 46],
+        [0.835, 0.890,  1, 15.5, 46], [0.280, 0.360,  1, 14.5, 46],
+        [0.620, 0.700, -1, 14.5, 46],
+        [0.150, 0.235,  1, 15.5, 24.5], [0.560, 0.612, -1, 15.5, 24.5],
+      ];
+      const keptOut = (k, side, dist, r) => KEEP_OUT.some(([s0, s1, zs, d0, d1]) =>
+        zs === side && k >= K(s0 - 0.004) && k <= K(s1 + 0.004) &&
+        dist + r > d0 && dist - r < d1);
+      // World-XZ footprints of every terrace row / escarpment, so scattered
+      // trees also stay off a terrace that belongs to a NEIGHBOURING leg (the
+      // 0.28-0.36 right-hand terracing reaches to within ~35 m of the 0.50 leg).
+      const TERRACE_FP = [];
+      const onTerrace = (c, r) => TERRACE_FP.some((f) => {
+        const dx = c[0] - f.x, dz = c[2] - f.z;
+        const u = Math.max(0, Math.abs(dx * f.ax[0] + dz * f.ax[1]) - f.hx);
+        const v = Math.max(0, Math.abs(dx * f.at[0] + dz * f.at[1]) - f.hz);
+        return u * u + v * v < r * r;
       });
-      every(22, (k) => {
-        const h = hash(k * 97 + 23);
-        if (h < 0.44) return;
-        bush(k, h < 0.72 ? -1 : 1, 8 + h * 7, h < 0.6 ? SCRUB : SCRUB_D);
-      });
-      every(46, (k) => {
-        const s = k / n;
-        if (openArea(s)) return;
-        const h = hash(k * 67 + 17);
-        if (h < 0.58) return;
-        tree(k, h < 0.5 ? -1 : 1, 44 + h * 26, 8 + h * 5, [0.26, 0.36, 0.20]);
-      });
-
+      // Red-earth cut banks (groundedSegments below): 9 m wide at dist 20.
+      const CUTS = [
+        ["portimao-cut-t3", 0.150, 0.235, 1],
+        // Ends at 0.612: past it the bank ran into the 0.620 left terrace.
+        ["portimao-cut-t11", 0.560, 0.612, -1],
+      ];
+      for (const [, s0, s1, side] of CUTS) {
+        // Same polyline the cut is extruded along; registered up front so the
+        // scatter below (and the T3 hairpin's opposite leg) keeps off it.
+        let prev = null;
+        for (let s = s0; s <= s1 + 1e-9; s += 0.004) {
+          const c = anchor(K(s), side, 20).c;
+          if (prev) {
+            const dx = c[0] - prev[0], dz = c[2] - prev[2], len = Math.hypot(dx, dz) || 1;
+            TERRACE_FP.push({ x: (c[0] + prev[0]) / 2, z: (c[2] + prev[2]) / 2, y: c[1],
+              hx: 4.5, hz: len / 2, ax: [dz / len, -dx / len], at: [dx / len, dz / len] });
+          }
+          prev = c;
+        }
+      }
       const hillsideTerrace = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 7, rise = opts.rise || 1.5, depth = opts.depth || 2.9;
         const dens = opts.density != null ? opts.density : 0.55;
+        // Footprints already laid by this terrace: near the centre of a tight
+        // inside corner successive steps' rows still land on each other, so a
+        // row that would sink >0.25 m into an earlier one is dropped.
+        const laid = [];   // this terrace's rows; TERRACE_FP holds every terrace's
+        const footprint = (c, ax, at, hx, hz, y) => {
+          const al = Math.hypot(ax[0], ax[2]) || 1, tl = Math.hypot(at[0], at[2]) || 1;
+          return { x: c[0], z: c[2], y, hx, hz,
+            ax: [ax[0] / al, ax[2] / al], at: [at[0] / tl, at[2] / tl] };
+        };
+        const sinksInto = (f, g) => {
+          if (Math.abs(f.y - g.y) >= rise + 0.3) return false;
+          const dx = g.x - f.x, dz = g.z - f.z;
+          for (const v of [f.ax, f.at, g.ax, g.at]) {
+            const rad = (o) => o.hx * Math.abs(o.ax[0] * v[0] + o.ax[1] * v[1]) +
+                               o.hz * Math.abs(o.at[0] * v[0] + o.at[1] * v[1]);
+            if (rad(f) + rad(g) - Math.abs(dx * v[0] + dz * v[1]) < 0.25) return false;
+          }
+          return true;
+        };
         along(s0, s1, opts.step || 7, (k, spacing) => {
           const a = anchor(k, side, gap);
-          const b = [a.r, a.u, a.t], seg = spacing * 0.96;
+          const b = [a.r, a.u, a.t];
+          // Arc length scales with lateral offset through a corner: a fixed
+          // segment overlapped its neighbour by up to 1.8 m on the inside rows
+          // (clip-audit). Size each row to the local arc at its own offset.
+          // SIGNED along the local tangent: past the centre of curvature of a
+          // tight inside corner the offset curve runs backwards (cusp), and
+          // rows there stacked through the ones before them.
+          const arcAt = (off) => {
+            const p = anchor(k - 1, side, off).c, q = anchor(k + 1, side, off).c;
+            return (q[0] - p[0]) * a.t[0] + (q[2] - p[2]) * a.t[2];
+          };
+          const arc0 = arcAt(0) || 1;
+          // Shorter of the two long edges: on the inside of a corner the far
+          // edge is the short one, on the outside the near edge.
+          const segAt = (off, d) => spacing * 0.96 *
+            Math.min(1.25, arcAt(off - d * 0.5) / arc0, arcAt(off + d * 0.5) / arc0);
+          const seg = segAt(gap, 0.9);
+          // The wall line itself past the cusp: nothing to build here.
+          if (!(seg >= spacing * 0.3)) return;
           out._mat = MAT.CONCRETE;
           // Retaining wall holding the first terrace off the run-off.
           addBox(out, vadd(a.c, a.u, 1.1), [0.9, 2.2, seg], CONC, b);
           for (let r = 0; r < rows; r++) {
             const back = 1.2 + r * depth, up = 1.6 + r * rise;
+            const segR = segAt(gap + back, depth);
+            // Rows that fan to a sliver near the centre of a tight inside
+            // corner (T1, R ~43 m) are dropped, not stacked through each other.
+            // `break`, not `continue`: every higher row stands on this one, and
+            // a row over a dropped one floats (ground-audit "unsupported").
+            if (segR < spacing * 0.3) break;
+            const rc = vadd(vadd(a.c, a.r, side * back), a.u, up);
+            const fp = footprint(rc, a.r, a.t, depth * 0.5, segR * 0.5, rc[1]);
+            if (laid.some((g) => sinksInto(fp, g))) break;
+            laid.push(fp);
+            TERRACE_FP.push(fp);
             out._mat = MAT.CONCRETE;
-            addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
-              [depth, rise + 0.3, seg], r & 1 ? CONC : [0.70, 0.68, 0.65], b);
+            addBox(out, rc,
+              [depth, rise + 0.3, segR], r & 1 ? CONC : [0.70, 0.68, 0.65], b);
             const h = hash(k * 17 + r * 11);
             if (h > dens) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
-              a.t, (h - 0.3) * seg * 0.7), a.u, up + rise * 0.5 + 0.55),
+              a.t, (h - 0.3) * segR * 0.7), a.u, up + rise * 0.5 + 0.55),
               [0.55, 1.0, 0.6],
               h < 0.2 ? [0.86, 0.30, 0.24] : h < 0.38 ? [0.92, 0.90, 0.86] : [0.24, 0.36, 0.62], b);
           }
@@ -151,6 +222,7 @@
           // floating red wedge rather than a cut face behind the seats.
           if (roadTop - gy > 4.5) return;
           addPrism(out, [wx, gy, wz], [6, 3.4, seg], EARTH_D, b);
+          TERRACE_FP.push(footprint([wx, gy, wz], a.r, a.t, 3, seg * 0.5, gy));
         });
       };
       hillsideTerrace(0.035, 0.095, 1, 16, { rows: 8, density: 0.6 });   // Turn 1 amphitheatre
@@ -161,6 +233,33 @@
       hillsideTerrace(0.835, 0.890, 1, 16, { rows: 7 });
       hillsideTerrace(0.280, 0.360, 1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
       hillsideTerrace(0.620, 0.700, -1, 15, { rows: 6, rise: 1.4, depth: 2.7, density: 0.5, step: 8 });
+
+
+      every(32, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 31);
+        if (h < 0.45) return;
+        const side = h < 0.5 ? -1 : 1, dist = 16 + h * 14;
+        if (keptOut(k, side, dist, 5.5) || onTerrace(anchor(k, side, dist).c, 5.5)) return;
+        pine(k, side, dist, 9 + h * 6, h < 0.6 ? PINE : PINE_D);
+      });
+      every(22, (k) => {
+        const h = hash(k * 97 + 23);
+        if (h < 0.44) return;
+        const side = h < 0.72 ? -1 : 1, dist = 8 + h * 7;
+        if (keptOut(k, side, dist, 2.5) || onTerrace(anchor(k, side, dist).c, 2.5)) return;
+        bush(k, side, dist, h < 0.6 ? SCRUB : SCRUB_D);
+      });
+      every(46, (k) => {
+        const s = k / n;
+        if (openArea(s)) return;
+        const h = hash(k * 67 + 17);
+        if (h < 0.58) return;
+        const side = h < 0.5 ? -1 : 1, dist = 44 + h * 26;
+        if (keptOut(k, side, dist, 7) || onTerrace(anchor(k, side, dist).c, 7)) return;
+        tree(k, side, dist, 8 + h * 5, [0.26, 0.36, 0.20]);
+      });
 
       // Paddock: six structurally independent blocks (A–F) with separate roofs
       // and dilatation joints — Dimeconsult project notes for the 2008 AIA
@@ -345,10 +444,7 @@
       // Continuous runoffApron loop removed — slabs buried into the red cut
       // banks beside hillsideTerrace (ground-audit). Corner gravel groundPatch
       // + groundedSegments cuts keep the Algarve earth colour at the key offs.
-      for (const [id, s0, s1, side] of [
-        ["portimao-cut-t3", 0.150, 0.235, 1],
-        ["portimao-cut-t11", 0.560, 0.640, -1],
-      ]) {
+      for (const [id, s0, s1, side] of CUTS) {
         const pts = [];
         for (let s = s0; s <= s1 + 1e-9; s += 0.012) pts.push({ k: K(s), side, dist: 20 });
         groundedSegments({ id, points: pts, width: 9, height: 5.5, color: EARTH_D });
@@ -501,9 +597,15 @@
       // two carriageways, where they grounded up to 12 m in the air. And the two
       // hillsideTerraces above (0.470-0.530 left, 0.835-0.890 right): the belt
       // stood at the same 16 m gap and grew straight up through the terracing.
-      for (const [s0, s1, side] of [[0.1, 0.168, -1], [0.181, 0.28, -1], [0.1, 0.28, 1],
-                                    [0.44, 0.47, -1], [0.53, 0.91, -1],
-                                    [0.44, 0.835, 1], [0.89, 0.91, 1]]) {
-        forestEdge(s0, s1, side, 16, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
+      // The belt also stood in the T3 / T11 cut banks (dist 20, 9 m wide) and
+      // through the 0.620-0.700 left terrace: over the cuts it steps back to
+      // gap 28 (canopy edge behind the bank); terrace runs are skipped, with a
+      // few metres of margin at every terrace end.
+      for (const [s0, s1, side, gap] of [[0.1, 0.168, -1, 16], [0.181, 0.28, -1, 16],
+                                    [0.1, 0.130, 1, 16], [0.160, 0.239, 1, 28], [0.239, 0.274, 1, 16],
+                                    [0.44, 0.464, -1, 16], [0.536, 0.556, -1, 16],
+                                    [0.556, 0.614, -1, 28], [0.706, 0.91, -1, 16],
+                                    [0.44, 0.829, 1, 16], [0.896, 0.91, 1, 16]]) {
+        forestEdge(s0, s1, side, gap, { density: 0.52, hMin: 9, hMax: 16, pineFrac: 0.78, col: PINE, col2: PINE_D });
       }
     };

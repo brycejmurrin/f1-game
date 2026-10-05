@@ -43,17 +43,30 @@ const UiExperience = (function () {
     }
     const wasPaused = G.paused;
     const callers = [G.$("pmsettings"), G.$("carsetup")].filter((e) => e && !e.hidden);
-    const restore = () => {
-      if (source === "race" || source === "watch") deps.setPaused(wasPaused, "photo-done");
+    const unhide = () => {
       for (const e of callers) e.hidden = false;
       if (callers.length) G.$("pausemenu").hidden = true;
+    };
+    const restore = () => {
+      if (source === "race" || source === "watch") deps.setPaused(wasPaused, "photo-done");
+      unhide();
+      if (deps.onDone) deps.onDone();
     };
     for (const e of callers) e.hidden = true;
     if (["race", "watch"].includes(source)) { deps.setPaused(true, "photo-studio"); G.$("pausemenu").hidden = true; }
     const team = Teams.LIST[G.teamIdx];
     const title = source === "home" || source === "garage" ? team.name : G.track && G.track.def.name;
     const subtitle = source === "home" || source === "garage" ? "GARAGE · " + team.name : "LAP " + Math.max(1, ((G.player && G.player.lap) || 1));
-    const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore,
+    // The Home door's SUBJECT row (js/ui/photo-studio.js): close, swap the Home
+    // world for this visit (photoSubject), reopen through the door so trackHome
+    // and trackReady are read again. The callers come back first so the
+    // reopened studio hides and restores them itself on DONE.
+    const fromHome = source === "home" || source === "home-track";
+    const subject = fromHome && deps.photoSubject && deps.reopen ? (mode) => {
+      deps.photoStudio.close(false); unhide();
+      return Promise.resolve(deps.photoSubject(mode)).then((ok) => { if (!ok) deps.photoSubject(null); return deps.reopen(); });
+    } : null;
+    const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore, subject,
       view: source === "home-track" && deps.photoView ? deps.photoView() : null });
     if (!opened) restore();
     return opened;
@@ -63,6 +76,10 @@ const UiExperience = (function () {
     const { $ } = G;
     const overlay = $("overlay"), panel = $("menu-buttons");
     let home = false, signature = "", elapsed = 0, painted = false, failure = false, photoHomeCamera = null;
+    // Photo Studio's SUBJECT for this visit: "track" or "garage" laid over the
+    // stored Home scene while the studio is open (never written to the store).
+    let photoScene = null, photoSwitching = false, photoSwitch = 0;
+    const selectedScene = () => { const s = AppearanceStudio.scene(); return photoScene ? { ...s, mode: photoScene } : s; };
     const variation = homeVariation(GameStore.store);
     const world = HomeWorld.create(G, { prepareTrack: deps.prepareTrack, worldReady: deps.trackReady,
       capture: deps.captureTrackCamera, restore: deps.restoreTrackCamera, contextKey: deps.trackKey,
@@ -131,7 +148,7 @@ const UiExperience = (function () {
     if (pm) new MutationObserver(() => { if (!pm.hidden) refreshPause(); }).observe(pm, { attributes: true, attributeFilter: ["hidden"] });
     const toggle = $("home-motion");
     function scene() {
-      const selected = typeof AppearanceStudio !== "undefined" ? AppearanceStudio.scene() : { mode: "static", motion: "still" };
+      const selected = typeof AppearanceStudio !== "undefined" ? selectedScene() : { mode: "static", motion: "still" };
       return { ...selected, ...variation.peek(selected.mode, AppearanceStudio.homeCamera()) };
     }
     function stamp() {
@@ -189,13 +206,13 @@ const UiExperience = (function () {
       if (previewBusy) return false;
       let s = scene();
       const photoOpen = $("photo-studio") && !$("photo-studio").hidden;
-      if (!photoOpen) photoHomeCamera = null;
+      if (!photoOpen) { photoHomeCamera = null; if (photoScene && !photoSwitching) photoScene = null; }
       const visible = G.state === "menu" && overlay && !overlay.hidden && !document.hidden
         && !G.setupPreviewOn && (["garage", "night", "studio", "track", "pitlane"].includes(s.mode) || photoOpen);
       // Only the title scene and its own photo dock can own this camera.
       const covered = overlay.inert && !photoOpen;
       if (!visible || covered || failure) { variation.leave(); stopHome(photoOpen && G.state === "menu" && !G.setupPreviewOn); return false; }
-      const selected = AppearanceStudio.scene();
+      const selected = selectedScene();
       s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
       const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
@@ -279,6 +296,28 @@ const UiExperience = (function () {
       } catch (e) { Log.debug("ui", "Garage appearance preview unavailable: " + e.message); }
       finally { deps.setupCam.endHome(); previewBusy = false; if (previewQueued) { const latest = previewQueued; previewQueued = null; queueMicrotask(() => previewScene(latest)); } }
     }
+    /** Photo Studio's SUBJECT: "circuit" / "garage" lays that scene over the
+     *  stored one for this visit, null restores it. Resolves true once the
+     *  swapped scene has rendered (and, for the circuit, its world is ready),
+     *  false after 20 s, a race start or a newer pick. */
+    function photoSubject(mode) {
+      const want = mode === "circuit" ? "track" : mode === "garage" ? "garage" : null;
+      const gen = ++photoSwitch;
+      photoScene = want; photoSwitching = !!want; signature = "";
+      delete overlay.dataset.homeReady; stamp();
+      if (!want) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const t0 = Date.now();
+        const done = (ok) => { if (gen === photoSwitch) photoSwitching = false; resolve(ok); };
+        const tick = () => {
+          if (gen !== photoSwitch || photoScene !== want || G.state !== "menu") { done(false); return; }
+          if (overlay.dataset.homeReady === "1" && (want !== "track" || deps.trackReady())) { done(true); return; }
+          if (Date.now() - t0 > 20000) { done(false); return; }
+          setTimeout(tick, 100);
+        };
+        tick();
+      });
+    }
     function photoView() {
       const s = scene();
       if (G.state !== "menu" || !deps.trackReady() || !["track", "pitlane"].includes(s.mode)) return null;
@@ -288,7 +327,7 @@ const UiExperience = (function () {
       view.begin(s.mode, { shot: s.shot, motion: "still" });
       const pose = view.camera(); view.end(); return pose;
     }
-    return { renderHome, stopHome, refreshPause, previewScene, photoView, wantsTrack: world.wantsTrack, trackActive: world.active,
+    return { renderHome, stopHome, refreshPause, previewScene, photoView, photoSubject, wantsTrack: world.wantsTrack, trackActive: world.active,
       trackCamera: world.camera, didRenderTrack: () => { if (!world.didRender()) return; overlay.dataset.homeReady = "1";
         const photoButton = $("mb-photo"); if (photoButton) { photoButton.disabled = false; photoButton.textContent = "PHOTO STUDIO"; }
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },

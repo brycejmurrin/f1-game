@@ -9,6 +9,18 @@ The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you dr
 
 `Parts.CATALOG` is an **ordered array**, not a keyed map. `Parts.getMods`
 returns four stat multipliers; `getVisualTiers()` feeds `Car3D.build`.
+
+## Contents
+- Catalog, presets and finish
+- Tail design and spine fields
+- Flank regions and the atlas
+- Wings, cover, lower body and details
+- The paint sheet field list
+- Garage files are player input
+- Colour versus legibility, and mark slots
+
+## Catalog, presets and finish
+
 **SIGNATURE** (`tag: "SIGNATURE"`, `teams: [id]`) is a cost/physics-identical
 clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
 only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
@@ -20,6 +32,9 @@ Design colour fills on the sheet are gated: BAND (`spineTint`), SADDLE, FLANK
 FILL (`sideTint`), SUN, 2ND BAND, PLATE — only when the current TOP/SIDE/BIND
 paints that surface. `ridgeTint` / `airboxTint` / `crestInk` / `plateInk` are
 migrated away (`Liveries.migratePaint`).
+
+## Tail design and spine fields
+
 The tail DESIGN is four enum fields with defaults that reproduce the shipped car —
 `finShape` (`Car3D.FIN_SHAPES` + `none`; a geometry-changing livery field, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel ONLY — the crown's gradient wash was removed, so every
@@ -38,12 +53,18 @@ tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` 
 `lockup` the number + mark on the upper third; `band`/`sash`/`rake`/`shoulder` are
 colour fills under the wrap bull, `slash`/`starfield` strokes on the bare flank —
 all of them take `sideTint`. Culled: `bars|split|chevron` — unknown → bare flank).
+
+## Flank regions and the atlas
+
 The two flanks are SEPARATE regions (`spineSide` RIGHT, `spineSideL` LEFT, in the atlas's
 extra rows: `SIZE` × `SIZE_H`); paint them through `eachFlank`/`flankFrame`, never one
 mirrored texture. The car is drawn through an x-reflection, so the mesh's +x quad RENDERS
 as the car's right flank: right canvas-left = REAR, left canvas-left = FRONT, text reading
 on both. Calibrate by painting a labelled grid into both regions and reading it in the REAL
 garage — never by deriving it from car space, which is where the first pass inverted both. UVs divide v by `SIZE_H`. `drawTailGraphic` clips to its region.
+
+## Wings, cover, lower body and details
+
 `wingCarbon` (`paint|carbon`) puts every flap, front and rear, on `SURFACES.carbon` — the flap sites
 pass their surface explicitly, so a CARBON colour alone would be dark paint — and `rearWing` colours the
 rear mainplane block (absent = `c2`, today's look); the garage greys WINGS and REAR WING under carbon.
@@ -68,6 +89,9 @@ it — place side details with `coverFlankX(c, y)` and crown details with
 `coverSurfaceY(c, x)`, never at `c.x` / `c.top` literally, or they float. The 2026
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
+
+## The paint sheet field list
+
 **THE PAINT SHEET HAS ONE FIELD LIST, and adding a field means touching it in
 exactly two places.** The editor's 36 keys (21 colours + 15 pills) live in `LIV_DRAFT_COLORS` +
 `LIV_DRAFT_PILLS` (js/garage/setup-sheet.js); `livDraftFrom(liv, name)` builds a
@@ -85,11 +109,15 @@ A new draft inherits the TEAM's livery pills (every 2026 car is
 `finShape: "none"` + `spineHeight: "dorsal"`), so a blank canvas is blank paint
 and not a different car.
 
+## Garage files are player input
+
 **A garage FILE is player input.** `applyGarage` validates SHAPE per key family
 before writing (js/ui/settings-export.js): a custom livery needs an id and two
 rgb triples, and a partly-corrupt array keeps the sound paint jobs. Without it
 one entry lacking `c1` took the LIVERY tab down — `cssCol` reads `c[0]` on
 whatever it is handed.
+
+## Colour versus legibility, and mark slots
 
 **COLOUR AND LEGIBILITY ARE TWO DIFFERENT PARAMETERS.** A mark's colour is
 AUTHORED — by the player's TEAM LOGO row or by the team's `livery` block in

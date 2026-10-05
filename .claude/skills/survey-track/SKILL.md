@@ -2,7 +2,7 @@
 name: survey-track
 context: fork
 agent: track-surveyor
-description: "Use when one circuit needs an end-to-end accuracy or grounding pass (gaps, terrain channels/steps, sunk water). Worker analysis is browser-free with parent captures; reusable or parallel multi-track campaigns → track-realism; prop implementation → scenery-dress; geometry hooks only → agent-view."
+description: "Use when one circuit needs an accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water). Worker analysis is browser-free with parent captures; reusable or parallel multi-track campaigns → track-realism; prop implementation → scenery-dress; geometry hooks only → agent-view."
 ---
 
 # Survey & update a track

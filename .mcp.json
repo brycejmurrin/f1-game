@@ -8,8 +8,8 @@
     },
     "playwright-official": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@0.0.79"]
+      "command": "bash",
+      "args": ["tools/mcp/playwright-mcp.sh", "run"]
     },
     "chrome-devtools": {
       "type": "stdio",

@@ -649,6 +649,20 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
+/* THE RETENTION PAIR STACKS ITS SUB LINE UNDER THE LABEL on a short wide
+   title. MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05):
+   #mb-daily put DAILY TIME TRIAL and its sub side by side in one nowrap line,
+   and the sub painted "MONTREAL · DRY" cut to an ellipsis. Stacked, each line
+   gets the button's whole width. The height is ALWAYS two lines, whatever the
+   text — the shell's TODAY'S CHALLENGE and the booted MONTREAL · DRY · STREAK n
+   occupy the same box — so, like #mb-career-sub, the button never changes
+   height after boot (docs/PERF-FINDINGS.md 4a). Tight leading and a quarter-gap of
+   block padding keep the cost to ~8 own px over the one-line chip. */
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
+  flex-direction: column; gap: 0;
+  padding-block: calc(var(--gap) * 0.25);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; line-height: 1.15; }
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------

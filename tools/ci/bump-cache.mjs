@@ -25,9 +25,13 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/ci/bump-cache.mjs [--check] [--json]            # in the repo: assert every tag reads ?v=dev
+       node tools/ci/bump-cache.mjs --apply --at <N> --root <dir>   # deploy-side (pages.yml): hash a STAGED shell
+  There is no cache bump in development; --apply refuses without --root.`);
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
 // --root is RESOLVED: pages.yml passes the relative `_site`, and the asset-path
