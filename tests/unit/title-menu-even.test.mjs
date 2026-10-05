@@ -238,7 +238,7 @@ test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(
     overlays,
-    /body\[data-shape="tall"\]:has\(#home-motion:not\(\[hidden\]\)\) #install-chip,[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
+    /body\[data-shape="tall"\]:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
     "tall title lifts INSTALL when ANIMATE is showing (both chips share the bottom)",
   );
   assert.doesNotMatch(
