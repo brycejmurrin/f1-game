@@ -417,9 +417,9 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("Tab cannot escape the track-detail dialog into the select screen behind it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
-    // Opens via openTrackDetail() in js/ui/select-screen.js — the circuit preview
-    // map on the select screen, same trigger tests/specs/ui-audit.spec.js uses.
-    await page.locator("#sel-preview-map").click();
+    // Opens via openTrackDetail() — the still's #sel-map-btn, same door
+    // ui-audit uses. The outline canvas is visibility:hidden on a short hero.
+    await page.locator("#sel-map-btn").click();
     await page.locator("#track-detail").waitFor({ state: "visible" });
     /* WAIT FOR MODAL, DO NOT SLEEP TOWARD IT.
        This was `waitForTimeout(300)` and it produced a red `:modal` assertion

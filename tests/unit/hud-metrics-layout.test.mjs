@@ -118,7 +118,9 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
   assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
-  assert.match(hud, /hitsRight && !limLeft \? dockR\.width \/ chromeZ : 0/);
+  // Dock width is published whenever the right dock has a box so #hud-sectors
+  // (above limits) can stand off BOOST before the limits chip would hit it.
+  assert.match(hud, /const dockRW = \(dockR && dockR\.width\) \? dockR\.width \/ chromeZ : 0;/);
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {

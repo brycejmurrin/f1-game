@@ -144,7 +144,9 @@ const NetLobby = (function () {
     // relay was offered and did not carry it" — when the relay had never been
     // in the connection at all. Every wire dump through this whole
     // investigation said relay:0 while a perfectly good Metered credentials
-    // endpoint sat there answering in 180 ms.
+    // endpoint sat there answering in 180 ms. stats().turn is stamped from the
+    // iceServers THIS PC was built with (not live hasRelay()) so failureMsg
+    // cannot lie the other way when credentials arrive after construction.
     //
     // So: await it here, at the one choke point every path goes through, and
     // no call site can forget. It resolves instantly once fetched (memoised),
