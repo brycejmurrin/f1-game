@@ -2146,14 +2146,29 @@ const Car3D = (function () {
       const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
       const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
+      // Floor fences sit outboard of the pod. Keep their tops under the
+      // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
+      // (body-split). TEAM_STYLE inlet/undercut can drop that band onto a
+      // stock-height fence.
+      const fenceCap = (z) => {
+        const pod = anchors.podAt(z);
+        return pod.bottom + 0.28 * (pod.top - pod.bottom);
+      };
+      const fenceFit = (y, h, cap) => {
+        const top = y + h * 0.5;
+        if (top <= cap) return { y, h };
+        const room = Math.max(0.018, cap - (y - h * 0.5));
+        return { y: cap - room * 0.5, h: room };
+      };
       for (let i = 0; i < fenceN; i++) {
         const fz = 0.42 - i * fenceStep;
         const ex = floorEdgeAt(fz);
+        const cap = fenceCap(fz);
+        const a = fenceFit(0.152 + rideDY + 0.058 * fenceH, 0.132 * fenceH, cap);
+        const b = fenceFit(0.168 + rideDY + 0.062 * fenceH, 0.145 * fenceH, cap);
         addSpan(out,
-          { z: fz + 0.095, x: s * (ex + 0.014), y: 0.152 + rideDY + 0.058 * fenceH,
-            w: 0.028, h: 0.132 * fenceH },
-          { z: fz - 0.095, x: s * (ex + 0.038), y: 0.168 + rideDY + 0.062 * fenceH,
-            w: 0.022, h: 0.145 * fenceH },
+          { z: fz + 0.095, x: s * (ex + 0.014), y: a.y, w: 0.028, h: a.h },
+          { z: fz - 0.095, x: s * (ex + 0.038), y: b.y, w: 0.022, h: b.h },
           CARBON);
       }
       const edgeLip = Math.max(0, Math.min(1, floorStyle.edgeLip || 0));
