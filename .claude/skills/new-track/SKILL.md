@@ -48,7 +48,7 @@ road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`**
     sectors: [0.32, 0.66],         // S1/S2 ends; omit → thirds
     turns: [0.0455, 0.0755 /* … */], // curated apexes in lap order; index 0 = Turn 1
 
-    // DRESSING — the per-circuit rows the engine used to keep in id-keyed tables.
+    // DRESSING — per-circuit dressing fields on the def object.
     // Every field is optional; absent → FURN_DEF / KIT_DEF / THEME_DEF / STAND_SET_DEF[theme].
     furniture: { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },

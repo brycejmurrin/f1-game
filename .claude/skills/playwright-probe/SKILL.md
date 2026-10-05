@@ -64,9 +64,8 @@ node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JP
 ```
 
 `garage-angles` boots its own static server (no `:3456` serve). A dead local
-`DISPLAY=:N` (no `/tmp/.X11-unix/XN`) used to make WebGL null and hang on
-`__apex` — `launchChromium` clears that automatically; fallback is
-`unset DISPLAY` or `xvfb-run -a`. Details:
+`DISPLAY=:N` (no `/tmp/.X11-unix/XN`) makes WebGL null — `launchChromium`
+clears that automatically; fallback is `unset DISPLAY` or `xvfb-run -a`. Details:
 [garage-parts-livery/references/garage-angles.md](../garage-parts-livery/references/garage-angles.md).
 
 ## Single framed screenshot (`shot.mjs`)

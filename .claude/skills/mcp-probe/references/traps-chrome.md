@@ -4,53 +4,27 @@ Load from traps.md when debugging this class of failure.
 
 ## Contents
 - THE trap: never render in the MCP browser while Playwright is running
-- A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine
+- Garage tab clicks and the black-canvas trap combine
 - A car drawn off the road after `jump()`/`park()`: check the render anchors first
 
 ## THE trap: never render in the MCP browser while Playwright is running
 
-A live game page in the MCP browser holds ~20% CPU (survey-ui-matrix measured
-21.7%). On this 4-core box that is enough to starve a concurrently-running
-Playwright render and produce **false failures**, not just timeouts. Measured
-2026-08-12: rendering one Portimão frame here while `test:gfx` ran turned two
-passing specs red — a 120 s timeout AND an assertion miss (`dynamic player shadow`
-read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
+A live game page in the MCP browser holds ~20% CPU. On this 4-core box that is
+enough to starve a concurrently-running Playwright render and produce **false
+failures**, not just timeouts. So:
 
 - **Check `node tools/ci/test-bg.mjs --status` before you render here.** If a group
   is running, wait — or accept you will re-run its false-fails solo.
-- **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
-  page doesn't tax the next `test-solo`.
-- **"The moment you're done" is a promise you WILL break once you get absorbed in
-  something else — make parking a precondition of starting a Playwright run, not
-  a thing you remember to do first.** MEASURED 2026-08-13: after a multi-shot MCP
-  session proving out a shadow-acne fix, the very last verification screenshot's
-  `navigate_page(about:blank)` call got skipped — attention had moved to writing
-  up the finding — and the live game page sat there actively rendering (frozen
-  car, but the render loop keeps running) through a `test-bg.mjs gfx`
-  launch. Load average climbed to 8–12 (guidance: < 3) and produced a real
-  `page.screenshot: Timeout 60000ms exceeded` failure plus several more in the
-  second group — a genuine false failure that took a `ps -eo pid,etimes,args`
-  audit to trace back to 4+ lingering Chromium renderer processes from the MCP
-  session, not to orphans from a killed run (the first, wrong hypothesis — those
-  look identical in `pgrep -cf pw-browsers` and only `ps` with full args
-  distinguishes `chrome-devtools-mcp`'s own tree from Playwright's). **Before
-  every `test-bg.mjs` invocation, `navigate_page(about:blank)` unconditionally**
-  — even (especially) when you're confident you already parked. It's one call;
-  the cost of skipping it once is a full contaminated test run.
-- **Parking is NECESSARY BUT NOT SUFFICIENT — verify by CPU, then kill by age.**
-  The bullet above reads as though `about:blank` ends the problem. It does not.
-  MEASURED 2026-08-14: after a mobile-emulation session, `navigate_page` to
-  `about:blank` returned success and the page WAS blank, yet the MCP browser's
-  GPU process still held **174% CPU** five minutes later, and a `test:gfx`
-  launched on top of it inherited that load. (A plausible contributor: CPU
-  throttling / device-metrics overrides set via `emulate` survive the
-  navigation — the emulation banner is re-printed on every subsequent call —
-  so the compositor keeps working even with nothing to draw.) So park, then
-  CHECK, then kill:
+- **Before every `test-bg.mjs` invocation, `navigate_page(about:blank)`
+  unconditionally** — even when you think you already parked. Make parking a
+  precondition of starting Playwright, not something you remember afterward.
+- **Parking is necessary but not sufficient — verify by CPU, then kill by age.**
+  `about:blank` can leave the MCP GPU process spinning (emulation overrides
+  often survive navigation). Park, then CHECK, then kill:
 
   ```sh
-  # Ages separate the two trees far more reliably than args do: the run you
-  # just started is seconds old, an MCP browser is minutes old.
+  # Ages separate the two trees: the run you just started is seconds old,
+  # an MCP browser is minutes old.
   ps -eo pid,etimes,pcpu,comm | awk '$4 ~ /chrome/ {print $1, $2"s", $3"%"}'
   for p in $(ps -eo pid,etimes,comm | awk '$2>120 && $3 ~ /chrome/ {print $1}'); do
     kill -9 $p 2>/dev/null            # >120s = pre-dates the run; MCP's, not Playwright's
@@ -58,9 +32,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   ```
 
   Do this AFTER `test-bg.mjs` has started (so its own processes are the young
-  ones) and confirm every survivor shares the run's age. A parked-but-spinning
-  MCP browser is indistinguishable from a healthy box by load average alone,
-  which is why the check has to be per-process.
+  ones) and confirm every survivor shares the run's age.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
   the MCP. HeadlessChrome GLX hides `#game` (opacity 0) and blits onto
   `#game-soft` — a `#game` locator shot is that black gap. Await
@@ -70,7 +42,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
 ---
 
-## A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine
+## Garage tab clicks and the black-canvas trap combine
 
 Driving the GARAGE screen (`#carsetup`) with `chrome_click` on a category tab
 (`role=tab`, e.g. LIVERY) — or a livery swatch button — hit two issues back to

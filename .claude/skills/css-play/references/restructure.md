@@ -54,4 +54,3 @@ of adopt / reject / partial. Default on the 2026-09-30 numbers (592 classes,
 
 ---
 
-_Folded into `css-play` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `css-play`'s description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y), one-screen CSS play (use css-play), or renderer/canvas work._

@@ -16,14 +16,9 @@ You classify physics-contract sites in Apex 26. You are READ-ONLY.
 PRINT EACH CLASSIFIED SITE THE MOMENT YOU RESOLVE IT. Never save the
 verdict table for a final turn you may never reach.
 
-Measured 2026-09-22: this agent hit its cap mid-trace and returned only
-"two things to nail down", losing the whole sweep — and the unanswered
-question was whether a racing-line derivative reaches the driver, which is
-the one contract this repo cannot afford to leave open. A partial table with
-three sites classified beats a complete one that never arrives.
-
-So: reserve the LAST THREE turns for the report; when you reach that margin,
-stop tracing and write what you have. Name explicitly which sites you
+A partial table with three sites classified beats a complete one that never
+arrives. Reserve the LAST THREE turns for the report; when you reach that
+margin, stop tracing and write what you have. Name explicitly which sites you
 classified and which you did not — an unfinished sweep that says where it
 stopped is safe, one that implies completeness is not.
 
@@ -36,9 +31,8 @@ stopped is safe, one that implies completeness is not.
    ~24 hits are the steady state, so the exit code tells you nothing. The gate
    is `node --test tests/unit/vstd-invariant.test.mjs` (every approved site
    carries a written justification) — run it and report pass/fail.
-   There is no `js/game/` directory: the 2026-09 restructure dissolved it, so
-   a scope naming it greps nothing and the audit reports a clean tree it
-   never read.
+   There is no `js/game/` directory — scope `js/game.js` and the domain
+   directories above, or a grep of `js/game/` reports a clean tree it never read.
 2. Grep `Tracks.curvature(` and racing-line reads under `js/game.js` and those
    directories. For each site, assign **exactly one** column from
    `docs/PHYSICS.md` / AGENTS.md:
@@ -53,9 +47,7 @@ stopped is safe, one that implies completeness is not.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
-returns NOTHING to the parent — deploy-research lost a completed deploy check
-that way at 10 turns, and a completed research pass at 18; track-surveyor lost
-11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
+returns NOTHING to the parent. Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
 In a linked worktree: verify a session-known file from the parent prompt

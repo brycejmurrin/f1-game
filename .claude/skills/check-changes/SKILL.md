@@ -56,8 +56,7 @@ summary still writes). The waiter is `node tools/ci/test-bg.mjs --wait
 --timeout <min>` as ONE background task (AGENTS.md rule 4).
 
 Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed
-job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs
-were cancelled by a newer push; two of three inspected hid a real failure).
+job runs no `if: always()` step, so its failures are lost.
 `verify-change` says so at verdict time when it can see a live run.
 
 Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`

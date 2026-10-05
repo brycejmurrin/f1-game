@@ -9,8 +9,8 @@ One MCP server sits alongside the Playwright suite for live poking:
 **chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
 from `tools/lib/webgpu-chrome-args.cjs`). The deployed site / public web is **not**
 reachable from a container browser — that is the **deploy-research** subagent
-(host fetch / WebFetch). `tools/mcp/probe-mcp.py` is a CLI (not MCP-attached since
-2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
+(host fetch / WebFetch). `tools/mcp/probe-mcp.py` is a CLI daemon (not an
+attached MCP server) whose `chrome-start` keeps ONE Chromium alive across `call`s.
 
 ## Entry
 
@@ -61,17 +61,14 @@ vs playwright-official).
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 2. **github.io is unreachable from any container BROWSER** (egress proxy) —
-   route it to `deploy-research`. `curl` does reach it (HTTP 200 in 0.36 s,
-   measured 2026-09-18: curl trusts the agent proxy's CA bundle and Chrome does
-   not), so curl is the right tool for the deployed shell's exact bytes — a
-   `<meta name="apex-sha">`, a `?v=` hash — which the host fetch tool cannot
-   read: it renders to markdown and drops every `<meta>` tag silently. The fetch
-   tool stays correct for plain JSON (`version.json`) and prose.
-   Measured 2026-09-15: `chrome-devtools` navigating to ANY external HTTPS
-   (not just github.io — plain `https://example.com` too) fails
-   `net::ERR_CERT_AUTHORITY_INVALID`, since Chrome here does not trust the
-   proxy's CA. That error is the signature of "wrong tool for this URL," not a
-   flag or config bug — route to `deploy-research` instead of chasing it.
+   route it to `deploy-research`. `curl` reaches it (curl trusts the agent
+   proxy's CA bundle; Chrome does not), so curl is the right tool for the
+   deployed shell's exact bytes — a `<meta name="apex-sha">`, a `?v=` hash —
+   which the host fetch tool cannot read: it renders to markdown and drops
+   every `<meta>` tag silently. The fetch tool stays correct for plain JSON
+   (`version.json`) and prose. `chrome-devtools` navigating to ANY external
+   HTTPS fails `net::ERR_CERT_AUTHORITY_INVALID` — that error means "wrong
+   tool for this URL," not a flag bug; route to `deploy-research`.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`, or from a live

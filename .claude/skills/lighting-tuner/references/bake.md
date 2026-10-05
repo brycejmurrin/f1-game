@@ -7,9 +7,7 @@
 | `window.LightEdits = {…}` | a DELTA — only the player's own overrides, what COPY VALUES emits | `merge-proposals.mjs` (merge) |
 | `window.LightPresets = {…}` | a full SNAPSHOT of every profile | `bake.mjs` (full replace) |
 
-The **LIGHTING TUNER** COPY VALUES button used to export the file+local merge —
-805 conditions, 182,569 characters, which no one could select out of a phone
-textarea or paste into a message. It now exports only the local overrides, as
+The **LIGHTING TUNER** COPY VALUES button exports only the local overrides, as
 `window.LightEdits`, current condition first. That is a DELTA: feeding it to
 `bake.mjs` would write those few keys and delete ~1,000 others, so `bake.mjs`
 refuses it by name and points here. Either way this skill writes shipped

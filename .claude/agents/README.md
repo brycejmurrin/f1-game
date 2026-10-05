@@ -26,7 +26,8 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
 Playwright/test-bg/test-solo/chrome-start, no --wait); the
 js/css/index.html write ban is hook-enforced." Agent-specific scope rules stay
-short and sit above it.
+short and sit above it. Hitting `maxTurns` mid-tool-call returns nothing to
+the parent — each body also says to budget the hand-back, not the work.
 
 Skills (workflows) live in `.claude/skills/`. Canonical rules live in
 `AGENTS.md`. Which CLIs are wrapped as `apex_*`: `docs/AGENT-SURFACE.md`.

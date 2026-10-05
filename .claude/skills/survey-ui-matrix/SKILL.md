@@ -37,7 +37,7 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
 # Both of those LAUNCH CHROMIUM unless `--help` is passed (added 2026-10-01);
-# a bare probe for usage used to start a browser. Prefer `layout-audit.mjs --list`
+# `--help` only (no browser). Prefer `layout-audit.mjs --list`
 # for the catalog without launching.
 ```
 

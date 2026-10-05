@@ -53,10 +53,9 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
-**Do not sync on every tip move.** Branch protection (2026-09-30) requires
-the 12 fast-tier checks green on the PR's own head, NOT an up-to-date
-branch, and every re-sync is a fresh PR run (40 concurrent jobs on this account) — re-syncs
-were ~80 % of the deploy branch's commits on 2026-09-29. Sync when GitHub
+**Do not sync on every tip move.** Branch protection requires the 12 fast-tier
+checks green on the PR's own head, NOT an up-to-date branch, and every re-sync
+is a fresh PR run (40 concurrent jobs on this account). Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands.
 
@@ -91,8 +90,7 @@ is AGENTS.md §Critical conventions rule 11.
 
 Other sessions develop directly on the deploy branch, so they all see one red at
 once. **This overrides "port the fix now and push":** a fix already pushed, a
-live claim, or a live host session on it means STAND DOWN and say so. Three
-sessions fixed one bug on 2026-09-18 and the result was a revert
+live claim, or a live host session on it means STAND DOWN and say so
 (`docs/notes/SHARED-BRANCH-COORDINATION.md`).
 
 ## 4. Never push to the deploy branch

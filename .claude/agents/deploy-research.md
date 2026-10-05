@@ -44,27 +44,18 @@ return a short summary with citations (URLs + live vs local build numbers).
    is the train, not a miss; past that, read `pages.yml`'s latest run. A behind
    WORKING TREE is not a Pages miss — compare to the tip, not to disk.
 
-   Never verdict on a `version.json` build number: since 2026-09-01 the
-   shell generation is STAMPED, NOT COMMITTED (`pages.yml` §"Stamp the shell
-   generation"): the deploy computes `BUILD=$(( 2000 + $(git rev-list --count
-   HEAD) ))`, and the committed `version.json` is a placeholder that workflow's
-   own comment calls "consistent, never current". A live build of 9760 against
-   a committed 1695 is the NORMAL state, not a finding — comparing the two
-   called a correctly-published tip an ANOMALY on 2026-09-22. Nor can you
-   recompute the expected build here: this container's clone is SHALLOW
-   (`git rev-parse --is-shallow-repository` -> true), so `git rev-list --count`
-   returns the clone depth (647 that day), not real history (7760). Report the
-   live build as evidence; never as the verdict.
+   Never verdict on a `version.json` build number: the shell generation is
+   STAMPED, NOT COMMITTED (`pages.yml` §"Stamp the shell generation"): the
+   deploy computes `BUILD=$(( 2000 + $(git rev-list --count HEAD) ))`, and the
+   committed `version.json` is a placeholder that workflow's own comment calls
+   "consistent, never current". A live build far above the committed figure is
+   normal. This container's clone is often SHALLOW, so `git rev-list --count`
+   returns clone depth, not real history — do not recompute the expected build
+   here. Report the live build as evidence; never as the verdict.
 
-   **USE `curl` FOR THE SHELL, NOT THE FETCH TOOL.** The fetch tool renders the
-   page to markdown and DROPS EVERY `<meta>` TAG, silently — asked for
-   `apex-sha` on 2026-09-18 it answered "NO META TAGS VISIBLE" about a page
-   whose `<head>` carried
-   `<meta name="apex-sha" content="5a1a07fcddb56773ed33ed270d44889125ba54e3">`,
-   and the same curl above printed it in 0.36 s. That is a CONFIDENT FALSE
-   NEGATIVE on the one question this agent exists to answer, and it reads
-   exactly like a deploy that never landed. Both halves were reproduced here
-   before this paragraph was written.
+   Prefer `curl` for the shell, not the fetch tool. The fetch tool renders the
+   page to markdown and drops every `<meta>` tag, silently — a confident false
+   negative on `apex-sha`. Use `pages-live-sha.sh` / `curl` for that question.
 2. **Did my edit ship?** Matching `version.json` alone is not proof. Fetch
    the changed file at the live hash — read the `?v=<12 hex>` from the live
    `index.html` script tag for that path, then fetch
@@ -75,14 +66,11 @@ return a short summary with citations (URLs + live vs local build numbers).
    provenance (is the commit an ancestor of the deploy tip?).
 3. **External grounding** — search, then fetch the best URLs. Prefer primary
    sources (FIA, circuit sites, official docs) over blogs.
-4. **From this container**, `curl` DOES reach github.io through the agent
-   proxy — measured 2026-09-18: HTTP 200 in 0.36 s for both `version.json` and
-   `index.html`. This line previously said curl fails and the host fetch tool
-   is the only path; that was wrong, and being wrong pushed this agent onto the
-   one tool that cannot read a `<meta>` tag. Prefer `curl` for anything where
-   the exact bytes matter — the shell's `<head>`, a `?v=` hash, a marker grep —
-   and keep the fetch tool for prose pages and search. CHROMIUM is still out:
-   never "prove" a deploy with a local browser navigate.
+4. **From this container**, `curl` reaches github.io through the agent proxy.
+   Prefer `curl` for anything where the exact bytes matter — the shell's
+   `<head>`, a `?v=` hash, a marker grep — and keep the fetch tool for prose
+   pages and search. CHROMIUM is still out: never "prove" a deploy with a
+   local browser navigate.
 
 ## Return format
 
@@ -93,9 +81,7 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
-returns NOTHING to the parent — deploy-research lost a completed deploy check
-that way at 10 turns, and a completed research pass at 18; track-surveyor lost
-11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
+returns NOTHING to the parent. Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
 If the task needs a live canvas or working-tree probe, stop and tell the

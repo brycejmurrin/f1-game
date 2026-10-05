@@ -4,42 +4,29 @@ Deploy branch: `claude/f1-game-project-26h3ng` (`pages.yml` →
 https://brycejmurrin.github.io/f1-game/). Other sessions push there mid-hour.
 Never force-push. Never rebase published history. Never push without review.
 
-**The protocol is one command (2026-09-01):**
+**The protocol is one command:**
 
 ```sh
 node tools/ci/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track (touched circuits) → push HEAD:<deploy> — REFUSED since 2026-09-30 (branch protection, GH006): use --pr
+node tools/ci/deploy.mjs          # fetch → merge → gate → push HEAD:<deploy> — REFUSED (branch protection, GH006): use --pr
 node tools/ci/deploy.mjs --gate-only  # the same gate, pushes nothing (the pre-push check)
 node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch
 ```
 
-What changed underneath it, and why the old steps are gone:
+Current behaviour (detail in `bump.md` and `pages.yml`):
 
-1. **No union re-bump.** `pages.yml` stamps the shell generation while staging
-   (`2000 + git rev-list --count HEAD`, `bump-cache --apply --at N --root _site`),
-   so the committed `version.json` / `<meta name="apex-build">` are a consistent
-   placeholder and the repo's tags read `?v=dev` (nothing to bump). Two sessions cannot
-   land the same build; `index.html`/`version.json` were the only files that
-   ever conflicted and `deploy.mjs` resolves them to either side + a hash-only
-   `--apply`. Pinned by `tests/unit/deploy-stamp.test.mjs`.
-2. **Sweeps only when the union can move geometry.** `ci.yml` runs
-   `test:sweeps` (and the split-out `sweeps-parts`) on the same diff, so a
-   local run duplicated 10 minutes for most changes — but `deploy.mjs` does
-   run `test:sweeps` itself when the merged union touches geometry (its own
-   `--plan` prints which of the two it chose, and one float-equality failure
-   that only the sweeps catch is why). `verify-track` runs for touched
-   circuits either way (2 s each).
+1. **No union re-bump.** `pages.yml` stamps the shell generation while staging;
+   committed tags stay `?v=dev`. `deploy.mjs` resolves generated-file conflicts
+   it can re-derive. Pinned by `tests/unit/deploy-stamp.test.mjs`.
+2. **Sweeps only when the union can move geometry.** `deploy.mjs` runs
+   `test:sweeps` when the merged union touches geometry (`--plan` prints which);
+   `verify-track` runs for touched circuits either way.
 3. **No tinyfish live check.** `pages.yml`'s `verify-live` job polls the Pages
-   CDN for the stamped build and fails the run if it never appears; read the
-   run in the Actions tab. From a session, the host's fetch tool can read
-   `version.json`, and `curl` reaches github.io too (see below) — never the
-   in-repo wrapper.
-4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
-   branch is protected (a PR with the twelve fast-tier checks green; admin
-   tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
-   creates the merge commit, so the PR is a real record — a local
-   fast-forward auto-closes the PR instead (#67). Auto-merge is attempted;
-   if it does not arm, merge the PR yourself once CI is green.
+   CDN; from a session use the host fetch tool or `curl` — never the in-repo
+   wrapper.
+4. **`--pr` is the path that lands work** — the deploy branch is protected (a PR
+   with the twelve fast-tier checks green; admin tokens bypass). Auto-merge is
+   attempted; if it does not arm, merge the PR yourself once CI is green.
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
 conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual
@@ -54,17 +41,12 @@ git merge-base --is-ancestor origin/claude/f1-game-project-26h3ng HEAD \
   && echo "already contains deploy — push will fast-forward"
 ```
 
-Measured 2026-08-17: an interim silverstone coplanar re-baseline 15→16 was
-obsoleted within the hour by the deploy session's real geometry fix putting it
-back to 15.
-
 ### Union verification
 
 - `npm run test:tooling-fast` — always.
 - `npm run test:sweeps` — when EITHER side touched what the fleet build reads
   (`tools/ci/geometry-paths.mjs`, derived from `TRACK_VM`). Per-circuit clip/float/coplanar baselines are exact in BOTH
-  directions; geometry green on each lineage alone can be red on their union
-  (measured 2026-08-14: one engine fix moved clip counts on 8 circuits).
+  directions; geometry green on each lineage alone can be red on their union.
 - A grown count needs `node tools/track/coplanar-audit.cjs <id>` and a dated note in
   the test file before the baseline moves.
 - A shrunk count means the baseline must come DOWN (the anti-staleness
@@ -73,13 +55,12 @@ back to 15.
 ### Push and live check
 
 ```sh
-git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED since 2026-09-30 (GH006): land through `deploy.mjs --pr`
+git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED (GH006): land through `deploy.mjs --pr`
 ```
 
 Live `version.json`: subagent **deploy-research**, or
 `https://brycejmurrin.github.io/f1-game/version.json` via MCP fetch / WebFetch —
-or `curl`, which reaches github.io from this container (HTTP 200 in 0.36 s,
-measured 2026-09-18). For "is MY commit
+or `curl`, which reaches github.io from this container. For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
 `curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take up to ~25 min. A NEWER push to the

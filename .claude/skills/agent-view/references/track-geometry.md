@@ -70,4 +70,3 @@ Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turn
 
 ---
 
-_Folded into `agent-view` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `agent-view`'s description: Use when the user asks about track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, or whether terrain is poking through the road in Apex 26._
