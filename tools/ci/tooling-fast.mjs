@@ -279,6 +279,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // racecraft harder than pace, and asLegend hands over the legend's OWN
   // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
   "tests/unit/duel.test.mjs",
+  // ElevPresets (js/editor/elev-presets.js): Flat / Rolling / Hilly → per-node
+  // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
+  "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),

@@ -65,6 +65,18 @@ const CustomTracks = (function () {
     }
     return out;
   }
+  /** Parallel node heights (metres). Missing / short → zeros (old saves load flat).
+   *  Same ±rise lattice as a cosine bump's rise. Always length === pts.length. */
+  function sanitizeHeights(pts, heights) {
+    const n = pts.length, out = new Array(n);
+    const src = Array.isArray(heights) ? heights : null;
+    for (let i = 0; i < n; i++) {
+      const h = src && i < src.length && Number.isFinite(+src[i]) ? +src[i] : 0;
+      out[i] = q(Math.min(LIMITS.rise, Math.max(-LIMITS.rise, h))) || 0;
+    }
+    return out;
+  }
+  const heightsFlat = (h) => { for (let i = 0; i < h.length; i++) if (h[i]) return false; return true; };
 
   function sanitizeZones(list, shape) {
     if (!Array.isArray(list)) return null;
@@ -111,6 +123,8 @@ const CustomTracks = (function () {
   function canonical(it) {
     const parts = [it.theme, it.baseHW, it.seed, it.pts.map((p) => p[0] + "," + p[1]).join(";"),
       JSON.stringify([it.hwZones, it.bankZones, it.elevations, it.bridges])];
+    // Per-node heights rebuild the centreline; omitted when flat so older flat ids hold.
+    if (it.heights && !heightsFlat(it.heights)) parts.push("h:" + it.heights.join(","));
     // The scenery options rebuild the circuit too; absent at their defaults, so older ids hold.
     if (it.look) parts.push("look:" + it.look.time + "," + it.look.trees + "," + it.look.crowd);
     return parts.join("|");
@@ -140,12 +154,14 @@ const CustomTracks = (function () {
     if (!pts) return null;
     const L = loopLength(pts);
     if (!(opts && opts.loose) && L < LIMITS.loopMin) return null;
+    const heights = sanitizeHeights(pts, raw.heights);
     const it = {
       name: sanitizeName(raw.name),
       seed: Number.isFinite(raw.seed) ? (Math.floor(raw.seed) >>> 0) : 1,
       theme: TrackThemes.has(raw.theme) ? raw.theme : TrackThemes.ORDER[0],
       baseHW: Math.round(num(raw.baseHW, LIMITS.hwMin, LIMITS.hwMax, 7) * 10) / 10,
       pts,
+      heights,
       hwZones: sanitizeZones(raw.hwZones, HWZ),
       bankZones: sanitizeZones(raw.bankZones, BANK),
       elevations: sanitizeZones(raw.elevations, BUMP),
@@ -202,12 +218,19 @@ const CustomTracks = (function () {
   /** Design record → the raw def shape js/circuits/<id>.js authors, ready for TrackDef.fromRaw. */
   function toRaw(it) {
     const theme = TrackThemes.defFields(it.theme, it);   // the design: the street presets thin their city past cityM of lap
+    const hs = Array.isArray(it.heights) ? it.heights : null;
+    // path.pts stay [x, z]; optional [x, z, y] when any node height is non-zero
+    // (TrackDef.realPoints reads p[2] as authored Y for custom circuits).
+    const pathPts = it.pts.map((p, i) => {
+      const y = hs && Number.isFinite(+hs[i]) ? +hs[i] : 0;
+      return y ? [p[0], p[1], y] : [p[0], p[1]];
+    });
     const raw = Object.assign({
       id: it.id, custom: true, name: it.name, gp: it.name + " GP", country: it.country || "",
       lengthKm: Math.round(it.lengthM / 100) / 10 || 0.1, classic: false,
       sceneryCoordinates: "racing", startFrac: 0, undulate: true,
       baseHW: it.baseHW,
-      path: { len: it.lengthM, pts: it.pts.map((p) => [p[0], p[1]]) },
+      path: { len: it.lengthM, pts: pathPts },
       turns: it.turns && it.turns.length ? it.turns.slice() : null, sectors: null,
       bankZones: it.bankZones, elevations: it.elevations, bridges: it.bridges,
     }, theme);
@@ -370,6 +393,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, sanitizeCountry, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();
 Object.freeze(CustomTracks);
