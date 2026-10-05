@@ -203,6 +203,8 @@ window.MenuNav = (function () {
     const out = [];
     for (const el of layer.querySelectorAll(FOCUSABLE)) {
       if (el.disabled || el.getAttribute("aria-hidden") === "true") continue;
+      // A roving listbox is one spatial stop, at its selected option.
+      if (ownedListboxOption(el) && el.tabIndex < 0) continue;
       if (!shown(el)) continue;
       if (el.checkVisibility) {
         if (!el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) continue;
@@ -419,6 +421,10 @@ window.MenuNav = (function () {
   // a text field like they leave a slider; Home/End stay with it (they jump the
   // caret, and a range to min/max — the ARIA slider pattern).
   const CARET_KEYS = { ArrowLeft: 1, ArrowRight: 1, Home: 1, End: 1 };
+  function ownedListboxOption(el) {
+    return el && el.dataset && el.dataset.arrows === "listbox" && el.getAttribute && el.getAttribute("role") === "option"
+      && el.closest && el.closest('[role="listbox"]');
+  }
   function ownsArrows(el, key, event) {
     if (!el) return false;
     const t = el.tagName;
@@ -448,6 +454,14 @@ window.MenuNav = (function () {
       return !!CARET_KEYS[key];
     }
     if (el.getAttribute && el.getAttribute("role") === "tab") return tabOwns(el, key);
+    // Owned single-select listboxes handle these keys on their options. Leave
+    // other option grids with the spatial walker until they opt into ownership.
+    if (ownedListboxOption(el)) {
+      // The pad has no Tab. Its synthetic vertical keys leave the row;
+      // physical keyboard arrows retain the full listbox interaction.
+      const vertical = key === "ArrowUp" || key === "ArrowDown";
+      return !!CARET_KEYS[key] || (vertical && !(event && event.isTrusted === false));
+    }
     return !!el.isContentEditable;
   }
 
@@ -537,6 +551,7 @@ window.MenuNav = (function () {
           scope = [];
           for (const el of region.querySelectorAll(FOCUSABLE)) {
             if (el.disabled || el.getAttribute("aria-hidden") === "true") continue;
+            if (ownedListboxOption(el) && el.tabIndex < 0) continue;
             if (el.checkVisibility) {
               if (!el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) continue;
             } else if (!shown(el)) continue;

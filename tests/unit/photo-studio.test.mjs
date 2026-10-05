@@ -40,7 +40,7 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, setTimeout: () => 0, Blob, Uint8ClampedArray,
+    Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || (() => 0), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
@@ -48,6 +48,65 @@ function boot(options = {}) {
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw") });
   return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+// One shared object store, with serialized transactions and staged writes. A
+// request's success is distinct from commit, and abort discards every staged
+// mutation, so these tests exercise isolation and rollback rather than callbacks
+// that immediately mutate a Map. Real multi-tab IndexedDB is the browser gate.
+function photoDb(seed = []) {
+  const rows = new Map(seed.map((row) => [row.id, row])), queue = [], failures = [];
+  let active = false, hold = null, release = null, writes = 0;
+  const start = () => {
+    if (active || !queue.length) return;
+    active = true; const state = queue.shift(), tx = state.tx;
+    let staged = new Map(rows), ended = false;
+    const finish = (error) => {
+      if (ended) return; ended = true;
+      if (error) { tx.error = error; if (tx.onabort) tx.onabort(); }
+      else {
+        if (state.mode === "readwrite") { rows.clear(); for (const row of staged) rows.set(...row); }
+        if (tx.oncomplete) tx.oncomplete();
+      }
+      active = false; start();
+    };
+    tx.abort = () => finish(tx.error || new Error("Transaction aborted"));
+    const step = () => {
+      if (ended) return;
+      const op = state.ops.shift();
+      if (!op) {
+        if (failures[0] === "commit" && state.mode === "readwrite") { failures.shift(); finish(new Error("Injected commit failure")); return; }
+        if (state.held) { release = () => finish(); state.held(); }
+        else finish();
+        return;
+      }
+      if (failures[0] === op.kind) {
+        failures.shift(); op.req.error = new Error("Injected " + op.kind + " failure");
+        if (tx.onerror) tx.onerror({ target: op.req });
+        setImmediate(() => finish(op.req.error)); return;
+      }
+      op.req.result = op.kind === "getAll" ? [...staged.values()] : op.kind === "put" ? (staged.set(op.value.id, op.value), op.value.id) : (staged.delete(op.value), undefined);
+      if (op.req.onsuccess) op.req.onsuccess();
+      setImmediate(step);
+    };
+    setImmediate(step);
+  };
+  const db = { close() {}, transaction(_store, mode) {
+    const tx = { error: null }, state = { tx, mode, ops: [], held: mode === "readwrite" ? hold : null };
+    if (mode === "readwrite") { writes++; hold = null; }
+    const request = (kind, value) => {
+      if (kind === "delete" && failures[0] === "delete-sync") { failures.shift(); throw new Error("Injected delete enqueue failure"); }
+      const req = {}; state.ops.push({ kind, value, req }); return req;
+    };
+    tx.objectStore = () => ({ getAll: () => request("getAll"), put: (v) => request("put", v), delete: (v) => request("delete", v) });
+    queue.push(state); setImmediate(start); return tx;
+  } };
+  return {
+    rows, get writes() { return writes; }, failNext(kind) { failures.push(kind); },
+    holdNextCommit() { return new Promise((resolve) => { hold = resolve; }); },
+    releaseCommit() { const done = release; release = null; done(); },
+    open() { const req = { result: db }; queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); }); return req; },
+  };
+}
+const seededPhotos = (n) => Array.from({ length: n }, (_, i) => ({ id: "old-" + i, at: i, title: "Old " + i, thumb: "data:image/jpeg;base64,ZmFrZQ==", blob: new Blob(["old"]) }));
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 test("centre crops preserve composition across aspect ratios and filenames stay safe", () => {
@@ -118,6 +177,36 @@ test("pre-existing photo mode keeps its pose on normal exit", () => {
   const b = boot({ priorPhoto: true }); b.api.open(); b.G.photoCam.pos[0] = 99; b.api.close(true);
   assert.equal(b.G.photoMode, true); assert.deepEqual(b.G.photoCam.pos, [1, 2, 3]);
 });
+test("DONE waits until after the caller's first restored paint before focusing", async () => {
+  const frames = [], events = [], b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
+  const overlay = b.dom.byId("overlay"), opener = b.dom.document.createElement("button"); overlay.appendChild(opener);
+  const nativeFocus = opener.focus; let visible = true;
+  opener.focus = () => { events.push(overlay.inert || !visible ? "blocked" : "focused"); if (!overlay.inert && visible) nativeFocus(); };
+  opener.focus(); events.length = 0;
+  b.api.open({ source: "home", back: () => queueMicrotask(() => { overlay.inert = false; events.push("isolated"); }) });
+  overlay.inert = true; visible = false; b.api.close(true); await Promise.resolve();
+  assert.deepEqual(events, ["isolated"], "the microtask settles isolation while visibility still prevents focus");
+  assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true);
+  frames.shift()();
+  assert.deepEqual(events, ["isolated"], "the first frame must not focus while visibility remains hidden");
+  assert.equal(frames.length, 1, "only one further frame is scheduled");
+  visible = true; events.push("visible"); while (frames.length) frames.shift()();
+  assert.deepEqual(events, ["isolated", "visible", "focused"]); assert.equal(b.dom.document.activeElement === opener, true);
+});
+test("queued opener focus cannot steal focus from a reopened Studio or a detached caller", () => {
+  const frames = [], b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
+  const opener = b.dom.document.createElement("button"); b.dom.document.body.appendChild(opener); opener.focus();
+  b.api.open({ source: "home" }); b.api.close(true); frames.shift()(); b.api.open({ source: "garage" });
+  while (frames.length) frames.shift()();
+  assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true, "reopening between frames cancels opener focus");
+  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true);
+  b.api.open({ source: "garage" }); b.api.close(false); b.dom.byId("overlay").focus();
+  while (frames.length) frames.shift()();
+  assert.equal(b.dom.document.activeElement === b.dom.byId("overlay"), true, "a new generation invalidates focus even after it closes");
+  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true); opener.remove();
+  while (frames.length) frames.shift()();
+  assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true, "a detached opener is no longer a focus target");
+});
 test("an import finishing after close is discarded and its bitmap is released", async () => {
   let resolve, disposed = 0;
   const b = boot({ bitmap: () => new Promise((r) => { resolve = r; }) }); b.api.open({ source: "garage" });
@@ -156,4 +245,56 @@ test("Studio uses canonical sheet regions and enumerated controls with a persist
 test("Studio suspends a borrowed FreeCam's guides and restores them on returning to its owner", () => {
   const b = boot({ priorCamera: { open: true } }); b.api.open();
   assert.equal(b.overlays(), false); b.api.close(true); assert.equal(b.overlays(), true);
+});
+
+test("concurrent Studio saves in separate instances keep exactly six durable photos", async () => {
+  const idb = photoDb(seededPhotos(6)), a = boot({ indexedDB: idb }), b = boot({ indexedDB: idb });
+  a.api.open({ metadata: { title: "Tab A" } }); b.api.open({ metadata: { title: "Tab B" } });
+  await Promise.all([a.api.capture(), b.api.capture()]);
+  await Promise.all([a.api.savePhoto(), b.api.savePhoto()]);
+  assert.equal(idb.rows.size, 6);
+  assert.equal(idb.writes, 2, "each save has one atomic write transaction");
+  assert.deepEqual([...idb.rows.values()].filter((row) => /^Tab /.test(row.title)).map((row) => row.title).sort(), ["Tab A", "Tab B"]);
+  assert.equal(idb.rows.has("old-0"), false); assert.equal(idb.rows.has("old-1"), false);
+});
+test("saving repairs a previously oversized library in the same transaction", async () => {
+  const idb = photoDb(seededPhotos(9)), b = boot({ indexedDB: idb });
+  b.api.open(); await b.api.capture(); await b.api.savePhoto();
+  assert.equal(idb.rows.size, 6); assert.equal(idb.writes, 1);
+  assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-4", "old-5", "old-6", "old-7", "old-8"]);
+});
+test("save remains busy and unannounced until the write transaction commits", async () => {
+  const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });
+  b.api.open(); await b.api.capture(); const held = idb.holdNextCommit(), saving = b.api.savePhoto(); await held;
+  assert.equal(b.api.state().busy, true); assert.doesNotMatch(b.dom.byId("ps-message").textContent, /Saved to My Photos/);
+  assert.deepEqual([...idb.rows.keys()], seededPhotos(6).map((p) => p.id), "request success has not changed durable rows");
+  idb.releaseCommit(); await saving;
+  assert.equal(b.api.state().busy, false); assert.match(b.dom.byId("ps-message").textContent, /Saved to My Photos/);
+});
+test("put, prune, and commit failures roll back all durable changes and retain a visit-only photo", async () => {
+  for (const failure of ["put", "delete", "delete-sync", "commit"]) {
+    const seed = seededPhotos(6), idb = photoDb(seed), b = boot({ indexedDB: idb });
+    b.api.open(); await b.api.capture(); idb.failNext(failure); await b.api.savePhoto();
+    assert.deepEqual([...idb.rows.keys()], seed.map((p) => p.id), failure + " cannot commit a partial save or prune");
+    assert.match(b.dom.byId("ps-message").textContent, /Saved for this visit/);
+    assert.equal(b.api.state().busy, false);
+    assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Photo");
+  }
+});
+
+test("equal timestamps prune deterministically by ID instead of request or enumeration order", async () => {
+  const seed = seededPhotos(8).map((row) => ({ ...row, at: 1 })).reverse(), idb = photoDb(seed), b = boot({ indexedDB: idb });
+  b.api.open(); await b.api.capture(); await b.api.savePhoto();
+  assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-3", "old-4", "old-5", "old-6", "old-7"]);
+});
+test("a committed save from a closed Studio retains its original metadata without touching a reopened session", async () => {
+  const idb = photoDb(), b = boot({ indexedDB: idb });
+  b.api.open({ metadata: { title: "Earlier session" } }); await b.api.capture();
+  const held = idb.holdNextCommit(), saving = b.api.savePhoto(); await held;
+  b.api.close(false); b.api.open({ source: "garage", metadata: { title: "Current session" } });
+  let read; b.G.gfx.capturePixels = () => new Promise((resolve) => { read = resolve; });
+  const capturing = b.api.capture(); idb.releaseCommit(); await saving;
+  assert.equal([...idb.rows.values()][0].title, "Earlier session");
+  assert.equal(b.api.state().busy, true); assert.match(b.dom.byId("ps-message").textContent, /Capturing/);
+  read({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
