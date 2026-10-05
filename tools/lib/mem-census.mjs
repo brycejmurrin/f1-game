@@ -94,20 +94,26 @@ export async function waitFrames(page, n = 15, timeoutMs = 120000) {
   await page.waitForFunction(([f, k]) => window.__memCensus && window.__memCensus.frames >= f + k, [f0, n], { polling: 100, timeout: timeoutMs });
 }
 
-/** Wait until three's render-object cache has at least `min` entries.
+/** Wait until the picker's hidden warm frames have drawn circuit `id`: the
+ *  "menu warm drawn <id>" Log record game.js writes when the last of them
+ *  renders, newer than the "build done <id>" record pickTrack returned on.
  *  pickTrack returns at "build done"; the picker then prepares car assets
- *  (~5 s on software GL) and only then arms two hidden warm frames. A fixed
- *  settle after the build log races that work — CI run 37274796306 censused
- *  visit 1 to monza at 10 RenderObjects with the world built and the still
- *  committed, because the census ran on the same tick as
- *  "selector car assets ready". Does not call __apex (lazyTrackEnsure). */
-export async function waitUntilDrawn(page, min, timeoutMs = 180000) {
-  await page.waitForFunction((n) => {
+ *  (~5 s on software GL), waits MENU_IDLE_MS of quiet and only then arms two
+ *  hidden warm frames. A fixed settle after the build log races that work —
+ *  CI run 37274796306 censused visit 1 to monza at 10 RenderObjects — and a
+ *  wait on the render-object count can pass on the previous scene's objects
+ *  before the new world drew (run 37330132243, 10 again with floor 20). Reads
+ *  the Log ring directly: no __apex call (lazyTrackEnsure). */
+export async function waitUntilDrawn(page, id, timeoutMs = 180000) {
+  await page.waitForFunction((tid) => {
     try {
-      const set = window.renderer && window.renderer._objects && window.renderer._objects._renderObjects;
-      return !!(set && set.size >= n);
+      const recs = Log.records();
+      let built = -1;
+      for (let i = recs.length - 1; i >= 0; i--) if (String(recs[i].msg).startsWith("build done " + tid + " ")) { built = recs[i].id; break; }
+      if (built < 0) return false;
+      return recs.some((r) => r.id > built && r.msg === "menu warm drawn " + tid);
     } catch (_) { return false; }
-  }, min, { polling: 100, timeout: timeoutMs });
+  }, id, { polling: 100, timeout: timeoutMs });
 }
 
 /** Let the page run for `ms` of its own clock (the picker draws the world in

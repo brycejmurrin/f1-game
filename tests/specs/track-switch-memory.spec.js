@@ -45,17 +45,13 @@ test.use({ viewport: { width: 960, height: 540 } });
 // least this many render objects. Measured 54–312 on monza/monaco here: a
 // revisit draws less than the first visit (monza 109–145, then 54 every run),
 // so this floor only rules out an undrawn world; assertion 2 is the leak's.
-// 2026-10-05: the deploy tip's gfx group (llvmpipe, 4 shards, run
-// 37273020922) drew 39 on monza's second visit, twice (retry too), with the
-// world built and lit (apex-state carried the full lightState) — 40 was the
-// SwiftShader revisit's number with no margin under it, and a floor that
-// trips on a drawn world is not the undrawn-world guard it claims to be. An
-// undrawn world reads 0; 20 keeps the guard and the measured margin.
-// Selected-specs job 111655042275 (run 37274796306) then failed visit 1 to
-// monza at Received 10 with the same "world built and lit" dump — that was
-// the census racing menuFinish (car assets, then hidden warm frames), not a
-// drawn world of 10. waitUntilDrawn holds the floor; do not lower it.
-const MIN_RENDER_OBJECTS = 20;
+// The floor is NOT lowered when the opening flyby `wide` shot is levelled at
+// the horizon (39 ROs on llvmpipe at u=0): picker warm frames sit on
+// turn-first (FlybySeq.warmProgress) so the leak path still draws. A census
+// before those frames still reads ~10 leftover objects (CI 37330132243 visit
+// 1 monza) — waitUntilDrawn waits for "menu warm drawn <id>", not the leftover
+// RO count. Do not lower this floor.
+const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
@@ -78,7 +74,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
-      await waitUntilDrawn(page, MIN_RENDER_OBJECTS);
+      await waitUntilDrawn(page, id);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);

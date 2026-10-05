@@ -143,6 +143,28 @@ test("clearance lifts a shot, it does not relocate one", async () => {
   }
 });
 
+test("hidden picker warm sits on turn-first, not the horizon-levelled wide shot", async () => {
+  await withTrack("monza", (track, g) => {
+    const F = g.sandbox.FlybySeq;
+    const u = F.warmProgress();
+    assert.ok(u > 0 && u < 1, "warmProgress is inside the sequence");
+    assert.equal(F.shotAt(u).id, "turn-first");
+    assert.equal(F.shotAt(0).id, "wide");
+    assert.equal(F.warmProgress([{ id: "wide", dur: 1 }]), 0, "an edited list without turn-first keeps shot 0");
+  });
+});
+
+test("picker census waits for the last hidden warm frame, not leftover render objects", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /if \(menuBlank && --_menuGate\.warm === 0\) Log\.info\("gfx", "menu warm drawn " \+ \(track\.def && track\.def\.id\)\);/,
+    "the last hidden warm present logs menu warm drawn <id> for waitUntilDrawn");
+  assert.match(game, /if \(state === "menu" && _menuGate\.warm > 0 && typeof FlybySeq !== "undefined" && FlybySeq\.warmProgress\)\s*return FlybySeq\.warmProgress\(flybyShots\);/,
+    "hidden picker presents film turn-first via warmProgress, not u=0 wide");
+  const census = fs.readFileSync(path.join(ROOT, "tools/lib/mem-census.mjs"), "utf8");
+  assert.match(census, /r\.msg === "menu warm drawn " \+ tid/,
+    "waitUntilDrawn keys on that record, newer than this pick's build done");
+});
+
 test("each shot is continuous, and only a shot BOUNDARY is a cut", async () => {
   await withTrack("monza", (track, g) => {
     const FlybySeq = g.sandbox.FlybySeq;

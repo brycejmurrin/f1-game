@@ -104,7 +104,7 @@ async function main() {
           await page.evaluate((tid) => { window.__apex.race(tid); }, id);
           await page.waitForFunction((tid) => { try { const i = window.__apex.info(); return i.track === tid && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, id, { polling: 100, timeout: 240000 });
         }
-        await waitUntilDrawn(page, 20);
+        if (o.mode === "picker") await waitUntilDrawn(page, id);   // race mode warms at the lights, in front of the player
         await waitFrames(page, 15);
         await sleep(o.settle * 1000);
         const r = await censusAfterGc(page, cdp);
