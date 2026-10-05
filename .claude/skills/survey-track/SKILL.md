@@ -15,9 +15,16 @@ For a reusable or parallel multi-track campaign, the parent uses the
 Runs FORKED as the **track-surveyor** subagent (`context: fork`,
 `agent: track-surveyor`): the browser-free measurements and source diagnosis stay in the
 fork; the parent captures survey framings. The fork edits only that circuit's
-pair of files, and it stops at
-`verify-track` — engine work and the fleet gate below are the PARENT's, after
-the fork returns.
+pair of files, in its OWN worktree (`isolation: worktree`, so a campaign can run
+two surveyors at once), and it stops at `verify-track` — engine work and the
+fleet gate below are the PARENT's, after the fork returns.
+
+## Hand-back
+
+The fork's edits are on its worktree branch, not in this checkout. Its report
+names the branch and path; merge it before verifying here
+(`git merge --no-ff <fork-branch>`, then `verify-track` on the merged tree), and
+remove the worktree once merged (`git worktree remove <path>`).
 
 ```sh
 node tools/track/verify-track.cjs <id>            # baseline; again after all pair edits
