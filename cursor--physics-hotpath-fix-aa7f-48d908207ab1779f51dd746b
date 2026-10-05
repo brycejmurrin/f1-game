@@ -1,0 +1,1 @@
+1791220650	Cursor Agent	PR #955 physics bankAngle hot path: own, sync onto ship, merge if valuable; OWNED js/track/core/mesh.js bankAngle + js/game.js updateCar bankRoll; no other PRs  [cursor/physics-hotpath-fix-aa7f; session 48d908207ab1779f51dd746b]
