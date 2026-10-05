@@ -334,7 +334,10 @@ const SceneryIdentity = (function () {
         if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
         const bv = [p.r, p.u, p.t];
         addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
-        addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * (thick * 0.38)),
+        // crowd outer face = 0.38*thick + 0.275 meets the shell face (thick/2) near thick 2.3 m;
+        // stand it 6 cm proud there so the two same-facing faces never share a plane.
+        const crowdOff = thick * 0.38 + (Math.abs(thick * 0.38 + 0.275 - thick / 2) < 0.05 ? 0.06 : 0);
+        addBox(out, vadd(vadd(p.c, p.u, h * 0.55), p.r, -side * crowdOff),
                [0.55, h * 0.72, spacing * 0.88],
                crowdCols[Math.floor(hash(k * 11 + side) * crowdCols.length) % crowdCols.length], bv);
       });
