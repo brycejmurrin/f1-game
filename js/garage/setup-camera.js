@@ -818,6 +818,13 @@ return {
     return GarageScene.prepare(team, _spLiv(), getTeamParts, G.driverIdx, garageCtx(true));
   },
   roomReady() { return GarageScene.prepared(Teams.LIST[G.teamIdx], _spLiv(), getTeamParts, G.driverIdx, garageCtx(true)); },
+  // Race start (GaragePrebuild.release): free the room and every cached car, unless a
+  // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
+  release() {
+    if (G.setupPreviewOn) return false;
+    GarageScene.release(); _spMesh = null; _spMeshKey = "";   // the hull is CPU-only and frames the next visit
+    return true;
+  },
   get meshKey() { return _spMeshKey; },
   set meshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
 };

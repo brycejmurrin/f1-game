@@ -207,16 +207,18 @@ const GameStore = (function () {
   function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
   function fullKey(k) { return "apex26." + shortKey(k); }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
-  // (apex26.api.*, js/data/api.js) is disposable and could fill the whole
-  // 5 MiB origin quota, after which every career/settings/ghost write failed.
-  // On a failed write, drop that cache and try once more.
+  // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
+  // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
+  // origin quota, after which every career/settings/ghost write failed.
+  // On a failed write, drop those caches and try once more.
+  const DISPOSABLE_PREFIXES = ["apex26.api.", "apex26.realrace."];
   function setRoomy(key, str) {
     try { localStorage.setItem(key, str); return; } catch (e) {
       let freed = 0;
       try {
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);
-          if (k && k.indexOf("apex26.api.") === 0) { localStorage.removeItem(k); freed++; }
+          if (k && DISPOSABLE_PREFIXES.some((p) => k.indexOf(p) === 0)) { localStorage.removeItem(k); freed++; }
         }
       } catch (err) { Log.warn("game", "quota recovery could not scan storage:", err && err.message); }
       if (!freed) throw e;
