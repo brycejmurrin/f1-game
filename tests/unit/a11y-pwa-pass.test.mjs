@@ -226,6 +226,15 @@ test("INSTALL APP: beforeinstallprompt is stashed, prompt() only from the tap, o
   win.get("beforeinstallprompt")(ev);
   assert.equal(chip.hidden, true, "a player who has seen it is not asked again");
   assert.match(read("index.html"), /<button id="install-chip" type="button" hidden>INSTALL APP<\/button>/);
+  // UI-12 (hunt2): a launch where the chip only times out still counts as
+  // seen — it used to come back for 20 s on every launch until tapped.
+  const boot = () => { const w = new Map(), c = { hidden: true, addEventListener() {} };
+    vm.runInContext(body, vm.createContext({ ...sb, window: { addEventListener: (t, fn) => w.set(t, fn) }, $: (id) => (id === "install-chip" ? c : null) }));
+    w.get("beforeinstallprompt")({ preventDefault() {} }); return c; };
+  stored.clear();
+  assert.equal(boot().hidden, false, "first launch: shown");
+  assert.equal(stored.get("installChipSeen"), true, "and remembered without a tap");
+  assert.equal(boot().hidden, true, "the next launch does not nag again");
 });
 
 test("the CAM button's accessible name starts with the word it shows", () => {
