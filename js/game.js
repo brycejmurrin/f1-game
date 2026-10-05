@@ -8658,6 +8658,7 @@ els.resNext.onclick = () => {
     // After a SPRINT the round has not advanced, so this re-selects the circuit
     // the weekend is already at — the Grand Prix is its second half.
     trackIdx = SeasonCal.trackIndex(season.round);
+    raceLaps = SeasonCal.roundLaps(raceLaps, season, Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps);
   }
   els.results.hidden = true;
   // Every championship SESSION that races qualifies first — every round, and on

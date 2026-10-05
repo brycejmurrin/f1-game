@@ -588,6 +588,20 @@ test("a race nobody took the flag in pays the shortened-race scale by the leader
   assert.deepEqual(Array.from(S.payTable(S.CLASSIC_POINTS, "race", { laps: 5, of: 10 })), [5, 3, 2, 1.5, 1, 0.5], "the classic table pays half below 75 %");
 });
 
+test("roundLaps: NEXT ROUND's distance is the format's laps clamped to the circuit's FULL; a sprint weekend's GP keeps its own", () => {
+  const { S } = load({ seasonCfg: { laps: 57 } });
+  S.engage("season");
+  const season = S.blank();
+  assert.equal(S.roundLaps(57, season, 52), 52, "clamped to a shorter FULL");
+  assert.equal(S.roundLaps(52, season, 66), 57, "a value clamped at a short circuit does not stick: back to the format's 57");
+  assert.equal(S.roundLaps(57, season, null), 57, "no FULL known: the format distance");
+  const sp = load({ seasonCfg: { laps: 57, sprint: true } });
+  sp.S.engage("season");
+  const wk = sp.S.blank();
+  sp.S.award(wk, field(3));                               // the sprint pays; the GP is next, same circuit
+  assert.equal(sp.S.roundLaps(25, wk, 66), 25, "mid-weekend: the Grand Prix keeps the weekend's distance");
+});
+
 test("DROP WORST 2 ranks on the best rounds — countback and the gross total are both kept", () => {
   const { S } = load({ seasonCfg: { drop: 2 } });        // 8 rounds → the best 6 count
   S.engage("season");

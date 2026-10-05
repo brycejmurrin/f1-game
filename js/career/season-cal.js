@@ -391,6 +391,15 @@ function lapsFor(fallback, season) {
 }
 
 function formatLaps(fallback) { return fmtActive() ? rulesConfig().laps : fallback; }
+// NEXT ROUND's distance: what RACE SETTINGS would preselect for the new round
+// (the format's laps, clamped to the circuit's FULL, never raised) — NEXT ROUND
+// skips that screen, so a 57-lap format ran 57 at Silverstone (full 52) and a
+// value clamped at a short circuit stuck to every longer round after it. The
+// Grand Prix after a sprint keeps the weekend's distance (lapsFor divides it).
+function roundLaps(prev, season, full) {
+  const laps = midWeekend(season) ? prev : formatLaps(prev);
+  return full > 0 ? Math.min(laps, full) : laps;
+}
 
 function pointsTable() {
   return fmtActive() && rulesConfig().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
@@ -656,7 +665,7 @@ return {
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
-  quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
+  quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
   award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
   presetIds, preset, shuffled, gpName,
 };
