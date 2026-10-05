@@ -1485,8 +1485,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
   assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
     "desktop hides the TILT help with RECALIBRATE TILT");
-  assert.match(read("css/settings-controls.css"), /#pm-calib:disabled \+ #pm-calib-help/,
-    "TILT help also hides when RECALIBRATE is disabled or hidden");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
+    "disabled TILT help keeps its slot so steer-mode changes do not reflow");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib[hidden] + #pm-calib-help", "display"), "none",
+    "hidden RECALIBRATE also drops its described-by copy");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
     "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",

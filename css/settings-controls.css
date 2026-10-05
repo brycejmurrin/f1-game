@@ -141,12 +141,13 @@
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
-/* Pair TILT help with RECALIBRATE: the copy is aria-describedby of
-   #pm-calib. When the plate is disabled (non-tilt) or hidden, do not
-   leave "TILT steering only…" under RESET DOCK LAYOUT. body.desktop
-   still CSS-hides both (css/responsive.css) for a tilt-saved desktop. */
-#pm-calib[hidden] + #pm-calib-help,
-#pm-calib:disabled + #pm-calib-help { display: none; }
+/* Pair TILT help with RECALIBRATE (aria-describedby). Disabled (BUTTONS /
+   TOUCH) must keep the slot so STEER / GEARS / AERO do not jump — the
+   pause-settings stable-layout spec. Hide the copy, not the box.
+   [hidden] drops the plate entirely, so the described-by goes with it.
+   body.desktop still CSS-hides both (css/responsive.css). */
+#pm-calib:disabled + #pm-calib-help { visibility: hidden; }
+#pm-calib[hidden] + #pm-calib-help { display: none; }
 /* RESET KEYS is the last reachable control when CONTROLLER is hidden.
    Sheet-body padding alone left the plate flush against .sheet-foot
    and the bottom of the button clipped at max scroll. */
