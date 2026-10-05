@@ -375,9 +375,11 @@
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
       if (circuitKit) {
+        // Gap 55 (was 30): kit modules clipped back-row neonTower (severe
+        // 1.11 m @ racing 0.042) after the sl() re-key densified this strip.
         circuitKit.hospitality({
           id: "kit:vegas:paddock-hospitality", frac: sl(0.045),
-          side: -1, gap: 30, size: [18, 9, 46], modules: 5,
+          side: -1, gap: 55, size: [18, 9, 46], modules: 5,
         });
         circuitKit.serviceCompound({
           id: "kit:vegas:paddock-service", frac: sl(0.022),
@@ -608,7 +610,9 @@
 
       grandstandEx(sl(0.965), 1, 16, 70, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      lotBleacher("vegas-lot-bleacher-harmon", sl(0.90), -1, 16, 9, { rows: 8, ribbon: CYAN });
+      // Gap 30 (was 16): stair tower vs neonTower severe 3.40 m @ racing 0.895
+      // once Harmon bleachers were re-keyed onto the racing frame.
+      lotBleacher("vegas-lot-bleacher-harmon", sl(0.90), -1, 30, 9, { rows: 8, ribbon: CYAN });
       grandstandEx(sl(0.945), 1, 20, 40, null, null,
         { livery: "alu", tiers: 1, roof: "none" });
       building(K(sl(0.93)), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
