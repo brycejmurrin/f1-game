@@ -22,7 +22,7 @@
 // Phases:
 //   1 fast (inline, ~2 min at three files at a time): tooling-fast when the change warrants it;
 //     verify-track.cjs per changed circuit; graph-parity when js/track/scenery/graph.js
-//     moved; bump-cache --check. Any red here stops before browsers spin up.
+//     moved (BASE = --since's ref, else the merge-base); bump-cache --check. Any red here stops before browsers spin up.
 //   2 groups (background via test-bg.mjs): pick-tests selection, ONE group per
 //     batch (browser OR node) — sequential by default; AGENTS.md one-browser-
 //     per-batch rule, enforced instead of quoted.
@@ -64,6 +64,16 @@ const loadavgLine = () => {
 
 const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 
+// The ref the default selection diffs against: merge-base with the deploy
+// branch (HEAD~1 last). Also graph-parity's BASE: without one it diffs only the
+// uncommitted part, and exits 2 "nothing to compare" on a clean tree.
+function mergeBase() {
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
+    try { return git(["merge-base", "HEAD", ref]); } catch (_) { /* next */ }
+  }
+  return "";
+}
+
 // ── changed-file selection (same semantics as pick-tests.mjs's CLI) ─────────
 function changedFiles() {
   const sinceIdx = argv.indexOf("--since");
@@ -72,10 +82,7 @@ function changedFiles() {
   if (explicit.length) return explicit;
   if (flag("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
   if (opt("--since")) return git(["diff", "--name-only", opt("--since")]).split("\n").filter(Boolean);
-  let base = "";
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
-    try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* next */ }
-  }
+  const base = mergeBase();
   const out = new Set(git(["diff", "--name-only", "HEAD"]).split("\n").filter(Boolean));
   if (base) for (const f of git(["diff", "--name-only", base]).split("\n")) if (f) out.add(f);
   for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
@@ -115,6 +122,9 @@ const circuits = files
 const wantsToolingFast = groups.includes("tooling-fast") ||
   files.some((f) => /^(js|css|tools|tests|docs)\//.test(f) || /^index\.html|^AGENTS\.md/.test(f));
 const wantsGraphParity = files.some((f) => f === "js/track/scenery/graph.js");
+// --since names the baseline outright; otherwise the merge-base (committed +
+// uncommitted work). Null = no git ref found: graph-parity then defaults to HEAD.
+const graphParityBase = wantsGraphParity ? (opt("--since") || mergeBase() || null) : null;
 const wantsSweepsHint = files.some((f) => /^js\/(track|circuits)\//.test(f) || /^tools\//.test(f));
 
 const plan = {
@@ -130,6 +140,7 @@ const plan = {
     toolingFast: wantsToolingFast,
     verifyTrack: circuits,
     graphParity: wantsGraphParity,
+    graphParityBase,
     cacheCheck: true,
   },
   batches,
@@ -152,10 +163,10 @@ if (batches.length) {
 
 // ── phase 1: fast, inline ────────────────────────────────────────────────────
 const phases = [];
-const run = (name, cmd, args) => {
+const run = (name, cmd, args, env = null) => {
   const t0 = Date.now();
   say(`phase1 START ${name}: ${cmd} ${args.join(" ")} at=${new Date(t0).toISOString()} ${loadavgLine()}`);
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", ...(env ? { env: { ...process.env, ...env } } : {}) });
   const ok = r.status === 0;
   const dur = Date.now() - t0;
   phases.push({ name, ok, exit: r.status, durationMs: dur });
@@ -170,7 +181,9 @@ for (const id of plan.fast.verifyTrack) {
   fastOk = run(`verify-track ${id}`, "node", ["tools/track/verify-track.cjs", id]) && fastOk;
 }
 if (plan.fast.graphParity) {
-  fastOk = run("graph-parity", "node", ["tools/track/graph-parity.cjs", "--all"]) && fastOk;
+  const base = plan.fast.graphParityBase;
+  fastOk = run(`graph-parity BASE=${base || "HEAD"}`, "node", ["tools/track/graph-parity.cjs", "--all"],
+    base ? { BASE: base } : null) && fastOk;
 }
 if (plan.fast.toolingFast) {
   // Files at a time, by load. MEASURED 2026-09-16 on the 4-core box: 194 files

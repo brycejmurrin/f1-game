@@ -175,7 +175,7 @@ const diskFetch = (needAbsolute) => async (u) => {
   return { ok: true, json: async () => JSON.parse(b.toString("utf8")), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
-function pageWithWorker({ workerPack = true } = {}) {
+function pageWithWorker({ workerPack = true, workerRefuses = () => false } = {}) {
   const T = buildContext(null, { quiet: true, instancing: true });
   const page = T._vmContext;
   Object.assign(page, { setTimeout, clearTimeout, performance, URL, fetch: diskFetch(false),
@@ -184,12 +184,13 @@ function pageWithWorker({ workerPack = true } = {}) {
     ApexRoster: { TRACK_VM: vmFiles, TRACK_WORKER_EXTRA: MANIFEST.TRACK_WORKER_EXTRA } });
   for (const f of ["js/render/shared/assets.js", "js/track/build-client.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), page, { filename: f });
-  const posts = [];
+  const posts = [], workerFetched = [], workers = [];
   page.Worker = class {
     constructor() {
       const me = this;
       const wctx = vm.createContext({ performance, console, URL, setTimeout, clearTimeout,
-        fetch: workerPack ? diskFetch(true) : async () => ({ ok: false, status: 404 }),
+        fetch: workerPack ? async (u) => { workerFetched.push(String(u)); return workerRefuses(String(u)) ? { ok: false, status: 404 } : diskFetch(true)(u); }
+          : async () => ({ ok: false, status: 404 }),
         postMessage: (m) => { const d = structuredClone(m); setTimeout(() => me.onmessage && me.onmessage({ data: d }), 0); } });
       wctx.self = wctx;
       wctx.importScripts = (...files) => {
@@ -200,6 +201,7 @@ function pageWithWorker({ workerPack = true } = {}) {
       };
       vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), wctx);
       this.wctx = wctx;
+      workers.push(this);
     }
     postMessage(m) { posts.push(m.type); const d = structuredClone(m); setTimeout(() => this.wctx.onmessage({ data: d }), 0); }
     terminate() {}
@@ -218,8 +220,10 @@ function pageWithWorker({ workerPack = true } = {}) {
     },
     free() {},
   };
-  return { T, page, posts };
+  return { T, page, posts, workerFetched, workers };
 }
+// The baked-model ids a circuit's scenery closure names (its per-circuit set).
+const circuitIds = (page, id) => page.Assets.modelIds(String(page.TrackScenery[id]));
 
 test("worker world == main-thread world WITH baked models, pit signs and MY TEAM", async () => {
   const { T, page } = pageWithWorker();
@@ -234,7 +238,7 @@ test("worker world == main-thread world WITH baked models, pit signs and MY TEAM
   const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def,
     { chunkRibbons: true, retainGraph: false }, b.gfx, MANIFEST.sceneryPath(id));
   assert.ok(msg, "the worker answered a world");
-  assert.equal(msg.models, resident, "the worker stamped from the same pack");
+  assert.deepEqual([...msg.models].sort(), [...circuitIds(page, id)].sort(), "the worker holds every model this circuit names, by id");
   const tB = await page.TrackBuildClient.replay(msg, def, b.gfx);
   assert.deepEqual(b.log, a.log, "every upload — baked models and the bay-sign mesh included — in order, byte-identical");
   assert.equal(tB.meshes.pitSignTex, tA.meshes.pitSignTex, "the bay signs carry the page's MY TEAM row");
@@ -253,6 +257,47 @@ test("a worker holding fewer models than the page answers null (build in steps)"
   const def = T.LIST.find((d) => d.id === "vegas");
   const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf("vegas"), def, { chunkRibbons: true }, recorder().gfx, MANIFEST.sceneryPath("vegas"));
   assert.equal(msg, null, "a poorer world is refused, not adopted");
+});
+
+// #908 + #915: the worker fetches only THIS circuit's models (never the whole
+// pack), and the page compares the answer BY ID: a worker that hit its cap
+// holding many models — but not the circuit's — must not pass on a count.
+test("the worker fetches only the circuit's own models, none at init", async () => {
+  const { T, page, workerFetched } = pageWithWorker();
+  const id = "monza", def = T.LIST.find((d) => d.id === id);
+  await page.Assets.modelsReady(0, String(page.TrackScenery[id]));
+  const want = circuitIds(page, id);
+  assert.ok(want.length > 0 && want.length < page.Assets.models().length, `premise: ${id} names a strict subset of the pack (${want.length})`);
+  assert.equal(await page.TrackBuildClient.spawn(), true);
+  assert.deepEqual(workerFetched.filter((u) => /\.ax26|models\//.test(u)), [], "init prefetches no model");
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true, retainGraph: false }, recorder().gfx, MANIFEST.sceneryPath(id));
+  assert.ok(msg, "the worker answered a world");
+  const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/pack/manifest.json"), "utf8"));
+  const files = new Set(want.map((m) => man.models[m].file));
+  const modelFetches = workerFetched.filter((u) => Object.values(man.models).some((r) => u.endsWith("/" + r.file)));
+  assert.ok(modelFetches.length > 0, "premise: the worker fetched its models");
+  for (const u of modelFetches) assert.ok([...files].some((f) => u.endsWith("/" + f)), "fetched only this circuit's model: " + u);
+  assert.deepEqual([...msg.models].sort(), [...want].sort());
+});
+
+test("a worker missing one of the circuit's model ids answers null, whatever its count", async () => {
+  const man = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/pack/manifest.json"), "utf8"));
+  const id = "monza";
+  let want = null;
+  const { T, page, workers } = pageWithWorker({ workerRefuses: (u) => want && u.endsWith("/" + man.models[want[0]].file) });
+  const def = T.LIST.find((d) => d.id === id);
+  await page.Assets.modelsReady(0, String(page.TrackScenery[id]));
+  want = circuitIds(page, id);
+  assert.ok(want.every((m) => page.Assets.modelSync(m)), "premise: the page holds all of the circuit's models");
+  // The worker stopped at its cap with a pile of OTHER circuits' models: more
+  // than the page's count, so the old count check (#908) would have passed it.
+  assert.equal(await page.TrackBuildClient.spawn(), true);
+  const W = workers[0].wctx.Assets, others = Object.keys(man.models).filter((m) => !want.includes(m));
+  await Promise.all(others.map((m) => W.model(m)));
+  const have = W.models().filter((m) => W.modelSync(m)).length;
+  assert.ok(have >= want.length, `premise: the worker's count (${have}) is not below the circuit's (${want.length})`);
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true }, recorder().gfx, MANIFEST.sceneryPath(id));
+  assert.equal(msg, null, "the missing id is refused; the page builds in steps");
 });
 
 test("a custom circuit never goes to the worker", async () => {

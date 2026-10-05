@@ -67,24 +67,15 @@ export const FIXED_GATE_SPECS = new Set([
   "tests/specs/physics-characterization.spec.js",
 ]);
 
-/** Specs whose describe-scope skip is `test.skip(!process.env.FOO)`. The
- *  selected / Pages gate never sets those vars, so scheduling one is an
- *  all-skipped RED rather than a measurement. `npm run test:shimmer` is the
- *  door; nightly-group already files it as manual. */
-const ENV_SKIP_RE = /test\.skip\(\s*!process\.env\.([A-Z0-9_]+)/;
-const envGateCache = new Map();
-export function envGateOf(file) {
-  if (envGateCache.has(file)) return envGateCache.get(file);
-  let name = null;
-  try {
-    const src = fs.readFileSync(path.join(ROOT, file), "utf8");
-    const m = ENV_SKIP_RE.exec(src);
-    name = m ? m[1] : null;
-  } catch { name = null; }
-  envGateCache.set(file, name);
-  return name;
-}
-export function isEnvGatedSpec(file) { return !!envGateOf(file); }
+// Opt-in / manual specs: the body is behind an env gate (APEX_SHIMMER=1) and
+// nightly-group.mjs lists them as manual with no pass/fail verdict. Selecting
+// them without the env makes every test SKIP and the runner treat "all
+// skipped" as RED (PR #968 sync: T2 circuit-racing routed material-shimmer
+// after a fleet props-tris remeasure). Keep them named in the report; never
+// put them on a selected command.
+export const MANUAL_OPT_IN_SPECS = new Set([
+  "tests/specs/material-shimmer.spec.js",
+]);
 
 /** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
  *  THE COST MODEL'S BLIND SPOT, measured on CI run 31233088772: the selector
@@ -164,8 +155,10 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // expected work, which two jobs' worth dropped and six carry. Raised to 7
 // (2026-10-04, PR #915): a synced 84-file bug-hunt batch with the
 // bot/spec-timings overlay still dropped tracks-walls + props-over-road at 6
-// (overflow 2740/2880 s) and cleared both at 7.
-export const MAX_OVERFLOW_SHARDS = 7;
+// (overflow 2740/2880 s) and cleared both at 7. Raised to 8 (2026-10-05,
+// PR #951): a synced bug-hunt batch with the failing-spec hoist dropped
+// tracks-walls + dev-tools at 7 (Selected specs verdict on run 37327254206).
+export const MAX_OVERFLOW_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -342,7 +335,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
   const costOf = (r) => r.tests * specSecPerTest(r.file, db).sec;
-  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [], coveredByOptIn = [];
+  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByManualOptIn = [], coveredByVmTwin = [];
   const unreadable = [];
   for (const file of specs) {
     const tests = declaredTests(file);
@@ -356,15 +349,8 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       coveredByFixedGates.push({ file, tests });
       continue;
     }
-    // OPT-IN ENV GATE. material-shimmer.spec.js is `test.skip(!process.env.APEX_SHIMMER)`
-    // at describe scope, and CI never sets that var (only `npm run test:shimmer` /
-    // nightly-group's manual row does). Pages 37293090788 selected it as oversize
-    // from a helper import, the one test skipped, and live-reporter's
-    // "ALL 1 TEST(S) SKIPPED" made the shard RED. Naming it here keeps the
-    // all-skipped fail as a real signal; the gate just must not pick a row that
-    // can only skip.
-    if (isEnvGatedSpec(file)) {
-      coveredByOptIn.push({ file, tests, env: envGateOf(file) });
+    if (MANUAL_OPT_IN_SPECS.has(file)) {
+      coveredByManualOptIn.push({ file, tests });
       continue;
     }
     // A spec whose assertions a VM twin replays test-for-test, in a node group
@@ -523,8 +509,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
   }
-  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
-    coveredByOptIn,
+  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
@@ -989,8 +974,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
+  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   if (si < 0 || !argv[si + 1]) {
-    console.error("usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--stale-first] [--json]");
+    console.error(usage);
     process.exit(2);
   }
   const bi = argv.indexOf("--budget-min");
@@ -1024,10 +1011,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `DROPPED (declares ${s.ownTimeoutSec}s/test and the over-budget pool is full): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
     `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of r.coveredByManualOptIn || []) console.error(
+    `COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByVmTwin || []) console.error(
     `COVERED BY A VM TWIN ON THE NODE GATE: ${s.file} (${s.tests} tests) -> ${s.twin}`);
-  for (const s of r.coveredByOptIn || []) console.error(
-    `OPT-IN ENV GATE (this job does not set ${s.env}=1; run npm run test:shimmer): ${s.file} (${s.tests} tests)`);
   for (const s of r.unreachable) console.error(
     `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);

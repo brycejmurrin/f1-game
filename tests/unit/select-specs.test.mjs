@@ -10,12 +10,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
-  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, isEnvGatedSpec, envGateOf,
+  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
+  SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
@@ -63,8 +63,8 @@ test("fit cuts at the budget and names every skipped spec", () => {
   const specs = ["tests/specs/smoke.spec.js", "tests/specs/boot-guard.spec.js"];
   const r = fit(specs, 5);
   assert.equal(r.selected.length + r.skipped.length + r.unreachable.length
-    + r.oversize.length + r.coveredByFixedGates.length, 2,
-    "every spec lands in selected, skipped, unreachable, oversize, or an independent fixed gate");
+    + r.oversize.length + r.coveredByFixedGates.length + r.coveredByManualOptIn.length, 2,
+    "every spec lands in selected, skipped, unreachable, oversize, or an independent fixed/manual gate");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
 });
@@ -114,8 +114,23 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
-    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + (x.coveredByOptIn || []).length + x.unreadable.length;
+    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
+    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
+});
+
+test("manual opt-in specs are never put on a selected command", () => {
+  // material-shimmer is behind APEX_SHIMMER=1; selecting it without the env
+  // skips every test and the runner fails the job as all-skipped (PR #968).
+  assert.ok(MANUAL_OPT_IN_SPECS.has("tests/specs/material-shimmer.spec.js"));
+  const r = fit([...MANUAL_OPT_IN_SPECS, "tests/specs/boot-guard.spec.js"], 60);
+  assert.deepEqual(r.coveredByManualOptIn.map((s) => s.file).sort(), [...MANUAL_OPT_IN_SPECS].sort());
+  assert.ok(!r.selected.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  assert.ok(!r.oversize.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  assert.ok(!r.overBudgetRun.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  const planned = shards(r).flatMap((j) => j.specs.split(" "));
+  assert.ok(!planned.some((f) => MANUAL_OPT_IN_SPECS.has(f)),
+    "shards() must not schedule a manual opt-in spec");
 });
 
 test("the nightly diffs from the deploy branch as it stood a day ago, with a wider allowance", () => {
@@ -166,24 +181,6 @@ test("fixed blocking specs can never run under the selected gate's timeout", () 
   const r = fit([...FIXED_GATE_SPECS], 60);
   assert.deepEqual(r.selected, [], "even a huge selected budget must not duplicate fixed specs");
   assert.deepEqual(r.coveredByFixedGates.map((s) => s.file).sort(), [...FIXED_GATE_SPECS].sort());
-});
-
-test("an env-gated spec is named, never scheduled — all-skipped stays a RED", () => {
-  // Pages 37293090788: material-shimmer rode as oversize, skipped without
-  // APEX_SHIMMER, live-reporter failed the shard. The skip-fail is correct;
-  // the selector must not pick a row that can only skip.
-  const pin = "tests/specs/material-shimmer.spec.js";
-  assert.equal(isEnvGatedSpec(pin), true);
-  assert.equal(envGateOf(pin), "APEX_SHIMMER");
-  assert.equal(isEnvGatedSpec("tests/specs/boot-guard.spec.js"), false);
-  const r = fit([pin, "tests/specs/boot-guard.spec.js"], 60);
-  assert.deepEqual(r.coveredByOptIn.map((s) => s.file), [pin]);
-  assert.equal(r.coveredByOptIn[0].env, "APEX_SHIMMER");
-  assert.ok(!r.oversize.some((s) => s.file === pin));
-  assert.ok(!r.selected.some((s) => s.file === pin));
-  assert.ok(!r.overBudgetRun.some((s) => s.file === pin));
-  const planned = new Set(shards(r).flatMap((j) => j.specs.split(" ")));
-  assert.ok(!planned.has(pin), "no selected-gate job may carry the opt-in spec");
 });
 
 test("TRACKED covers the paths that make a selection meaningless", () => {
@@ -1023,7 +1020,7 @@ test("a routed over-budget spec is never silently dropped: run, or named, and ev
     const r = fit(specs, 10, { db: EMPTY, ...opts });
     const over = specs.filter((f) => maxDeclaredTimeout(f) >= SELECTED_GATE.perTestTimeoutSec * 1000);
     const accounted = new Set([...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun, ...r.overBudgetSpecs,
-      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByVmTwin, ...(r.coveredByOptIn || [])].map((x) => x.file));
+      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByManualOptIn, ...r.coveredByVmTwin].map((x) => x.file));
     for (const f of over) assert.ok(accounted.has(f), `${f} is in no bucket (${JSON.stringify(opts)})`);
     const planned = new Set(shards(r, EMPTY).flatMap((j) => j.specs.split(" ")));
     for (const x of [...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun])
