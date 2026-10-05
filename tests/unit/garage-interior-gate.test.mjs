@@ -101,8 +101,10 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     assert.doesNotMatch(head, /isolation:\s*isolate/,
       "header isolate + translucent wash composites the WebGL canvas through BUDGET");
   }
-  assert.match(css, /#cs-aero \{[^}]*flex-direction:\s*column/s,
-    "ACTIVE AERO stacks above CORNER MODE so a squeezed stack cannot overlap them");
+  assert.match(css, /#cs-aero \{[^}]*width:\s*max-content/s,
+    "the aero chip hugs its labels instead of stretching the car band");
+  assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
+    "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
   assert.match(css,
     /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
     "GLASS thins the card body only — head chrome stays carbon");
