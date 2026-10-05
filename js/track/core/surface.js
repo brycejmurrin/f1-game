@@ -37,6 +37,9 @@ const TrackSurface = (function () {
     const street = !!def.street;
     const flat = !!def.flatTerrain;
     const outerW = Math.max(0.5, Number(def.terrainOuter) || (street ? 28 : 120));
+    const falloffStart = Number.isFinite(def.terrainFalloffStart) &&
+      def.terrainFalloffStart >= SHELF_BLEND && def.terrainFalloffStart < outerW
+      ? def.terrainFalloffStart : null;
     // The ribbon samples heightAt() only at its rails, and is linear between
     // them. The pit complex flattens the ground to its keep-out edge and eases
     // it back over 8 m (heightAt below), so the edges are rails too: sampled
@@ -134,6 +137,13 @@ const TrackSurface = (function () {
           const shelf = base - 0.08 - Math.max(0, dist - 2.2) * 0.004;
           const u = clamp01((dist - SHELF_END) / (SHELF_BLEND - SHELF_END));
           slope = lerp(shelf, slope, u * u * (3 - 2 * u));
+        }
+        // High-relief opt-in: distribute the outer drop over the remaining
+        // ribbon, preserving the road shelf, rails and bank attenuation.
+        // Both the visible mesh and grounding fallback use this profile.
+        if (falloffStart !== null) {
+          const edgeT = clamp01((dist - falloffStart) / (outerW - falloffStart));
+          return lerp(slope, floorY, edgeT * edgeT * (3 - 2 * edgeT));
         }
         // Last 18% meets the universal floor exactly; no hanging ribbon edge.
         const edgeT = clamp01((t - 0.82) / 0.18);

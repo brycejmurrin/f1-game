@@ -5026,8 +5026,9 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "";
+  let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
+  const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
@@ -5072,6 +5073,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     let casters = false;
     const shadowCastersWanted = () => casters;
     const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
+    const cockpitShadowMesh = (t, c, key) => calls.push(["fpCaster", c.num, key]);   // the first-person caster (car-draw.js)
     const WORKS = { aero: "w", tyres: "w" };
     const Parts = { CATALOG: [{ id: "aero" }, { id: "tyres" }], getFactorySetup: () => WORKS,
                     resolveSetup: (s) => ({ ids: Object.assign({}, WORKS, s) }) };
@@ -5116,7 +5118,9 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     await prepare(current);
     assert.deepEqual(calls.filter(c => c[0] === "caster"),
       [["caster", 99, true, "hi,:sh"], ["caster", 1, true, "sh"], ["caster", 3, true, "sh"]]);
-    assert.deepEqual(calls.map(c => c[0]), ["player", "cockpit", "atlas", "caster", "field", "atlas", "caster", "field", "atlas", "caster"]);
+    // In a first-person camera the player's step also builds its first-person caster, on the prepared key.
+    assert.deepEqual(calls.filter(c => c[0] === "fpCaster"), [["fpCaster", 99, "parts:a"]]);
+    assert.deepEqual(calls.map(c => c[0]), ["player", "cockpit", "atlas", "fpCaster", "caster", "field", "atlas", "caster", "field", "atlas", "caster"]);
     assert.equal(yields, 6, "a caster takes a slice of its own");
   }
 });

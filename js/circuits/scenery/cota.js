@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["cota"] =
   function (api) {
-      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
+      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop, terrainYAt } = api;
 
       // -- Speckled crowd palette (casual Texan race-day colours) --
       const crowdCols = [
@@ -308,7 +308,28 @@
         [0.798, 48, 26, 4.5, 56],
       ]) {
         const aa = anchor(K(sf), 1, dist);
-        addPrism(out, vadd(aa.c, aa.u, rise * 0.35),
+        let lift = rise * 0.35;
+        // The 0.735 mound's base sat 1.09 m above the terrain under it (float
+        // gap under the 1.2 m gate, so it was not a hard fail). Seat that one
+        // mound on the rendered ribbon. Leave 0.758 and 0.798, which already
+        // pass, and don't bury the base more than 0.4 m under the high sample.
+        if (sf === 0.735 && terrainYAt) {
+          const hx = width / 2, hl = len / 2;
+          const samples = [];
+          for (const sx of [-hx, hx]) for (const sz of [-hl, hl]) {
+            const ty = terrainYAt(
+              aa.c[0] + aa.t[0] * sx + aa.r[0] * sz,
+              aa.c[2] + aa.t[2] * sx + aa.r[2] * sz);
+            if (ty != null) samples.push(ty);
+          }
+          if (samples.length) {
+            const lo = Math.min(...samples), hi = Math.max(...samples);
+            const target = Math.max(lo + 0.15, hi - 0.4);
+            const uy = aa.u[1] || 1;
+            lift = (target - aa.c[1]) / uy;
+          }
+        }
+        addPrism(out, vadd(aa.c, aa.u, lift),
                  [width, rise, len], dryGrass, [aa.t, aa.u, aa.r]);
       }
 

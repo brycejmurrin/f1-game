@@ -13,8 +13,8 @@
    pack models are stamped, not their procedural fallbacks); the page posts its
    MY TEAM row (a worker has no localStorage, so custom-team.js could not rebuild
    it there); replay() uploads the pit signs the worker cannot paint; and a
-   worker that holds fewer models than the page answers null rather than a
-   poorer world. A custom circuit never goes to the worker: its list holds only
+   worker missing any of THIS circuit's models the page holds (compared by id,
+   not count — #908) answers null rather than a poorer world. A custom circuit never goes to the worker: its list holds only
    the shipped circuits. */
 const TrackBuildClient = (function () {
   "use strict";
@@ -30,6 +30,7 @@ const TrackBuildClient = (function () {
   function set(on) {
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* private mode: the row still reads back what stuck */ }
     if (on) spawn();   // parse the build modules now, not at the next RACE!
+    else if (_w) drop("turned off");   // the worker holds a whole TRACK_VM heap (~20 MB) for nothing
   }
   function initUI() {
     if (typeof SettingRow === "undefined" || !document.getElementById("pm-buildworker")) return;
@@ -82,8 +83,9 @@ const TrackBuildClient = (function () {
       const p = _pending.get(m.seq);
       if (!p) return;
       _pending.delete(m.seq);
-      if (m.type === "built" && (m.models | 0) < p.models) {
-        Log.warn("track", `build worker: ${m.id} built with ${m.models | 0} of the page's ${p.models} baked models — building in steps instead`);
+      const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
+      if (lack.length) {
+        Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
         p.resolve(null);
       } else if (m.type === "built") p.resolve(m);
       else { Log.warn("track", "build worker failed: " + m.message); p.resolve(null); }
@@ -121,7 +123,7 @@ const TrackBuildClient = (function () {
     if (!r || !(await r) || !_w) return null;
     const seq = ++_seq;
     return new Promise((resolve) => {
-      _pending.set(seq, { resolve, models: pageModels() });
+      _pending.set(seq, { resolve, def });
       _w.postMessage({
         type: "build", seq, idx, id: def.id,
         opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
@@ -143,10 +145,16 @@ const TrackBuildClient = (function () {
       return t ? JSON.parse(JSON.stringify(t)) : null;
     } catch (_) { return null; }
   }
-  // Baked models resident on the page — what a main-thread build would stamp.
-  function pageModels() {
-    if (typeof Assets === "undefined" || !Assets.models || !Assets.modelSync) return 0;
-    return Assets.models().filter((id) => Assets.modelSync(id)).length;
+  // This circuit's baked models (the ids its scenery closure names) resident on
+  // the page — what a main-thread build would stamp — that the worker's answer
+  // (`have`, the ids it held) lacks. Read when the answer lands, not at post: a
+  // model the page gained meanwhile is one a stepped build would still stamp.
+  function missingModels(def, have) {
+    if (typeof Assets === "undefined" || !Assets.modelIds || !Assets.modelSync) return [];
+    const S = typeof TrackScenery !== "undefined" ? TrackScenery : null;
+    const fn = def && (def.scenery || (S && S[def.id]));
+    const got = new Set(Array.isArray(have) ? have : []);
+    return Assets.modelIds(fn ? String(fn) : "").filter((id) => Assets.modelSync(id) && !got.has(id));
   }
 
   // The worker's track, made real: every recorded upload runs against `gfx` in

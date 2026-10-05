@@ -316,6 +316,48 @@ function circuitSpec(id, extra = {}) {
   return { id, frac: 0.25, side: 1, gap: 8, ...extra };
 }
 
+test("structured shelters keep the roof, columns and recessed panels inside rotated bounds", () => {
+  const angle = .63, r = [Math.cos(angle), 0, Math.sin(angle)], t = [-r[2], 0, r[0]];
+  for (const side of [-1, 1]) {
+    const { calls, kit } = circuitHarness({ frameAt: () => ({ k: 40,
+      c: [10, 2, 20], r, u: [0, 1, 0], t, hw: 6 }) });
+    assert.equal(kit.marshalShelter(circuitSpec("structured", {
+      side, size: [5, 3.2, 5], detail: "structure" })), true);
+    assert.equal(calls.boxes.length, 8);
+    assert.equal(calls.landmarks.length, 0);
+    const { bounds, stage } = calls.groups[0];
+    for (const part of calls.boxes) {
+      assert.equal(part.stage, stage);
+      for (let axis = 0; axis < 3; axis++) {
+        const b = bounds.basis[axis];
+        const delta = part.center.map((v, i) => v - bounds.center[i]);
+        const offset = delta.reduce((v, d, i) => v + d * b[i], 0);
+        assert.ok(Math.abs(offset) + part.size[axis] / 2 <= bounds.size[axis] / 2 + 1e-9);
+      }
+    }
+  }
+});
+
+test("textured ground patches drape on terrain and restore the caller material", () => {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Models = load("js/track/scenery/models.js", "TrackModels", { TrackGeom: Geom });
+  for (const material of [undefined, Geom.MAT.ROCK, NaN, 999, "10"]) {
+    const out = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: Geom.MAT.METAL };
+    const track = { n: 1, rx: [1], ry: [0], rz: [0], tx: [0], ty: [0], tz: [1] };
+    const models = Models.create({ out, track, n: 1, px: [0], pz: [0], hw: [7],
+      rails: [2.2, 7, 14], groundHeight: (_, d) => -d * .1,
+      terrainY: (x, z) => -.1 * (x - 7) + .02 * z,
+      emitFace: Geom.emit, preflight: () => true });
+    assert.equal(models.groundPatch({ k: 0, side: 1, gap: 2.2, size: [3, .08, 8],
+      color: [.68, .62, .49], material }), true);
+    assert.equal(out._mat, Geom.MAT.METAL);
+    assert.ok(out.pos.length > 0 && out.pos.every(Number.isFinite));
+    const expected = material === Geom.MAT.ROCK ? Geom.MAT.ROCK : Geom.MAT.FLAT;
+    assert.ok(out.mat.every(value => value === expected));
+    assert.ok(out.pos.some((v, i) => i % 3 === 1 && v < -.2));
+  }
+});
+
 test("CircuitKit exposes all nine infrastructure facilities", () => {
   const { kit } = circuitHarness();
   assert.deepEqual(Object.keys(kit).sort(), [...CIRCUIT_METHODS].sort());
