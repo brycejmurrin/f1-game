@@ -174,8 +174,8 @@ once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
 
 ### Concurrent PRs
-Open DRAFT PRs; mark ready only when final; keep ~6 or fewer ready. Own notes at `docs/notes/<topic>.md`. Cloud launch prompts must include `OWNED:` / `FORBIDDEN:` path globs; stand down on overlap. Lighting: ≤1 concurrent lighting agent, OWNED=`js/lighting/**` only — do not open scenery PRs from that lane. Sync with
-`sync-pr.mjs` only when MUST (above); one Sync cloud agent per PR (refuse duplicates); never Sync+arm in one agent/run (`behind-ship.mjs` warns over 10 behind; never fails). Normalize with
+Open DRAFT PRs; mark ready only when final; keep ~6 or fewer ready. Own notes at `docs/notes/<topic>.md`. Cloud launch prompts must include `OWNED:` / `FORBIDDEN:` path globs; stand down on overlap. Lighting: ≤1 concurrent lighting agent, OWNED=`js/lighting/**` only — do not open scenery PRs from that lane. Review-ONE / parallel review farm: ≤2 concurrent review agents unless Bryce overrides. Sync with
+`sync-pr.mjs` only when MUST (above); Finish/Update-existing syncs only if CONFLICTING; one Sync cloud agent per PR (refuse duplicates); never Sync+arm in one agent/run (`behind-ship.mjs` warns over 10 behind; never fails). Abort or stop+report a Finish/Update run past ~120 msgs or >2 tip moves with no progress while clean-behind. Normalize with
 `node tools/check/merge-hygiene.mjs --fix` then `gen-test-groups.mjs`. No unsanctioned ratchet raises. Report head SHA; do
 not merge; on token failure stop and report. Detail: `docs/TESTING.md` §Merge train / §Flaky tests and
 `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`. Flakes: CI retries default to 1; quarantine in
