@@ -891,7 +891,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
-  right: calc(10px + var(--sar) / var(--hud-z));
+  /* STAND OFF THE RIGHT DOCK. Same --dock-r-w clearance #hud-limits and
+     #hud-damage already take: on a touch phone that column is BOOST / OT /
+     AERO, and at HUD/BTN SIZE 130–150% (and on short landscape) the sector
+     strip sat under BOOST — measured tip + live Pages, 2026-10-05,
+     ~1200 px² on 852×393 @150% and ~2533 px² on 750×320. fitHud publishes
+     the dock width in this element's zoom space (0 when the dock is empty),
+     so desktop chrome is unchanged. */
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
   padding: 5px 9px;
@@ -1820,6 +1827,19 @@ body:not(.desktop) #hud-strat { top: calc(144px + var(--sat) / var(--hud-z)); }
     left: anchor(left);
     bottom: calc(anchor(top) + var(--gap));
     margin: 0;
+  }
+  /* TOUCH SECTORS ↔ RIGHT DOCK. Same CSS Anchor Positioning pattern as TYRES
+     on the left dock (Modern Web Guidance css-layout §5: tether floating
+     chrome to its trigger, do not guess offsets). #hud-sectors is fixed and
+     zoomed (--hud-z), so anchor() is divided like --sar; max() keeps the
+     measured --dock-r-w floor when the engine's inset is smaller. */
+  body:not(.desktop) #dock-right { anchor-name: --apex-dock-right; }
+  body:not(.desktop) #hud-sectors {
+    position-anchor: --apex-dock-right;
+    right: max(
+      calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px)),
+      calc((anchor(left) + var(--gap)) / var(--hud-z))
+    );
   }
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }

@@ -591,6 +591,10 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(144px/, "touch STRATEGY sits under the 128px map");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
+  assert.match(css, /#hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
+    "sectors take the same --dock-r-w clearance as limits/damage");
+  assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-right \{ anchor-name: --apex-dock-right; \}[\s\S]*#hud-sectors \{[^}]*position-anchor: --apex-dock-right;/,
+    "touch sectors also tether to the right dock via CSS anchor positioning");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
     assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");

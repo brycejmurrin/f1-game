@@ -826,7 +826,12 @@ function fitHud() {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
   }
-  const dockRW = hitsRight && !limLeft ? dockR.width / chromeZ : 0;
+  // Publish whenever the right dock has a box — not only when LIMITS would hit
+  // it. #hud-sectors sits ABOVE the limits chip and was already under BOOST
+  // while --dock-r-w stayed 0 (SIZE 150% landscape, 2026-10-05). Limits that
+  // move left (:root[data-limits-left]) ignore `right`, so a live dock width
+  // does not drag them. Empty dock → 0 → desktop / no-touch unchanged.
+  const dockRW = (dockR && dockR.width) ? dockR.width / chromeZ : 0;
   hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
   // THE DOCK CAP IS ASKED OF FIXED LAYOUTS, NOT OF THE ONE ON SCREEN. A dock is
   // a wrap-reverse row, so its height depends on the zoom: at HUD 150% on a
