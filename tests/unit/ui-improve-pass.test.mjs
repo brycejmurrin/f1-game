@@ -1491,6 +1491,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
+    "LOAD CAREER FILE confirm stays stacked — no wrap jump off the pointer");
+  assert.equal(decl(css("css/career.css"), "#cr-career-load", "min-height"), "calc(var(--tap-paint) * 2)",
+    "armed OVERWRITE copy fits the reserved LOAD height");
+  assert.equal(decl(css("css/career.css"), /\.cr-slot-del,/, "position"), "sticky",
+    "EXPORT / IMPORT / DELETE labels stay visible while the slot card scrolls");
+  assert.match(decl(css("css/settings.css"), "#pmsettings", "--sheet-w") || "",
+    /1020px/,
+    "SETTINGS matches the career hub width, not a 760 postcard");
+  assert.equal(decl(css("css/settings.css"), "#pm-settings-body", "scrollbar-width"), "none",
+    "DISPLAY uses the themed .sf-scroll thumb, not a white native gutter");
+  assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
+    "1px solid var(--card-line)",
+    "DISPLAY fold rules span the sheet, not a fading --grad-rule");
   assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,

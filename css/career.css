@@ -394,8 +394,29 @@
 /* SAVE / LOAD CAREER FILE and PROTECT LOCAL SAVES are plain <button>s
    (js/ui/settings-export.js careerRow) sized only by the base 10px padding:
    51 tall on a landscape iPhone (layout-audit 2026-10-05), a pixel under the
-   touch floor. Every density — the padding is the same everywhere. */
-#cr-career-file > button { min-height: var(--tap-paint); }
+   touch floor. Every density — the padding is the same everywhere.
+   .sel-edit-row wraps: arming LOAD to "… — OVERWRITE CAREER SAVES?" jumped
+   the plate to a new row and below the fold. Stack + a reserved two-line
+   height keeps the confirm under the pointer with no reflow. */
+#cr-career-file {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--gap);
+}
+#cr-career-file > button {
+  width: 100%;
+  flex: 0 0 auto;
+  min-height: var(--tap-paint);
+  box-sizing: border-box;
+}
+#cr-career-load {
+  min-height: calc(var(--tap-paint) * 2);
+  height: calc(var(--tap-paint) * 2);
+  white-space: normal;
+  line-height: 1.15;
+}
 #cr-inner[data-density="compact"] #cr-meters {
   margin-left: 0;
   width: 100%;
@@ -565,7 +586,19 @@
    career.spec.js's `.cr-slot .cr-slot-del` stays a single match. */
 .cr-slot-del,
 [data-cr-act] {
-  align-self: stretch; min-width: 62px; cursor: pointer;
+  /* Stretch painted empty slabs once the slot card's top (and the label)
+     scrolled off; keep a tap-tall chip that sticks while the card is in view. */
+  align-self: start;
+  position: sticky;
+  top: calc(var(--pad) * 0.25);
+  min-width: 62px;
+  min-height: var(--tap);
+  height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
   font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   color: var(--dim); background: transparent;
   border: 1px solid var(--card-line); border-radius: var(--r-sm);

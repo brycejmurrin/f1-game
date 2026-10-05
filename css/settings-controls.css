@@ -385,6 +385,12 @@
 /* Fold summaries are disclosures, not plates: readable ink + rule + left
    chevron (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate
    made HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
+/* Rule on the fold, not a fading --grad-rule on the summary: DISPLAY
+   (and the same disclosure family) stopped ~150px short of the sheet. */
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details {
+  width: 100%;
+  border-bottom: 1px solid var(--card-line);
+}
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
   /* --text, not --steel: steel italic on --surf-1 is the low-contrast
@@ -393,23 +399,19 @@
   font-style: italic;
   opacity: 1;
   background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
+  background-image: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 @media (hover: hover) {
   :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+    background-image: none;
     border: none;
     box-shadow: none;
   }
@@ -574,8 +576,7 @@ button:has(> [data-fold]) {
    The section headings inside the ADVANCED disclosure span the full width so
    the list still reads as grouped rather than as one undifferentiated field. */
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #audioset-inner,
-#pmsettings-inner[data-shape="wide"] #audioset .as-sec {
+#pmsettings-inner[data-shape="wide"] #audioset-inner {
   grid-column: 1 / -1;
   min-width: 0;
 }
