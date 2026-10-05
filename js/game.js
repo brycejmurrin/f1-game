@@ -7293,19 +7293,10 @@ function render(dt) {
   // raceT-keyed flash in this file is frozen at 0 until lights-out.
   const preGrid = state === "count";
   const gridFlash = preGrid && CarMesh.gridStrobe(countT);
-  // Prop emissive (lit windows / signage / neon) drives how strongly the
-  // buildings glow after dark. A full night session goes to full emissive
-  // REGARDLESS of the palette's sun elevation — many night palettes keep the sun
-  // above the horizon for the sky glow (sunY≈0.25), which would pin an elevation
-  // ramp near 0.10 and leave the glowing-glass towers reading as dark boxes.
-  // Dusk/dawn ramp by the (genuinely low) sun elevation; day stays dark.
+  // Prop emissive (lit windows / signage / neon) — the ramp lives in
+  // Atmosphere.floodEmit, which applyRaceSettings also resolves at once.
   // (Hoisted above the env probe so both world passes share it.)
-  const _sunY = frame.sunDir ? frame.sunDir[1] : (night ? -1 : 1);
-  const _floodEmit = Math.min(1, LT.floodEmitMul * (   // min(1): glsl-lit.js mix() EXTRAPOLATES past 1
-    (raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night)) ? 0.78
-      : (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - _sunY * 6, 0, 1)))
-        : 0));
+  const _floodEmit = _atmo.floodEmit(frame.sunDir ? frame.sunDir[1] : null);
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
   // ── Live env probe: render ONE 64px cubemap face of the world around the

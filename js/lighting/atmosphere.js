@@ -537,6 +537,27 @@ function _applyRaceBody() {
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
   if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+  // Resolve the prop-emissive ramp NOW, not only on the next rendered frame:
+  // stars/moon/ambient above land synchronously, and a read between a night→day
+  // rebuild and the first day frame used to pair the day sky with the night's
+  // floodEmit (qatar-foundation.spec, 2026-10-05: day 0.0858 == night 0.0858).
+  G._lastFloodEmit = floodEmit(G.frame && G.frame.sunDir ? G.frame.sunDir[1] : null);
+}
+
+// Prop emissive (lit windows / signage / neon) — how strongly the buildings
+// glow after dark. A full night session goes to full emissive REGARDLESS of the
+// palette's sun elevation: many night palettes keep the sun above the horizon
+// for the sky glow (sunY≈0.25), which would pin an elevation ramp near 0.10 and
+// leave the glowing-glass towers reading as dark boxes. Dusk/dawn ramp by the
+// (genuinely low) sun elevation; day stays dark. min(1): glsl-lit.js mix()
+// EXTRAPOLATES past 1. The ONE formula: game.js's frame and the resolve above.
+function floodEmit(sunY) {
+  const tod = G.raceTimeOfDay;
+  const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));
+  if (sunY == null) sunY = night ? -1 : 1;
+  return Math.min(1, LT.floodEmitMul * (night ? 0.78
+    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - sunY * 6, 0, 1)))
+    : 0));
 }
 
 // The sky shader's smoothstep, for the overcast horizon weight above.
@@ -624,7 +645,7 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-return { applyRaceSettings, prebakeLamps, tick, wxBlend, WX_BLEND_S };
+return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S };
 }
 
 return { create };
