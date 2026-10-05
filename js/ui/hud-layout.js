@@ -123,12 +123,17 @@ const HudLayout = (function () {
   // wheel's top edge (844x390, dock zoom 0.865: y-37 is 197..212, the wheel
   // from 215) and TYRES stays in the left corner between STRATEGY (bottom 211)
   // and the steer buttons (top 289): y-2 is 232..273, where the chase row's
-  // own position sat 8 px over the buttons at this zoom. Gear reads off the
-  // LCD's one large glyph, speed comes back under
-  // the 900x600 breakpoint, and OVERTAKE / AERO / BRAKE BIAS stay with the
-  // touch buttons that carry them (css/track-detail.css, the helmet touch hide).
+  // own position sat 8 px over the buttons at this zoom. GEAR takes the LCD's
+  // place and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay
+  // with the touch buttons that carry them (css/track-detail.css, the helmet
+  // touch hide).
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
-  const HELMET_TOUCH = { energy: { x: 0, y: -37, s: 100 }, tyre: { x: 0, y: -2, s: 100 } };
+  // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
+  // where the wheel's screen is (the chase row's own centre, one step down),
+  // SPEED moves right of it (the owner asked for the chip on the visor,
+  // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
+  const HELMET_TOUCH = { energy: { x: 0, y: -37, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
@@ -474,7 +479,7 @@ const HudLayout = (function () {
     [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
-    [["gearbox", "ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the wheel's gear glyph and the OT / AERO buttons carry it — move it to show it", true],
+    [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["rel", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
