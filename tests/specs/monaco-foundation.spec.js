@@ -92,7 +92,8 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   // js/circuits/monaco.js (sceneryCoordinates: "source", reverse: true):
   //
   //   0.6516-0.7516        -> 0.4380-0.5380 both   tunnel (bore 0.449-0.524)
-  //   0.0116-0.0816        -> 0.1080-0.1780 both   Casino sightline
+  //   0.0116-0.0816        -> 0.1080-0.1780 both   Beau Rivage climb (city)
+  //   0.9046-0.9846        -> 0.2050-0.2850 both   Casino Square (re-seated 2026-10-05)
   //   0.5516-0.9616 side-1 -> 0.2280-0.6380 R
   //   0.1116-0.2516 side-1 -> 0.9380-0.0780 R
   //   0.1116-0.2016 side+1 -> Beau Rivage climb (f822738c9 landmark wave)
@@ -100,6 +101,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   expect(result.definition.dressingExclusions).toEqual([
     { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
     { kind: "city", s0: 0.0116, s1: 0.0816 },
+    { kinds: ["city", "foliage"], s0: 0.9046, s1: 0.9846 },
     { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
     { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
     { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2016, side: 1 },
