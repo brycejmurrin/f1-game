@@ -15,6 +15,7 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -1562,6 +1563,71 @@ test("the planner frames its subject: Monza's turn-first clears the grandstand, 
     }
     assert.ok(Math.abs(F.PAN_MAX * 180 / Math.PI - 25) < 1e-9 && Math.abs(F.PARA_MAX * 180 / Math.PI - 30) < 1e-9,
       "pan and parallax budgets are the frame report's FAST_PAN 25 / FAST_MOVE 30 deg/s");
+    return null;
+  });
+});
+
+// ---- the three measured cases (frame report, 2026-10-05) --------------------
+//
+// tools/shot/frame-report.mjs on the tip found: Spa's landmark shots 52-62 with
+// SUBJECT_SMALL 0 % (the report's road clear had dropped the grandstand it was
+// filming — FlybySight.offRoad — so its box was never in the scene), Spa's wide
+// shots 70-77 with 34-44 % of the lap visible through the pines, Monza's wide
+// shots 72-80 % flat lawn (EMPTY_GROUND), and Monaco's grid walk with a barrier
+// across 31-32 % of its left third. These run the report itself, as a child,
+// so the numbers pinned are the report's own.
+
+function frameReport(id) {
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, [path.join(ROOT, "tools/shot/frame-report.mjs"), "--track", id, "--json", "--thumb", "0"],
+      { cwd: ROOT, maxBuffer: 64 * 1024 * 1024, timeout: 240000 }, (err, out) => {
+        if (err) return reject(err);
+        const byShot = {};
+        for (const f of JSON.parse(out).frames) (byShot[f.shot] = byShot[f.shot] || []).push(f);
+        resolve(byShot);
+      });
+  });
+}
+const minScore = (fs) => Math.min(...fs.map((f) => f.score));
+const flagged = (fs, re) => fs.flatMap((f) => f.flags).filter((s) => re.test(s));
+
+test("frame report: the subject landmark stays in the scene (Spa's stands framed, not 0 %); Spa's wide shots see more lap", async () => {
+  const spa = await frameReport("spa");
+  for (const id of ["landmark1", "landmark2"]) {
+    assert.deepEqual(flagged(spa[id], /SUBJECT_SMALL/), [], `spa ${id}: the grandstand is in frame (was SUBJECT_SMALL 0.0 %)`);
+    assert.ok(spa[id].every((f) => f.subject.coverPct > 20), `spa ${id}: ${spa[id].map((f) => f.subject.coverPct)} % of the frame is the stand`);
+    assert.ok(minScore(spa[id]) >= 80, `spa ${id}: worst frame ${minScore(spa[id])} (was 52-62)`);
+  }
+  // The wide shots: the crest eye sees down into the forest.
+  for (const id of ["wide", "wide2"]) assert.ok(minScore(spa[id]) >= 75, `spa ${id}: worst frame ${minScore(spa[id])} (was 70)`);
+  assert.deepEqual(flagged(spa.wide2, /SUBJECT_OCCLUDED/), [], "spa wide2: the lap is no longer hidden by the pines (was 34-35 % visible)");
+  assert.ok(spa.wide.every((f) => f.subject.visiblePct >= 44), `spa wide: ${spa.wide.map((f) => f.subject.visiblePct)} % of the lap visible (was 34-44)`);
+});
+
+test("frame report: Monza's wide shots tilt the horizon down out of the lawn; Monaco's grid walk steps off its barrier", async () => {
+  const [monza, monaco] = await Promise.all([frameReport("monza"), frameReport("monaco")]);
+  for (const id of ["wide", "wide2"]) {
+    assert.deepEqual(flagged(monza[id], /EMPTY_GROUND/), [], `monza ${id}: under groundMaxPct (was 72-80 % ground)`);
+    assert.ok(minScore(monza[id]) >= 77, `monza ${id}: worst frame ${minScore(monza[id])} (was 76)`);
+  }
+  assert.deepEqual(flagged(monaco["grid-walk"], /NEAR_OBSTRUCTION/), [], "monaco grid-walk: no barrier across a third (was 31-32 %)");
+  assert.ok(minScore(monaco["grid-walk"]) >= 80, `monaco grid-walk: worst frame ${minScore(monaco["grid-walk"])} (was 77)`);
+  assert.ok(minScore(monaco.wide2) >= 76, `monaco wide2: worst frame ${minScore(monaco.wide2)} (was 73)`);
+  for (const id of ["landmark1", "landmark2", "turn-first", "turn-mid", "grid-crane", "grid-front", "grid-mine"]) {
+    assert.ok(minScore(monza[id]) >= 78 && minScore(monaco[id]) >= 78, `${id}: untouched shots hold (monza ${minScore(monza[id])}, monaco ${minScore(monaco[id])})`);
+  }
+});
+
+test("FlybySight.mix: the frame's sky / ground / prop shares and their cost", async () => {
+  await withTrack("monza", (track, g) => {
+    const S = g.sandbox.FlybySight, F = g.sandbox.FlybySeq, b = F.bounds(track);
+    const up = S.mix(track, S.camera([b.x, b.y + 400, b.z], [b.x + 100, b.y + 500, b.z], 40, 16 / 9));
+    assert.ok(up.sky > 0.99, `looking up from 400 m is sky (${up.sky})`);
+    const down = S.mix(track, S.camera([b.x, b.y + 300, b.z], [b.x + 300, b.y, b.z], 40, 16 / 9));
+    assert.ok(down.ground + down.prop > 0.6 && Math.abs(down.sky + down.ground + down.prop - 1) < 1e-6, `looking down 45 degrees is mostly world (${JSON.stringify(down)})`);
+    assert.ok(S.GROUND_OK < 0.7, "the planner's ground limit sits under the report's groundMaxPct 70");
+    assert.equal(S.mixCost({ ground: 0.5, sky: 0.2 }), 0, "a frame well inside both limits costs nothing");
+    assert.ok(S.mixCost({ ground: 0.8, sky: 0 }) >= 15, "a lawn frame pays the report's rate and the flag");
     return null;
   });
 });

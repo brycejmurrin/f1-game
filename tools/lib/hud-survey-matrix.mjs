@@ -666,6 +666,10 @@ export function expectedVisibility(cell, ctx = {}) {
   const onboard = ONBOARD_IDS.includes(cam);
   const bcam = BCAM_IDS.includes(cam);
   const cockpitCam = ctx.cockpitCam != null ? !!ctx.cockpitCam : (cam === "cockpit" || cam === "helmet");
+  // The touch-cockpit strip hide follows the cockpit LAYOUT set (body[data-hl-set],
+  // js/ui/hud-layout.js) — the camera alone, whatever the wheel; cockpitCam is
+  // only the wheel LCD's gear / speed hide.
+  const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam);
   const big = dev.w >= 900 && dev.h >= 600;
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const minimal = prof === "minimal", broadcast = prof === "broadcast";
@@ -701,14 +705,14 @@ export function expectedVisibility(cell, ctx = {}) {
     "cockpit-cam hides the floating speed only at >= 900x600; BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
-    else camRule(k, !(bcam || (cockpitCam && !desktop && !placed.has(k))),
+    else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k))),
       "broadcast cams hide it; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css); desktop cockpit keeps it beside the wheel");
   }
   if (minimal || lay === "timing" || lay === "compact") want("bb", false, "BRAKE BIAS drops under MINIMAL / TIMING / COMPACT");
   else camRule("bb", !(bcam || (!desktop && !placed.has("bb"))), "BRAKE BIAS is desktop-only unless placed (css/hud.css)");
   if (cell.tyres === "off") want("tyre", false, "TYRE WEAR off hides the widget (js/ui/hud.js)");
   else if (lay === "timing" || lay === "compact") want("tyre", false, "TYRES drop under TIMING / COMPACT");
-  else camRule("tyre", !((broadcast && bcam) || (cockpitCam && !desktop && !placed.has("tyre"))),
+  else camRule("tyre", !((broadcast && bcam) || (cockpitSet && !desktop && !placed.has("tyre"))),
     "BROADCAST + broadcast cam hides .hud-bottom; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css)");
   if (cell.mirror === "off") want("mirror", false, "MIRROR: OFF");
   else if (cell.mirror === "on") camRule("mirror", true, "MIRROR: ON");

@@ -372,6 +372,14 @@ test("apex_select_specs dryRun pins --since --json, never --bg", () => {
   assert.ok(!body.argv.includes("--bg"), body.argv);
 });
 
+test("apex_agent describe passes its id as --id (agent.mjs describe needs one)", () => {
+  const r = callCli("apex_agent", { dryRun: true, track: "suzuka", command: "describe", id: "corner:T1" });
+  assert.equal(r.status, 0, r.stderr);
+  const argv = JSON.parse(r.stdout).argv;
+  assert.equal(argv[argv.indexOf("--id") + 1], "corner:T1", argv);
+  assert.equal(callCli("apex_agent", { dryRun: true, command: "describe", id: "--url" }).status, 1, "id is flag-guarded");
+});
+
 test("apex_select_specs without since → bad_args", () => {
   const r = callCli("apex_select_specs", { dryRun: true });
   assert.equal(r.status, 1, r.stderr);
@@ -755,6 +763,32 @@ test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () =>
 
 // Regression evidence from the tool survey: malformed callers must fail at
 // the seam, before any tree command, browser occupancy check or VM boot.
+test("every tool carries title, honest MCP annotations and an outputSchema; results mirror structuredContent", () => {
+  // MCP 2025-06-18 ToolAnnotations default to destructiveHint: true and
+  // openWorldHint: true — wrong for 25 of these 26 wraps. The hints derive from
+  // the catalog's kind (docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md §4).
+  const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
+  const readOnly = [], destructive = [], openWorld = [];
+  for (const t of listed) {
+    assert.match(t.title, /^Apex 26 · /, t.name);
+    assert.equal(t.outputSchema.type, "object", t.name);
+    assert.equal(typeof t.outputSchema.properties.ok, "object", t.name);
+    const a = t.annotations;
+    for (const k of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) assert.equal(typeof a[k], "boolean", `${t.name}.${k}`);
+    if (a.readOnlyHint) readOnly.push(t.name);
+    if (a.destructiveHint) destructive.push(t.name);
+    if (a.openWorldHint) openWorld.push(t.name);
+    if (a.readOnlyHint) assert.equal(a.idempotentHint, true, `${t.name}: read-only implies idempotent`);
+    if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
+  }
+  assert.deepEqual(destructive, ["apex_job_cancel"]);
+  assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
+  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
+  assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
+});
+
 test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
   for (const tool of listed) {

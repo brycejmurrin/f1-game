@@ -12,7 +12,10 @@
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
               modelGroup, waterSurface, groundPatch, broadcastCompound, cameraTower,
-              sponsorHoarding } = api;
+              sponsorHoarding, broadleafFall, lapBounds, py } = api;
+      // Subtropical broadleaf canopy greens + flowering jacaranda.
+      const BROAD = [[0.20, 0.42, 0.18], [0.24, 0.47, 0.20], [0.18, 0.38, 0.17]];
+      const JACARANDA = [0.56, 0.44, 0.74];
 
       // Vivid favela palette (terracotta, sunflower, teal, coral, sage, ochre…)
       const FAV = [
@@ -431,9 +434,9 @@
       marshalPost(K(0.085), -1, 8);
 
       forestEdge(0.04, 0.10,  1, 14, { density: 0.78, hMin: 10, hMax: 16,
-                                        col: [0.18, 0.42, 0.18], col2: [0.24, 0.48, 0.24], pineFrac: 0.1 });
+                                        col: [0.18, 0.42, 0.18], col2: [0.24, 0.48, 0.24], pineFrac: 0 });
       forestEdge(0.04, 0.10, -1, 18, { density: 0.58, hMin: 11, hMax: 17,
-                                        col: [0.20, 0.44, 0.20], col2: [0.26, 0.50, 0.24], pineFrac: 0.1 });
+                                        col: [0.20, 0.44, 0.20], col2: [0.26, 0.50, 0.24], pineFrac: 0 });
       // Steep green bank boxes selling the plunge into the S
       for (const s of [0.045, 0.06, 0.08]) {
         backdrop(K(s), 1, 28, [22, 8, 18], HILL);
@@ -465,7 +468,7 @@
       });
 
       forestEdge(0.10, 0.32, -1, 34, { density: 0.42, hMin: 6, hMax: 11,
-                                        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0.15 });
+                                        col: [0.18, 0.40, 0.18], col2: [0.22, 0.44, 0.20], pineFrac: 0 });
 
       // Three dense climbing communities: baseDist 68-90 m, rows 8-9. Each
       // patch grounds per-row against the real terrain (see favelaPatch), so
@@ -494,7 +497,7 @@
 
       // Dense shoreline forestEdge — guaranteed no barrier clipping
       forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
-                                        col: [0.18, 0.42, 0.18], col2: [0.22, 0.46, 0.18], pineFrac: 0.25 });
+                                        col: [0.18, 0.42, 0.18], col2: [0.22, 0.46, 0.18], pineFrac: 0 });
       // Palms near water's edge for tropical look
       for (const s of [0.30, 0.34, 0.38, 0.42, 0.46]) {
         const k = K(s);
@@ -611,7 +614,7 @@
       // canopy overhanging a DIFFERENT part of the circuit — props-over-road
       // measured 2.88 m of intrusion at f=84.5 from trees authored at f~70.
       forestEdge(0.61, 0.76, -1, 7, { density: 0.55, hMin: 9, hMax: 14,
-                                        col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.18], pineFrac: 0.5 });
+                                        col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.18], pineFrac: 0 });
       // Accent trees go on the OUTSIDE (-1) only. Side +1 through here is the
       // inside of the Bico de Pato / Mergulho loop, and the lap folds back on
       // itself tightly enough that a canopy 22-38 m into the infield hangs over
@@ -670,8 +673,14 @@
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
           const r = hash(k * 93 + side);
+          // Subtropical Atlantic-forest mix, no conifers (survey 2026-10-05:
+          // the pine() cones here read as alpine). Lobed broadleaf for the
+          // dense bushy canopy; ~1 in 5 of those is a jacaranda in its
+          // Sep-Nov bloom, which is when the GP runs.
           if      (r > 0.62) tree(k, side, d, 10 + hash(k * 94 + side) * 6, [0.22, 0.46, 0.22]);
-          else if (r > 0.31) pine(k, side, d, 12 + hash(k * 95 + side) * 6, [0.20, 0.42, 0.20]);
+          else if (r > 0.31) broadleafFall(k, side, d, 11 + hash(k * 95 + side) * 6,
+                               hash(k * 96 + side) > 0.80 ? JACARANDA : BROAD[(k + side + 2) % BROAD.length],
+                               { lobes: 4, spread: 1.15, barkCol: [0.34, 0.28, 0.22] });
           else               bush(k, side, d, [0.24, 0.48, 0.24]);
         }
       });
@@ -682,5 +691,123 @@
         if (hash(kk * 97 + i) > 0.50) continue;
         const d = 40 + hash(kk * 98 + i) * 28;
         palm(kk, -1, d, 12 + hash(kk * 99 + i) * 6, [0.20, 0.46, 0.18]);
+      }
+
+      // ── São Paulo bowl ring (survey 2026-10-05) ──────────────────────────
+      // The real autódromo sits in a natural bowl walled by dense high-rise
+      // apartment blocks and hillside low-rise/favela housing (Cidade Dutra,
+      // Jardim Satélite), with Guarapiranga/Billings to the south-west. The
+      // build had green mounds, five favela patches and a handful of towers
+      // in a void. This walks rays out of the lap centroid and, past the last
+      // point any part of the lap comes within RING_IN m, raises a terraced
+      // hillside (grounded on the world floor, stepping up past track height)
+      // with self-built houses on every terrace and apartment towers behind.
+      // One small modelGroup per ray: a site the preflight rejects drops
+      // alone, and clip-audit sees each as one model.
+      {
+        const { cx, cz } = lapBounds();
+        const FLOOR = pyMin - 1;
+        const RING_IN = 235;              // clear of favela patches, hill mounds, cityFront rows
+        const near = (x, z) => {
+          let best = 1e18, bk = 0;
+          for (let i = 0; i < n; i += 2) {
+            const dx = px[i] - x, dz = pz[i] - z, d = dx * dx + dz * dz;
+            if (d < best) { best = d; bk = i; }
+          }
+          return [Math.sqrt(best), bk];
+        };
+        const lake = anchor(K(0.42), -1, 520).c;
+        const sky = anchor(K(0.60), 1, 240).c;
+        const TOWER = [
+          [0.80, 0.78, 0.72], [0.72, 0.72, 0.70], [0.86, 0.82, 0.74], [0.66, 0.68, 0.70],
+          [0.78, 0.70, 0.62], [0.90, 0.88, 0.82], [0.60, 0.62, 0.64],
+        ];
+        const GLAZE = [0.30, 0.36, 0.42];
+        const EARTH = [[0.30, 0.44, 0.22], [0.36, 0.46, 0.24], [0.52, 0.36, 0.26]];
+        const SITES = 60, NT = 5, STEP = 11, L = 58;
+        for (let i = 0; i < SITES; i++) {
+          const ang = (i + 0.5) / SITES * 6.2832;
+          const dx = Math.cos(ang), dz = Math.sin(ang);
+          let rEdge = 0;
+          for (let r = 0; r < 1700; r += 12)
+            if (near(cx + dx * r, cz + dz * r)[0] < RING_IN) rEdge = r;
+          const r0 = rEdge + 14 + hash(i * 3.7) * 10;
+          const ox = cx + dx * r0, oz = cz + dz * r0;
+          const [d0, kn] = near(ox, oz);
+          if (d0 < RING_IN - 5) continue;
+          if (Math.hypot(ox - lake[0], oz - lake[2]) < 360) continue;   // Guarapiranga water
+          if (Math.hypot(ox - sky[0], oz - sky[2]) < 150) continue;     // the hero skyline
+          const R = [dx, 0, dz], U = [0, 1, 0], T = [-dz, 0, dx], b = [R, U, T];
+          // Both tangent corners of the outermost terrace must stay clear too.
+          const far = r0 + NT * STEP + 40;
+          let clear = true;
+          for (const rr of [r0, far]) for (const tt of [-L / 2, L / 2]) {
+            const x = cx + dx * rr + T[0] * tt, z = cz + dz * rr + T[2] * tt;
+            if (near(x, z)[0] < RING_IN - 25 || Math.hypot(x - lake[0], z - lake[2]) < 330) clear = false;
+          }
+          if (!clear) continue;
+          const yRef = Math.max(py[kn], FLOOR + 6);
+          const at = (rad, tan, y) => [cx + dx * rad + T[0] * tan, y, cz + dz * rad + T[2] * tan];
+          const tops = [];
+          for (let j = 0; j < NT; j++) tops.push(Math.max(yRef - 8, FLOOR + 3) + j * 6.5 + hash(i * 5 + j) * 2.0);
+          const towers = [];
+          const nTw = 1 + Math.floor(hash(i * 7.1) * 3);
+          for (let t = 0; t < nTw; t++) {
+            const h = (yRef - FLOOR) + 34 + hash(i * 13 + t * 3) * 56;
+            const w = 15 + hash(i * 17 + t) * 6, dp = 13 + hash(i * 19 + t) * 4;
+            const tan = (t - (nTw - 1) / 2) * 20 + (hash(i * 23 + t) - 0.5) * 4;
+            towers.push({ h, w, dp, tan, rad: r0 + NT * STEP + 10 + dp / 2 + (t & 1) * 6 });
+          }
+          let topY = tops[NT - 1] + 14;
+          for (const tw of towers) topY = Math.max(topY, FLOOR + tw.h + 2);
+          const botY = FLOOR - 1.5;
+          const rMid = (r0 - 2 + far + 6) / 2;
+          modelGroup(`interlagos-bowl-${i}`, {
+            center: at(rMid, 0, (topY + botY) / 2),
+            size: [far + 8 - r0, topY - botY + 2, L + 30], basis: b,
+          }, (stage) => {
+            for (let j = 0; j < NT; j++) {
+              // Terrace: from the world floor to its top. Each overlaps the
+              // next by 1.3 m and is 1.6 m narrower, so no two share a face.
+              // Feet staggered 7 cm per terrace (3 cm per odd site): the
+              // overlapping undersides were one plane (ground-audit flatCoplanar).
+              const foot = FLOOR - 1 - j * 0.07 - (i & 1) * 0.03;
+              const top = tops[j], lj = L - j * 1.6, h = top - foot;
+              stage._mat = 0;
+              addBox(stage, at(r0 + j * STEP + (STEP + 1.3) / 2, 0, foot + h / 2),
+                     [STEP + 1.3, h, lj], EARTH[(i + j) % EARTH.length], b);
+              stage._mat = MAT.CONCRETE;
+              const cols = Math.floor((lj - 4) / 7.4);
+              for (let c = 0; c < cols; c++) {
+                const hh = hash(i * 31 + j * 7 + c * 3);
+                if (hh > 0.86) continue;                              // alleys / stairs
+                const w = 5.0 + hash(i * 37 + c + j) * 1.8, dd = 5.0 + hash(i * 41 + j + c) * 2.4;
+                const hgt = 3.2 + hash(i * 43 + j * 3 + c) * 6.0;
+                const sink = 0.3 + ((c + j) & 1) * 0.05;               // no shared undersides
+                const fin = hash(i * 47 + j * 11 + c * 5);
+                const col = fin < 0.46 ? RAW[(j * 3 + c) % RAW.length]
+                          : fin < 0.58 ? SCREED[(j + c) % SCREED.length]
+                          : FAV[(i + j * 4 + c * 3) % FAV.length];
+                const tan = (c - (cols - 1) / 2) * 7.4 + (hh - 0.5) * 1.2;
+                addBox(stage, at(r0 + j * STEP + 1.0 + dd / 2, tan, top - sink + (hgt + sink) / 2),
+                       [dd, hgt + sink, w], col, b);
+              }
+            }
+            for (const [ti, tw] of towers.entries()) {
+              const tf = FLOOR - 1.5 - ti * 0.06;
+              // Apartment slab on the floor, with three glazed bands and a roof plant
+              stage._mat = MAT.CONCRETE;
+              const col = TOWER[Math.floor(hash(tw.rad + tw.tan + i) * TOWER.length) % TOWER.length];
+              addBox(stage, at(tw.rad, tw.tan, (tf + FLOOR + tw.h) / 2), [tw.dp, FLOOR + tw.h - tf, tw.w], col, b);
+              stage._mat = MAT.GLASS;
+              for (const f of [0.52, 0.70, 0.86])
+                addBox(stage, at(tw.rad, tw.tan, FLOOR + tw.h * f), [tw.dp + 0.3, 2.2, tw.w + 0.3], GLAZE, b);
+              stage._mat = MAT.CONCRETE;
+              addBox(stage, at(tw.rad, tw.tan, FLOOR + tw.h + 1.1), [tw.dp * 0.5, 2.6, tw.w * 0.4],
+                     [0.58, 0.58, 0.60], b);
+            }
+            stage._mat = 0;
+          });
+        }
       }
     };

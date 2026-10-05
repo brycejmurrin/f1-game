@@ -115,6 +115,10 @@
       // grid, and every car is clearance-checked rather than left to the guard.
       const CAR = [[0.85, 0.85, 0.86], [0.70, 0.69, 0.68], [0.52, 0.14, 0.12],
                    [0.22, 0.25, 0.31], [0.86, 0.82, 0.58], [0.33, 0.34, 0.36]];
+      // Columns are spaced along the TRACK, so on the inside of a bend they
+      // converge out at the park and two cars can land in one bay: skip a car
+      // whose centre is within a car length of one already parked (in any park).
+      const parked = [];
       const carPark = (f0, side, d0, cols, ranks, seed) => {
         for (let i = 0; i < cols; i++) {
           const k = K(f0 + i * 6.5 * M);
@@ -123,7 +127,10 @@
             const h = hash(i * 17 + r * 83 + seed);
             if (h < 0.22) continue;                 // a car park is never full
             if (!clear(k, side, d, 11)) continue;
-            place(k, side, d, [4.6, 1.5, 2.2], CAR[(i + r * 2 + seed) % 6]);
+            const c = anchor(k, side, d).c;
+            if (parked.some((q) => Math.hypot(q[0] - c[0], q[2] - c[2]) < 5)) continue;
+            parked.push(c);
+            place(k, side, d, [4.6, 2.25, 2.2], CAR[(i + r * 2 + seed) % 6]);   // 1.45 m showing (place sinks 0.8)
           }
         }
       };
@@ -187,7 +194,7 @@
       tower(K(sl(0.0400)), -1, 50, 1.1, 15);
       building(K(sl(0.9880)), -1, 57, 14, 5.5, 26,   // services block; the
         { wall: WHITEWASH, roof: [0.55, 0.34, 0.24] }); // road returns at ~60
-      carPark(sl(0.9620), -1, 82, 16, 2, 3);
+      carPark(sl(0.9620), -1, 96, 16, 2, 3);   // 96, not 82: clear of the spectator hill's back rows
 
       // 3. PIT + PADDOCK BLOCK  (0.010, +1, 8)
       //    The only dense built mass on the circuit: a low flat-roofed garage
