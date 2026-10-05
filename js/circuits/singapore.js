@@ -94,6 +94,13 @@
       ambientGround:[0.18, 0.20, 0.26],
       fogColor:     [0.06, 0.08, 0.14],
       fogDensity:   0.0020,
+      // A street, not a park: the verge between the kerb and the wall and the
+      // ground behind it are pavement/road, so the engine's "grass" and
+      // "runoff" tints are concrete greys (monaco/jeddah precedent). The
+      // terrain still carries MAT.GRASS's texture layer — def.terrainMat has
+      // no paved option (parent: js/track/core/mesh.js ribbon()).
+      grass:        [0.25, 0.25, 0.27],
+      runoff:       [0.30, 0.30, 0.31],
     },
     elevations: [
       { s: 0.9000, halfM: 120, rise: -2.5 },
@@ -125,7 +132,7 @@
     // physical apex positions are unchanged — only which corner you meet first.
     sectors: [0.34, 0.68],
     turns: [0.0629, 0.0809, 0.0914, 0.1739, 0.1814, 0.3409, 0.3839, 0.4259, 0.5179, 0.5414, 0.5484, 0.5574, 0.5829, 0.6004, 0.7104, 0.8579, 0.8714, 0.9299, 0.9499],
-    barrier: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.12, 0.16, 0.32], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red
+    barrier: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.52, 0.54, 0.58], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red; night = floodlit grey concrete (the near-black navy vanished against the road at night)
     furniture: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "truss",      camera: "scaffold",  hoarding: "led" },
     standSet: ["scaffold", "teal", "darkSteel"],
