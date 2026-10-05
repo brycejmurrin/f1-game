@@ -205,7 +205,7 @@ test("the terrain material knob: desert and alpine presets name it, shipped defs
   assert.equal(b.T.defFields("desertnight").terrainMat, "SAND");
   assert.equal("terrainMat" in b.T.defFields("parkland"), false);
   // Shipped circuits that name their ground: Vegas's desert lots, Singapore's paved verges.
-  const SHIPPED = { vegas: "SAND", singapore: "CONCRETE" };
+  const SHIPPED = { vegas: "SAND", singapore: "CONCRETE", miami: "CONCRETE" };
   for (const t of b.Tracks.LIST) if (!t.custom) assert.equal(t.terrainMat, SHIPPED[t.id], t.id + " terrainMat");
   const def =b.ctx.TrackDef.fromRaw(Object.assign({ id: "t", name: "T", gp: "T", country: "", lengthKm: 4, path: { len: 4000, pts: [[0, 0], [100, 0], [100, 100], [0, 100]] }, baseHW: 7, theme: "green", pal: {}, terrainMat: "SNOW" }));
   assert.equal(def.terrainMat, "SNOW");
