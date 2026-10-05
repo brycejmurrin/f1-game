@@ -9,7 +9,7 @@
       "lines": 3289
     },
     "js/car/car3d.js": {
-      "lines": 3483
+      "lines": 3489
     },
     "js/game.js": {
       "codeLines": 4833,
@@ -74,7 +74,7 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 93,
+    "waitForTimeout": 92,
     "waitNoPolling": {
       "ceiling": 57,
       "slack": 39
