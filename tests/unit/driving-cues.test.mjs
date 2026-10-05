@@ -132,6 +132,50 @@ test("one call per turn: a long sweeper is called ONCE, and the next turn on the
   assert.deepEqual(ctx._calls, ["L", "L"], "the sweeper once, the later left once");
 });
 
+test("two same-side turns split by a straight shorter than the lookahead are each called", () => {
+  // Was: callArmed re-armed only when the WHOLE window (~100 m on the top notch)
+  // ran straight, so after a 60 m straight the second left was never called.
+  // It now re-arms once the car is past the called turn's exit.
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 1000 && u < 1100) return 0.03;  // left
+    if (u > 1160 && u < 1260) return 0.03;  // 60 m straight, then another left
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 800, speed: 70, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(10);
+  for (let i = 0; i < 600; i++) { ctx._t = i * 1000 / 60; G.player.s = 800 + i; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L", "L"], "each left once, got " + JSON.stringify(ctx._calls));
+});
+
+test("a double-apex dip inside one long turn does not re-arm the call", () => {
+  const ctx = load();
+  ctx.Tracks.curvature = (track, s) => {
+    const u = ((s % track.total) + track.total) % track.total;
+    if (u > 500 && u < 700) return 0.02;
+    if (u >= 700 && u < 730) return 0.008;  // eases below K_CALL, never opens up
+    if (u >= 730 && u < 900) return 0.02;
+    return 0;
+  };
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 300, speed: 60, axEstSm: 0, finished: false, retired: false },
+    track: { total: 2000 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(10);
+  for (let i = 0; i < 800; i++) { ctx._t = i * 1000 / 60; G.player.s = 300 + i; ctx.DrivingCues.tick(); }
+  assert.deepEqual(ctx._calls, ["L"], "one turn, one call, got " + JSON.stringify(ctx._calls));
+});
+
 test("the call memory resets when the cues stand down (a new race starts clean)", () => {
   const ctx = load();
   ctx.Tracks.curvature = (track, s) => (s > 500 && s < 900 ? 0.02 : 0);
