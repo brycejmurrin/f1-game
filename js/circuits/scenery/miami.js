@@ -32,8 +32,10 @@
       const PALM_DARK  = [0.16, 0.45, 0.20];
       const GLASS      = [0.55, 0.72, 0.78];
       const CONCRETE   = [0.70, 0.70, 0.72];
-      const WATER      = [0.13, 0.46, 0.62];
-      const WATER_DEEP = [0.08, 0.32, 0.48];
+      // The MIA marina is painted vinyl on the car park, not water: the
+      // turquoise lives here (and only here) — the def's terrain is asphalt.
+      const WATER      = [0.16, 0.66, 0.72];
+      const WATER_DEEP = [0.12, 0.56, 0.64];
       // Dolphins aqua runoff — COL.aquaRunoff when shared kit is present
       const AQUA       = (COL && COL.aquaRunoff) || [0.12, 0.72, 0.78];
       const PASTELS    = [TEAL, CORAL, PINK, [0.75, 0.90, 1.0], [1.0, 0.85, 0.55]];
@@ -100,14 +102,16 @@
         if (onTrack(a.c[0], a.c[2], 20)) return;
         const size = [rows * 6 + 4, 1.6, cols * 2.6 + 4];
         modelGroup(`car-park-${k}`, { center: vadd(a.c, a.u, 0.8), size, basis: bv }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 0.1), [size[0], 0.2, size[2]], [0.30, 0.30, 0.33], bv);
-          // white bay lines
+          // anchor() is 0.3 m under grade: the pad spans -0.05..+0.15 m about
+          // the ground (it sat 0.1 m under it, its bay lines buried with it).
+          addBox(stage, vadd(a.c, a.u, 0.35), [size[0], 0.2, size[2]], [0.27, 0.27, 0.30], bv);
+          // white bay lines, 1.5 cm into the pad top, 3.5 cm proud
           for (let c = 0; c <= cols; c++)
-            addBox(stage, vadd(vadd(a.c, a.u, 0.2), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
+            addBox(stage, vadd(vadd(a.c, a.u, 0.46), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
           for (let r = 0; r < rows; r++)
             for (let c = 0; c < cols; c++) {
               if (hash(k + r * 13 + c * 7) > 0.82) continue;   // empty bays
-              const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 0.75), a.t, (c - cols / 2) * 2.6);
+              const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 1.13), a.t, (c - cols / 2) * 2.6);
               const t = hash(k * 5 + r * 11 + c);
               addBox(stage, p, [4.4, 1.4, 2.1],
                      [0.28 + t * 0.5, 0.30 + hash(c * 3) * 0.4, 0.34 + hash(r * 7) * 0.42], bv);
@@ -210,19 +214,21 @@
           const kFrac = ((i / 12) * 0.28 + 0.90) % 1.0;   // s 0.90 → 0.18
           const k = K(kFrac);
           const side = (i % 3 === 2) ? -1 : 1;
-          const dist = 700 + h0 * 280;           // 700–980 m — horizon haze
+          // Downtown Miami is ~25 km south of the campus: a far haze only.
+          const dist = 1250 + h0 * 350;          // 1250–1600 m (was 700–980)
           const bW = 20 + h1 * 14;
           const bH = 55 + h0 * 80 + (i < 4 ? 40 : 0);
           const bD = 14 + h2 * 8;
           backdrop(k, side, dist, [bW, bH, bD], haze(SKY_COLS[i % SKY_COLS.length]));
         }
-        // 6 mid-rise skirt blocks — also hazed and far
+        // 6 skirt blocks — hazed, and beyond the campus (were 560–720 m:
+        // a mid-rise ring around the lots that the real site does not have)
         for (let i = 0; i < 6; i++) {
           const h0 = hash(i * 9.9 + 11), h1 = hash(i * 4.4 + 13), h2 = hash(i * 6.1 + 17);
           const kFrac = (i / 6 + 0.88) % 1.0;
           const k = K(kFrac);
           const side = (i % 2) ? 1 : -1;
-          const dist = 560 + h0 * 160;
+          const dist = 1100 + h0 * 160;
           const bW = 28 + h1 * 16;
           const bH = 30 + h2 * 32;
           const bD = 16 + h0 * 8;
@@ -351,8 +357,10 @@
           roof: (i % 2) ? "truss" : "cantilever", endWalls: i === 0,
         });
       }
+      // Low hospitality pavilions, not towers: every trackside cityFront here
+      // was 10-38 m (x1.5 landmarks to 57 m) — a downtown the campus lacks.
       cityFront(0.04, 0.12, 1, 30, {
-        minH: 14, maxH: 38, depth: 25, step: 20,
+        minH: 5, maxH: 9, depth: 25, step: 26,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
@@ -374,7 +382,7 @@
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
       cityFront(0.18, 0.26, -1, 42, {
-        minH: 10, maxH: 26, depth: 16, step: 18,
+        minH: 4, maxH: 8, depth: 16, step: 24,
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
@@ -491,11 +499,17 @@
         });
       }
       cityFront(0.42, 0.53, -1, 24, {
-        minH: 14, maxH: 34, depth: 22, step: 20,
+        minH: 4, maxH: 8, depth: 22, step: 30,
         palette: SKY_PAL_STADIUM, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
       carPark(0.47, -1, 60, 4, 18);
+      // The campus IS its car parks (Hard Rock Stadium lots): painted-bay lots
+      // where the generic low-rise and the hand-placed dressing leave room.
+      carPark(0.10, 1, 90, 4, 16);
+      carPark(0.62, 1, 60, 4, 18);
+      carPark(0.81, 1, 62, 4, 18);
+      carPark(0.92, 1, 50, 4, 16);
       parkingDeck(0.55, 1, 70, { tiers: 4, w: 34, len: 56 });
 
       {
@@ -576,7 +590,8 @@
           const [s, side, gap] = apronSpots[i];
           const depth = 16 + hash(i * 17) * 8;
           const len = 28 + hash(i * 23) * 16;
-          runoffApron(K(s), side, gap, [depth, 0.32, len], AQUA);
+          // Aqua only at the marina exit; elsewhere the run-off is lot asphalt.
+          runoffApron(K(s), side, gap, [depth, 0.32, len], s === 0.36 ? AQUA : [0.32, 0.33, 0.35]);
         }
       }
 
@@ -659,8 +674,10 @@
         [0.572, "notch",    WHITE,            21],
         [0.590, "ziggurat", [0.80, 0.92, 0.96], 17],
       ];
+      // Beach-club cabanas and hospitality suites, two storeys at most: the
+      // authored 16-22 m heights read as a mid-rise Ocean Drive strip.
       for (const [s, kind, wallCol, h] of DECO) {
-        building(K(s), 1, 22, 20, h, 18, {
+        building(K(s), 1, 22, 20, Math.round(h * 0.45 * 10) / 10, 18, {
           kind, wall: wallCol, window: [0.30, 0.52, 0.60], floor: 4.2,
           lit: true, windowCol: WIN_AMBER,
           // The neon eyebrow — the one detail every Ocean Drive photograph has.
@@ -702,7 +719,7 @@
         bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
       });
       cityFront(0.76, 0.86, -1, 34, {
-        minH: 16, maxH: 38, depth: 22, step: 20,
+        minH: 5, maxH: 9, depth: 22, step: 30,
         palette: SKY_PAL_DUSKGLASS, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 12; i++) {
@@ -719,7 +736,7 @@
       }
 
       cityFront(0.87, 0.97, -1, 26, {
-        minH: 10, maxH: 28, depth: 22, step: 18,
+        minH: 4, maxH: 8, depth: 22, step: 26,
         palette: [WHITE, ...rotPal(SKY_PAL, 3)], lit: true, windowCol: WIN_AMBER,
       });
       const FINAL_STANDS = ["pastel", "teal"];

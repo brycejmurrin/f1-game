@@ -35,7 +35,15 @@
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
       { kinds: ["city"], s0: 0.115, s1: 0.128 },   // T4 inside: retail boxes converge and interpenetrate
     ],
-    pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.12, 0.72, 0.78], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
+    // The campus is car park, not lawn: Hard Rock Stadium's lots are grey
+    // asphalt with painted bays, and the turquoise is the painted fake marina
+    // only (scenery/miami.js, racing 0.26-0.38). The old runoff [0.12,0.72,0.78]
+    // was the terrain ribbon's inner colour on EVERY verge (TrackMesh ribbon()
+    // grades runoff -> grass across terrainOuter), so the whole lap read
+    // turquoise; grass also tints the far floor (x0.88). terrainMat CONCRETE
+    // makes the baked pack lay paving, not a grass texture (singapore precedent).
+    terrainMat: "CONCRETE",
+    pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.36, 0.36, 0.37], runoff: [0.30, 0.30, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [{ s: 0.8605, halfM: 220, rise: 3.5 }],
     bankZones: [
       { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3
@@ -56,8 +64,12 @@
     kit: { marshal: "kiosk",     rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     standSet: ["pastel", "teal", "alu"],
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
-    cityStyle: { neon: ["pink", "cyan", "teal", "orange", "purple"], bias: 0.44, fh: [11, 30], bh: [28, 68],
-                 kinds: ["setback", "podium", "slab", "cylinder", "twin", "dome", "chevron", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
+    // Low-rise only: the campus around the circuit is car parks, hospitality
+    // pavilions and service sheds; downtown Miami is ~25 km south and lives in
+    // the scenery's far backdrop. fh/bh were [11,30]/[28,68] — a 28-96 m
+    // "downtown" walling both sides of every straight.
+    cityStyle: { neon: ["pink", "cyan", "teal", "orange", "purple"], bias: 0.44, fh: [4, 5], bh: [6, 6],
+                 kinds: ["podium", "slab", "dome", "drum", "hall"], neonKinds: ["clad", "screen"], tone: { n: [0.15, 0.14, 0.18], d: [0.58, 0.60, 0.64] },
                  dayPal: ["cream", "white", "peach", "pink", "aqua", "mint", "lemon"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
