@@ -149,6 +149,8 @@ const SceneryCity = (function () {
       drawFace(0, -side, sw / 2, 2, sd, 0, false);   // track-facing facade: full detail
       drawFace(2, 1, sd / 2, 0, sw, 137, true);      // +t side: simple
       drawFace(2, -1, sd / 2, 0, sw, 311, true);     // -t side: simple
+      // No back-face panes: the solid UNIT_BOX mass already closes all four
+      // walls; dressing the rear adds tris without fixing open faces.
     };
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
@@ -232,6 +234,10 @@ const SceneryCity = (function () {
         const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
           { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: dayWall },
           unitBox, { kind: "buildingMass", k, side }) > 0;
+        // DAY must match NIGHT: a rejected wall mass must not leave orphan
+        // facade rails / panes / mullions (the open-face / skeletal-slab look
+        // on Vegas/Baku/Sochi/Imola — W4-AUDIT 2026-08, survey 2026-10-05).
+        if (ok === false) { out._mat = 0; glassBuf._mat = 0; return false; }
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
         const dayMull = [dayWall[0] * 0.82, dayWall[1] * 0.82, dayWall[2] * 0.82];
@@ -343,7 +349,8 @@ const SceneryCity = (function () {
         const h1 = h * 0.55, collar = h * 0.05;
         if (section(0, w, h1, d) === false) return;
         addFrustum(out, vadd(p.c, p.u, h1), diag * 0.5, diag * 0.40, collar, crownCol, 8, b);
-        section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72);
+        // Upper storey rejected → drop crown/cap dependents (same atomic rule).
+        if (section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72) === false) return;
         topW = w * 0.72; topD = d * 0.72;
       } else if (arch === "taper") {
         const bh = h * 0.90;
@@ -477,6 +484,9 @@ const SceneryCity = (function () {
         dface(0, -side, sw / 2, 2, sd, false);   // track-facing: full
         dface(2, 1, sd / 2, 0, sw, true);        // +t side: simple
         dface(2, -1, sd / 2, 0, sw, true);       // -t side: simple
+        // Back face undressed on purpose (matches neonFacade): the solid
+        // addBox body already closes all four walls; a 4th window grid is
+        // tris growth, not an open-face fix.
       };
       const bmat = NIGHT ? MAT.CONCRETE : facadeMat(bodyCol);
       const sec = (yb, sw, sh, sd, seed, to, ro) => {
@@ -494,12 +504,16 @@ const SceneryCity = (function () {
       if (kind === "tiered") {
         let yb = 0, tw = w, td = d;
         const frac = [0.46, 0.32, 0.22];
-        for (let i = 0; i < 3; i++) { const th = h * frac[i]; sec(yb, tw, th, td, k * 3.7 + side * 1.9 + i * 11); yb += th; tw *= 0.66; td *= 0.66; }
+        for (let i = 0; i < 3; i++) {
+          const th = h * frac[i];
+          if (sec(yb, tw, th, td, k * 3.7 + side * 1.9 + i * 11) === false) return;
+          yb += th; tw *= 0.66; td *= 0.66;
+        }
         addBox(out, vadd(a.c, a.u, h + 0.5), [tw, 1.0, td], cap, b);
       } else if (kind === "podium") {
         const podH = h * 0.28;
-        sec(0, w * 1.35, podH, d * 1.35, k * 3.1 + side);          // wide retail podium
-        sec(podH, w * 0.7, h - podH, d * 0.7, k * 5.1 + side * 2);  // slender tower
+        if (sec(0, w * 1.35, podH, d * 1.35, k * 3.1 + side) === false) return;          // wide retail podium
+        if (sec(podH, w * 0.7, h - podH, d * 0.7, k * 5.1 + side * 2) === false) return;  // slender tower
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.45, 1.0, d * 0.45], cap, b);
       } else if (kind === "slab") {
         if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents // clean tall slab
@@ -508,12 +522,15 @@ const SceneryCity = (function () {
         const td = d * 0.4, off = d * 0.28;
         for (let i = 0; i < 2; i++) {
           const o = i === 0 ? -off : off, th = h * (i === 0 ? 1 : 0.82);
-          sec(0, w * 0.9, th, td, k * 3.1 + side + i * 7, o);
+          if (sec(0, w * 0.9, th, td, k * 3.1 + side + i * 7, o) === false) continue;
           addBox(out, vadd(vadd(a.c, a.u, th + 0.4), b[2], o), [w * 0.6, 0.8, td * 0.8], cap, b);
         }
       } else if (kind === "jenga") {                              // offset stacked boxes
         const n2 = 4, bh = h / n2;
-        for (let i = 0; i < n2; i++) sec(i * bh, w * 0.86, bh, d * 0.72, k + i * 9.1, (hash(k + i * 5.5) - 0.5) * d * 0.5);
+        for (let i = 0; i < n2; i++) {
+          if (sec(i * bh, w * 0.86, bh, d * 0.72, k + i * 9.1, (hash(k + i * 5.5) - 0.5) * d * 0.5) === false)
+            return;
+        }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.5, 1.0, d * 0.5], cap, b);
       } else if (kind === "cylinder") {                           // round glass tower
         const R = reach * 0.5, segs = 14;
@@ -572,7 +589,10 @@ const SceneryCity = (function () {
         // long, one through the other (clip-audit 6.65 m, frac 0.049).
         const podH = h * 0.22, off = d * 0.30;
         if (sec(0, w, podH, d, k * 3.1 + side) === false) return;   // body rejected -> drop its dependents // shared podium base
-        for (const o2 of [-off, off]) sec(podH, w, h - podH, d * 0.42, k * 4.3 + side + o2, o2, o2 > 0 ? side * 0.07 : 0);             // two towers
+        for (const o2 of [-off, off]) {
+          if (sec(podH, w, h - podH, d * 0.42, k * 4.3 + side + o2, o2, o2 > 0 ? side * 0.07 : 0) === false)
+            return;             // two towers
+        }
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.92, 1.0, d * 0.9], cap, b);
       } else if (kind === "fin") {                               // slab with proud vertical fins on the face
         if (sec(0, w, h, d, k * 3.7 + side * 1.9) === false) return;   // body rejected -> drop its dependents
@@ -614,12 +634,19 @@ const SceneryCity = (function () {
         // Legs split along the street (d), as notch's towers: sized across w and
         // offset along d with the full d each, they overlapped whenever d > 0.72 w.
         const legW = d * 0.26, gp = d * 0.46, legH = h * 0.78, off = gp / 2 + legW / 2;
-        for (const o3 of [-off, off]) sec(0, w, legH, legW, k * 3.3 + side + o3 * 7, o3, o3 > 0 ? side * 0.07 : 0);   // legs
-        sec(legH, w, h - legH, d, k * 5.9 + side);                                          // lintel
+        for (const o3 of [-off, off]) {
+          if (sec(0, w, legH, legW, k * 3.3 + side + o3 * 7, o3, o3 > 0 ? side * 0.07 : 0) === false)
+            return;   // legs
+        }
+        if (sec(legH, w, h - legH, d, k * 5.9 + side) === false) return;                                          // lintel
         addBox(out, vadd(a.c, a.u, h + 0.5), [w * 0.96, 1.0, d * 0.9], cap, b);
       } else if (kind === "ziggurat") {                          // stepped terrace (many small steps)
         const steps = 6; let yb = 0, tw = w, td = d;
-        for (let i = 0; i < steps; i++) { const th = h / steps; sec(yb, tw, th, td, k * 2.9 + side + i * 8); yb += th; tw *= 0.82; td *= 0.82; }
+        for (let i = 0; i < steps; i++) {
+          const th = h / steps;
+          if (sec(yb, tw, th, td, k * 2.9 + side + i * 8) === false) return;
+          yb += th; tw *= 0.82; td *= 0.82;
+        }
         addBox(out, vadd(a.c, a.u, h + 0.4), [tw, 0.8, td], cap, b);
       } else if (kind === "drum") {                              // squat arena / stadium drum
         const R = reach * 0.6, dh = h * 0.5;
