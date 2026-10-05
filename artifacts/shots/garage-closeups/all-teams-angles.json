@@ -1,0 +1,1957 @@
+{
+  "teams": [
+    "redbull",
+    "ferrari",
+    "mercedes",
+    "mclaren"
+  ],
+  "liveries": [
+    "default"
+  ],
+  "base": null,
+  "axes": [],
+  "designs": null,
+  "against": null,
+  "preset": "closeup",
+  "fast": true,
+  "rollupOnly": false,
+  "rollupView": "wingRear",
+  "multiTeam": true,
+  "useStoreTeam": true,
+  "withOracle": false,
+  "live": false,
+  "liveBuild": 14034,
+  "liverySettle": 6,
+  "viewSettle": 2,
+  "gateRetries": 1,
+  "zoom": [
+    0
+  ],
+  "pan": [
+    [
+      0,
+      0
+    ]
+  ],
+  "cams": [
+    {
+      "view": "wingFront",
+      "alias": "fwLow",
+      "station": "fwLow",
+      "az": 0.13962634015954636,
+      "el": 0.04,
+      "dist": 2,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0xm0.05x2.05",
+        "at": [
+          0,
+          -0.05,
+          2.05
+        ]
+      },
+      "lamp": "front",
+      "crop": null,
+      "clamp": false,
+      "key": "fwLow"
+    },
+    {
+      "view": "wingFront",
+      "alias": "fwSide",
+      "station": "fwSide",
+      "az": 1.4835298641951802,
+      "el": 0.08,
+      "dist": 2.1,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.55x0.12x2",
+        "at": [
+          0.55,
+          0.12,
+          2
+        ]
+      },
+      "lamp": "wingFront",
+      "crop": null,
+      "clamp": false,
+      "key": "fwSide"
+    },
+    {
+      "view": "wingFront",
+      "alias": "noseTip",
+      "station": "noseTip",
+      "az": 0.4886921905584123,
+      "el": 0.14,
+      "dist": 1.9,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0x0.28x2.2",
+        "at": [
+          0,
+          0.28,
+          2.2
+        ]
+      },
+      "lamp": "front",
+      "crop": null,
+      "clamp": false,
+      "key": "noseTip"
+    },
+    {
+      "view": "wingFront",
+      "alias": "endplate",
+      "station": "endplate",
+      "az": 1.0995574287564276,
+      "el": 0.1,
+      "dist": 2.6,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.9x0.2x2.3",
+        "at": [
+          0.9,
+          0.2,
+          2.3
+        ]
+      },
+      "lamp": "wingFront",
+      "crop": null,
+      "key": "endplate"
+    },
+    {
+      "view": "wingRear",
+      "alias": "rwRear",
+      "station": "rwRear",
+      "az": 3.0543261909900763,
+      "el": 0.22,
+      "dist": 1.9,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0x1xm2.4",
+        "at": [
+          0,
+          1,
+          -2.4
+        ]
+      },
+      "lamp": "wingRear",
+      "crop": null,
+      "clamp": false,
+      "key": "rwRear"
+    },
+    {
+      "view": "wingRear",
+      "alias": "rwSide",
+      "station": "rwSide",
+      "az": 1.8325957145940461,
+      "el": 0.2,
+      "dist": 2,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.35x1xm2.35",
+        "at": [
+          0.35,
+          1,
+          -2.35
+        ]
+      },
+      "lamp": "wingRear",
+      "crop": null,
+      "clamp": false,
+      "key": "rwSide"
+    },
+    {
+      "view": "wingRear",
+      "alias": "rwTop",
+      "station": "rwTop",
+      "az": 2.705260340591211,
+      "el": 0.85,
+      "dist": 2.2,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0x1.05xm2.35",
+        "at": [
+          0,
+          1.05,
+          -2.35
+        ]
+      },
+      "lamp": "off",
+      "crop": null,
+      "clamp": false,
+      "key": "rwTop"
+    },
+    {
+      "view": "side",
+      "alias": "podInlet",
+      "station": "podInlet",
+      "az": 0.7330382858376184,
+      "el": 0.16,
+      "dist": 2.5,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.7x0.5x0.55",
+        "at": [
+          0.7,
+          0.5,
+          0.55
+        ]
+      },
+      "lamp": "side",
+      "crop": null,
+      "clamp": false,
+      "key": "podInlet"
+    },
+    {
+      "view": "side",
+      "alias": "podFloor",
+      "station": "podFloor",
+      "az": 1.710422666954443,
+      "el": 0.04,
+      "dist": 2.3,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.75x0.12x0",
+        "at": [
+          0.75,
+          0.12,
+          0
+        ]
+      },
+      "lamp": "side",
+      "crop": null,
+      "clamp": false,
+      "key": "podFloor"
+    },
+    {
+      "view": "side",
+      "alias": "wheelF",
+      "station": "wheelF",
+      "az": 1.1868238913561442,
+      "el": 0.1,
+      "dist": 1.7,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.9x0.32x1.15",
+        "at": [
+          0.9,
+          0.32,
+          1.15
+        ]
+      },
+      "lamp": "front",
+      "crop": null,
+      "clamp": false,
+      "key": "wheelF"
+    },
+    {
+      "view": "side",
+      "alias": "wheelR",
+      "station": "wheelR",
+      "az": 2.0594885173533086,
+      "el": 0.1,
+      "dist": 1.7,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.9x0.32xm1.05",
+        "at": [
+          0.9,
+          0.32,
+          -1.05
+        ]
+      },
+      "lamp": "rear",
+      "crop": null,
+      "clamp": false,
+      "key": "wheelR"
+    },
+    {
+      "view": "rear",
+      "alias": "haloBehind",
+      "station": "haloBehind",
+      "az": 3.5779249665883754,
+      "el": 0.55,
+      "dist": 2.2,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0x0.95xm0.15",
+        "at": [
+          0,
+          0.95,
+          -0.15
+        ]
+      },
+      "lamp": "off",
+      "crop": null,
+      "clamp": false,
+      "key": "haloBehind"
+    },
+    {
+      "view": "front",
+      "alias": "mirror",
+      "station": "mirror",
+      "az": 0.8377580409572781,
+      "el": 0.28,
+      "dist": 1.9,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0.55x0.78x0.45",
+        "at": [
+          0.55,
+          0.78,
+          0.45
+        ]
+      },
+      "lamp": "front",
+      "crop": null,
+      "clamp": false,
+      "key": "mirror"
+    },
+    {
+      "view": "rear",
+      "alias": "cover",
+      "station": "cover",
+      "az": 2.4085543677521746,
+      "el": 0.42,
+      "dist": 2.6,
+      "zoom": 0,
+      "strafe": 0,
+      "dolly": 0,
+      "azNudge": 0,
+      "elNudge": 0,
+      "target": {
+        "name": "0x0.88xm0.75",
+        "at": [
+          0,
+          0.88,
+          -0.75
+        ]
+      },
+      "lamp": "off",
+      "crop": null,
+      "clamp": false,
+      "key": "cover"
+    }
+  ],
+  "crop": null,
+  "name": null,
+  "logos": null,
+  "site": true,
+  "inert": [],
+  "dprs": [
+    1
+  ],
+  "bases": [],
+  "lamps": [],
+  "targets": [],
+  "baseline": null,
+  "budget": 2100,
+  "sheetHead": "GARAGE\n        RED BULL RACING\n      \n      \n        \n        \n          BUDGET:",
+  "viewport": [
+    1280,
+    720
+  ],
+  "viewports": [
+    [
+      1280,
+      720
+    ]
+  ],
+  "views": [
+    "wingFront",
+    "wingRear",
+    "side",
+    "rear",
+    "front"
+  ],
+  "loadavg1": 0.02,
+  "phase": {
+    "after": {
+      "boot": 7061,
+      "open": 716
+    },
+    "before": null
+  },
+  "sheets": [
+    "artifacts/shots/garage-closeups/sheet.png",
+    "artifacts/shots/garage-closeups/redbull-sheet.png",
+    "artifacts/shots/garage-closeups/ferrari-sheet.png",
+    "artifacts/shots/garage-closeups/mercedes-sheet.png",
+    "artifacts/shots/garage-closeups/mclaren-sheet.png",
+    "artifacts/shots/garage-closeups/matrix.png"
+  ],
+  "shots": [
+    {
+      "view": "wingFront",
+      "cam": "fwLow",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-fwLow.png",
+      "vp": "1280x720",
+      "spread": 44.39,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.14,
+      "el": 0.04,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 24025,
+        "capture": 23711,
+        "gate": 120,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-fwSide.png",
+      "vp": "1280x720",
+      "spread": 53.24,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.484,
+      "el": 0.08,
+      "dist": 2.1,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 32131,
+        "capture": 13647,
+        "gate": 127,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "noseTip",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-noseTip.png",
+      "vp": "1280x720",
+      "spread": 51.55,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.489,
+      "el": 0.14,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 34715,
+        "capture": 7141,
+        "gate": 136,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "endplate",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-endplate.png",
+      "vp": "1280x720",
+      "spread": 61.97,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.1,
+      "el": 0.1,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 31923,
+        "capture": 6004,
+        "gate": 123,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwRear",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-rwRear.png",
+      "vp": "1280x720",
+      "spread": 61.97,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.054,
+      "el": 0.22,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5010,
+        "capture": 13123,
+        "gate": 149,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-rwSide.png",
+      "vp": "1280x720",
+      "spread": 61.97,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.833,
+      "el": 0.2,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5011,
+        "capture": 12871,
+        "gate": 69,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwTop",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-rwTop.png",
+      "vp": "1280x720",
+      "spread": 48.63,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.705,
+      "el": 0.85,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 19273,
+        "capture": 5878,
+        "gate": 119,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podInlet",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-podInlet.png",
+      "vp": "1280x720",
+      "spread": 48.63,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.733,
+      "el": 0.16,
+      "dist": 2.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5009,
+        "capture": 18540,
+        "gate": 70,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podFloor",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-podFloor.png",
+      "vp": "1280x720",
+      "spread": 60.89,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.71,
+      "el": 0.04,
+      "dist": 2.3,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 24914,
+        "capture": 7089,
+        "gate": 72,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelF",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-wheelF.png",
+      "vp": "1280x720",
+      "spread": 49.85,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.187,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 28448,
+        "capture": 7458,
+        "gate": 98,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelR",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-wheelR.png",
+      "vp": "1280x720",
+      "spread": 49.85,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.059,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5011,
+        "capture": 24612,
+        "gate": 74,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "haloBehind",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-haloBehind.png",
+      "vp": "1280x720",
+      "spread": 50.67,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.578,
+      "el": 0.55,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 30844,
+        "capture": 12980,
+        "gate": 99,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "mirror",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-mirror.png",
+      "vp": "1280x720",
+      "spread": 51.8,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.838,
+      "el": 0.28,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 25377,
+        "capture": 6853,
+        "gate": 137,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "cover",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/redbull-default-cover.png",
+      "vp": "1280x720",
+      "spread": 51.8,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.409,
+      "el": 0.42,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5008,
+        "capture": 15329,
+        "gate": 116,
+        "tries": 1
+      },
+      "team": "redbull",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwLow",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-fwLow.png",
+      "vp": "1280x720",
+      "spread": 51.37,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.14,
+      "el": 0.04,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 17777,
+        "capture": 5745,
+        "gate": 74,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-fwSide.png",
+      "vp": "1280x720",
+      "spread": 51.37,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.484,
+      "el": 0.08,
+      "dist": 2.1,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5005,
+        "capture": 17675,
+        "gate": 116,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "noseTip",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-noseTip.png",
+      "vp": "1280x720",
+      "spread": 60.42,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.489,
+      "el": 0.14,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 26678,
+        "capture": 6950,
+        "gate": 116,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "endplate",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-endplate.png",
+      "vp": "1280x720",
+      "spread": 60.42,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.1,
+      "el": 0.1,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 22645,
+        "gate": 70,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwRear",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-rwRear.png",
+      "vp": "1280x720",
+      "spread": 49.37,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.054,
+      "el": 0.22,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 23487,
+        "capture": 6048,
+        "gate": 125,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-rwSide.png",
+      "vp": "1280x720",
+      "spread": 49.37,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.833,
+      "el": 0.2,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5005,
+        "capture": 13258,
+        "gate": 116,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwTop",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-rwTop.png",
+      "vp": "1280x720",
+      "spread": 48.77,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.705,
+      "el": 0.85,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 19168,
+        "capture": 5898,
+        "gate": 113,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podInlet",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-podInlet.png",
+      "vp": "1280x720",
+      "spread": 48.77,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.733,
+      "el": 0.16,
+      "dist": 2.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5007,
+        "capture": 12519,
+        "gate": 122,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podFloor",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-podFloor.png",
+      "vp": "1280x720",
+      "spread": 63.01,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.71,
+      "el": 0.04,
+      "dist": 2.3,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 24767,
+        "capture": 7092,
+        "gate": 120,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelF",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-wheelF.png",
+      "vp": "1280x720",
+      "spread": 63.01,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.187,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 15970,
+        "gate": 84,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelR",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-wheelR.png",
+      "vp": "1280x720",
+      "spread": 63.01,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.059,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5012,
+        "capture": 17225,
+        "gate": 100,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "haloBehind",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-haloBehind.png",
+      "vp": "1280x720",
+      "spread": 50.88,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.578,
+      "el": 0.55,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 30119,
+        "capture": 6096,
+        "gate": 129,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "mirror",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-mirror.png",
+      "vp": "1280x720",
+      "spread": 50.88,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.838,
+      "el": 0.28,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 13147,
+        "gate": 117,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "cover",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/ferrari-default-cover.png",
+      "vp": "1280x720",
+      "spread": 50.88,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.409,
+      "el": 0.42,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5007,
+        "capture": 15529,
+        "gate": 126,
+        "tries": 1
+      },
+      "team": "ferrari",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwLow",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-fwLow.png",
+      "vp": "1280x720",
+      "spread": 38.27,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.14,
+      "el": 0.04,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 18035,
+        "capture": 11658,
+        "gate": 69,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-fwSide.png",
+      "vp": "1280x720",
+      "spread": 38.27,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.484,
+      "el": 0.08,
+      "dist": 2.1,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 12491,
+        "gate": 108,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "noseTip",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-noseTip.png",
+      "vp": "1280x720",
+      "spread": 45.89,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.489,
+      "el": 0.14,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 27188,
+        "capture": 7275,
+        "gate": 78,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "endplate",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-endplate.png",
+      "vp": "1280x720",
+      "spread": 45.89,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.1,
+      "el": 0.1,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 16006,
+        "gate": 119,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwRear",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-rwRear.png",
+      "vp": "1280x720",
+      "spread": 45.89,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.054,
+      "el": 0.22,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5005,
+        "capture": 19504,
+        "gate": 117,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-rwSide.png",
+      "vp": "1280x720",
+      "spread": 45.89,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.833,
+      "el": 0.2,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5005,
+        "capture": 13219,
+        "gate": 122,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwTop",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-rwTop.png",
+      "vp": "1280x720",
+      "spread": 45.52,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.705,
+      "el": 0.85,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 19182,
+        "capture": 12196,
+        "gate": 119,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podInlet",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-podInlet.png",
+      "vp": "1280x720",
+      "spread": 45.52,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.733,
+      "el": 0.16,
+      "dist": 2.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5008,
+        "capture": 12862,
+        "gate": 128,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podFloor",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-podFloor.png",
+      "vp": "1280x720",
+      "spread": 45.52,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.71,
+      "el": 0.04,
+      "dist": 2.3,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5004,
+        "capture": 12923,
+        "gate": 137,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelF",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-wheelF.png",
+      "vp": "1280x720",
+      "spread": 45.52,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.187,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5009,
+        "capture": 16051,
+        "gate": 66,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelR",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-wheelR.png",
+      "vp": "1280x720",
+      "spread": 52.11,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.059,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 30105,
+        "capture": 8016,
+        "gate": 132,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "haloBehind",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-haloBehind.png",
+      "vp": "1280x720",
+      "spread": 45.69,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.578,
+      "el": 0.55,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 29868,
+        "capture": 12134,
+        "gate": 119,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "mirror",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-mirror.png",
+      "vp": "1280x720",
+      "spread": 45.69,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.838,
+      "el": 0.28,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5006,
+        "capture": 13096,
+        "gate": 116,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "cover",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mercedes-default-cover.png",
+      "vp": "1280x720",
+      "spread": 45.69,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.409,
+      "el": 0.42,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5004,
+        "capture": 15644,
+        "gate": 134,
+        "tries": 1
+      },
+      "team": "mercedes",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwLow",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-fwLow.png",
+      "vp": "1280x720",
+      "spread": 51.92,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.14,
+      "el": 0.04,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 12507,
+        "capture": 11642,
+        "gate": 130,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "fwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-fwSide.png",
+      "vp": "1280x720",
+      "spread": 51.92,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.484,
+      "el": 0.08,
+      "dist": 2.1,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5018,
+        "capture": 12399,
+        "gate": 122,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "noseTip",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-noseTip.png",
+      "vp": "1280x720",
+      "spread": 59.86,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.489,
+      "el": 0.14,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 26961,
+        "capture": 7093,
+        "gate": 140,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingFront",
+      "cam": "endplate",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-endplate.png",
+      "vp": "1280x720",
+      "spread": 56.65,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.1,
+      "el": 0.1,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 27034,
+        "capture": 12066,
+        "gate": 111,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwRear",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-rwRear.png",
+      "vp": "1280x720",
+      "spread": 48.68,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.054,
+      "el": 0.22,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 24386,
+        "capture": 6484,
+        "gate": 122,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwSide",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-rwSide.png",
+      "vp": "1280x720",
+      "spread": 48.68,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.833,
+      "el": 0.2,
+      "dist": 2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5010,
+        "capture": 13736,
+        "gate": 92,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "wingRear",
+      "cam": "rwTop",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-rwTop.png",
+      "vp": "1280x720",
+      "spread": 48.68,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.705,
+      "el": 0.85,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5007,
+        "capture": 13170,
+        "gate": 71,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podInlet",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-podInlet.png",
+      "vp": "1280x720",
+      "spread": 48.68,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.733,
+      "el": 0.16,
+      "dist": 2.5,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5007,
+        "capture": 13366,
+        "gate": 117,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "podFloor",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-podFloor.png",
+      "vp": "1280x720",
+      "spread": 53.03,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.71,
+      "el": 0.04,
+      "dist": 2.3,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 25610,
+        "capture": 7316,
+        "gate": 166,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelF",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-wheelF.png",
+      "vp": "1280x720",
+      "spread": 53.03,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 1.187,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5007,
+        "capture": 16633,
+        "gate": 68,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "side",
+      "cam": "wheelR",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-wheelR.png",
+      "vp": "1280x720",
+      "spread": 53.03,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.059,
+      "el": 0.1,
+      "dist": 1.7,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5003,
+        "capture": 18304,
+        "gate": 124,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "haloBehind",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-haloBehind.png",
+      "vp": "1280x720",
+      "spread": 53.03,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 3.578,
+      "el": 0.55,
+      "dist": 2.2,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 5006,
+        "capture": 20525,
+        "gate": 86,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "front",
+      "cam": "mirror",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-mirror.png",
+      "vp": "1280x720",
+      "spread": 55.58,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 0.838,
+      "el": 0.28,
+      "dist": 1.9,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 26463,
+        "capture": 7325,
+        "gate": 73,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    },
+    {
+      "view": "rear",
+      "cam": "cover",
+      "tag": "default",
+      "png": "artifacts/shots/garage-closeups/mclaren-default-cover.png",
+      "vp": "1280x720",
+      "spread": 44.2,
+      "via": "game-soft",
+      "dpr": 1,
+      "az": 2.409,
+      "el": 0.42,
+      "dist": 2.6,
+      "pan": [
+        0,
+        0,
+        0
+      ],
+      "ms": {
+        "settle": 28178,
+        "capture": 6768,
+        "gate": 123,
+        "tries": 1
+      },
+      "team": "mclaren",
+      "name": "Team Livery",
+      "livery": "default"
+    }
+  ],
+  "rollupEntries": null,
+  "teamRollup": null,
+  "pairs": [],
+  "pairAxis": null,
+  "path": null,
+  "eyes": null,
+  "clamp": true,
+  "resumed": null,
+  "seconds": 1723.1
+}
