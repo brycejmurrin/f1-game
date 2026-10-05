@@ -123,6 +123,19 @@ test("backup controls mount once in their own settings page, outside renderer op
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
 });
 
+test("ensureMounted remounts after the files panel was emptied", () => {
+  const b = bootImportUI();
+  assert.ok(b.dom.byId("pm-settings-load"));
+  const host = b.dom.byId("pm-panel-files");
+  while (host.firstChild) host.removeChild(host.firstChild);
+  assert.equal(host.children.length, 0);
+  assert.equal(typeof b.SettingsExport.ensureMounted, "function");
+  b.SettingsExport.ensureMounted();
+  for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
+    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+  }
+});
+
 const volumeFile = (v) => JSON.stringify({ format: "apex26-settings-v1", settings: { audio: { volMusic: v } } });
 for (const fileReader of [false, true]) test(`a slow older settings import cannot overwrite the newer file (${fileReader ? "FileReader" : "File.text"})`, async () => {
   const b = bootImportUI({ fileReader });
