@@ -217,6 +217,33 @@ test("the script cache round-trips through localStorage and rejects a stale shap
   assert.equal(D.cached(11377), null);
 });
 
+// One script per watched session (~45 KB) with no eviction filled the 5 MB origin
+// quota after ~115 sessions and starved every save: the cache keeps the newest
+// CACHE_MAX, most recently used first, and prunes any written before the index.
+test("the script cache keeps only the newest CACHE_MAX sessions, LRU by use", () => {
+  const store = new Map();
+  const localStorage = { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+    getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  const { D, findTeam } = load({ localStorage });
+  const base = host(D.build(rawBaku(), findTeam, TRACKS));
+  for (let i = 0; i < 5; i++) store.set(D.CACHE_KEY + "legacy" + i, JSON.stringify(base));   // written before the index existed
+  store.set("apex26.settings", "{}");
+  const scripts = () => [...store.keys()].filter((k) => k.startsWith(D.CACHE_KEY));
+  for (let i = 0; i < 200; i++) {
+    D.remember({ ...base, sessionKey: 1000 + i });
+    assert.ok(scripts().length <= D.CACHE_MAX, "at most CACHE_MAX scripts after write " + i);
+  }
+  assert.equal(scripts().length, D.CACHE_MAX);
+  assert.ok(!scripts().some((k) => k.includes("legacy")), "pre-index scripts are pruned");
+  assert.ok(store.has(D.CACHE_KEY + "1199") && !store.has(D.CACHE_KEY + "1191"));
+  // a cache hit is a use: the oldest kept session survives the next write, the next-oldest goes
+  assert.equal(host(D.cached(1192)).laps, 51);
+  D.remember({ ...base, sessionKey: 2000 });
+  assert.ok(store.has(D.CACHE_KEY + "1192"), "the session just read is kept");
+  assert.ok(!store.has(D.CACHE_KEY + "1193"), "the least recently used one is evicted");
+  assert.equal(store.get("apex26.settings"), "{}", "other keys are untouched");
+});
+
 // A DOM stand-in with the surface the tab touches (the data-results.test.mjs shape).
 function makeDom() {
   function el(tag, cls, text) {
@@ -583,6 +610,69 @@ test("real position retries retain successful cars, report partial failures, and
   assert.deepEqual(requested.slice(-2), [[8, 1], [8, 2]], "another race gets its own positions");
   rejectSecond = true;
   await assert.rejects(D.fetchTraces({ ...script, drivers: [script.drivers[1]] }), /positions did not load/, "a completely failed load cannot masquerade as cached positions");
+});
+
+test("position caches refresh when race coverage grows, and never persist unfinished timing", async () => {
+  const records = new Map(), requested = [];
+  const indexedDB = { open() {
+    const rq = {};
+    queueMicrotask(() => {
+      rq.result = { transaction() {
+        const tx = { objectStore: () => ({
+          get(key) { const read = {}; queueMicrotask(() => { read.result = records.get(key); read.onsuccess(); }); return read; },
+          put(value, key) { records.set(key, value); queueMicrotask(() => tx.oncomplete()); },
+        }) }; return tx;
+      } }; rq.onsuccess();
+    }); return rq;
+  } };
+  const t0 = Date.parse("2026-10-04T12:00:00Z");
+  const script = (laps, complete) => ({ sessionKey: 123, t0, complete,
+    drivers: [{ num: 1, lapStart: Array.from({ length: laps }, (_, i) => i * 60), laps: Array(laps).fill(60) }] });
+  const { D } = load({ indexedDB, F1API: { locationData: async (_key, num, start, end, options) => {
+    requested.push({ num, start, end, options });
+    return [{ date: t0, x: 100, y: 200 }, { date: Date.parse(end), x: 200, y: 300 }];
+  } } });
+  const early = await D.fetchTraces(script(1, false));
+  assert.equal(early.cars[1][3], 150);
+  assert.equal(records.size, 0, "an unfinished race remains usable but is not persisted");
+  // A legacy IndexedDB record is what existing players already have installed.
+  records.set("123", { v: D.TRACE_V, sessionKey: 123, t0, cars: early.cars });
+  const fullScript = script(10, true), full = await D.fetchTraces(fullScript, null, early);
+  assert.equal(requested.length, 2, "neither the legacy DB record nor incomplete in-memory retry wins");
+  assert.equal(full.cars[1][3], 690, "the complete race has its complete request window");
+  assert.ok(requested.every((r) => r.options.cache === false), "raw HTTP cache cannot reintroduce truncated positions");
+  await D.fetchTraces(fullScript);
+  assert.equal(requested.length, 2, "a completed matching cache avoids another download");
+  await D.fetchTraces(script(11, true));
+  assert.equal(requested.length, 3, "a longer window invalidates even a formerly complete record");
+  await D.fetchTraces({ ...script(11, true), t0: t0 + 1000 });
+  assert.equal(requested.length, 4, "a corrected lights-out timestamp invalidates the old trace clock");
+  const withDriver = { ...script(11, true), t0: t0 + 1000 };
+  withDriver.drivers.push({ ...withDriver.drivers[0], num: 2 });
+  await D.fetchTraces(withDriver);
+  assert.deepEqual(requested.slice(-2).map((r) => r.num), [1, 2], "a newly published driver invalidates the old roster");
+});
+
+test("WATCH and JUMP IN reject stale in-memory coverage; reopening drops unfinished positions", async () => {
+  const calls = [], launches = [], flush = () => new Promise((resolve) => setImmediate(resolve));
+  const t0 = Date.parse("2026-10-04T12:00:00Z");
+  const { D } = load({ F1API: { locationData: async (_key, _num, _start, end) => {
+    calls.push(end); return [{ date: t0, x: 100, y: 200 }, { date: Date.parse(end), x: 200, y: 300 }];
+  } }, RealRace: { launch: (_script, options) => { launches.push(options); return true; } } });
+  const earlyScript = { sessionKey: 42, t0, complete: false, laps: 1, drivers: [{ num: 1, lapStart: [0], laps: [60] }] };
+  const fullScript = { ...earlyScript, complete: true, laps: 10, drivers: [{ num: 1, lapStart: [0], laps: [600] }] };
+  const early = await D.fetchTraces(earlyScript);
+  const tab = D.create({ isOpen: () => true, close: () => tab.cancel() });
+  tab.setTraces(early); tab.jumpIn(fullScript, "AAA");
+  assert.equal(launches.at(-1).traces, null, "JUMP IN never seeds cars from the earlier race window");
+  tab.watch(fullScript, null, 1, false); await flush();
+  assert.equal(calls.length, 2, "WATCH refetches instead of immediately launching stale memory");
+  assert.equal(launches.at(-1).traces.cars[1][3], 690);
+  tab.watch(fullScript, null, 1, false); await flush();
+  assert.equal(calls.length, 2, "matching completed memory still reuses positions");
+  tab.setTraces(early); tab.jumpIn(earlyScript, "AAA");
+  assert.equal(launches.at(-1).traces, early, "JUMP IN captures usable incomplete positions before closing their view");
+  assert.equal(tab.traces(), null, "close/picker lifecycle cannot retain unfinished positions forever");
 });
 
 

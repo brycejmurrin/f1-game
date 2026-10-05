@@ -588,7 +588,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ live: false }).hiddenReason("rel").soft, true, "touch RELATIVE still waits to be placed");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
-  assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(144px/, "touch STRATEGY sits under the 128px map");
+  assert.match(css, /body:not\(\.desktop\) #hud-strat \{ top: calc\(152px/, "touch STRATEGY sits under the 128px map and the limits chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body\.steer-touch #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
@@ -657,7 +657,9 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
   assert.deepEqual(plain(T.H.get("energy", "helmet")), plain(T.H.TOUCH_SHIPPED.helmet.energy));
   assert.ok(T.H.get("energy", "helmet").y <= -25, "ENERGY lifts above the wheel's top edge");
   assert.ok(T.H.get("tyre", "helmet").x === 0 && T.H.get("tyre", "helmet").y < 0, "TYRES stays in the left corner, lifted off the steer buttons");
-  for (const id of ["gearbox", "speed", "ot", "aero", "bb"]) assert.deepEqual(plain(T.H.get(id, "helmet")), { x: 0, y: 0, s: 100 }, id + ": shipped on touch");
+  assert.deepEqual(plain(T.H.get("gearbox", "helmet")), { x: 0, y: 0, s: 100 }, "GEAR takes the LCD's place: the row's own centre");
+  assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y === 0, "SPEED moves right of GEAR");
+  for (const id of ["ot", "aero", "bb"]) assert.deepEqual(plain(T.H.get(id, "helmet")), { x: 0, y: 0, s: 100 }, id + ": shipped on touch");
   assert.deepEqual(plain(T.H.get("energy", "cockpit")), plain(D.H.get("energy", "cockpit")), "the cockpit strip is the same on both");
   assert.equal(T.H.isShipped("helmet"), true);
   T.H.set("energy", { y: -40 }, "helmet");
@@ -669,14 +671,14 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
 test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY and TYRES show (CSS and hiddenReason agree)", () => {
   const T = load3({ classes: [], live: false });
   T.H.setCam("helmet");
-  for (const id of ["gearbox", "ot", "aero", "bb"]) {
+  for (const id of ["ot", "aero", "bb"]) {
     const r = T.H.hiddenReason(id);
     assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
   }
-  for (const id of ["energy", "tyre", "speed"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
+  for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
   const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
   assert.ok(rule, "the touch-helmet hide rule exists");
-  assert.deepEqual(rule[1].split(",").map((x) => x.trim()).sort(), ["#hud-aero", "#hud-bb", "#hud-gearbox", "#hud-ot"]);
+  assert.deepEqual(rule[1].split(",").map((x) => x.trim()).sort(), ["#hud-aero", "#hud-bb", "#hud-ot"]);
   const D = load3({ classes: ["desktop"], live: false });
   D.H.setCam("helmet");
   for (const id of ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"]) assert.equal(D.H.hiddenReason(id), null, id + " shows on a desktop helmet");

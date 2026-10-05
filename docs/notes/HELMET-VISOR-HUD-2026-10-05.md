@@ -49,3 +49,13 @@ The gearbox chip stays hidden on a touch helmet on purpose: at 844x390 it is
 ~106x61 px and no free region beside the wheel holds it, while the LCD's gear
 glyph is the one read that survives the shrink. A placed gearbox (MOVE & SIZE,
 `data-hl-user`) shows.
+
+## GEAR on the touch visor (the owner's ask, same day)
+
+`phone-landscape-844x390 · helmet` with HELMET_TOUCH gearbox {0, 0} and speed
+{x+12}: the gearbox chip back in the dock drops the dock zoom to 0.718 (from
+0.865), so every bottom piece sits a step smaller. GEAR 300..406 y296-357 over
+the LCD; SPEED 547..611 y299-330, right of it and 67 px clear of the AERO
+button (678); ENERGY 412..544 y194-209 over the wheel's top edge; TYRES 59..189
+y244-285 between STRATEGY (bottom 211) and the steer buttons (top 301). Zero
+findings. Only OVERTAKE, AERO and BRAKE BIAS stay with their buttons.

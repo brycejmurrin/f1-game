@@ -155,6 +155,14 @@ function createDom(sandbox, runScriptFile) {
       currentTime: 0, paused: true, muted: false, loop: false, files: [],
       style: makeStyle(), isConnected: true,
     };
+    // A text/markup write REPLACES the children, as in a real DOM: kept, every UI
+    // rebuild accumulated nodes and a heap census read ~6 MB per garage cycle of
+    // growth that does not exist.
+    for (const k of ["textContent", "innerHTML", "innerText"]) {
+      let v = "";
+      Object.defineProperty(el, k, { configurable: true, enumerable: true, get: () => v,
+        set: (x) => { v = String(x == null ? "" : x); el.children.length = 0; el.childNodes.length = 0; } });
+    }
     el.classList = makeClassList(el);
     el.addEventListener = (t, fn) => ls.add(t, fn);
     el.removeEventListener = (t, fn) => ls.remove(t, fn);

@@ -1,6 +1,6 @@
 ---
 name: season-mode
-description: "Use when the standalone Season screen — calendar, weekend format, sprint, quali-on/off, points table, Season SETUP (#season-setup), season-cal.js, or season-ui.js — is being changed, and only that screen. A season, sprint or quali bug reported from inside a DRIVER CAREER / MY TEAM save is career-mode, even when it says sprint — career always races Tracks.SEASON."
+description: "Use when the standalone Season screen — calendar, weekend format, sprint, quali-on/off, points table, Season SETUP (#season-setup), season-cal.js, season-ui.js — changes, and only that screen. A season, sprint or quali bug reported from inside a DRIVER CAREER / MY TEAM save is career-mode, even when it says sprint (career always races Tracks.SEASON)."
 ---
 
 # Standalone Season — calendar vs format

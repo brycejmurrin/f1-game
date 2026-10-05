@@ -12,11 +12,11 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
   SOLO_OWN_TIMEOUT_SEC,
-  partitionMegaSweepArgs, shouldRunMegaOnThisShard, megaSoloFlags, playwrightShard, isMegaSweepSpec,
+  partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
   DEFAULT_BUDGET_MIN,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
-  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource } from "../../tools/ci/select-specs.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
+  scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -63,8 +63,8 @@ test("fit cuts at the budget and names every skipped spec", () => {
   const specs = ["tests/specs/smoke.spec.js", "tests/specs/boot-guard.spec.js"];
   const r = fit(specs, 5);
   assert.equal(r.selected.length + r.skipped.length + r.unreachable.length
-    + r.oversize.length + r.coveredByFixedGates.length, 2,
-    "every spec lands in selected, skipped, unreachable, oversize, or an independent fixed gate");
+    + r.oversize.length + r.coveredByFixedGates.length + r.coveredByManualOptIn.length, 2,
+    "every spec lands in selected, skipped, unreachable, oversize, or an independent fixed/manual gate");
   assert.ok(r.testsSelected <= r.testsFit, `${r.testsSelected} selected into ${r.testsFit}`);
   for (const s of r.skipped) assert.ok(s.tests > 0, "a skipped spec carries its cost");
 });
@@ -114,8 +114,23 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
-    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
+    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
+});
+
+test("manual opt-in specs are never put on a selected command", () => {
+  // material-shimmer is behind APEX_SHIMMER=1; selecting it without the env
+  // skips every test and the runner fails the job as all-skipped (PR #968).
+  assert.ok(MANUAL_OPT_IN_SPECS.has("tests/specs/material-shimmer.spec.js"));
+  const r = fit([...MANUAL_OPT_IN_SPECS, "tests/specs/boot-guard.spec.js"], 60);
+  assert.deepEqual(r.coveredByManualOptIn.map((s) => s.file).sort(), [...MANUAL_OPT_IN_SPECS].sort());
+  assert.ok(!r.selected.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  assert.ok(!r.oversize.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  assert.ok(!r.overBudgetRun.some((s) => MANUAL_OPT_IN_SPECS.has(s.file)));
+  const planned = shards(r).flatMap((j) => j.specs.split(" "));
+  assert.ok(!planned.some((f) => MANUAL_OPT_IN_SPECS.has(f)),
+    "shards() must not schedule a manual opt-in spec");
 });
 
 test("the nightly diffs from the deploy branch as it stood a day ago, with a wider allowance", () => {
@@ -779,10 +794,45 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(peeled, [terrain]);
   assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar]);
   assert.deepEqual(playwrightShard(packed), { index: 2, total: 4 });
-  assert.equal(shouldRunMegaOnThisShard(packed), false, "shard 2 must not re-run megas");
-  assert.equal(shouldRunMegaOnThisShard(["--shard=1/4", terrain, qatar]), true);
-  assert.equal(shouldRunMegaOnThisShard([terrain, qatar]), true, "unsharded runs megas once");
+  assert.deepEqual(megasForThisShard(packed, [terrain]), [], "a lone mega lands on shard 1; shard 2 must not re-run it");
+  assert.deepEqual(megasForThisShard(["--shard=1/4", terrain, qatar], [terrain]), [terrain]);
+  assert.deepEqual(megasForThisShard([terrain, qatar], [terrain]), [terrain], "unsharded runs megas once");
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
+});
+
+test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
+  // modes nightly 2026-10-04 (run 37195789273): career AND quali solo on shard
+  // 1 = 1827 s against 185/276/410 s on shards 2-4.
+  const db = { specs: {} };   // constant-rate fallback: expected = declared tests x 7.5 s
+  const megas = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
+    .filter((f) => isMegaSweepSpec(f)).sort();
+  assert.ok(megas.length >= 3, `need several megas to spread, found ${megas.length}`);
+  for (const total of [1, 2, 4]) {
+    const plan = megaShardPlan(megas, total, db);
+    const owners = [];
+    for (let i = 1; i <= total; i++) owners.push(...megasForThisShard([`--shard=${i}/${total}`], megas, db));
+    assert.deepEqual(owners.sort(), megas, `${total} shards: every mega runs exactly once`);
+    for (const shard of plan.values()) assert.ok(shard >= 1 && shard <= total);
+    // Deterministic: a reversed input list gives the same plan.
+    assert.deepEqual([...megaShardPlan([...megas].reverse(), total, db)].sort(), [...plan].sort());
+  }
+  const career = "tests/specs/career.spec.js", quali = "tests/specs/quali.spec.js";
+  if (isMegaSweepSpec(career) && isMegaSweepSpec(quali)) {
+    const plan = megaShardPlan([career, quali], 4, db);
+    assert.equal(plan.get(career), 1, "the longest mega takes shard 1");
+    assert.notEqual(plan.get(quali), plan.get(career), "the modes megas no longer share a runner");
+  }
+  // Load beats count: one long mega against two short ones on 2 shards.
+  const ranked = megas.map((f) => [f, declaredTests(f) || 1]).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  const plan2 = megaShardPlan(megas, 2, db);
+  assert.equal(plan2.get(ranked[0][0]), 1);
+  const load = [0, 0];
+  for (const [f, n] of ranked) load[plan2.get(f) - 1] += n;
+  assert.ok(Math.max(...load) - Math.min(...load) <= ranked[0][1], `LPT bound: ${load}`);
+  // The runner consumes the plan, not the old shard-1 rule.
+  const runner = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
+  assert.match(runner, /megasForThisShard\(args, mega\)/);
+  assert.match(runner, /for \(const spec of megaHere\)/);
 });
 
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
@@ -900,6 +950,26 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
 });
 
+test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
+  // #878 moved Bahrain's startFrac; steering.spec (races bahrain) went red on
+  // six unrelated PRs because a bahrain edit never selected it.
+  const bahrain = specsRacing(["bahrain"]);
+  assert.ok(bahrain.includes("tests/specs/steering.spec.js"), "the #878 regression must now be routed");
+  assert.ok(bahrain.length >= 10, `only ${bahrain.length} specs race bahrain — the scan broke`);
+  for (const f of bahrain) assert.ok(circuitsOf(f)?.has("bahrain"), `${f} does not build bahrain`);
+  assert.ok(specsRacing(["monza"]).length > bahrain.length, "monza is the fixtures' default circuit");
+  assert.deepEqual(specsRacing([]), [], "no circuit touched routes nothing");
+  // A roster walker is the circuits group's business, not this route's.
+  const walker = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
+    .find((f) => f.endsWith(".spec.js") && circuitsOf(f) === null);
+  if (walker) assert.ok(!specsRacing(["monza"]).includes(walker), `${walker} walks the roster`);
+  // Wiring: routed (rank 3, budgeted), never forced past fit() as affected.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.match(src, /const racing = specsRacing\(circ\.ids\);/);
+  assert.match(src, /\.\.\.specs, \.\.\.racing\]\)\]/, "racing specs join the routed candidates");
+  assert.doesNotMatch(src, /racing\.includes\(f\)\) \? [012]/, "a racing spec must not out-rank group routing");
+});
+
 test("a per-circuit data file resolves to the circuits whose rows changed", () => {
   // Build a two-commit repo so dataCircuits reads a real base, for both shapes.
   // artifacts/ is gitignored, so a fresh clone or worktree has none.
@@ -950,7 +1020,7 @@ test("a routed over-budget spec is never silently dropped: run, or named, and ev
     const r = fit(specs, 10, { db: EMPTY, ...opts });
     const over = specs.filter((f) => maxDeclaredTimeout(f) >= SELECTED_GATE.perTestTimeoutSec * 1000);
     const accounted = new Set([...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun, ...r.overBudgetSpecs,
-      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByVmTwin].map((x) => x.file));
+      ...r.skipped, ...r.unreachable, ...r.coveredByFixedGates, ...r.coveredByManualOptIn, ...r.coveredByVmTwin].map((x) => x.file));
     for (const f of over) assert.ok(accounted.has(f), `${f} is in no bucket (${JSON.stringify(opts)})`);
     const planned = new Set(shards(r, EMPTY).flatMap((j) => j.specs.split(" ")));
     for (const x of [...r.selected, ...r.oversize, ...r.overflow, ...r.overBudgetRun])

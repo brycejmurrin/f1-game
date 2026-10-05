@@ -103,6 +103,9 @@ function loadHarness(options = {}) {
   vm.runInContext(src("js/career/career.js"), ctx);
   vm.runInContext(src("js/career/season-cal.js"), ctx);
   return {
+    ctx,
+    SettingsExport: options.settingsExport !== false ? vm.runInContext("SettingsExport", ctx) : null,
+    SeasonCal: vm.runInContext("SeasonCal", ctx),
     CareerBackup: vm.runInContext("CareerBackup", ctx),
     Career: vm.runInContext("Career", ctx),
     SaveMigrate: vm.runInContext("SaveMigrate", ctx),
@@ -820,3 +823,121 @@ for (const focus of ["driver", "myteam"]) {
     });
   }
 }
+
+
+// The older all-careers file UI must use the same revision authority as slot
+// imports. Keep the REAL store and Career listener: a mock revision map alone
+// would miss imports that clear or bypass the live conflict during refresh.
+function legacyImportUI(h) {
+  const dom = makeDom();
+  h.ctx.document = dom.document;
+  h.ctx.document.readyState = "loading";
+  const timers = [];
+  h.ctx.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
+  h.ctx.clearTimeout = () => {};
+  h.SettingsExport.create({ soundOn: false });
+  dom.document.body.appendChild(h.SettingsExport.careerRow());
+  const button = dom.document.body.querySelector("#cr-career-load");
+  return { button, timers,
+    choose(pending) {
+      const picker = dom.document.body.querySelector("input");
+      picker.files = [{ text: () => pending }];
+      picker.onchange();
+    },
+  };
+}
+const legacyFile = (careers) => ({ format: "apex26-career-v1", careers });
+
+for (const flavour of ["driver", "myteam"]) test(`legacy file picker refuses a peer's ${flavour} write before touching any slots`, async () => {
+  const h = loadHarness();
+  fillSix(h);
+  h.Career.engage(true);
+  const ui = legacyImportUI(h);
+  ui.button.onclick(); ui.button.onclick();
+  let resolve;
+  ui.choose(new Promise((r) => { resolve = r; }));
+  const key = "apex26.career." + flavour + ".0";
+  h.disk.set(key, JSON.stringify(save({ flavour, money: 8000 })));
+  h.foreign(key);
+  const before = slotSnap(h.disk), pointer = h.disk.get("apex26.careerSlot");
+  if (flavour === "driver") assert.equal(h.Career.conflicted(), true);
+  resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
+    "career.myteam.0": save({ flavour: "myteam", money: 60 }), careerSlot: "myteam:0" })));
+  await Promise.resolve(); await Promise.resolve();
+  assert.match(ui.button.textContent, /CONFLICT/);
+  assert.deepEqual(slotSnap(h.disk), before, "even the unchanged destination is not partly imported");
+  assert.equal(h.disk.get("apex26.careerSlot"), pointer);
+  assert.equal(ui.timers.some((t) => t.ms === 600), false, "a refused file never reloads");
+});
+
+test("legacy file confirmation captures revisions on the first tap, including the selected-slot pointer", async () => {
+  const h = loadHarness(); fillSix(h);
+  const ui = legacyImportUI(h);
+  ui.button.onclick();
+  h.disk.set("apex26.careerSlot", JSON.stringify("myteam:2")); h.foreign("apex26.careerSlot");
+  const before = slotSnap(h.disk);
+  ui.button.onclick();
+  ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }), careerSlot: "driver:0" }))));
+  await Promise.resolve(); await Promise.resolve();
+  assert.match(ui.button.textContent, /CONFLICT/);
+  assert.deepEqual(slotSnap(h.disk), before);
+  assert.equal(JSON.parse(h.disk.get("apex26.careerSlot")), "myteam:2");
+});
+
+test("legacy file imports both modes and refreshes the selected career through the shared authority", async () => {
+  const h = loadHarness(); fillSix(h);
+  const ui = legacyImportUI(h);
+  ui.button.onclick(); ui.button.onclick();
+  ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
+    "career.myteam.0": save({ flavour: "myteam", team: "custom", money: 60 }), careerSlot: "myteam:0" }))));
+  await Promise.resolve(); await Promise.resolve();
+  assert.match(ui.button.textContent, /3 APPLIED, RELOADING/);
+  assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 50);
+  assert.equal(h.Career.data().money, 60);
+  assert.equal(h.Career.slot().flavour, "myteam");
+  assert.equal(h.Career.conflicted(), false);
+  assert.equal(ui.timers.filter((t) => t.ms === 600).length, 1);
+});
+
+test("empty and malformed legacy files preserve saves and do not reload", async () => {
+  for (const file of [legacyFile({}), legacyFile([]), legacyFile(null), { format: "other" }, "broken JSON"]) {
+    const h = loadHarness(); fillSix(h);
+    const before = slotSnap(h.disk), pointer = h.disk.get("apex26.careerSlot");
+    const ui = legacyImportUI(h);
+    ui.button.onclick(); ui.button.onclick();
+    ui.choose(Promise.resolve(typeof file === "string" ? file : JSON.stringify(file)));
+    await Promise.resolve(); await Promise.resolve();
+    assert.deepEqual(slotSnap(h.disk), before);
+    assert.equal(h.disk.get("apex26.careerSlot"), pointer);
+    assert.equal(ui.timers.some((t) => t.ms === 600), false);
+    assert.doesNotMatch(ui.button.textContent, /APPLIED/);
+  }
+});
+
+test("legacy imports report refused storage and stay on the page", async () => {
+  const h = loadHarness(); fillSix(h);
+  const ui = legacyImportUI(h);
+  const pointer = h.disk.get("apex26.careerSlot"), original = h.disk.get("apex26.career.driver.1");
+  h.ctx.localStorage.setItem = () => { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; };
+  ui.button.onclick(); ui.button.onclick();
+  ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.1": save({ money: 50 }), careerSlot: "driver:1" }))));
+  await Promise.resolve(); await Promise.resolve();
+  assert.match(ui.button.textContent, /STORAGE FULL/);
+  assert.equal(h.disk.get("apex26.career.driver.1"), original);
+  assert.equal(h.disk.get("apex26.careerSlot"), pointer);
+  assert.equal(ui.timers.some((t) => t.ms === 600), false);
+});
+
+test("real cached store preserves an unknown season through boot and menu loads", () => {
+  const h = loadHarness();
+  const raw = JSON.stringify({ round: 1, pts: { "haas:0": 25 }, config: { trackIds: ["a", "missing"] } });
+  h.disk.set("apex26.season", raw);
+  const boot = h.SeasonCal.load();
+  h.SeasonCal.engage("season");
+  const menu = h.SeasonCal.load();
+  assert.equal(h.SeasonCal.lastLoadLossy(), true);
+  assert.equal(h.SeasonCal.save(boot).ok, false);
+  assert.equal(h.SeasonCal.save(menu).ok, false);
+  assert.equal(h.disk.get("apex26.season"), raw);
+  assert.deepEqual(Array.from(h.store.get("season").config.trackIds), ["a", "missing"]);
+});

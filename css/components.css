@@ -180,6 +180,11 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
   /* Keep native sliders at 32 painted px when this sheet is fit-capped. */
   --slider: calc(32px / var(--sheet-scale, var(--ui-scale)));
+  /* The compact tap floor too, at its painted target (css/tokens.css
+     --tap-paint-at): divided by the requested slider, a capped sheet painted
+     QUALIFYING's doors 48 at 150 % on a 734x343 phone. Uncapped, this is the
+     :root/body value exactly. */
+  --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--sheet-scale, var(--ui-scale))));
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);

@@ -12,10 +12,12 @@
    stripped before the post: the gfx handle, the surface sampler (rebuilt by
    the page from the def) and the lazy node grid.
 
-   It also imports TRACK_WORKER_EXTRA (assets.js): the build waits for the
-   baked model pack as the page's does (Assets.modelsReady, 4 s cap), and
-   reports how many it holds so the page can refuse a poorer world. The page's
-   MY TEAM row arrives with each build and replaces the worker's default. */
+   It also imports TRACK_WORKER_EXTRA (assets.js): the build waits for THIS
+   circuit's baked models as the page's does (Assets.modelsReady(ms, src), the
+   ids its scenery closure names, 4 s cap — never the whole pack, #915), and
+   reports WHICH of those ids it holds so the page can refuse a poorer world
+   by id (#908: a count let 30 unrelated models stand in for the circuit's 6).
+   The page's MY TEAM row arrives with each build and replaces the default. */
 "use strict";
 self.window = self;
 let _loaded = false;
@@ -36,8 +38,15 @@ function adoptTeam(team) {
   if (i >= 0) Teams.LIST.splice(i, 1, team); else Teams.LIST.push(team);
 }
 
-const residentModels = () => (typeof Assets === "undefined" || !Assets.models ? 0
-  : Assets.models().filter((id) => Assets.modelSync(id)).length);
+// The scenery closure's source text: the model ids it names are this
+// circuit's set (Assets.modelIds), exactly as js/core/lazy-bundles.js derives it.
+function scenerySrc(def) {
+  const fn = def.scenery || (self.TrackScenery && self.TrackScenery[def.id]);
+  return fn ? String(fn) : "";
+}
+// Which of this circuit's model ids are resident here — what the build stamped.
+const residentModels = (src) => (typeof Assets === "undefined" || !Assets.modelIds ? []
+  : Assets.modelIds(src).filter((id) => Assets.modelSync(id)));
 
 // Every ArrayBuffer under `root`, once each: transferred, not copied.
 function transferables(root) {
@@ -70,7 +79,8 @@ async function build(m) {
   const def = Tracks.LIST[m.idx];
   if (!def || def.id !== m.id) throw new Error("worker track list differs at " + m.idx + " (" + (def && def.id) + " != " + m.id + ")");
   adoptTeam(m.team);
-  if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady();
+  const src = scenerySrc(def);
+  if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady(0, src);
   const t0 = performance.now();
   const track = Tracks.build(def, Object.assign({}, m.opts, { gfx }));
   const ms = performance.now() - t0;
@@ -79,7 +89,7 @@ async function build(m) {
   // (tracks.js); the main-thread def never sees it, so every later reader there
   // (scenery reloads, frac-keyed tables, agent hooks) read 0. Send it back,
   // with _startFrac (same story, tracks.js).
-  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels() };
+  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels(src) };
   self.postMessage(msg, transferables(msg));
 }
 
@@ -90,9 +100,7 @@ self.onmessage = async (e) => {
       if (!_loaded) {
         pageRelativeFetch(m.base);
         importScripts(...m.files);
-        _loaded = true;
-        // Prefetch now, as the page does at boot: a build awaits the same run.
-        if (typeof Assets !== "undefined" && Assets.loadModels) Assets.loadModels().catch(() => 0);
+        _loaded = true;   // no model prefetch: each build fetches its own circuit's set
       }
       self.postMessage({ type: "ready" });
     } else if (m.type === "build") {
