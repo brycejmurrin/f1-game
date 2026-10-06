@@ -158,7 +158,10 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // (overflow 2740/2880 s) and cleared both at 7. Raised to 8 (2026-10-05,
 // PR #951): a synced bug-hunt batch with the failing-spec hoist dropped
 // tracks-walls + dev-tools at 7 (Selected specs verdict on run 37327254206).
-export const MAX_OVERFLOW_SHARDS = 8;
+// Raised to 9 (2026-10-06, PR #1077): a wide UI diff (Home resize + layers
+// :modal ranking) packed 21 overflow specs and dropped hud-layout.spec.js
+// (32 tests, ~182 s measured) with dropped=1 on run 37438922786.
+export const MAX_OVERFLOW_SHARDS = 9;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
