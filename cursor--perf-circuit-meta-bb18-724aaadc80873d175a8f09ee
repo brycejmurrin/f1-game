@@ -1,1 +1,1 @@
-1791317899	Cursor Agent	fix #1134: menu-sentinel-resize + gfx-backend-canary ensureCircuit before loadTrack; no AM/merge  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
+1791318833	Cursor Agent	PR#1134: disabled MERGE auto-merge (Bryce armed); tip 14f425b CI Watch sandbox+ours; keep UNARMED; watching CI; no merge  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
