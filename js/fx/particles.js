@@ -88,6 +88,14 @@ const Particles = (function () {
     return 1;
   }
 
+  // Governor evidence only (PerfGov.autoShed — crash floor + measured sheds,
+  // never the GRAPHICS user floor). HIGH/ULTRA stay at full density until the
+  // device is missing frames; spray/rain already use the same divisor.
+  function shedDiv() {
+    const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
+    return 1 + shed;
+  }
+
   function rnd(k) { return (Math.random() * 2 - 1) * k; }
 
   // A rate·dt request → a whole count, rounding the fraction stochastically. The
@@ -132,7 +140,7 @@ const Particles = (function () {
 
   function tyreSmoke(x, y, z, bvx, bvz, inten, count) {
     const m = mul(); if (m <= 0) return;
-    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
+    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / shedDiv()); n > 0; n--) {
       const s = 0.7 + Math.random() * 0.6;
       const w = 0.52 + 0.3 * inten;                  // whiteness with intensity
       spawn(x + rnd(0.18), y + 0.06, z + rnd(0.18),
@@ -148,7 +156,7 @@ const Particles = (function () {
 
   function sparks(x, y, z, dirx, dirz, speed, count) {
     const m = mul(); if (m <= 0) return;
-    let n = Math.round(count * Math.min(m, 2));
+    let n = Math.round(count * Math.min(m, 2) / shedDiv());
     const baseA = Math.atan2(dirx, dirz);
     for (; n > 0; n--) {
       const a = baseA + rnd(1.15);
@@ -171,7 +179,7 @@ const Particles = (function () {
   // so a field of bottoming cars never starves the collision sparks and smoke.
   function scrape(x, y, z, vx, vz, count) {
     const m = mul(); if (m <= 0) return;
-    for (let n = nOf(count * Math.min(m, 2)); n > 0 && _n < MAX * 0.6; n--) {
+    for (let n = nOf(count * Math.min(m, 2) / shedDiv()); n > 0 && _n < MAX * 0.6; n--) {
       const k = 0.45 + Math.random() * 0.35;
       spawn(x + rnd(0.3), y + rnd(0.02), z + rnd(0.3),
         vx * k + rnd(1.8), 0.5 + Math.random() * 2.4, vz * k + rnd(1.8),
@@ -184,7 +192,7 @@ const Particles = (function () {
 
   function kickup(x, y, z, bvx, bvz, r, g, b, count) {
     const m = mul(); if (m <= 0) return;
-    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2)); n > 0; n--) {
+    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / shedDiv()); n > 0; n--) {
       spawn(x + rnd(0.2), y + 0.05, z + rnd(0.2),
         bvx * (0.5 + Math.random() * 0.4) + rnd(1.6),
         1.6 + Math.random() * 2.6,
@@ -232,9 +240,8 @@ const Particles = (function () {
   // it is the one alpha effect big enough to cost real overdraw.
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
-    const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
     const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1;
-    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / (1 + shed)); n > 0 && _n < MAX * 0.75; n--) {
+    for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / shedDiv()); n > 0 && _n < MAX * 0.75; n--) {
       spawn(x + rnd(0.4), y + rnd(0.12), z + rnd(0.4),
         bvx + rnd(1.4), 1.2 + Math.random() * 1.8, bvz + rnd(1.4),
         (1.1 + Math.random() * 0.8) * lifeK,
@@ -449,8 +456,8 @@ const Particles = (function () {
   // once the governor has shed on its own measurements. Read per frame, so
   // density returns when it recovers.
   function _rainShown() {
-    const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
-    return shed > 0 ? Math.ceil(_rainN / (1 + shed)) : _rainN;
+    const d = shedDiv();
+    return d > 1 ? Math.ceil(_rainN / d) : _rainN;
   }
 
   // Advance the field. `eye` = the camera position (world, m); the camera

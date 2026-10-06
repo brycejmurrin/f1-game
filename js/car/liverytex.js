@@ -156,6 +156,18 @@ const LiveryTex = (function () {
   }
   function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }
 
+  // Opaque underfill for a sponsor region. Glyph AA and generateMipmap both
+  // average into whatever sits under the ink: a transparent surround smears a
+  // soft dark fringe into every board letter (createTexture already documents
+  // the same trap for crests). Filling the region with the PANEL / plate /
+  // band colour the mesh already paints underneath keeps the mip blend on
+  // paint, and makes the whole decal quad opaque so its rim stays hard.
+  function fillRegion(ctx, R, colour) {
+    if (!R || !colour) return;
+    ctx.fillStyle = css(colour);
+    ctx.fillRect(R.x, R.y, R.w, R.h);
+  }
+
   function drawWordmark(ctx, text, R, ink, opts = {}) {
     const pad = opts.pad != null ? opts.pad : 14;
     const spacing = opts.spacing != null ? opts.spacing : 0.06; // of font size
@@ -207,10 +219,17 @@ const LiveryTex = (function () {
     clipToRegion(ctx, R);
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
+    // geometricPrecision keeps glyph outlines resolution-true; the default
+    // "auto" hinting softens boards at garage / 3/4 distance.
+    try { ctx.textRendering = "geometricPrecision"; } catch (_) { /* older canvas */ }
     if (opts.halo) {
+      // Legibility outline only — keep it thin and mitred. A round 0.13·size
+      // stroke read as a soft cloud around every letter on the pale sidepod
+      // board (SKYSTRIKE / NITROX BEFORE shots).
       ctx.strokeStyle = css(opts.halo);
-      ctx.lineWidth = Math.max(2, size * 0.13);
-      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(1.25, size * 0.07);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
       let hx = x;
       for (let i = 0; i < text.length; i++) {
         ctx.strokeText(text[i], hx, y);
@@ -221,6 +240,23 @@ const LiveryTex = (function () {
     for (let i = 0; i < text.length; i++) {
       ctx.fillText(text[i], x, y);
       x += widths[i] + size * spacing;
+    }
+    // Hairline same-ink stroke after the fill hardens the canvas AA fringe so
+    // letters stay cut-vinyl crisp once the atlas is mipmapped and sampled at
+    // a grazing garage angle. Skip when a contrast halo already outlined them
+    // (that stroke is the rim; a second pass would fatten the glyph).
+    if (!opts.halo) {
+      ctx.strokeStyle = css(ink);
+      ctx.lineWidth = Math.max(0.75, size * 0.035);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
+      let sx = R.x + pad;
+      if (align === "center") sx = R.x + (R.w - total) / 2;
+      else if (align === "right") sx = R.x + R.w - pad - total;
+      for (let i = 0; i < text.length; i++) {
+        ctx.strokeText(text[i], sx, y);
+        sx += widths[i] + size * spacing;
+      }
     }
     ctx.restore();
   }
@@ -1623,6 +1659,9 @@ const LiveryTex = (function () {
     // keyline on the rake is what sells the edge at garage distance. `acc` is
     // the resolved saddle fill (pick or derived) — never re-pick here; a pick
     // must reach the atlas as chosen.
+    // A 1px diagonal fill aliased into a stair-step under cover UVs (Ferrari
+    // podFloor). Same-colour round strokes along the rake anti-alias the cut
+    // without shrinking the solid (lettering still sits on the saddle).
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
@@ -1632,8 +1671,20 @@ const LiveryTex = (function () {
       ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.64), Sf.y);                 // along the crease
       ctx.lineTo(F.fx(0.38), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
       ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = cssA(INK_DARK, 0.35);
-      ctx.lineWidth = Math.max(2, Sf.h * 0.018);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = cssA(acc, 0.55);
+      ctx.lineWidth = Math.max(4, Sf.h * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(acc, 0.97);
+      ctx.lineWidth = Math.max(2, Sf.h * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(INK_DARK, 0.28);
+      ctx.lineWidth = Math.max(1.5, Sf.h * 0.014);
       ctx.beginPath();
       ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
       ctx.stroke();
@@ -2566,13 +2617,14 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "starfield") {
-      // Micro dot field on the flank panel — not finStyle "stars". Density
-      // floor keeps cover-legibility's 1.5 % flank area readable.
+      // Ordered halftone on the flank — not finStyle "stars". Same recipe as
+      // crown `fade`: regular grid, radius ramps front→rear, no hash-skip
+      // clumps. The previous 0.28 density skip read as broken-text clusters
+      // at garage close-up (Mercedes cover, 1024/2048 atlas).
       // sideTint owns starfield ink; never crestInk (that row is gone from the
       // sheet and was never a flank graphic colour).
       const dotInk = colors.sideTint
         || pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
-      const density = 0.28;
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); clipToRegion(ctx, Sf);
@@ -2581,15 +2633,24 @@ const LiveryTex = (function () {
         const x0 = su(F, u0), x1 = su(F, uEnd);
         const y0 = Sf.y + Sf.h * 0.06, y1 = Sf.y + Sf.h * 0.58;
         const w = Math.abs(x1 - x0), h = y1 - y0;
-        const step = Math.max(3, w * 0.045);
-        for (let py = y0; py < y1 - step * 0.5; py += step) {
-          for (let px = Math.min(x0, x1); px < Math.min(x0, x1) + w - step * 0.5; px += step) {
-            const hsh = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
-            if (hsh / 1000 > density) continue;
-            const r = step * 0.32;
-            ctx.fillStyle = cssA(dotInk, 0.97);
+        const cols = Math.max(8, Math.round(w / Math.max(4, w * 0.032)));
+        const rows = Math.max(6, Math.round(h / Math.max(4, w * 0.032)));
+        const cellW = w / cols, cellH = h / rows;
+        const rMax = Math.min(cellW, cellH) * 0.38;
+        const xMin = Math.min(x0, x1);
+        const xFront = F.fx(u0), xRear = F.fx(uEnd);
+        const span = xRear - xFront;
+        ctx.fillStyle = cssA(dotInk, 0.97);
+        for (let j = 0; j < rows; j++) {
+          const cy = y0 + (j + 0.5) * cellH;
+          for (let i = 0; i < cols; i++) {
+            const cx = xMin + (i + 0.5) * cellW;
+            const along = span !== 0 ? (cx - xFront) / span : 0; // 0 front, 1 rear
+            const t = 1 - Math.max(0, Math.min(1, along));
+            const r = rMax * (0.38 + 0.62 * t * t);
+            if (r < 0.4) continue;
             ctx.beginPath();
-            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -2621,6 +2682,15 @@ const LiveryTex = (function () {
 
     // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
+      // Opaque substrates UNDER every board wordmark. The mesh already paints
+      // these panels; baking the same colour into the atlas stops mip/AA soft
+      // fringes on SKYSTRIKE / NITROX / wing / strip letters at garage distance.
+      // titleB stays unfilled: it drapes over curved nose paint, and a flat
+      // patch would read as a sticker rectangle on the monocoque.
+      fillRegion(ctx, REGIONS.titleA, board);
+      fillRegion(ctx, REGIONS.fwEnd, c2);
+      fillRegion(ctx, REGIONS.wing, colors.wing || c2);
+      fillRegion(ctx, REGIONS.strip, c2);
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });
       // titleB rides the NOSE, not the sidepod board: car-mesh drapes it over
@@ -2660,7 +2730,12 @@ const LiveryTex = (function () {
     if (div > 1) {
       const small = document.createElement("canvas");
       small.width = SIZE / div; small.height = SIZE_H / div;
-      small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
+      // High-quality downscale: the authored glyphs are already hard-edged;
+      // bilinear shrink is what keeps AI boards readable at racing distance.
+      const sctx = small.getContext("2d");
+      sctx.imageSmoothingEnabled = true;
+      try { sctx.imageSmoothingQuality = "high"; } catch (_) { /* Safari <15 */ }
+      sctx.drawImage(canvas, 0, 0, small.width, small.height);
       return small;
     }
     return canvas;
