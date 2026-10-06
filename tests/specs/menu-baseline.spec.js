@@ -44,14 +44,12 @@ const SCREENS = [
     // #carsetup unhides before buildSetup paints tabs. ENGINE click before
     // aria-busy clears leaves TEAM selected (CI 37452342027, 0.03 ratio).
     await waitGarageSheet(page);
-    await page.evaluate(() => {
-      const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-      (t.find((e) => /ENGINE/i.test(e.textContent || "")) || t[1] || t[0])?.click();
-    });
+    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
     await page.waitForFunction(() => {
-      const engine = [...document.querySelectorAll("#cs-tabs .cs-tab")]
-        .find((e) => /ENGINE/i.test(e.textContent || ""));
-      return !!(engine && engine.getAttribute("aria-selected") === "true");
+      const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
+      return [...document.querySelectorAll("#cs-options .cs-opt")]
+        .some((o) => /torque curve/i.test(o.textContent || ""));
     }, null, { polling: 100, timeout: 15000 });
   }],
 ];
