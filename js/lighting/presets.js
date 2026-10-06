@@ -12071,13 +12071,24 @@ window.LightPresets = {
     "tint": -0.2,
     "shadowTintAmt": 0.2
   },
+  // Spa dusk was buried: sunElev -10 → sunY≈0.006 so twilight lamps ramp to
+  // near-night while key/sky fill die (scenic reads as lamp ribbon on black).
+  // Raise sun, lift ambient/key, soften lamp twilight — night keys untouched.
   "spa|dusk|dry": {
-    "sunTemp": -0.4,
-    "grMul": 1.5,
-    "sunElev": -10,
-    "floodEmitMul": 0.66,
-    "lampLevel": 0.3,
-    "tint": 0.05
+    "sunTemp": -0.55,
+    "grMul": 1.65,
+    "sunElev": -1.5,
+    "floodEmitMul": 0.4,
+    "lampLevel": 0.17,
+    "tint": 0.14,
+    "ambientMul": 1.55,
+    "keyMul": 1.18,
+    "twilightFloor": 0.16,
+    "twilightRamp": 3.0,
+    "exposureMul": 1.1,
+    "ambTemp": -0.2,
+    "glowAmp": 1.9,
+    "poolEnergy": 0.46
   },
   "spa|dusk|fog": {
     "fogDensityMul": 2.15,
@@ -12115,15 +12126,23 @@ window.LightPresets = {
     "wetDark": 1.12
   },
   "spa|dusk|wet": {
-    "keyMul": 0.76,
+    "keyMul": 1.15,
     "ssrWetMul": 1.38,
-    "fogDensityMul": 1.42,
-    "tint": -0.14,
-    "lampLevel": 0.34,
-    "sunTemp": -0.22,
-    "wetDark": 1.12,
-    "ambientMul": 1.12,
-    "saturation": 0.92
+    "fogDensityMul": 1.28,
+    "tint": 0.08,
+    "lampLevel": 0.19,
+    "sunTemp": -0.4,
+    "wetDark": 1.05,
+    "ambientMul": 1.65,
+    "saturation": 0.96,
+    "twilightFloor": 0.16,
+    "twilightRamp": 3.0,
+    "floodEmitMul": 0.45,
+    "exposureMul": 1.12,
+    "ambTemp": -0.16,
+    "glowAmp": 2.1,
+    "poolEnergy": 0.48,
+    "grMul": 1.4
   },
   "spa|night|dry": {
     "lampLevel": 0.26,
