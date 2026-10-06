@@ -46,6 +46,7 @@
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
 import { test, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE_LANDSCAPE = { width: 852, height: 393 };
@@ -107,8 +108,10 @@ async function loadAt(page) {
 // one carrying all three classification attributes at once.
 async function openGarage(page) {
   await page.evaluate(() => document.getElementById("mb-garage").click());
-  await page.waitForFunction(() => !document.getElementById("carsetup").hidden,
-    null, { polling: 100, timeout: 10_000 });
+  // #carsetup unhides before buildSetup fills tabs (#1024 two-rAF). A
+  // 3-frame wait on an empty sheet reports DONE on-screen; after a
+  // resize walk the filled sheet is the one that must keep it reachable.
+  await waitGarageSheet(page);
   // WAIT OUT THE WARM-UP FRAMES, NOT A FIXED SLEEP. Under GLX on SwiftShader the
   // first animation frame after the garage opens took 4.1-4.8 s and the next two
   // ~1 s each; after that a frame is ~17 ms (measured 2026-10-03, headless(true)
@@ -139,6 +142,7 @@ const readState = (page) => page.evaluate(() => {
     // rounded: sub-pixel differences between a resize and a fresh load are not
     // a bug, and asserting on them would make this spec flaky for no truth.
     panelW: Math.round(r.width),
+    zoom: Number(getComputedStyle(el).zoom),
     hOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
     doneOnScreen: db.width > 0 && db.height > 0 &&
       db.top >= 0 && db.bottom <= window.innerHeight + 1 &&
@@ -179,9 +183,23 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       // the same thing (convergence, not speed) with headroom.
       await page.waitForFunction((expected) => {
         const el = document.getElementById("cs-inner");
-        return el.dataset.shape === expected.shape &&
-          el.dataset.pair === expected.pair &&
-          el.dataset.density === expected.density;
+        const done = document.getElementById("cs-done");
+        if (!el || !done) return false;
+        if (el.dataset.shape !== expected.shape ||
+            el.dataset.pair !== expected.pair ||
+            el.dataset.density !== expected.density) return false;
+        const zoom = Number(getComputedStyle(el).zoom);
+        if (Number.isFinite(expected.zoom) && Math.abs(zoom - expected.zoom) > 0.001) {
+          return false;
+        }
+        // classifyFit writes --sheet-scale on a later turn than
+        // data-density. Waiting only on the attributes left DONE 1–2 px
+        // past the short-wide viewport after a portrait→wide resize
+        // (CI 37459850548 packed-5) while a screenshot still showed it.
+        const db = done.getBoundingClientRect();
+        return db.width > 0 && db.height > 0 &&
+          db.top >= 0 && db.bottom <= window.innerHeight + 1 &&
+          db.left >= 0 && db.right <= window.innerWidth + 1;
       }, fresh[name], { polling: 50, timeout: 15_000 }).catch(() => {});
 
       const after = await readState(page);
