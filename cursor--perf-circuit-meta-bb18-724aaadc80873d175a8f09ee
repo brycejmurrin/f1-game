@@ -1,1 +1,1 @@
-1791312350	Cursor Agent	PR#1134 fix hydrate: materialize onto LIST entry (Shanghai/Singapore/Suzuka CI); no AM/merge  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
+1791317236	Cursor Agent	fix #1134: lazyTrackEnsure skip meta; await ensureCircuit in loadTrackStepped; f1-accuracy hydrate  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
