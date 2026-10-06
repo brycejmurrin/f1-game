@@ -174,6 +174,7 @@ const F1Transport = (function () {
       if (controller) liveControllers.add(controller);
       let timer = null;
       let onAbort = null;
+      let responseError = null;
       const timeout = new Promise(function (_resolve, reject) {
         timer = setTimeout(function () {
           reject(new Error("Request timed out for " + url));
@@ -185,17 +186,49 @@ const F1Transport = (function () {
         controller.signal.addEventListener("abort", onAbort, { once: true });
       }) : null;
       let network;
-      try { network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(consume); }
+      try {
+        network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(function (res) {
+          // Remember failure headers BEFORE awaiting the body. A rejected body
+          // or the original attempt deadline must not turn a known 401/403
+          // into an offline error eligible for stale-cache fallback.
+          if (!res.ok) responseError = httpError(url, res);
+          return consume(res, responseError);
+        });
+      }
       catch (e) { network = Promise.reject(e); }
       // Promise.race is intentional even with AbortController: a broken fetch
       // or body implementation that ignores abort must release its provider queue.
-      return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).finally(function () {
+      return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).catch(function (err) {
+        if (!responseError || (err && err.cancelled) || err === responseError) throw err;
+        // Wrap rather than mutate a body implementation's rejection (which
+        // may be primitive or frozen). Keep timeout/body diagnostics as well
+        // as the response's authoritative retry policy.
+        const failure = new Error(err && err.message ? err.message : responseError.message);
+        failure.status = responseError.status;
+        failure.retryAfterMs = responseError.retryAfterMs;
+        failure.cause = err;
+        throw failure;
+      }).finally(function () {
         clearTimeout(timer);
         if (controller) {
           controller.signal.removeEventListener("abort", onAbort);
           liveControllers.delete(controller);
         }
       });
+    }
+
+    function httpError(url, res) {
+      const err = new Error("HTTP " + res.status + " for " + url);
+      err.status = res.status;
+      err.retryAfterMs = 0;
+      // Retry-After is not CORS-safelisted: absent unless the provider exposes
+      // it. Honour exposed seconds / HTTP-date as sent; request() applies the
+      // existing ceiling instead of retrying inside the server's quota window.
+      const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
+      let ra = parseFloat(hdr);
+      if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;
+      if (isFinite(ra) && ra > 0) err.retryAfterMs = Math.round(ra * 1000);
+      return err;
     }
 
     // Single attempt: status/error handling only. Retries live in request(), where
@@ -206,47 +239,16 @@ const F1Transport = (function () {
       lane.lastNetAt = Date.now();
       // Count actual attempts, never a reservation cancelled during pacing.
       if (lane === openF1Lane) _of1Recent.push(lane.lastNetAt);
-      return fetchTimed(url, function (res) {
+      return fetchTimed(url, function (res, httpErr) {
         if (!res.ok) {
-          // Retry-After is NOT a CORS-safelisted response header, so on a
-          // cross-origin 429 `hdr` is null unless the API lists it in
-          // Access-Control-Expose-Headers — OpenF1/Jolpica do not today, so this
-          // branch is dormant and the backoff ladder in request() (RETRY_BASE_MS
-          // doubling to RETRY_CAP_MS) is what actually paces retries. Kept
-          // because it is harmless when null and correct the day the header is
-          // exposed: honoured AS SENT up to RETRY_AFTER_MAX_MS, past which the
-          // request fails fast rather than sleeping behind a spinner.
-          const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
-          let ra = parseFloat(hdr);
-          if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;   // HTTP-date form
-          const raMs = isFinite(ra) && ra > 0 ? Math.round(ra * 1000) : 0;        // as sent; request() applies the ceiling
           return res.text().then(function (txt) {
             try {
               const j = JSON.parse(txt);
-              // j must be object-ish: JSON.parse("null") is a legal parse whose
-              // .detail read would throw a TypeError — NOT a SyntaxError, so the
-              // filter below would rethrow it as the request error, and that
-              // error carries no .status and no "HTTP 401"/"HTTP 403" text,
-              // letting a lockout serve stale cache after all.
-              if (j && (j.detail || j.error)) {
-                const err = new Error(j.detail || j.error);
-                err.status = res.status;
-                err.retryAfterMs = raMs;
-                throw err;
-              }
+              // JSON null / a non-JSON body keeps the generic HTTP message.
+              if (j && (j.detail || j.error)) httpErr.message = String(j.detail || j.error);
             } catch (e) {
-              // A non-JSON error body just falls through to the generic
-              // "HTTP <status>" error below; the deliberate detail/error throws
-              // above must surface. Matched structurally: JSON.parse failures
-              // are SyntaxErrors on every engine, whereas matching V8 message
-              // strings lets Firefox/Safari parse errors escape —
-              // and an escaped raw SyntaxError lacks "HTTP 401"/"HTTP 403",
-              // defeating request()'s refusal to serve stale cache on lockouts.
               if (!(e instanceof SyntaxError)) throw e;
             }
-            const httpErr = new Error("HTTP " + res.status + " for " + url);
-            httpErr.status = res.status;
-            httpErr.retryAfterMs = raMs;
             throw httpErr;
           });
         }

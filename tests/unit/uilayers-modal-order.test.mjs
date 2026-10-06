@@ -20,7 +20,7 @@ function fakeDom(els, modalOrder) {
     showModal() { this._modal = true; },
     close() { this._modal = false; },
     _z: e.z,
-    children: [],
+    children: e.children || [],
     getBoundingClientRect: () => e.box || { width: 800, height: 600 },
     matches(sel) { return sel === ":modal" ? this._modal : false; },
   });
@@ -76,22 +76,6 @@ test("any modal outranks any z-index, and hidden layers never rank", () => {
     ["teampicker"],
   );
   assert.equal(U.top().id, "teampicker", "a dialog is in the top layer, above every z-index");
-});
-
-test("a zero-box modal still outranks the sized screen behind it", () => {
-  // Chromium can leave a freshly showModal()'d dialog at 0×0 after the
-  // hidden→[open] seam (css/dialog-platform.css). shownLayer() would skip it
-  // and hand the layer to #pausemenu — menu-keyboard's "open modal is the
-  // active layer" wait then times out with TopModal already logging #standings.
-  const U = fakeDom(
-    [
-      { id: "pausemenu", modal: true, z: 30 },
-      { id: "standings", modal: true, box: { width: 0, height: 0 } },
-    ],
-    ["pausemenu", "standings"],
-  );
-  assert.equal(U.top().id, "standings",
-    ":modal wins even when getBoundingClientRect is empty");
 });
 
 test("with no dialogs open the z-index ranking is unchanged", () => {
@@ -213,6 +197,25 @@ test("a close event arriving after the screen reopened does not press its door",
   dlg.open = false;
   listeners.close();
   assert.equal(clicks, 1, "a platform close of a visible screen still presses its door");
+});
+
+test("a :modal dialog that bypassed the showModal wrapper still outranks an earlier tracked one", () => {
+  // Packed-3 menu-keyboard: #standings was :modal (CLOSE focused, painted on
+  // top) while activeLayer() stayed on #pausemenu, because standings had no
+  // modalOrder stamp and ranked 0 against pause's serial.
+  const U = fakeDom([{ id: "pausemenu" }, { id: "standings" }], ["pausemenu"]);
+  U._nodes.get("standings")._modal = true;
+  assert.equal(U.top().id, "standings",
+    "a live :modal without a wrapper stamp is stamped on first top() and wins");
+});
+
+test("a zero-box :modal still ranks above a sized screen behind it", () => {
+  const U = fakeDom(
+    [{ id: "pausemenu", z: 30 }, { id: "standings", box: { width: 0, height: 0 } }],
+    ["standings"],
+  );
+  assert.equal(U.top().id, "standings",
+    ":modal skips the shownLayer size gate (Chromium dropped-box re-attach)");
 });
 
 test("close and reopen moves a dialog above the previously latest opening", () => {

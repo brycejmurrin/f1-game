@@ -1,9 +1,10 @@
 {
-  "why": "Wave 6 — Indianapolis Motor Speedway road course (Pagoda / pylon / pit stalls already required; continuous Paddock–Tower Terrace wall)",
+  "why": "DETAIL pass — IMS Pagoda (closed core), scoring pylon, pit stalls, Paddock/Tower Terrace wall, Museum campus",
   "ids": [
     "indy-pagoda",
     "indy-scoring-pylon",
     "indy-pit-stalls",
-    "indy-main-stands"
+    "indy-main-stands",
+    "indy-museum"
   ]
 }
