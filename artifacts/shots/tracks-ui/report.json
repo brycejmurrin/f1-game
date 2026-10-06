@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "live": "https://brycejmurrin.github.io/f1-game/",
+    "started": "2026-10-05T21:15:14.534Z",
+    "view": {
+      "width": 1440,
+      "height": 900
+    },
+    "version": {
+      "build": 14034
+    }
+  },
+  "count": 21,
+  "shots": [
+    {
+      "name": "01-select-list-default",
+      "bytes": 406779,
+      "rel": "artifacts/shots/tracks-ui/01-select-list-default.png"
+    },
+    {
+      "name": "02-select-filter-season",
+      "bytes": 407072,
+      "rel": "artifacts/shots/tracks-ui/02-select-filter-season.png"
+    },
+    {
+      "name": "03-select-filter-classics",
+      "bytes": 402280,
+      "rel": "artifacts/shots/tracks-ui/03-select-filter-classics.png"
+    },
+    {
+      "name": "04-select-preview-monza",
+      "bytes": 416497,
+      "rel": "artifacts/shots/tracks-ui/04-select-preview-monza.png"
+    },
+    {
+      "name": "05-select-preview-spa",
+      "bytes": 439340,
+      "rel": "artifacts/shots/tracks-ui/05-select-preview-spa.png"
+    },
+    {
+      "name": "06-select-preview-monaco",
+      "bytes": 406045,
+      "rel": "artifacts/shots/tracks-ui/06-select-preview-monaco.png"
+    },
+    {
+      "name": "07-select-list-scrolled",
+      "bytes": 406741,
+      "rel": "artifacts/shots/tracks-ui/07-select-list-scrolled.png"
+    },
+    {
+      "name": "08-track-detail-monza",
+      "bytes": 112085,
+      "rel": "artifacts/shots/tracks-ui/08-track-detail-monza.png"
+    },
+    {
+      "name": "09-track-detail-spa",
+      "bytes": 151131,
+      "rel": "artifacts/shots/tracks-ui/09-track-detail-spa.png"
+    },
+    {
+      "name": "10-track-detail-monaco",
+      "bytes": 135067,
+      "rel": "artifacts/shots/tracks-ui/10-track-detail-monaco.png"
+    },
+    {
+      "name": "11-track-detail-jeddah",
+      "bytes": 134135,
+      "rel": "artifacts/shots/tracks-ui/11-track-detail-jeddah.png"
+    },
+    {
+      "name": "12-track-detail-singapore",
+      "bytes": 167454,
+      "rel": "artifacts/shots/tracks-ui/12-track-detail-singapore.png"
+    },
+    {
+      "name": "13-track-detail-bahrain",
+      "bytes": 144969,
+      "rel": "artifacts/shots/tracks-ui/13-track-detail-bahrain.png"
+    },
+    {
+      "name": "14-designer-main",
+      "bytes": 171770,
+      "rel": "artifacts/shots/tracks-ui/14-designer-main.png"
+    },
+    {
+      "name": "15-designer-howto",
+      "bytes": 218074,
+      "rel": "artifacts/shots/tracks-ui/15-designer-howto.png"
+    },
+    {
+      "name": "16-designer-edit-randomise",
+      "bytes": 179986,
+      "rel": "artifacts/shots/tracks-ui/16-designer-edit-randomise.png"
+    },
+    {
+      "name": "17-designer-library",
+      "bytes": 136967,
+      "rel": "artifacts/shots/tracks-ui/17-designer-library.png"
+    },
+    {
+      "name": "18-race-settings-monza",
+      "bytes": 200972,
+      "rel": "artifacts/shots/tracks-ui/18-race-settings-monza.png"
+    },
+    {
+      "name": "19-phone-select-list",
+      "bytes": 162228,
+      "rel": "artifacts/shots/tracks-ui/19-phone-select-list.png"
+    },
+    {
+      "name": "20-phone-track-detail-spa",
+      "bytes": 66894,
+      "rel": "artifacts/shots/tracks-ui/20-phone-track-detail-spa.png"
+    },
+    {
+      "name": "21-phone-designer-main",
+      "bytes": 77280,
+      "rel": "artifacts/shots/tracks-ui/21-phone-designer-main.png"
+    }
+  ],
+  "findings": [
+    {
+      "sev": "ux",
+      "title": "CLASSICS filter keeps prior season selection",
+      "detail": "Strip switches to classics; preview stayed on Bahrain until a classics row click (03)."
+    },
+    {
+      "sev": "fit",
+      "title": "Phone landscape select compresses preview",
+      "detail": "852x393 drops stats grid/elevation; turns+length only (19). Detail sheet OK (20)."
+    },
+    {
+      "sev": "ux",
+      "title": "Designer coach overlays edit tools",
+      "detail": "RANDOMISE edit state still shows coach over SHAPE until GOT IT (16)."
+    },
+    {
+      "sev": "copy",
+      "title": "52 CIRCUITS \u00b7 MORE \u2192 ambiguous",
+      "detail": "Scroll cue vs link unclear on select header (01/04)."
+    },
+    {
+      "sev": "copy",
+      "title": "DRS wraparound ranges lack lap cue",
+      "detail": "e.g. Monza Zone 2 5149\u2013522 m reads as wrap without marking (08)."
+    }
+  ]
+}
