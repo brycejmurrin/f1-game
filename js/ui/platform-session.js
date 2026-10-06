@@ -39,30 +39,42 @@ function wireInstall() {
    iPhone Safari has no element fullscreen at all, so the row hides itself
    rather than offering a control that cannot work. */
 const fsOk = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
 function paintFullscreenRow() {
   const row = $("pm-fullscreen");
   if (!row) return;
   row.hidden = !fsOk();
   const note = $("pm-fullscreen-note");
   if (note) note.hidden = !fsOk();
-  SettingRow.paint(row, document.fullscreenElement ? "on" : "off");
+  SettingRow.paint(row, fsElement() ? "on" : "off");
+}
+function syncFullscreen() {
+  if (fsElement()) {
+    Input.lockEscape(); if (G.state === "race" || G.state === "count") Input.lockLandscape();
+  } else {
+    Input.unlockEscape(); Input.unlockLandscape();
+  }
+  paintFullscreenRow();
 }
 if ($("pm-fullscreen")) {
   SettingRow.wire("pm-fullscreen", { values: SettingRow.labels(["off", "on"]),
-    read: () => (document.fullscreenElement ? "on" : "off"),
+    read: () => (fsElement() ? "on" : "off"),
     write: (v) => {
       if (v === "on") {
         const el = document.documentElement;
         const req = el.requestFullscreen || el.webkitRequestFullscreen;
-        if (req) Promise.resolve(req.call(el)).then(() => { Input.lockEscape(); if (G.state === "race" || G.state === "count") Input.lockLandscape(); }).catch(() => paintFullscreenRow());
-      } else if (document.fullscreenElement) {
-        Input.unlockEscape(); Input.unlockLandscape();
-        if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
+        try { if (req) Promise.resolve(req.call(el)).then(syncFullscreen).catch(paintFullscreenRow); }
+        catch (_) { paintFullscreenRow(); }
+      } else if (fsElement()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        try { if (exit) Promise.resolve(exit.call(document)).then(syncFullscreen).catch(paintFullscreenRow); }
+        catch (_) { paintFullscreenRow(); }
       }
     } });
   // The player can leave fullscreen without us (Esc, F11, the OS), so the row
   // follows the DOCUMENT rather than remembering what it last asked for.
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) { Input.unlockEscape(); Input.unlockLandscape(); } paintFullscreenRow(); });
+  document.addEventListener("fullscreenchange", syncFullscreen);
+  document.addEventListener("webkitfullscreenchange", syncFullscreen);
   paintFullscreenRow();
 }
 /* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
@@ -106,6 +118,10 @@ if ($("pm-fullscreen")) {
     deferred = e;
     if (store.get("installChipSeen", false) || UiLayers.inRace()) return;
     chip.hidden = false;
+    // SEEN ONCE SHOWN, like the iOS nudge: set only on a tap or an install, it
+    // came back for 20 s on every launch until somebody tapped it. The stashed
+    // event still serves a tap during this showing.
+    store.set("installChipSeen", true);
     setTimeout(hide, 20000);
   });
   chip.addEventListener("click", async () => {

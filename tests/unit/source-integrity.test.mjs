@@ -93,6 +93,9 @@ test("Data Export actions are not announced as toggles", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/data/export.js"), "utf8");
   assert.match(src, /gatherBtn\.setAttribute\("data-aria-action",\s*""\)/);
   assert.match(src, /dlBtn\.setAttribute\("data-aria-action",\s*""\)/);
+  assert.doesNotMatch(src, /send it to me/);
+  assert.match(src, /el\("div",\s*"dh-export-status"/);
+  assert.doesNotMatch(src, /el\("pre",\s*"dh-export-status"/);
 });
 
 /* A SELECTOR THAT MATCHES NOTHING IS THE THIRD WAY A STYLESHEET LIES.

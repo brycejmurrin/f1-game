@@ -118,7 +118,9 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
   assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
-  assert.match(hud, /hitsRight && !limLeft \? dockR\.width \/ chromeZ : 0/);
+  // Dock width is published whenever the right dock has a box so #hud-sectors
+  // (above limits) can stand off BOOST before the limits chip would hit it.
+  assert.match(hud, /const dockRW = \(dockR && dockR\.width\) \? dockR\.width \/ chromeZ : 0;/);
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {
@@ -179,4 +181,18 @@ test("TIMING and COMPACT drop the tyre readout but never the pit cue or the dwel
   assert.match(back[3], /display:\s*flex\s*!important/, "…over the layout's own !important hide");
   assert.match(back[1], /:not\(\[data-hud-hide~="tyre"\]\)/, "the player's own TYRE toggle still wins");
   assert.match(back[2], /:not\(\[hidden\]\)/, "and a chip hidden because TYRE WEAR is off stays hidden");
+});
+
+// NEW-4: cockpit float + wheel LCD share one SPD plate (HudReadouts.spdPlate).
+// paintInstruments must not call AppearanceOpts.speed / unitLabel alone — that
+// left KM/H on the float while the LCD said KPH/MPH.
+test("paintInstruments paints SPD via HudReadouts.spdPlate (one MPH|KPH plate)", () => {
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  const ro = fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8");
+  assert.match(ro, /function spdPlate\(/);
+  assert.match(ro, /return \(units \|\| spdUnits\(\)\) === "mph" \? "MPH" : "KPH"/);
+  const paint = hud.slice(hud.indexOf("function paintInstruments"), hud.indexOf("function updateHud"));
+  assert.match(paint, /_ro\.spdPlate\(/);
+  assert.match(paint, /plate\.unit/);
+  assert.doesNotMatch(paint, /AppearanceOpts\.unitLabel/);
 });

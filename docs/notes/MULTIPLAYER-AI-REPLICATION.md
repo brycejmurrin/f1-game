@@ -34,7 +34,7 @@ THE HOST OWNS THE AI POSES, AND PUBLISHES THEM.
 | what a guest draws for an AI car | its own simulation | the host's pose, interpolated like a human rival |
 | packet | own car 20 Hz; relays one datagram per car per guest | own car 20 Hz; ONE aged packet per guest per publish carrying the relayed humans every tick and the AI every other tick (10 Hz) |
 | AI contact on a guest | resolved locally, both cars move | the AI car is net-owned (`invMass 0`), as a human rival already is: the guest's own car takes the whole response |
-| AI reliability (DNFs) | each peer arms its own | the host's: guests apply the host's `seed`/`round` from SETTINGS already (lobby.js), and a guest never runs `updateCar` for a replicated AI car, so no local DNF can fire |
+| AI reliability (DNFs) | each peer arms its own | the host's: guests apply the host's `seed`/`round` from SETTINGS already (lobby.js), and a guest never runs `updateCar` for a replicated AI car, so no local DNF can fire. The host's own AI retirements reach the guest as a LAP event with `retired` + `driverId` (game.js `retireCar` → netplay.js LAP handler → `G.retireCar` on the guest), so the guest parks the car and it stays parked after a hand-back (2026-10-05) |
 
 ### Wire format
 

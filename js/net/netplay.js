@@ -523,10 +523,22 @@ const NetPlay = (function () {
       s.clearHandlers();
       s.onState((bytes, at) => onState(bytes, s, id, at));
       s.onClose((why) => {
-        lastReason = why;
         sessions.delete(id);
         const carFor = remoteFor(id);
         armedPeers.delete(id);
+        peerCar.delete(id);
+        peerEpochs.delete(id);
+        // stop() closes remaining sockets after active=false. Real NetSession
+        // close() fires onClose("local") synchronously; without this guard that
+        // re-enters stop("local") while inactive, clears lastReason, and fires
+        // onStop — so a mid-race BYE restored lobby rules and erased the drop
+        // reason. Transport-only drops delete the session before stop() and
+        // never hit this path; BYE and local stop() do.
+        if (!active) {
+          session = sessionList()[0] || null;
+          return;
+        }
+        lastReason = why;
         /* A PEER WITH NO GRID SLOT MUST NOT END THE RACE FOR EVERYONE. With a
            `carFor != null` gate on this whole branch, a session that dropped
            before it was seated — a spectator, a joiner still negotiating, a
@@ -595,8 +607,11 @@ const NetPlay = (function () {
             // ICE-level close to land: that wait left the departed rival's
             // car a frozen human slot for seconds. onClose owns the
             // hand-back + cleanup, so this stays a single path.
-            if (role === "host" && sessions.size > 1) { try { s.close(); } catch (e) { /* already gone */ } }
-            else stop("bye");
+            if (role === "host" && sessions.size > 1) {
+              try { s.close(); } catch (e) { /* already gone */ }
+              // close() fires onClose("local"); keep the clean-leave reason.
+              lastReason = "bye";
+            } else stop("bye");
           }
           // CLAMP THE WIRE VALUE. `hold` is peer-supplied and reaches countT
           // as `(COUNTDOWN_S + hold) - …`: a missing or non-numeric hold makes
@@ -668,9 +683,13 @@ const NetPlay = (function () {
             // A RETIREMENT is the owner's word too. The 13 B snapshot has no
             // flag for it, so without this the retired rival stands parked as
             // "still running" and finishDelay holds the other screen to the
-            // hard cap (reliability on). Relayed by the host like the rest.
+            // hard cap (reliability on). Relayed by the host like the rest; the
+            // host's own AI retirements arrive here as well (game.js retireCar).
             const ret = typeof d.retired === "string" && d.retired ? d.retired.slice(0, 32) : null;
             if (fr && ret && !fr.car.finished && !fr.car.retired) {
+              // The host's AI is parked and announced here too (retireCar). Retired,
+              // it stays parked after a hand-back: updateCar never drives it again.
+              if (fr.hostAi && G.retireCar) G.retireCar(fr.car, ret);
               fr.car.retired = true; fr.car.dnf = ret; fr.car.dnfAt = null;
               fr.car._nFin = null; fr.car._nFinLap = null;
             }

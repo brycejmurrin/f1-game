@@ -359,10 +359,10 @@ test("the APPEARANCE fold: built inside TITLE SCREEN before REPLAY INTRO, slider
 
 test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and lives in the overlays layer", () => {
   const start = CSS.indexOf("/* ---------- TITLE LAYOUT player setting");
-  // The block runs to the SCREEN LOOKS block (js/ui/screen-looks.js), which
-  // tests/unit/screen-looks.test.mjs gates; both sit inside @layer overlays.
+  // Title layout + peek/tl-edit stay in blocking responsive.css; the
+  // SCREEN LOOKS (moved) breadcrumb marks where deferred folds used to sit.
   const end = CSS.indexOf("/* ---------- SCREEN LOOKS");
-  assert.ok(end < CSS.indexOf("} /* @layer overlays */"), "SCREEN LOOKS is in the overlays layer too");
+  assert.ok(end < CSS.indexOf("} /* @layer overlays */"), "title layout ends before the layer close");
   assert.ok(start > 0 && end > start, "the block sits inside @layer overlays");
   const block = CSS.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, "");
   const sels = [...block.matchAll(/(^|\})\s*([^{}@]+)\{/g)].map((m) => m[2].trim()).filter(Boolean);

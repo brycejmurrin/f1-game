@@ -360,8 +360,15 @@ const RealReplay = (function () {
 
     function onKey(e) {
       if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
-      const tag = e.target && e.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
+      const t = e.target, tag = t && t.tagName;
+      // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
+      // leaves focus there, and the keys went dead until something else took
+      // focus. Space / Enter stay the focused control's (press it, not pause).
+      // Text fields and selects keep every key (typing, type-ahead).
+      const ctl = t && typeof t.closest === "function" && t.closest(".watch-transport") &&
+        (tag === "BUTTON" || (tag === "INPUT" && t.type === "range"));
+      if (ctl ? (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter")
+          : (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON")) return;
       let used = true;
       if (e.code === KEY_NEXT) { follow(-1); if (bc) bc.manual(); }   // up the order: the viewer has the picture
       else if (e.code === KEY_PREV) { follow(+1); if (bc) bc.manual(); }   // down the order
@@ -425,10 +432,22 @@ const RealReplay = (function () {
     }
     // tick() stops with the page, so a clip mid-sentence played on over a call
     // or a backgrounded tab until it ran out: cut it with the page.
+    // …and with the PAUSE CARD, for the same reason: the game loop returns
+    // before update() while paused, so the replay clock froze under the card
+    // while the clip talked on over it — the "voice over a stopped game"
+    // radio-voice.js cuts its own lines for on this same observer. Cut, not
+    // held: like a hidden tab, the clip's moment has passed by the resume.
+    // LITERAL id (tests/unit/shell-ids.test.mjs), as radio-voice.js does.
+    // Gate on G.paused too: rotate-block / photo-mode re-hide #pausemenu in the
+    // same task as setPaused(true), so MutationObserver runs after the card is
+    // already hidden again and `!pause.hidden` alone never fires (#1029's twin).
+    const cutClip = () => { if (run && run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; } };
     if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden && run && run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
-      });
+      document.addEventListener("visibilitychange", () => { if (document.hidden) cutClip(); });
+      const pause = typeof document.getElementById === "function" ? document.getElementById("pausemenu") : null;
+      if (pause && typeof MutationObserver === "function") {
+        new MutationObserver(() => { if (G.paused || !pause.hidden) cutClip(); }).observe(pause, { attributes: true, attributeFilter: ["hidden"] });
+      }
     }
     // A real clip is an HTMLAudioElement, outside the WebAudio master, so SOUND
     // OFF and VOICE VOLUME never reached it: honour both here (iOS ignores
