@@ -793,11 +793,32 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
+test("solo oversize mega keeps --shard (selected gate does not peel itself)", () => {
+  // PR #1113 / #1109: select-specs already shards tlx-probes 1/3. Peeling the
+  // lone file dropped --shard (megaSoloFlags) and ran all 17 tests on shard 1
+  // inside a 6 min cap billed for 6; shards 2/3 exited green with no tests.
+  const tlx = "tests/specs/tlx-probes.spec.js";
+  assert.equal(isMegaSweepSpec(tlx), true, "tlx-probes test.slow() is mega-class");
+  const solo = [tlx, "--retries=0", "--timeout=180000", "--max-failures=3", "--shard=1/3"];
+  const { mega, rest, peeled } = partitionMegaSweepArgs(solo);
+  assert.equal(peeled, false);
+  assert.deepEqual(mega, []);
+  assert.deepEqual(rest, solo);
+  assert.deepEqual(playwrightShard(solo), { index: 1, total: 3 });
+});
+
+test("shardCapMin leaves wrap-up room after Mesa setup", () => {
+  // PR #1109 image-grade-visual 1of2: 5 tests billed ~265 s → used to cap at
+  // 8 min; 5/5 passed in 379 s after 113 s Mesa, then the kill hit upload.
+  assert.equal(shardCapMin(265), MAX_SELECTED_JOB_MIN);
+  assert.equal(shardCapMin(163), 8);
+  assert.equal(shardCapMin(1), 6);
+});
+
 test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110)", () => {
   // select-specs shards() emits oversize-tlx-probes-1of3 with --shard=1/3 and a
-  // 6 min kill timer sized for ~1/3 of the file. megaShardPlan + megaSoloFlags
-  // would pin the whole mega to shard 1 and drop --shard — 1of3 ran 17/17 under
-  // that 6 min cap while 2of3/3of3 printed "solos on this shard: none" in 1 s.
+  // 6 min kill timer sized for ~1/3 of the file. partitionMegaSweepArgs no longer
+  // peels a lone mega (#1113); run-playwright still guards peeled megas-only + shard.
   const runner = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
   assert.match(runner, /playwrightShard/, "imports the shard parser");
   assert.match(runner, /megas-only \+ --shard/, "names the oversize exception");
@@ -805,10 +826,9 @@ test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110
   const tlx = "tests/specs/tlx-probes.spec.js";
   assert.equal(isMegaSweepSpec(tlx), true, "tlx-probes still peels when packed with siblings");
   const alone = ["--timeout=180000", "--shard=1/3", "--workers=1", tlx];
-  const { mega, rest, peeled } = partitionMegaSweepArgs(alone);
-  assert.equal(peeled, true);
-  assert.deepEqual(mega, [tlx]);
-  assert.ok(!rest.some((a) => /\.spec\.js$/.test(a)), "after peel, argv is flags only");
+  const soloPart = partitionMegaSweepArgs(alone);
+  assert.equal(soloPart.peeled, false, "lone oversize job keeps native --shard in argv (PR #1113/#1109)");
+  assert.deepEqual(soloPart.rest, alone);
   assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
   // Packed with a sibling: peel stays the packed-group path (megaShardPlan).
   const packed = ["--shard=2/4", "tests/specs/qatar-foundation.spec.js", tlx];

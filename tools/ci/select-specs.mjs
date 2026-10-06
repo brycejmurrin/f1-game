@@ -251,6 +251,17 @@ export function partitionMegaSweepArgs(args) {
     if (isMegaSweepSpec(a)) mega.push(a);
     else rest.push(a);
   }
+  // Selected-gate oversize jobs are already a SINGLE mega + --shard=i/n
+  // (tlx-probes test.slow() → 540 s). Peeling dropped --shard (megaSoloFlags)
+  // and ran all 17 tests on shard 1 inside a 6 min cap billed for 6 tests
+  // (PR #1113 job 112373879955; siblings 2/3 and 3/3 were empty greens).
+  // Only peel when a mega shares the argv with another spec file.
+  const specLike = (a) => typeof a === "string" && !a.startsWith("-")
+    && (/\.spec\.js$/.test(a) || a.includes("*") || /^tests\//.test(a));
+  const otherSpecs = rest.filter(specLike);
+  if (mega.length === 1 && otherSpecs.length === 0) {
+    return { mega: [], rest: args || [], peeled: false };
+  }
   return { mega, rest, peeled: mega.length > 0 };
 }
 
@@ -323,8 +334,13 @@ export function megaSoloFlags(args) {
 // cap is derived from the plan, never guessed.
 export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTimeoutSec, maxMin = MAX_SELECTED_JOB_MIN) => {
   const setupMin = 3;
+  // Wrap-up (junit upload) + Mesa apt variance. PR #1109 image-grade-visual
+  // 1of2: 5/5 passed in 379 s after 113 s Mesa; the 8 min cap (workMin 5 +
+  // setup 3) killed the job during artifact upload. PR #1113 tlx-probes 1of3
+  // billed 6 tests / 6 min then mega-peel dropped --shard and ran all 17.
+  const wrapMin = 2; // selected wrap-up headroom (PR #1109/#1113/#1114)
   const workMin = Math.ceil(Math.max(0, expectedSec) / 60);
-  return Math.min(maxMin, Math.max(6, workMin + setupMin));
+  return Math.min(maxMin, Math.max(6, workMin + setupMin + wrapMin));
 };
 
 /** Seconds one row of the plan is expected to take: its tests at the spec's

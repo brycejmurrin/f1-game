@@ -754,7 +754,16 @@ const TrackThemes = (function () {
           Log.warn("track", "custom scenery " + themeId + " failed (" + name + ") — the other dressers stand: " + (e && e.message || e));
         }
       }
-      Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " look=" + sv.look.time + "/" + sv.look.trees + "/" + sv.look.crowd + " straights=" + sv.straights.length + " slow=" + sv.slow.length + (failed ? " failed=" + failed : ""));
+      // Slice H: authored props (design.props) after the theme dressers. Resolved
+      // at call time so FULL boot order (props.js after this file) still works.
+      let authored = 0;
+      if (typeof TrackDesignerProps !== "undefined" && TrackDesignerProps.dress && design && design.props) {
+        try { authored = TrackDesignerProps.dress(api, sv, design.props) || 0; } catch (e) {
+          failed++;
+          Log.warn("track", "custom scenery " + themeId + " failed (props) — theme dressers stand: " + (e && e.message || e));
+        }
+      }
+      Log.info("track", "custom scenery " + api.def.id + " theme=" + themeId + " look=" + sv.look.time + "/" + sv.look.trees + "/" + sv.look.crowd + " straights=" + sv.straights.length + " slow=" + sv.slow.length + (authored ? " props=" + authored : "") + (failed ? " failed=" + failed : ""));
     };
   }
 

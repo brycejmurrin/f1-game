@@ -12,7 +12,7 @@
     },
     {
       "name": "playwright-official",
-      "command": "npx"
+      "command": "bash"
     }
   ]
 }

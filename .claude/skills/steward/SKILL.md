@@ -23,7 +23,10 @@ a branch push and its PR run did the same). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
 failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
 no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
-only the newest waiting push stays queued.)
+only the newest waiting push stays queued.) Before marking ready, run
+`node tools/ci/ready-gate.mjs` (exit 0 = Structural guards / tooling-fast green
+on the tip) **and** `node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready
+PRs already hold full-tier CI; draft fast-tier is uncapped).
 
 The other two look identical from the conclusion alone:
 
@@ -150,9 +153,12 @@ never a looser pattern or `| tail` on a live log.
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
 without a Claude session variable; do not share a `nosession` identity.
-If Monitor/subscribe_pr_activity/send_later are absent, run the watcher as one
-owned background command with a log, read events while doing independent work,
-and poll `ci-watch --sha <sha> --once` at checkpoints. Record missing subscription
-and reminder capabilities as unverified; do not claim an automation was armed.
+Prefer `subscribe_github_ci` + `subscribe_github_pr` (cursor-subscriptions MCP);
+never write the fake name `subscribe_pr_activity`. If those or Monitor/send_later
+are absent, run the watcher as one owned background command with a log, read
+events while doing independent work, and at most one `ci-watch --sha <sha>
+--once` at a checkpoint (no shell-poll loops while subscribed). Record missing
+subscription and reminder capabilities as unverified; do not claim an automation
+was armed.
 Check the active tool catalog with `doctor.mjs --catalog <file>`; upstream
 connector availability cannot be fixed by inventing tool results.

@@ -84,49 +84,67 @@
     }
     const blurAO = makeBlur("tlx-post-blur-ao");
     const blurGR = makeBlur("tlx-post-blur-godray");
+    // P2 (TLX-PERF-PLAN / audit #6): fixed H/V materials so present() never
+    // swaps .tex.value (WebGL2 re-uploads the bind group's UBOs on each swap).
+    // Own customProgramCacheKey per pair — a shared key clones the first
+    // material's bindings and samples the wrong texture.
+    const blurAOH = makeBlur("tlx-post-blur-ao-h");
+    const blurAOV = makeBlur("tlx-post-blur-ao-v");
+    const blurGRH = makeBlur("tlx-post-blur-gr-h");
+    const blurGRV = makeBlur("tlx-post-blur-gr-v");
 
-    const downTex = texture(ctx.blackTex);
-    const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
-    const down = {
-      tex: downTex, U: downU,
-      mat: passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
-        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
-        const t = vec2(downU.texel).toVar();
-        const tap = (x, y) => vec3(downTex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
-        const a = tap(-2, 2).toVar(), b = tap(0, 2).toVar(), c = tap(2, 2).toVar();
-        const d = tap(-2, 0).toVar(), e = tap(0, 0).toVar(), f = tap(2, 0).toVar();
-        const g = tap(-2, -2).toVar(), h = tap(0, -2).toVar(), i = tap(2, -2).toVar();
-        const j = tap(-1, 1).toVar(), k = tap(1, 1).toVar();
-        const l = tap(-1, -1).toVar(), m = tap(1, -1).toVar();
-        const g0 = a.add(b).add(d).add(e).mul(0.25).toVar();
-        const g1 = b.add(c).add(e).add(f).mul(0.25).toVar();
-        const g2 = d.add(e).add(g).add(h).mul(0.25).toVar();
-        const g3 = e.add(f).add(h).add(i).mul(0.25).toVar();
-        const g4 = j.add(k).add(l).add(m).mul(0.25).toVar();
-        const res = vec3(0.0).toVar();
-        If(downU.karis.greaterThan(0.5), () => {
-          // Karis partial luma weighting, FIRST mip only (firefly fix).
-          const w0 = float(0.125).div(max(g0.r, max(g0.g, g0.b)).add(1.0)).toVar();
-          const w1 = float(0.125).div(max(g1.r, max(g1.g, g1.b)).add(1.0)).toVar();
-          const w2 = float(0.125).div(max(g2.r, max(g2.g, g2.b)).add(1.0)).toVar();
-          const w3 = float(0.125).div(max(g3.r, max(g3.g, g3.b)).add(1.0)).toVar();
-          const w4 = float(0.5).div(max(g4.r, max(g4.g, g4.b)).add(1.0)).toVar();
-          res.assign(g0.mul(w0).add(g1.mul(w1)).add(g2.mul(w2)).add(g3.mul(w3)).add(g4.mul(w4))
-            .div(w0.add(w1).add(w2).add(w3).add(w4)));
-        }).Else(() => {
-          res.assign(g0.add(g1).add(g2).add(g3).mul(0.125).add(g4.mul(0.5)));
-        });
-        return vec4(res, 1.0);
-      })(), "tlx-post-down"),
-    };
+    function makeDown(key) {
+      const downTex = texture(ctx.blackTex);
+      const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
+      return {
+        tex: downTex, U: downU,
+        mat: passMaterial(Fn(() => {
+          const suv = vec2(screenUV).toVar();
+          const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+          const t = vec2(downU.texel).toVar();
+          const tap = (x, y) => vec3(downTex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
+          const a = tap(-2, 2).toVar(), b = tap(0, 2).toVar(), c = tap(2, 2).toVar();
+          const d = tap(-2, 0).toVar(), e = tap(0, 0).toVar(), f = tap(2, 0).toVar();
+          const g = tap(-2, -2).toVar(), h = tap(0, -2).toVar(), i = tap(2, -2).toVar();
+          const j = tap(-1, 1).toVar(), k = tap(1, 1).toVar();
+          const l = tap(-1, -1).toVar(), m = tap(1, -1).toVar();
+          const g0 = a.add(b).add(d).add(e).mul(0.25).toVar();
+          const g1 = b.add(c).add(e).add(f).mul(0.25).toVar();
+          const g2 = d.add(e).add(g).add(h).mul(0.25).toVar();
+          const g3 = e.add(f).add(h).add(i).mul(0.25).toVar();
+          const g4 = j.add(k).add(l).add(m).mul(0.25).toVar();
+          const res = vec3(0.0).toVar();
+          If(downU.karis.greaterThan(0.5), () => {
+            // Karis partial luma weighting, FIRST mip only (firefly fix).
+            const w0 = float(0.125).div(max(g0.r, max(g0.g, g0.b)).add(1.0)).toVar();
+            const w1 = float(0.125).div(max(g1.r, max(g1.g, g1.b)).add(1.0)).toVar();
+            const w2 = float(0.125).div(max(g2.r, max(g2.g, g2.b)).add(1.0)).toVar();
+            const w3 = float(0.125).div(max(g3.r, max(g3.g, g3.b)).add(1.0)).toVar();
+            const w4 = float(0.5).div(max(g4.r, max(g4.g, g4.b)).add(1.0)).toVar();
+            res.assign(g0.mul(w0).add(g1.mul(w1)).add(g2.mul(w2)).add(g3.mul(w3)).add(g4.mul(w4))
+              .div(w0.add(w1).add(w2).add(w3).add(w4)));
+          }).Else(() => {
+            res.assign(g0.add(g1).add(g2).add(g3).mul(0.125).add(g4.mul(0.5)));
+          });
+          return vec4(res, 1.0);
+        })(), key),
+      };
+    }
+    const down = makeDown("tlx-post-down");
+    // Fixed per-mip downs (index i samples bloomLv[i] → writes bloomLv[i+1]).
+    // Cap matches tlx-post.js BLOOM_LEVELS_MAX (5) → 4 down steps.
+    const DOWN_FIXED_N = 4;
+    const downFixed = [];
+    for (let di = 0; di < DOWN_FIXED_N; di++) {
+      downFixed.push(makeDown("tlx-post-down-" + (di + 1)));
+    }
 
     /* UP (UP_FS in js/render/glx/shaders/glsl-post.js): 9-tap tent. Two materials: additive
      *    (ONE,ONE) for the intermediate octaves, overwrite for the final into
      *    level 0 (js/render/glx/shaders/glsl-post.js — adding onto the sharp bright-pass
      *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. */
     const spread = uniform(1.0);
-    function makeUp(additive) {
+    function makeUp(additive, key) {
       const tex = texture(ctx.blackTex);
       const U = { texel: uniform(new THREE.Vector2()) };
       const mat = passMaterial(Fn(() => {
@@ -138,7 +156,7 @@
           .add(tp(0, 1).add(tp(0, -1)).add(tp(-1, 0)).add(tp(1, 0)).mul(2.0))
           .add(tp(0, 0).mul(4.0));
         return vec4(s.div(16.0), 1.0);
-      })(), additive ? "tlx-post-up-add" : "tlx-post-up");
+      })(), key || (additive ? "tlx-post-up-add" : "tlx-post-up"));
       if (additive) {
         m8Additive(mat);
       }
@@ -155,6 +173,13 @@
     }
     const upAdd = makeUp(true);
     const upFinal = makeUp(false);
+    // Fixed per-source ups: upAddFixed[i] samples bloomLv[i+2] → bloomLv[i+1];
+    // upFinal stays the overwrite into level 0 (one source: bloomLv[1]).
+    const upAddFixed = [];
+    for (let ui = 0; ui < DOWN_FIXED_N - 1; ui++) {
+      upAddFixed.push(makeUp(true, "tlx-post-up-add-" + (ui + 2)));
+    }
+    const upFinalFixed = makeUp(false, "tlx-post-up-final");
 
     /* SSAO (SSAO_FS in js/render/glx/shaders/glsl-post.js): view-space horizon AO + contact
      *    shadows, half-res. Depth reconstruction through the game's
@@ -1079,8 +1104,9 @@
       })(), "tlx-post-mirror"),
     };
 
-    return { bright, blurAO, blurGR, down, upAdd, upFinal, spread, ssao, godray,
-             composite, fxaa, sgsr, blit, mirror };
+    return { bright, blurAO, blurGR, blurAOH, blurAOV, blurGRH, blurGRV,
+             down, downFixed, upAdd, upFinal, upAddFixed, upFinalFixed, spread,
+             ssao, godray, composite, fxaa, sgsr, blit, mirror };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });

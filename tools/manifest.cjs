@@ -202,6 +202,7 @@ const FULL = [
   // registry that appends the player's saved circuits to Tracks.LIST at eval,
   // before game.js resolves the stored trackId. The editor itself is LAZY.
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
+  "js/editor/props.js",          // TrackDesignerProps: capped scenery props (sanitize + dress); FULL so sync()/share see them
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
   "js/car/car-geometry.js",
@@ -740,6 +741,7 @@ const HARD_EDGES = [
   ["js/track/tracks.js", "js/editor/custom-tracks.js"],
   ["js/track/core/def.js", "js/editor/custom-tracks.js"],
   ["js/editor/track-themes.js", "js/editor/custom-tracks.js"],
+  ["js/editor/props.js", "js/editor/custom-tracks.js"],           // sanitize/canonical props at eval
   ["js/editor/custom-tracks.js", "js/game.js"],    // game.js calls CustomTracks.create(G, { load }) after the DATA door
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
