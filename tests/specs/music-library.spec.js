@@ -72,6 +72,9 @@ async function boot(page) {
       && typeof GameAudio !== "undefined" && !GameAudio._stub,
     null, { polling: 100, timeout: BOOT_MS }
   );
+  // MusicLib.init() is async IDB hydrate → GameAudio.addTracks; !stub alone
+  // races the reload-persistence poll (empty userTracks until settle).
+  await page.evaluate(() => MusicLib.list());
 }
 
 /** Open the MUSIC & SOUND panel. #pm-audio lives in the hidden pause menu, so

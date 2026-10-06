@@ -8430,9 +8430,15 @@ function syncSettingsAvailability() {
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
   // AUTO is FULL" is written after the first HUD tick, not only at boot.
-  ensureAudio(); paintHudDetailsSummary(); // LAZY_AUDIO / MusicLib (pm-settings skips pointerdown)
-  syncSettingsAvailability(); settingsNav.showCurrent();
-  els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+  paintHudDetailsSummary();
+  // LAZY_AUDIO: wait for the real AudioPanel before revealing — a sync reveal
+  // walks the stub panel while onAudioReady swaps it (menu-traversal MUSIC &
+  // SOUND: 12 unreachable controls). pm-settings click is not a pointerdown.
+  const reveal = () => {
+    syncSettingsAvailability(); settingsNav.showCurrent();
+    els.pmsettings.hidden = false; els.pausemenu.hidden = true;
+  };
+  ensureAudio().then(reveal);
 }
 let keyBinds = null;   // KeyBinds.create(G), below
 function closeSettings() { if (keyBinds) keyBinds.disarmAll(); els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free

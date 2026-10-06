@@ -12,9 +12,9 @@
       "lines": 3573
     },
     "js/game.js": {
-      "codeLines": 4878,
+      "codeLines": 4881,
       "gMembers": 287,
-      "lines": 9036,
+      "lines": 9042,
       "topLets": 150
     },
     "js/lighting/presets.js": {
@@ -74,7 +74,7 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 92,
+    "waitForTimeout": 90,
     "waitNoPolling": {
       "ceiling": 56,
       "slack": 39
