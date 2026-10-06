@@ -55,6 +55,29 @@ test("bbText: the set-up sheet's half-percent steps", () => {
   assert.equal(R.bbText(null, 0.56), "BB 56%");
 });
 
+test("spdPlate: one MPH|KPH plate — never KM/H, settings drive the unit", () => {
+  const { R } = load();
+  assert.equal(R.spdUnits(), "kmh");
+  assert.equal(R.spdUnit(), "KPH");
+  assert.equal(R.spdUnit("mph"), "MPH");
+  assert.deepEqual({ ...R.spdPlate(287.4, "kmh") }, { n: 287, unit: "KPH" });
+  assert.deepEqual({ ...R.spdPlate(287.4, "mph") }, { n: 179, unit: "MPH" });
+  assert.deepEqual({ ...R.spdPlate(0, "mph") }, { n: 0, unit: "MPH" });
+  assert.deepEqual({ ...R.spdPlate(NaN, "kmh") }, { n: 0, unit: "KPH" });
+  // Plate spelling is the short form the wheel LCD uses — not settings' "KM/H".
+  assert.doesNotMatch(R.spdUnit("kmh"), /KM\/H/);
+  assert.doesNotMatch(R.spdPlate(100, "kmh").unit, /KM\/H/);
+  // AppearanceOpts.speed wins for the number when present (same rounding).
+  const withAO = load({
+    AppearanceOpts: {
+      units: () => "mph",
+      speed: (kph) => Math.round((Number(kph) || 0) / R.KPH_PER_MPH),
+    },
+  });
+  assert.equal(withAO.R.spdUnits(), "mph");
+  assert.deepEqual({ ...withAO.R.spdPlate(160.9344) }, { n: 100, unit: "MPH" });
+});
+
 test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () => {
   const { R } = load();
   const L = 5000;
@@ -188,6 +211,35 @@ test("hud.js: gear, tach and speed update every frame; the clock stays at 10 Hz"
   assert.equal(els.gear.textContent, "4");
   assert.equal(els.speed.textContent, "216");
   assert.equal(els.time.textContent, "12.00", "the lap clock is still on the 10 Hz tick");
+});
+
+test("hud.js: SPD unit plate is MPH|KPH (matches wheel LCD), not KM/H", () => {
+  const { $, player, frame, sb, dom } = boot();
+  // mini-dom auto-creates ids flat under body — mirror the shell tree so
+  // paintInstruments can find .hud-unit beside #hud-speed-n.
+  const wrap = $("hud-speed"), n = $("hud-speed-n");
+  const unit = dom.document.createElement("span");
+  unit.className = "hud-unit";
+  unit.textContent = "KM/H";   // AppearanceOpts.applyReadability's settings copy
+  wrap.appendChild(n);
+  wrap.appendChild(unit);
+  player.speed = 50; frame(16);
+  assert.equal(n.textContent, "180");
+  assert.equal(unit.textContent, "KPH", "float plate re-asserted to KPH every frame");
+  // MPH setting: spdPlate reads AppearanceOpts live; number + plate flip together.
+  sb.AppearanceOpts = {
+    units: () => "mph",
+    speed: (kph) => Math.round((Number(kph) || 0) / 1.609344),
+    hudUsesTeam: () => true,
+    menuAccent: () => "brand",
+    applyMenuAccent() {},
+    applyHudAccent() {},
+  };
+  assert.deepEqual({ ...sb.HudReadouts.spdPlate(160.9344) }, { n: 100, unit: "MPH" });
+  player.speed = 160.9344 / 3.6; frame(16);   // dashKph(v)=v*3.6 → 160.9344
+  assert.equal(n.textContent, "100");
+  assert.equal(unit.textContent, "MPH");
+  assert.doesNotMatch(unit.textContent, /KM\/H/);
 });
 
 test("hud.js: ENERGY number + state, BB chip, the energy fill has its own colour", () => {

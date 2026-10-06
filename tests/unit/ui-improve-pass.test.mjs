@@ -121,7 +121,7 @@ test("select track filter persists via store", () => {
   // check, and skips tiles beside the season/classic/daily-open rules.
   assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
   assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
-  assert.match(js, /filter\s*===\s*"fav"\s*&&\s*!favs\.includes\(t\.id\)\)\s*return/);
+  assert.match(js, /filter === "fav"\) return \(favs \|\| favList\(\)\)\.includes\(t\.id\)/);
   assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
   assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
     "only a favourited tile is positioned — the shipped strip paints unchanged");
@@ -224,6 +224,18 @@ test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifi
   const row = season.dom.makeElement("button"); row.className = "track-row"; row.dataset.trackIdx = "0"; cal.appendChild(row);
   season.dom.dispatch(row, { type: "keydown", key: "f", bubbles: true });
   assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
+});
+
+test("CLASSICS filter snaps the hero off a season circuit onto the first classic", () => {
+  const h = bootMenus();
+  assert.equal(h.G.trackIdx, 1, "fixture opens on Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic")
+    .onclick({ stopPropagation() {} });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "classic");
+  assert.equal(h.G.trackIdx, 2, "Bahrain/Spa is not in CLASSICS — Imola is the first classic");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"]);
+  assert.ok(h.tiles()[0].className.includes("active"), "the snapped classic is highlighted");
+  assert.equal(JSON.parse(h.data.get("trackId")), "imola");
 });
 
 test("FAVOURITE CIRCUITS: a stored FAVOURITES filter with no (known) favourites opens on ALL", () => {
@@ -580,6 +592,76 @@ test("VS Friend text uses the menu type scale instead of sub-floor rem literals"
   assert.equal(decl(section, /\.vs-summary dd$/, "font-size"), "var(--fs-2)");
 });
 
+test("track select + circuit detail: readable selected title, sheet chrome, wrapping DRS", () => {
+  const html = read("index.html");
+  assert.match(html, /id="td-inner" class="sheet"/, "Circuit Detail is a sheet like standings, not a full-bleed overlay");
+  assert.doesNotMatch(html, /id="track-detail-legend"/, "legend is built once in JS so the shell ratchet stays flat");
+  const sel = css("css/select.css");
+  assert.equal(decl(sel, "#sel-preview-gp", "color"), "var(--text)",
+    "GP title is ink, not brand red (~2.6:1 on the still)");
+  assert.equal(decl(sel, "#sel-preview-gp", "background"), "var(--plate-opaque)",
+    "GP subtitle sits on a plate so Imola sunset / Bahrain sand stay ≥4.5:1");
+  assert.equal(decl(sel, "#sel-preview-gp", "text-shadow"), "var(--hud-halo)");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active", "background"), "transparent");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(sel, /#sel-tracks/, "scrollbar-color"), "var(--scroll-thumb) var(--scroll-track)");
+  const td = css("css/track-detail.css");
+  assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
+  assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
+  assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
+  const menus = code("js/ui/select-screen.js");
+  assert.match(menus, /past S\/F/, "a DRS zone that wraps the line says so");
+  assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
+    "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
+  assert.ok(!/className = "track-group-head"/.test(menus),
+    "filter chips name the view; no vertical CLASSICS/SEASON divider");
+  assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
+  assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+  const maps = code("js/ui/track-maps.js");
+  assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
+  const nav = code("js/ui/menu-nav.js");
+  assert.match(nav, /if \(overStrip\) \{/, "wheel over #sel-tracks pans the strip before the ancestor walk");
+  assert.match(menus, /opts && opts\.readOnly\) row\.dataset\.tip/,
+    "season calendar tiles use data-tip, not native title over the neighbour");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "padding-inline"), "var(--pad)");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scrollbar-color"),
+    "var(--scroll-thumb) var(--scroll-track)");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scroll-snap-type"), "x mandatory",
+    "season end-of-pan settles on a tile start, so R14 is not mid-cut");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"] .track-row', "scroll-snap-align"), "start");
+  assert.equal(decl(sel, "#sel-tracks .track-row", "scroll-snap-align"), "start",
+    "snap-start so the last flag is not centre-clipped at the strip end");
+  assert.equal(decl(sel, "#sel-tracks .track-row:last-child", "scroll-snap-align"), "end",
+    "last flag snaps to the end slack instead of hanging off the clip");
+  assert.equal(decl(sel, "#sel-tracks", "padding-inline-end"), "calc(var(--pad) + var(--chip-h))",
+    "strip end pad is one chip plus --pad so the last flag clears the edge");
+  assert.equal(decl(sel, "#sel-car small", "white-space"), "normal",
+    "CHANGE CAR team name wraps at ~500 instead of SCUDERIA FERR…");
+  assert.equal(decl(sel, "#sel-tracks .track-group-head", "max-height"), "none",
+    "CLASSICS vertical label is not chip-capped");
+  assert.equal(decl(sel, '#sel-inner[data-density="compact"] #sel-tracks .track-group-head', "display"), "none",
+    "compact strip: the chip already names CLASSICS, so the squeezed divider goes");
+  assert.ok(rulesFor(sel, /#sel-tracks \.track-group-head/).some((r) =>
+    r.context.includes("@container sheet (max-width: 520px)") && r.decls.get("display") === "none"),
+    "~500 width hides the vertical CLASSICS divider even when density is still normal");
+  const lowerThirdDd = rulesFor(sel, /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-preview-meta dd/)[0];
+  assert.ok(lowerThirdDd, "lower-third stats keep a wrap rule");
+  assert.equal(lowerThirdDd.decls.get("white-space"), "normal");
+  assert.ok(rulesFor(sel, /#sel-inner > \.sheet-foot/).some((r) =>
+    r.context.includes("@container sheet (max-width: 520px)")),
+    "foot wraps team names from ~500, not only a tall 480 phone");
+  assert.ok(rulesFor(sel, /data-tip\]:hover::before/).every((r) =>
+    r.context.some((c) => /hover\s*:\s*hover/.test(c))),
+    "season data-tip :hover is gated; :active is the touch twin");
+  assert.match(menus, /function snapTrackToFilter/, "CLASSICS (and the other chips) snap the hero onto a visible tile");
+  assert.match(menus, /function trackInFilter/, "filter membership is one helper for the strip and the snap");
+  assert.match(menus, /fmtElev/, "sparkline labels keep the minus on a trough");
+  assert.match(menus, /clientWidth <= 520/,
+    "narrow (~500) CIRCUIT LENGTH drops the mile half so TURNS is not 1..");
+  assert.equal(decl(td, "#track-detail-header", "padding-inline"), "var(--pad)");
+  assert.equal(decl(td, "#track-detail-panel", "padding-inline"), "var(--pad)");
+});
+
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
   const menus = code("js/ui/select-screen.js");
   const drawAt = menus.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
@@ -647,6 +729,14 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
     "data hub short-height chrome must use body[data-density], not viewport max-height");
   assert.ok(ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/),
     "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
+  // Live survey ~500px: TELEMETRY (7.1em) used to be the widest label; WATCH &
+  // DRIVE overflows that column with nowrap. Size the grid for the new widest
+  // and let the chip wrap instead of painting past its plate.
+  const tallTabs = ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/);
+  assert.match(tallTabs.decls.get("grid-template-columns") || "", /11\.2 \* var\(--fs-micro\)/,
+    "tall+narrow hub columns size to WATCH & DRIVE, not TELEMETRY");
+  assert.equal(decl(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tab\b/, "white-space"), "normal",
+    "WATCH & DRIVE wraps inside the chip instead of overflowing the plate");
   assert.equal(decl(css("css/menus.css"), /^#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row/, "flex-wrap"), "wrap");
 });
 
@@ -795,7 +885,14 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
   assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-pits:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-driving:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
+  assert.ok(decl(overlays, "#howtoplay .sheet-body::after", "height") ||
+    rulesFor(overlays, /#howtoplay \.sheet-body::after/).some((r) => r.decls.get("height")),
+    "HTP body keeps scroll slack so FRIENDS can reach the pane top");
+  assert.ok(decl(overlays, "#howtoplay .sheet-body", "scroll-padding-block-start") ||
+    rulesFor(overlays, /^#howtoplay \.sheet-body$/).some((r) => r.decls.has("scroll-padding-block-start")));
   assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
     "help rows must not synchronize two unrelated answers");
   assert.equal(decl(css("css/components.css"), "#howtoplay", "--sheet-w"), "1000px");
@@ -1452,7 +1549,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.doesNotMatch(read("index.html"), /<h3 class="pm-group-h">(?:DRIVING CONTROLS|DISPLAY|APPEARANCE|STEERING &amp; ASSISTS|MUSIC &amp; SOUND)<\/h3>/,
     "page titles are not duplicated by hidden headings");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--text)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
@@ -1485,12 +1582,65 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--text)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "color"), "var(--text)",
+    "MUSIC fold names use --text, not steel italic");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec$/, "border-bottom"), "1px solid var(--card-line)",
+    "MUSIC & SOUND rules sit on the fold at full width, not a fading --grad-rule");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset-inner,/, "width"), "100%",
+    "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
+  assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
+    "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
+  assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
+    "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
+    "disabled TILT help keeps its slot so steer-mode changes do not reflow");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib[hidden] + #pm-calib-help", "display"), "none",
+    "hidden RECALIBRATE also drops its described-by copy");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
+    "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
+    "NEW CAREER columns keep the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
+    "LOAD CAREER FILE confirm stays stacked — no wrap jump off the pointer");
+  assert.equal(decl(css("css/career.css"), "#cr-career-load", "min-height"), "calc(var(--tap-paint) * 2)",
+    "armed OVERWRITE copy fits the reserved LOAD height");
+  assert.equal(decl(css("css/career.css"), ".cr-slot-main", "grid-column"), "1 / -1",
+    "SLOT 1 copy keeps the full card; EXPORT / IMPORT / DELETE sit underneath");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left$/, "overflow-x"), "hidden",
+    "paired career panes do not grow a second horizontal gutter");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\]:has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > \.sheet-foot$/, "grid-column"), "1 / -1",
+    "CAREER MODES BACK spans both columns");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file > button", "text-transform"), "uppercase",
+    "SAVE / LOAD / PROTECT share one uppercase plate");
+  assert.equal(decl(css("css/career-experience.css"), /\[data-career-part="nav"\]$/, "flex-wrap"), "nowrap",
+    "hub chips pan instead of wrapping under the title");
+  assert.match(decl(css("css/career-experience.css"), /\[data-career-part="calendar"\]$/, "grid-template-columns") || "",
+    /auto-fill/,
+    "season story tiles wrap in the pane instead of a clipped H strip");
+  assert.match(decl(css("css/settings.css"), "#pmsettings", "--sheet-w") || "",
+    /1020px/,
+    "SETTINGS matches the career hub width, not a 760 postcard");
+  assert.equal(decl(css("css/settings.css"), "#pm-settings-body", "scrollbar-width"), "none",
+    "DISPLAY uses the themed .sf-scroll thumb, not a white native gutter");
+  const hubGrid = rulesFor(css("css/settings-controls.css"), /^#pm-settings-index$/).find((r) =>
+    r.context.includes("@container sheet (min-width: 24rem)"));
+  assert.ok(hubGrid, "SETTINGS doors become a 2-col grid once two --balance-basis tiles fit");
+  assert.equal(hubGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(hubGrid.decls.get("align-items"), "stretch",
+    "APPEARANCE wrap stretches the pair so DISPLAY is not a short neighbour");
+  assert.equal(decl(css("css/career.css"), /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents a,/, "white-space"), "nowrap",
+    "How My Team Works topic chips stay one line");
+  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents", "scrollbar-width"), "none",
+    "How My Team Works keeps the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
+    "1px solid var(--card-line)",
+    "DISPLAY fold rules span the sheet, not a fading --grad-rule");
   assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
@@ -1515,8 +1665,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
   assert.equal(decl(css("css/components.css"), "#pm-uiscale-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
-    "fold names stay heading steel");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--text)",
+    "fold names stay readable --text, not steel italic");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
     "fold ON chips pick up the live gold the inner ON buttons name");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--red)",
@@ -1536,6 +1686,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   const comp = css("css/components.css");
   assert.equal(decl(comp, ".set-row", "display"), "flex");
   assert.equal(decl(comp, ".set-row", "flex-wrap"), "wrap", "the ‹ select › cluster drops to its own line, never squeezes");
+  assert.equal(decl(css("css/settings.css"), "#pm-panel-driving .set-row > div", "flex-wrap"), "wrap",
+    "Driving ‹ select › cluster wraps at small-phone 200% instead of overflowing the pane");
   assert.equal(decl(comp, ".set-row > div > select", "appearance"), "none", "the chevrons are the arrows");
   assert.equal(decl(comp, ".set-row > div > button", "width"), "var(--chip-h)", "each chevron is a full tap square");
   assert.equal(decl(comp, "#pmsettings-inner .pm-groups .set-row > div > button", "width"), "var(--chip-h)",
@@ -1596,6 +1748,36 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
+  // VS Friend chrome (dialogs.css @layer overlays): one red primary per step,
+  // enter-code JOIN/field width, short-code error under the field, lone step
+  // chip hidden, tall CLOSE stays in the footer. ID-only so vs-* stay owned by
+  // overlays.css for component-inventory.
+  const vsDlg = css("css/dialogs.css");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-host/, "background"), "var(--plate-opaque)",
+    "NEW CODE is a plate secondary — HOST keeps the sole red on the hub");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-share-invite/, "background"), "var(--plate-opaque)",
+    "SHARE LINK is secondary until the room owns START");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-in.*\)::placeholder/, "word-break"), "normal",
+    "code placeholder never wraps mid-word");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-in, #vs-invite/, "color-scheme"), "dark",
+    "code boxes use dark form tokens (no nested white scroll chrome)");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-code-go", "width"), "min(100%, 22rem)",
+    "Enter Code JOIN matches the field column width");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status", "text-align"), "center",
+    "short-code error is centred under the field");
+  assert.equal(
+    decl(vsDlg, /#vsfriend:has\(#vs-code-input:not\(\[hidden\]\)\):has\(#vs-status\[class~="vs-error"\]\) #vs-code-in/, "border-color"),
+    "var(--red)",
+    "short-code error flags the field");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-code > h3 > span:first-child", "display"), "none",
+    "a lone step number chip is hidden");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-joining section > p", "text-align"), "start",
+    "join-friend hints align with their column");
+  assert.equal(
+    decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
+    "relative",
+    "narrow/tall CLOSE stays in the footer, not absolute in the head");
+
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
@@ -1648,8 +1830,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
   assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
-  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
+  assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
+    "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
+  const titleFlow = read("js/ui/title-flow.js");
+  assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
+    "HTP CLOSE drops a stale #htp-* hash from title-flow, not game.js");
+  assert.match(titleFlow, /\^#htp-/);
+  assert.doesNotMatch(read("js/game.js"), /\^#htp-/);
+  assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
+  assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");

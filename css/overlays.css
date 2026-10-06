@@ -157,11 +157,17 @@ body:has(dialog[open]) #save-warning { display: none; }
    chips stay `--text` while career guide/history stay `--dim`. */
 #htp-contents a { color: var(--text); }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"],
-#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"],
-#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"] {
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
-#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"],
+#howtoplay:has(#htp-pits:target) #htp-contents a[href="#htp-pits"],
+#howtoplay:has(#htp-driving:target) #htp-contents a[href="#htp-driving"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"],
+#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
@@ -215,6 +221,16 @@ body:has(dialog[open]) #save-warning { display: none; }
      scrollable overflow in block layout after Quick Start wraps the <dl>. */
   display: grid; grid-template-columns: minmax(0, 1fr); align-content: start;
   font-size: var(--fs-micro); line-height: 1.45;
+  scroll-padding-block-start: var(--gap);
+}
+/* Slack so FRIENDS (and every earlier section) can sit at the scrollport top
+   when its contents-rail link is pressed — without this, the last sections
+   stop mid-pane because there is nothing below them to scroll past. */
+#howtoplay .sheet-body::after {
+  content: "";
+  display: block;
+  height: min(70vh, 28rem);
+  pointer-events: none;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
 #htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
@@ -649,6 +665,37 @@ body:has(dialog[open]) #save-warning { display: none; }
   border-radius: var(--r-md);
   background: var(--plate-opaque);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
+/* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
+   (#home-motion, css/experience.css). Lift this chip one --tap so the
+   two never share a hit target (survey ~500px, 2026-10-05). --safe-b
+   already includes --sab, matching the toggle's dock. Desktop Classic
+   keeps ANIMATE top-left, so a bare :has(home-motion) lift would
+   still walk INSTALL on the title-desktop golden. */
+body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+:where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+body[data-shape="wide"]:has(#overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+/* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
+   which would otherwise wipe the leftover-row inset (menus.css is
+   @layer components and loses). Extra attrs beat the shorthand. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+body[data-shape="wide"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
 }
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
    non-dialog layers (title, #select, #career, #carsetup), bottom-right clear

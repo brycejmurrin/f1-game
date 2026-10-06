@@ -1,0 +1,252 @@
+{
+  "live": "https://brycejmurrin.github.io/f1-game/",
+  "at": "2026-10-05T21:19:05.153Z",
+  "count": 35,
+  "shots": [
+    {
+      "slug": "home-desktop",
+      "note": "title / home @1280x800",
+      "path": "artifacts/shots/menus-settings-htp/home-desktop.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-controls",
+      "note": "HTP default / CONTROLS",
+      "path": "artifacts/shots/menus-settings-htp/htp-controls.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-racing",
+      "note": "HTP #htp-racing",
+      "path": "artifacts/shots/menus-settings-htp/htp-racing.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-pits",
+      "note": "HTP #htp-pits",
+      "path": "artifacts/shots/menus-settings-htp/htp-pits.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-driving",
+      "note": "HTP #htp-driving",
+      "path": "artifacts/shots/menus-settings-htp/htp-driving.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-setup",
+      "note": "HTP #htp-setup",
+      "path": "artifacts/shots/menus-settings-htp/htp-setup.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-modes",
+      "note": "HTP #htp-modes",
+      "path": "artifacts/shots/menus-settings-htp/htp-modes.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-friends",
+      "note": "HTP #htp-friends",
+      "path": "artifacts/shots/menus-settings-htp/htp-friends.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "htp-scroll-mid",
+      "note": "HTP mid-scroll body",
+      "path": "artifacts/shots/menus-settings-htp/htp-scroll-mid.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-index",
+      "note": "Settings root index",
+      "path": "artifacts/shots/menus-settings-htp/settings-index.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-controls",
+      "note": "Settings panel settings-controls",
+      "path": "artifacts/shots/menus-settings-htp/settings-controls.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-driving",
+      "note": "Settings panel settings-driving",
+      "path": "artifacts/shots/menus-settings-htp/settings-driving.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-display",
+      "note": "Settings panel settings-display",
+      "path": "artifacts/shots/menus-settings-htp/settings-display.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-appearance",
+      "note": "Settings panel settings-appearance",
+      "path": "artifacts/shots/menus-settings-htp/settings-appearance.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-files",
+      "note": "Settings panel settings-files",
+      "path": "artifacts/shots/menus-settings-htp/settings-files.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-advanced",
+      "note": "Steering & assists",
+      "path": "artifacts/shots/menus-settings-htp/settings-advanced.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "settings-audio",
+      "note": "Music & sound",
+      "path": "artifacts/shots/menus-settings-htp/settings-audio.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-default",
+      "note": "Data Hub default tab",
+      "path": "artifacts/shots/menus-settings-htp/datahub-default.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-schedule",
+      "note": "Data Hub SCHEDULE",
+      "path": "artifacts/shots/menus-settings-htp/datahub-schedule.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-standings",
+      "note": "Data Hub STANDINGS",
+      "path": "artifacts/shots/menus-settings-htp/datahub-standings.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-results",
+      "note": "Data Hub RESULTS",
+      "path": "artifacts/shots/menus-settings-htp/datahub-results.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-live",
+      "note": "Data Hub LIVE",
+      "path": "artifacts/shots/menus-settings-htp/datahub-live.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-telemetry",
+      "note": "Data Hub TELEMETRY",
+      "path": "artifacts/shots/menus-settings-htp/datahub-telemetry.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-race",
+      "note": "Data Hub WATCH & DRIVE",
+      "path": "artifacts/shots/menus-settings-htp/datahub-race.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "datahub-export",
+      "note": "Data Hub EXPORT",
+      "path": "artifacts/shots/menus-settings-htp/datahub-export.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "sheet-vsfriend",
+      "note": "VS Friend lobby sheet",
+      "path": "artifacts/shots/menus-settings-htp/sheet-vsfriend.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "sheet-select",
+      "note": "Circuit select sheet",
+      "path": "artifacts/shots/menus-settings-htp/sheet-select.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "dialog-track-detail",
+      "note": "Circuit detail dialog",
+      "path": "artifacts/shots/menus-settings-htp/dialog-track-detail.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "home-portrait-500x800",
+      "note": "home portrait ~500×800",
+      "path": "artifacts/shots/menus-settings-htp/home-portrait-500x800.png",
+      "w": 500,
+      "h": 800
+    },
+    {
+      "slug": "settings-controls-portrait-500x800",
+      "note": "settings controls portrait",
+      "path": "artifacts/shots/menus-settings-htp/settings-controls-portrait-500x800.png",
+      "w": 500,
+      "h": 800
+    },
+    {
+      "slug": "home-narrow-500x385",
+      "note": "home narrow ~500×385",
+      "path": "artifacts/shots/menus-settings-htp/home-narrow-500x385.png",
+      "w": 500,
+      "h": 385
+    },
+    {
+      "slug": "settings-controls-narrow-500x385",
+      "note": "settings controls narrow",
+      "path": "artifacts/shots/menus-settings-htp/settings-controls-narrow-500x385.png",
+      "w": 500,
+      "h": 385
+    },
+    {
+      "slug": "sheet-garage",
+      "note": "Garage sheet",
+      "path": "artifacts/shots/menus-settings-htp/sheet-garage.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "sheet-career",
+      "note": "Career sheet",
+      "path": "artifacts/shots/menus-settings-htp/sheet-career.png",
+      "w": 1280,
+      "h": 800
+    },
+    {
+      "slug": "sheet-race-settings",
+      "note": "Race settings sheet",
+      "path": "artifacts/shots/menus-settings-htp/sheet-race-settings.png",
+      "w": 1280,
+      "h": 800
+    }
+  ]
+}
