@@ -18,15 +18,28 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Ship-checkpoint freeze: no sync **pushes** or **merges** while freeze is on.
 
 ## Existing PR (steward attach)
-When the job is an **open PR**, do not start from ship and fork a new topic head:
-- Pass `cloud_base_branch` = the PR's current head ref.
-- Prompt: stay on that branch; `git checkout <head>`; do **not** create a new
-  `cursor/<topic>-<hash>`; do **not** open a second PR.
-- The **parent coordinator** holds `subscribe_github_pr` + `subscribe_github_ci`.
-  Task children cannot receive those events — do not ask the child to subscribe.
-- Stall abort: 0 tools after 5–10 min **and** no push to that PR SHA. A cloud
-  listing with `branchName: null` is **not** stalled if the PR got a
-  `synchronize` or the child reported the PR head SHA.
+When the job is an **open PR**, do not start from ship and fork a new topic head.
+**Never** launch a PR steward as Task `environment: cloud` (source=internal,
+often `branchName:null`, cannot receive `subscribe_github_pr` /
+`subscribe_github_ci`). Launch a **full** Cursor Cloud Agent:
+
+    node tools/ci/launch-steward.mjs --pr N --prompt-file body.txt
+
+That POSTs `https://api.cursor.com/v1/agents` with `repos[0].prUrl`,
+`workOnCurrentBranch: true`, `autoCreatePR: false`, `model.id: default`.
+Needs `CURSOR_API_KEY` (Dashboard → Cloud Agents → API Keys). `--dry-run`
+prints the payload.
+
+The launched agent:
+- stays on that PR's existing head; does **not** create a new
+  `cursor/<topic>-<hash>`; does **not** open a second PR
+- arms `subscribe_github_pr` + `subscribe_github_ci` **itself**
+- prompt must include `Do not merge.` and `Do not disable squash auto-merge if it is already armed.`
+
+Stall abort: 0 tools after 5–10 min **and** no push to that PR SHA. A cloud
+listing with `branchName: null` is **not** stalled if the PR got a
+`synchronize` or the agent reported the PR head SHA — that listing shape is
+typical of Task children, not full agents.
 
 ## Prompt template (fill gaps)
 1. **Goal** — outcome, not line edits.

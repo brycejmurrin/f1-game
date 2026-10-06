@@ -157,18 +157,27 @@ and reminder capabilities as unverified; do not claim an automation was armed.
 Check the active tool catalog with `doctor.mjs --catalog <file>`; upstream
 connector availability cannot be fixed by inventing tool results.
 
-## 8. Auto-merge and who watches (do not fight the coordinator)
+## 8. Auto-merge and who watches (full agents, not Task children)
 
-Task / cloud **children cannot receive** `subscribe_github_pr` / `subscribe_github_ci`
-notifications. Do not try to arm those from a child; say the parent already
-watches, push the fix, and stop. The coordinator holds PR+CI subscriptions
-until merge, plus a DIRTY scan after ship merges. No `sleep` / `gh run view`
-poll loops.
+A steward of PR `#N` is a **full** Cursor Cloud Agent, never a Task
+`environment: cloud` child. Children are `source=internal`, often
+`branchName:null`, and **cannot receive** `subscribe_github_pr` /
+`subscribe_github_ci`. Launch with:
+
+    node tools/ci/launch-steward.mjs --pr N --prompt-file body.txt
+
+That POSTs `https://api.cursor.com/v1/agents` with `repos[0].prUrl`,
+`workOnCurrentBranch: true`, `autoCreatePR: false`, `model.id: default`
+(docs: https://cursor.com/docs/cloud-agent/api/endpoints). Needs
+`CURSOR_API_KEY` (Dashboard → Cloud Agents → API Keys). `--dry-run` prints
+the payload.
+
+The launched agent arms those subscriptions **itself**, stays on the existing
+PR head, and does not open a second PR or create a new `cursor/<topic>-<hash>`.
+The coordinator may still hold a DIRTY scan after ship merges. No `sleep` /
+`gh run view` poll loops.
 
 **Do not merge.** **Do not disable squash auto-merge if it is already armed.**
 `gh pr merge N --disable-auto` on a squash AM is a bug: the user or CI Watch
 armed it on purpose. Disable **MERGE/REBASE** auto-merge only, then tell
 CI Watch. Only the coordinator / CI Watch arms squash AM on ready PRs.
-
-Attach to an **existing** PR: stay on that head ref. Do not open a second PR
-and do not create a new `cursor/<topic>-<hash>` for a steward of PR `#N`.
