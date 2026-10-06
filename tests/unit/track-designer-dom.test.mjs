@@ -1517,20 +1517,33 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty-five), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
   const T = b.ctx.TrackThemes;
-  assert.equal(T.ORDER.length, 20);
+  // Share-code indexes ORDER: first twenty stay put; slice I only appends.
+  const LEGACY_20 = ["parkland", "alpine", "oasis", "desertnight", "harbour", "marina", "tilke", "autumn",
+    "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
+    "jungle", "lakeside", "moorland", "metropolis"];
+  const SLICE_I = ["shipyard", "saltflat", "vineyard", "stadium", "island"];
+  assert.equal(T.ORDER.length, 25);
+  // Spread out of the editor VM realm — deepEqual rejects cross-realm arrays.
+  assert.deepEqual([...T.ORDER.slice(0, 20)], LEGACY_20, "legacy ORDER ids never reorder");
+  assert.deepEqual([...T.ORDER.slice(20)], SLICE_I, "slice I appends shipyard…island");
   assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
   // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
   for (const id of T.ORDER) {
     const p = T.PRESETS[id];
+    assert.ok(p && T.DRESS[id], id + " has PRESET + DRESS");
     assert.ok(Array.isArray(p.swatch) && p.swatch.length === 2, id + " has a swatch pair");
     assert.match(p.swatch[0], /^#[0-9a-fA-F]{6}$/, id + " swatch[0] hex");
     assert.match(p.swatch[1], /^#[0-9a-fA-F]{6}$/, id + " swatch[1] hex");
     assert.equal(T.swatchCss(id), "linear-gradient(135deg," + p.swatch[0] + " 50%," + p.swatch[1] + " 50%)");
+  }
+  for (const id of SLICE_I) {
+    assert.equal(T.swatchCss(id), "linear-gradient(135deg," + T.PRESETS[id].swatch[0] + " 50%," + T.PRESETS[id].swatch[1] + " 50%)",
+      id + " swatchCss matches its pair");
   }
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
   assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
