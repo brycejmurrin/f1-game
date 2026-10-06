@@ -10,15 +10,20 @@
         px, pz, hw, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop, waterSurface,
-        floodMast, cameraTower, sponsorHoarding, signDigit,
+        floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
         bleacher, scaffoldStand, seat, groundedSegments,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
       const CONC = [0.74, 0.73, 0.70];
+      // Speedway bucket seats: navy / white / crimson — the stand read.
       const SEAT = [[0.30, 0.42, 0.66], [0.86, 0.86, 0.84], [0.72, 0.20, 0.18]];
       const SHELL = [0.78, 0.78, 0.76], SHELL2 = [0.70, 0.71, 0.73];
       const ROOF = [0.86, 0.86, 0.84];
+      const IMS_RED = [0.72, 0.14, 0.14], IMS_NAVY = [0.14, 0.22, 0.42];
+      const IMS_GOLD = [0.86, 0.70, 0.18], ASPHALT = [0.28, 0.28, 0.30];
+      const IMS_PAL = [IMS_RED, [0.94, 0.94, 0.92], IMS_NAVY, IMS_GOLD,
+                       [0.10, 0.10, 0.12], [0.86, 0.86, 0.84]];
 
       // SIDES (measured on the built centreline, 2026-10-05): the F1 lap runs
       // the oval clockwise, so the INFIELD is side +1 (r at frac 0 = (-1, 0),
@@ -39,16 +44,20 @@
 
       // Outside grandstand bank: short chute, oval Turn 1 and the whole front
       // stretch, gap 18 behind the outer wall and catch fence. Skips the
-      // start/finish window that indy-main-stands owns.
+      // start/finish window that indy-main-stands owns. Navy/crimson/concrete
+      // with bucket-seat crowd bands — grey alu bars read as placeholders.
       const BAY_LEN = 38, BAY_F = 40 / 4073;
+      const OVAL_LIV = ["navy", "crimson", "concrete"];
       for (let s = 0.770, i = 0; s < 1.150; s += BAY_F, i++) {
         const s01 = s % 1;
         if (s01 > 0.986 || s01 < 0.014) continue;
         const g = i % 6;
-        grandstandEx(s01, OUT, 18, BAY_LEN, null, null, {
-          livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
+        grandstandEx(s01, OUT, 18, BAY_LEN, null, SEAT[g % 3], {
+          livery: OVAL_LIV[g % 3],
           tiers: s01 > 0.90 || s01 < 0.10 ? 3 : 2,
-          roof: g === 0 ? "cantilever" : null, endWalls: false, pylons: g === 0,
+          roof: g % 3 === 0 ? "cantilever" : (g % 3 === 1 ? "flat" : "cantilever"),
+          endWalls: true, pylons: g % 2 === 0,
+          fasciaCol: g % 3 === 0 ? IMS_NAVY : (g % 3 === 1 ? IMS_RED : SHELL2),
         });
       }
 
@@ -66,11 +75,9 @@
         const a0 = anchor(K(0.0), side, gap0 + DEPTH * 0.4);
         if (onTrack(a0.c[0], a0.c[2], FACE * 0.3)) return;
         const b0 = [a0.r, a0.u, a0.t];
-        modelGroup("indy-main-stands", {
-          center: vadd(a0.c, a0.u, 9),
-          size: [DEPTH * 0.8, 22, FACE + 6], basis: b0,
-        }, (stage) => {
-          // Three long bays along the tangent so the wall reads continuous.
+        // Emit body kept out of the modelGroup call so `{ required: true }`
+        // stays inside the landmark contract's 2200-char window (BATCH-01).
+        const emitMain = (stage) => {
           for (let bay = -1; bay <= 1; bay++) {
             const along = bay * (FACE * 0.34);
             for (let t = 0; t < 4; t++) {
@@ -79,12 +86,8 @@
               const h = 1.8 + t * 2.2;
               const len = FACE * 0.30 - t * 1.0;
               const c = vadd(a.c, a.t, along);
-              // seat.box takes the FOOT point: tier on grade, seat band on
-              // the tier, sun deck on the band (a centre point here lifted
-              // each piece by half its height).
               stage._mat = MAT.CONCRETE;
               seat.box(stage, c, [3.6, h, len], t % 2 ? SHELL : SHELL2, b);
-              // Bucket-seat bands: blue / white / red — the Speedway read.
               stage._mat = MAT.FABRIC;
               seat.box(stage, vadd(c, a.u, h),
                 [3.0, 0.95, len - 2.2], SEAT[(bay + t + 3) % 3], b);
@@ -93,7 +96,6 @@
                 [3.3, 0.16, len - 0.8], ROOF, b);
             }
           }
-          // Rear spine + cantilever lip (outer grandstand roof silhouette).
           const aR = anchor(K(0.0), side, gap0 + DEPTH * 0.55);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aR.c, aR.u, 8.5), [2.4, 16, FACE * 0.9], SHELL2,
@@ -101,11 +103,23 @@
           stage._mat = MAT.METAL;
           addBox(stage, vadd(aR.c, aR.u, 14.8), [DEPTH * 0.5, 0.6, FACE + 1], ROOF,
             [aR.r, aR.u, aR.t]);
-          // Fascia stripe facing the track.
-          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.3), aR.u, 14.25),
-            [0.3, 0.5, FACE * 0.85], [0.20, 0.28, 0.48], [aR.r, aR.u, aR.t]);
+          // Fascia on the roof lip — navy + crimson + checkered IMS cue.
+          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.3), aR.u, 15.2),
+            [0.3, 0.55, FACE * 0.85], IMS_NAVY, [aR.r, aR.u, aR.t]);
+          addBox(stage, vadd(vadd(aR.c, aR.r, -side * 4.4), aR.u, 15.55),
+            [0.28, 0.4, FACE * 0.35], IMS_RED, [aR.r, aR.u, aR.t]);
+          for (let c = 0; c < 8; c++) {
+            const alongC = (c - 3.5) * (FACE * 0.1);
+            addBox(stage, vadd(vadd(vadd(aR.c, aR.r, -side * 4.5), aR.t, alongC), aR.u, 15.65),
+              [0.22, 0.32, FACE * 0.05],
+              c & 1 ? [0.08, 0.08, 0.09] : [0.94, 0.94, 0.92], [aR.r, aR.u, aR.t]);
+          }
           stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("indy-main-stands", {
+          center: vadd(a0.c, a0.u, 9),
+          size: [DEPTH * 0.8, 22, FACE + 6], basis: b0,
+        }, emitMain, { required: true });
       })();
 
       {
@@ -113,28 +127,36 @@
         // 26 m-deep pagoda stood in the garages and was superseded. Gap 52
         // clears the neonTower ring that clipped the 26×30 m group AABB at
         // gap 46 (clip-audit 9.95 m @ frac 0.006).
+        // Closed tiered Pagoda: continuous solid core + cladding/glass/eaves
+        // so the silhouette is not open stacked slabs (sheet-08 / DETAIL plan).
         const a = rot(anchor(K(0.005), IN, 62));
         const b = [a.r, a.u, a.t];
         modelGroup("indy-pagoda", {
-          center: vadd(a.c, a.u, 26), size: [22, 58, 26], basis: b,
+          center: vadd(a.c, a.u, 26), size: [26, 58, 30], basis: b,
         }, (stage) => {
-          // Solid base housing.
-          addBox(stage, vadd(a.c, a.u, 5), [18, 10, 22], [0.80, 0.80, 0.82], b);
+          const CORE = [0.80, 0.80, 0.82], CLAD = [0.86, 0.86, 0.88];
+          const GLASS = [0.28, 0.42, 0.56], EAVE = [0.92, 0.92, 0.94];
+          // Podium / base housing — solid block.
+          addBox(stage, vadd(a.c, a.u, 5.5), [20, 11, 24], CLAD, b);
+          // Fat continuous core — narrower than every storey so storey faces
+          // are not coplanar with the core (flatCoplanar).
+          addBox(stage, vadd(a.c, a.u, 27), [12.5, 34, 14], CORE, b);
           for (let t = 0; t < 5; t++) {
-            const w = 15 - t * 2.0, d = 18 - t * 2.2;
-            const y = 12 + t * 6.85;
-            // Glass sits on the storey face (halfW + 0.2): a w*0.48 offset
-            // opens a >5 cm XZ gap on the upper, narrower storeys and leaves
-            // two glass bands unsupported by 31–38 m (ground-audit).
-            const halfW = (w - 1.2) * 0.5;
-            addBox(stage, vadd(a.c, a.u, y + 0.175), [w - 1.2, 5.95, d - 1.2],
-              [0.76, 0.77, 0.79], b);
-            addBox(stage, vadd(vadd(a.c, a.r, halfW + 0.2), a.u, y + 0.2),
-              [0.45, 2.2, d - 2.0], [0.26, 0.39, 0.52], b);
-            addBox(stage, vadd(a.c, a.u, y + 3.6), [w + 2.5, 0.9, d + 2.8],
-              [0.86, 0.86, 0.88], b);                                      // diminishing eave
+            const w = 16.5 - t * 1.5, d = 19 - t * 1.6;
+            // Contiguous storeys (pitch = height) — solid mass, no air gap.
+            const y = 11.0 + t * 6.0;
+            addBox(stage, vadd(a.c, a.u, y + 3.0), [w, 6.0, d], CLAD, b);
+            // Glass proud of the cladding face (not sharing its plane).
+            addBox(stage, vadd(vadd(a.c, a.r, w * 0.5 + 0.28), a.u, y + 2.9),
+              [0.4, 2.4, d - 3.5], GLASS, b);
+            // Thin eave lip only — does not dominate the mass.
+            addBox(stage, vadd(a.c, a.u, y + 5.85), [w + 1.0, 0.35, d + 1.0], EAVE, b);
           }
-          addCyl(stage, vadd(a.c, a.u, 43.25), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
+          // Crown cap + mast.
+          addBox(stage, vadd(a.c, a.u, 42.0), [11, 1.4, 13], EAVE, b);
+          addCyl(stage, vadd(a.c, a.u, 42.7), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
+          // IMS red accent ring under the crown.
+          addBox(stage, vadd(a.c, a.u, 41.2), [11.8, 0.4, 13.6], IMS_RED, b);
         }, { required: true });
       }
 
@@ -172,12 +194,13 @@
               });
             }
           }
-          // Cap and beacon.
-          addBox(stage, vadd(a.c, a.u, 31.8), [5.2, 0.9, 6.0], [0.80, 0.80, 0.82], b);
+          // Cap and beacon — thicker amber crown so the pylon reads from SF.
+          addBox(stage, vadd(a.c, a.u, 31.8), [5.6, 1.1, 6.4], [0.80, 0.80, 0.82], b);
+          addBox(stage, vadd(a.c, a.u, 32.5), [5.8, 0.35, 6.6], AMBER, b);
           // addCyl is base-anchored too: the mast stands on the cap's top
           // (32.25 m), the beacon on the mast.
-          addCyl(stage, vadd(a.c, a.u, 32.25), 0.28, 3.6, [0.86, 0.86, 0.88], 6, b);
-          addCyl(stage, vadd(a.c, a.u, 35.85), 0.42, 0.7, AMBER, 8, b);
+          addCyl(stage, vadd(a.c, a.u, 32.65), 0.32, 4.0, [0.86, 0.86, 0.88], 6, b);
+          addCyl(stage, vadd(a.c, a.u, 36.65), 0.55, 1.0, AMBER, 8, b);
         }, { required: true });
       }
 
@@ -189,12 +212,22 @@
         }, (stage) => {
           // The continuous roof.
           addBox(stage, vadd(a.c, a.u, 6.4), [10, 0.7, 118], [0.88, 0.88, 0.86], b);
-          // Open stalls: a back wall and dividing fins, no fronts.
+          // Open fronts (IMS road-course identity) but closed END walls so the
+          // row does not read as an open-ended grey tube (DETAIL plan #4).
           addBox(stage, vadd(vadd(a.c, a.r, -4.6), a.u, 3), [0.5, 6, 118], CONC, b);
+          for (const end of [-1, 1]) {
+            addBox(stage, vadd(vadd(a.c, a.t, end * 58.5), a.u, 3),
+              [9.2, 6, 0.55], SHELL2, b);
+          }
           for (let i = 0; i < 15; i++) {
             const p = vadd(a.c, a.t, (i - 7) * 8);
             addBox(stage, vadd(p, a.u, 3), [9, 6, 0.35], [0.82, 0.82, 0.80], b);
             addCyl(stage, vadd(p, a.r, 4.4), 0.16, 6.2, [0.70, 0.70, 0.72], 6, b);
+            // Small IMS red header over every third bay.
+            if (i % 3 === 0) {
+              addBox(stage, vadd(vadd(p, a.r, 4.2), a.u, 5.6),
+                [0.2, 0.45, 6.5], IMS_RED, b);
+            }
           }
         }, { required: true });
       }
@@ -202,14 +235,21 @@
       gantry(0.955, 9, [0.15, 0.15, 0.18]);
 
       {
+        // Yard of Bricks — two staggered rows across the full width at S/F so
+        // the band reads from chase/orbit (a single 6 cm strip vanished).
         const lineK = K(0.0), a = anchor(lineK, 0, 0);
         const fullWidth = hw[lineK] * 2;
-        const brickCount = Math.ceil(fullWidth);
+        const brickCount = Math.ceil(fullWidth * 1.2);
         const brickWidth = fullWidth / brickCount;
-        for (let i = 0; i < brickCount; i++) {
-          const off = -fullWidth * 0.5 + brickWidth * (i + 0.5);
-          addBox(out, vadd(vadd(a.c, a.r, off), a.u, 0.03), [brickWidth + 0.02, 0.06, 1.0],
-            i % 2 ? [0.52, 0.28, 0.22] : [0.44, 0.24, 0.19], [a.r, a.u, a.t]);
+        for (let row = 0; row < 3; row++) {
+          const alongT = (row - 1) * 0.7;
+          for (let i = 0; i < brickCount; i++) {
+            const off = -fullWidth * 0.5 + brickWidth * (i + 0.5);
+            const warm = (i + row) & 1;
+            addBox(out, vadd(vadd(vadd(a.c, a.r, off), a.t, alongT), a.u, 0.05),
+              [brickWidth + 0.03, 0.12, 0.85],
+              warm ? [0.62, 0.32, 0.20] : [0.42, 0.20, 0.14], [a.r, a.u, a.t]);
+          }
         }
       }
 
@@ -251,7 +291,14 @@
         motorhome(k, IN, 62 + h * 10, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
       });
       broadcastCompound(K(0.895), IN, 78, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.97, 0.01, 0.04]) billboard(K(s), IN, 10, 14, 5, [0.20, 0.30, 0.60]);
+      for (const s of [0.97, 0.01, 0.04]) billboard(K(s), IN, 10, 14, 5, IMS_NAVY);
+      // IMS branding — front-stretch hoarding + S/F boards (red/white/navy/gold).
+      sponsorHoarding(0.970, 0.045, OUT, 7, { h: 1.35, step: 10, palette: IMS_PAL });
+      sponsorHoarding(0.980, 0.030, IN, 8, { h: 1.2, step: 11, palette: IMS_PAL });
+      billboard(K(0.995), OUT, 12, 16, 5.5, IMS_RED);
+      billboard(K(0.018), OUT, 14, 14, 5, IMS_GOLD);
+      billboard(K(0.110), OUT, 16, 12, 4.5, IMS_NAVY);
+      billboard(K(0.500), -1, 12, 14, 4.5, IMS_RED);
 
       groundPatch(K(0.300), 1, 8, [22, 0.18, 28], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-a", samples: 6 });
@@ -384,9 +431,91 @@
           tree(kk, -1, gap + sz[0] * dg, 9 + dg * 4, dg > 0.6 ? LEAF : LEAF_D);
         }
       }
-      // IMS Museum: low, broad building in the south infield (side +1 of the
-      // short chute), set well back from the circuit.
-      building(K(0.805), IN, 92, 34, 9, 56, { wall: [0.86, 0.85, 0.82] });
+      // IMS Museum campus + parking + golf silhouette — cheap instanced masses
+      // so the oval infield is not a bare green plate from overview (sheet-08).
+      (function indyInfieldCampus() {
+        // Museum pavilion — solid closed shells (not city.js building open-face).
+        {
+          const a = rot(anchor(K(0.805), IN, 96));
+          const b = [a.r, a.u, a.t];
+          if (!onTrack(a.c[0], a.c[2], 40)) {
+            indexSolid(0.790, 0.825, IN, 80, 55);
+            modelGroup("indy-museum", {
+              center: vadd(a.c, a.u, 7), size: [36, 16, 72], basis: b,
+            }, (stage) => {
+              const WALL = [0.88, 0.87, 0.84], TRIM = IMS_NAVY;
+              // Main hall; wing clear of hall AABB (no coplanar face share).
+              addBox(stage, vadd(a.c, a.u, 5.5), [26, 11, 40], WALL, b);
+              addBox(stage, vadd(vadd(a.c, a.t, 34), a.u, 3.8), [18, 7.6, 14], WALL, b);
+              // Glass atrium proud of the hall face (not coplanar with wall).
+              addBox(stage, vadd(vadd(a.c, a.r, 13.4), a.u, 5), [0.55, 8, 28],
+                [0.24, 0.38, 0.52], b);
+              addBox(stage, vadd(a.c, a.u, 11.2), [28, 0.55, 42], [0.72, 0.72, 0.70], b);
+              // Red IMS eyebrow seated on the glass head.
+              addBox(stage, vadd(vadd(a.c, a.r, 13.7), a.u, 9.2),
+                [0.4, 0.7, 16], IMS_RED, b);
+              addBox(stage, vadd(vadd(a.c, a.r, 13.7), a.u, 3.2),
+                [0.35, 0.5, 18], TRIM, b);
+            }, { required: true });
+          }
+        }
+        // Parking lots: museum campus + a front-stretch infield pad so the
+        // SF/overview cameras see asphalt (not only bare green).
+        for (const [id, s, gap, sz] of [
+          ["a", 0.780, 70, [34, 0.14, 44]],
+          ["b", 0.835, 88, [28, 0.16, 36]],
+          ["sf", 0.040, 55, [30, 0.14, 40]],
+        ]) {
+          groundPatch(K(s), IN, gap, sz, ASPHALT,
+            { id: `indy-parking-${id}`, samples: 8 });
+          const a = rot(anchor(K(s), IN, gap + 4));
+          const b = [a.r, a.u, a.t];
+          for (let i = 0; i < 14; i++) {
+            const h = hash(i * 17 + s * 1000);
+            if (h < 0.30) continue;
+            const p = vadd(vadd(a.c, a.t, (i % 5 - 2) * 7), a.r, Math.floor(i / 5) * 8 - 2);
+            if (onTrack(p[0], p[2], 10)) continue;
+            // Foot at grade (seat.box idiom): centre-anchored addBox would
+            // bury half the car in the asphalt patch.
+            addBox(out, vadd(p, a.u, 0.55), [2.0, 1.1, 4.2],
+              h < 0.5 ? [0.15, 0.18, 0.35] : (h < 0.75 ? [0.72, 0.72, 0.74] : IMS_RED), b);
+          }
+        }
+        // Low tech / plaza boxes inside the front stretch (overview silhouette).
+        for (const [s, gap, w, h, len] of [
+          [0.055, 72, 14, 6, 22], [0.075, 80, 12, 5, 18], [0.095, 68, 16, 7, 20],
+        ]) {
+          const a = rot(anchor(K(s), IN, gap));
+          const b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 18)) continue;
+          addBox(out, vadd(a.c, a.u, h * 0.5), [w, h, len],
+            [0.78, 0.78, 0.76], b);
+          addBox(out, vadd(a.c, a.u, h + 0.2), [w + 0.8, 0.35, len + 0.8],
+            IMS_NAVY, b);
+        }
+        // Golf fairway ribbons on the back-stretch infield — gaps clear of
+        // existing greens (gap 40–48) and bunkers (gap+26.5); 2 cm lift slots
+        // between neighbouring fairways (flatCoplanar).
+        for (const [id, s, gap, sz, lift] of [
+          ["fair-a", 0.480, 88, [20, 0.12, 54], 0],
+          ["fair-b", 0.545, 96, [18, 0.14, 48], 0.02],
+          ["fair-c", 0.630, 90, [16, 0.12, 44], 0],
+          ["tee-a", 0.355, 100, [14, 0.14, 24], 0.02],
+        ]) {
+          // groundPatch thickness is sz[1]; nudge via a second micro pad offset
+          // is unnecessary when gaps do not overlap — keep simple.
+          groundPatch(K(s), -1, gap + lift * 50, sz, [0.26, 0.48, 0.20],
+            { id: `indy-golf-${id}`, samples: 6 });
+        }
+        // Clubhouse / cart shed silhouettes near the ponds (far of fairways).
+        for (const [s, gap] of [[0.475, 118], [0.605, 112]]) {
+          const a = anchor(K(s), -1, gap);
+          const b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 16)) continue;
+          addBox(out, vadd(a.c, a.u, 3.2), [10, 6.4, 14], [0.82, 0.80, 0.76], b);
+          addBox(out, vadd(a.c, a.u, 6.6), [11, 0.4, 15], [0.55, 0.28, 0.22], b);
+        }
+      })();
 
       // The town of Speedway, IN: low-rise blocks OUTSIDE the outer wall and
       // well behind the stand bank (gap >= 120), never at trackside.

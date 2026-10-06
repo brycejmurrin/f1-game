@@ -15,7 +15,8 @@
 // fresh page did. UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { toMenu, forgetStored, pinFreePlay, freeBuildOff, waitGarageSheet } from "../helpers/shared-page.js";
+import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
