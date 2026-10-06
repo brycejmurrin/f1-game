@@ -2,6 +2,18 @@
 const UiExperience = (function () {
   "use strict";
 
+  // Practice from the title door is a Time Trial under the hood. This flag is
+  // the only way the picker and race-settings sheets can say PRACTICE instead
+  // of TIME TRIAL. Cleared in capture on the other session doors so their
+  // open handlers paint the right title.
+  let practicePick = false;
+  let hidePracticeBrief = () => {};
+  function isPracticePick() { return practicePick; }
+  function leavePracticePick() {
+    practicePick = false;
+    hidePracticeBrief();
+  }
+
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
     if (!p || !t) return { title: "SESSION PAUSED", detail: "Your session is held here." };
@@ -12,6 +24,19 @@ const UiExperience = (function () {
     if (G.practice) parts.push("PRACTICE");
     if (G.netPlay && G.netPlay.active()) parts.push("ONLINE · RACE CONTINUES");
     return { title: t.name || t.id, detail: parts.join(" · ") };
+  }
+
+  /* textContent on #mb-photo used to wipe the .mb-sub ("CAPTURE & BACKGROUNDS")
+     and leave PHOTO STUDIO as a one-line leftover tile next to Garage. */
+  function setDoorLabel(el, text) {
+    const sub = el && el.querySelector(".mb-sub");
+    const host = sub && sub.parentNode;
+    // game-vm stubs querySelector() as a detached div (parentNode null). Keep
+    // the subtitle in a real tree; fall back to textContent anywhere else.
+    if (!host || !host.firstChild) { if (el) el.textContent = text; return; }
+    while (host.firstChild && host.firstChild !== sub) host.removeChild(host.firstChild);
+    if (host.firstChild !== sub) { el.textContent = text; return; }
+    host.insertBefore(document.createTextNode(text + " "), sub);
   }
 
   function homeVariation(store) {
@@ -86,42 +111,90 @@ const UiExperience = (function () {
       eligible: () => G.state === "menu" && !overlay.hidden && !document.hidden && !G.setupPreviewOn
         && (!overlay.inert || !$("photo-studio").hidden) });
     let wantedPractice = false;
+    practicePick = false;
     const node = (tag, text, attrs) => {
       const el = document.createElement(tag);
       if (text) el.textContent = text;
       for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
       return el;
     };
+    const SOLO_GOAL = Object.freeze({
+      free: "FREE PRACTICE", sector: "SECTOR", corner: "CORNER", lap: "FULL LAP",
+      braking: "BRAKING", trail: "TRAIL BRAKING", slalom: "SLALOM", launch: "LAUNCH",
+    });
+    function goalValues() {
+      const out = [];
+      for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
+        if (RaceInsights.needsRivals(id)) continue;
+        out.push([id, SOLO_GOAL[id] || String(label).toUpperCase()]);
+      }
+      return out;
+    }
     function wire(id, fn) { const b = $(id); if (b) b.onclick = fn; }
     wire("mb-watch", deps.openWatch);
-    wire("mb-practice", () => { wantedPractice = true; deps.openPractice(); showPractice(); });
+    wire("mb-practice", () => {
+      wantedPractice = true;
+      practicePick = true;
+      deps.openPractice();
+      showPractice();
+    });
     wire("mb-photo", () => deps.openPhoto("home"));
     wire("pm-photo", () => deps.openPhoto("race"));
     wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
     const intro = $("practice-brief");
+    let goal = $("practice-goal");
+    function paintGoal() {
+      if (!goal) return;
+      const row = goal.closest && goal.closest(".set-row");
+      if (row && typeof SettingRow !== "undefined") SettingRow.paint(row, deps.coach.practiceGoal());
+      else goal.value = deps.coach.practiceGoal();
+    }
     function showPractice() {
       if (!intro) return;
       intro.hidden = !wantedPractice;
       if (wantedPractice) {
         if (RaceInsights.needsRivals(deps.coach.practiceGoal())) deps.coach.setPracticeGoal("free");
-        $("practice-goal").value = deps.coach.practiceGoal(); $("practice-goal").focus({ preventScroll: true });
+        paintGoal();
+        if (goal) goal.focus({ preventScroll: true });
       }
     }
-    const goal = $("practice-goal");
+    hidePracticeBrief = () => { wantedPractice = false; showPractice(); };
     if (goal) {
-      for (const [id, label] of Object.entries(RaceInsights.DRILLS)) {
-        if (RaceInsights.needsRivals(id)) continue;
-        const o = node("option", String(label)); o.value = id; goal.appendChild(o);
+      const values = goalValues();
+      // Built at runtime so the shell keeps its two Goal nodes (label + select)
+      // and shellNodes does not grow. Same ‹ VALUE › contract as race settings.
+      if (typeof SettingRow !== "undefined" && goal.closest && !goal.closest(".set-row")) {
+        const built = SettingRow.build("practice-goal-row", "GOAL");
+        built.sel.id = "practice-goal";
+        built.sel.setAttribute("aria-labelledby", "practice-goal-label");
+        const host = goal.parentNode;
+        const oldLabel = intro && intro.querySelector('label[for="practice-goal"]');
+        if (oldLabel) oldLabel.remove();
+        host.replaceChild(built.row, goal);
+        goal = built.sel;
       }
-      goal.onchange = () => {
-        deps.coach.setPracticeGoal(goal.value);
-      };
+      const row = goal.closest && goal.closest(".set-row");
+      if (row && typeof SettingRow !== "undefined") {
+        SettingRow.wire(row, {
+          values,
+          read: () => deps.coach.practiceGoal(),
+          write: (v) => { deps.coach.setPracticeGoal(v); },
+        });
+      } else {
+        for (const [id, label] of values) {
+          const o = node("option", label); o.value = id; goal.appendChild(o);
+        }
+        goal.onchange = () => { deps.coach.setPracticeGoal(goal.value); };
+      }
     }
-    // Normal Time Trial/Race doors always retire the optional practice brief.
+    // Capture: hide the brief BEFORE the other doors' open handlers paint
+    // the picker, or Time Trial would inherit PRACTICE from the last visit.
     for (const id of ["mb-tt", "mb-race", "mb-daily", "mb-season", "mb-career", "mb-continue", "sel-back"]) {
-      const b = $(id); if (b) b.addEventListener("click", () => { wantedPractice = false; showPractice(); });
+      const b = $(id); if (b) b.addEventListener("click", () => {
+        wantedPractice = false; practicePick = false; showPractice();
+      }, true);
     }
     const context = $("pm-race-context");
     function refreshPause() {
@@ -156,7 +229,7 @@ const UiExperience = (function () {
       overlay.dataset.homeScene = s.mode;
       overlay.dataset.homeShot = s.shot;
       const photoButton = $("mb-photo"), waiting = ["track", "pitlane"].includes(s.mode) && !deps.trackReady();
-      if (photoButton) { photoButton.disabled = waiting; photoButton.textContent = waiting ? "SCENE LOADING…" : "PHOTO STUDIO"; }
+      if (photoButton) { photoButton.disabled = waiting; setDoorLabel(photoButton, waiting ? "SCENE LOADING…" : "PHOTO STUDIO"); }
       const photo = typeof PhotoStudio !== "undefined" && PhotoStudio.background ? PhotoStudio.background() : null;
       overlay.style.setProperty("--home-scene-image", s.mode === "photo" && photo ? 'url("' + photo + '")' : "none");
       if (toggle) {
@@ -202,6 +275,56 @@ const UiExperience = (function () {
         } catch (_) { /* probe hygiene — never block leaving Home */ }
       }
     }
+    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
+    // so every narrow rotate tore down beginHome and blacks the canvas for
+    // seconds while the garage rebuilds. Signature is scene-only; viewport
+    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
+    const HOME_RESIZE_MS = 120;
+    const PREVIEW_MAX_EDGE = 512;
+    let homeViewGen = 0, resizeTimer = 0;
+    let lastViewportW = window.innerWidth | 0, lastViewportH = window.innerHeight | 0;
+    function settleHomeViewport() {
+      resizeTimer = 0;
+      homeViewGen++;
+      painted = false;
+      elapsed = 0;
+      try { if (G.gfx && typeof G.gfx.resize === "function") G.gfx.resize(); } catch (_) { /* harness / pre-boot */ }
+    }
+    function onHomeViewportChange() {
+      const w = window.innerWidth | 0, h = window.innerHeight | 0;
+      if (w === lastViewportW && h === lastViewportH) return;
+      lastViewportW = w; lastViewportH = h;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(settleHomeViewport, HOME_RESIZE_MS);
+    }
+    window.addEventListener("resize", onHomeViewportChange);
+    window.addEventListener("orientationchange", onHomeViewportChange);
+    function previewSoftGfx(gfx) {
+      if (!gfx) return false;
+      try { if (gfx.softPresent && gfx.softPresent()) return true; } catch (_) { /* no soft path */ }
+      try {
+        const bs = gfx.backendState && gfx.backendState();
+        return !!(bs && (bs.softwareGL || bs.softAdapter));
+      } catch (_) { return false; }
+    }
+    function downscalePreview(sourceW, sourceH, paintFull) {
+      const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(1, sourceW, sourceH));
+      const dw = Math.max(1, Math.round(sourceW * scale));
+      const dh = Math.max(1, Math.round(sourceH * scale));
+      if (scale >= 1) {
+        const image = document.createElement("canvas");
+        image.width = dw; image.height = dh;
+        paintFull(image.getContext("2d"));
+        return image;
+      }
+      const full = document.createElement("canvas");
+      full.width = sourceW; full.height = sourceH;
+      paintFull(full.getContext("2d"));
+      const image = document.createElement("canvas");
+      image.width = dw; image.height = dh;
+      image.getContext("2d").drawImage(full, 0, 0, dw, dh);
+      return image;
+    }
     function renderHome(dt) {
       if (previewBusy) return false;
       let s = scene();
@@ -216,10 +339,11 @@ const UiExperience = (function () {
       s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
       const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-      const pane = rect ? [rect.left, rect.top, rect.width, rect.height].map(Math.round).join(":") : "full";
-      const worldView = { motion, shot: s.shot, viewKey: pane + ":" + window.innerWidth + ":" + window.innerHeight,
+      const worldView = { motion, shot: s.shot, viewKey: String(homeViewGen),
         pane: rect ? GarageExperience.freePane(rect, { left: 0, top: 0, right: innerWidth, bottom: innerHeight, width: innerWidth, height: innerHeight }) : null };
-      const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen + ":" + window.innerWidth + ":" + window.innerHeight + ":" + pane;
+      // Scene ownership only — never viewport size or menu pane (those settle
+      // via onHomeViewportChange → gfx.resize / homeViewGen).
+      const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen;
       if (signature !== sig) {
         stopHome(photoOpen); stamp();
         if (["track", "pitlane"].includes(s.mode)) {
@@ -256,7 +380,8 @@ const UiExperience = (function () {
       preview = { ...preview, ...variation.peek(preview.mode, AppearanceStudio.homeCamera()) };
       if (["static", "photo"].includes(preview.mode)) { previewMode = ""; previewGeneration++; return; }
       if (previewBusy) { previewQueued = preview; previewGeneration++; return; }
-      const previewKey = [preview.mode, preview.shot, G.teamIdx, GameStore.store.rev, window.innerWidth, window.innerHeight].join(":");
+      // Viewport size is not part of the key — a rotate must not re-capture.
+      const previewKey = [preview.mode, preview.shot, G.teamIdx, GameStore.store.rev].join(":");
       if (!["garage", "night", "studio"].includes(preview.mode)) {
         previewMode = ""; const image = document.querySelector('[data-as="preview"]');
         if (image) image.style.removeProperty("--studio-scene-image"); return;
@@ -264,18 +389,26 @@ const UiExperience = (function () {
       if (previewMode === previewKey || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
       const generation = ++previewGeneration;
       if (G.state !== "menu" || G.setupPreviewOn || !["garage", "night", "studio"].includes(preview.mode)) return;
+      // Yield two frames so Settings › Appearance can paint (and drop aria-busy)
+      // before stopHome/beginHome take the main thread for a garage capture.
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      await frame(); await frame();
+      if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
+      const gfx = G.gfx;
+      // Software GL (llvmpipe / SwiftShader) + soft-blit: a full garage capture
+      // stalls the menu for seconds; keep the CSS scene fallback instead.
+      if (previewSoftGfx(gfx)) { previewMode = previewKey; return; }
       // One real rendered garage frame inside the native settings preview. The
       // borrowed camera is restored even when capture fails or a race starts.
-      stopHome();
-      if (!deps.setupCam.beginHome(preview.mode, { motion: "still", shot: preview.shot, panel: null })) return;
       previewBusy = true;
       try {
-        const gfx = G.gfx;
+        stopHome();
+        if (!deps.setupCam.beginHome(preview.mode, { motion: "still", shot: preview.shot, panel: null })) return;
         const readyUntil = performance.now() + 15000;
         while (performance.now() < readyUntil) {
           if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
           if (!(gfx.warming && gfx.warming()) && deps.setupCam.renderHome(0)) break;
-          await new Promise((resolve) => requestAnimationFrame(resolve));
+          await frame();
         }
         if (performance.now() >= readyUntil) return;
         if (gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
@@ -284,13 +417,14 @@ const UiExperience = (function () {
         const pixelsPromise = gfx.capturePixels ? gfx.capturePixels() : Promise.resolve(null);
         const pixels = pending ? (await Promise.all([pixelsPromise, pending]))[0] : await pixelsPromise;
         if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden || scene().mode !== preview.mode || scene().shot !== preview.shot) return;
-        const image = document.createElement("canvas");
+        let image;
         if (pixels && pixels.data) {
-          image.width = pixels.width; image.height = pixels.height;
-          image.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height), 0, 0);
+          image = downscalePreview(pixels.width, pixels.height, (ctx) => {
+            ctx.putImageData(new ImageData(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height), 0, 0);
+          });
         } else {
-          const source = $("game-soft") || $("game"); image.width = source.width; image.height = source.height;
-          image.getContext("2d").drawImage(source, 0, 0);
+          const source = $("game-soft") || $("game");
+          image = downscalePreview(source.width, source.height, (ctx) => ctx.drawImage(source, 0, 0));
         }
         AppearanceStudio.setPreviewFrame(image.toDataURL("image/jpeg", .75)); previewMode = previewKey;
       } catch (e) { Log.debug("ui", "Garage appearance preview unavailable: " + e.message); }
@@ -329,10 +463,10 @@ const UiExperience = (function () {
     }
     return { renderHome, stopHome, refreshPause, previewScene, photoView, photoSubject, wantsTrack: world.wantsTrack, trackActive: world.active,
       trackCamera: world.camera, didRenderTrack: () => { if (!world.didRender()) return; overlay.dataset.homeReady = "1";
-        const photoButton = $("mb-photo"); if (photoButton) { photoButton.disabled = false; photoButton.textContent = "PHOTO STUDIO"; }
+        const photoButton = $("mb-photo"); if (photoButton) { photoButton.disabled = false; setDoorLabel(photoButton, "PHOTO STUDIO"); }
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },
       state: () => ({ home, painted, failure, scene: scene(), world: world.state() }) };
   }
-  return { create, raceBrief, openPhoto, homeVariation };
+  return { create, raceBrief, openPhoto, homeVariation, isPracticePick, leavePracticePick };
 })();
 Object.freeze(UiExperience);

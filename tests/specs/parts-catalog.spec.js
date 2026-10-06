@@ -21,8 +21,8 @@ const LANDSCAPE = { width: 844, height: 390 };
 async function openSetup(page, team = "mclaren", opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
-  // The store write; #mb-race below re-reads it (restoreFreePlaySelection) and
-  // the team's fitted parts are forgotten with it.
+  // Empty factory sheet (HIT), not a forgotten key: GarageDefaults would fill
+  // the signature kit and mark Standard / high_octane over-budget.
   await pinFreePlay(page, { team, click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });

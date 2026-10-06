@@ -268,6 +268,7 @@ const api = {
     if (!G.player || !G.track) return false;
     G.skyViewOverride = null;   // clear any sky override so normal chase cam resumes
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
@@ -536,11 +537,21 @@ const api = {
   // whole garage animation was unobservable from a test — which is exactly how
   // "the wings do not move" reached a player instead of a spec. No argument
   // reads the state; garageStep(dt) advances the ease by dt seconds.
-  garageAero(on) {
+  garageAero(on, opts) {
     if (!G.setupPreviewOn) return null;
-    if (on !== undefined) G.setSetupAero(!!on);
+    if (on !== undefined) G.setSetupAero(!!on, opts);
     return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
              mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
+  },
+  // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
+  // light their wings; `apex26.aeroEdge=1` is the debug latch.
+  aeroEdge(on) {
+    const KEY = "apex26.aeroEdge";
+    if (on !== undefined) {
+      try { if (on) localStorage.setItem(KEY, "1"); else localStorage.removeItem(KEY); }
+      catch (e) { /* private mode */ }
+    }
+    try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
   },
   // The resolved (level, style) the garage hands drawAeroFlaps, plus the pose
   // pair each element ends up with. An element whose closed and open angles are
@@ -1313,6 +1324,7 @@ const api = {
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;

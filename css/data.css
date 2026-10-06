@@ -113,7 +113,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   padding: 0; font-size: var(--fs-5);
   color: var(--text);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-close:hover { color: var(--text); }
 }
 .dh-close:active { color: var(--text); }
@@ -144,7 +144,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-tab:hover { color: var(--text); }
 }
 .dh-tab:active { color: var(--text); }
@@ -327,7 +327,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   padding-left: 7px;
   border-radius: 0 var(--r-xs) var(--r-xs) 0;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-row:hover { background: var(--plate); }
 }
 /* The leader gets the faintest possible wash — enough that the top of the table
@@ -392,7 +392,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-bottom: 1px solid var(--card-line);
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   /* :not(.dh-cut) — an elimination band is a rule across the table, not a row
      of data, so it does not light up when the pointer passes over it. */
   .dh-table tbody tr:not(.dh-cut):hover { background: rgba(255,255,255,0.03); }
@@ -498,7 +498,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 /* A striped row still answers the pointer: .dh-row's own hover fill, at the
    stripe's weight and later (gated like every :hover, css/tokens.css policy). */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   :root[data-look-datahub-stripes="on"] #datahub .dh-row:not(.dh-row-lead):nth-child(even):hover { background: var(--plate); }
 }
 :root[data-look-datahub-stripes="on"] #datahub .dh-table tbody tr:nth-child(even):not(.dh-cut, .dh-lap-board, .dh-lr-p1, .dh-lr-p2, .dh-lr-p3, [aria-expanded="true"]) {
@@ -620,7 +620,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); margin: 0; color: inherit; font: inherit;
   letter-spacing: var(--ls-2); cursor: pointer; transition: opacity 0.12s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   button.dh-legend-item:hover { background: var(--plate); }
 }
 button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
@@ -733,7 +733,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   background: var(--plate); color: var(--text); font-size: var(--fs-4);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-lane-x:hover { background: color-mix(in oklab, var(--red) 80%, transparent); border-color: var(--red); }
 }
 .dh-lane-clear { background: rgba(255, 255, 255, 0.04); }

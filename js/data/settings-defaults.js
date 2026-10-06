@@ -38,11 +38,15 @@
 
      node tools/gen/settings-defaults.mjs <that-file.json>
 
-   which rewrites the block below from the export's own CHANGED list. Do not
-   hand-edit the block; the tool prints every edit it makes and refuses keys
-   that are not in SPEC. Device-adaptive defaults (uiScale, resMode, gfxPreset —
-   the ones SPEC declares as null or as a function of the device) are refused on
-   purpose: pinning one device's number here makes every other device wrong. */
+   which rewrites the block below from the export's own CHANGED list. The
+   provenance export is tests/data/settings-defaults-export.json; only
+   drivingCoach/spotter OFF plus cockpit camera and home-screen look from that
+   file ship as fresh-install defaults (product 2026-10-05). Do not hand-edit
+   the block; the tool prints every edit it makes and refuses keys that are not
+   in SPEC. Device-adaptive defaults (uiScale, resMode, gfxPreset — the ones
+   SPEC declares as null or as a function of the device) are refused on
+   purpose: pinning one device's number here makes every other device wrong.
+   Subsystem keys (sound, unlimitedBudget, steering) need an explicit --include. */
 const SettingsDefaults = (function () {
   "use strict";
 
@@ -52,14 +56,27 @@ const SettingsDefaults = (function () {
     "difficulty": "hard",
     "tyreWear": "real",
     "raceGrid": "random",
-    "drivingCoach": true,
+    "drivingCoach": false,
     "caution": false,
     // AUDIO (js/audio/panel.js)
     "volMusic": 0.6,
     "volSfx": 0.2,
+    "spotter": false,
     // DISPLAY / METRICS (raw lane — bare strings, not JSON)
     "debris": "0",
     "metricsPos": "left",
+    // CAMERA
+    "camMode": 19,
+    "cockpitHalo": "fairing",
+    "cockpitBody": "sculpted",
+    "cockpitInterior": "team",
+    // APPEARANCE
+    "menuAccent": "ember",
+    "textSize": "large",
+    "uiContrast": "high",
+    "homeScene": "photo",
+    "backgroundMotion": "ambient",
+    "homeCamera": "side",
   };
   // @gen-settings-defaults end
 

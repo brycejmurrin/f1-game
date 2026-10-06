@@ -11,9 +11,8 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
 test("title 2-up rows share equal flex cells and fill them", () => {
   const menus = readCssSource("css/menus.css");
-  assert.match(menus, /#menu-primary\s*\{[^}]*--balance-min:\s*calc\(50%/);
+  assert.match(menus, /#menu-primary, #menu-explore\s*\{[^}]*--balance-min:\s*calc\(50%/);
   assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
-  assert.match(menus, /#menu-explore\s*\{[^}]*--balance-basis:\s*7rem/);
   assert.match(menus, /#menu-primary, #menu-explore, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
   assert.match(
     menus,
@@ -91,7 +90,9 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   const html = read("index.html");
   const title = read("js/ui/title-menu.js");
   assert.match(html, /id="menu-retention"[\s\S]*id="mb-continue"[\s\S]*id="mb-daily"/);
-  for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+  assert.match(html, /id="menu-explore"[\s\S]*id="mb-garage"/, "Garage is an explore door, not a leftover utility chip");
+  assert.doesNotMatch(html, /id="menu-secondary"[\s\S]*id="mb-garage"/);
+  for (const id of ["mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
   }
   assert.match(title, /const careerBtn = \$\("mb-career"\)[\s\S]*if \(careerBtn\) careerBtn\.onclick/,
@@ -103,6 +104,34 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.match(title, /G\.openDailyPicker\(\)/, "the title uses the dedicated staged-daily picker path");
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
+  const experience = read("css/experience.css");
+  assert.match(experience, /#menu-brand \{[\s\S]*background:\s*var\(--scrim-heavy\)/,
+    "live Home brand sits on a solid --scrim-heavy plate so bright liveries cannot wash the wordmark");
+  assert.doesNotMatch(experience, /#menu-brand \{[\s\S]*?background:\s*linear-gradient\([^;]*transparent\)/,
+    "brand plate must not fade to transparent over Ferrari white / SIDE wordmarks");
+  assert.match(
+    experience,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) \{\s*background:\s*linear-gradient\(90deg,\s*color-mix\(in oklab, var\(--carbon\)/,
+    "live Home wash starts on --carbon/--scrim, never a clear left edge",
+  );
+  assert.doesNotMatch(experience, /linear-gradient\(90deg,\s*transparent/,
+    "no home-scene wash may start transparent — that is the Ferrari overexposure");
+  assert.match(
+    experience,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\)::before/,
+    "upper-left veil covers the stacked D_WORD team banners without a second badge node",
+  );
+  assert.match(experience, /#menu-brand :is\(#soundbtn, #disclaimer\) \{[\s\S]*background:\s*var\(--carbon\)/,
+    "Sound and the disclaimer stay on solid --carbon over a bright livery");
+  // Retention / primary / explore are dark plates; only CAREER is solid --red.
+  // Without this override, .bigbtn:not(.alt) { color: var(--menu-accent-ink) }
+  // paints DAILY TIME TRIAL black-on-carbon when menuAccent is ember
+  // (2026-10-06 phone landscape).
+  assert.match(
+    experience,
+    /#menu-retention \.bigbtn,\s*#menu-primary \.bigbtn,\s*#menu-explore \.bigbtn \{ color: var\(--text\)/,
+    "DAILY / RACE / explore plates keep --text, not --menu-accent-ink",
+  );
 });
 
 test("title scrollers never paint a ScrollFade thumb", () => {
@@ -207,6 +236,11 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   );
   assert.match(
     menus,
+    /@media \(max-width:\s*899px\) and \(min-height:\s*370px\) \{[\s\S]*?min-width:\s*0/,
+    "844×390 compact-wide keeps 2-up shrinkable so GARAGE stays on-screen (CI 37469163266)",
+  );
+  assert.match(
+    menus,
     /@media \(max-width:\s*899px\) \{[^}]*body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
     "mid-wide title keeps --tap air under the utility row; 1440 desktop does not",
   );
@@ -271,7 +305,7 @@ const visibleText = (html) => html.replace(/<svg[\s\S]*?<\/svg>/g, "")
 
 test("title doors: the accessible name contains the visible label", () => {
   const html = read("index.html");
-  for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+  for (const id of ["mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
     const m = new RegExp(`<button id="${id}"[^>]*aria-label="([^"]*)"[^>]*>([\\s\\S]*?)</button>`).exec(html);
     assert.ok(m, `#${id} has a static aria-label`);
     assert.ok(norm(m[1]).includes(norm(visibleText(m[2]))),

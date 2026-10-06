@@ -48,6 +48,8 @@ test("the scenario list matches the browser spec verbatim", () => {
   for (const s of SCENARIOS) assert.ok(spec.includes(`name: "${s.name}", seed: ${s.seed}, frac: ${s.frac}, speed: ${s.speed}`),
     `scenario "${s.name}" no longer matches the browser spec`);
   assert.ok(spec.includes("if (i % 15 === 0)") && spec.includes("Math.round(v * 1e4) / 1e4"), "spec sampling or rounding changed");
+  assert.ok(spec.includes("pinFactorySeat"),
+    "browser characterization must pin factory McLaren before loadTrack so GarageDefaults cannot move the baseline");
 });
 
 // ONE boot for the file (createGame ~2-3 s on this box); each scenario is its

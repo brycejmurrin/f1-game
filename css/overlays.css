@@ -1,5 +1,109 @@
 @layer overlays {
 /* Apex 26 — overlays styles. Load order: tools/manifest.cjs CSS. */
+/* Portrait-mode overlay: shown only during races via body.in-race class.
+   Uses a CSS media query so it works on iOS Safari where JS lock APIs fail. */
+#rotate-device {
+  display: none;
+  position: fixed; inset: 0; z-index: 9000;
+  background: #000;
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  /* max() with the safe-area pads: this overlay is gated to notched portrait
+     phones (the media query below), where a flat 2rem sat under the 47-59px
+     top inset whenever the centred stack filled the height. Unzoomed layer,
+     so the raw tokens are the correct form. */
+  padding: max(2rem, var(--safe-t)) max(2rem, var(--safe-r)) max(2rem, var(--safe-b)) max(2rem, var(--safe-l));
+  gap: 0.8rem;
+}
+.rotate-icon {
+  font-size: 3.5rem;
+  animation: rotate-hint 1.6s ease-in-out infinite alternate;
+}
+@keyframes rotate-hint {
+  from { transform: rotate(-30deg); }
+  to   { transform: rotate(30deg); }
+}
+.rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: var(--ls-3); }
+.rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
+.rotate-inner { display: grid; justify-items: center; gap: 0.8rem; max-width: 28rem; }
+/* RACE IN PORTRAIT shares the pill so the three read as one stack. It sits
+   first because it is the primary action now; a distinct fill would have cost
+   a raw colour literal the token ratchet rightly refuses, and stack order is
+   enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
+#rotate-race, #rotate-controls, #rotate-exit {
+  /* --tap, not --tap-min: this layer is gated to coarse-pointer phones (the
+     media query below), and --tap-min is the 24px WCAG floor — with `padding:
+     0 1rem` and inherited type the three pills painted 24px tall, half of
+     Apple's 44pt and under the game's own 52px touch rung. Unzoomed layer, so
+     --tap here is body:not(.desktop)'s 52px as written. */
+  min-height: var(--tap); padding: 0 1rem;
+  border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.1); color: #fff;
+  font: inherit; font-weight: 800; letter-spacing: var(--ls-2);
+}
+/* outline-offset takes a <length> only — the old `medium` here made the whole
+   declaration invalid, silently dropping this rule since build 1496. 3px is
+   what `medium` resolves to; the blocker is unzoomed and unclipped, so a
+   plain outset ring is fine (no inverse floor needed on this layer). */
+#rotate-race:focus-visible, #rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* OPEN CONTROLS pauses the race and hides this blocker while How to Play is
+   up. NOT a z-index yield: #howtoplay is a showModal() <dialog>, so it lives
+   in the TOP LAYER, which outranks every z-index and inerts the document —
+   the blocker could never paint over or intercept it. What this rule really
+   does is stop the opaque #000 backdrop from filling the screen AROUND the
+   help sheet, and let syncRotateBlocker (which reads computed display) report
+   inactive so focus is not sent behind the dialog. Closing help restores the
+   blocker/focus if the phone is still portrait. */
+body.rotate-help-open #rotate-device,
+body.photo-studio-open #rotate-device { display: none !important; }
+/* Pause and the rotate gate never share paint. #pausemenu is a top-layer
+   <dialog>, but gate labels (RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE)
+   ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
+   Match both the hidden seam and the native `open` flag showModal sets.
+   Also beat the portrait media rule's `display: flex` with !important.
+   body.rotate-measure lifts it for one getComputedStyle: syncRotateBlocker
+   asks "does the gate want the screen?" BEFORE it decides the pause card
+   yields — reading through this rule, the card's own presence answered "no"
+   and the gate never came back after OPEN CONTROLS › CLOSE. */
+body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* The iOS install tip sits above the race and used to paint through the
+   pause card's translucent foot on phone portrait. */
+body:has(#pausemenu:not([hidden])) #ios-install,
+body:has(#pausemenu[open]) #ios-install,
+html:has(#pausemenu:not([hidden])) #ios-install,
+html:has(#pausemenu[open]) #ios-install {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing
+   more than height > width, so this opaque z-9000 sheet also fired on a rotated
+   1080x1920 monitor and on any desktop window dragged taller than it is wide —
+   mid-race, over the canvas and #pausebtn, with a mouse that has no way to
+   "rotate" anything. `pointer: coarse` asks whether this is a device you HOLD;
+   the 743px ceiling then keeps it to phones, since the narrowest iPad portrait
+   (744 CSS px, the mini) is wide enough to race in and the widest phone (430)
+   is not.
+   AND THE WINDOW, NOT JUST THE DEVICE. A coarse-pointer device can present a
+   narrow WINDOW: iPad Split View / Slide Over is a 320-507px portrait strip —
+   under 743, portrait, coarse — where "rotate your phone" is unfollowable
+   (rotating the iPad keeps the strip portrait) and the only escape was EXIT
+   RACE. Every phone portrait is ≤956px tall; the iPad strips are 1180+ tall,
+   so a height ceiling separates a held phone from a windowed slice. */
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 743px) and (max-height: 956px) {
+  body.in-race:not(.rotate-ok) #rotate-device { display: flex; }
+  #rotate-race, #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
+}
+
 /* ---------- results / standings rows ----------
    The shell (header + scrolling body + pinned action bar) is the shared .sheet
    in css/components.css, and so are the .res-* row rules now that four screens
@@ -157,11 +261,17 @@ body:has(dialog[open]) #save-warning { display: none; }
    chips stay `--text` while career guide/history stay `--dim`. */
 #htp-contents a { color: var(--text); }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"],
-#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"],
-#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"] {
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
-#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"],
+#howtoplay:has(#htp-pits:target) #htp-contents a[href="#htp-pits"],
+#howtoplay:has(#htp-driving:target) #htp-contents a[href="#htp-driving"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"],
+#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
@@ -215,6 +325,16 @@ body:has(dialog[open]) #save-warning { display: none; }
      scrollable overflow in block layout after Quick Start wraps the <dl>. */
   display: grid; grid-template-columns: minmax(0, 1fr); align-content: start;
   font-size: var(--fs-micro); line-height: 1.45;
+  scroll-padding-block-start: var(--gap);
+}
+/* Slack so FRIENDS (and every earlier section) can sit at the scrollport top
+   when its contents-rail link is pressed — without this, the last sections
+   stop mid-pane because there is nothing below them to scroll past. */
+#howtoplay .sheet-body::after {
+  content: "";
+  display: block;
+  height: min(70vh, 28rem);
+  pointer-events: none;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
 #htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
@@ -901,4 +1021,274 @@ body:has(dialog:modal) #update-chip { display: none; }
 :root[data-look-garage-head="centre"] #carsetup .sheet-head { justify-content: center; text-align: center; }
 :root[data-look-popups-head="centre"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) .sheet-head { justify-content: center; text-align: center; }
 
+
 } /* @layer overlays */
+
+@layer components {
+/* ---------- pane-pair: the LIST/DETAIL primitive ----------
+   #select, #carsetup and #career are all the same canonical layout — Material
+   calls it list-detail, and every adaptive UI framework ships one — and this
+   project had written it three times, in three files, with three sets of
+   hand-picked numbers. That is why fixing the garage taught us nothing about the
+   select screen, and why the "action bar steals a row from the list" bug had to
+   be found and fixed separately in each of them.
+   What every copy actually said, once the incidental differences are stripped:
+
+     - the columns live on the SHEET, never in a `@container` block, because the
+       sheet IS the query container and a container query cannot style its own
+       container
+     - every direct child spans both columns by default, so the narrow layout is
+       the plain single-column stack it always was
+     - when the pair is on, the body goes `display: contents` so the two panes
+       become grid items of the sheet itself
+     - the DETAIL pane spans the body row AND the foot row, i.e. down to the
+       sheet floor, because the action bar only ever holds buttons that belong
+       under the LIST pane
+     - the foot row is `min-content`, NOT `auto`: an auto track's growth limit is
+       max-content, and a scroller spanning into it hands over its entire content
+       height (a 24-row list once turned a 76px bar into 358px)
+
+   ON/OFF is an attribute, not a container query, for one reason: a query
+   condition cannot take a custom property, so `@container sheet (min-width:
+   400px)` and `(min-width: 620px)` are two different blocks and the shared body
+   would have to be duplicated into both — which is the exact problem being
+   solved. js/game/sheetshape.js already runs one ResizeObserver over every
+   sheet; it reads `--pair-at` and writes `data-pair`. Attributes also carry
+   specificity, which container queries do not — the tie that cost this project
+   two debugging sessions.
+   Screens tune it with five properties and nothing else:
+     --pair-at       the sheet width at which the pair turns on (default 620px)
+     --pair-compact  off = force stack when data-density=compact (default off)
+                     wide = pair when compact+horizontal, stack when compact+tall
+                     empty/on = keep reading --pair-at (safe default)
+     --pair-split    the SIDE column's track      (default minmax(0, 1fr))
+     --pair-main     the MAIN column's track      (default minmax(0, 1fr))
+     --pair-gap      the gutter between the panes (default 0.8 * --pad)
+
+   THE SLOTS ARE NAMED BY POSITION, NOT BY ROLE. `.pair-side` is the narrow
+   column with the action bar under it; `.pair-main` is the wide one that runs to
+   the sheet floor. In the canonical list-detail the side IS the list — the
+   garage's category rail, the career hub's left pane — but #select inverts it:
+   its side is the circuit PREVIEW and its main is the circuit LIST, because the
+   list is what needs the height and the preview is what needs a bounded column.
+   Naming the slots list/detail would have made that screen read as a mistake.
+
+   THE UNMEASURED STATE MUST BE A VALID LAYOUT, not a race the observer has to
+   win. `data-pair` is absent for the frame between a screen being shown and the
+   first ResizeObserver callback, so whatever the screen looks like WITHOUT the
+   attribute has to work at every width — including widths where the pair would
+   be on. #select assumed the opposite (its scroller was keyed on
+   `max-width: 619px`, i.e. "wide means split"), so in that frame a wide sheet
+   was stacked AND had no scroller, and a ~350px preview card plus the list
+   spilled past it: four clipped elements on a landscape phone, three on most
+   desktops, on every single run.
+
+   ONE RULE FOR SCREENS USING IT: gate the screen's own STACKED-layout
+   declarations with `:not([data-pair="on"])`. These placement rules are class-
+   and attribute-based (0,3,0) and a plain `#id` rule is (1,0,0), so an ungated
+   `#x-body { display: flex }` silently wins and you get a flex column laid out
+   inside two grid tracks — measured on the garage: the rail rendered 402px wide
+   in a 115px track and the option list came out 10px tall. Use `:not(... "on")`
+   rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
+   gets in the first frame, or if the script never loads. */
+.pane-pair {
+  --pair-compact: off;
+  grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) min-content;
+  column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
+}
+.pane-pair > .sheet-head,
+.pane-pair > .sheet-body,
+.pane-pair > .sheet-foot { grid-column: 1 / -1; }
+
+.pane-pair[data-pair="on"] > .sheet-body { display: contents; }
+.pane-pair[data-pair="on"] > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+.pane-pair[data-pair="on"] .pair-side   { grid-column: 1; grid-row: 2; min-height: 0; }
+.pane-pair[data-pair="on"] .pair-main { grid-column: 2; grid-row: 2 / 4; min-height: 0; }
+.pane-pair[data-pair="on"] > .sheet-foot { grid-column: 1; grid-row: 3; }
+
+/* A FOOT UNDER BOTH COLUMNS — the opt-out for a pair whose side slot is a RAIL.
+   The default above puts the action bar in the SIDE column, which is right when
+   that column is CONTENT (#select's preview card, #career's left pane) and
+   wrong when it is a narrow rail. The garage is the wrong case: its rail is
+   `minmax(112px, 27%)` (css/carsetup.css) while BACK+DONE need ~161px, so the
+   bar wrapped to two rows and — measured at 852x393, the primary play shape —
+   the foot came out 132px tall beside an 88px category rail. The action bar was
+   half again as tall as the twelve categories it sat next to, on the screen
+   with the least height in the app.
+   A slot on the primitive, not a fourth patch in carsetup.css: the same defect
+   ("the action bar steals a row from the list") has already been found three
+   times in three files, which is why .pane-pair exists at all.
+   #select and #season-setup also opt in: BACK + YOUR CAR + NEXT (and
+   BACK + APPLY) are three/two 110px buttons that wrap inside the ~50% side
+   column. Career keeps the default — a full-width foot clips UPCOMING.
+   Specificity is (0,4,0) against the primitive's (0,3,0), so it wins on its own
+   — no id, no !important. .pair-main stops spanning into row 3 because in this
+   shape the foot is underneath it too. */
+.pane-pair.pair-foot-full[data-pair="on"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+.pane-pair.pair-foot-full[data-pair="on"] .pair-main { grid-row: 2; }
+
+/* ---------- classification rows ----------
+   A position, a team colour, a name and a number: the race result, the
+   championship standings, the qualifying sheet and the career hub all show the
+   same shape, and a standings table should not look like a different game
+   depending on which screen it is on.
+
+   These lived twice, scoped to #results-table (css/overlays.css) and to
+   #standings-body (css/track-detail.css) — byte-identical apart from the prefix
+   and a font-size. A third screen needing them is what made the duplication a
+   real problem rather than a tidiness one, so the rules are hoisted here
+   UNSCOPED and each container keeps only what is genuinely its own (its
+   font-size). Podium and player rows are the same three accent colours
+   everywhere: gold/silver/bronze for the top three, the HUD's lime for you. */
+.res-row {
+  display: flex; gap: 10px; padding: 8px 6px;
+  align-items: center; border-radius: var(--r-sm);
+}
+.res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
+/* PODIUM ROWS come BEFORE the player's row on purpose: the two are the same
+   specificity, so source order decides, and with the metals last a player who
+   finished P1-P3 lost the lime ink AND the opaque sticky ground below — the
+   metal's translucent wash let the scrolled rows show through a sticky row.
+   You win the row; the metal stays as the accent on the left rule and the
+   position cell, which name the metal outright rather than inherit the row. */
+.res-row.p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); border-left: 3px solid var(--gold); padding-left: 5px; }
+.res-row.p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 7%, transparent); border-left: 3px solid var(--silver); padding-left: 5px; }
+.res-row.p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 7%, transparent); border-left: 3px solid var(--bronze); padding-left: 5px; }
+.res-row.p1 .res-pos, .res-row.p2 .res-pos, .res-row.p3 .res-pos { font-weight: 700; }
+.res-row.p1 .res-pos { color: var(--gold); }
+.res-row.p2 .res-pos { color: var(--silver); }
+.res-row.p3 .res-pos { color: var(--bronze); }
+/* YOUR ROW STICKS. A championship table is a COMPARISON surface, and the
+   comparison a player actually makes is "me against the front" — which is the
+   one comparison the table stops supporting the moment your row scrolls out of
+   view. At P17 of 22 you can see the leaders or see yourself, never both.
+   Datawrapper built sticky rows for exactly this question ("Compared to what?"),
+   and it is four declarations here.
+
+   Sticky to BOTH edges: the row pins to the top while you scroll down past it
+   and to the bottom while it is still below the fold, so it is on screen at
+   every scroll position without ever leaving its true rank order.
+
+   THE BACKGROUND MUST BE OPAQUE. A sticky element paints over its siblings, and
+   the 8% tint this used to carry would have let the rows underneath show
+   through it. Composited over --surf-1 rather than left translucent, so it
+   reads identically when parked and when in flow. */
+.res-row.you {
+  color: var(--you); font-weight: 700; padding-left: 5px;
+  background: color-mix(in oklab, var(--you) 8%, var(--surf-1));
+  /* Sticky TOP only. `bottom: 0` as well parked a late (P17+) row over the
+     story podium on short phone sheets — mid-word names under a green bar on
+     portrait, and empty-looking P1–P3 slots on landscape where the bar ate
+     the whole name block (layout-audit 2026-10-04). Top-sticky still keeps
+     "me vs the front" while scrolling the classification list. */
+  position: sticky; top: 0; z-index: 1;
+}
+/* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
+   whatever that resolves to rather than re-stating a hex here. */
+@media (prefers-reduced-transparency: reduce) {
+  .res-row.you { background: color-mix(in oklab, var(--you) 8%, var(--surf-3)); }
+}
+/* A podium class already supplies the left rule, so only a non-podium player row
+   draws its own — otherwise P1-and-you would stack two borders. */
+.res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }
+.res-pos { width: 26px; text-align: right; color: var(--dim); font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+.res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
+/* min-width: 0 + ellipsis: a 22-char single-token MY TEAM name (the maxlength
+   the customize form allows) cannot line-break, and a flex item's default
+   min-width: auto refuses to shrink below it — pushing the fixed 62px points
+   column past the sheet edge, where .sheet's overflow: hidden clipped it
+   silently. The compact quali/history rules already wrap; this is the base. */
+.res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-name > .q-time { display: block; font-size: var(--fs-micro); }
+.res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
+   and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
+   segment's width is its share of the car's laps, so a glance down the column
+   compares strategies — one long segment is a car that went to the end, three
+   short ones is a car that could not. Butted, with no gap and no padding, which
+   is also why this rule adds no raw spacing to a count that asserts exact
+   equality. The segment COLOURS are the compound's own band, written inline by
+   the sheet from the tyre record, so they stay out of the CSS colour count and
+   cannot drift from the HUD's. */
+.res-stints { display: flex; width: 78px; height: 6px; border-radius: var(--r-pill); overflow: hidden; flex-shrink: 0; }
+/* A phone: the name wins the row. At 78px the strategy bar took the middle
+   third of a 390px results row and the name ellipsised to "RUS Geor…"; the
+   bar stays proportional at half the width. */
+body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
+.res-stint { height: 100%; min-width: 2px; }
+/* RESULTS SETTLE. The classification lands row by row (18 ms apart, capped at
+   the 12th row) instead of appearing; results-sheet.js writes --i per row.
+   Scoped to the results table only — #ch-body / #q-body / #standings-body
+   reuse .res-row and stay instant. Inside the no-preference query so the
+   `both` fill can never hold a row invisible for a reduced-motion reader. */
+@media (prefers-reduced-motion: no-preference) {
+  #results-table .res-row { animation: row-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) calc(min(var(--i, 0), 12) * 18ms) both; }
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* ---------- section label ---------- */
+.sel-label {
+  color: var(--steel);
+  font-size: var(--label); font-weight: 700;
+  letter-spacing: var(--ls-5);
+  margin: 0 0 calc(var(--gap) * 0.5);
+}
+/* A short accent tick before every section label. Dim uppercase text at 10-12px
+   is easy to skim past; the tick gives each section a fixed left edge for the
+   eye to run down, and it is the same skewed red mark the title and the primary
+   buttons use, so the sheets read as one family. */
+.sel-label::before {
+  content: ""; display: inline-block;
+  width: 3px; height: 0.82em;
+  margin-right: 7px; vertical-align: -0.04em;
+  background: var(--accent);
+  transform: skewX(-12deg);
+  border-radius: var(--r-xs);
+}
+
+/* ---------- term-rail (How to Play / career guide / career history) ----------
+   One strip + chip box. Idle ink and wide/compact placement stay on the
+   screen sheets: HTP is ink, guide/history are dim; placement is measured. */
+#htp-contents, #cg-contents, #ch-contents {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: calc(var(--gap) * 0.4); min-width: 0;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+#htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child {
+  margin-inline-start: auto;
+}
+#htp-contents::-webkit-scrollbar, #cg-contents::-webkit-scrollbar, #ch-contents::-webkit-scrollbar {
+  display: none;
+}
+#htp-contents a, #cg-contents a, #ch-contents a {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-height: var(--chip-h);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
+  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
+  background: var(--plate);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  #htp-contents a:hover, #cg-contents a:hover, #ch-contents a:hover {
+    background: var(--plate-hover); color: var(--text);
+  }
+}
+#htp-contents a:active, #cg-contents a:active, #ch-contents a:active {
+  background: var(--plate-press); color: var(--text);
+}
+#htp-contents a:focus-visible, #cg-contents a:focus-visible, #ch-contents a:focus-visible {
+  background: var(--plate-hover); color: var(--text);
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
+#htp-contents a[aria-current="true"],
+#cg-contents a[aria-current="true"],
+#ch-contents a[aria-current="true"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+} /* @layer components */

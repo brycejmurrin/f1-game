@@ -217,6 +217,19 @@ const TrackGraph = (function () {
       }
       const m = model(key, build);
       if (!m.ops.length) { dropped++; return 0; }
+      // A pine is one object. Lower crown tiers can hit a doubled-back ribbon
+      // (Fuji 120R / 300R / 30R-45R) while the trunk and upper cones clear it,
+      // so the soup kept 10–28 m unsupported cones. Dry-run the guards; if any
+      // op would drop, plant nothing.
+      if (meta && meta.kind === "pine" && emit) {
+        const verd = m._whole || (m._whole = new Uint8Array(m.ops.length));
+        out._dryRun = true;
+        out._recVerdicts = verd;
+        out._vIdx = 0;
+        const nLand = replay(m, place, emit, out);
+        out._dryRun = false; out._recVerdicts = null;
+        if (nLand !== m.ops.length) { dropped++; return 0; }
+      }
       const prefer = !!(out && out._preferInstance && emit);
       let landed;
       if (prefer) {
@@ -383,7 +396,17 @@ const TrackGraph = (function () {
           const b = i * 16;
           matrices[b]      = r[0] * sx; matrices[b + 1]  = r[1] * sx; matrices[b + 2]  = r[2] * sx;
           matrices[b + 4]  = u[0] * sy; matrices[b + 5]  = u[1] * sy; matrices[b + 6]  = u[2] * sy;
-          matrices[b + 8]  = t[0] * sz; matrices[b + 9]  = t[1] * sz; matrices[b + 10] = t[2] * sz;
+          // Same test as TrackGeom.addBox: the track frame is left-handed
+          // (r×u · t < 0). Canonical meshes are wound CCW-outward for a
+          // right-handed basis, so a negative-det instance matrix turns the
+          // exterior walls inside-out under GPU back-face culling (see-through
+          // UNIT_BOX masses). Negating the t column restores det > 0; a
+          // centred model occupies the same eight corners, just rewound.
+          const cr0 = r[1] * u[2] - r[2] * u[1];
+          const cr1 = r[2] * u[0] - r[0] * u[2];
+          const cr2 = r[0] * u[1] - r[1] * u[0];
+          const tz = (cr0 * t[0] + cr1 * t[1] + cr2 * t[2]) < 0 ? -sz : sz;
+          matrices[b + 8]  = t[0] * tz; matrices[b + 9]  = t[1] * tz; matrices[b + 10] = t[2] * tz;
           matrices[b + 12] = o[0];      matrices[b + 13] = o[1];      matrices[b + 14] = o[2];
           matrices[b + 15] = 1;
           if (colors) {

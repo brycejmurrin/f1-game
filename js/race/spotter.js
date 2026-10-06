@@ -85,7 +85,7 @@ const Spotter = (() => {
 
   function create(G) {
     let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0;
-    const on = () => G.store.get("spotter", true) !== false;
+    const on = () => G.store.get("spotter", false) !== false;
 
     // `quiet`: a REAL RACE WATCH (js/race/race-radio.js) — every car is a
     // puppet and nobody is driving, so there is nobody to spot for.

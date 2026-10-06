@@ -43,7 +43,9 @@ const AudioPanel = (() => {
       else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
         GameAudio.startMusic(G.trackIdx);
         GameAudio.startEngine();
-        if (G.raceWeather === "rain") GameAudio.startRain();
+        // isRaining(), like every other startRain caller: a race whose weather
+        // arc turned wet (or dried out) is not described by the weather it gridded in.
+        if (G.isRaining()) GameAudio.startRain();
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
@@ -76,7 +78,7 @@ const AudioPanel = (() => {
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
-    const spotNow = () => (store.get("spotter", true) !== false ? "on" : "off");
+    const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);

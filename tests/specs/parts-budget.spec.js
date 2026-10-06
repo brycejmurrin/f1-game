@@ -16,7 +16,8 @@
 // BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { toMenu, forgetStored, garageTeam, freeBuildOff } from "../helpers/shared-page.js";
+import { toMenu, forgetStored, pinFreePlay, garageTeam, freeBuildOff } from "../helpers/shared-page.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 async function waitReady(page) {
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -36,6 +37,9 @@ async function openSetup(page) {
   // navigation, and a shared page has none — docs/TESTING.md §sharedTest.)
   await toMenu(page);
   await forgetStored(page, ["parts.*", "unlimitedBudget"]);
+  // Empty factory sheet, not a miss: forgetStored of parts.* would otherwise
+  // let GarageDefaults fill the McLaren signature kit (−1220 / 780).
+  await pinFreePlay(page, { team: "mclaren", click: false });
   // THE GARAGE DOOR, not the race flow. This used to walk mb-race -> select ->
   // sel-go, which builds the circuit picker and then the track itself before it
   // ever reaches the screen these tests are about. Measured on this box:
@@ -51,7 +55,7 @@ async function openSetup(page) {
   // WORKER, so the per-test cost is the re-entry alone. Measure it
   // (docs/TESTING.md §navigation) — this conversion was not run in a browser.
   await page.locator("#mb-garage").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await waitGarageSheet(page);
   // Two `let`s the forgotten keys cannot reach: the team the garage shows and
   // FREE BUILD. A fresh boot read both out of empty storage; the shared page
   // has whatever the last test chose.
@@ -247,7 +251,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.reload();
     await waitReady(page);
     await page.locator("#mb-garage").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await waitGarageSheet(page);
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
     await shot(page, "budget-unlimited-persisted.png");

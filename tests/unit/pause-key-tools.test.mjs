@@ -74,6 +74,22 @@ test("racing (not paused): the key pauses, whatever layer the DOM reports", () =
   assert.deepEqual(r.clicks, []);
 });
 
+test("pre-race #loading on top: pause key is a no-op while unpaused", () => {
+  // Escape is refused via data-esc="none" + anyOpen(); KeyP / Start still hit
+  // onPause and must not open #pausemenu over the plate.
+  const r = rig({ paused: false, top: { id: "loading" } });
+  r.fn();
+  assert.deepEqual(r.toggles, [], "no pause under the loading plate");
+  assert.deepEqual(r.clicks, []);
+});
+
+test("pre-race #loading on top: pause key is a no-op while already paused", () => {
+  const r = rig({ paused: true, top: { id: "loading" } });
+  r.fn();
+  assert.deepEqual(r.toggles, [], "no resume / toggle under the loading plate");
+  assert.deepEqual(r.clicks, []);
+});
+
 test("a tool setPaused(false) closes itself (the lighting tuner) still resumes on the key", () => {
   // ui-button-touch.spec.js "pause key leaves tuner-owned photo mode": the
   // lighting tuner has its own Escape door, but unpausing is what closes it.

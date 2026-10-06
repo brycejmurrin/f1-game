@@ -88,15 +88,22 @@ async function glassBands(page, screen, rect) {
 }
 
 async function mirrorRace(page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.hudMirror", '"auto"');
+      localStorage.setItem("apex26.camMode", "3"); // cockpit — shipped default is helmet (19)
+    } catch (_) {}
+  });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry", { laps: 3 }));
   await awaitTrackBuild(page);
+  // Freeze after AUTO->ON in mirrorCase: TLX on software never composites a
+  // pass that is enabled only after freeze has already stopped the loop.
   await page.evaluate(() => {
     const a = window.__apex;
     if (typeof a.renderScale === "function") a.renderScale(0.5);
     a.go();
-    a.freeze(true);   // a still scene: the on/off frames differ only by the mirror
     a.camera("cockpit");
   });
 }
@@ -111,6 +118,7 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
     const m = window.__apex.mirror();
     return m.shown && m.backend && m.backend.renders >= 1 && m.backend.composites >= 1;
   }, null, { polling: 100, timeout: FRAME_MS });
+  await page.evaluate(() => window.__apex.freeze(true));
   const on = await page.evaluate(() => ({
     m: window.__apex.mirror(),
     cls: document.body.classList.contains("hud-mirror-on"),
@@ -333,11 +341,15 @@ test.describe("HUD rear-view mirror", () => {
         try {
           localStorage.setItem("apex26.gfxBackend", "three");
           localStorage.setItem("apex26.tlxForceGL", "1");
+          localStorage.setItem("apex26.camMode", "3");
         } catch (_) {}
       });
     });
     test("TLX prepares an enabled mirror before the countdown advances and reuses its target in the race", async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("apex26.hudMirror", '"on"'));
+      await page.addInitScript(() => {
+        localStorage.setItem("apex26.hudMirror", '"on"');
+        localStorage.setItem("apex26.camMode", "3");
+      });
       await page.goto("/");
       await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       const prepared = await page.evaluate(async () => {

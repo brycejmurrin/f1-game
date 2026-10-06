@@ -1282,6 +1282,37 @@ test("AUTO never refits the letter a car that owes its second compound has run",
   assert.equal(pits.pickFor(c).code, "S", "with the rule met, the fastest set that lasts is fine");
 });
 
+// c.lap is the lap the car is ON (line crossings; grid 0). Remaining racing
+// laps INCLUDING the current one are lapsTarget - lap + 1. pickFor / think
+// used lapsTarget - lap, so AUTO fitted a set one lap short of the flag and
+// wornPays refused a stop that would still pay back over the current lap.
+test("AUTO remaining-laps count includes the lap the car is ON", () => {
+  const { pits, car, G } = strategySession(5);   // under TWO_COMPOUND_MIN_LAPS
+  // Soft lasts 1.5 racing laps; medium lasts 3. The default stub floors at 4,
+  // which hid the off-by-one (both sets "reach" a bogus lapsLeft of 1).
+  G.tyres.planLaps = (life) => (life < 0.6 ? 1.5 : 3);
+  const c = car(0);
+  c.lap = 4; c.pitStops = 0; c.pitPlan = null;
+  c.tyreLog = [{ code: "H", lap0: 0, lap1: null }];
+  // On lap 4 of 5 → 2 laps to the flag. Soft covers 1.5, medium covers 3.
+  assert.equal(pits.pickFor(c).code, "M",
+    "a soft that lasts 1.5 must not be chosen when 2 laps remain incl. the current");
+});
+
+test("a worn AI stop counts the current lap toward payback", () => {
+  // wornPays: gainPerLap≈0.0825 at wear 1.2; pitLossLaps 0.12 → payback ≈1.45.
+  // Bug lapsLeft=1 refuses; correct lapsLeft=2 (lap 4 of 5) accepts.
+  const { pits, car } = strategySession(5);
+  const c = car(0);
+  c.human = false; c.local = false;
+  c.lap = 4; c.pitStops = 0;
+  c.tyreWear = 1.2; c.tyreWearF = 1.2; c.tyreWearR = 1.2;
+  c.tyre = { code: "M", tread: 0, life: 0.74 };
+  c.pitPlan = { stops: 0, seq: ["medium"], stints: [5], lapsAt: [], pitLossLaps: 0.12 };
+  assert.equal(pits.think(c), "worn",
+    "a cliff set with ~1.5-lap payback must still box when 2 laps remain incl. current");
+});
+
 test("AUTO fits the plan's letter, and the HUD names the set the crew will fit", () => {
   const { pits, car } = strategySession(5);                // under the rule's minimum: no rule
   const c = car(0);

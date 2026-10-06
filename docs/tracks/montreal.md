@@ -109,3 +109,12 @@ Internationales, with canals, footbridges and massed bedding. The thing that
 must read is that the planting is **geometric**: rectangular parterres in
 blocks of single strong colour, edged in clipped green, on gravel walks.
 Scattered bushes would say *park*; blocks say *Floralies*.
+
+## DETAIL pass — 2026-10-05 (sheet-04)
+
+Local densify only (no shared `city.js` / water core / `flatTerrain` change):
+- Closed pit-end shells at garage-row entry/exit (RAW `seat.box`; modelGroups are superseded by the pit complex).
+- Olympic Basin near-shore lip + quay kerb + sparse reeds (local waterBand/boxes).
+- Island midfield: service paths, low park sheds, tree/bush variety, casino plaza cue.
+- Hairpin stand end fascias + Canadian GP billboards; S/F bay `endWalls` where missing.
+

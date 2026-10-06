@@ -20,7 +20,8 @@
  *     the background zoom guard and multi-touch driving behavior.
  *
  * CONFIRMED-OK and pinned so they stay that way: every `:hover` in css/ is
- * gated on `(hover: hover)`; every scroll container contains its overscroll;
+ * gated on `(hover: hover) and (pointer: fine)` (css/race-setup.css and
+ * css/dialogs.css may still use `(hover: hover)` only — follow-up); every scroll container contains its overscroll;
  * the dock's tap rungs clear 44px at both width tiers; the tallest dock
  * column fits a 390px-tall landscape phone at HUD SIZE 200 % before fitHud's
  * `--hud-z-dock` cap even has to act; double-tap zoom is refused on every
@@ -70,7 +71,7 @@ const rung = (v, what) => { const m = /^max\((\d+(?:\.\d+)?)px,/.exec(String(v).
 /* ── tap targets ─────────────────────────────────────────────────────────── */
 
 test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG floor", () => {
-  const rules = css("css/responsive.css");
+  const rules = css("css/overlays.css");
   const sel = /^#rotate-race, #rotate-controls, #rotate-exit$/;
   assert.equal(decl(rules, sel, "min-height"), "var(--tap)",
     "#rotate-* min-height must be --tap: --tap-min is the 24px floor, and this layer only ever shows on a phone");
@@ -223,14 +224,33 @@ test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z"
 /* ── touch policy across css/ ────────────────────────────────────────────── */
 
 test("every :hover rule in css/ is gated on (hover: hover) — a tap sticks :hover on iOS", () => {
+  const FOLLOW_UP = new Set(["css/race-setup.css", "css/dialogs.css"]);
   const ungated = [];
+  const coarseHover = [];
+  // Physical files only: readCssSource concatenates race-setup into select/menus.
   for (const file of CSS_FILES) {
-    for (const r of css(file)) {
+    const rules = cssRules(read(file));
+    for (const r of rules) {
       if (!/:hover/.test(r.selector)) continue;
       if (!r.context.some((c) => /hover\s*:\s*hover/.test(c))) ungated.push(`${file} ${r.selector}`);
+      else if (!FOLLOW_UP.has(file) && !r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
+        coarseHover.push(`${file} ${r.selector}`);
+      }
     }
   }
-  assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and give touch an :active twin (css/tokens.css policy)");
+  assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and (pointer: fine); touch uses :active (css/tokens.css policy)");
+  assert.deepEqual(coarseHover, [], "non-follow-up :hover must also sit in (pointer: fine); skip css/race-setup.css + css/dialogs.css");
+});
+
+test("JS hover-only UI skips touch / (hover: none) so a tap does not latch a tooltip", () => {
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /pointerenter[\s\S]{0,220}pointerType === ["']touch["']/,
+    "garage part comparison must ignore touch pointerenter");
+  assert.match(sheet, /matchMedia\(["']\(hover: none\)["']\)/,
+    "garage part comparison must skip when the device cannot hover");
+  const sched = read("js/data/schedule.js");
+  assert.match(sched, /mouseenter[\s\S]{0,280}matchMedia\(["']\(hover: none\)["']\)/,
+    "schedule overflow title must not attach on (hover: none)");
 });
 
 test("every scroll container contains its overscroll (no chaining into the page behind)", () => {
@@ -338,13 +358,22 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   // The portrait ladder (RACE IN PORTRAIT) anchors on the same insets.
   assert.match(decl(ov, "#btn-throttle", "left"), /var\(--sal\)/); assert.match(decl(ov, "#btn-throttle", "bottom"), /var\(--sab\)/);
   assert.match(decl(ov, "#btn-boost", "right"), /var\(--sar\)/);
-  const blocker = decl(css("css/responsive.css"), "#rotate-device", "padding");
+  const blocker = decl(css("css/overlays.css"), "#rotate-device", "padding");
   for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) assert.ok(blocker.includes(`var(${t})`), `#rotate-device padding uses ${t}`);
   // The insets themselves are env() reads with a 0px fallback, declared once.
   const tk = css("css/tokens.css");
   for (const [t, side] of [["--sat", "top"], ["--sar", "right"], ["--sab", "bottom"], ["--sal", "left"]]) {
     assert.equal(decl(tk, ":root", t), `env(safe-area-inset-${side}, 0px)`);
   }
+  // Title landscape: a centred 30rem #ios-install sat over RACE A FRIEND /
+  // SEASON (layout-audit ios-iphone-landscape, 2026-10-06). Park it under
+  // the brand column on compact-wide.
+  const src = read("css/touch-controls.css");
+  assert.match(
+    src,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
+    "compact-wide title parks #ios-install under the brand column, not over the doors",
+  );
 });
 
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */

@@ -5,6 +5,7 @@
 // camera, and an untuned mode frames exactly as it did before the feature.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 /* Two cases here outrun the project's shared 120 s budget, and say so rather
    than reporting a bare "Test timeout exceeded".
@@ -18,11 +19,13 @@ test.describe.configure({ timeout: 300_000 });
 
 async function loadMonza(page) {
   await page.setViewportSize({ width: 844, height: 390 });
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
   // AWAIT THE RACE — same thenable contract as camera-hooks / monaco-foundation.
-  // A 3 s sleep is not a track build; dolly/camTune then see G.track null.
+  // A 3 s sleep is not a track build; GarageDefaults' full-grid kits outrun it
+  // and dolly/camTune then see G.track null.
   await page.evaluate(async () => {
     await __apex.race("monza");
     __apex.go();

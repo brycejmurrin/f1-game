@@ -10,14 +10,25 @@
 // are states real users boot into.
 //
 // Run: npx playwright test tests/specs/assets-api.spec.js   (npm run test:assets)
+//
+// ONE BOOT PER WORKER (sharedTest). Ten goto("/") waits against BOOT_MS (45 s)
+// were the selected-2 red on PR #1103 run 37438784776: the fifth test
+// (`matTexMix…`) timed out with the title already painted — TitleMenu.create
+// at 40.8 s, lazy __apex still null. Sibling tests in the same file passed at
+// 21–39 s. sharedTest pays the worker boot once at 60 s (same bound as smoke)
+// and pins GLX via the fixture, which this file's `supported === true` check
+// already assumed. First-load mix stays on freshTest.
 
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
-
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  // Shallow shared-page reset does not rewind the BAKED MATERIALS knob or pack.
+  await page.evaluate(async () => {
+    const a = window.__apex;
+    if (!a) return;
+    a.matTex(1);
+    if (window.Assets && a.assets && !a.assets().uploaded) await window.Assets.load();
+  });
 });
 
 test("assets() reports a coherent state", async ({ page }) => {
@@ -53,11 +64,19 @@ test("the committed pack loads and uploads its material layers", async ({ page }
   expect(s.scales[0]).toBe(0);
 });
 
-test("the baked materials are ON by default", async ({ page }) => {
-  // Inverted deliberately when the baked pack started shipping ON: 5 MB that
-  // nothing sampled was pure cost. (The shipped layers are PROCEDURAL — see
-  // assets/pack/CREDITS.md; webbake.js can swap in Poly Haven CC0 scans, but
-  // that bake is opt-in and has never been the committed pack.)
+freshTest("the baked materials are ON by default", async ({ page }) => {
+  // FIRST-LOAD: the shipped mix, not a shared-page restore. Inverted when the
+  // baked pack started shipping ON: 5 MB that nothing sampled was pure cost.
+  // (The shipped layers are PROCEDURAL — see assets/pack/CREDITS.md; webbake.js
+  // can swap in Poly Haven CC0 scans, but that bake is opt-in and has never
+  // been the committed pack.)
+  // Factory McLaren, empty sheet — GarageDefaults outfits every constructor,
+  // and a 22-car kit blocked a 45 s __apex wait while Bahrain built
+  // (CI run 37445579432 packed-1). sharedTest's worker boot is 60 s; this
+  // first-load goto still uses BOOT_MS, so pin before navigation.
+  await pinFactorySeat(page);
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   const r = await page.evaluate(async () => {
     await window.Assets.load();
     return { mix: window.__apex.matTex(), state: window.__apex.assets() };
@@ -87,15 +106,18 @@ test("matTex() round-trips and clamps", async ({ page }) => {
 
 test("matTexMix is a real lighting-tuner knob, and 0 stays reachable", async ({ page }) => {
   // 0 is the revert path: if scanned tarmac ever crawls at speed, this slider is
-  // the fix, and at 0 the pack is not even downloaded.
+  // the fix, and at 0 the pack is not even downloaded. Set 1 first so a prior
+  // test's matTex(0) on the shared page cannot starve `value > 0`.
   const r = await page.evaluate(() => {
+    window.__apex.matTex(1);
     const all = window.__apex.lightTune();
     const off = window.__apex.matTex(0);
-    return { present: "matTexMix" in all, value: all.matTexMix, off };
+    return { present: "matTexMix" in all, value: all.matTexMix, off, still: window.__apex.lightTune().matTexMix };
   });
   expect(r.present).toBe(true);
   expect(r.value).toBeGreaterThan(0);
   expect(r.off).toBe(0);
+  expect(r.still).toBe(0);
 });
 
 test("unload returns to the procedural state without erroring", async ({ page }) => {

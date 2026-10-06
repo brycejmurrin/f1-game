@@ -57,6 +57,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
   "tests/unit/a11y-pwa-pass.test.mjs",
+  "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
@@ -160,6 +161,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/change-kind.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -206,6 +208,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
   "tests/unit/css-comments.test.mjs",
+  "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
@@ -259,6 +262,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a grip drag sets height (8 % cap) / place / Shift length and commits once,
   // long-press and Delete remove, data-arrows own/pass, the hill's aria-label.
   "tests/unit/designer-profile.test.mjs",
+  // TrackDesignerProps (js/editor/props.js): capped place/remove scenery props; sanitize, caps, place/remove, CustomTracks id, APXT1/APXT2 codec. ~0.3 s.
+  "tests/unit/designer-props.test.mjs",
   "tests/unit/desktop-app-protocol.test.mjs",
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
@@ -289,6 +294,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // racecraft harder than pace, and asLegend hands over the legend's OWN
   // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
   "tests/unit/duel.test.mjs",
+  // ElevPresets (js/editor/elev-presets.js): Flat / Rolling / Hilly → per-node
+  // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
+  "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
@@ -360,6 +368,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
+  "tests/unit/garage-defaults.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
@@ -464,6 +473,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
+  // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
+  "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
@@ -554,10 +566,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-step-snap.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
+  // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
+  "tests/unit/ready-full-cap.test.mjs",
   // ...and the REAL RACE: the OpenF1 timing of the 2026 Azerbaijan GP
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
   // flag windows. Pure rules in a VM, ~0.3 s together.
+  "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
@@ -596,8 +611,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
+  // foot clearance — css/race-setup.css + season-ui.js only.
+  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
+  "tests/unit/selected-gate-verdict.test.mjs",
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
@@ -727,6 +746,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trackside.test.mjs",
+  // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
+  // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
+  "tests/unit/traffic-arc-buckets.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
   // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
@@ -1007,6 +1029,22 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  // Full-suite green → stamp HEAD for ready-gate.mjs (draft→ready must not
+  // flip without tooling-fast evidence; #1111 designer-canvas). Subset / shard
+  // runs and failures leave any prior stamp alone so a partial re-run cannot
+  // bless a tip that never passed the full suite. Compare as a set: longest-
+  // first reorders `files` before this point.
+  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
+  const ran = new Set(files.map(rel));
+  const fullSuite = ran.size === TOOLING_FAST_FILES.length
+    && TOOLING_FAST_FILES.every((f) => ran.has(f));
+  if (ok && fullSuite) {
+    try {
+      const { stampReadySha } = await import("./ready-gate.mjs");
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
+      if (head.status === 0) stampReadySha(head.stdout.trim());
+    } catch (_) { /* stamp is advisory for ready-gate; never fail the suite */ }
+  }
   // Every run teaches the next one: the passing files' durations go to the
   // local table (a timed-out or failed file's duration says nothing about its
   // normal cost). --record also rewrites the committed table CI reads.
@@ -1032,11 +1070,21 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
+
+/** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
+export function applyFileShard(files, spec) {
+  if (!spec) return files;
+  const m = /^(\d+)\/(\d+)$/.exec(String(spec));
+  if (!m) throw new Error(`bad --shard=${spec} (want i/n)`);
+  const i = Number(m[1]), n = Number(m[2]);
+  if (n < 1 || i < 1 || i > n) throw new Error(`bad --shard=${spec}`);
+  return files.filter((_, idx) => idx % n === i - 1);
+}
 
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
 export function parseToolingFastArgv(argv) {
@@ -1062,6 +1110,7 @@ export function parseToolingFastArgv(argv) {
     jobs: val("jobs") ? Number(val("jobs")) : 1,
     order: val("order"),
     record: argv.includes("--record"),
+    shard: val("shard"),
     testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
     fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
   };
@@ -1080,7 +1129,8 @@ if (isMain) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
   }
-  const files = parsed.files || [...TOOLING_FAST_FILES];
+  const files0 = parsed.files || [...TOOLING_FAST_FILES];
+  const files = applyFileShard(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     order: parsed.order,

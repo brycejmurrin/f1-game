@@ -2,24 +2,30 @@
    is a compact binary record — theme, width, seed, the control loop as
    second-order deltas on the 0.25 m lattice, the zone lists and the name, with
    a 16-bit FNV check — and `APXT1.z.…` the same bytes through deflate-raw
-   (CompressionStream, Baseline 2023) when that is shorter. The code rides a URL
-   fragment (`#track=`, never sent to the host) and the JSON file envelope.
-   Decoding is DEFENSIVE: every field is bounded, nothing public throws (a
-   refusal is { ok: false, reason } or null), and the design that comes out is
-   re-sanitised by CustomTracks before anyone keeps it. The same lattice and the
-   same zone caps as storage (CustomTracks.LIMITS.zones) mean a code's content
-   id matches on both ends — tests/unit/track-codec.test.mjs pins it.
-   Mirrors js/car/ghost-share.js. LAZY_EDITOR; no eval-time dependencies. */
+   (CompressionStream, Baseline 2023) when that is shorter. `APXT2.…` is the
+   same layout plus an authored props trailer (TrackDesignerProps) when the
+   design places any; empty-props codes stay APXT1 so older saves are unchanged.
+   The code rides a URL fragment (`#track=`, never sent to the host) and the
+   JSON file envelope. Decoding is DEFENSIVE: every field is bounded, nothing
+   public throws (a refusal is { ok: false, reason } or null), and the design
+   that comes out is re-sanitised by CustomTracks before anyone keeps it. The
+   same lattice and the same zone caps as storage (CustomTracks.LIMITS.zones)
+   mean a code's content id matches on both ends — tests/unit/track-codec.test.mjs
+   pins it. Mirrors js/car/ghost-share.js. LAZY_EDITOR; no eval-time dependencies. */
 const TrackCodec = (function () {
   "use strict";
-  const MAGIC = "APXT1", VERSION = 1;
+  const MAGIC = "APXT1", VERSION = 1, VERSION_PROPS = 2;
   const MAX_CODE = 4096, MAX_BYTES = 16384, MAX_N = 200, MIN_N = 8, UNIT = 4 /* per metre */, COORD_MAX = 10000 * UNIT;
   // look (32): the scenery options (TrackThemes.LOOK) as one byte, written only
   // when one is off its default — so every code made before it is unchanged.
   // country (64): a label like name, after it. A build that predates it refuses
   // the bit ("corrupt"), so a code carries it only when a country is set.
-  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64 };
-  const FLAG_ALL = 0x7f;
+  // heights (128): per-node Y metres on the 0.25 m lattice. Written only when
+  // any height is non-zero — flat designs (and every pre-heights code) keep the
+  // old bit pattern. Older builds refuse the bit ("corrupt").
+  // Props ride VERSION_PROPS (APXT2) — FLAG is full (0xff); no spare bit.
+  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64, heights: 128 };
+  const FLAG_ALL = 0xff;
   // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
   // dropped what storage keeps (a dropped bridge turned into a RED crossing on
   // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
@@ -103,7 +109,14 @@ const TrackCodec = (function () {
     if (country && country.length) flags |= FLAG.country;
     const look = TrackThemes.sanitizeLook(it.look);
     if (look) flags |= FLAG.look;
-    w.u8(VERSION).u8(flags).u8(themeIdx).u8(Math.round(it.baseHW * 10)).varint(it.seed >>> 0).varint(it.pts.length);
+    const hs = Array.isArray(it.heights) ? it.heights : null;
+    let hasH = false;
+    if (hs && hs.length === it.pts.length) for (let i = 0; i < hs.length; i++) if (hs[i]) { hasH = true; break; }
+    if (hasH) flags |= FLAG.heights;
+    const props = (typeof TrackDesignerProps !== "undefined" && TrackDesignerProps.sanitize)
+      ? TrackDesignerProps.sanitize(it.props) : null;
+    const ver = props && props.length ? VERSION_PROPS : VERSION;
+    w.u8(ver).u8(flags).u8(themeIdx).u8(Math.round(it.baseHW * 10)).varint(it.seed >>> 0).varint(it.pts.length);
     const q = (v) => Math.round(v * UNIT);
     let px = q(it.pts[0][0]), pz = q(it.pts[0][1]);
     w.zz(px).zz(pz);
@@ -120,6 +133,28 @@ const TrackCodec = (function () {
     if (flags & FLAG.name) { w.u8(name.length).bytes(name); }
     if (flags & FLAG.look) { const L = TrackThemes.LOOK; w.u8(L.time.indexOf(look.time) | (L.trees.indexOf(look.trees) << 2) | (L.crowd.indexOf(look.crowd) << 4)); }
     if (flags & FLAG.country) { w.u8(country.length).bytes(country); }
+    // Heights after the label fields: older decoders that ignore unknown flags
+    // never reached here; a heights bit forces refusal on builds that lack it.
+    if (flags & FLAG.heights) {
+      let py = q(hs[0] || 0), dy = 0;
+      w.zz(py);
+      for (let i = 1; i < hs.length; i++) {
+        const y = q(hs[i] || 0), ndy = y - py;
+        if (i === 1) w.zz(ndy); else w.zz(ndy - dy);
+        dy = ndy; py = y;
+      }
+    }
+    // APXT2 trailer: authored props (FLAG is full — no spare bit on v1).
+    if (ver === VERSION_PROPS) {
+      const kinds = TrackDesignerProps.KINDS;
+      w.varint(props.length);
+      for (const p of props) {
+        w.u8(kinds.indexOf(p.kind));
+        w.u16(u16frac(p.s));
+        w.u8(p.side < 0 ? 0 : 1);
+        w.u8(Math.min(255, Math.max(0, p.gap | 0)));
+      }
+    }
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
     all.set(body); const c = fnv16(body, body.length); all[body.length] = c & 0xff; all[body.length + 1] = c >> 8;
@@ -132,7 +167,7 @@ const TrackCodec = (function () {
       const bodyLen = bytes.length - 2;
       if (fnv16(bytes, bodyLen) !== (bytes[bodyLen] | (bytes[bodyLen + 1] << 8))) return { ok: false, reason: "check" };
       const r = reader(bytes.subarray(0, bodyLen));
-      const ver = r.u8(); if (ver !== VERSION) return { ok: false, reason: "version" };
+      const ver = r.u8(); if (ver !== VERSION && ver !== VERSION_PROPS) return { ok: false, reason: "version" };
       const flags = r.u8(); if (flags & ~FLAG_ALL) return { ok: false, reason: "corrupt" };
       const themeIdx = r.u8(); if (themeIdx >= TrackThemes.ORDER.length) return { ok: false, reason: "theme" };
       const baseHW = r.u8() / 10; if (baseHW < 5 || baseHW > 8) return { ok: false, reason: "bounds" };
@@ -161,6 +196,29 @@ const TrackCodec = (function () {
         design.look = { time: L.time[t], trees: L.trees[tr], crowd: L.crowd[c] };
       }
       if (flags & FLAG.country) { const n = r.u8(); if (n > 32) return { ok: false, reason: "bounds" }; design.country = new TextDecoder().decode(r.bytes(n)); }
+      if (flags & FLAG.heights) {
+        const heights = [];
+        let y = r.zz(), dy = 0;
+        const pushH = () => { if (Math.abs(y) > COORD_MAX) throw new RangeError("bounds"); heights.push(y / UNIT); };
+        pushH();
+        for (let i = 1; i < N; i++) {
+          if (i === 1) dy = r.zz(); else dy += r.zz();
+          y += dy; pushH();
+        }
+        design.heights = heights;
+      }
+      if (ver === VERSION_PROPS) {
+        if (typeof TrackDesignerProps === "undefined" || !TrackDesignerProps.KINDS) return { ok: false, reason: "corrupt" };
+        const n = r.varint(), kinds = TrackDesignerProps.KINDS, max = TrackDesignerProps.TOTAL || 16;
+        if (n > max) return { ok: false, reason: "bounds" };
+        const props = [];
+        for (let i = 0; i < n; i++) {
+          const ki = r.u8(); if (ki >= kinds.length) return { ok: false, reason: "bounds" };
+          const s = fracU16(r.u16()), side = r.u8() ? 1 : -1, gap = r.u8();
+          props.push({ kind: kinds[ki], s, side, gap });
+        }
+        design.props = props;
+      }
       if (r.left !== 0) return { ok: false, reason: "corrupt" };
       return { ok: true, design };
     } catch (e) {
@@ -212,28 +270,31 @@ const TrackCodec = (function () {
       return { ok: false, reason: "corrupt" };
     }
   }
-  /** design → "APXT1.p.…" (or "APXT1.z.…" when deflate is shorter). */
+  /** design → "APXT1.p.…" / "APXT2.p.…" (or ".z.…" when deflate is shorter). */
   async function encode(design) {
     const it = CustomTracks.sanitize(design);
     if (!it) return null;
     let bytes;
     try { bytes = encodeBytes(it, true); } catch (e) { if (typeof Log !== "undefined") Log.warn("track", "share code refused: " + (e && e.message || e)); return null; }
-    const plain = MAGIC + ".p." + b64url(bytes);
+    const magic = "APXT" + bytes[0];
+    const plain = magic + ".p." + b64url(bytes);
     const z = await deflate(bytes);
-    if (z && z.length < bytes.length - 8) { const zc = MAGIC + ".z." + b64url(z); if (zc.length < plain.length) return zc; }
+    if (z && z.length < bytes.length - 8) { const zc = magic + ".z." + b64url(z); if (zc.length < plain.length) return zc; }
     return plain;
   }
-  /** "APXT1.…" → { ok, design (sanitised), id } or { ok: false, reason }. Never throws. */
+  /** "APXT1.…" / "APXT2.…" → { ok, design (sanitised), id } or { ok: false, reason }. Never throws. */
   async function decode(code) {
     try {
       const s = String(code || "").trim();
       if (s.length > MAX_CODE) return { ok: false, reason: "bounds" };
       const m = /^APXT(\d+)\.([pz])\.([A-Za-z0-9_-]+)$/.exec(s);
       if (!m) return { ok: false, reason: "magic" };
-      if (m[1] !== String(VERSION)) return { ok: false, reason: "version" };
+      const outer = +m[1];
+      if (outer !== VERSION && outer !== VERSION_PROPS) return { ok: false, reason: "version" };
       let bytes = unb64url(m[3]);
       if (!bytes) return { ok: false, reason: "corrupt" };
       if (m[2] === "z") { const z = await inflate(bytes); if (!z.ok) return z; bytes = z.bytes; }
+      if (bytes[0] !== outer) return { ok: false, reason: "version" };
       const d = decodeBytes(bytes);
       if (!d.ok) return d;
       const it = CustomTracks.sanitize(d.design);
@@ -273,6 +334,6 @@ const TrackCodec = (function () {
     return null;
   }
 
-  return { MAGIC, VERSION, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
+  return { MAGIC, VERSION, VERSION_PROPS, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
 })();
 Object.freeze(TrackCodec);

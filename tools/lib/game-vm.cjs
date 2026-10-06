@@ -588,7 +588,13 @@ async function createGame(opts) {
   // pitNow, compoundFor, degCost and pits.think are all inert, so ai-pace /
   // ai-field / ai-line / ai-human measure a field that never pits unless the
   // caller asks for wear. They default to off so their recorded numbers hold.
-  const seed = Object.assign({ tyreWear: "off" },
+  //
+  // FACTORY SEAT, same idea: js/data/garage-defaults.js makes a miss-path
+  // player Mercedes with a signature parts kit, which moves stopping envelopes,
+  // tyre peaks, and AI racecraft. This harness pins McLaren + an empty sheet
+  // (the pre-GarageDefaults car) so characterization stays on the driving
+  // model. Callers that want the shipped garage pass storage themselves.
+  const seed = Object.assign({ tyreWear: "off", team: 2, "parts.mclaren": {} },
                              opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));

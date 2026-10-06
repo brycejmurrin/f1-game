@@ -20,7 +20,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -37,7 +37,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   });
   const run=vm.runInContext("("+helper[0].replace(/\n\nconst measure$/,"")+")",ctx);
   const invoke=(fn,arg)=>vm.runInContext("("+fn.toString()+")",ctx)(arg);
-  const page={goto:async()=>{},reload:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
+  const page={goto:async()=>{},reload:async()=>{},addInitScript:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
     waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
     waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
   await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
@@ -188,6 +188,24 @@ test("no HUD position, size or MOVE & SIZE offset is measured in the large viewp
   assert.match(m[1], /--hl-y, 0\) \* 1svh/, "the MOVE & SIZE vertical offset is a share of the small viewport");
 });
 
+// Phone-portrait survey 390×844 ranked tower × map: the centred POS row sits
+// on the top-left minimap. Park map+gaps under --hud-top-h only in that
+// shape; landscape / tablet / desktop keep the shipped top-left cluster.
+test("phone portrait parks the minimap under the timing tower; other shapes keep the corner", () => {
+  const src = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const q = /@media \(orientation: portrait\) and \(max-width: 500px\)\s*\{([^}]+)\}/;
+  const m = src.match(q);
+  assert.ok(m, "a portrait-and-narrow query owns the tower/map stack");
+  assert.match(m[1], /#minimap/);
+  assert.match(m[1], /\.hud-gaps/);
+  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 8px\)/);
+  const baseMap = src.match(/(?:^|\n)#minimap \{\s*position: absolute;([\s\S]*?)\n\}/);
+  assert.ok(baseMap, "shipped #minimap rule");
+  assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
+  assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
+});
+
 const plain = (o) => JSON.parse(JSON.stringify(o));
 const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
 
@@ -315,6 +333,20 @@ test("apply a preset to the edited set, tweak it, CUSTOM detection", () => {
   H.applyPreset("shipped", "cockpit");
   H.applyPreset("shipped", "other");
   assert.equal(written.hudLayout, null);
+});
+
+test("CORNERS on a touch cockpit does not pull ENERGY or TYRES onto the steer column", () => {
+  const T = load3({ classes: [], live: false });
+  const lay = T.H.presetLayout("corners", "cockpit");
+  assert.deepEqual(plain(lay.energy), plain(T.H.get("energy", "cockpit")));
+  assert.deepEqual(plain(lay.tyre), plain(T.H.get("tyre", "cockpit")));
+  assert.equal(lay.energy.x, T.H.SHIPPED.standard.cockpit.energy.x);
+  const helm = T.H.presetLayout("corners", "helmet");
+  assert.deepEqual(plain(helm.energy), plain(T.H.TOUCH_SHIPPED.helmet.energy));
+  assert.deepEqual(plain(helm.gearbox), { x: 0, y: 0, s: 100 });
+  const D = load3({ classes: ["desktop"], live: false });
+  assert.equal(D.H.presetLayout("corners", "cockpit").energy.x, -34, "desktop corners still moves ENERGY");
+  assert.equal(D.H.presetLayout("corners", "other").energy.x, -34);
 });
 
 test("css/track-detail.css: cockpit hides only speed/gear, not the OT/AERO/ENERGY strip", () => {
@@ -583,19 +615,30 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(hc({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("ot"), null);
   assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason("tower"), null);
   assert.equal(h({ live: false }).hiddenReason("flag").soft, true, "event chips are edited blind, not locked");
-  // TOUCH: STRATEGY has a home under the minimap; RELATIVE / INPUTS still wait to be placed.
+  // TOUCH: RELATIVE sits under the minimap, INPUTS under the sector box.
+  // STRATEGY keeps its --hud-left-h home and steps right while RELATIVE is on.
   assert.equal(h({ live: false }).hiddenReason("strat"), null, "touch STRATEGY shows at its touch home");
-  assert.equal(h({ live: false }).hiddenReason("rel").soft, true, "touch RELATIVE still waits to be placed");
+  assert.equal(h({ live: false }).hiddenReason("rel"), null, "touch RELATIVE has a home under the map");
+  assert.equal(h({ live: false }).hiddenReason("inputs"), null, "touch INPUTS has a home under the sectors");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
-  assert.match(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
+  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)/);
+  assert.doesNotMatch(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
   assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
+  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+    "touch RELATIVE uses the same measured left column");
+  assert.match(css, /:has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
+    "STRATEGY steps beside RELATIVE instead of stacking onto PLAN");
   assert.match(css, /:root\[data-limits-left\] #hud-strat/,
     "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body\.steer-touch #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
     "touch sectors take the same --dock-r-w clearance as limits/damage");
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/,
+    "touch #announce sits in the published dock lane, not at 10px+sal over TILT's left dock");
+  assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
+    "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*body\.steer-touch #dock-right \{ anchor-name: --apex-dock-right; \}[\s\S]*body\.steer-touch #hud-sectors \{[^}]*position-anchor: --apex-dock-right;/,
     "touch sectors also tether to the right dock via CSS anchor positioning");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
@@ -679,6 +722,9 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
     assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
   }
   for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
+  // SPEED's second copy is the data-wheel-lcd attribute, not a class, so
+  // hiddenReason stays null (the harness has no wheel) while the CSS hides it.
+  assert.match(TD, /body\[data-helmet-cam\]\[data-wheel-lcd\]:not\(\.desktop\) #hud-speed:not\(\[data-hl-user\]\) \{ display: none; \}/);
   const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
   assert.ok(rule, "the touch-helmet hide rule exists");
   // GEAR sits on the wheel LCD — plate-opaque so SPD/G on the mesh does not ghost through.

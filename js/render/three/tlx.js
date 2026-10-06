@@ -114,6 +114,10 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      // Set by onDeviceLost: abort in-flight compileAsync so warming() cannot
+      // stick true forever (race-start handoff waited on !warming via afterPresent,
+      // and render() returned early while warming — HUD surveys hung).
+      let _deviceLost = false;
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
@@ -277,6 +281,12 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      // Soft-present / capturePixels LDR unstride pool (audit #3): one grow-only
+      // Uint8ClampedArray reused across presents so a 1280×720 soft blit does not
+      // allocate ~3.7 MB of young-gen every frame. Soft blit writes straight into
+      // _softImg.data (no second full-frame copy); capturePixels clones the pool
+      // view so a held screenshot cannot be overwritten by the next read.
+      let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
@@ -825,12 +835,20 @@ const TLX = (function () {
       // background loss, not a crash — same rule as GLX webglcontextlost.
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
+      let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       try {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
         window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
+        // Abort program warm first: compileAsync after a loss often never
+        // settles, and warming()===true makes game.js skip present/afterPresent
+        // forever (handoff card + HUD survey hang). Clear before any reload.
+        _deviceLost = true;
+        _warmRequested = false;
+        _warmPending = null;
+        _warmDone = true;
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -855,8 +873,11 @@ const TLX = (function () {
             return;
           }
           const rk = "apex26.ctxLostReloads";
-          const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
-          sessionStorage.setItem(rk, String(n));
+          let n;
+          try {
+            n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+            sessionStorage.setItem(rk, String(n));
+          } catch (_) { n = ++_sessLostN; }
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -872,7 +893,7 @@ const TLX = (function () {
             } else {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
               try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
-              sessionStorage.setItem("apex26.gfxClaimFail", "1");
+              try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* claim latch best-effort; panel below still paints */ }
               // NO CANARY RE-ARM HERE. It was added on the claim of parity with
               // WGX; WGX does the opposite. wgx.js arms the probe in the ELSE of
               // its reload (`if (skipped) reload(); else setItem(probe)`) and
@@ -891,17 +912,27 @@ const TLX = (function () {
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
             if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
-            else if (typeof window.__apexReportError === "function")
-              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+            else {
+              if (typeof window.__apexReportError === "function")
+                window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+              try {
+                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+                  RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                }
+              } catch (_) { /* picker absent in harness */ }
+            }
           }
-        } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
+        } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
       };
       try {
         canvas.addEventListener("webglcontextrestored",
           function () {
             // Same two-reload budget as the loss handler: an unguarded restore
             // reload looped on a device that loses the context every boot.
-            try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+            // Storage failure must not skip the reload (GLX: dead canvas).
+            var n = 0;
+            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+            if (n > 2) return;
             try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
           }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
@@ -1083,7 +1114,7 @@ const TLX = (function () {
       }
 
       const ENV_SIZE = 64;
-      const ENV_CULL_M = 300;
+      const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
       // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
       // shape with a 2-D target: mirrorBegin (before begin(), like a probe
@@ -2775,13 +2806,20 @@ const TLX = (function () {
         return _blitRT;
       }
       // three pads copyTextureToBuffer rows to 256 bytes (WebGPU rule).
+      function _ensureUnstridePool(need) {
+        if (!_unstridePool || _unstridePool.length < need) {
+          _unstridePool = new Uint8ClampedArray(need);
+        }
+        return _unstridePool.length === need ? _unstridePool : _unstridePool.subarray(0, need);
+      }
       function _unstrideRgba(src, w, h) {
         const bpr = 256 * Math.ceil((w * 4) / 256);
-        const data = new Uint8ClampedArray(w * h * 4);
+        const need = w * h * 4;
+        const data = _ensureUnstridePool(need);
         const row = w * 4;
         if (src.length < (h - 1) * bpr + row) {
           // tight pack fallback (WebGL backend copy)
-          if (src.length >= w * h * 4) data.set(src.subarray(0, w * h * 4));
+          if (src.length >= need) data.set(src.subarray(0, need));
         } else {
           for (let y = 0; y < h; y++) {
             data.set(src.subarray(y * bpr, y * bpr + row), y * row);
@@ -2789,8 +2827,36 @@ const TLX = (function () {
         }
         // SSR car-paint tag is 0.35 in ALPHA — a channel, not opacity.
         // Screenshots and the 2D overlay must not treat it as compositor a.
-        for (let i = 3; i < data.length; i += 4) data[i] = 255;
+        for (let i = 3; i < need; i += 4) data[i] = 255;
         return data;
+      }
+      // Soft blit: unstride + opaque alpha + ink check in ONE pass into ImageData
+      // (drops the intermediate full-frame alloc and the second RGBA walk).
+      function _unstrideIntoSoft(src, w, h, dest) {
+        const bpr = 256 * Math.ceil((w * 4) / 256);
+        const row = w * 4;
+        const need = w * h * 4;
+        let maxPx = 0;
+        if (src.length < (h - 1) * bpr + row) {
+          if (src.length < need) return 0;
+          for (let i = 0; i < need; i += 4) {
+            const r = src[i], g = src[i + 1], b = src[i + 2];
+            dest[i] = r; dest[i + 1] = g; dest[i + 2] = b; dest[i + 3] = 255;
+            const s = r + g + b;
+            if (s > maxPx) maxPx = s;
+          }
+        } else {
+          for (let y = 0; y < h; y++) {
+            const so = y * bpr, d0 = y * row;
+            for (let x = 0; x < row; x += 4) {
+              const r = src[so + x], g = src[so + x + 1], b = src[so + x + 2];
+              dest[d0 + x] = r; dest[d0 + x + 1] = g; dest[d0 + x + 2] = b; dest[d0 + x + 3] = 255;
+              const s = r + g + b;
+              if (s > maxPx) maxPx = s;
+            }
+          }
+        }
+        return maxPx;
       }
       function _readLdr(rt, readW, readH) {
         const w = readW || (rt && rt.width) || W;
@@ -2818,11 +2884,13 @@ const TLX = (function () {
         _softReadPending = true;
         _softReadSince = (typeof performance !== "undefined" ? performance.now() : Date.now());
         let read;
-        try { read = _readLdr(req.rt, req.w, req.h); }
-        catch (_) { _finishSoftBlitRead(); return; }
-        read.then(function (pack) {
+        try {
+          // Raw padded read — _unstrideIntoSoft folds unstride + ink into ImageData.
+          read = renderer.readRenderTargetPixelsAsync(req.rt, 0, 0, req.w, req.h);
+        } catch (_) { _finishSoftBlitRead(); return; }
+        read.then(function (src) {
           try {
-            const w = pack.w, h = pack.h, src = pack.data;
+            const w = req.w, h = req.h;
             // Resize/post-fallback invalidates an older source generation. One
             // in-flight read means same-size frames stay ordered, so do not drop
             // a valid completion merely because a newer frame is queued.
@@ -2831,18 +2899,9 @@ const TLX = (function () {
             if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
               _softImg = _displayCtx.createImageData(w, h);
             }
-            const img = _softImg;
-            let maxPx = 0;
-            for (let i = 0; i < src.length; i += 4) {
-              img.data[i] = src[i];
-              img.data[i + 1] = src[i + 1];
-              img.data[i + 2] = src[i + 2];
-              img.data[i + 3] = 255;
-              const s = src[i] + src[i + 1] + src[i + 2];
-              if (s > maxPx) maxPx = s;
-            }
+            const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
             if (maxPx >= 8) {
-              _displayCtx.putImageData(img, 0, 0);
+              _displayCtx.putImageData(_softImg, 0, 0);
               _softBlitNotify();
             }
             _softReadLastMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince;
@@ -3294,15 +3353,12 @@ const TLX = (function () {
             return;
           }
           const faceCam = envCubeCam.children[face & 7];
-          const faceVP = _envVPArr;
-          const faceCull = (_envFrame && _envFrame.cullDist) || 0;
-          const faceEye = (_envFrame && _envFrame.eye) || null;
           // Software GL: six world presents into a 64px cube miss the 360 s
           // test budget even after skipping city+sky (measured 2026-08-17:
           // M9 timed out at 424 s with park() done and ready still false —
           // each waitForFunction poll sat behind a SwiftShader frame).
           // Clear the face and count it; the main present still paints the
-          // canvas. Real GPUs keep the full world capture.
+          // canvas. Hardware skips chunked/city on this path too (below).
           if (softContent("env")) {
             try {
               renderer.setRenderTarget(envRT, face & 7);
@@ -3327,19 +3383,12 @@ const TLX = (function () {
           _instAlive.clear();
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
-            if (rec.instanced) {
-              _showInstanced(rec, i);
-              continue;
-            }
+            if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
             if (rec.chunked) {
-              // A 64px blurred cube cannot resolve the city. On software GL
-              // the chunked cull+draw is the fill that made M9 miss 360 s
-              // (measured 2026-08-17: six full Monza presents into the cube
-              // after M5 had already left the GPU process at 387%).
+              // A 64px blurred cube cannot resolve the city. Hardware now
+              // skips chunked/city on probe faces the way software already
+              // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
               if (softContent("chunked") || !chunkedSys) continue;
-              const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull, frameCullFog);
-              const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
@@ -3603,7 +3652,9 @@ const TLX = (function () {
               "three.js WebGPU screenshot needs SCREENSHOTS: 2D BLIT (or AUTO on software)"));
           }
           return _readLdr(rt).then(function (pack) {
-            return { width: pack.w, height: pack.h, data: pack.data };
+            // Clone off the unstride pool — callers may hold the buffer across
+            // later soft presents / captures that would otherwise overwrite it.
+            return { width: pack.w, height: pack.h, data: new Uint8ClampedArray(pack.data) };
           });
         },
         awaitSoftPresent(timeoutMs) {
@@ -3670,9 +3721,10 @@ const TLX = (function () {
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         warm() {
+          if (_deviceLost) return;
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
-        warming() { return !!_warmPending; },
+        warming() { return !_deviceLost && !!_warmPending; },
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
         // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
@@ -4176,7 +4228,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (_warmRequested && !_warmPending) startProgramWarm(opts);
+          if (_warmRequested && !_warmPending && !_deviceLost) startProgramWarm(opts);
           if (_warmPending) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
@@ -4644,6 +4696,7 @@ const TLX = (function () {
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
               presents: _presentN, healed: _healTried,
+              ctxLost: !!_deviceLost,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager); tsl-lit's frame block left that group for
               // renderGroup (SHARED_UNIFORMS), so what remains per draw is

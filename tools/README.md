@@ -64,12 +64,14 @@ The test runner and the release pipeline: what to run, how to run it in the back
 |---|---|---|
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
+| **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
+| **ci/ready-gate.mjs** | Gate for marking a PR ready: require green tooling-fast / Structural guards on the tip SHA. | steward |
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
@@ -114,6 +116,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | slim-bloat |
 | **check/skill-smoke.mjs** | Plan or execute one bounded offline contract per canonical skill; retain explicit unverified browser/device scope. | — |
+| **check/traffic-scan-bench.mjs** | Microbench: old full-field traffic/tow/OT scans vs collide arc buckets (22 and 40 cars). | — |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips dividers, closed banners and loc pointers; `--headers` shortens headers; `--narrative` needs explicit paths. | slim-bloat |
 | **check/twin-fidelity.mjs** | Prove a VM twin catches what the browser copy catches — by breaking the | — |
@@ -129,6 +132,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/assets.mjs** | Author-time asset bake CLI: `bake-synthetic[-models]`, `bake-atlas`, `bake-model`, `verify` (licence + md5 + budget). | asset-pack |
 | **gen/bake-elevation.mjs** | Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global. | new-track |
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
+| **gen/garage-defaults.mjs** | Apply an exported GARAGE file to the shipped defaults in `js/data/garage-defaults.js`; `--check` reports drift. | — |
 | **gen/gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift. | check-changes |
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
@@ -386,10 +390,13 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/ready-full-cap.mjs** | Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI. |
+| **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe). |
 | **ci/select-recall.mjs** | Would the selector have caught it? Replays `select-specs` against real past regressions and asserts recall. |
 | **ci/select-specs.mjs** | Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip. |
+| **ci/selected-gate-verdict.mjs** | Selected-specs gate verdict: cancel/red with clean junit is infra-retry, not a hard fail. |
 | **ci/spec-staleness.mjs** | Replays select-specs over recent history to rank tests/specs/*.spec.js by how long since CI last selected one. |
 | **ci/spec-timings.mjs** | Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth. |
 | **ci/test-bg.mjs** | Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`). |
@@ -410,11 +417,11 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
-| **track/clip-baseline.json** | `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
-| **track/coplanar-baseline.json** | `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
+| **track/clip-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
+| **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |
-| **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs` |
+| **track/props-tris-baseline.json** | `ci/select-specs.mjs`, `tests/unit/props-tri-ratchet.test.mjs`, `tests/unit/select-specs.test.mjs` |
 
 ## Conventions
 

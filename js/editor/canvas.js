@@ -10,8 +10,11 @@ const DesignerCanvas = (function () {
   "use strict";
   const S = TrackShape;
   const clamp = M4.clamp;          // the shared scalar (js/core/mat4.js, FULL), never a private copy
-  const HIT_PX = 24;                 // a thumb-sized hit radius around a handle (css px)
-  const HIT_TOUCH = 30;              // …and under a finger (the last pointer seen was touch)
+  const HIT_PX = 28;                 // pick radius around a handle (css px); larger than the drawn dot
+  const HIT_TOUCH = 44;              // …and under a finger (≥44 css px WCAG / Bryce mobile)
+  const DRAG_MOUSE = 6;              // intentional move threshold (mouse) — below this, select only
+  const DRAG_TOUCH = 10;             // …and under a finger
+  const TOUCH_ARM_MS = 140;          // short hold before an unselected touch press may start a drag
   const HOLD_MS = 500, HOLD_PX = 6;  // a long-press: held this long, moved no further
   const STRAIGHT_R = 10000;          // a Menger radius past this reads STRAIGHT (m)
   const LATTICE = 4;                 // 0.25 m — the storage lattice, so a drag never lands off it
@@ -59,6 +62,9 @@ const DesignerCanvas = (function () {
     let taps = [];
     let ptype = "mouse";             // the last pointerType seen: touch widens hits and handles
     let hold = null;                 // a long-press in flight { id, timer }
+    // A press on a handle before a deliberate drag: select-only until the
+    // threshold (and, on touch, a short hold or a prior selection) is met.
+    let press = null;                // { id, i, wasSel, t0, touch }
     let preview = null;              // setTool's ghost: (i) → { pts: [[x, z]…] } | null
     let ghost = null, ghostKey = null; // its last answer, and the (fn, anchor, loop) it answered
     let last = null;                 // the pointer's latest canvas-relative position
@@ -142,15 +148,31 @@ const DesignerCanvas = (function () {
 
     // ── pointer ─────────────────────────────────────────────────────────────
     function local(ev) { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+    function dragThresh() { return (ptype === "touch" || (press && press.touch)) ? DRAG_TOUCH : DRAG_MOUSE; }
     function beginDrag(i, isInsert) {
       work = base.map((p) => [p[0], p[1]]);
       if (isInsert) { work.splice(i, 0, [0, 0]); inserted = true; } else inserted = false;
-      dragI = i; moved = false; mode = "drag"; stale = false;
+      dragI = i; moved = false; mode = "drag"; stale = false; press = null;
       if (hooks.onBegin) hooks.onBegin();
     }
+    /** Promote a select-only press into a real drag once the gesture is deliberate. */
+    function tryArmDrag(p) {
+      if (mode !== "press" || !press || !start) return false;
+      const dist = Math.hypot(p.x - start.x, p.y - start.y);
+      if (dist <= dragThresh()) return false;
+      const held = (Date.now() - press.t0) >= TOUCH_ARM_MS;
+      // Mouse: threshold alone. Touch: already selected, or a short hold, then threshold.
+      const may = press.wasSel || ptype === "mouse" || held;
+      if (!may) return false;
+      cancelHold();
+      beginDrag(press.i, false);
+      moved = true; stale = true;
+      work[dragI] = place(toWX(p.x), toWZ(p.y));
+      return true;
+    }
     // ── long-press ──────────────────────────────────────────────────────────
-    // Held on a handle: hooks.onContext once, and the press becomes "held" — the
-    // drag is dropped (the point goes back), the release ends it, no pick.
+    // Held on a handle: hooks.onContext once, and the press becomes "held" — any
+    // in-flight drag is dropped (the point goes back), the release ends it, no pick.
     function cancelHold() {
       if (!hold) return;
       try { globalThis.clearTimeout(hold.timer); } catch (_) { /* no timers here */ }
@@ -161,10 +183,12 @@ const DesignerCanvas = (function () {
       if (typeof hooks.onContext !== "function" || typeof globalThis.setTimeout !== "function") return;
       const me = { id, i, timer: null };
       me.timer = globalThis.setTimeout(() => {
-        if (hold !== me || mode !== "drag" || dragI !== i || pointers.size !== 1 || !pointers.has(id)) return;
+        if (hold !== me || (mode !== "press" && mode !== "drag") || pointers.size !== 1 || !pointers.has(id)) return;
+        if (mode === "drag" && dragI !== i) return;
+        if (mode === "press" && (!press || press.i !== i)) return;
         hold = null;
         const p = pointers.get(id);
-        work = null; stale = false; dragI = -1; moved = false; inserted = false; mode = "held";
+        work = null; stale = false; dragI = -1; moved = false; inserted = false; press = null; mode = "held";
         if (taps.length) taps[taps.length - 1] = { kind: "context", i };
         render();
         hooks.onContext(i, { x: p.x, y: p.y });
@@ -182,7 +206,7 @@ const DesignerCanvas = (function () {
       if (pointers.size >= 2) cancelHold();
       if (pointers.size === 2) {
         // A second finger turns whatever was happening into a pinch; a drag is abandoned.
-        if (mode === "drag" || mode === "held") { work = null; stale = false; dragI = -1; }
+        if (mode === "drag" || mode === "held" || mode === "press") { work = null; stale = false; dragI = -1; press = null; }
         if (mode === "draw") { path = null; }
         const [a, b] = [...pointers.values()];
         pinch0 = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, scale, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, wx: toWX((a.x + b.x) / 2), wz: toWZ((a.y + b.y) / 2) };
@@ -196,9 +220,13 @@ const DesignerCanvas = (function () {
       if (tool === "draw") { mode = "draw"; path = [[toWX(p.x), toWZ(p.y)]]; render(); return; }
       const i = hitHandle(p.x, p.y);
       if (i >= 0) {
+        // Select first — never move on down. A later deliberate drag (threshold /
+        // already-selected / short touch hold) promotes this press into a move.
         taps[taps.length - 1] = { kind: "pick", i };
-        beginDrag(i, false);
+        const wasSel = sel === i;
         if (sel !== i) { sel = i; if (hooks.onSelect) hooks.onSelect(i); }
+        press = { id: ev.pointerId, i, wasSel, t0: Date.now(), touch: ptype === "touch" };
+        mode = "press";
         armHold(ev.pointerId, i);
         render();
         return;
@@ -212,6 +240,7 @@ const DesignerCanvas = (function () {
         render();
         return;
       }
+      // Empty space: pan. Never hits a node, so it never moves one.
       mode = "pan";
     }
     function onMove(ev) {
@@ -236,8 +265,12 @@ const DesignerCanvas = (function () {
         render();
         return;
       }
+      if (mode === "press") {
+        if (tryArmDrag(p)) { render(); return; }
+        return;
+      }
       if (mode === "drag" && work) {
-        if (!moved && Math.hypot(p.x - start.x, p.y - start.y) > 3) { moved = true; stale = true; }
+        if (!moved && Math.hypot(p.x - start.x, p.y - start.y) > dragThresh()) { moved = true; stale = true; }
         if (moved || inserted) work[dragI] = place(toWX(p.x), toWZ(p.y));
         render();
         return;
@@ -248,8 +281,8 @@ const DesignerCanvas = (function () {
         return;
       }
       if (mode === "draw" && path) {
-        const last = path[path.length - 1], wx = toWX(p.x), wz = toWZ(p.y);
-        if (Math.hypot(wx - last[0], wz - last[1]) >= Math.max(1.5, 2 / scale)) path.push([wx, wz]);
+        const lastPt = path[path.length - 1], wx = toWX(p.x), wz = toWZ(p.y);
+        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) path.push([wx, wz]);
         render();
       }
     }
@@ -258,11 +291,19 @@ const DesignerCanvas = (function () {
       cancelHold();
       pointers.delete(ev.pointerId);
       try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
-      if (mode === "held") { mode = "none"; render(); return; }
+      if (mode === "held") { mode = "none"; press = null; render(); return; }
       if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
+      if (mode === "press") {
+        // Tap / click / below-threshold jitter: select only — coordinates unchanged.
+        const i = press ? press.i : -1;
+        press = null; mode = "none";
+        if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey });
+        render();
+        return;
+      }
       if (mode === "drag") {
         if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
-        const out = work; work = null; mode = "none"; stale = false;
+        const out = work; work = null; mode = "none"; stale = false; press = null;
         if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, inserted ? "insert" : "move"); }
         else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey });
         dragI = -1; render();
@@ -274,7 +315,7 @@ const DesignerCanvas = (function () {
         render();
         return;
       }
-      mode = "none";
+      mode = "none"; press = null;
       if (hooks.onView) hooks.onView(view());
     }
     // pointercancel AND lostpointercapture: a dialog hidden mid-drag takes the
@@ -289,7 +330,7 @@ const DesignerCanvas = (function () {
     }
     function reset() {
       cancelHold();
-      pointers.clear(); taps = []; last = null;
+      pointers.clear(); taps = []; last = null; press = null;
       work = null; path = null; pinch0 = null; mode = "none"; dragI = -1; inserted = false; moved = false; stale = false; hover = -1;
       render();
     }
@@ -309,7 +350,15 @@ const DesignerCanvas = (function () {
     }
     // Keyboard: the canvas owns its arrows while a point is selected
     // (js/ui/menu-nav.js stands aside for a focused <canvas> unless it says
-    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] walk the selection.
+    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] / Tab walk the
+    // selection; Escape clears it.
+    function cycleSel(dir) {
+      const N = base.length; if (!N) return;
+      hover = -1;
+      sel = sel < 0 ? (dir > 0 ? 0 : N - 1) : (sel + dir + N) % N;
+      if (hooks.onSelect) hooks.onSelect(sel);
+      render();
+    }
     function onKey(ev) {
       const pts = base, N = pts.length;
       if (!N) return;
@@ -320,8 +369,10 @@ const DesignerCanvas = (function () {
         case "ArrowRight": dx = step; break;
         case "ArrowUp": dz = -step; break;
         case "ArrowDown": dz = step; break;
-        case "[": hover = -1; sel = (Math.max(sel, 0) - 1 + N) % N; if (hooks.onSelect) hooks.onSelect(sel); render(); ev.preventDefault(); return;
-        case "]": hover = -1; sel = (sel + 1) % N; if (hooks.onSelect) hooks.onSelect(sel); render(); ev.preventDefault(); return;
+        case "[": cycleSel(-1); ev.preventDefault(); return;
+        case "]": cycleSel(1); ev.preventDefault(); return;
+        case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
+        case "Escape": if (sel >= 0) { sel = -1; span = -1; if (hooks.onSelect) hooks.onSelect(-1); render(); ev.preventDefault(); } return;
         case "Delete": case "Backspace": if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;
         default: return;
@@ -451,11 +502,21 @@ const DesignerCanvas = (function () {
         for (let n = 0; n < N && i !== span; n++) { i = (i + 1) % N; g.lineTo(toSX(pts[i][0]), toSY(pts[i][1])); }
         g.strokeStyle = COL.span; g.lineWidth = 6; g.stroke();
       }
+      const touch = ptype === "touch";
       for (let i = 0; i < N; i++) {
         const sx = toSX(pts[i][0]), sy = toSY(pts[i][1]);
         if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
-        const isSel = i === sel || (i === dragI && mode === "drag");
-        const r = (isSel ? 7 : i === hover ? 6 : 4.5) * (ptype === "touch" ? 1.5 : 1);
+        const isSel = i === sel || (i === dragI && mode === "drag") || (press && press.i === i);
+        const r = (isSel ? 7 : i === hover ? 6 : 4.5) * (touch ? 1.5 : 1);
+        // Soft hit halo under a finger so the ≥44 px target reads on the map.
+        if (touch && (isSel || i === hover)) {
+          g.beginPath(); g.arc(sx, sy, HIT_TOUCH / 2, 0, Math.PI * 2);
+          g.fillStyle = isSel ? "rgba(225,6,0,0.14)" : "rgba(246,246,249,0.06)"; g.fill();
+        }
+        if (isSel) {
+          g.beginPath(); g.arc(sx, sy, r + 5, 0, Math.PI * 2);
+          g.strokeStyle = COL.sel; g.lineWidth = 2.5; g.stroke();
+        }
         g.beginPath();
         if (i === 0) g.rect(sx - r - 1, sy - r - 1, 2 * r + 2, 2 * r + 2); else g.arc(sx, sy, r, 0, Math.PI * 2);
         g.fillStyle = isSel ? COL.sel : i === 0 ? COL.start : COL.handle;
@@ -496,12 +557,13 @@ const DesignerCanvas = (function () {
     // its middle. { text, x, y } in css px, or null.
     function chip() {
       const pts = work || base, N = pts.length;
-      if (mode === "drag" && work && dragI >= 0 && N >= 3) {
-        const R = S.menger(pts[(dragI - 1 + N) % N], pts[dragI], pts[(dragI + 1) % N]);
-        const at = last || { x: toSX(pts[dragI][0]), y: toSY(pts[dragI][1]) };
+      const chipI = mode === "drag" && work && dragI >= 0 ? dragI : (mode === "press" && press ? press.i : -1);
+      if (chipI >= 0 && N >= 3) {
+        const R = S.menger(pts[(chipI - 1 + N) % N], pts[chipI], pts[(chipI + 1) % N]);
+        const at = last || { x: toSX(pts[chipI][0]), y: toSY(pts[chipI][1]) };
         return { text: Number.isFinite(R) && R < STRAIGHT_R ? "R " + Math.round(R) + " m" : "STRAIGHT", x: at.x + 18, y: at.y - 26 };
       }
-      if (mode === "drag" || sel < 0 || span < 0 || sel === span || sel >= N || span >= N) return null;
+      if (mode === "drag" || mode === "press" || sel < 0 || span < 0 || sel === span || sel >= N || span >= N) return null;
       const seg = [];
       let L = 0;
       for (let i = sel, n = 0; n < N && i !== span; n++) { const j = (i + 1) % N, d = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]); seg.push([i, j, d]); L += d; i = j; }
@@ -589,6 +651,6 @@ const DesignerCanvas = (function () {
     return true;
   }
 
-  return { create, thumb, HIT_PX, HIT_TOUCH, HOLD_MS, COL };
+  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS, HOLD_MS, COL };
 })();
 Object.freeze(DesignerCanvas);

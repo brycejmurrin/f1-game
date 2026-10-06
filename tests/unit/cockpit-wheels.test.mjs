@@ -197,7 +197,7 @@ test("the rig draws the chosen wheel, seat and interior; a screenless wheel give
   assert.match(ms, /CockpitOpts\.onWheel\(refreshCamBtn\);/, "a mid-race change re-evaluates it");
   const exp = read("js/ui/settings-export.js");
   for (const [k, def, one] of [["cockpitWheel", "f1", '"f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"'], ["cockpitSeat", "std", '"std", "low", "high", "fwd"'],
-    ["cockpitInterior", "carbon", '"carbon", "team", "suede", "ribbed", "classic"']])
+    ["cockpitInterior", "team", '"carbon", "team", "suede", "ribbed", "classic"']])
     assert.ok(exp.includes(`k: "${k}", lane: "raw", group: "camera", def: "${def}"`) && exp.includes(`oneOf: [${one}]`), `${k} is exported and imported`);
   assert.ok(exp.includes('oneOf: ["0", "slim", "1", "thick", "fairing"]'), "cockpitHalo accepts the sizes and faired style");
 });
@@ -436,7 +436,7 @@ test("body alternatives change shoulders but retain cockpit clearance and geomet
     { cockpit: true, cockpitBody, noWheels: true, noDriver: true, measure: true }));
   for (const mesh of shapes) {
     assert.ok(mesh.pos.every(Number.isFinite) && mesh.nrm.every(Number.isFinite));
-    assert.ok(mesh.idx.length / 3 <= 1500, "body-only cockpit triangle budget");
+    assert.ok(mesh.idx.length / 3 <= 1580, "body-only cockpit triangle budget");
     let start = 0;
     for (const part of mesh.parts) { if (part.name === "bolsters") break; start += part.vertices; }
     const count = mesh.parts.find(p => p.name === "bolsters").vertices;

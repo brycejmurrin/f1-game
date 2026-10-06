@@ -12,7 +12,7 @@
         bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront, forestEdge,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
-        scaffoldStand, bleacher, acacia, circuitKit,
+        scaffoldStand, bleacher, acacia, circuitKit, ledFacadeBands, terrainYAt, neonSign,
       } = api;
 
       const { cx, cz, radius: rad } = lapBounds();
@@ -30,18 +30,28 @@
       const GREYWHITE  = [0.80, 0.82, 0.84];
       const PALM_GREEN = [0.20, 0.55, 0.25];
       const PALM_DARK  = [0.16, 0.45, 0.20];
+      const PALM_LIME  = [0.28, 0.62, 0.30];
+      const PALM_OLIVE = [0.18, 0.40, 0.22];
       const GLASS      = [0.55, 0.72, 0.78];
       const CONCRETE   = [0.70, 0.70, 0.72];
       const WATER      = [0.13, 0.46, 0.62];
       const WATER_DEEP = [0.08, 0.32, 0.48];
       // Dolphins aqua runoff — COL.aquaRunoff when shared kit is present
       const AQUA       = (COL && COL.aquaRunoff) || [0.12, 0.72, 0.78];
-      const PASTELS    = [TEAL, CORAL, PINK, [0.75, 0.90, 1.0], [1.0, 0.85, 0.55]];
-      // Night/emissive colours
+      const PASTELS    = [
+        TEAL, CORAL, PINK,
+        [0.75, 0.90, 1.0], [1.0, 0.85, 0.55],
+        [0.95, 0.72, 0.78], [0.55, 0.85, 0.90], [0.98, 0.90, 0.70],
+      ];
+      // Night/emissive colours (HDR >1 so Hard Rock / marina neon reads at night)
       const LAMP_WARM  = [1.0,  0.92, 0.70];
       const FLOOD_WH   = [0.98, 0.97, 0.92];
       const WIN_AMBER  = [1.0,  0.88, 0.55];
       const WIN_COOL   = [0.68, 0.85, 1.0];
+      const NEON_PINK  = [1.55, 0.28, 1.15];
+      const NEON_CYAN  = [0.25, 1.45, 1.55];
+      const NEON_MAG   = [1.40, 0.20, 0.85];
+      const PALM_COLS  = [PALM_GREEN, PALM_DARK, PALM_LIME, PALM_OLIVE];
 
       // Miami skyline building palette — pastel tropical glass towers
       const SKY_PAL = [
@@ -230,7 +240,7 @@
         }
       }
 
-      // ── Hard Rock Stadium — coral/teal rim bowl (wave-2 crowd denser) ─────
+      // ── Hard Rock Stadium — coral/teal rim bowl + night neon hero ────────
       // Not a required modelGroup: the 132×100 m ellipse at gap 155 reaches the
       // pit-straight edge, so a whole-bowl footprint test rejects every build.
       // Individual prims still go through rejBox; the silhouette is the hero.
@@ -255,11 +265,12 @@
           const segW = 19;
           addBox(out, vadd(vadd(c, u, h * 0.5),  rad2,  6), [12, h + 2, segW], GREYWHITE, [rad2, u, tan]);
           addBox(out, vadd(vadd(c, u, h + 10),   rad2,  9), [11, 18, segW + 1], WHITE,     [rad2, u, tan]);
+          // DETAIL: HDR neon rim so the bowl reads at night (survey sheet-04)
           addBox(out, vadd(vadd(c, u, h + 20.9), rad2,  9), [12, 4.2, segW + 2],
-            (i % 2) ? CORAL : TEAL, [rad2, u, tan]);
+            (i % 2) ? NEON_PINK : NEON_CYAN, [rad2, u, tan]);
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h + 18), rad2, 10.5), [2.2, 2.4, segW],
-              AQUA, [rad2, u, tan]);
+              NEON_MAG, [rad2, u, tan]);
           if (i % 2 === 0)
             addBox(out, vadd(vadd(c, u, h * 0.6), rad2, 0), [1.5, h * 0.65, segW - 2],
               PASTELS[(i * 3) % PASTELS.length], [rad2, u, tan]);
@@ -286,15 +297,52 @@
           [0.82, 0.84, 0.86], 48, [r, u, t]);
         addFrustum(out, vadd(stadiumBase, u, 55), 120, 76, 0.8,
           [0.55, 0.55, 0.57], 48, [r, u, t]);
+        // DETAIL: top neon ring (readable night cue even when rim segments reject)
+        addFrustum(out, vadd(stadiumBase, u, 74.5), 122, 78, 1.6,
+          NEON_PINK, 48, [r, u, t]);
+        addFrustum(out, vadd(stadiumBase, u, 76.2), 118, 74, 1.2,
+          NEON_CYAN, 48, [r, u, t]);
         for (let i = 0; i < 8; i++) {
           const ang = i / 8 * 6.2832;
           const ex = Math.cos(ang) * (RA - 22), ez = Math.sin(ang) * (RB - 22);
           const hc = vadd(vadd(stadiumBase, t, ex), r, ez);
-          addBox(out, [hc[0], stadiumFloorY + 5, hc[2]], [15, 11, 15],
+          // Seat hospitality cubes on terrain (ground-audit unsupported @295)
+          const ty = (typeof terrainYAt === "function" && terrainYAt(hc[0], hc[2]));
+          const baseY = (ty != null ? ty : stadiumFloorY);
+          addBox(out, [hc[0], baseY + 5.5, hc[2]], [15, 11, 15],
             (i % 2) ? TEAL : CORAL, null);
-          addBox(out, [hc[0], stadiumFloorY + 11.2, hc[2]], [15.2, 1.0, 15.2],
-            [WIN_AMBER[0] * 0.65, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], null);
+          addBox(out, [hc[0], baseY + 11.7, hc[2]], [15.2, 1.0, 15.2],
+            (i % 2) ? NEON_CYAN : NEON_PINK, null);
         }
+      }
+
+      // Hard Rock neon landmark — compact guitar-neck / LED tower near S/F
+      // (whole-bowl footprint rejects; this required group is the night hero).
+      {
+        const a = anchor(K(0.008), 1, 118);
+        const bv = [a.r, a.u, a.t];
+        const ty = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+        const base = [a.c[0], (ty != null ? ty : a.c[1]), a.c[2]];
+        modelGroup("miami-hard-rock-neon", {
+          center: vadd(base, a.u, 28), size: [18, 58, 18], basis: bv,
+        }, (stage) => {
+          addCyl(stage, base, 4.2, 8, CONCRETE, 10, bv);
+          addCyl(stage, vadd(base, a.u, 8), 3.4, 36, GREYWHITE, 10, bv);
+          if (typeof ledFacadeBands === "function") {
+            ledFacadeBands(vadd(base, a.u, 10), 34, {
+              r: 4.0, bands: 10, seg: 10, basis: bv,
+              cols: [NEON_PINK, NEON_CYAN, NEON_MAG, NEON_CYAN, NEON_PINK],
+            });
+          } else {
+            for (let i = 0; i < 8; i++)
+              addFrustum(stage, vadd(base, a.u, 12 + i * 4),
+                4.2, 3.2, 1.6, [NEON_PINK, NEON_CYAN][i % 2], 10, bv);
+          }
+          // Guitar-head silhouette cue
+          addBox(stage, vadd(base, a.u, 48), [10, 4.5, 6], NEON_PINK, bv);
+          addBox(stage, vadd(vadd(base, a.t, 4), a.u, 50), [3.5, 2.2, 8], NEON_CYAN, bv);
+          addCyl(stage, vadd(base, a.u, 52), 0.35, 6, GREYWHITE, 5, bv);
+        }, { required: true });
       }
 
       {
@@ -312,7 +360,22 @@
           building(K(0.0), -1, 13, 22, 9, 120, { kind: "hall", wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         }
         building(K(0.0), -1, 42, 26, 22, 120,
-          { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER });
+          { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER, neon: 0 });
+        // DETAIL: closed end walls on the pit grandstand block (local; not city.js)
+        // Vertical faces only — a roof slab fought grandstandEx flatCoplanar.
+        for (const endS of [0.0, 0.048]) {
+          const ak = anchor(K(endS), -1, 42);
+          const bv = [ak.r, ak.u, ak.t];
+          if (onTrack(ak.c[0], ak.c[2], 14)) continue;
+          modelGroup(`miami-pit-end-shell-${endS === 0 ? "s" : "n"}`, {
+            center: vadd(ak.c, ak.u, 11), size: [28, 24, 6], basis: bv,
+          }, (st) => {
+            addBox(st, vadd(vadd(ak.c, ak.t, endS === 0 ? -3.2 : 3.2), ak.u, 11),
+              [24, 20, 1.6], WHITE, bv);
+            addBox(st, vadd(vadd(ak.c, ak.t, endS === 0 ? -2.2 : 2.2), ak.u, 11),
+              [20, 16, 0.8], GREYWHITE, bv);
+          });
+        }
         // pit wall
         wall(0.0, 0.05, -1, 2.2, 1.1, GREYWHITE);
       }
@@ -348,7 +411,7 @@
         const flick = PASTELS[Math.floor(hash(i * 7 + 3) * PASTELS.length) % PASTELS.length];
         grandstandEx(s, side, 18, 95 + i * 5, null, flick, {
           livery: T1_STANDS[i], tiers: i === 0 ? 2 : 1,
-          roof: (i % 2) ? "truss" : "cantilever", endWalls: i === 0,
+          roof: (i % 2) ? "truss" : "cantilever", endWalls: true,
         });
       }
       cityFront(0.04, 0.12, 1, 30, {
@@ -391,38 +454,47 @@
       }
       guardrail(0.26, 0.38, 1, 2.8, GREYWHITE);
 
+      // DETAIL: marina water-edge bollards (beyond pontoon; no extra groundPatch —
+      // a second apron fought pontoon flatCoplanar +4 spots).
+      along(0.272, 0.368, 18, (k) => {
+        const a = anchor(k, 1, 8.2), bv = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 5)) return;
+        addCyl(out, vadd(a.c, a.u, 0.15), 0.26, 1.05, [0.72, 0.70, 0.68], 6, bv);
+      });
+
       // Draped paint (place() sank these 5-6 cm strips 0.74 m under grade:
       // 148 invisible boxes), 0.2 m over grade so it reads on the pontoon.
       along(0.265, 0.375, 8, (k) => {
         drape(k, 1, 6.075, [0.45, 0.06, 8], WHITE, { res: 0, phase: 0, h: 0.2 });   // painted vinyl boundary
         drape(k, 1, 6.55, [0.7, 0.05, 8], [0.34, 0.34, 0.36], { res: 0.03, phase: 0, h: 0.2 });  // asphalt showing through
       });
-      // Moored rank — one hull repeated at a fixed berth pitch, bows all the
-      // same way. A real harbour never looks this regular; a boat show does.
-      along(0.272, 0.368, 22, (k) => {
+      // Moored rank — denser berth pitch (DETAIL: yacht densify, still instanced)
+      along(0.272, 0.368, 16, (k) => {
         const a = anchor(k, 1, 26 + (k & 1) * 10), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 9)) return;
-        const L = 15, W = 4.4;
+        const L = 14 + hash(k * 3) * 3, W = 4.2 + hash(k * 5) * 0.6;
+        const hull = (k % 5 === 0) ? [0.18, 0.20, 0.26]
+          : ((k % 4 === 1) ? [0.96, 0.92, 0.86] : WHITE);
         modelGroup(`miami-berth-${k}`, {
           center: vadd(a.c, a.u, 4), size: [W + 1, 9, L + 1], basis: bv,
         }, (st) => {
-          // Hull sits ON the sheet, not in it — the flat bottom is visible.
-          addBox(st, vadd(a.c, a.u, 1.5), [W, 2.6, L], WHITE, bv);
+          // Hull sits ON the sheet (no separate foot pad — that fought flatCoplanar)
+          addBox(st, vadd(a.c, a.u, 1.5), [W, 2.6, L], hull, bv);
           addBox(st, vadd(a.c, a.u, 2.9), [W + 0.2, 0.5, L],
-                 (k % 3 === 0) ? TEAL : ((k % 3 === 1) ? CORAL : PINK), bv);
+                 PASTELS[k % PASTELS.length], bv);
           addBox(st, vadd(vadd(a.c, a.t, -1.5), a.u, 4.2), [W * 0.7, 2.2, L * 0.42], GREYWHITE, bv);
           addBox(st, vadd(vadd(a.c, a.t, -1.5), a.u, 4.9), [W * 0.74, 0.9, L * 0.44], GLASS, bv);
           addCyl(st, vadd(a.c, a.u, 5.4), 0.14, 4.5, GREYWHITE, 4, bv);
         });
       });
 
-      // Fewer larger yacht silhouettes (6 boats, not ~50)
-      for (let i = 0; i < 6; i++) {
-        const k = K(0.275 + i * 0.018);
-        const a = anchor(k, 1, 46 + (i % 3) * 11);   // beyond the promenade palms and the 26/36 m berth rank (was 18 + 14i: clipped both)
+      // Larger yacht silhouettes — densify 6 → 9 (still cheap boxes)
+      for (let i = 0; i < 9; i++) {
+        const k = K(0.273 + i * 0.012);
+        const a = anchor(k, 1, 46 + (i % 3) * 11);
         const c = vadd(a.c, a.t, (i % 2 ? 8 : -8));
-        const len = 22 + hash(i * 4) * 16;          // 22–38 m hulls
-        const trim = (i % 3 === 0) ? TEAL : ((i % 3 === 1) ? CORAL : PINK);
+        const len = 20 + hash(i * 4) * 18;
+        const trim = PASTELS[i % PASTELS.length];
         const bv = [a.r, a.u, a.t];
         modelGroup(`marina-yacht-${i}`, {
           center: vadd(c, a.u, 12), size: [7, 26, len], basis: bv,
@@ -433,7 +505,7 @@
           addBox(yacht, vadd(c, a.u, 6.6),      [3.2, 2.0, len * 0.34], GLASS,     bv);
           addCyl(yacht, vadd(c, a.u, 7.4), 0.22, 12 + hash(i) * 4, GREYWHITE, 5, bv);
           addBox(yacht, vadd(c, a.u, 5.2), [5.1, 0.5, len * 0.54],
-            [WIN_AMBER[0] * 0.6, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], bv);
+            (i % 2) ? NEON_CYAN : [WIN_AMBER[0] * 0.6, WIN_AMBER[1] * 0.5, WIN_AMBER[2] * 0.15], bv);
         });
       }
 
@@ -488,6 +560,7 @@
         const flick = PASTELS[Math.floor(hash(i * 11 + 5) * PASTELS.length) % PASTELS.length];
         grandstandEx(0.43 + i * 0.035, -1, 22, 85 + i * 10, null, flick, {
           livery: STADIUM_STANDS[i], roof: (i === 1) ? "flat" : "cantilever",
+          endWalls: true,
         });
       }
       cityFront(0.42, 0.53, -1, 24, {
@@ -544,6 +617,20 @@
         thickness: 1.0, depth: 3.2, supportGap: 5.5, supportWidth: 1.4,
         color: CORAL, required: true,
       });
+      // DETAIL: bridge abutment pads OUTSIDE overheadSpan supports (gap>supportGap+width)
+      // — earlier gap 6.2 clipped the span emitBox (severe @0.405 / minor @0.235).
+      for (const [sf, col] of [[0.235, TEAL], [0.405, CORAL]]) {
+        for (const side of [-1, 1]) {
+          const a = anchor(K(sf), side, 9.5);
+          const bv = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          const ty = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+          const base = [a.c[0], (ty != null ? ty : a.c[1]), a.c[2]];
+          addBox(out, vadd(base, a.u, 0.3), [3.2, 0.55, 3.6], CONCRETE, bv);
+          addBox(out, vadd(base, a.u, 1.1), [2.2, 1.4, 2.4], GREYWHITE, bv);
+          addBox(out, vadd(base, a.u, 1.9), [2.6, 0.35, 2.8], col, bv);
+        }
+      }
 
       if (circuitKit) {
         circuitKit.serviceCompound({
@@ -665,7 +752,25 @@
           lit: true, windowCol: WIN_AMBER,
           // The neon eyebrow — the one detail every Ocean Drive photograph has.
           roof: (K(s) % 2) ? TEAL : PINK,
+          neon: 0.55,
         });
+      }
+      // DETAIL: extra pastel street masses (variety beyond the Deco six)
+      const PASTEL_EXTRA = [
+        [0.508, "podium",  [0.95, 0.72, 0.78], 14],
+        [0.545, "slab",    [0.55, 0.85, 0.90], 12],
+        [0.580, "setback", [0.98, 0.90, 0.70], 15],
+      ];
+      for (const [s, kind, wallCol, h] of PASTEL_EXTRA) {
+        building(K(s), 1, 28, 16, h, 14, {
+          kind, wall: wallCol, window: GLASS, floor: 3.6,
+          lit: true, windowCol: WIN_COOL, neon: 0.4,
+          roof: PASTELS[Math.floor(s * 20) % PASTELS.length],
+        });
+      }
+      if (typeof neonSign === "function") {
+        neonSign(K(0.52), 1, 14, 12, NEON_PINK);
+        neonSign(K(0.30), 1, 16, 10, NEON_CYAN);
       }
 
       // 0.635 sat on the T17 hairpin (15 m radius) once the bogus
@@ -691,6 +796,7 @@
         const flick = PASTELS[Math.floor(hash(i * 13 + 9) * PASTELS.length) % PASTELS.length];
         grandstandEx(0.77 + i * 0.025, -1, 20, 80, null, flick, {
           livery: i === 1 ? "pastel" : "teal", tiers: 2, roof: "flat",   // truss beams outlived a rejected deck and floated
+          endWalls: true,
         });
       }
       scaffoldStand(0.7626, 0.7774, -1, 20, {
@@ -725,7 +831,9 @@
       const FINAL_STANDS = ["pastel", "teal"];
       for (let i = 0; i < 2; i++) {
         const flick = PASTELS[Math.floor(hash(i * 17 + 2) * PASTELS.length) % PASTELS.length];
-        grandstandEx(0.88 + i * 0.035, -1, 18, 80, null, flick, { livery: FINAL_STANDS[i] });
+        grandstandEx(0.88 + i * 0.035, -1, 18, 80, null, flick, {
+          livery: FINAL_STANDS[i], endWalls: true,
+        });
       }
       for (let i = 0; i < 14; i++) {
         palm(K(0.88 + i * 0.006), (i % 2) ? 1 : -1, 16 + (i % 3) * 5, 8 + hash(i * 4) * 2,
@@ -760,26 +868,27 @@
         bush(K(0.72 + i * 0.006), -1, 6 + (i % 2) * 3, PALM_GREEN);
         bush(K(0.05 + i * 0.005),  1, 6 + (i % 2) * 3, PALM_DARK);
       }
-      // Scatter palms on infield-adjacent edges
-      for (let i = 0; i < 24; i++) {
-        const s = i / 24;
+      // Scatter palms on infield-adjacent edges (DETAIL: more + colour variety)
+      for (let i = 0; i < 32; i++) {
+        const s = i / 32;
         const side = (i % 2) ? 1 : -1;
         palm(K(s + 0.002), side, 24 + hash(i * 31) * 14, 7 + hash(i * 13) * 4,
-          (i % 2) ? PALM_GREEN : PALM_DARK);
+          PALM_COLS[i % PALM_COLS.length]);
       }
 
       const palmRow = (s0, s1, side, dist, stepM, hBase) => {
         along(s0, s1, stepM, (k) => {
           palm(k, side, dist + (k & 1) * 1.5, hBase + hash(k * 29 + side) * 2.5,
-               (k & 1) ? PALM_GREEN : PALM_DARK);
+               PALM_COLS[(k + side + 2) & 3]);
         });
       };
-      palmRow(0.26, 0.38,  1, 15, 26, 9.0);    // marina promenade
-      palmRow(0.26, 0.38, -1, 16, 32, 8.5);
-      palmRow(0.72, 0.88, -1, 14, 26, 9.0);    // back-straight campus road
-      palmRow(0.72, 0.88,  1, 16, 34, 8.0);
-      palmRow(0.60, 0.72, -1, 18, 34, 8.5);    // Turnpike service road
-      palmRow(0.38, 0.55,  1, 16, 34, 8.5);    // stadium-lot perimeter
+      palmRow(0.26, 0.38,  1, 15, 20, 9.0);    // marina promenade denser
+      palmRow(0.26, 0.38, -1, 16, 26, 8.5);
+      palmRow(0.72, 0.88, -1, 14, 22, 9.0);    // back-straight campus road
+      palmRow(0.72, 0.88,  1, 16, 28, 8.0);
+      palmRow(0.60, 0.72, -1, 18, 28, 8.5);    // Turnpike service road
+      palmRow(0.38, 0.55,  1, 16, 26, 8.5);    // stadium-lot perimeter
+      palmRow(0.48, 0.58,  1, 20, 22, 9.5);    // beach-club palm belt
       const LIVE_OAK = [0.22, 0.38, 0.20];
       // Kept clear of the stadium-lot cityFront (side -1, 24-46 m): a species
       // call guards against the ROAD only, never against a building already

@@ -157,6 +157,11 @@ const FULL = [
   // header), and ahead of everything that reads a preference for the same
   // reason. Pure data with no dependencies of its own.
   "js/data/settings-defaults.js",
+  // Shipped GARAGE defaults (parts / liveries / setups / team / driver). Same
+  // miss-path as settings-defaults: GameStore.get consults GarageDefaults
+  // after SettingsDefaults, so a stored player garage still wins. Generated
+  // from an apex26-garage-v1 export via tools/gen/garage-defaults.mjs.
+  "js/data/garage-defaults.js",
   "js/core/store.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
@@ -197,6 +202,7 @@ const FULL = [
   // registry that appends the player's saved circuits to Tracks.LIST at eval,
   // before game.js resolves the stored trackId. The editor itself is LAZY.
   "js/editor/track-themes.js",   // TrackThemes: preset def fields + generated scenery closure (reads TrackSceneryData at eval)
+  "js/editor/props.js",          // TrackDesignerProps: capped scenery props (sanitize + dress); FULL so sync()/share see them
   "js/editor/custom-tracks.js",  // CustomTracks: apex26.customTracks → TrackDef.fromRaw → Tracks.LIST tail (`custom: true`); sync() at eval
   "js/car/helmets.js",
   "js/car/car-geometry.js",
@@ -413,7 +419,7 @@ const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
   "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
-  "css/carsetup.css", "css/hud.css", "css/touch-controls.css", "css/overlays.css",
+  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/responsive.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
@@ -424,20 +430,21 @@ const CSS = [
   "css/cockpit-preview.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
-// block; the components family retains its original preload coverage.
+// block. Dialogs/settings load print→all without a competing high-priority
+// preload (title LCP vs a fast SETTINGS tap: accept no FOUC on a warm cache /
+// already-in-flight print sheet, not a second 79 KB of preload contention).
 const CSS_PRELOAD = [
-  "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/dialog-platform.css",
+  "css/tokens.css", "css/components.css", "css/title.css", "css/menus.css",
+  "css/responsive.css",
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 // Title paints #overlay / #title / #menu-buttons (tokens, components, title,
 // menus, responsive). Everything below is a [hidden] screen or dialog at
-// first paint — defer it. Settings/dialogs stay in CSS_PRELOAD so a fast
-// SETTINGS tap still has bytes in flight (FOUC guard). Live census after
-// #958 still had race-setup/select/settings*/dialogs* blocking (~139 KB).
+// first paint — defer it. Keep every deferred file as rel=stylesheet (sw.js
+// essential-set). fonts-hud.css is Barlow + unused Titillium @font-face.
 const CSS_DEFERRED = [
-  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/touch-controls.css",
+  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
@@ -744,6 +751,7 @@ const HARD_EDGES = [
   ["js/track/tracks.js", "js/editor/custom-tracks.js"],
   ["js/track/core/def.js", "js/editor/custom-tracks.js"],
   ["js/editor/track-themes.js", "js/editor/custom-tracks.js"],
+  ["js/editor/props.js", "js/editor/custom-tracks.js"],           // sanitize/canonical props at eval
   ["js/editor/custom-tracks.js", "js/game.js"],    // game.js calls CustomTracks.create(G, { load }) after the DATA door
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
@@ -946,13 +954,15 @@ const LAZY_EDITOR = [
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
-  "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (hills as cosine bumps → callbacks)
+  "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
+  "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
 // stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/designer.js")
+// elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 

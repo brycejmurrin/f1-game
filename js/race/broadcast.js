@@ -22,6 +22,28 @@ const Broadcast = (function () {
                       behind: "BEHIND · ", ahead: "AHEAD · ", leader: "LEADER · " };
 
   // ── Timing (pure): the tower at race time T ───────────────────────────────
+  // Pooled scratch for towerAt: WATCH/HIGHLIGHTS repaints at TOWER_TICK_S and
+  // used to allocate filter/sort/row objects every tick (static audit #7).
+  // Same shape as game.js ranked[] reuse — length-truncated, grow slots on demand.
+  const _lead = [], _stopped = [], _rows = [];
+  const _doneScratch = { k: 0, at: null };
+  let _towerScript = null, _towerSample = 0, _towerN = 0;
+  function _slot(arr, i) {
+    let s = arr[i];
+    if (!s) { s = { d: null, k: 0, at: null }; arr[i] = s; }
+    return s;
+  }
+  function _row(i) {
+    let r = _rows[i];
+    if (!r) {
+      r = { pos: 0, num: 0, code: null, lap: 0, gap: null, interval: null, down: 0,
+            tyre: null, pit: false, out: false, fastest: false, grid: null };
+      _rows[i] = r;
+    }
+    return r;
+  }
+  function _mix(h, n) { h ^= (n | 0); return Math.imul(h, 16777619) >>> 0; }
+
   /** Seconds from lights out at which driver d crossed the line for the k-th time (k >= 1), or null. */
   function crossAt(d, k) {
     const ls = d.lapStart || [], laps = d.laps || [];
@@ -36,6 +58,14 @@ const Broadcast = (function () {
     for (let j = 1; j <= n; j++) { const c = crossAt(d, j); if (c == null || c > T) break; k = j; at = c; }
     return { k, at };
   }
+  /** Write doneBy into `slot` (no alloc). Returns slot. */
+  function doneByInto(d, T, slot) {
+    let k = 0, at = null;
+    const n = (d.laps || []).length;
+    for (let j = 1; j <= n; j++) { const c = crossAt(d, j); if (c == null || c > T) break; k = j; at = c; }
+    slot.k = k; slot.at = at;
+    return slot;
+  }
   function compoundAt(d, lap) {
     let c = null;
     for (const st of d.stints || []) if (st.from <= lap) c = st.c;
@@ -46,37 +76,93 @@ const Broadcast = (function () {
     for (let i = 0; i < t.length; i++) if (t[i] != null && T >= t[i] - 12 && T <= t[i] + (dur[i] > 0 ? dur[i] : 22) + 6) return true;
     return false;
   }
+  /** Discrete timing-line sample key for T: changes only when a crossing, OUT,
+   *  pit window, tyre, or fastest-lap flag that the tower shows would change. */
+  function towerSample(script, T, out) {
+    let h = 2166136261 >>> 0;
+    const drivers = script.drivers || [];
+    for (let i = 0; i < drivers.length; i++) {
+      const d = drivers[i];
+      if (d.dns) continue;
+      doneByInto(d, T, _doneScratch);
+      const gone = out ? out(d.num) : !!(d.dnf && d.outT != null && T >= d.outT);
+      const pit = inPit(d, T);
+      const tyre = compoundAt(d, Math.max(1, _doneScratch.k + 1));
+      h = _mix(h, d.num);
+      h = _mix(h, _doneScratch.k);
+      h = _mix(h, _doneScratch.at == null ? -1 : (_doneScratch.at * 1000) | 0);
+      h = _mix(h, gone ? 1 : 0);
+      h = _mix(h, pit ? 1 : 0);
+      h = _mix(h, tyre ? tyre.charCodeAt(0) : 0);
+    }
+    const fast = script.fastest && script.fastest.t != null && T >= script.fastest.t ? script.fastest.num : 0;
+    return _mix(h, fast || 0);
+  }
   /** The tower rows at race time T. `out(num)` says a car is parked (its data ended). Ordered as the timing
-   *  shows it: most laps first, then who crossed the last line first; the stopped cars last, the latest out first. */
+   *  shows it: most laps first, then who crossed the last line first; the stopped cars last, the latest out first.
+   *  Returns a module-owned pooled array (mutated on the next differing sample). */
   function towerAt(script, T, out) {
-    const drivers = (script.drivers || []).filter((d) => !d.dns);
-    const lead = [], stopped = [];
-    for (const d of drivers) {
-      const { k, at } = doneBy(d, T);
-      const gone = out ? out(d.num) : (d.dnf && d.outT != null && T >= d.outT);
-      (gone ? stopped : lead).push({ d, k, at });
+    let nLead = 0, nStop = 0, h = 2166136261 >>> 0;
+    const drivers = script.drivers || [];
+    for (let i = 0; i < drivers.length; i++) {
+      const d = drivers[i];
+      if (d.dns) continue;
+      const gone = out ? out(d.num) : !!(d.dnf && d.outT != null && T >= d.outT);
+      const dest = gone ? _stopped : _lead;
+      const si = gone ? nStop++ : nLead++;
+      const s = _slot(dest, si);
+      s.d = d;
+      doneByInto(d, T, s);
+      const pit = inPit(d, T);
+      const tyre = compoundAt(d, Math.max(1, s.k + 1));
+      s._pit = pit; s._tyre = tyre; // carry into row fill (avoids a second inPit/compoundAt)
+      h = _mix(h, d.num);
+      h = _mix(h, s.k);
+      h = _mix(h, s.at == null ? -1 : (s.at * 1000) | 0);
+      h = _mix(h, gone ? 1 : 0);
+      h = _mix(h, pit ? 1 : 0);
+      h = _mix(h, tyre ? tyre.charCodeAt(0) : 0);
+    }
+    const fast = script.fastest && script.fastest.t != null && T >= script.fastest.t ? script.fastest.num : null;
+    h = _mix(h, fast || 0);
+    _lead.length = nLead;
+    _stopped.length = nStop;
+    if (script === _towerScript && h === _towerSample && _towerN > 0) {
+      _rows.length = _towerN;
+      return _rows;
     }
     // Before the first crossing the grid is the order.
-    lead.sort((a, b) => (b.k - a.k) || (a.k ? a.at - b.at : (a.d.grid || 99) - (b.d.grid || 99)));
-    stopped.sort((a, b) => (b.k - a.k) || ((b.at || 0) - (a.at || 0)));
-    const L = lead[0];
-    const fast = script.fastest && script.fastest.t != null && T >= script.fastest.t ? script.fastest.num : null;
-    const rows = [];
-    lead.forEach((r, i) => {
+    _lead.sort((a, b) => (b.k - a.k) || (a.k ? a.at - b.at : (a.d.grid || 99) - (b.d.grid || 99)));
+    _stopped.sort((a, b) => (b.k - a.k) || ((b.at || 0) - (a.at || 0)));
+    const L = _lead[0];
+    let n = 0;
+    for (let i = 0; i < nLead; i++) {
+      const r = _lead[i];
       let gap = null, interval = null, down = 0;
       if (i && r.k && L.k) {
         // Laps down: the leader's crossings that came before this car's last one.
         for (let j = r.k + 1; j <= L.k; j++) { const c = crossAt(L.d, j); if (c != null && c <= r.at) down++; }
         if (!down) { const lc = crossAt(L.d, r.k); if (lc != null) gap = r.at - lc; }
-        const A = lead[i - 1];
+        const A = _lead[i - 1];
         if (!down && A.k >= r.k) { const ac = crossAt(A.d, r.k); if (ac != null) interval = r.at - ac; }
       }
-      rows.push({ pos: i + 1, num: r.d.num, code: r.d.code, lap: r.k, gap, interval, down,
-                  tyre: compoundAt(r.d, Math.max(1, r.k + 1)), pit: inPit(r.d, T), out: false, fastest: fast === r.d.num, grid: r.d.grid || null });
-    });
-    stopped.forEach((r, i) => rows.push({ pos: lead.length + i + 1, num: r.d.num, code: r.d.code, lap: r.k, gap: null, interval: null, down: 0,
-                                          tyre: null, pit: false, out: true, fastest: fast === r.d.num, grid: r.d.grid || null }));
-    return rows;
+      const row = _row(n++);
+      row.pos = i + 1; row.num = r.d.num; row.code = r.d.code; row.lap = r.k;
+      row.gap = gap; row.interval = interval; row.down = down;
+      row.tyre = r._tyre; row.pit = !!r._pit; row.out = false; row.fastest = fast === r.d.num;
+      row.grid = r.d.grid || null;
+    }
+    for (let i = 0; i < nStop; i++) {
+      const r = _stopped[i];
+      const row = _row(n++);
+      row.pos = nLead + i + 1; row.num = r.d.num; row.code = r.d.code; row.lap = r.k;
+      row.gap = null; row.interval = null; row.down = 0;
+      row.tyre = null; row.pit = false; row.out = true; row.fastest = fast === r.d.num;
+      row.grid = r.d.grid || null;
+    }
+    _rows.length = n;
+    _towerScript = script; _towerSample = h; _towerN = n;
+    return _rows;
   }
   function fmtGap(r, mode) {
     if (r.out) return "OUT";
@@ -101,17 +187,27 @@ const Broadcast = (function () {
     }
     return best;
   }
+  // Pooled fight rows: Director + ExtraRigs + WATCH PiP call battles() every
+  // cut/tick; a fresh array + objects each time was steady-state GC in a race.
+  const _fights = [];
   /** The closest battle among running cars ordered by progress: [{chaser, gapS}] best first — tighter and
-   *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending. */
+   *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending.
+   *  Returns a module-owned pooled array (mutated on the next call). */
   function battles(cars) {
-    const out = [];
+    let n = 0;
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
       const v = Math.max(b.speed || 0, 20);
       const g = (a.prog - b.prog) / v;
-      if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
+      if (g < 0 || g >= BATTLE_S) continue;
+      let f = _fights[n];
+      if (!f) { f = { key: null, ahead: null, gapS: 0, score: 0 }; _fights[n] = f; }
+      f.key = b.key; f.ahead = a.key; f.gapS = g; f.score = g + i * 0.08;
+      n++;
     }
-    return out.sort((x, y) => x.score - y.score);
+    _fights.length = n;
+    _fights.sort((x, y) => x.score - y.score);
+    return _fights;
   }
   /** The PiP's car (pure): the followed car's battle partner — the car BEHIND when
    *  it is sandwiched, the threat — on an onboard shot; else the car in the next
@@ -232,35 +328,42 @@ const Broadcast = (function () {
     function paintTower(st) {
       if (!tower) return;
       const rows = towerAt(st.script, st.T, st.isOut);
-      const L = rows.find((r) => !r.out);
+      let L = null;
+      for (let i = 0; i < rows.length; i++) if (!rows[i].out) { L = rows[i]; break; }
       const total = st.script.laps | 0;
-      head.textContent = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total + (mode === "interval" ? " · INTERVAL" : " · GAP");
+      const headText = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total + (mode === "interval" ? " · INTERVAL" : " · GAP");
+      if (head.textContent !== headText) head.textContent = headText;
       const followNum = st.followNum;
-      rows.forEach((r, i) => {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
         const e = rowEl(i);
         const was = prevPos.get(r.num);
         if (was != null && was !== r.pos) deltaAt.set(r.num, { at: wall, up: r.pos < was });
         prevPos.set(r.num, r.pos);
         const dl = deltaAt.get(r.num);
         const delta = dl && wall - dl.at < DELTA_S ? (dl.up ? "up" : "down") : "";
-        const key = [r.pos, r.code, fmtGap(r, mode), r.tyre, r.out, r.pit, r.fastest, delta, r.num === followNum].join("|");
-        if (key === e.key) return;
-        e.key = key;
+        const gapText = fmtGap(r, mode);
+        const onCam = r.num === followNum;
+        // Field compare — no "|".join string per row per tick.
+        if (e._pos === r.pos && e._code === r.code && e._gap === gapText && e._tyre === (r.tyre || "") &&
+            e._out === r.out && e._pit === r.pit && e._fl === r.fastest && e._delta === delta && e._on === onCam) continue;
+        e._pos = r.pos; e._code = r.code; e._gap = gapText; e._tyre = r.tyre || "";
+        e._out = r.out; e._pit = r.pit; e._fl = r.fastest; e._delta = delta; e._on = onCam;
         e.pos.textContent = String(r.pos);
         e.code.textContent = r.code || "#" + r.num;
-        e.gap.textContent = fmtGap(r, mode);
-        e.tyre.textContent = r.tyre || "";
-        e.tyre.dataset.c = r.tyre || "";
+        e.gap.textContent = gapText;
+        e.tyre.textContent = e._tyre;
+        e.tyre.dataset.c = e._tyre;
         e.b.dataset.code = r.code || "";
         const col = st.colourOf ? st.colourOf(r.num) : "";
         e.team.style.background = col || "";
         e.li.classList.toggle("out", r.out);
         e.li.classList.toggle("pit", r.pit);
         e.li.classList.toggle("fl", r.fastest);
-        e.li.classList.toggle("on", r.num === followNum);
+        e.li.classList.toggle("on", onCam);
         if (delta) e.li.dataset.delta = delta; else delete e.li.dataset.delta;
-        e.b.setAttribute("aria-label", "P" + r.pos + " " + (r.code || r.num) + " " + fmtGap(r, mode) + (r.num === followNum ? ", on camera" : ""));
-      });
+        e.b.setAttribute("aria-label", "P" + r.pos + " " + (r.code || r.num) + " " + gapText + (onCam ? ", on camera" : ""));
+      }
       for (let i = rows.length; i < rowsEl.length; i++) rowsEl[i].li.hidden = true;
       for (let i = 0; i < rows.length; i++) rowsEl[i].li.hidden = false;
     }
@@ -344,6 +447,6 @@ const Broadcast = (function () {
     return { start, stop, tick, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
-  return { create, towerAt, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
+  return { create, towerAt, towerSample, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
 })();
 Object.freeze(Broadcast);

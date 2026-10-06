@@ -154,10 +154,10 @@ function bootTuning(input = {}) {
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: "js/input/steer-tuning.js" });
-  vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
+  const api = vm.runInContext("SteerTuning", ctx).create({ $, store, soundOn: false,
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   const move = (id, v) => $(id).oninput({ target: { value: String(v) } });
-  return { $, disk, move, fire: (t) => { for (const f of listeners[t] || []) f(); } };
+  return { $, disk, move, fire: (t) => { for (const f of listeners[t] || []) f(); }, apply: api.applySteerTuning };
 }
 
 test("the open settings haptics row follows phone capability changes and pad disconnects", () => {
@@ -216,4 +216,45 @@ test("lineBand treats PUSH / non-named notches as CUSTOM, never CORNERS", () => 
   assert.match(SRC, /return "custom"/);
   assert.match(SRC, /n === "custom" \|\| LINE_LEVELS\[n\] == null/);
   assert.doesNotMatch(SRC, /rl === 0 \? "off" : rl >= 5 \? "full" : "corner"/);
+});
+
+test("AIDS fold and DRIVING HELP row share OFF/MEDIUM/HIGH labels", () => {
+  // Live survey: ROOKIE chip + AIDS · OFF while the row said LOW for the same
+  // notch. The fold used `dh <= 1 ? OFF : HELP_LABEL[hb]` and HELP_LABEL.low
+  // was still "LOW".
+  assert.match(SRC, /const HELP_LABEL = \{ low: "OFF", med: "MEDIUM", high: "HIGH" \}/);
+  assert.match(SRC, /\[hb === "low" \? "off" : "val", HELP_LABEL\[hb\]\]/);
+  assert.doesNotMatch(SRC, /dh <= 1 \? \["off", "OFF"\]/);
+  assert.doesNotMatch(SRC, /low: "LOW"/);
+});
+
+test("STEER ASSIST fold token is STEER OFF, not LINE OFF", () => {
+  // Race Settings owns the visual DRIVING LINE; the AIDS row is STEER ASSIST.
+  assert.match(SRC, /const LINE_FOLD = \{ off: "STEER OFF"/);
+  assert.doesNotMatch(SRC, /off: "LINE OFF"/);
+});
+
+test("refreshPresetButtons reconciles a stale preset chip against live values", () => {
+  // preset:"rookie" survived a steerSchema assist reset, so the chip stayed
+  // lit while drivingHelp/raceLine were OFF. matchPreset() is the value check;
+  // refreshPresetButtons writes "custom" when nothing matches.
+  assert.match(SRC, /function matchPreset\(\)/);
+  assert.match(SRC, /if \(matched\) \{\s*if \(claimed !== matched\) store\.set\("preset", matched\);/);
+  assert.match(SRC, /else if \(claimed !== "custom"\) \{\s*store\.set\("preset", "custom"\);/);
+  const { disk, apply } = bootTuning();
+  disk.preset = "rookie";
+  disk.drivingHelp = 1;
+  disk.raceLine = 0;
+  disk.steerRate = 2; disk.steerExpo = 6; disk.steerLock = 7; disk.steerSpeed = 7;
+  disk.tiltDeg = 8; disk.steerSmooth = 3; disk.adaptiveButtons = 5;
+  disk.brakeCue = 4; disk.audioCues = 1; disk.gripSteer = 1;
+  apply();
+  assert.equal(disk.preset, "standard",
+    "values match STANDARD — chip follows the values, not the stale ROOKIE name");
+  disk.preset = "rookie";
+  disk.drivingHelp = 1;
+  disk.raceLine = 0;
+  disk.steerRate = 7; // PRO rack, but assists still OFF → no named bundle
+  apply();
+  assert.equal(disk.preset, "custom", "mixed values clear a stale ROOKIE claim");
 });

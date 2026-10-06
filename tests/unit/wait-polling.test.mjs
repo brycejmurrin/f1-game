@@ -20,7 +20,12 @@
 // population and fix existing waits where their timing can be verified.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { lintSource, lintAll, count } from "../../tools/check/wait-polling-lint.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // The POPULATION ratchet on these sites is now `waitNoPolling` in
 // tests/data/ratchets.json (slack 39, the rule this file used); its history
@@ -96,4 +101,19 @@ test("check-physics.mjs does not declare a timeout without polling", () => {
   const row = lintAll().find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check/check-physics.mjs"));
   assert.deepEqual(row?.sites ?? [], [],
     `check-physics.mjs still has waitForFunction timeout without polling: ${JSON.stringify(row?.sites)}`);
+});
+
+test("career selectPartCategory retries the tab click on lexical Parts, not window.Parts", () => {
+  // js/car/parts.js is `const Parts = (function () { … })()` — a global lexical
+  // binding, not window.Parts. A `window.Parts &&` guard in page.evaluate is
+  // always false (PR #1075 helper follow-up, 2026-10-06).
+  const src = fs.readFileSync(path.join(ROOT, "tests/helpers/career-boot.js"), "utf8");
+  const body = src.slice(src.indexOf("export async function selectPartCategory"),
+    src.indexOf("export async function startCareer"));
+  const code = body.replace(/\/\/[^\n]*/g, "");
+  assert.match(code, /typeof Parts/);
+  assert.doesNotMatch(code, /window\.Parts/);
+  assert.match(code, /tab\.click\(\)/);
+  assert.match(body, /polling:\s*100/);
+  assert.match(body, /timeout:\s*BOOT_MS/);
 });

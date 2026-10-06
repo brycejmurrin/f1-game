@@ -3,14 +3,19 @@
 // and the TT results panel. Uses __apex.tt() to enter TT mode programmatically.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function enterTT(page, trackId = "monza") {
+  // Factory McLaren, empty sheet — GarageDefaults Mercedes kit made
+  // __apex.tt() reject with "Race start did not reach the grid" (CI run
+  // 37401839190, HUD label). TT measures ghosts and the HUD, not the garage.
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate((id) => window.__apex.tt(id), trackId);
+  await page.evaluate(async (id) => { await window.__apex.tt(id); }, trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
@@ -68,7 +73,7 @@ test.describe("Time Trial — daily picker flow", () => {
       expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
       await expect(page.locator("#rs-weather-sel")).toBeDisabled();
       await expect(page.locator("#rs-time-sel")).toBeDisabled();
-      await expect(page.locator("#rs-go")).toHaveText("START RACE");
+      await expect(page.locator("#rs-go")).toHaveText("START TIME TRIAL");
     });
   }
 });

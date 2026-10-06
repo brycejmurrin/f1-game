@@ -52,8 +52,17 @@ say() { echo "$*" >&2; }
 # already passed give the same answer on the same bytes, so ci.yml's
 # `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
 # fast tier and then ~14 min of full tier, serially, with no job shared).
+# fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
+# suites, sweeps-parts, driving-model, selection) that already passed on this
+# exact tree, when there is one. Never a reason to skip the gate — the train
+# still runs the browser smoke, the geometry sweeps and the parts census (whose
+# filter diffs a base, so it is not tree-only) — but the tree-only jobs it
+# already passed give the same answer on the same bytes, so ci.yml's
+# `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
+# fast tier and then ~14 min of full tier, serially, with no job shared).
 FAST_RUN=""
-verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\n' "$1" "$2" "$3" "$FAST_RUN"; }
+SHIP_ONLY="false"
+verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\nship_only=%s\n' "$1" "$2" "$3" "$FAST_RUN" "${4:-$SHIP_ONLY}"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
 
 TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
@@ -73,7 +82,7 @@ for c in $candidates; do
   json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
     || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
   # The fast tier on the same tree, remembered for the verdict either way.
-  if [ -z "$FAST_RUN" ]; then
+  if [ -z "$FAST_RUN" ] && [ "$c" = "$SHA" ]; then
     FAST_RUN="$(printf '%s' "$json" | node -e '
       let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
         let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
@@ -91,15 +100,24 @@ for c in $candidates; do
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
       const self = process.env.GITHUB_RUN_ID || "";
       const deployBranch = process.env.DEPLOY_BRANCH || "";
-      // A push run is a full gate only OFF the deploy branch (there it is the fast tier).
+      // A push run is a full gate only OFF the deploy branch (there it is the fast
+      // tier). merge_group is the merge-queue gate (full tier; Bryce enables the
+      // queue later). A deploy-branch push is remembered as FAST_RUN, and if it
+      // is THIS commit we reuse it as ship_only (Pages smoke, no 28-job re-gate).
       const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
+      const mergeGroup = (r) => r.event === "merge_group";
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
-        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
+        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || mergeGroup(r) || r.event === "pull_request")) ||
         (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
       for (const r of runs.filter(gate)) console.log(`${r.id} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
   while read -r id path event url; do
     [ -n "$id" ] || continue
+    if [ "$event" = merge_group ]; then
+      say "REUSING the gate: $c already passed $path $event (merge_group)"
+      verdict true "$c" "$url" false
+      exit 0
+    fi
     if [ "$event" = pull_request ]; then
       full="$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" 2>/dev/null | node -e '
         let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
@@ -109,7 +127,7 @@ for c in $candidates; do
       if [ "$full" != yes ]; then say "run $id is a pull_request run whose sweeps did not run (a draft PR: fast tier) — not a gate"; continue; fi
     fi
     say "REUSING the gate: $c already passed $path $event"
-    verdict true "$c" "$url"
+    verdict true "$c" "$url" false
     exit 0
   done <<EOF_HITS
 $hit
@@ -117,5 +135,15 @@ EOF_HITS
   say "no successful gate run recorded for $c"
 done
 
-say "no reusable gate for $SHA; running the full gate"
-verdict false "" ""
+# Exact-SHA ship fast tier: skip the 28-job Pages re-gate; pages.yml may still
+# run a 1-shard smoke. Do not reuse a parent's fast tier as the publish gate —
+# only GITHUB_SHA itself (candidates lists it first).
+if [ -n "$FAST_RUN" ]; then
+  say "REUSING ship fast-tier run $FAST_RUN on $SHA (Pages smoke only; no full gate)"
+  SHIP_ONLY=true
+  verdict true "$SHA" "$FAST_RUN" true
+  exit 0
+fi
+
+say "no reusable gate for $SHA; waiting (no 28-job Pages re-gate)"
+verdict false "" "" false

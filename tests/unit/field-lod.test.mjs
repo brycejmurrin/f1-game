@@ -231,21 +231,29 @@ function world(draws) {
 }
 const maxDiff = (a, b) => { assert.equal(a.length, b.length, "vertex count"); let d = 0; for (let i = 0; i < a.length; i++) d = Math.max(d, Math.abs(a[i] - b[i])); return d; };
 
+// The straight-mode TE strip (CarMesh.drawAeroEdge) is a separate overlay on
+// existing emissive opts, not a flap element. LOD still merges the flaps.
+const flapDraws = (r) => r.draws.filter((d) => d.opts === FLAP_PAINT);
+const edgeDraws = (r) => r.draws.filter((d) => d.opts !== FLAP_PAINT);
+
 test("drawAeroFlaps: moving = one draw per element; `still` or at rest = ONE draw of the whole set", () => {
   const r = flapRig(), els = r.M.Car3D.aeroFlaps(FLAP_LVL, null);
   assert.deepEqual(["front", "rear"].map((w) => els.filter((e) => e.wing === w).length >= 2), [true, true],
     "level 2 moves two elements on each wing (the case worth merging)");
   r.draw(FLAP_TEAM, FLAP_LVL, 0.4, FLAP_MAT, FLAP_PAINT, null);
-  assert.equal(r.draws.length, els.length, "moving, inside the gate: the animated per-element path");
+  assert.equal(flapDraws(r).length, els.length, "moving, inside the gate: the animated per-element path");
+  assert.equal(edgeDraws(r).length, 0, "TE strip is off unless apex26.aeroEdge");
   for (const [blend, still, why] of [[0.4, true, "a rival past FieldLod.flapsM() / the mirror / the PiP"],
     [0, false, "closed, at rest"], [1, false, "open, at rest"], [0.7, true, "still, mid-travel"]]) {
     r.draws.length = 0;
     r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, null, still);
-    assert.equal(r.draws.length, 1, why + ": ONE draw");
-    assert.equal(r.draws[0].opts, FLAP_PAINT, why + ": the flaps' own draw options (one material on every backend)");
-    assert.deepEqual(r.draws[0].mat, Array.from(FLAP_MAT), why + ": on the car's own matrix");
+    const flaps = flapDraws(r);
+    assert.equal(flaps.length, 1, why + ": ONE flap-set draw");
+    assert.equal(flaps[0].opts, FLAP_PAINT, why + ": the flaps' own draw options (one material on every backend)");
+    assert.deepEqual(flaps[0].mat, Array.from(FLAP_MAT), why + ": on the car's own matrix");
     const verts = els.reduce((n, e) => n + r.M.Car3D.buildFlapGeom(e, r.st.col, null).pos.length, 0);
-    assert.equal(r.draws[0].mesh.d.pos.length, verts, why + ": every element of both wings");
+    assert.equal(flaps[0].mesh.d.pos.length, verts, why + ": every element of both wings");
+    assert.equal(edgeDraws(r).length, 0, why + ": TE strip stays off by default");
   }
 });
 
@@ -254,10 +262,10 @@ test("the static set is the per-element draw, baked: same vertices and normals a
   for (const [blend, near, pose] of [[0.2, 1e-9, "closed (Z-mode)"], [0.5, 1 - 1e-9, "open (X-mode)"]]) {
     r.draws.length = 0;
     r.draw(FLAP_TEAM, FLAP_LVL, near, FLAP_MAT, FLAP_PAINT, null);   // the animated path, a hair off the pose
-    const moving = world(r.draws);
+    const moving = world(flapDraws(r));
     r.draws.length = 0;
     r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null, null, true);   // the nearer rest pose
-    const still = world(r.draws);
+    const still = world(flapDraws(r));
     assert.ok(maxDiff(moving.P, still.P) < 1e-5, pose + ": positions");
     assert.ok(maxDiff(moving.N, still.N) < 1e-5, pose + ": normals");
     assert.deepEqual(r.draws[0].mesh.d.mat, r.M.Car3D.aeroFlaps(FLAP_LVL, null)

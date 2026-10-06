@@ -247,6 +247,8 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   const body = g.slice(g.indexOf("async function startRaceBody()"), g.indexOf("const sessionEntry = SessionEntry.create();"));
   assert.match(body, /if \(document\.hidden\) setPaused\(true, "hidden-tab"\);\n\}\s*$/, "the hidden check is the LAST thing, after the audio starts it stops");
   const sp = g.slice(g.indexOf("function setPaused(p, why) {"), g.indexOf("els.pausebtn.onclick = () => setPaused(true);"));
+  assert.match(sp, /if \(p\) \{ GameAudio\.stopEngine\(\); GameAudio\.setSkid\(0\); GameAudio\.stopRain\(\); radioVoice\.halt\(\);/,
+    "pause stops rain with the engine — rain rides the SFX bus and must not hiss over a frozen race");
   assert.match(sp, /else if \(soundOn\) \{[^\n]*GameAudio\.startEngine\(\); GameAudio\.startMusic\(trackIdx\); if \(isRaining\(\)\) GameAudio\.startRain\(\); \}/,
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");
@@ -352,4 +354,19 @@ test("with no media element at all, the cap falls back to the file size", async 
   r.A.init(); await flush();
   r.A.addTracks([UPLOAD]); r.A.playTrackId(UPLOAD.id); await flush();
   assert.ok(r.decoded.includes(UPLOAD.url), "a 2 MB upload decodes");
+});
+
+// SOUND OFF -> ON mid-race restarts the rain from the LIVE weather. panel.js
+// keyed it off G.raceWeather (the grid's weather), so a dry race the weather arc
+// turned wet came back with no rain after a SOUND toggle, and a wet race that
+// dried out came back raining. Every other startRain caller asks isRaining().
+test("the SOUND toggle restarts rain from the live weather, not the grid's raceWeather", () => {
+  const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
+  const on = panel.slice(panel.indexOf('else if ((G.state === "race" || G.state === "count") && !G.paused) {'));
+  const block = on.slice(0, on.indexOf("syncAudioPanel();"));
+  assert.match(block, /GameAudio\.startEngine\(\);/, "precondition: found the mid-race SOUND ON block");
+  assert.doesNotMatch(block, /raceWeather/, "the grid's weather does not describe a race the arc has turned");
+  assert.match(block, /if \(G\.isRaining\(\)\) GameAudio\.startRain\(\);/);
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /\bisRaining: \(\) => isRaining\(\),/, "G.isRaining is exported to the panel");
 });

@@ -123,23 +123,27 @@ const NetSession = (function () {
         return false;
       }
       if (type === PONG) {
-        if (dv.byteLength >= PONG_MIN_BYTES) {
-          const id = dv.getUint32(1), t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
-          const t2raw = dv.byteLength >= PONG_BYTES ? dv.getFloat64(21) : t1;
-          if (!takePing(id, t0)) return false;   // not a ping of ours, or already answered
-          // NTP's four stamps: the peer's hold (t2 − t1) is not path, so it
-          // leaves the round trip; the offset is the mean of the two legs.
-          const hold = Number.isFinite(t2raw) && t2raw >= t1 ? Math.min(t2raw - t1, MAX_PLAUSIBLE_RTT_MS) : 0;
-          const t2 = t1 + hold;
-          const roundTrip = now - t0 - hold;
-          addSample(roundTrip, ((t1 - t0) + (t2 - now)) / 2);   // hold 0: t1 − (t0 + rtt/2), as before
-        }
+        // A short type=4 used to fall through to `return synced()` and keep
+        // lastHeardAt fresh after the clock landed — a silent peer flooding
+        // truncated PONGs never hit the 6 s timeout (frozen rival, no AI hand-back).
+        // Match PING: refuse short frames; a matched PONG is heard even when
+        // addSample rejects the RTT (synced() alone is not "this packet counted").
+        if (dv.byteLength < PONG_MIN_BYTES) return false;
+        const id = dv.getUint32(1), t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
+        const t2raw = dv.byteLength >= PONG_BYTES ? dv.getFloat64(21) : t1;
+        if (!takePing(id, t0)) return false;   // not a ping of ours, or already answered
+        // NTP's four stamps: the peer's hold (t2 − t1) is not path, so it
+        // leaves the round trip; the offset is the mean of the two legs.
+        const hold = Number.isFinite(t2raw) && t2raw >= t1 ? Math.min(t2raw - t1, MAX_PLAUSIBLE_RTT_MS) : 0;
+        const t2 = t1 + hold;
+        const roundTrip = now - t0 - hold;
+        addSample(roundTrip, ((t1 - t0) + (t2 - now)) / 2);   // hold 0: t1 − (t0 + rtt/2), as before
         if (synced() && heldState) {
           const held = heldState;
           heldState = null;
           deliverState(held.data, held.now);
         }
-        return synced();
+        return true;
       }
       const valid = !!NetSnapshot.decodeSnapshot(dv);
       if (!synced()) {

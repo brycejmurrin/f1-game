@@ -46,7 +46,7 @@ Everything else is built on these. They live in `css/components.css`.
 | `.screen` | a full-viewport overlay, inset by the OS safe area, that centres its child |
 | `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it. Phone-landscape floors: select / season / garage / career / settings / howtoplay / results / standings / customize / vs-friend / quali use `--compact-at: 480px`; audio / Spotify use `520px`; the generic floor is `380px` |
 | `.pane` | a scroll region that says so — an edge fade on whichever side has more |
-| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#season-setup`, `#carsetup` and `#career` (`#select` left it in the 2026-09 picker redesign: a flag strip over a hero is one column). Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
+| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#season-setup`, `#carsetup` and `#career` (`#select` left it in the 2026-09 picker redesign: a flag strip over a hero is one column). Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/overlays.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
 ## Selection grammar — how a control says "this one"
@@ -212,7 +212,7 @@ file changes a screen owned by another.
   `menus`, overridden by a compact-density selector in `components`.
 - `.cs-liv-swatch` / `.tm-colour` / `.swatch` / `.res-swatch` / `.dh-swatch` /
   `.pm-accent-chip` / `.pm-accent-preview-hud` —
-  their owning files (`carsetup` / `menus` / `menus` / `components` / `data` /
+  their owning files (`carsetup` / `menus` / `menus` / `overlays` / `data` /
   `components` / `components`)
   + `tokens`. The whole swatch family appears once more in `tokens`' single
   `forced-colors` block: colour IS the content on a swatch, so they all opt
@@ -221,11 +221,11 @@ file changes a screen owned by another.
 
 **Cross-SCREEN reuse — a component borrowed by a screen that does not own it:**
 
-- `.res-row` / `.res-pos` — `components` + `career`. The championship table
+- `.res-row` / `.res-pos` — `overlays` + `career`. The championship table
   deliberately reuses the results-screen row so standings do not look like a
   different game depending on where you are. **This is the one that bit us**: it
   is invisible from either file alone.
-- `.sel-label` — `components` + `menus` + `career` + `carsetup`. The skewed red
+- `.sel-label` — `overlays` + `menus` + `career` + `carsetup`. The skewed red
   section heading, used by four screens.
 - `.sel-chip` — `components` + `menus` + `career`; `.sel-edit` — `components` +
   `menus` + `carsetup`; `.sel-edit-row` — `menus` + `carsetup`.
@@ -257,8 +257,8 @@ most-shared class in the project and had no entry at all:
   its heading; `menus` re-tints them under `#pmsettings`
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
-- `.res-name` — `career` + `components`
-- `.res-pts` — `career` + `components`. Compact Career history / qualifying /
+- `.res-name` — `career` + `overlays`
+- `.res-pts` — `career` + `overlays`. Compact Career history / qualifying /
   standings / results wrap the shared points cell instead of ellipsizing it.
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
@@ -267,7 +267,7 @@ most-shared class in the project and had no entry at all:
 - `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and
   Career history place the shared body on the sheet grid for the wide contents
   rail (`#htp-contents` / `#cg-contents` / `#ch-contents`). The shared strip
-  + chip box lives in `components.css`; idle ink and wide/compact placement
+  + chip box lives in `overlays.css`; idle ink and wide/compact placement
   stay on the screen sheets.
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`

@@ -120,6 +120,38 @@ export const VARIANTS = [
 // (2026-09-04), so the gate failed specs that pass. Read a timeout row here
 // against the SLOWEST spec you might select, never against secPerTest.
 
+/** Statically resolvable number (slice bounds, Math.ceil(n/2) shard sizes). */
+function staticNumber(node, bindings) {
+  if (!node || typeof node !== "object") return null;
+  if (node.type === "Literal" && typeof node.value === "number") return node.value;
+  if (node.type === "Identifier") {
+    const v = bindings.get(node.name);
+    return typeof v === "number" ? v : null;
+  }
+  if (node.type === "MemberExpression" && (node.property?.name === "length" || node.property?.value === "length")) {
+    return staticArrayLen(node.object, bindings);
+  }
+  if (node.type === "BinaryExpression") {
+    const a = staticNumber(node.left, bindings);
+    const b = staticNumber(node.right, bindings);
+    if (a == null || b == null) return null;
+    if (node.operator === "/") return b === 0 ? null : a / b;
+    if (node.operator === "*") return a * b;
+    if (node.operator === "+") return a + b;
+    if (node.operator === "-") return a - b;
+    return null;
+  }
+  if (node.type === "CallExpression" && node.callee?.type === "MemberExpression"
+      && node.callee.object?.name === "Math"
+      && /^(ceil|floor|round)$/.test(node.callee.property?.name || "")
+      && node.arguments.length === 1) {
+    const x = staticNumber(node.arguments[0], bindings);
+    if (x == null) return null;
+    return Math[node.callee.property.name](x);
+  }
+  return null;
+}
+
 /** How many `js/circuits/*.js` defs exist — the length a `readdirSync` of that
  *  directory expands to at module load (tracks-walls, elevation-tracks, …). */
 function circuitDefCount() {
@@ -171,12 +203,21 @@ function staticArrayLen(node, bindings) {
     if (a != null && b != null) return Math.max(a, b);
     return a ?? b;
   }
-  // .filter / .map / .sort / .slice keep (or shrink) length; we cannot see a
+  // .filter / .map / .sort keep (or shrink) length; we cannot see a
   // filter predicate's runtime, so keep the base length — exact for the
   // `!ONLY_TRACK || …` guards these specs use when TRACK is unset.
+  // `.slice(i, j)` with numeric literals OR bound numbers IS a shrink
+  // (tracks-walls fleet files: ALL.slice(0, HALF) with HALF = ceil(n/2)).
   if (node.type === "CallExpression" && node.callee?.type === "MemberExpression"
       && /^(filter|map|sort|slice|concat)$/.test(node.callee.property?.name || "")) {
-    return staticArrayLen(node.callee.object, bindings);
+    const base = staticArrayLen(node.callee.object, bindings);
+    if (node.callee.property.name === "slice" && base != null) {
+      const args = node.arguments || [];
+      const a0 = staticNumber(args[0], bindings) ?? 0;
+      const a1 = args[1] != null ? (staticNumber(args[1], bindings) ?? base) : base;
+      if (args.length) return Math.max(0, Math.min(base, a1) - Math.max(0, a0));
+    }
+    return base;
   }
   // fs.readdirSync(path.join(ROOT, "js/circuits")) — same source tracks-walls
   // and friends use to build their per-circuit list at module load.
@@ -225,7 +266,7 @@ export function declaredTests(file) {
     if (x.type === "VariableDeclaration") {
       for (const d of x.declarations) {
         if (d.id?.type === "Identifier") {
-          const len = staticArrayLen(d.init, bindings);
+          const len = staticArrayLen(d.init, bindings) ?? staticNumber(d.init, bindings);
           if (len != null) bindings.set(d.id.name, len);
         }
       }

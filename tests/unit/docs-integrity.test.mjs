@@ -430,9 +430,12 @@ test("ci.yml makes the derived figures advisory off pull requests, and only ther
   // but pull_request — the merged tip cannot regenerate itself — and must not
   // leak onto pull requests, where the PR is the one that regenerates.
   const ci = read(".github/workflows/ci.yml");
-  const step = ci.slice(ci.indexOf("- name: Structural guards\n"), ci.indexOf("- name: Ratchet ceilings vs the base"));
-  assert.match(step, /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
-    "the guards step must set APEX_DOCS_FIGURES_ADVISORY=1 off pull requests only");
+  const shards = [...ci.matchAll(/name: Tooling-fast shard [12]\/2[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs --jobs=4 --shard=[12]\/2/g)];
+  assert.equal(shards.length, 2, "both tooling-fast shards must exist so Structural guards can split");
+  for (const m of shards) {
+    assert.match(m[0], /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
+      "each tooling-fast shard must set APEX_DOCS_FIGURES_ADVISORY=1 off pull requests only");
+  }
   assert.doesNotMatch(read("package.json"), /APEX_DOCS_FIGURES_ADVISORY/, "no npm script may bake the advisory in: locally the pins fail");
   assert.doesNotMatch(read("tools/ci/tooling-fast.mjs"), /APEX_DOCS_FIGURES_ADVISORY/, "tooling-fast must not set it either");
 });

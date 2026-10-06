@@ -75,7 +75,7 @@ const SPEC = [
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
-  { k: "spotter", lane: "json", group: "audio", def: true, src: "js/race/spotter.js" },
+  { k: "spotter", lane: "json", group: "audio", def: false, src: "js/race/spotter.js" },
   { k: "commentary", lane: "json", group: "audio", def: "tv", src: "js/race/race-radio.js", oneOf: ["off", "tv", "on"] },
   { k: "musicSource", lane: "json", group: "audio", def: "all", src: "js/audio/panel.js" },
   { k: "sndProfile", lane: "json", group: "audio", def: "team", src: "js/audio/panel.js" },
@@ -126,21 +126,21 @@ const SPEC = [
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudElements", lane: "json", group: "hud", def: {}, src: "js/ui/hud-elements.js per-element on/off (missing key = on)" },
   { k: "hudLayout", lane: "json", group: "hud", def: null, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:3, standard?, minimal?, broadcast?}, each {cockpit, other} of {id: {x, y, s}} — a missing style or element is its SHIPPED layout; a v1/v2 {cockpit, other} reads as STANDARD's)" },
-  { k: "hudMirror", lane: "json", group: "hud", def: "auto", oneOf: ["auto", "on", "off"], src: "js/render/shared/mirror-pass.js" },
+  { k: "hudMirror", lane: "json", group: "hud", def: "auto", src: "js/render/shared/mirror-pass.js", oneOf: ["auto", "on", "off"] },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
   { k: "flybyShots", lane: "json", group: "camera", def: null, src: "js/camera/flyby-panel.js FLYBY SHOT EDITOR (null = shipped shots)" },
   { k: "ldCard", lane: "json", group: "camera", def: null, src: "js/ui/loading-screen.js loading card {scale, x, y} (null = shipped)" },
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
-  { k: "camMode", lane: "json", group: "camera", def: 3, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
+  { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
   { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
   { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
   { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
-  { k: "cockpitHalo", lane: "raw", group: "camera", def: "1", src: "js/camera/cockpit-opts.js HALO_VALUES (\"1\" = standard, \"0\" = off)", oneOf: ["0", "slim", "1", "thick", "fairing"] },
+  { k: "cockpitHalo", lane: "raw", group: "camera", def: "fairing", src: "js/camera/cockpit-opts.js HALO_VALUES (\"1\" = standard, \"0\" = off)", oneOf: ["0", "slim", "1", "thick", "fairing"] },
   { k: "cockpitWheel", lane: "raw", group: "camera", def: "f1", src: "js/camera/cockpit-opts.js CHOICES.wheel", oneOf: ["f1", "gt", "butterfly", "yoke", "endurance", "retro", "round", "none"] },
-  { k: "cockpitBody", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.body", oneOf: ["standard", "sculpted", "wide", "tapered", "stepped"] },
+  { k: "cockpitBody", lane: "raw", group: "camera", def: "sculpted", src: "js/camera/cockpit-opts.js CHOICES.body", oneOf: ["standard", "sculpted", "wide", "tapered", "stepped"] },
   { k: "cockpitSeat", lane: "raw", group: "camera", def: "std", src: "js/camera/cockpit-opts.js CHOICES.seat", oneOf: ["std", "low", "high", "fwd"] },
-  { k: "cockpitInterior", lane: "raw", group: "camera", def: "carbon", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "suede", "ribbed", "classic"] },
+  { k: "cockpitInterior", lane: "raw", group: "camera", def: "team", src: "js/camera/cockpit-opts.js CHOICES.interior", oneOf: ["carbon", "team", "suede", "ribbed", "classic"] },
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
   { k: "speedVignette", lane: "json", group: "camera", def: false, src: "js/camera/feel.js SPEED VIGNETTE (off by default)" },
@@ -179,18 +179,18 @@ const SPEC = [
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
   // APPEARANCE (js/ui/appearance-opts.js) — theme + dual accents
   { k: "uiTheme", lane: "json", group: "appearance", def: "dark", src: "js/ui/appearance-opts.js" },
-  { k: "menuAccent", lane: "json", group: "appearance", def: "brand", src: "js/ui/appearance-opts.js" },
+  { k: "menuAccent", lane: "json", group: "appearance", def: "ember", src: "js/ui/appearance-opts.js" },
   { k: "hudAccent", lane: "json", group: "appearance", def: "team", src: "js/ui/appearance-opts.js" },
   { k: "menuAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
   { k: "hudAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
-  { k: "textSize", lane: "json", group: "appearance", def: "normal", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
-  { k: "uiContrast", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
+  { k: "textSize", lane: "json", group: "appearance", def: "large", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
+  { k: "uiContrast", lane: "json", group: "appearance", def: "high", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
   { k: "cvdMode", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js COLOUR VISION", oneOf: ["off", "deutan", "protan", "tritan"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
   { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },
-  { k: "homeScene", lane: "json", group: "appearance", def: "garage", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
-  { k: "backgroundMotion", lane: "json", group: "appearance", def: "still", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
-  { k: "homeCamera", lane: "json", group: "appearance", def: "auto", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
+  { k: "homeScene", lane: "json", group: "appearance", def: "photo", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
+  { k: "backgroundMotion", lane: "json", group: "appearance", def: "ambient", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
+  { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
   { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
@@ -199,7 +199,7 @@ const SPEC = [
   { k: "aiPace", lane: "json", group: "driving", def: "scripted", src: "js/game.js / js/physics/ai-band.js", oneOf: ["scripted", "catchup"] },
   // Keys real UI writes (checked against every store.set call site): player
   // preferences by the file's own definition, beside difficulty/raceGrid/caution.
-  { k: "drivingCoach", lane: "json", group: "driving", def: true, src: "js/race/driving-coach.js" },
+  { k: "drivingCoach", lane: "json", group: "driving", def: false, src: "js/race/driving-coach.js" },
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
@@ -507,6 +507,30 @@ function applyGarage(file) {
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
+// RESET TO THE SHIPPED GARAGE. Fresh installs never need this — GameStore.get
+// already answers from GarageDefaults on a miss — but a player who diverged
+// and wants the factory look back does. Clear every garage-shaped key first
+// so extras the shipped file does not name (an invented team, a one-off
+// setup.*) cannot linger, then apply GarageDefaults.file() through the same
+// loader a hand-picked export uses. Career / season / settings stay out.
+function resetGarage() {
+  if (typeof GarageDefaults === "undefined" || !GarageDefaults.file) {
+    return { ok: false, reason: "no shipped garage defaults", applied: 0, skipped: 0 };
+  }
+  const doomed = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const full = localStorage.key(i);
+      if (!full || full.indexOf("apex26.") !== 0) continue;
+      const k = full.slice(7);
+      if (isGarageKey(k)) doomed.push(k);
+    }
+  } catch (_) { /* storage blocked: apply what we can */ }
+  for (const k of doomed) {
+    try { GameStore.store.set(k, undefined); } catch (_) { /* keep clearing */ }
+  }
+  return applyGarage(GarageDefaults.file());
+}
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same
 // allowlist discipline as the garage — only career.<flavour>.<i> and
@@ -781,13 +805,43 @@ function create(G) {
     const wrap = document.createElement("div");
     wrap.id = "cs-garage-file";
     wrap.className = "sel-edit-row";
+    // Same two-tap arm as LOAD, but no file picker — the second tap clears
+    // garage-shaped keys and re-applies js/data/garage-defaults.js.
+    const resetLabel = "RESET GARAGE TO DEFAULTS";
+    const resetBtn = document.createElement("button");
+    resetBtn.id = "cs-garage-reset";
+    resetBtn.type = "button";
+    resetBtn.textContent = resetLabel;
+    resetBtn.title = "Clear parts, liveries, setups and team/driver back to the shipped garage. Career and settings are never touched.";
+    resetBtn.onclick = () => {
+      if (reloading) return;
+      if (!armed || armed.el !== resetBtn) {
+        disarm(); unflash(resetBtn);
+        armed = { el: resetBtn, label: resetLabel, snapshot: null };
+        resetBtn.textContent = `${resetLabel} — OVERWRITE THE GARAGE WITH DEFAULTS?`;
+        armT = setTimeout(disarm, ARM_MS);
+        tick();
+        return;
+      }
+      disarm();
+      const r = resetGarage();
+      if (!r.ok) { flash(resetBtn, resetLabel, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+      Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
+      if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+      if (!r.applied) { flash(resetBtn, resetLabel, "NOTHING TO RESET", 2200); return; }
+      resetBtn.textContent = `${resetLabel} — ${r.applied} APPLIED, RELOADING…`;
+      reloading = true; resetBtn.disabled = true;
+      setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      tick();
+    };
     wrap.append(
       saveBtn("cs-garage-save", "SAVE GARAGE FILE",
         "Parts, liveries, setup sheets and your own team, for every team. Career money, results and lap records are never in it.",
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       loadBtn("cs-garage-load", "LOAD GARAGE FILE",
         "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
-        applyGarage, "THE GARAGE"));
+        applyGarage, "THE GARAGE"),
+      resetBtn);
     return wrap;
   }
   // CAREER MODES mounts this the same way GARAGE mounts garageRow: fresh
@@ -846,13 +900,19 @@ function create(G) {
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,
-          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer,
+          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer, resetGarage,
           garageRow, careerRow, mount };
   return _ui;
 }
 
+/** Remount the BACKUP & RESTORE controls if create already ran (idempotent).
+ *  SettingsNav calls this when the files page opens so a missed boot mount
+ *  cannot leave an empty panel (title + Back only). */
+function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
+
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
-         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, garageValue, create,
+         applySettings, applyGarage, applyCareer, resetGarage, isGarageKey, isCareerKey, garageValue, create,
+         ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
