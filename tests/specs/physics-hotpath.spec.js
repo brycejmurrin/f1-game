@@ -120,8 +120,13 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
 test("arc-bucket traffic scan matches full-field on a seeded 22-car pack", async ({ loadTrack, page }) => {
   test.setTimeout(300_000);
   await loadTrack("monza", "day", "dry", { headless: true });
+  // Collide is a script-level `const` (js/physics/collide.js), same as AiDrive:
+  // page.evaluate cannot read it off window. Bind through a classic <script>.
+  await page.addScriptTag({
+    content: "window.__Collide = Collide;",
+  });
   const r = await page.evaluate(() => {
-    const C = window.Collide;
+    const C = window.__Collide;
     if (!C || typeof C.fillArcBuckets !== "function" || typeof C.forArcNear !== "function") {
       return { ok: false, reason: "Collide.fillArcBuckets/forArcNear missing" };
     }
