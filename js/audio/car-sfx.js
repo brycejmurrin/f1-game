@@ -10,7 +10,7 @@
  * Read-only on the car: every input is the car's own state, never the track's
  * curvature, so it sits in docs/PHYSICS.md's "surface" column.
  */
-const CarSfx = (() => {
+var CarSfx = (() => {
   const SFX = { scrub: 0, lock: 0, surface: 0, pitLim: 0, wet: false };
 
   function create(G) {

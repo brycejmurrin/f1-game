@@ -195,7 +195,8 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
+    ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
 }
 
@@ -240,6 +241,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
+                   ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])]) {
     assert.ok(seeded.has(f),
@@ -259,7 +261,8 @@ test("sw.js stamps every injected asset it seeds", () => {
   // source text: the question is which paths actually get the ?v= suffix.
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
+    ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],

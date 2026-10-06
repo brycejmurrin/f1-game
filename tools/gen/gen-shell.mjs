@@ -162,6 +162,7 @@ export function swOptionalFiles() {
   return [
     ...Object.values(MANIFEST.DEFERRED).flat(),
     ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+    ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR,
   ];
 }
@@ -170,6 +171,7 @@ function swOptionalBlock() {
   const groups = [
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
     ["LAZY_RACE + LAZY_SCENERY — the race payload; a miss builds a bare circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY]],
+    ["LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start", MANIFEST.LAZY_AUDIO || []],
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
     ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
@@ -193,6 +195,7 @@ function rosterSource() {
     ["DEFERRED", MANIFEST.DEFERRED], ["DEFERRED_EDGES", MANIFEST.DEFERRED_EDGES],
     ["LAZY_AGENT", MANIFEST.LAZY_AGENT], ["LAZY_EDGES", MANIFEST.LAZY_EDGES],
     ["LAZY_RACE", MANIFEST.LAZY_RACE], ["SCENERY_DIR", MANIFEST.SCENERY_DIR],
+    ["LAZY_AUDIO", MANIFEST.LAZY_AUDIO], ["LAZY_AUDIO_EDGES", MANIFEST.LAZY_AUDIO_EDGES],
     ["LAZY_DATA", MANIFEST.LAZY_DATA], ["LAZY_DATA_EDGES", MANIFEST.LAZY_DATA_EDGES],
     ["LAZY_NET", MANIFEST.LAZY_NET], ["LAZY_NET_EDGES", MANIFEST.LAZY_NET_EDGES],
     ["LAZY_WORKER", MANIFEST.LAZY_WORKER],

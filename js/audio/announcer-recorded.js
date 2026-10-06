@@ -1,7 +1,7 @@
 "use strict";
 /* A recorded read owns its pending load as well as its playing clips. Unknown
  * event copy stays on the card; never change speakers halfway through it. */
-const RecordedAnnouncer = (() => {
+var RecordedAnnouncer = (() => {
   function create(G) {
     let generation = 0, live = false, timer = null, deadline = null;
     const pack = () => G.radio && G.radio.pack;

@@ -1,7 +1,7 @@
 /* GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite fields; nameForTune derives its matching preset, preserving the current name on ties. No audio nodes or context state. */
 "use strict";
 
-const GameAudioToneModel = (function () {
+var GameAudioToneModel = (function () {
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
   // function of rev — so tools/check/audio-test.cjs's invariants (pitch monotonic in

@@ -12,7 +12,7 @@
    { init } — game.js calls init() at the boot-restore position, AFTER
    the saved settings are loaded but before the first frame. setSound at
    create time would run ~2800 lines early, ahead of CamModes/DataHub. */
-const AudioPanel = (() => {
+var AudioPanel = (() => {
   function create(G) {
     Log.info("audio", "AudioPanel.create");
     const { $, els, store } = G;

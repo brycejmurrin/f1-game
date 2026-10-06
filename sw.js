@@ -354,6 +354,22 @@ async function precacheAssetLists() {
     "js/circuits/scenery/buddh.js",
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
+    // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
+    "js/audio/signal.js",
+    "js/audio/soundtrack.js",
+    "js/audio/radio-fx.js",
+    "js/audio/tone-model.js",
+    "js/audio/engine.js",
+    "js/audio/music-lib.js",
+    "js/audio/spotify.js",
+    "js/audio/rivals.js",
+    "js/audio/car-sfx.js",
+    "js/audio/voice-pack.js",
+    "js/audio/radio-voice.js",
+    "js/audio/announcer-recorded.js",
+    "js/audio/announcer.js",
+    "js/audio/panel.js",
+    "js/audio/driving-cues.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
     "js/data/tab-utils.js",
     "js/data/api-transport.js",
@@ -523,7 +539,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/audio\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then

@@ -19,7 +19,7 @@
  * The pure half (norm, compose) is shared with the generator, so the keys the
  * tool writes are exactly the keys the game looks up.
  */
-const VoicePack = (() => {
+var VoicePack = (() => {
   // Author-time generator and player picker share this catalogue. `speaker` is
   // the voice's OWN channel; every voice can speak every channel (packFor), each
   // from a pack holding only that channel's words. The spotter speaks in the

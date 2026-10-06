@@ -77,8 +77,20 @@ const lazyBundles = LazyBundles.create({
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G); },
+  // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals.
+  onAudioReady: () => {
+    radioVoice = RadioVoice.create(G);
+    announcer = Announcer.create(G);
+    rivalAudio = RivalAudio.create(G);
+    carSfx = CarSfx.create(G);
+    audioPanel = AudioPanel.create(G);
+    if (audioPanel && audioPanel.init) audioPanel.init();
+    if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
+  },
 });
-const { SCENERY_DIR, sceneryResident, ensureScenery, ensureDataHub, ensureNet, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+// Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
+if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
 const { backendPreference } = rendererBoot;
 const backendBoot = await rendererBoot.start();
@@ -2563,6 +2575,7 @@ async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
+  await ensureAudio();   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
   const careerSaveConflict = isCareer() && Career.conflicted();
@@ -4028,8 +4041,8 @@ function drivingLineApi(trk) {
   }
   return _dlApi;
 }
-const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
-const carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter and wheel guns
+let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
+let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
 // Photo mode (js/camera/photo-cam.js).
 const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode;
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -4096,7 +4109,7 @@ const bodyAttitude = BodyAttitude.create(G);
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
-const audioPanel = AudioPanel.create(G);
+let audioPanel = AudioPanel.create(G);   // stub at boot; real panel after ensureAudio
 
 function teamById(id) { return Teams.LIST.find((t) => t.id === id); }
 function cssCol(c) { return "rgb(" + (c[0] * 255 | 0) + "," + (c[1] * 255 | 0) + "," + (c[2] * 255 | 0) + ")"; }
@@ -8413,7 +8426,7 @@ $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings()
 // tuners are reachable without starting a race first. Always opens on the
 // door index. closeSettings() already only returns to the pause menu when
 // actually paused, so from here it just closes back to the title.
-$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
+$("mb-settings").onclick = () => { ensureAudio().then(() => { if (soundOn) GameAudio.init(); }); openSettings(); };
 // STEERING and MUSIC are SettingsNav pages (js/ui/settings-tabs.js). Lighting
 // and camera tuners open as their own docks from DISPLAY > ADVANCED VISUALS.
 // ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
@@ -8556,7 +8569,7 @@ let garageReturn = "select";
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
   garagePre.markOpen(from);
-  if (from === "menu" && soundOn) GameAudio.init();
+  if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
@@ -8983,6 +8996,11 @@ if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
 if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
 lazyBundles.raceAssets();
+// First pointerdown also kicks LAZY_AUDIO so a later SOUND click still has a
+// chance to unlock AudioContext on the same gesture chain (iOS).
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+}
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
 // binds to exists and the G facade is fully built. This is the STUB's no-op
