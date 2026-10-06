@@ -31,11 +31,13 @@ the browser loses nothing.
 
 | You want to… | Do this |
 |---|---|
-| Move the road | Drag a white point. |
+| Select a point | Tap (click) a white point — selecting never moves it. |
+| Move the road | Drag a **selected** point (or drag past a short threshold on mouse). Arrow keys nudge 1 m (10 m with Shift). **UNDO** restores an accidental move. |
 | Add a point | Tap (click) the road between two points. |
 | Remove a point | Double-tap it, press and hold it and choose DELETE, or select it and press **DELETE POINT**. A loop keeps at least 8 points. |
+| Cycle points | **PREV POINT** / **NEXT POINT**, Tab, or `[` `]` step through the loop; Escape deselects. |
 | Draw a new circuit | Pick **DRAW** and draw one closed loop in a single stroke. It closes, smooths and spaces itself, and the start goes on its longest straight. |
-| Look around | Pinch or use the wheel to zoom, drag empty space to pan, **FIT VIEW** to recentre. |
+| Look around | Pinch or use the wheel to zoom, drag empty space to pan, **FIT VIEW** to recentre. Pan and zoom never move points. |
 | Turn it around | **REVERSE** runs the circuit the other way; the start line stays put. |
 
 Every point snaps to a 25 cm grid, which is what keeps a share link short and
@@ -140,26 +142,20 @@ or stamp elsewhere. Three rows of chips live here too:
   nudges two or three of that card's points (never within 300 m of the start
   line) into four new cards. The same circuit always gives the same cards.
 
-## Elevation — hills and dips
+## Elevation — per-node heights
 
-The strip under the canvas is the circuit's height profile, start line on the
-left, as the game builds it. Its dots are the hills you added (each a smooth
-cosine bump), the short ticks along the bottom your points, the red line the
-point selected on the canvas, and amber dots the slope, crest and dip warnings.
+Switch to **ELEVATION** mode. The strip under the canvas is the circuit's
+height profile (start line on the left), with one grip per control point. Amber
+dots mark slope, crest and dip warnings.
 
-- **Add a hill** — tap the strip where it should go (or, on the strip, Enter
-  adds one at the point selected on the canvas). A new hill is 6 m high and
-  320 m long.
-- **Shape it** — drag its dot up or down for the height (a dip is a negative
-  height), sideways to move it, and with Shift held sideways to make it longer
-  or shorter. The road never gets steeper than 8 %: a short hill cannot be a
-  tall one, so the height stops at the limit.
-- **Remove it** — press and hold its dot, or Delete with it selected.
-- **On a phone or a pad** — with a hill selected, **HILL m**, **HILL LENGTH m**
-  and **REMOVE HILL** appear at the end of 4 DETAILS. On a phone held sideways
-  the strip is hidden to give the canvas the height.
+- **Select** — tap a grip. Selecting never changes height.
+- **Edit height** — drag the **selected** grip vertically (horizontal motion
+  is ignored), or use **POINT m** in the rail. Up/Down on the strip nudge 1 m
+  (5 m with Shift); Delete / Enter flatten that node.
+- **Presets** — **Flat** clears heights; **Rolling** / **Hilly** write smooth
+  per-node profiles (one UNDO each). Old saves without heights load flat.
 
-Every change is one UNDO step. Up to 24 hills per circuit.
+Every height edit is one UNDO step.
 
 ## TURNS — every corner, tappable
 
@@ -236,9 +232,9 @@ the designer with the same point selected.
 
 | Input | How |
 |---|---|
-| Touch | Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE / TEST HERE · pinch to zoom, drag empty space to pan. |
-| Mouse | Drag a point · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the stretch between them. |
-| Keyboard | Tab to the canvas · `[` and `]` step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, `[` and `]` pick one, Up/Down set its height (5 m with Shift), Left/Right move it 10 m (with Shift: 40 m shorter / longer), Delete removes it. |
+| Touch | Tap a point to select · drag a selected point (or hold briefly then drag) to move it · tap the road to add one · double-tap to delete · press and hold for DELETE / START HERE / TEST HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically. |
+| Mouse | Click a point to select · drag past a short threshold to move · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point for a span. |
+| Keyboard | Tab / `[` `]` cycle points · arrows nudge 1 m (10 m with Shift) · Delete removes · Enter stamps · Esc deselects · Ctrl/⌘Z undo · on the elevation strip, Up/Down set height (Shift ×5), Delete / Enter flatten. |
 | Gamepad | The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer. |
 
 ## Limits

@@ -30,17 +30,17 @@ const TrackDesigner = (function () {
   const HOWTO = Object.freeze({
     STEPS: Object.freeze([
       { n: 1, title: "Start", text: "Pick a MODE (DRAW / EDIT / ELEVATION / SCENERY / TEST), then RANDOMISE, TRACK OF THE DAY, START FROM…, or DRAW one closed loop." },
-      { n: 2, title: "Shape", text: "In EDIT, drag white points; tap the road to add one; double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
+      { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); tap the road to add one, double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
       { n: 3, title: "Corners", text: "Still in EDIT, choose CORNER / HAIRPIN / CHICANE / S-BEND, set radius and angle, then tap where it should begin — UNDO takes a stamp back." },
-      { n: 4, title: "Elevation", text: "In ELEVATION, drag grips on the strip under the map, or use Flat / Rolling / Hilly. Each control point has its own height; old saves without heights load flat." },
+      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select (height stays put), then drag vertically — or use POINT m / Flat / Rolling / Hilly. Old saves without heights load flat." },
       { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD, then name the circuit." },
       { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
     GESTURES: Object.freeze([
-      { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, drag a grip up or down (≥44 px targets)." },
-      { input: "Mouse", text: "Drag a point to move it · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape · Esc lets go · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height." },
+      { input: "Touch", text: "Tap a point to select · drag a selected point (or hold briefly then drag) to move it · tap the road to add one · double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap to select then drag vertically (≥44 px targets)." },
+      { input: "Mouse", text: "Click a point to select · drag past a short threshold to move it · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
+      { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
@@ -97,13 +97,13 @@ const TrackDesigner = (function () {
   function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
-    if (mode === "elevation") return "ELEVATION: drag grips on the strip under the map · Flat / Rolling / Hilly presets · each point has its own height";
+    if (mode === "elevation") return "ELEVATION: tap a grip to select (height stays) · drag vertically to edit · POINT m / Flat / Rolling / Hilly";
     if (mode === "scenery") return "SCENERY: pick a theme and tune TIME / TREES / CROWD";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
     return kind ? kind.label + ": tap a point to stamp it after that point (shift-tap a second point to replace the span between them)"
-      : "SELECT: drag points · tap the road to add one · double-tap a point to delete it · wheel or pinch to zoom";
+      : "SELECT: tap a point to select · drag to move · tap the road to add one · double-tap to delete · empty-space drag pans";
   }
   /** "CORNER R 45 m × 90° LEFT" — what STAMP will lay down with the stepper values. */
   function stampExample() {
@@ -372,6 +372,18 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { pts: next }), "delete");
     return true;
   }
+  /** Cycle the selected control point (PREV / NEXT POINT, Tab / [ ]). */
+  function cyclePoint(dir) {
+    if (!design || !design.pts || !design.pts.length) return false;
+    const N = design.pts.length;
+    const d = dir < 0 ? -1 : 1;
+    sel = sel < 0 ? (d > 0 ? 0 : N - 1) : (sel + d + N) % N;
+    span = -1;
+    if (cv) cv.setSelection(sel, span);
+    if (prof && mode === "elevation") prof.select(sel);
+    refreshControls();
+    return true;
+  }
   function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = ensureHeights(JSON.parse(undo.pop())); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
   function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = ensureHeights(JSON.parse(redo.pop())); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
   function setTheme(id) {
@@ -523,9 +535,9 @@ const TrackDesigner = (function () {
     const stage = el("div", "td-stage");
     canvas = el("canvas");
     canvas.tabIndex = 0;
-    canvas.setAttribute("aria-label", "Circuit design. Drag a point to move it, tap the road to add one, double-tap a point to delete it. Arrow keys move the selected point.");
+    canvas.setAttribute("aria-label", "Circuit design. Tap a point to select it, then drag to move. Tap the road to add one; double-tap a point to delete it. Arrow keys nudge the selected point.");
     ui.stats = el("div", "td-stats");
-    ui.hint = el("div", "td-hint", "Drag points · tap the road to add one · shift-tap a second point to select a span");
+    ui.hint = el("div", "td-hint", "Tap to select · drag to move · tap the road to add one · shift-tap a second point for a span");
     // The canvas's press-and-hold row (hooks.onContext): absolute over the
     // stage at the press, acting on one point; any new press on the canvas hides it.
     ui.ctx = el("div", "td-chips td-ctx"); ui.ctx.hidden = true; ui.ctx.setAttribute("role", "group");
@@ -582,7 +594,7 @@ const TrackDesigner = (function () {
     cv = DesignerCanvas.create(canvas, {
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
-      onSelect: (i) => { sel = i; refreshControls(); },
+      onSelect: (i) => { sel = Number.isInteger(i) ? i : -1; if (sel < 0) span = -1; refreshControls(); },
       onPick: (i, ev) => {
         if (TrackStamps.KINDS[tool]) { if (ev.shiftKey && sel >= 0 && sel !== i) applyStamp(sel, i); else applyStamp(i, i); return; }
         if (ev.shiftKey && sel >= 0 && sel !== i) span = i; else { sel = i; span = -1; }
@@ -778,7 +790,11 @@ const TrackDesigner = (function () {
     ui.reverse = btn("REVERSE", "sel-chip", () => reverse());
     ui.start = btn("START HERE", "sel-chip", () => setStart(sel));
     ui.del = btn("DELETE POINT", "sel-chip", () => deletePoint(sel));
-    actions.append(ui.randomise, ui.reverse, ui.start, ui.del);
+    ui.prevPt = btn("PREV POINT", "sel-chip", () => cyclePoint(-1));
+    ui.nextPt = btn("NEXT POINT", "sel-chip", () => cyclePoint(1));
+    ui.prevPt.setAttribute("aria-label", "Select previous control point");
+    ui.nextPt.setAttribute("aria-label", "Select next control point");
+    actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
     ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
     actions.appendChild(ui.testHere);
@@ -792,7 +808,7 @@ const TrackDesigner = (function () {
       b.dataset.elev = name;
       ui.elevPresets.appendChild(b);
     }
-    ui.elevHint = el("div", "td-hint", "Drag grips on the strip · Flat clears heights · Rolling / Hilly write smooth per-node heights");
+    ui.elevHint = el("div", "td-hint", "Tap a grip to select (height stays) · drag vertically to edit · POINT m nudges · Flat / Rolling / Hilly presets");
     ui.elevNode = stepper("POINT m", () => {
       if (!design || sel < 0 || !design.heights) return 0;
       return design.heights[sel] || 0;
@@ -947,6 +963,8 @@ const TrackDesigner = (function () {
     if (ui.undo) ui.undo.disabled = !undo.length;
     if (ui.redo) ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
+    if (ui.prevPt) ui.prevPt.disabled = !(design && design.pts && design.pts.length);
+    if (ui.nextPt) ui.nextPt.disabled = !(design && design.pts && design.pts.length);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
     if (ui.elevNode) { ui.elevNode.hidden = !(showElev && sel >= 0); if (!ui.elevNode.hidden) ui.elevNode._refresh(); }
     if (root) root.dataset.mode = mode;
@@ -1794,7 +1812,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank };
