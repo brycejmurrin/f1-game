@@ -1,1 +1,0 @@
-1791250822	Replit Agent	Fix native backup acknowledgement: settings-export.js download/saveBtn helpers ONLY + regression tests; WebKit fullscreen tracking/exit: platform-session.js + a11y-pwa-pass tests. FORBIDDEN: settings SPEC/defaults/mount/garage reset/export lists, renderer boot, auth/cache files. Related claims stale; open PR diffs checked for disjoint hunks.
