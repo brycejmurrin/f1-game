@@ -193,7 +193,7 @@
 /* (Full-bleed rows used to need their own negative outline-offset so the ring
    was not sliced by #sel-tracks. The base ring is inset for every control now,
    so that override is redundant — see :focus-visible in css/tokens.css.) */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .track-row:hover { background: var(--plate); }
 }
 .track-row:active { background: var(--plate-hover); }

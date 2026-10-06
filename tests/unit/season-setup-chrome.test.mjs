@@ -67,3 +67,8 @@ test("preset chips are a balanced-row with a quarter-row basis (no REVERSE orpha
     "quarter-row basis packs eight chips as 4+4 (never 7+1 REVERSE orphan)");
   assert.equal(decl(rules, "#ss-presets", "--balance-min"), "4.5rem");
 });
+
+test(".track-row:hover is gated on (hover: hover) and (pointer: fine)", () => {
+  const r = ruleFor(raceRules(), ".track-row:hover", "background");
+  assert.ok(r && r.context.some((c) => /hover:\s*hover/.test(c) && /pointer:\s*fine/.test(c)));
+});
