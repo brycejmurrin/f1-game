@@ -2366,22 +2366,28 @@ const Car3D = (function () {
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
     if (!ckpt) {
-      if (_round) CarShade.headrest(out, DARK, addTri); else addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop (rounded build: a horseshoe on the coaming)
       // Recipe-gated HEADREST behind the helmet: 0 flat rim (shipped) / 1 raised
-      // horseshoe pad / 2 winged pad. Front face z -0.25 sits just behind the
-      // helmet dome (centre z -0.08, r 0.145 -> rear extent -0.225); pad tops
-      // stay under the airbox intake underside (y 0.715).
+      // horseshoe pad / 2 winged pad. Front face stays behind the helmet dome
+      // (centre z -0.075, r 0.145 -> rear extent -0.220); pad tops stay under
+      // the airbox intake underside (y 0.715). Rounded builds draw the whole
+      // recipe as CarShade pipes (no stacked addBox cushions).
       const headrest = Math.max(0, Math.min(2, Math.round(cockpitStyle.headrest || 0)));
       const PAD = [0.08, 0.08, 0.10];
-      if (headrest === 1) {
-        addBox(out, 0, 0.655, -0.30, 0.34, 0.075, 0.10, PAD, SURFACES.carbon);
-        for (const s of [-1, 1])
-          addBox(out, s * 0.20, 0.645, -0.16, 0.06, 0.065, 0.24, PAD, SURFACES.carbon);
-      } else if (headrest === 2) {
-        addBox(out, 0, 0.665, -0.31, 0.36, 0.095, 0.11, PAD, SURFACES.carbon);
-        for (const s of [-1, 1]) {
-          addBox(out, s * 0.21, 0.675, -0.22, 0.05, 0.075, 0.16, PAD, SURFACES.carbon);
-          addBox(out, s * 0.215, 0.700, -0.13, 0.04, 0.028, 0.10, PAD, SURFACES.carbon);
+      if (_round) {
+        CarShade.headrest(out, headrest === 0 ? DARK : PAD, addTri,
+                          headrest === 0 ? null : SURFACES.carbon, headrest);
+      } else {
+        addBox(out, 0, 0.74, -0.18, 0.60, 0.06, 0.07, DARK); // rear hoop (flat build)
+        if (headrest === 1) {
+          addBox(out, 0, 0.655, -0.30, 0.34, 0.075, 0.10, PAD, SURFACES.carbon);
+          for (const s of [-1, 1])
+            addBox(out, s * 0.20, 0.645, -0.16, 0.06, 0.065, 0.24, PAD, SURFACES.carbon);
+        } else if (headrest === 2) {
+          addBox(out, 0, 0.665, -0.31, 0.36, 0.095, 0.11, PAD, SURFACES.carbon);
+          for (const s of [-1, 1]) {
+            addBox(out, s * 0.21, 0.675, -0.22, 0.05, 0.075, 0.16, PAD, SURFACES.carbon);
+            addBox(out, s * 0.215, 0.700, -0.13, 0.04, 0.028, 0.10, PAD, SURFACES.carbon);
+          }
         }
       }
     }
