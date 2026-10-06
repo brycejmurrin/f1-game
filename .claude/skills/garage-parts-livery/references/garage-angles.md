@@ -14,6 +14,7 @@
 - [Presets are starting points](#presets-are-starting-points)
 - [Fast iteration](#fast-iteration)
 - [Multi-team](#multi-team)
+- [BEFORE pack — fetch, do not recapture](#before-pack--fetch-do-not-recapture)
 - [Before you run](#before-you-run)
 - [When NOT to use](#when-not-to-use)
 - [Offline preflight](#offline-preflight)
@@ -29,6 +30,7 @@ answered placement and you need **lit, foreshortened** proof.
 - Presets are starting points
 - Fast iteration
 - Multi-team
+- BEFORE pack — fetch, do not recapture
 - Before you run
 - When NOT to use
 - Offline preflight
@@ -312,6 +314,19 @@ or with a higher `--view-settle`.
 per-team rollup contact sheet of `--rollup-view` (default `side`);
 `--full-views` shoots every camera for every team. `--resume` skips teams that
 already have their first frame in `--out`; `--reset` clears it.
+
+## BEFORE pack — fetch, do not recapture
+
+For a car/garage change, download the ship pack instead of shooting the
+11-team grid here:
+
+```sh
+node tools/garage-angles-fetch.mjs --out artifacts/garage-before
+```
+
+`Garage before` (`.github/workflows/garage-before.yml`) captures
+`--team` shards × `--views=hero,front,side,rear,top,wingFront,wingRear`
+on macos-latest. Recapture only the AFTER angles you changed.
 
 ## Before you run
 

@@ -59,10 +59,10 @@ cmd_status() {
   echo "Out:     ${OUTDIR}"
   if [[ -x /opt/google/chrome/chrome ]]; then
     echo "Chrome:  /opt/google/chrome/chrome"
-  elif compgen -G "/opt/pw-browsers/chromium-*/chrome-linux64/chrome" >/dev/null; then
-    echo "Chrome:  $(compgen -G "/opt/pw-browsers/chromium-*/chrome-linux64/chrome" | head -1)"
   else
-    echo "Chrome:  (playwright default)"
+    local found
+    found="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+    echo "Chrome:  ${found:-"(playwright default)"}"
   fi
   echo "Bin:     npx ${MCP_NPM_PACKAGE}"
 }

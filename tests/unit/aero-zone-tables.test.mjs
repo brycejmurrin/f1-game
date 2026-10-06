@@ -144,3 +144,14 @@ test("the MAP asks AeroZones where the zones are — it does not scan curvature 
   assert.ok(!/KV_THRESH|MIN_FRAC/.test(src),
     "the old DRS thresholds are still present — they are a second source of truth");
 });
+
+// UI-11 (hunt2): the circuit picker and CIRCUIT DETAIL called the 2026
+// active-aero (straight-mode) zones "DRS ZONES" / "N DRS"; the HUD, the phone
+// and HOW TO PLAY all say AERO. No player-visible string here names DRS.
+test("the circuit picker names the zones the way the HUD does (AERO, never DRS)", () => {
+  const src = fs.readFileSync(new URL("../../js/ui/select-screen.js", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const visible = (src.match(/"[^"\n]*"/g) || []).filter((s) => /\bDRS\b/.test(s));
+  assert.deepEqual(visible, [], "a string literal still says DRS");
+  assert.match(src, /\["AERO ZONES", /);
+});

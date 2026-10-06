@@ -253,6 +253,22 @@ function openUnavailableDialog(dialog, closeButton, returnFocus) {
 }
 function showUnavailable(opts) {
   const panel = opts && opts.panel;
+  // APEX_SURVEY_HUD=1 (#1034): keep cockpit chrome for Wave-3 shots even when
+  // gfx is dead (ctxLost / Graphics unavailable — #1033). Do not hide #hud or
+  // leave #nogl covering the survey target.
+  const survey = typeof SurveyHud !== "undefined" && SurveyHud.armed && SurveyHud.armed();
+  if (survey) {
+    if (panel) panel.hidden = true;
+    if (opts && opts.hud) { opts.hud.hidden = false; if ("inert" in opts.hud) opts.hud.inert = false; }
+    if (opts && opts.overlay) { opts.overlay.hidden = true; if ("inert" in opts.overlay) opts.overlay.inert = false; }
+    try {
+      SurveyHud.holdChrome({
+        document: typeof document !== "undefined" ? document : null,
+        els: { hud: opts && opts.hud, overlay: opts && opts.overlay, nogl: panel },
+      });
+    } catch (_) { /* holdChrome best-effort */ }
+    return;
+  }
   if (opts && opts.hud) { opts.hud.hidden = true; opts.hud.inert = true; }
   if (opts && opts.overlay) { opts.overlay.hidden = true; opts.overlay.inert = true; }
   if (!panel) return;
