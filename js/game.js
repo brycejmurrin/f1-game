@@ -9020,6 +9020,6 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // ...and a link pasted into a tab that is ALREADY running only fires
 // hashchange. The lobby's own listener exists once the bundle is up; until
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
-if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
+if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); }); if (typeof SurveyHud !== "undefined") SurveyHud.boot({ $, els, document, loadingScreen, canvas });
 
 })();
