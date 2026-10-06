@@ -8,7 +8,11 @@
    circuit shelf is .track-row (below), the format groups are .chip-row/.sel-chip
    (shared with #race-settings), and the panes are .pane-pair from
    css/components.css. Only the two behavioural deltas are written here. */
-#season-setup { z-index: 26; }              /* over #select, which is 25 */
+/* Native overlay scrollbars follow color-scheme. Without this the calendar
+   and preset panes keep OS-light white thumbs on the dark sheet (measured
+   1280x800). Light UI theme flips the scheme with the tokens. */
+#season-setup { z-index: 26; color-scheme: dark; }   /* over #select, which is 25 */
+:root[data-ui-theme="light"] #season-setup { color-scheme: light; }
 /* --pair-at IS WHAT MAKES THE PANES SCROLL, and leaving it out is why they did
    not. js/ui/sheet-shape.js reads this property to decide `data-pair`, and
    with no value it deletes the attribute and returns — so .pane-pair never
@@ -40,11 +44,47 @@
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  /* One themed thumb on narrow: plate-line on transparent, not OS white. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--plate-line) transparent;
+  /* Last format chips / ADD rows clear the foot when scrolled to the end. */
+  padding-bottom: calc(var(--pad) * 0.75);
+  scroll-padding-bottom: calc(var(--pad) * 0.75);
+}
+#ss-inner:not([data-pair="on"]) > #ss-body::-webkit-scrollbar { width: 8px; }
+#ss-inner:not([data-pair="on"]) > #ss-body::-webkit-scrollbar-track { background: transparent; }
+#ss-inner:not([data-pair="on"]) > #ss-body::-webkit-scrollbar-thumb {
+  background: var(--plate-line);
+  border-radius: var(--r-xs);
 }
 #ss-inner:not([data-pair="on"]) > #ss-body > .pane {
   flex: 0 0 auto;
   overflow: visible;
   overscroll-behavior: auto;
+}
+/* Paired desktop (1280×800): two panes scroll — theme both thumbs and drop the
+   ScrollFade pseudo so native + red indicator never double up. Gutter stays
+   stable from `.pane`; the thumb alone is the bar. */
+#ss-inner[data-pair="on"] :is(#ss-cal, #ss-pool) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--plate-line) transparent;
+  padding-bottom: calc(var(--pad) * 0.75);
+  scroll-padding-bottom: calc(var(--pad) * 0.75);
+}
+#ss-inner[data-pair="on"] :is(#ss-cal, #ss-pool)::-webkit-scrollbar { width: 8px; }
+#ss-inner[data-pair="on"] :is(#ss-cal, #ss-pool)::-webkit-scrollbar-track { background: transparent; }
+#ss-inner[data-pair="on"] :is(#ss-cal, #ss-pool)::-webkit-scrollbar-thumb {
+  background: var(--plate-line);
+  border-radius: var(--r-xs);
+}
+#ss-inner[data-pair="on"] :is(#ss-cal, #ss-pool).sf-scroll::before { display: none; }
+/* PRESETS: eight chips (FULL…REVERSE). Content-sized .chip-row left REVERSE
+   alone on a trailing line at ~half of the 1020 sheet. `.balanced-row` grows
+   each chip from a quarter-row basis so wraps stay 4+4 / 3+3+2 / 2×4 — never
+   a one-chip orphan. */
+#ss-presets {
+  --balance-basis: calc(25% - var(--gap) * 0.5);
+  --balance-min: 4.5rem;
 }
 /* Both columns are .pane, so the scrolling, the overscroll containment and the
    reserved gutter come with the primitive — nothing to restate here.

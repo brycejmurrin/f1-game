@@ -593,6 +593,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
+  // foot clearance — css/race-setup.css + season-ui.js only.
+  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/session-contracts.test.mjs",
