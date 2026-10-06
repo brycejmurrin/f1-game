@@ -30,7 +30,7 @@ const { LiveryTex } = loadParts();
 
 // The resident cost of one atlas at a given divisor: the exact mip chain, the
 // same arithmetic GLX.texCensus() uses. NOT w*h*4*4/3 — that rule assumes a
-// square texture and this atlas is 1024x1280.
+// square texture and this atlas is 2048x2560.
 function atlasBytes(div) {
   let total = 0, w = LiveryTex.SIZE / div, h = LiveryTex.SIZE_H / div;
   for (;;) {
@@ -41,36 +41,38 @@ function atlasBytes(div) {
 }
 
 test("the authored atlas is the size the memory arithmetic assumes", () => {
-  assert.equal(LiveryTex.SIZE, 1024);
-  assert.equal(LiveryTex.SIZE_H, 1280);
-  // 6.99 MB — the per-atlas figure §2v and the plan are built on. If the
-  // authored size ever changes, every number in both is stale and this fails.
-  assert.equal(atlasBytes(1), 6990500);
+  assert.equal(LiveryTex.SIZE, 2048);
+  assert.equal(LiveryTex.SIZE_H, 2560);
+  // ~26.7 MB — garage boards need 2× linear texels; AI/mobile keep the old
+  // absolute upload sizes via atlasDiv. If the authored size ever changes,
+  // every number in the tier table is stale and this fails.
+  assert.equal(atlasBytes(1), 27962020);
 });
 
-test("desktop: the player keeps full resolution, AI drops one step", () => {
+test("desktop: the player keeps full resolution, AI uploads at 512×640", () => {
   assert.equal(LiveryTex.atlasDiv(true, false), 1, "the player's own car stays authored-size");
-  assert.equal(LiveryTex.atlasDiv(false, false), 2, "AI cars upload at 512x640");
+  assert.equal(LiveryTex.atlasDiv(false, false), 4, "AI cars upload at 512x640 (same absolute as pre-2048 half)");
+  assert.equal(atlasBytes(4), 1747620, "desktop AI mip chain stays ~1.67 MB");
 });
 
-test("mobile is UNCHANGED — it already had a tighter policy", () => {
-  // Not touched by this change: mobile carries a jetsam budget this is not
-  // about, and it was already at 512 player / 256 AI.
-  assert.equal(LiveryTex.atlasDiv(true, true), 2);
-  assert.equal(LiveryTex.atlasDiv(false, true), 4);
+test("mobile keeps the same absolute upload sizes as the 1024-era policy", () => {
+  // Divisors doubled with SIZE so jetsam bytes are unchanged: 512 player / 256 AI.
+  assert.equal(LiveryTex.atlasDiv(true, true), 4);
+  assert.equal(LiveryTex.atlasDiv(false, true), 8);
+  assert.equal(atlasBytes(4), 1747620);
+  assert.equal(atlasBytes(8), 436900);
 });
 
-test("the desktop grid saving is the order of magnitude the plan claimed", () => {
-  const before = 22 * atlasBytes(1);                       // every car at full
-  const after = atlasBytes(1) + 21 * atlasBytes(2);        // player full, 21 AI at half
+test("the desktop grid stays well under the old every-car-full figure", () => {
+  const everyFull = 22 * atlasBytes(1);                    // every car at authored full
+  const tiered = atlasBytes(1) + 21 * atlasBytes(4);       // player full, 21 AI at 512×640
   const mb = (b) => b / 1048576;
-  // Measured before: 146.67 MB (texCensus, montreal, full grid).
-  assert.ok(Math.abs(mb(before) - 146.67) < 0.5, `before ${mb(before).toFixed(2)} MB`);
-  assert.ok(mb(after) < 50, `after ${mb(after).toFixed(2)} MB should be well under 50`);
-  // The whole point: this is worth more than every other texture lever
-  // combined. The baked material arrays measure 11.33 MB in total.
-  assert.ok(mb(before) - mb(after) > 90,
-    `expected to free >90 MB, freed ${(mb(before) - mb(after)).toFixed(1)}`);
+  // Pre-tier / pre-2048 plan figure was ~147 MB for 22 × 1024×1280. Authored
+  // 2048 makes every-full ~587 MB; the tiered desktop grid is ~62 MB.
+  assert.ok(mb(everyFull) > 500, `every-full ${mb(everyFull).toFixed(2)} MB`);
+  assert.ok(mb(tiered) < 70, `tiered ${mb(tiered).toFixed(2)} MB should stay under 70`);
+  assert.ok(mb(everyFull) - mb(tiered) > 400,
+    `expected to free >400 MB vs every-full, freed ${(mb(everyFull) - mb(tiered)).toFixed(1)}`);
 });
 
 test("a tier is never bigger than the one above it", () => {

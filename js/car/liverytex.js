@@ -1,68 +1,71 @@
 "use strict";
 const LiveryTex = (function () {
-  const SIZE = 1024;
-  // The atlas is SIZE wide and SIZE_H tall: the extra rows below y 1024 hold
+  // Authored at 2048×2560 (was 1024×1280): garage / 3/4 boards need ~2×
+  // texels so SKYSTRIKE / NITROX edges stay cut-vinyl crisp. UV fractions are
+  // unchanged — REGIONS scale with SIZE. MEMORY (exact mip chain):
+  //   one full atlas  ~26.7 MB  (was 6.67 MB)
+  //   desktop grid    ~61.7 MB  player full + 21 AI at 512×640 (was ~41.7 MB)
+  // AI and mobile KEEP the same absolute upload sizes as before via atlasDiv
+  // (divisors doubled with SIZE), so race-distance rivals do not pay 4×.
+  const SIZE = 2048;
+  // The atlas is SIZE wide and SIZE_H tall: the extra rows below y SIZE hold
   // the LEFT flank, authored separately from the right (an asymmetric graphic
   // — a bull facing forward — cannot be one texture mirrored across the car,
   // and text cannot be one texture NOT mirrored; each side gets its own).
   // UVs are fractions, so v divides by SIZE_H wherever u divides by SIZE.
-  const SIZE_H = 1280;
-  // Mobile tier: upload atlases at half size — 22 cars × 1024² RGBA + mips was
-  // ~117 MB of GPU memory, the biggest consumer on iOS web apps, whose jetsam
-  // budget counts GPU allocations. This READS glx.js's answer rather than
-  // copying its sniff (a "must match glx.js" comment is not a mechanism): the
-  // same "phone AND not GRAPHICS: HIGH" tier IS_MOBILE means here. glx.js is
-  // tagged ahead of this file in both index.html and the CARVIEW subset, so
-  // the value exists at eval; the
+  const SIZE_H = 2560;
+  // Mobile tier: upload atlases at a jetsam-safe absolute size — 22 cars ×
+  // full RGBA + mips was the biggest GPU consumer on iOS web apps. This READS
+  // glx.js's answer rather than copying its sniff (a "must match glx.js"
+  // comment is not a mechanism): the same "phone AND not GRAPHICS: HIGH" tier
+  // IS_MOBILE means here. glx.js is tagged ahead of this file in both
+  // index.html and the CARVIEW subset, so the value exists at eval; the
   // typeof guard is the standalone-harness fallback (full-size atlas), never a
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
 
-  // How much to shrink an atlas before upload. 1 = the authored 1024x1280.
+  // How much to shrink an atlas before upload. 1 = the authored 2048×2560.
   //
   // The livery atlases are the biggest thing on the GPU, and that is MEASURED
   // rather than assumed: __apex.texCensus() on a full montreal grid reported
   // 146.67 MB of them against 11.33 MB of baked material arrays and 13.8 MB for
   // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v).
-  // Ten times the geometry. One atlas with its mip chain is 6.99 MB.
+  // Ten times the geometry. One authored atlas with its mip chain is ~26.7 MB.
   //
-  //   tier            player   AI     a full grid
-  //   mobile             2      4        ~37 MB     (unchanged — tighter jetsam budget)
-  //   desktop            1      2        ~44 MB     (was 147: every car at full)
+  //   tier            player   AI     upload px        a full grid
+  //   mobile             4      8     512 / 256        ~37 MB   (same absolutes)
+  //   desktop            1      4     2048 / 512       ~62 MB   (was ~42 at 1024)
   //
-  // AI at half is the change. At racing distance an AI car is a few hundred
-  // pixels and 512x640 is ample; what a fixed downshift would cost is the
-  // CLOSE-UP, so photo mode asks for the full tier for every car it draws
-  // (js/car/car-draw.js decalTextureFor). That upgrade is lazy and bounded: the
-  // tier is part of the decal cache key, at most one full atlas is built per
-  // frame (the uncached car nearest the photo camera), at most PHOTO_ATLAS_MAX
-  // are held, and they are freed when the mode closes — so entering photo mode
-  // on a grid is not twenty-one atlas builds in one frame.
+  // AI at 512×640 is ample at racing distance; CLOSE-UP / photo mode asks for
+  // the full tier for every car it draws (js/car/car-draw.js decalTextureFor).
+  // That upgrade is lazy and bounded: the tier is part of the decal cache key,
+  // at most one full atlas is built per frame, at most PHOTO_ATLAS_MAX are
+  // held, and they are freed when the mode closes.
   //
   // Pure on purpose: rasterising a livery needs a browser (see the boundary
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
   // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
   function atlasDiv(isPlayer, mobile) {
-    if (mobile) return isPlayer ? 2 : 4;
-    return isPlayer ? 1 : 2;
+    if (mobile) return isPlayer ? 4 : 8;
+    return isPlayer ? 1 : 4;
   }
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
-  // maps panel UVs to these rects. Do NOT change these numbers — the geometry
-  // depends on them.
+  // maps panel UVs to these rects. Fractions of SIZE / SIZE_H are frozen —
+  // scale every rect with SIZE, never move them independently.
   const REGIONS = {
-    crest:  { x: 40,  y: 40,  w: 430, h: 430 },  // team crest/logo (engine-cover top; badge copy on the fin via finBadge)
-    titleA: { x: 500, y: 40,  w: 484, h: 170 },  // primary sponsor wordmark
-    titleB: { x: 500, y: 240, w: 484, h: 130 },  // secondary sponsor
-    wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
-    num:    { x: 700, y: 420, w: 284, h: 284 },  // nose + both rear endplates: lockup over the driver number
-    strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
-    fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
-    finBadge: { x: 500, y: 856, w: 160, h: 160 },
-    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // the WHOLE engine-cover flank, the car's RIGHT side (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
-    spineSideL: { x: 40, y: 1040, w: 304, h: 160 },  // the same for the LEFT flank, authored in its own outside-view frame
-    fwEnd: { x: 380, y: 1040, w: 340, h: 140 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
-    tail: { x: 500, y: 420, w: 180, h: 80 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
+    crest:  { x: 80,  y: 80,  w: 860, h: 860 },  // team crest/logo (engine-cover top; badge copy on the fin via finBadge)
+    titleA: { x: 1000, y: 80,  w: 968, h: 340 },  // primary sponsor wordmark
+    titleB: { x: 1000, y: 480, w: 968, h: 260 },  // secondary sponsor
+    wing:   { x: 80,  y: 1040, w: 1240, h: 300 },  // rear-wing sponsor band
+    num:    { x: 1400, y: 840, w: 568, h: 568 },  // nose + both rear endplates: lockup over the driver number
+    strip:  { x: 80,  y: 1440, w: 1888, h: 260 },  // long thin sponsor strip (sidepod lower)
+    fin:    { x: 80,  y: 1712, w: 860, h: 320 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
+    finBadge: { x: 1000, y: 1712, w: 320, h: 320 },
+    spineSide: { x: 1360, y: 1712, w: 608, h: 320 },   // the WHOLE engine-cover flank, the car's RIGHT side (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
+    spineSideL: { x: 80, y: 2080, w: 608, h: 320 },  // the same for the LEFT flank, authored in its own outside-view frame
+    fwEnd: { x: 760, y: 2080, w: 680, h: 280 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
+    tail: { x: 1000, y: 840, w: 360, h: 160 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
   };
 
   // Primary driver number per team.
@@ -187,7 +190,10 @@ const LiveryTex = (function () {
     let refW = 0;
     for (let i = 0; i < text.length; i++) refW += ctx.measureText(text[i]).width;
     const perPx = refW / REF + spacing * Math.max(0, text.length - 1);
-    let size = Math.max(8, Math.min(Math.min(maxH, 160), Math.floor(maxW / (perPx || 1))));
+    // Cap tracks SIZE (~0.16·SIZE was the old 160 at 1024) so a 2048 atlas
+    // actually paints larger glyphs into the doubled board regions.
+    const fontCap = Math.min(maxH, Math.round(SIZE * 0.16));
+    let size = Math.max(8, Math.min(fontCap, Math.floor(maxW / (perPx || 1))));
     const fitsAt = (px) => {
       ctx.font = "900 " + px + "px Arial, sans-serif";
       let w = 0;
@@ -198,7 +204,7 @@ const LiveryTex = (function () {
       return w <= maxW;
     };
     while (size > 8 && !fitsAt(size)) size--;
-    while (size < Math.min(maxH, 160) && fitsAt(size + 1)) size++;
+    while (size < fontCap && fitsAt(size + 1)) size++;
     ctx.font = "900 " + size + "px Arial, sans-serif";
 
     // Measure final width for alignment.
