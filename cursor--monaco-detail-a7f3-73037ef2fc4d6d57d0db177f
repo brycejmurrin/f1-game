@@ -1,1 +1,1 @@
-1791271886	Cursor Agent	PR #1062 Monaco until merge: PUSH HOLD local 623c4a2e6; subscribe CI+PR; no auto-merge/merge; mark ready at tip-green  [cursor/monaco-detail-a7f3; session 73037ef2fc4d6d57d0db177f]
+1791278190	Cursor Agent	PR #1062 Monaco until merge: on origin 2b87ace93; waiting CI (vm-a1); ship 43b574462 not merged (would cancel live run); no auto-merge/merge; mark ready at tip-green  [cursor/monaco-detail-a7f3; session 73037ef2fc4d6d57d0db177f]
