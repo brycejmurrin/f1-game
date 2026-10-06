@@ -1305,7 +1305,7 @@ body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
   flex: 0 0 auto;
   min-width: var(--tap-min);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #game-metrics-bar > button:hover {
     background: color-mix(in oklab, var(--steel) 14%, transparent);
   }
@@ -1615,7 +1615,7 @@ body.pc-uihidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the photo UI is hidden */
 }
-@media (hover: hover) { #pc-restore:hover { opacity: 0.95; } }
+@media (hover: hover) and (pointer: fine) { #pc-restore:hover { opacity: 0.95; } }
 #pc-restore:active { opacity: 0.95; }
 body.pc-uihidden #pc-restore { display: block; }
 body.pc-uihidden #hud-restore { display: none !important; }

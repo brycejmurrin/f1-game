@@ -49,31 +49,55 @@ const SurveyHud = (function () {
     if (!left || !right) return;
     const pedals = $("grp-pedals"), taps = $("grp-taps");
     const steer = $("grp-steer"), shifts = $("grp-shifts");
-    // Auto-tilt order (same as game.js layoutDocks when !steerBtns && !manual).
+    // Auto-tilt order (same as game.js layoutDocks when !steerBtns && !manual):
+    // pedals left, taps right. Steer arrows (◀ ▶) must stay out of the docks —
+    // they sit on BRAKE / ERS and read as a replay play glyph (#1034 fixture).
     if (pedals) left.appendChild(pedals);
-    if (steer) left.appendChild(steer);
     if (taps) right.appendChild(taps);
-    if (shifts) right.appendChild(shifts);
+    if (steer) steer.hidden = true;
+    if (shifts) shifts.hidden = true;
+  }
+
+  /** Keep on-screen steer arrows and WATCH play chrome off the survey HUD. */
+  function hidePlayGlyphs($, doc) {
+    const sl = ($ && $("btn-steer-left"))
+      || (doc && doc.getElementById && doc.getElementById("btn-steer-left"));
+    const sr = ($ && $("btn-steer-right"))
+      || (doc && doc.getElementById && doc.getElementById("btn-steer-right"));
+    const steer = ($ && $("grp-steer"))
+      || (doc && doc.getElementById && doc.getElementById("grp-steer"));
+    const up = ($ && $("shift-up"))
+      || (doc && doc.getElementById && doc.getElementById("shift-up"));
+    const dn = ($ && $("shift-down"))
+      || (doc && doc.getElementById && doc.getElementById("shift-down"));
+    const shifts = ($ && $("grp-shifts"))
+      || (doc && doc.getElementById && doc.getElementById("grp-shifts"));
+    if (sl) sl.hidden = true;
+    if (sr) sr.hidden = true;
+    if (steer) steer.hidden = true;
+    if (up) up.hidden = true;
+    if (dn) dn.hidden = true;
+    if (shifts) shifts.hidden = true;
+    const wt = doc && doc.querySelector && doc.querySelector(".watch-transport");
+    if (wt) wt.hidden = true;
+    if (doc && doc.body && doc.body.classList) {
+      doc.body.classList.remove("manual", "steer-buttons", "watch-controls-on");
+    }
   }
 
   /** Unhide the touch stack so docks are layoutable on desktop too. */
-  function showTouchStub($, body) {
+  function showTouchStub($, body, doc) {
     // Literals only — shell-ids.mjs ratchets non-literal $() as dynamicIdReads.
     const brake = $("btn-brake"), thr = $("btn-throttle"), boost = $("btn-boost");
     const ot = $("btn-ot"), aero = $("btn-aero");
-    const up = $("shift-up"), dn = $("shift-down");
-    const sl = $("btn-steer-left"), sr = $("btn-steer-right");
     if (brake) brake.hidden = false;
     if (thr) thr.hidden = false;
     if (boost) boost.hidden = false;
     if (ot) ot.hidden = false;
     if (aero) aero.hidden = false;
-    if (up) up.hidden = false;
-    if (dn) dn.hidden = false;
-    if (sl) sl.hidden = false;
-    if (sr) sr.hidden = false;
     fillDocks($);
-    if (body && body.classList) body.classList.add("steer-touch", "manual");
+    hidePlayGlyphs($, doc);
+    if (body && body.classList) body.classList.add("steer-touch");
   }
 
   /**
@@ -110,6 +134,7 @@ const SurveyHud = (function () {
       doc.body.classList.add("in-race");
       if (doc.body.dataset) doc.body.dataset.surveyHud = "1";
     }
+    hidePlayGlyphs($, doc);
     return !!hud && !hud.hidden;
   }
 
@@ -136,7 +161,7 @@ const SurveyHud = (function () {
       node.hidden = true;
     }
     const ok = holdChrome(hooks);
-    showTouchStub($, doc.body);
+    showTouchStub($, doc.body, doc);
 
     if (ls && typeof ls.stop === "function") {
       try { ls.stop(); } catch (_) { /* card already down */ }

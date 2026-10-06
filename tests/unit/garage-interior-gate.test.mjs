@@ -120,6 +120,41 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
     "ScrollFade watches #cs-tabs so the compact pan strip gets sf-l / sf-r");
 });
 
+it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
+  const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
+  const sheet = rd("js/garage/setup-sheet.js");
+  const css = rd("css/carsetup.css");
+  assert.match(css, /#cs-inner \{[^}]*background:\s*var\(--carbon\)/s,
+    "shipped garage card is opaque carbon so 3D type cannot ghost through");
+  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
+    "header paint is an opaque color, not a translucent --grad-head shorthand");
+  assert.match(css, /#cs-inner > \.sheet-head \{[^}]*background-image:\s*var\(--grad-head\)/s,
+    "brand wash sits on top of carbon, never instead of it");
+  {
+    const head = css.slice(css.indexOf("#cs-inner > .sheet-head {"),
+      css.indexOf("#cs-inner > .sheet-foot {"));
+    assert.doesNotMatch(head, /isolation:\s*isolate/,
+      "header isolate + translucent wash composites the WebGL canvas through BUDGET");
+  }
+  assert.match(css, /#cs-aero \{[^}]*width:\s*max-content/s,
+    "the aero chip hugs its labels instead of stretching the car band");
+  assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
+    "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
+  assert.match(css,
+    /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
+    "GLASS thins the card body only — head chrome stays carbon");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*scrollbar-color:/s,
+    "pair rail uses a themed scrollbar, not the platform white track");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*padding:[^;]*var\(--pad\)\s+var\(--pad\)/s,
+    "pair rail keeps bottom padding so ERS can scroll fully into view");
+  assert.match(css, /#cs-team-card span \{[^}]*white-space:\s*normal/s,
+    "garage team line wraps instead of ellipsizing the engine");
+  assert.match(css, /#carsetup\[data-cs-exit="one"\] #cs-back \{ display: none; \}/);
+  assert.match(sheet, /root\.setAttribute\("data-cs-exit", "one"\)/);
+  assert.match(sheet, /\[team\.short, team\.engine\]\.filter\(Boolean\)\.join\(" · "\)/);
+  assert.doesNotMatch(sheet, /team\.engine \|\| ""\} engine/, "no redundant 'engine' suffix on the team line");
+});
+
 /* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).
  *
  * garage-frame.mjs sampled its pixels from ctx.drawImage(#game) inside the
