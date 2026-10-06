@@ -745,6 +745,13 @@ test("quitting to the title ends the radio, not just the card", () => {
   assert.match(quit, /GameAudio\.radioStingStop\(\)/,
     "quitToMenu must end the sting itself rather than borrow the voice's observer");
   assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
+  // Spotter speaks on VoicePack channel "spotter" without RadioVoice.current, so
+  // hiding #announce only calls stop() (engineer) or radioStingStop — never
+  // pack.stop(). raceRadio.update (which would pack.stop("spotter") on !race)
+  // lives AFTER `if (state !== "race") return` in update(), so the next tick
+  // never reaches it. halt() is the pause/pit contract: every pack channel.
+  assert.match(quit, /radioVoice\.halt\(\)/,
+    "quitToMenu must halt every pack channel (spotter included), not only the sting");
 });
 
 // ── Regressions from the 2026-09-24 integration audit ───────────────────────
@@ -889,7 +896,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
   assert.ok(audio, "setPaused still has a pause-audio line");
   vm.runInNewContext(audio[0], {
     p: true, radioVoice: v,
-    GameAudio: { stopEngine() {}, setSkid() {} },
+    GameAudio: { stopEngine() {}, setSkid() {}, stopRain() {} },
     $: () => ({ disabled: false }),
     netPlay: { active: () => false },
     qualiNet: { hasArmed: () => false },

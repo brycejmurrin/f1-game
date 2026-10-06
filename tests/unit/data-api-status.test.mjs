@@ -739,3 +739,75 @@ test("placeLabel remaps a moved venue's OpenF1 meeting country", () => {
   assert.equal(api.placeLabel("Baku", "Azerbaijan"), "Baku, Azerbaijan");
   assert.equal(api.placeLabel("", "Bahrain"), "Bahrain");
 });
+
+test("carData drops rows with unparseable dates (same rule as locationData)", async () => {
+  const rows = [
+    { date: "2026-07-26T14:00:00.000Z", speed: 280, throttle: 100, brake: 0, n_gear: 8, rpm: 10000, drs: 0 },
+    { date: "not-a-date", speed: 50, throttle: 0, brake: 100, n_gear: 1, rpm: 2000, drs: 0 },
+    { date: "2026-07-26T14:00:01.000Z", speed: 290, throttle: 100, brake: 0, n_gear: 8, rpm: 10500, drs: 0 },
+  ];
+  const locRows = rows.map((r) => ({ date: r.date, x: 10, y: 20 }));
+  let path = "";
+  const context = vm.createContext({
+    fetch: async (url) => {
+      path = String(url);
+      const body = /\/location\?/.test(path) ? locRows : rows;
+      return { ok: true, status: 200, headers: { get: () => null },
+        json: async () => body, text: async () => JSON.stringify(body) };
+    },
+    AbortController, localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    Date, setTimeout, clearTimeout,
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context);
+  const car = await context.api.carData(1, 44, "2026-07-26T14:00:00.000Z", "2026-07-26T14:00:02.000Z");
+  const loc = await context.api.locationData(1, 44, "2026-07-26T14:00:00.000Z", "2026-07-26T14:00:02.000Z");
+  assert.equal(car.length, 2, "bad date row must be dropped");
+  assert.equal(car[0].t, 0);
+  assert.ok(Math.abs(car[1].t - 1) < 1e-9, "second sample is 1 s after the first, got " + car[1].t);
+  assert.equal(car[0].speed, 280);
+  assert.equal(car[1].speed, 290);
+  assert.ok(car.every((c) => c.date > 0), "no sentinel date:0");
+  assert.equal(loc.length, 2, "locationData already dropped the bad date");
+});
+
+test("export gather waits 90 s when fastestLap returns HTTP 429", async () => {
+  const exportSrc = await readFile(new URL("../../js/data/export.js", import.meta.url), "utf8");
+  const sleeps = [];
+  const logs = [];
+  let lapCalls = 0;
+  const context = vm.createContext({
+    Date, setTimeout: (fn, ms) => { sleeps.push(ms); queueMicrotask(fn); return sleeps.length; },
+    clearTimeout() {},
+    TextEncoder, Uint8Array, Uint32Array, Math, JSON, Promise, Object, Array, String, Number, isFinite,
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+    F1API: {
+      meetings: async () => [{ meetingKey: 1, circuit: "Monza", country: "Italy", name: "Italian Grand Prix" }],
+      sessionsForMeeting: async () => [{ sessionKey: 9, name: "Qualifying" }],
+      sessionDrivers: async () => [{ num: 16, code: "LEC" }],
+      fastestLap: async () => {
+        lapCalls++;
+        if (lapCalls === 1) {
+          const e = new Error("HTTP 429 for https://api.openf1.org/v1/laps");
+          e.status = 429;
+          throw e;
+        }
+        return { dateStart: "2026-07-26T14:00:00.000Z", lapDuration: 80 };
+      },
+      locationData: async () => {
+        const pts = [];
+        for (let i = 0; i < 40; i++) pts.push({ x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 100 });
+        return pts;
+      },
+    },
+  });
+  vm.runInContext(exportSrc + ";globalThis.DataExport=DataExport", context);
+  const { gatherStartLines } = context.DataExport.create({
+    el: () => ({}), clear() {}, isOpen: () => true,
+  });
+  const out = await gatherStartLines(2026, (m) => logs.push(m));
+  assert.ok(logs.some((m) => /rate limited/.test(m)), "outer 429 path must log the wait: " + logs.join(" | "));
+  assert.ok(sleeps.includes(90000), "must sleep 90 s before retry, sleeps=" + sleeps.join(","));
+  assert.ok(lapCalls >= 2, "meeting retried after the wait");
+  assert.ok(out.circuits.Monza, "circuit captured after the rate-limit retry");
+});

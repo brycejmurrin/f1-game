@@ -10,9 +10,10 @@ const DesignerProfile = (function () {
   const S = TrackShape;
   const PAD = 3;
   const MIN_SPAN = 8;
-  const DRAG_PX = 3, HOLD_PX = 6;
+  // Select-without-move: below these thresholds a press only selects (height unchanged).
+  const DRAG_MOUSE = 6, DRAG_TOUCH = 10, TOUCH_ARM_MS = 140;
   const KEY = Object.freeze({ rise: 1, riseBig: 5 });
-  const HIT_PX = 24, HIT_TOUCH = 44;   // ≥44 px under a finger (WCAG / Bryce mobile)
+  const HIT_PX = 28, HIT_TOUCH = 44;   // ≥44 px under a finger (WCAG / Bryce mobile)
   const GRIP_R = 7, GRIP_R_TOUCH = 12;
   const LABEL_FONT = "11px system-ui, sans-serif";
   const lim = () => (typeof CustomTracks !== "undefined" && CustomTracks.LIMITS) || { rise: 60 };
@@ -35,7 +36,9 @@ const DesignerProfile = (function () {
     let nodeH = [];                             // per-node heights (metres)
     let issues = [], cursor = null;
     let sel = -1, ptype = "mouse";
-    let drag = null;                            // { id, i, y0, h0, cur, moved, mpp, frame }
+    // Drag arms only after a deliberate vertical threshold (and on touch, a
+    // prior selection or short hold). Horizontal motion is ignored.
+    let drag = null;                            // { id, i, y0, h0, cur, moved, mpp, frame, wasSel, t0, touch }
     let liveH = null;                           // heights overlay while dragging
 
     function heightsShown() {
@@ -115,17 +118,27 @@ const DesignerProfile = (function () {
       try { canvas.setPointerCapture(ev.pointerId); } catch (_) { /* synthetic */ }
       const p = local(ev), i = hit(p.x, p.y);
       if (i < 0) return;
+      // Select on press — height stays until a deliberate vertical drag arms.
+      const wasSel = sel === i;
       choose(i);
       const f = fr || { lo: 0, span: MIN_SPAN };
-      drag = { id: ev.pointerId, i, y0: p.y, h0: nodeH[i] || 0, cur: nodeH[i] || 0, moved: false, mpp: f.span / Math.max(1, H - 2 * PAD), frame: f };
+      drag = {
+        id: ev.pointerId, i, y0: p.y, h0: nodeH[i] || 0, cur: nodeH[i] || 0,
+        moved: false, mpp: f.span / Math.max(1, H - 2 * PAD), frame: f,
+        wasSel, t0: Date.now(), touch: ptype === "touch",
+      };
       render();
     }
     function onMove(ev) {
       if (ev.pointerType) ptype = ev.pointerType;
       if (!drag || drag.id !== ev.pointerId || !tr) return;
-      const p = local(ev), dy = p.y - drag.y0;
+      const p = local(ev), dy = p.y - drag.y0;   // vertical only — ignore dx
       if (!drag.moved) {
-        if (Math.abs(dy) <= DRAG_PX) return;
+        const thresh = (drag.touch || ptype === "touch") ? DRAG_TOUCH : DRAG_MOUSE;
+        if (Math.abs(dy) <= thresh) return;
+        const held = (Date.now() - drag.t0) >= TOUCH_ARM_MS;
+        // Mouse: threshold alone. Touch: already selected, or short hold, then threshold.
+        if (!(drag.wasSel || ptype === "mouse" || held)) return;
         drag.moved = true;
       }
       const next = clampH(drag.h0 - dy * drag.mpp);
@@ -140,6 +153,7 @@ const DesignerProfile = (function () {
       if (drag && drag.id === ev.pointerId) {
         try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* */ }
         const d = drag; drag = null;
+        // Tap / below-threshold jitter: selection only — height unchanged.
         if (d.moved) hand(d.i, d.h0, d.cur);
         else liveH = null;
         render();
@@ -150,11 +164,12 @@ const DesignerProfile = (function () {
     }
     function onKey(ev) {
       const k = ev.key, n = ticks.length;
-      if (k === "[" || k === "]") {
+      if (k === "[" || k === "]" || k === "Tab") {
         if (!n) return;
         ev.preventDefault();
-        const at = sel < 0 ? (k === "]" ? -1 : 0) : sel;
-        choose(((at + (k === "]" ? 1 : -1)) % n + n) % n);
+        const dir = (k === "[" || (k === "Tab" && ev.shiftKey)) ? -1 : 1;
+        const at = sel < 0 ? (dir > 0 ? -1 : 0) : sel;
+        choose(((at + dir) % n + n) % n);
         render();
         return;
       }
@@ -187,7 +202,7 @@ const DesignerProfile = (function () {
         const h = (liveH && liveH[sel] != null) ? liveH[sel] : (nodeH[sel] || 0);
         return "Elevation profile. Point " + (sel + 1) + " of " + n + ": " + fmtRise(h) + " m" + (tr && ticks[sel] != null ? " at " + fmtKm(ticks[sel]) : "") + ". " + KEYS;
       }
-      return "Elevation profile. " + n + " control points. Drag a grip up or down. " + KEYS;
+      return "Elevation profile. " + n + " control points. Tap to select, then drag vertically to set height. " + KEYS;
     }
     function trace() {
       const n = tr.n;
@@ -224,13 +239,17 @@ const DesignerProfile = (function () {
       for (let i = 0; i < ticks.length; i++) {
         const p = grip(i), on = i === sel;
         const r = (on ? GRIP_R + 2 : GRIP_R) * (touch ? GRIP_R_TOUCH / GRIP_R : 1);
-        // Invisible hit halo (drawn lightly) so touch targets read as ≥44 px.
-        if (touch) {
-          g.beginPath(); g.arc(p.x, p.y, HIT_TOUCH / 2, 0, Math.PI * 2);
-          g.fillStyle = on ? "rgba(255,209,102,0.12)" : "rgba(246,246,249,0.06)"; g.fill();
+        // Soft hit halo so touch targets read as ≥44 px.
+        if (touch || on) {
+          g.beginPath(); g.arc(p.x, p.y, (touch ? HIT_TOUCH : HIT_PX) / 2, 0, Math.PI * 2);
+          g.fillStyle = on ? "rgba(225,6,0,0.14)" : "rgba(246,246,249,0.06)"; g.fill();
+        }
+        if (on) {
+          g.beginPath(); g.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+          g.strokeStyle = COL.sel || "#e10600"; g.lineWidth = 2.5; g.stroke();
         }
         g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2);
-        g.fillStyle = on ? (COL.sel || "#ffd166") : (COL.handle || "#f6f6f9"); g.fill();
+        g.fillStyle = on ? (COL.sel || "#e10600") : (COL.handle || "#f6f6f9"); g.fill();
         g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
       }
       // heights: the lap's top and bottom (one label when they round equal —
@@ -303,6 +322,6 @@ const DesignerProfile = (function () {
 
   // hill / ADD kept as no-op shims for older unit harnesses that import them.
   const hill = (b) => (typeof ElevPresets !== "undefined" ? { s: 0, halfM: 160, rise: ElevPresets.clampH(b && b.rise) } : { s: 0, halfM: 160, rise: 0 });
-  return { create, hill, ADD: Object.freeze({ halfM: 160, rise: 6 }), KEY, HIT_PX, HIT_TOUCH };
+  return { create, hill, ADD: Object.freeze({ halfM: 160, rise: 6 }), KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
 })();
 Object.freeze(DesignerProfile);

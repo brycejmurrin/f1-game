@@ -745,4 +745,9 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   assert.doesNotMatch(body, /setPaused\(/, "precondition: the garage pauses without the card (so the observer cannot help)");
   assert.ok(body.indexOf("radioVoice.halt();") > 0 && body.indexOf("radioVoice.halt();") < body.indexOf('openGarage("pit")'),
     "openPitWork halts the radio before the garage opens");
+  assert.match(body, /GameAudio\.stopRain\(\)/,
+    "openPitWork stops rain with the engine — the garage is a pause without the card");
+  const close = game.slice(game.indexOf("function closePitWork() {"), game.indexOf("function leaveGarage() {"));
+  assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
+    "leaving the pit garage restarts rain the way RESUME does");
 });

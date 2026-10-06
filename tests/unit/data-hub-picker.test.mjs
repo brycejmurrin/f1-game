@@ -57,8 +57,30 @@ function harness({ motion } = {}) {
     scrollIntoView(o) { scrolls.push({ id: this.id, o }); }
   }
   docRoot = new El("html");
-  const document = { createElement: (t) => new El(t), getElementById: () => null, addEventListener() {}, activeElement: null, hidden: false,
-    documentElement: { dataset: motion ? { motion } : {} } };
+  const byId = {};
+  const docListeners = {};
+  const document = {
+    createElement: (t) => new El(t),
+    getElementById: (id) => byId[id] || null,
+    querySelectorAll(sel) {
+      const out = [];
+      String(sel).split(",").forEach((part) => {
+        const id = part.replace(/:not\(\[hidden\]\)/g, "").replace(/^#/, "").trim();
+        if (id && byId[id]) out.push(byId[id]);
+      });
+      return out;
+    },
+    addEventListener(t, f, opts) {
+      const cap = opts === true || !!(opts && opts.capture);
+      (docListeners[t + (cap ? ":cap" : "")] ||= []).push(f);
+    },
+    dispatch(t, ev, cap) { (docListeners[t + (cap ? ":cap" : "")] || []).forEach((f) => f(ev)); },
+    activeElement: null, hidden: false,
+    documentElement: { dataset: motion ? { motion } : {} },
+  };
+  function place(id, hidden) {
+    const n = new El("dialog"); n.id = id; n.hidden = hidden !== false; byId[id] = n; docRoot.appendChild(n); return n;
+  }
   const pending = [], resultKeys = [];
   const defer = (name, value) => new Promise((res) => pending.push({ name, res: () => res(value) }));
   const LATEST = { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
@@ -90,11 +112,13 @@ function harness({ motion } = {}) {
   }
   async function drain() { await flush(); while (pending.length) { pending.shift().res(); await flush(); await flush(); } }
   const root = new El("dialog");
+  root.id = "datahub";
   docRoot.appendChild(root);
+  byId.datahub = root;
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document };
+  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document, byId, place };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -195,4 +219,41 @@ test("a fully-visible tab strip does not scrollIntoView (SCHEDULE stays put)", a
   markStripOverflow(h, false);
   h.DataHub.open("export"); await h.drain();
   assert.equal(h.scrolls.length, 0, "no overflow → the strip must not pan");
+});
+
+// Late ensureDataHub().then(open) used to unhide the hub after How to Play
+// (or another title sheet) was already up — both dialog.screen, last
+// showModal wins. Skip the open; a How to Play click while the hub is
+// already up closes it first (capture, before game.js unhides #howtoplay).
+test("open() is a no-op while How to Play is visible", () => {
+  const h = harness();
+  h.place("howtoplay").hidden = false;
+  h.root.hidden = true;
+  h.DataHub.open("schedule");
+  assert.equal(h.root.hidden, true, "hub must stay closed under How to Play");
+  assert.equal(h.DataHub.isOpen(), false);
+});
+
+test("open() still works when How to Play is hidden", async () => {
+  const h = harness();
+  h.place("howtoplay").hidden = true;
+  h.root.hidden = true;
+  h.DataHub.open("export");
+  await h.drain();
+  assert.equal(h.root.hidden, false, "title-only: hub opens from #overlay as before");
+  assert.equal(h.DataHub.isOpen(), true);
+});
+
+test("a How to Play door click closes an open hub", async () => {
+  const h = harness();
+  const help = h.place("mb-help");
+  help.hidden = false;
+  const ico = h.document.createElement("svg");
+  help.appendChild(ico);
+  h.DataHub.open("export");
+  await h.drain();
+  assert.equal(h.DataHub.isOpen(), true);
+  h.document.dispatch("click", { target: ico }, true);
+  assert.equal(h.DataHub.isOpen(), false);
+  assert.equal(h.root.hidden, true);
 });

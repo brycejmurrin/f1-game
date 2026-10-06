@@ -395,19 +395,25 @@ const F1API = (function () {
   // car telemetry samples within a time window: speed/throttle/brake/gear/rpm/drs
   function carData(sessionKey, driverNumber, startISO, endISO) {
     return windowed("/car_data", sessionKey, driverNumber, startISO, endISO).then(function (list) {
+      // Same dropout rule as locationData: an unparseable date must not become
+      // t:0 / date:0. That row sorted to the lap start (or broke monotonic t for
+      // sampleAt / cumDist) and painted a bogus brake/speed spike on the trace.
       const a = arr(list);
-      const t0ms = a.length ? Date.parse(a[0].date) : NaN;
-      const t0 = isFinite(t0ms) ? t0ms : 0;
-      return a.map(function (c) {
-        c = c || {};
+      const out = [];
+      let t0 = NaN;
+      for (let i = 0; i < a.length; i++) {
+        const c = a[i] || {};
         const cMs = Date.parse(c.date);
-        return {
-          t: isFinite(cMs) ? (cMs - t0) / 1000 : 0,   // seconds from window start
+        if (!isFinite(cMs)) continue;
+        if (!isFinite(t0)) t0 = cMs;
+        out.push({
+          t: (cMs - t0) / 1000,   // seconds from first valid sample
           speed: num(c.speed), throttle: num(c.throttle), brake: num(c.brake),
           gear: num(c.n_gear), rpm: num(c.rpm), drs: num(c.drs),
-          date: isFinite(cMs) ? cMs : 0
-        };
-      });
+          date: cMs
+        });
+      }
+      return out;
     });
   }
 
