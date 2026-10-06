@@ -107,7 +107,7 @@ test("TrackBuildClient.idleWarm no-ops when build worker is off", () => {
 test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
   const boot = read("js/render/renderer-boot.js");
   assert.match(boot, /Promise\.race\(\[\s*adapterP,/, "adapter probe is raced");
-  assert.match(boot, /setTimeout\(\(\) => resolve\(null\), 250\)/, "250 ms adapter cap");
+  assert.match(boot, /setTimeout\(\(\) => resolve\(null\), 2000\)/, "2 s adapter cap (CI-safe)");
   assert.match(boot, /typeof setTimeout !== "function"/, "VM harness without timers still awaits adapter");
   assert.match(boot, /requestIdleCallback\(kick, \{ timeout: 800 \}\)/,
     "three modulepreload waits for an idle slice");
