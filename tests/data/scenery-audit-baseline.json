@@ -3,7 +3,7 @@
     "abudhabi": 8,
     "albert_park": 3,
     "anderstorp": 2,
-    "bahrain": 46,
+    "bahrain": 22,
     "baku": 1,
     "brands_hatch": 3,
     "buddh": 3,
@@ -50,7 +50,7 @@
     "brands_hatch": 1,
     "fuji": 12,
     "imola": 2,
-    "jeddah": 11,
+    "jeddah": 4,
     "mexico": 11,
     "miami": 10,
     "monaco": 8,
@@ -99,6 +99,6 @@
     "spa": 1,
     "vegas": 5,
     "zandvoort": 7,
-    "zolder": 4
+    "zolder": 1
   }
 }

@@ -121,7 +121,8 @@ test("TLX soft present serializes reads, coalesces newest, and rejects stale siz
     "an abandoned read's completion must not clear the gate a newer read holds");
   assert.match(src, /const next = _softReadQueued;\s*_softReadQueued = null;\s*if \(next\) _startSoftBlitRead\(next\)/);
   assert.match(src, /req\.epoch !== _softReadEpoch[^]*?_displayCanvas\.width !== w[^]*?_displayCanvas\.height !== h/);
-  const resize = src.slice(src.indexOf("function resize()"), src.indexOf("const noopMesh"));
+  // Size work lives in applyResize(); public resize() only coalesces / warm-gates.
+  const resize = src.slice(src.indexOf("function applyResize()"), src.indexOf("function resize()"));
   assert.match(resize, /_softReadEpoch\+\+/);
   assert.match(resize, /_softReadQueued = null/);
 });
@@ -133,7 +134,7 @@ test("TLX voiding an in-flight soft read releases its gate", () => {
   const src = read("js/render/three/tlx.js");
   const cancel = src.slice(src.indexOf("function _cancelSoftBlits()"), src.indexOf("// the backend object"));
   assert.match(cancel, /_softReadEpoch\+\+;\s*_softReadQueued = null;\s*_softReadPending = false;/);
-  const resize = src.slice(src.indexOf("function resize()"), src.indexOf("const noopMesh"));
+  const resize = src.slice(src.indexOf("function applyResize()"), src.indexOf("function resize()"));
   assert.match(resize, /_softReadEpoch\+\+;\s*_softReadQueued = null;\s*_softReadPending = false;/);
 });
 
@@ -356,7 +357,7 @@ test("GLX and TLX clamp the present size to the driver limit before deriving the
   assert.match(resize, /const k = Math\.min\(maxDim \/ presentW, maxDim \/ presentH\);/, "one factor for both axes keeps aspect");
 
   const tlx = read("js/render/three/tlx.js");
-  const tresize = tlx.slice(tlx.indexOf("      function resize() {"), tlx.indexOf("      function resize() {") + 4000);
+  const tresize = tlx.slice(tlx.indexOf("      function applyResize() {"), tlx.indexOf("      function applyResize() {") + 4000);
   assert.match(tresize, /_gl\.getParameter\(_gl\.MAX_TEXTURE_SIZE\)/, "TLX's WebGL2 leg asks its driver, as GLX does");
   assert.match(tresize, /maxTextureDimension2D/, "TLX's WebGPU leg keeps the device limit");
 
