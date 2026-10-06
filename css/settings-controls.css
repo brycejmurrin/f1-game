@@ -625,4 +625,9 @@ button:has(> [data-fold]) {
   width: 28px; height: 28px; object-fit: contain;
   background: var(--plate-hover); border-radius: var(--r-xs); padding: 2px;
 }
+
+/* Desktop / mouse: hide phone-only tilt chrome (moved from css/responsive.css). */
+body.desktop #pm-steer-item,
+body.desktop #pm-calib,
+body.desktop #pm-calib-help { display: none !important; }
 } /* @layer components */

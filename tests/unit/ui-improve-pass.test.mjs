@@ -878,9 +878,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
       ? /<section id="htp-controls"/
       : new RegExp(`<dt id="htp-${id}">`));
   }
-  const components = css("css/components.css");
-  assert.equal(decl(components, /#htp-contents/, "overflow-x"), "auto");
-  assert.equal(decl(components, /#htp-contents a/, "min-height"), "var(--chip-h)");
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "overflow-x"), "auto");
+  assert.equal(decl(components, /^#htp-contents a, #cg-contents a, #ch-contents a$/, "min-height"), "var(--chip-h)");
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-shape="wide"\] > #htp-contents/));
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
@@ -967,9 +967,9 @@ test("variable control clusters use one content-driven balanced-row primitive", 
 
 test("overflowing Help navigation keeps its first landmark reachable", () => {
   const overlays = css("css/overlays.css");
-  const components = css("css/components.css");
-  assert.equal(decl(components, /#htp-contents/, "justify-content"), "flex-start");
-  assert.equal(decl(components, /#htp-contents > :first-child/, "margin-inline-start"), "auto");
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "justify-content"), "flex-start");
+  assert.equal(decl(components, /^#htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child$/, "margin-inline-start"), "auto");
 });
 
 /* ── Input (gamepad menu nav) in a VM ───────────────────────────────────── */
@@ -1596,7 +1596,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
   assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
-  assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
+  assert.match(read("css/settings-controls.css"), /body\.desktop #pm-calib-help/,
     "desktop hides the TILT help with RECALIBRATE TILT");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
     "disabled TILT help keeps its slot so steer-mode changes do not reflow");
@@ -1881,12 +1881,12 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
   assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
-  assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
+  assert.equal(decl(css("css/overlays.css"), ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
   assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
-  assert.equal(decl(components, /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
     "term-rail selected uses the one chip look (plate-on + red ring, no glow)");
-  assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
   // Flyby had --compact-at / #fb-rail but no compact rules (layout-audit 2026-10-05:

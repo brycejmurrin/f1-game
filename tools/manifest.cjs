@@ -413,7 +413,7 @@ const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
   "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
-  "css/carsetup.css", "css/hud.css", "css/touch-controls.css", "css/overlays.css",
+  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/responsive.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
@@ -424,20 +424,21 @@ const CSS = [
   "css/cockpit-preview.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
-// block; the components family retains its original preload coverage.
+// block. Dialogs/settings load print→all without a competing high-priority
+// preload (title LCP vs a fast SETTINGS tap: accept no FOUC on a warm cache /
+// already-in-flight print sheet, not a second 79 KB of preload contention).
 const CSS_PRELOAD = [
-  "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/dialog-platform.css",
+  "css/tokens.css", "css/components.css", "css/title.css", "css/menus.css",
+  "css/responsive.css",
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 // Title paints #overlay / #title / #menu-buttons (tokens, components, title,
 // menus, responsive). Everything below is a [hidden] screen or dialog at
-// first paint — defer it. Settings/dialogs stay in CSS_PRELOAD so a fast
-// SETTINGS tap still has bytes in flight (FOUC guard). Live census after
-// #958 still had race-setup/select/settings*/dialogs* blocking (~139 KB).
+// first paint — defer it. Keep every deferred file as rel=stylesheet (sw.js
+// essential-set). fonts-hud.css is Barlow + unused Titillium @font-face.
 const CSS_DEFERRED = [
-  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/touch-controls.css",
+  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",

@@ -671,7 +671,7 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
   // the rows scrolling under a sticky row showed through it. A small cascade
   // over the sheet's own rules: compound class selectors (with :not), outside
   // any @media, ranked by specificity then source order, as the browser does.
-  const rules = cssRules(readCssSource("css/components.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
+  const rules = cssRules(readCssSource("css/overlays.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
   const COMPOUND = /^((?:\.[\w-]+)+)((?::not\(\.[\w-]+\))*)$/;
   const winner = (classes, prop, descendant) => {
     let best = null;
