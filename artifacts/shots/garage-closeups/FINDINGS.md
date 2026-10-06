@@ -1,27 +1,23 @@
 # Garage close-ups — live pack (build 14034)
 
-**Cmd:**
+**Cmd (final, unique frames):**
 ```sh
-node tools/shot/garage-angles.mjs --site --fast --preset=closeup \
+node tools/shot/garage-angles.mjs --site --preset=closeup \
   --team=redbull,ferrari,mercedes,mclaren --full-views --sheet=1 \
-  --out=artifacts/shots/garage-closeups --budget=35m
+  --view-settle=6 --out=artifacts/shots/garage-closeups --budget=45m
 ```
 
-**Result:** 56/56 PNGs + 4 team sheets + matrix + sheet in 1723.1s (≈27.3s/shot). Soft `#game-soft`. Store path (`garageTeam`); no TEAM tab grind — no white-haze hang.
+**Result:** 56/56 PNGs, **14/14 unique per team**, + 4 team sheets + matrix + sheet in 3608.4s (≈59.8s/shot). Soft `#game-soft`. Store path; no TEAM tab. Stale-hash retry fired once (ferrari/cover ×2) then succeeded.
 
 ## Stations (unique az each)
 fwLow, fwSide, noseTip, endplate, rwRear, rwSide, rwTop, podInlet, podFloor, wheelF, wheelR, haloBehind, mirror, cover
 
 ## Findings (≤5)
-1. Part-fill framing works — dist 1.7–2.6 m with `clamp:false`; each station owns its az (no shared-az duplicates).
-2. Wings readable — fwLow/fwSide/endplate and rwRear/rwSide/rwTop show flaps/endplates; RW side/top expose element gaps.
-3. Wheels fill frame at 1.7 m — rim / cover / sidewall stripe clear on wheelF/wheelR.
-4. HaloBehind / mirror / cover hit cockpit + engine-cover marks across all four teams.
-5. Floor reflections strong on low shots (fwLow, podFloor); occasional foreground garage props in wheelR/podFloor — not haze.
-
-## Sheets
-- `redbull-sheet.png`, `ferrari-sheet.png`, `mercedes-sheet.png`, `mclaren-sheet.png`
-- `sheet.png`, `matrix.png`
+1. Part-fill framing works — dist 1.7–2.6 m, `clamp:false`; each station owns its az.
+2. First `--fast` pass was **stale soft blit** (27 unique of 56); fix = await soft present + MD5 retry vs previous shot.
+3. Wings / wheels / halo / cover readable across RBR / FER / MER / MCL after retry pass.
+4. Floor reflections strong on fwLow / podFloor; occasional garage props in foreground — not haze.
+5. Contact sheets: `redbull|ferrari|mercedes|mclaren-sheet.png` (+ `sheet.png`, `matrix.png`).
 
 ## Handoff
-OWNED: artifacts + small `--preset=closeup` tool option only. No mesh/CSS. Do not merge — Apex CI Watch only.
+OWNED: artifacts + small `--preset=closeup` / soft-blit fix only. **Do not push** until told (CI clogged). Do not merge — Apex CI Watch only.
