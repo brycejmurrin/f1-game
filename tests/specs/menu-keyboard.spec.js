@@ -326,11 +326,24 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+    // CI 37466125556 keyboard-2of3: live SwiftShader starved the 8 s wait
+    // (go()+jump evaluate 4.6 s, then waitForFunction 8000 ms). physState()
+    // throw also swallowed the track===monza OR. headlessMode skips render()
+    // only — inputState() under test is unchanged. BOOT_MS, same as the
+    // pause/standings twins in this file.
+    await page.evaluate(() => {
+      window.__apex.headless(true);
+      window.__apex.go();
+      window.__apex.jump(0.2, 40);
+    });
     await page.waitForFunction(() => {
-      try { return window.__apex.physState?.().s > 0 || window.__apex.info().track === "monza"; }
+      try {
+        const p = window.__apex.physState && window.__apex.physState();
+        if (p && p.s > 0) return true;
+      } catch (_) {}
+      try { return window.__apex.info().track === "monza"; }
       catch (_) { return false; }
-    }, null, { polling: 100, timeout: 8_000 });
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     // No menu layer is open, so MenuNav must be entirely out of the way.
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBeFalsy();
