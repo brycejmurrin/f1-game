@@ -1,1 +1,0 @@
-1791285346	Cursor Agent	PR #1075 red: career garage locked-row waitForFunction 45s (selectPartCategory tabs not ready under 2 workers); fix helper; no auto-merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
