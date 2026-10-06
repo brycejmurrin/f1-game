@@ -643,6 +643,13 @@ export const TRACKED = [
 // other circuits' foundation specs are not candidates, and the plan carries
 // the ids so per-circuit loops (APEX_CIRCUITS) test only what moved.
 export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
+// Per-circuit Must-landmark registry and that circuit's foundation spec.
+// tests/data/landmarks/<id>.json matches TRACKED (`^tests/data/`) otherwise,
+// so a new registry file made the selected gate "not circuit-only" and dropped
+// fleet specs it could not afford (PR #1015: props-over-road, tracks-walls,
+// parts-physics). Filename IS the circuit id, same as CIRCUIT_FILE.
+export const CIRCUIT_LANDMARK = /^tests\/data\/landmarks\/([a-z0-9_]+)\.json$/;
+export const CIRCUIT_FOUNDATION = /^tests\/specs\/([a-z0-9-]+)-foundation\.spec\.js$/;
 // Data files keyed `{ <category>: { <circuit id>: … } }`: a change here is
 // scoped to the ids whose rows differ. Reading them needs the base, so a
 // base git cannot show leaves the file TRACKED, exactly as before.
@@ -650,6 +657,8 @@ export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
 export const PER_CIRCUIT_DATA = new Set([
   "tests/data/scenery-audit-baseline.json",
   "tools/track/props-tris-baseline.json",
+  "tools/track/clip-baseline.json",
+  "tools/track/coplanar-baseline.json",
 ]);
 // Tests that read APEX_CIRCUITS to narrow their per-circuit loop. Editing one
 // of THESE is not circuit-scoped: the edit is to the loop, so it runs whole.
@@ -680,7 +689,13 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
 // they do not break a circuit scope: prose, and node unit files other than
 // the filtered ones (the node gate runs every one of them regardless).
 const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
-  || (/^tests\/unit\//.test(f) && !CIRCUIT_FILTERED_TESTS.has(f));
+  || (/^tests\/unit\//.test(f) && !CIRCUIT_FILTERED_TESTS.has(f))
+  // The selector itself does not change what a circuit spec sees. Without this,
+  // CIRCUIT_LANDMARK cannot land on the PR that needs it: adding the classifier
+  // made the diff "not circuit-only" and dropped the fleet specs the classifier
+  // was meant to keep affordable (PR #1015: props-over-road, tracks-walls,
+  // parts-physics).
+  || f === "tools/ci/select-specs.mjs";
 export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
 
@@ -778,6 +793,10 @@ export function circuitsTouched(changed, ref, root = ROOT) {
   for (const f of changed) {
     const m = CIRCUIT_FILE.exec(f);
     if (m) { ids.add(m[1]); continue; }
+    const lm = CIRCUIT_LANDMARK.exec(f);
+    if (lm) { ids.add(lm[1]); dataResolved.push(f); continue; }
+    const fd = CIRCUIT_FOUNDATION.exec(f);
+    if (fd) { ids.add(fd[1].replace(/-/g, "_")); continue; }
     if (PER_CIRCUIT_DATA.has(f)) {
       const d = ref ? dataCircuits(f, ref, root) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }

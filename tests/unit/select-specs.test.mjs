@@ -923,6 +923,26 @@ test("a circuit-only diff names its circuits; anything else leaves the fleet on"
   assert.equal(circuitsTouched([], null).scoped, false, "no change is not a circuit change");
 });
 
+test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR #1015)", () => {
+  // tests/data/landmarks/<id>.json matches TRACKED (`^tests/data/`) and a
+  // *-foundation.spec.js is not CIRCUIT_FILE; without CIRCUIT_LANDMARK /
+  // CIRCUIT_FOUNDATION the selected gate treated a Monza-only PR as fleet
+  // infra and dropped props-over-road, tracks-walls, and parts-physics.
+  const files = [
+    "js/circuits/scenery/monza.js",
+    "tests/data/landmarks/monza.json",
+    "tests/specs/monza-foundation.spec.js",
+    "tools/ci/select-specs.mjs",
+    "tests/unit/select-specs.test.mjs",
+  ];
+  const r = circuitsTouched(files, null);
+  assert.deepEqual(r.ids, ["monza"]);
+  assert.equal(r.scoped, true, "landmark + foundation + the selector stay circuit-only");
+  assert.ok(r.dataResolved.includes("tests/data/landmarks/monza.json"));
+  const clip = circuitsTouched(["js/circuits/scenery/monza.js", "tools/track/clip-baseline.json"], null);
+  assert.equal(clip.scoped, false, "clip-baseline still needs a base ref to resolve rows");
+});
+
 test("every APEX_CIRCUITS-filtered test actually reads APEX_CIRCUITS", () => {
   // The plan hands the ids to a job's env; a listed test that ignores them
   // runs the whole fleet while the plan's comment claims otherwise, and one

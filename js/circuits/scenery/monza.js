@@ -98,7 +98,9 @@
         tree(k, side, 12 + h * 8, 11 + h * 8, h < 0.4 ? LEAF_D : LEAF);
         if (!thin && h > 0.48) tree(k, -side, 13 + h * 9, 10 + h * 7, LEAF_L);
       });
-      // Rank C — set-back taller pines (deep-park wall).
+      // Rank C — set-back taller pines (deep-park wall). Parabolica inner
+      // (s≈0.80–0.96, right-hander infield) used pine() cones that read as
+      // stick diamonds from the racing line; stonePine is the park's umbrella.
       every(36, (k) => {
         const h = hash(k * 41 + 3);
         const s = k / n;
@@ -107,8 +109,15 @@
         if (h < (thin ? 0.82 : 0.20)) return;
         const side = h < 0.5 ? -1 : 1;
         const hVar = 22 + h * 16 + (hash(k * 137) > 0.6 ? 4 : 0);
-        pine(k, side, 24 + h * 18, hVar, PINE_D);
-        if (!thin && h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+        const parabolica = s >= 0.80 && s <= 0.96;
+        if (parabolica) {
+          stonePine(k, side, 24 + h * 18, 16 + h * 6, PINE_D, { spread: 0.74, lean: 0.22 });
+          if (!thin && h > 0.55)
+            stonePine(k, -side, 30 + h * 16, 15 + h * 6, PINE_D, { spread: 0.70, lean: 0.18 });
+        } else {
+          pine(k, side, 24 + h * 18, hVar, PINE_D);
+          if (!thin && h > 0.55) pine(k, -side, 30 + h * 16, 24 + h * 14, PINE_D);
+        }
       });
       // Rank D — outermost broadleaf rank blending to backdrop.
       every(55, (k) => {
@@ -852,9 +861,16 @@
 
       function tifosiCamp(id, s, side, gap) {
         const a = anchor(K(s), side, gap);
+        if (!a || onTrack(a.c[0], a.c[2], 16)) return;
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const base = [a.c[0], Number.isFinite(gy) ? gy : a.c[1], a.c[2]];
         const b = [a.r, a.u, a.t];
+        const onTerrain = (p) => {
+          const y = terrainYAt(p[0], p[2]);
+          return [p[0], Number.isFinite(y) ? y : p[1], p[2]];
+        };
         modelGroup(id, {
-          center: vadd(a.c, a.u, 4),
+          center: vadd(base, a.u, 2.2),
           size: [24, 8, 44],
           basis: b,
         }, (stage) => {
@@ -864,23 +880,25 @@
           for (let i = 0; i < 6; i++) {
             const row = i % 2, alongOff = (Math.floor(i / 2) - 1) * 12;
             const across = (row ? 1 : -1) * 5;
-            const p = vadd(vadd(a.c, a.r, across), a.t, alongOff);
-            addPrism(stage, p, [5.5, 3, 6.5],
+            const p = onTerrain(vadd(vadd(base, a.r, across), a.t, alongOff));
+            addPrism(stage, vadd(p, a.u, -0.08), [5.5, 3, 6.5],
               tentCols[i % tentCols.length], b);
           }
           for (let i = 0; i < 2; i++) {
-            const p = vadd(vadd(a.c, a.r, 7.5), a.t, (i - 0.5) * 18);
-            addBox(stage, vadd(p, a.u, 1.4), [3.2, 2.8, 7],
-              [0.82, 0.82, 0.78], b);
+            const p = onTerrain(vadd(vadd(base, a.r, 7.5), a.t, (i - 0.5) * 18));
+            addBox(stage, vadd(p, a.u, 1.2), [3.2, 2.4, 6.2],
+              [0.42, 0.44, 0.46], b);
           }
-          const flagBase = vadd(vadd(a.c, a.r, -8), a.t, 17);
-          addCyl(stage, flagBase, 0.10, 8, [0.30, 0.30, 0.31], 6, b);
-          addBox(stage, vadd(vadd(flagBase, a.u, 6.8), a.t, 1.4),
-            [0.16, 1.8, 4.2], [0.18, 0.58, 0.25], b);
+          const flagBase = onTerrain(vadd(vadd(base, a.r, -8), a.t, 17));
+          addCyl(stage, vadd(flagBase, a.u, -0.15), 0.10, 8.2, [0.30, 0.30, 0.31], 6, b);
+          addBox(stage, vadd(vadd(flagBase, a.u, 6.8), a.t, 0.8),
+            [0.16, 1.8, 3.2], [0.18, 0.58, 0.25], b);
         });
       }
       tifosiCamp("monza-tifosi-camp-curva-grande", 0.185, -1, 54);
-      tifosiCamp("monza-tifosi-camp-ascari", 0.825, 1, 56);
+      // Was 0.825/gap 56 on Parabolica inner — tents + beige vans floated as a
+      // tan beam over the infield. Seat on terrain, deeper in the park.
+      tifosiCamp("monza-tifosi-camp-ascari", 0.808, 1, 92);
 
       {
         const a = anchor(K(0.945), 1, 58);
