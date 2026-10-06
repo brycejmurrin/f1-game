@@ -1,1 +1,0 @@
-1791222401	Cursor Agent	particle shed + env-probe cadence: OWNED js/fx/particles.js js/game.js emit/cull + probe cadence; tests/unit; NOT #990 hold / #995 dirty-upload cores  [claude/f1-game-project-26h3ng; session e7f882d91ff454fab997267b]
