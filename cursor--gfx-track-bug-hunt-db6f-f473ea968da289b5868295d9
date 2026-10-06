@@ -1,0 +1,1 @@
+1791304089	Cursor Agent	PR #1110: fix Selected specs cancel/verdict on oversize-tlx-probes-1of3; OWNED tools/ci select/timeout + gfx tests if needed; FORBIDDEN auto-merge/merge. Do not enable auto-merge or merge.  [cursor/gfx-track-bug-hunt-db6f; session f473ea968da289b5868295d9]
