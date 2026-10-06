@@ -724,6 +724,9 @@ let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — 
 let builtGridSlots = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
+// Countdown setGridIdle opts — reused every frame (was a fresh {} on the
+// countdown return path, ~60 allocs/s until lights-out).
+const _gridIdleOpts = { soundOn: false, wet: false, step: true };
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
 // their time as seconds since green, and raceT is that only for a first
 // start — a red-flag restart resumes the clock the flag stopped, so without
@@ -4398,7 +4401,8 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    GameAudio.setGridIdle(player, { soundOn, wet: isWetRoad(), step: _audioParamStep }); return;
+    _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
+    GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks

@@ -2012,8 +2012,8 @@ test("the countdown drives the player's engine at idle, not silence until lights
   const upd = src.slice(src.indexOf("function update(dt)"));
   const count = upd.slice(upd.indexOf('if (state === "count") {'), upd.indexOf('if (state !== "race") return;'));
   assert.ok(count.length > 0, "precondition: found update()'s countdown branch");
-  assert.match(count, /GameAudio\.setGridIdle\(player,\s*\{\s*soundOn,\s*wet:\s*isWetRoad\(\),\s*step:\s*_audioParamStep\s*\}\);\s*return;/,
-    "the countdown branch calls setGridIdle on the existing return (line-neutral vs ship)");
+  assert.match(count, /_gridIdleOpts\.soundOn\s*=\s*soundOn;[\s\S]*?GameAudio\.setGridIdle\(player,\s*_gridIdleOpts\);\s*return;/,
+    "the countdown branch fills the pooled _gridIdleOpts bag then setGridIdle (no per-frame {})");
   assert.doesNotMatch(count, /GameAudio\.setEngine\(/, "the idle pack lives in GameAudio.setGridIdle, not inline in game.js");
   const { GameAudio: A } = boot();
   A.init();

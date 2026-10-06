@@ -198,7 +198,9 @@ test("GLX skips equal tuner-uniform re-uploads (lit / sky / composite)", () => {
   h.reset();
   h.GLX.begin(frame);
   const again = h.calls.filter((c) => c[0] === "uniform1f").map((c) => c[1][0].name);
-  assert.deepEqual(again, ["uTime"], "an identical begin() re-uploads only the per-frame clock");
+  // uTime is frame-global and cached via uf1 (perf(frame)): an identical
+  // begin() — same frame.time — uploads nothing, including the clock.
+  assert.deepEqual(again, [], "an identical begin() re-uploads no lit uniforms (uTime cached)");
   assert.equal(h.count("uniform3fv"), 0, "sun / ambient / fog vec3s are skipped when unchanged");
   h.reset();
   h.GLX.begin(h.frame({ tune: { bounceK: 0.5 } }));
