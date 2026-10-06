@@ -14,43 +14,8 @@ body.desktop #pm-steer-item,
 body.desktop #pm-calib { display: none !important; }
 
 /* ---------- LARGE SCREENS (iPad, desktop) ---------- */
-/* The height half of this condition now comes from data-density, measured in the
-   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
-   and width stay media queries: zoom does not distort either.
-
-   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
-   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
-   a class and an attribute to every selector in the block, which is enough to beat
-   a LATER rule that used to win — measured: #sel-inner's height cap started
-   overriding a rule it had always lost to, and the desktop select golden moved.
-   Wrapped in :where(), these rules keep exactly the specificity they had. */
-@media (min-width: 900px) {
-  /* The select sheet is the one screen that wants to fill the space it is
-     given rather than shrink to content — it is the game's "home".
-     THE CAP IS A FRACTION WITH A FLOOR, not a flat 720. On a rotated portrait
-     monitor (1080x1920) a flat cap left the sheet 720px tall in ~1896px of
-     room — about 60 % of the screen was empty black, on the one display shape
-     that has height to spare. 78 svh follows the screen; the 720px floor keeps
-     every landscape desktop exactly as it was, because 78 % of 800-937px is
-     less than 720 anyway.
-     Measured, sheet height x the resulting `data-shape` (js/ui/sheet-shape.js):
-       1280x800   720 -> wide    (unchanged)
-       1440x900   720 -> wide    (unchanged)
-       1920x1080  842 -> wide    (0.83 ratio, still columns)
-       1080x1920 1498 -> TALL    (1.47 ratio, and bands is the right answer)
-     The rotated monitor is the only one that moves, and it moves onto the band
-     layout the shape system was built to choose — which is why this is worth
-     doing NOW and was not before: with the old orientation proxy, a taller sheet
-     there would have kept the columns and just stretched them. */
-  /* #sel-inner IS the sheet, so the condition goes ON it, not in front of it — a
-   `:where(.sheet...) #sel-inner` prefix asks for the sheet to contain itself and
-   matches nothing, which is exactly how the desktop select golden moved. */
-  /* --svhz, not bare svh: #sel-inner IS the sheet, so this height resolves
-     INSIDE `zoom: var(--ui-scale)` where raw viewport units multiply — at
-     40% the select sheet was getting 31.2svh of the intent's 78. Same trap
-     as the compensated-unit note in tokens.css. */
-  #sel-inner:where(:not([data-density="compact"])) { height: min(100%, max(720px, calc(78 * var(--svhz)))); }
-}
+/* #sel-inner desktop height cap lives in css/overlays.css (deferred with
+   select.css) — not title-critical. Title composition media queries follow. */
 
 /* Main menu on a large LANDSCAPE screen: branding left, buttons right — as ONE
    centred composition. Content-sized columns, centred as a pair. `1fr 1fr` split
@@ -167,32 +132,8 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #mb-career-sub { font-size: clamp(14px, calc(1.1 * var(--vwz)), 15px); }
 }
 
-/* Scale up HUD readouts on large screens so they're legible at arm's length. */
-@media (min-width: 1200px) {
-  .hud-box { padding: 5px 16px; }
-  .hud-value { font-size: 23px; }
-  .hud-label { font-size: var(--fs-micro); }
-  /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
-     by the base rule. */
-  .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
-  /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
-     bottom sits at 68 in the widget's own zoomed units against 58 on the base
-     ladder, so the dropped state clears by the same 4px. */
-  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-z)); }
-  #hud-speed { font-size: 42px; }
-  #hud-gear  { font-size: 68px; }
-  #hud-tach  { width: 150px; height: 18px; }
-  #hud-energy { width: 150px; height: 16px; }
-  /* The chips scale with the rest of the cluster. Landscape sizes them for a
-     phone (11px), and desktop now shares that grid — at arm's length on a 27"
-     monitor an 11px countdown is the one readout you cannot actually read. */
-  #hud-ot, #hud-aero { font-size: 15px; padding: 6px 12px; }
-  /* 10px off the bottom is a phone's budget, spent because a phone has no
-     height to spare. A monitor does, and at this size the cluster hugging the
-     edge reads as something that fell off the screen. */
-  #hud-dock { bottom: calc(22px + var(--sab)); }
-  #minimap { width: 160px; height: 160px; }
-}
+/* Large-screen HUD readout scale lives in css/overlays.css (deferred with
+   hud.css) — in-race only. */
 
 /* Short-landscape HUD shrink used to live here behind
    `(orientation: landscape) and (max-height: 560px)`. That query is zoom-blind
@@ -437,8 +378,8 @@ html:has(#pausemenu[open]) #ios-install {
 /* PEEK (js/ui/screen-looks.js → html[data-appearance-peek="<screen>"]): while
    an APPEARANCE knob changes, the settings page fades to a ghost and the
    screen that knob describes shows behind it. TITLE: css/components.css fades
-   #overlay under any open dialog, so the peek lifts that. The other screens
-   are revealed by the block at the end of this file. */
+   #overlay under any open dialog, so the peek lifts that. Non-title screens
+   are revealed in css/overlays.css (deferred — not title-critical). */
 :root[data-appearance-peek="title"] #overlay { opacity: 1; }
 :root[data-appearance-peek] #pmsettings { background: transparent; }
 :root[data-appearance-peek] #pmsettings::backdrop { background: transparent; }
@@ -479,130 +420,9 @@ html:has(#pausemenu[open]) #ios-install {
   cursor: nwse-resize; touch-action: none;
 }
 
-/* ---------- SCREEN LOOKS: per-screen APPEARANCE folds (js/ui/screen-looks.js) ----------
-   Every rule keys on an <html data-look-<screen>-<knob>> attribute that the
-   engine writes ONLY for a non-default answer, and reads ranges from the
-   matching --look-<screen>-<knob> token (v / 100). Untouched, nothing here
-   matches. In this layer on purpose: css/data.css and css/track-detail.css are
-   @layer overlays too, and a components-layer rule would silently lose.
-   The SHARED CORE knobs live here; each screen's own knobs live beside its
-   other rules (css/components.css pause block, css/data.css, css/menus.css,
-   css/career.css, css/carsetup.css, css/overlays.css).
-   POPUPS scope (one fold): `dialog.screen.dim:not(#pmsettings, #pausemenu,
-   #race-settings)` — every dimmed pop-up (standings, quali, results, the
-   team / duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY,
-   music, career offers / guide / history, circuit details) except the
-   settings page itself and the two sheets with folds of their own. */
-
-/* A CLOSED dialog this file styles restates its closed state first (the
-   guard tests/unit/css-layers.test.mjs holds every winning-layer rule to:
-   layout in the hidden -> showModal seam drops child boxes for good). The
-   peek reveal below out-ranks these on purpose, for exactly as long as the
-   peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
-#pausemenu:not([open]) { display: none; }
-#race-settings:not([open]) { display: none; }
-#standings:not([open]) { display: none; }
-#datahub:not([open]) { display: none; }
-
-/* PEEK REVEAL. The target's hidden / open attributes are never touched (every
-   layer, focus and input module keys on them); display alone puts it behind
-   the ghosted settings page, which stays modal in the top layer, so nothing
-   revealed can take a pointer or focus. A closed dialog is not in the top
-   layer, so it takes a z-index over the title screen. !important because the
-   targets carry `hidden`, and `[hidden] { display: none !important }` above
-   (this layer) is beaten only by an important rule of higher specificity. */
-:root[data-appearance-peek="pause"] #pausemenu:not([open]),
-:root[data-appearance-peek="race"] #race-settings:not([open]),
-:root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
-:root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
-:root[data-appearance-peek="select"] #select[hidden],
-:root[data-appearance-peek="career"] #career[hidden],
-:root[data-appearance-peek="garage"] #carsetup[hidden] { display: grid !important; }
-/* The music card is hidden until a track plays; a pause peek shows its shell
-   so MUSIC CARD has something to hide. */
-:root[data-appearance-peek="pause"]:not([data-look-pause-music="hide"]) #pm-now-card[hidden] { display: flex !important; }
-
-/* WIDTH — a share of each sheet's OWN --sheet-w cap. */
-:root[data-look-select-w] #sel-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-select-w, 1))); }
-:root[data-look-race-w] #race-settings > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-race-w, 1))); }
-:root[data-look-career-w] #cr-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-career-w, 1))); }
-:root[data-look-popups-w] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-popups-w, 1))); }
-
-/* DENSITY — SheetShape's own compact tier (js/ui/sheet-shape.js reads
-   --compact-at off the sheet): ROOMY never goes compact, TIGHT always does.
-   1px, not 0: a zero reads as unset and falls back to the default. */
-:root[data-look-select-density="roomy"] #sel-inner,
-:root[data-look-race-density="roomy"] #race-settings > .sheet,
-:root[data-look-career-density="roomy"] #cr-inner,
-:root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
-:root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
-:root[data-look-select-density="tight"] #sel-inner,
-:root[data-look-race-density="tight"] #race-settings > .sheet,
-:root[data-look-career-density="tight"] #cr-inner,
-:root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
-:root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
-
-/* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
-   (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
-:root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
-:root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
-:root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
-:root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
-:root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
-:root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
-
-/* CORNERS — the radius tokens every card and button reads. */
-:root[data-look-pause-corners="sharp"] #pausemenu,
-:root[data-look-datahub-corners="sharp"] #datahub,
-:root[data-look-select-corners="sharp"] #select,
-:root[data-look-race-corners="sharp"] #race-settings { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
-:root[data-look-career-corners="sharp"] #career,
-:root[data-look-garage-corners="sharp"] #carsetup { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
-:root[data-look-popups-corners="sharp"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
-:root[data-look-pause-corners="pill"] #pausemenu,
-:root[data-look-datahub-corners="pill"] #datahub,
-:root[data-look-select-corners="pill"] #select,
-:root[data-look-race-corners="pill"] #race-settings { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
-:root[data-look-career-corners="pill"] #career,
-:root[data-look-garage-corners="pill"] #carsetup { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
-:root[data-look-popups-corners="pill"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
-
-/* BACKGROUND — the scrim behind the card. Dialogs paint it twice (their own
-   box and ::backdrop, which reads --pause-wash / --pause-scrim, see
-   css/components.css), so both layers move together. */
-:root[data-look-race-dim="solid"] #race-settings.screen.dim { background: var(--scrim-heavy); }
-:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: var(--scrim-heavy); }
-:root[data-look-datahub-dim="solid"] #datahub,
-:root[data-look-select-dim="solid"] #select,
-:root[data-look-career-dim="solid"] #career { background: var(--scrim-heavy); }
-:root[data-look-race-dim="soft"] #race-settings.screen.dim { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
-:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
-:root[data-look-datahub-dim="soft"] #datahub,
-:root[data-look-select-dim="soft"] #select,
-:root[data-look-career-dim="soft"] #career { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
-:root[data-look-race-dim="off"] #race-settings.screen.dim { background: transparent; }
-:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: transparent; }
-:root[data-look-datahub-dim="off"] #datahub,
-:root[data-look-select-dim="off"] #select,
-:root[data-look-career-dim="off"] #career { background: transparent; }
-:root[data-look-race-dim="solid"] #race-settings::backdrop { --pause-scrim: 0.62; }
-:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-scrim: 0.62; }
-:root[data-look-race-dim="soft"] #race-settings::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
-:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
-:root[data-look-race-dim="off"] #race-settings::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
-:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
-
-/* #track-detail (a full-bleed popup) keeps its opaque page and its
-   name | close head: BACKGROUND OFF would show #select through it, and a
-   centred head pulls the close button into the middle. */
-/* HEADINGS — the sheet's title band, centred. Rows and forms keep their
-   LABEL ‹ VALUE › alignment. */
-:root[data-look-datahub-head="centre"] #datahub .sheet-head,
-:root[data-look-select-head="centre"] #select .sheet-head,
-:root[data-look-race-head="centre"] #race-settings .sheet-head { justify-content: center; text-align: center; }
-:root[data-look-career-head="centre"] #career .sheet-head,
-:root[data-look-garage-head="centre"] #carsetup .sheet-head { justify-content: center; text-align: center; }
-:root[data-look-popups-head="centre"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) .sheet-head { justify-content: center; text-align: center; }
+/* ---------- SCREEN LOOKS (moved) ----------
+   Per-screen APPEARANCE folds + non-title peek reveals live in
+   css/overlays.css (deferred). Title peek + tl-edit stay above. */
 
 
 } /* @layer overlays */

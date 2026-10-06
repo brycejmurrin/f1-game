@@ -84,16 +84,17 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
 }
 /* DESKTOP: size to the content instead of to the screen.
    "Always fill most of the viewport" is right on a phone, where the hub IS the
-   screen. On a desktop it forced every tab to 900px tall no matter how little it
-   had to show — EXPORT ended after ~460px and left 525px of empty card below it,
-   TELEMETRY about 450px before a driver is picked. A floor keeps the card from
-   collapsing to a sliver (and from jumping around as you switch tabs); the cap
-   is unchanged, so the long tabs still scroll inside.
+   screen. On a desktop the overlay is flex-centered, so a content-sized card
+   (EXPORT ~460px, RESULTS near the cap) shrinks and re-centers on every tab
+   switch. Pin min = max to the same local height: long tabs still scroll
+   inside; short ones keep a stable box.
    --wide-at / --compact-at are local (zoom-aware); the old min-width/min-height
    media query could not see UI SIZE. */
 body[data-width="wide"][data-density="normal"] .dh-card {
-  min-height: 420px;
-  max-height: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
+  --dh-desk-h: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
+  min-height: var(--dh-desk-h);
+  max-height: var(--dh-desk-h);
+  height: var(--dh-desk-h);
 }
 
 /* The header is the canonical .sheet-head now (css/components.css) — one
@@ -117,29 +118,19 @@ body[data-width="wide"][data-density="normal"] .dh-card {
 }
 .dh-close:active { color: var(--text); }
 
-/* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
-   declarations decide whether a thumb-drag actually pans it, and this strip had
-   neither — while the three other strips in the app (the garage's category rail,
-   the tuner's chips in both its tiers) had one or both. Four hand-rolled copies
-   of one pattern, disagreeing.
-   `touch-action: pan-x` claims the horizontal gesture. Without it the browser is
-   free to give a diagonal drag to an ancestor, so the strip feels dead or the
-   panel behind it moves instead.
-   `overscroll-behavior-x: contain` stops a flick past the last chip from
-   CHAINING outward — and on iOS the thing it chains into is the back-navigation
-   gesture, so overscrolling the tab strip can leave the page. That is the worst
-   failure mode any of these four can have and it was on the widest screen in the
-   app.
-   Neither is visible to the layout audit: this is behaviour, not geometry, and
-   nothing about the boxes is wrong. tests/unit/scroll-strips.test.mjs is what
-   keeps the four in step from here. */
+/* Destinations wrap. A nowrap strip + overflow:hidden card clipped EXPORT
+   to EXPOR… on the 760px desktop card (WATCH & DRIVE is the long label).
+   Year chips (`.dh-pick-years`) stay the hub's sideways strip. */
 .dh-tabs {
   display: flex; gap: calc(var(--gap) * 0.5); padding: 10px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
-  overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+  min-width: 0; max-width: 100%;
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overscroll-behavior-x: auto;
+  touch-action: pan-y;
   scrollbar-width: none;
-  flex-wrap: nowrap;
 }
 .dh-tabs::-webkit-scrollbar { display: none; }
 .dh-tab {
@@ -364,6 +355,10 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Live / constructors put the team (or nothing) AFTER the name inside
+   .dh-cons-main. Growing the name parks that team on the far right when the
+   row has no gap column (P1), while P2+ keep it beside the name. */
+.dh-cons-main .dh-name { flex: 0 1 auto; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
 .dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
 .dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -410,16 +405,21 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* chip + driver name side by side in the driver cell */
 .dh-td-driver {
   min-width: 0; overflow: visible; text-overflow: clip; white-space: normal;
-  overflow-wrap: anywhere;
+  /* Spaces only — `anywhere` / `break-word` split VERSTAPPEN to VERSTAPPE / N
+     when the chip left too little inline room. Name sits under the chip so
+     the surname gets the full cell. */
+  overflow-wrap: normal; word-break: normal;
+  width: 28%;
 }
 .dh-td-driver .dh-codechip { display: inline-flex; margin-right: calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-driver .dh-name {
-  display: inline; min-width: 0; white-space: normal;
-  overflow-wrap: anywhere;
+  display: block; min-width: 0; white-space: normal;
+  overflow-wrap: normal; word-break: normal;
 }
 .dh-td-team {
   color: var(--dim); font-size: var(--fs-2); width: 100px; max-width: 100px;
-  overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
+  overflow: visible; text-overflow: clip; white-space: normal;
+  overflow-wrap: normal; word-break: normal;
 }
 .dh-td-grid { width: 30px; text-align: center; color: var(--dim); }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
@@ -809,7 +809,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
   margin: 0; padding: 8px 10px; border-radius: var(--r-sm);
   background: var(--surf-1); border: 1px solid var(--card-line);
   color: #cfcfd6; font-size: var(--fs-2); line-height: 1.45;
-  white-space: pre-wrap; word-break: break-word;
+  font-family: inherit;
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
   /* One axis. The text already `pre-wrap`s and `break-word`s, so there is
      nothing to scroll sideways to — `overflow: auto` turned the other axis on
      by shorthand, not by intent. Same trap as #overlay in css/menus.css. */
@@ -870,8 +871,8 @@ body[data-density="compact"] .dh-td-driver {
 body[data-width="narrow"] .dh-td-driver .dh-name,
 body[data-density="compact"] .dh-td-driver .dh-name {
   white-space: normal;
-  word-break: break-word;
-  overflow-wrap: break-word;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 /* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
@@ -883,9 +884,11 @@ body[data-density="compact"][data-width="wide"] .dh-race-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--gap);
 }
 
-/* ── Session picker: GP + session selects side-by-side ── */
-.dh-pick-fields { display: flex; gap: calc(var(--gap) * 2 / 3); }
-.dh-pick-fields .dh-pick-field { flex: 1; min-width: 0; }
+/* ── Session picker: GP + session stacked so the full meeting label fits ──
+   Side-by-side + min-width:0 clipped "Bahrain Grand Prix · Kuala Lumpur"
+   to "Bahrain Grand Prix · Kuala" on the 760px card. */
+.dh-pick-fields { display: flex; flex-direction: column; flex: 1 1 100%; gap: calc(var(--gap) * 2 / 3); }
+.dh-pick-fields .dh-pick-field { flex: 1 1 auto; min-width: 0; width: 100%; }
 .dh-pick-fields .dh-pick-select { max-width: none; width: 100%; }
 
 /* ── Two-pane split layout (Live + Telemetry) ─────────── */
