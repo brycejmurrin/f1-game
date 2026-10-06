@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
-  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
+  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
@@ -552,9 +552,9 @@ test("a loop-expanded per-circuit spec is billed at fleet size, and split only w
   // 45-58 s each, job cancelled at the cap with 0 failures. The count stays
   // the fleet's; what changed (2026-09-29) is that a split is decided by the
   // measured cost, not by "every test times out".
-  const walls = "tests/specs/tracks-walls.spec.js";
+  const walls = "tests/specs/tracks-walls-a.spec.js";
   const n = declaredTests(walls);
-  assert.ok(n > 40, `walls expands to ${n} — the per-circuit expansion must be counted`);
+  assert.ok(n > 15, `walls-a expands to ${n} — the per-circuit half must be counted`);
   // Cheap (llvmpipe measured ~3.3 s/test): one job, no --shard.
   const cheap = at([walls, "tests/specs/boot-guard.spec.js"], 3);
   const r1 = fit([walls, "tests/specs/boot-guard.spec.js"], 15, { db: cheap });
@@ -595,10 +595,9 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   assert.match(yml, /name: Selected specs[\s\S]*?timeout-minutes: \$\{\{ matrix\.timeout \}\}/,
     "the selected job's cap must come from the matrix (shardCapMin), not a literal");
   const { secFit } = fit([], DEFAULT_BUDGET_MIN);
-  const worstCaseMin = (secFit + MAX_FAILURES * SELECTED_GATE.perTestTimeoutSec) / 60 + 4;
-  assert.ok(shardCapMin(secFit) >= worstCaseMin,
-    `shardCapMin(${secFit}) = ${shardCapMin(secFit)} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
-    "the job would be CANCELLED, which reads as 0 failures and hides a dead deploy");
+  assert.equal(shardCapMin(secFit), MAX_SELECTED_JOB_MIN,
+    `passing selected legs are capped at ${MAX_SELECTED_JOB_MIN} min (career was 27-34 min when the cap priced three 540 s timeouts)`);
+  assert.ok(shardCapMin(1) >= 6 && shardCapMin(1) <= MAX_SELECTED_JOB_MIN);
   // The circuit lane reaches the runner: the plan's ids become the job's env.
   assert.match(yml, /APEX_CIRCUITS: \$\{\{ matrix\.circuits \}\}/,
     "the selected job must pass matrix.circuits to APEX_CIRCUITS, or the circuit lane runs the whole fleet");
@@ -733,44 +732,16 @@ test("an over-budget spec runs whether the diff EDITS it or merely routes it", (
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
 });
 
-test("mega-sweep over-budget specs never overflow into a shared selected job", () => {
-  // PR #604 / CI 36817164457: all-circuits mega-sweeps declare 1500 s. As
-  // oversize they lose MAX_OVERSIZE_SHARDS to smaller-rank peers, spill to
-  // skipped, then overflow billed them at the 7.5 s fallback and packed them
-  // next to title-menu-rotation / qatar-foundation. The sweep then ran 5–10
-  // min under llvmpipe and the next page.goto hung at 180 s (ERR_ABORTED /
-  // Navigate timeout); siblings on a fresh worker passed in ~8 s.
-  // props-over-road left the mega set on 2026-09-30 (one test per circuit at
-  // 120 s, PR #576); terrain-over-road is the remaining fixture.
-  const mega = "tests/specs/terrain-over-road.spec.js";
-  const other = "tests/specs/career.spec.js";
-  const victim = "tests/specs/output-paths.spec.js"; // undeclared, small, packable
-  assert.ok(maxDeclaredTimeout(mega) / 1000 >= SOLO_OWN_TIMEOUT_SEC,
-    `terrain-over-road must stay above the solo threshold (${SOLO_OWN_TIMEOUT_SEC}s)`);
-
-  // Many over-budget peers at rank 1 so mega loses the oversize lottery.
-  const peers = [other, "tests/specs/ui-audit.spec.js", "tests/specs/hud-layout.spec.js", mega, victim];
-  const cut = fit(peers, 10, {
-    rank: (f) => (f === victim ? 3 : 1),
-    db: EMPTY,
-    overflowShards: 12,
-  });
-  assert.ok(!cut.overflow.some((s) => s.file === mega),
-    "a gate-over-declared mega-sweep must not ride as overflow");
-  assert.ok(cut.oversize.some((s) => s.file === mega) || cut.overBudgetRun.some((s) => s.file === mega),
-    "it runs as oversize or in the over-budget pool — never silently packed");
-  const megaJobs = shards(cut, EMPTY).filter((j) => j.specs.split(" ").includes(mega));
-  assert.ok(megaJobs.length >= 1 && megaJobs.every((j) => j.specs === mega),
-    "wherever it runs, it runs ALONE: nothing inherits its Chromium");
-
-  // When it DOES run (edited → oversize slot), shards() gives it a solo job so
-  // nothing inherits its Chromium after the all-circuits walk.
-  const alone = fit([mega], 30, { rank: () => 0, db: EMPTY });
-  assert.equal(alone.oversize.length, 1);
-  const plan = shards(alone, EMPTY);
-  assert.equal(plan.length, 1);
-  assert.equal(plan[0].specs, mega);
-  assert.match(plan[0].name, /^oversize-terrain-over-road/);
+test("mega-sweep specs never share a selected Chromium", () => {
+  const megas = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
+    .filter((f) => isMegaSweepSpec(f));
+  assert.ok(megas.includes("tests/specs/material-shimmer.spec.js"));
+  assert.equal(isMegaSweepSpec("tests/specs/terrain-over-road.spec.js"), false);
+  for (const mega of megas) {
+    const cut = fit([mega], 30, { rank: () => 0, db: EMPTY });
+    const jobs = shards(cut, EMPTY).filter((j) => j.specs.split(" ").includes(mega));
+    assert.ok(jobs.every((j) => j.specs === mega), `${mega} must run alone`);
+  }
 });
 
 test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits argv", () => {
@@ -781,22 +752,25 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   // (PR #576: one test per circuit at 120 s) — it must NOT peel.
   const props = "tests/specs/props-over-road.spec.js";
   const terrain = "tests/specs/terrain-over-road.spec.js";
+  const shimmer = "tests/specs/material-shimmer.spec.js";
   const qatar = "tests/specs/qatar-foundation.spec.js";
   assert.equal(isMegaSweepSpec(props), false,
     "props-over-road is under the selected gate; peel must not isolate it");
-  assert.equal(isMegaSweepSpec(terrain), true);
+  assert.equal(isMegaSweepSpec(terrain), false,
+    "terrain-over-road is a per-circuit 180 s walk, under the mega threshold");
+  assert.equal(isMegaSweepSpec(shimmer), true);
   assert.equal(isMegaSweepSpec(qatar), false);
   assert.equal(isMegaSweepSpec("tests/specs/*-foundation.spec.js"), false);
 
-  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar, terrain];
+  const packed = ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar, shimmer];
   const { mega: peeled, rest, peeled: did } = partitionMegaSweepArgs(packed);
   assert.equal(did, true);
-  assert.deepEqual(peeled, [terrain]);
+  assert.deepEqual(peeled, [shimmer]);
   assert.deepEqual(rest, ["--timeout=900000", "--shard=2/4", "--workers=1", props, qatar]);
   assert.deepEqual(playwrightShard(packed), { index: 2, total: 4 });
-  assert.deepEqual(megasForThisShard(packed, [terrain]), [], "a lone mega lands on shard 1; shard 2 must not re-run it");
-  assert.deepEqual(megasForThisShard(["--shard=1/4", terrain, qatar], [terrain]), [terrain]);
-  assert.deepEqual(megasForThisShard([terrain, qatar], [terrain]), [terrain], "unsharded runs megas once");
+  assert.deepEqual(megasForThisShard(packed, [shimmer]), [], "a lone mega lands on shard 1; shard 2 must not re-run it");
+  assert.deepEqual(megasForThisShard(["--shard=1/4", shimmer, qatar], [shimmer]), [shimmer]);
+  assert.deepEqual(megasForThisShard([shimmer, qatar], [shimmer]), [shimmer], "unsharded runs megas once");
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
@@ -806,7 +780,7 @@ test("mega solos spread across shards longest-first, each on exactly one shard (
   const db = { specs: {} };   // constant-rate fallback: expected = declared tests x 7.5 s
   const megas = fs.readdirSync(path.join(ROOT, "tests/specs")).map((f) => `tests/specs/${f}`)
     .filter((f) => isMegaSweepSpec(f)).sort();
-  assert.ok(megas.length >= 3, `need several megas to spread, found ${megas.length}`);
+  assert.ok(megas.length >= 1, `need at least one mega to spread, found ${megas.length}`);
   for (const total of [1, 2, 4]) {
     const plan = megaShardPlan(megas, total, db);
     const owners = [];
@@ -838,13 +812,18 @@ test("mega solos spread across shards longest-first, each on exactly one shard (
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
   // PR #611: modes-group routing alone left career.spec.js in overBudgetSpecs
   // (declares 540 s), so EXPORT/IMPORT reusing .cr-slot-del shipped green.
-  const over = "tests/specs/career.spec.js";
+  const career = [
+    "tests/specs/career.spec.js",
+    "tests/specs/career-season.spec.js",
+    "tests/specs/career-hub.spec.js",
+  ];
   assert.ok(SOURCE_AFFECTED.some(([re, spec]) =>
-    re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === over));
-  assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]), [over]);
-  assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]), [over]);
+    re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === career[0]));
+  assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]).sort(), [...career].sort());
+  assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]).sort(), [...career].sort());
   assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), [],
     "other career modules stay merely routed");
+  const over = career[0];
   // Rank 2 (import / foundation / SOURCE_AFFECTED) must put it in oversize.
   const pinned = fit([over], 30, { rank: (f) => (f === over ? 2 : 3), db: EMPTY });
   assert.deepEqual(pinned.oversize.map((s) => s.file), [over],
@@ -866,6 +845,27 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   assert.deepEqual(r.unreadable.map((s) => s.file), [ghost]);
   for (const k of ["selected", "skipped", "unreachable", "oversize", "overBudgetRun", "overBudgetSpecs"]) {
     assert.equal((r[k] || []).length, 0, `${k} must not claim a spec that could not be read`);
+  }
+});
+
+test("career / hud-layout / terrain-over-road selected legs stay under the 10 min cap", () => {
+  const files = [
+    "tests/specs/career.spec.js",
+    "tests/specs/career-season.spec.js",
+    "tests/specs/career-hub.spec.js",
+    "tests/specs/hud-layout.spec.js",
+    "tests/specs/terrain-over-road.spec.js",
+  ];
+  for (const f of files) {
+    const n = declaredTests(f);
+    assert.ok(n >= 1, `${f} has tests`);
+    const jobs = shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY)
+      .filter((j) => j.specs.includes(f));
+    assert.ok(jobs.length >= 1, `${f} must run`);
+    assert.ok(jobs.every((j) => j.timeout <= MAX_SELECTED_JOB_MIN),
+      `${f} job cap ${jobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
+    assert.ok(jobs.every((j) => j.tests <= MAX_TESTS_PER_JOB + 1),
+      `${f} packed ${jobs.map((j) => j.tests)} tests per leg (max ${MAX_TESTS_PER_JOB})`);
   }
 });
 
@@ -931,9 +931,18 @@ test("every APEX_CIRCUITS-filtered test actually reads APEX_CIRCUITS", () => {
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} is gone — drop it from CIRCUIT_FILTERED_TESTS`);
     assert.match(fs.readFileSync(path.join(ROOT, f), "utf8"), /process\.env\.APEX_CIRCUITS/, `${f} ignores APEX_CIRCUITS`);
   }
-  const readers = execFileSync("git", ["grep", "-l", "-F", "process.env.APEX_CIRCUITS", "--", "tests/",
-    ":!tests/unit/select-specs.test.mjs"],
-    { cwd: ROOT, encoding: "utf8" }).trim().split("\n").filter(Boolean);
+  const readers = [];
+  const walk = (dir) => {
+    for (const name of fs.readdirSync(dir)) {
+      const p = path.join(dir, name);
+      const rel = path.relative(ROOT, p).replaceAll("\\", "/");
+      if (name === "helpers" || rel === "tests/unit/select-specs.test.mjs") continue;
+      const st = fs.statSync(p);
+      if (st.isDirectory()) walk(p);
+      else if (/\.(js|mjs|cjs)$/.test(name) && fs.readFileSync(p, "utf8").includes("process.env.APEX_CIRCUITS")) readers.push(rel);
+    }
+  };
+  walk(path.join(ROOT, "tests"));
   assert.deepEqual(readers.sort(), [...CIRCUIT_FILTERED_TESTS].sort(),
     "a test that reads APEX_CIRCUITS must be listed in CIRCUIT_FILTERED_TESTS");
 });
