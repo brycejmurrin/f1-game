@@ -648,6 +648,8 @@
     "// failure mode is a STALE key, which returns the wrong material and shows",
     "// up only on screen. Fuzzes the real lifted source over every field.",
     "tests/unit/tlx-mat-key-memo.test.mjs",
+    "// TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).",
+    "tests/unit/tlx-post-fixed-mats.test.mjs",
     "// TLX drops a createTexture() source canvas once three has uploaded it,",
     "// and freeTexture retires the decal materials bound to it (lifted source",
     "// against three r186's real Texture). The pit-crew mesh cache is capped.",
