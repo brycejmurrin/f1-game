@@ -545,14 +545,18 @@ function goalLabel(goal, code) {
   return goalKind(goal.type).label(goal.value, code);
 }
 // Live standings helpers — the hub asks these every build, the resolution does not.
+// driverStandings() rows carry `team` as the Teams.LIST object; career.team is
+// the string id. Comparing object === string always missed, so goalNow /
+// goalOnTrack for champPos / beatMate / beatRival returned null on the hub.
+function standingTeamId(r) { return r && r.team ? (typeof r.team === "string" ? r.team : r.team.id) : null; }
 function myStandingRow() {
   if (!career) return null;
-  return driverStandings().find((r) => r.team === career.team && r.seat === career.seat) || null;
+  return driverStandings().find((r) => standingTeamId(r) === career.team && r.seat === career.seat) || null;
 }
 function mateStandingRow() {
   if (!career) return null;
   return driverStandings()
-    .find((r) => r.team === career.team && r.seat === (career.seat === 0 ? 1 : 0)) || null;
+    .find((r) => standingTeamId(r) === career.team && r.seat === (career.seat === 0 ? 1 : 0)) || null;
 }
 function rivalStandingRow(id) {
   if (!career || !id) return null;

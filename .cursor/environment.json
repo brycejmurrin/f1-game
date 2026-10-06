@@ -4,15 +4,15 @@
   "mcpServerAllowlist": [
     {
       "name": "apex-tools",
-      "command": "bash"
+      "command": "*bash tools/mcp/apex-tools-mcp.sh serve"
     },
     {
       "name": "chrome-devtools",
-      "command": "bash"
+      "command": "*bash tools/mcp/chrome-devtools-mcp.sh run"
     },
     {
       "name": "playwright-official",
-      "command": "bash"
+      "command": "*bash tools/mcp/playwright-mcp.sh run"
     }
   ]
 }

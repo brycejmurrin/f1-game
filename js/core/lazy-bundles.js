@@ -187,6 +187,24 @@ function ensureNet() {
 const AUDIO_FILES = ApexRoster.LAZY_AUDIO || [];
 const AUDIO_EDGES = ApexRoster.LAZY_AUDIO_EDGES || [];
 let audioLoad = null;
+// GameAudio turns real the moment engine.js evaluates — files ahead of panel.js
+// and onAudioReady, where AudioPanel.create restores the saved mixer. Anything
+// reading it in that gap saw engine defaults (music 0.5 / sfx 1, master on), and
+// the title's LAZY_CIRCUIT + scenery fetches widen it. Restore the persisted
+// master and levels (the setters clamp to 0..1) as soon as the engine lands.
+let audioRestored = false;
+function restoreOnEngine() {
+  if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
+  audioRestored = true;
+  const G = deps.getContext(), store = G && G.store;
+  if (!store) return true;
+  try {
+    GameAudio.setEnabled(!!G.soundOn);
+    GameAudio.setMusicVolume(store.get("volMusic"));
+    GameAudio.setSfxVolume(store.get("volSfx"));
+  } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }
+  return true;
+}
 function ensureAudio() {
   if (audioLoad) return audioLoad;
   if (!AUDIO_FILES.length) return Promise.resolve(false);
@@ -194,7 +212,7 @@ function ensureAudio() {
     audioLoad = Promise.resolve(true);
     return audioLoad;
   }
-  audioLoad = loadBackendScripts(AUDIO_FILES, AUDIO_EDGES).then(() => {
+  audioLoad = loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, { ready: restoreOnEngine }).then(() => {
     if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");
       audioLoad = null;

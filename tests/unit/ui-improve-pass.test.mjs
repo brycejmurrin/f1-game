@@ -319,6 +319,26 @@ test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifi
   assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
 });
 
+test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
+  // Bug hunt 2026-10-06: ArrowRight restored focus after setTrackFilter rebuild;
+  // onclick (Enter/Space activate <button> via click) passed focus:false and
+  // left document.activeElement on <body>, killing the filter roving tabindex.
+  const h = bootMenus();
+  const chip = (id) => h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === id);
+  const season = chip("season");
+  assert.ok(season, "season filter chip exists");
+  season.focus();
+  assert.equal(h.dom.document.activeElement, season);
+  season.onclick({ stopPropagation() {}, detail: 0 });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "season");
+  const rebuilt = chip("season");
+  assert.ok(rebuilt, "bar rebuilt with season chip");
+  assert.notEqual(rebuilt, season, "the pressed chip node was replaced");
+  assert.equal(h.dom.document.activeElement, rebuilt, "focus lands on the new season chip");
+  assert.equal(rebuilt.getAttribute("aria-pressed"), "true");
+  assert.equal(rebuilt.tabIndex, 0);
+});
+
 test("CLASSICS filter snaps the hero off a season circuit onto the first classic", () => {
   const h = bootMenus();
   assert.equal(h.G.trackIdx, 1, "fixture opens on Spa");

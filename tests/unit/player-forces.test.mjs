@@ -165,3 +165,48 @@ test("brake-to-reverse does not snap front slip by ~2·steer (dirS blend)", () =
   assert.ok(Math.abs(sFull - slipAt(2)) > Math.abs(delta),
     "forward vs reverse at |v|≥DIR_BLEND must differ by about 2·δ");
 });
+
+test("NaN driverDelta or non-finite dt must not poison car state", () => {
+  // M4.clamp passes NaN (comparisons are false). A NaN driverDelta used to
+  // write NaN into vLat / yawRateCur / head for the rest of the session.
+  const { PlayerForces, TyreModel, PhysicsConsts } = load();
+  const G = {
+    PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0,
+    YAW_INERTIA: 0.58, YAW_DAMP: 1.0,
+  };
+  const api = PlayerForces.create(G);
+  const tyres = TyreModel.create({
+    get raceTyreWear() { return "off"; },
+    store: { get: () => "off", set: () => {} },
+  });
+  const L = 3.2, FRONT_WEIGHT = PhysicsConsts.FRONT_WEIGHT;
+  const ar = FRONT_WEIGHT * L, af = L - ar;
+  const baseCtx = {
+    assistDelta: 0, lineDelta: 0,
+    onThrottle: false, throttleLvl: 0, gearMult: 1,
+    deploy: 0, braking: false, surfaceMu: 1, kerbGrip: 1, bankMu: 1,
+    modsCornering: 1, loadF: FRONT_WEIGHT, loadR: 1 - FRONT_WEIGHT,
+    vertLoad: 0, af, ar, sp: 1, steer: 0.2,
+    weatherGrip: 1, aeroDf: 1, dirtyMul: 1, coastCut: 0,
+    vTopNow: 72, tyres,
+  };
+  function car() {
+    return {
+      human: true, isPlayer: false, speed: 40, axEstSm: 0, aeroX: 0, wake: 0,
+      vLat: 1.5, yawRateCur: 0.2, head: 0.1, brakeStab: 1, rearUtil: 0,
+      brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false,
+      tread: 0, flatSpot: 0,
+    };
+  }
+  const cBad = car();
+  api.step(cBad, { ...baseCtx, dt: DT, driverDelta: NaN });
+  for (const k of ["vLat", "yawRateCur", "head", "slipFront", "gripFront"]) {
+    assert.ok(Number.isFinite(cBad[k]), `NaN driverDelta poisoned ${k}=${cBad[k]}`);
+  }
+  const cSkip = car();
+  const before = { vLat: cSkip.vLat, yawRateCur: cSkip.yawRateCur, head: cSkip.head };
+  api.step(cSkip, { ...baseCtx, dt: NaN, driverDelta: 0.05 });
+  assert.equal(cSkip.vLat, before.vLat, "non-finite dt must skip the integrate");
+  assert.equal(cSkip.yawRateCur, before.yawRateCur);
+  assert.equal(cSkip.head, before.head);
+});

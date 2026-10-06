@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion } = {}) {
+function harness({ motion, latest = undefined } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -83,10 +83,12 @@ function harness({ motion } = {}) {
   }
   const pending = [], resultKeys = [];
   const defer = (name, value) => new Promise((res) => pending.push({ name, res: () => res(value) }));
-  const LATEST = { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
+  const LATEST = latest !== undefined ? latest
+    : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
+  const meetingYears = [];
   const F1API = {
     latestSession: () => defer("latestSession", LATEST),
-    meetings: () => defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]),
+    meetings: (year) => { meetingYears.push(year); return defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
     sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
     sessionResult: (sk) => { resultKeys.push(sk); return defer("sessionResult", []); },
     sessionDrivers: () => defer("drivers", []),
@@ -118,7 +120,7 @@ function harness({ motion } = {}) {
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document, byId, place };
+  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -256,4 +258,20 @@ test("a How to Play door click closes an open hub", async () => {
   h.document.dispatch("click", { target: ico }, true);
   assert.equal(h.DataHub.isOpen(), false);
   assert.equal(h.root.hidden, true);
+});
+
+test("RESULTS cold-start with empty latestSession defaults year (never meetings(null))", async () => {
+  // Off-season: latestSession is null. Leaving sel.year null made buildPicker
+  // call F1API.meetings(null) → OpenF1 ?year=null and no active year pill.
+  const h = harness({ latest: null });
+  h.DataHub.open("results");
+  await h.drain();
+  assert.ok(h.meetingYears.length, "RESULTS still asks for meetings");
+  assert.ok(h.meetingYears.every((y) => y != null), "year is never null/undefined");
+  assert.doesNotMatch(String(h.meetingYears[0]), /^null$/i);
+  const year = new Date().getFullYear();
+  assert.equal(h.meetingYears[0], year);
+  const active = h.content().find((n) => n.classList.contains("dh-pill") && n.classList.contains("active"));
+  assert.ok(active, "one year pill is active");
+  assert.equal(active.textContent, String(year));
 });
