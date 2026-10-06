@@ -161,6 +161,34 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
   assert.deepEqual(pinned, [], "per-track dawn|dry must defer ambientMul/keyMul to *|dawn|dry");
 });
 
+test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () => {
+  const P = presets();
+  const shared = P["*|night|dry"];
+  assert.ok(shared, "expected LightPresets['*|night|dry']");
+  assert.equal(shared.nightAmbLift, 1.45);
+  assert.equal(shared.ambientMul, 1.05);
+  assert.equal(shared.keyMul, 1.2);
+  assert.equal(shared.lampLevel, 0.26);
+  assert.equal(shared.floodEmitMul, 0.3);
+  assert.equal(shared.bloomMul, 1.1);
+  assert.equal(shared.glowAmp, 1.85);
+  assert.equal(shared.exposureMul, 0.92);
+  assert.equal(shared.poolEnergy, 0.7);
+  assert.equal(shared.cityGlowMul, 0.55);
+  // Fleet core authenticity knobs must not re-pin the pre-stamp crush/wash values.
+  const CORE = ["nightAmbLift", "ambientMul", "bloomMul", "glowAmp", "exposureMul"];
+  const pinned = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|night\|dry$/.test(key) || key.startsWith("*")) continue;
+    const o = P[key];
+    for (const id of CORE) {
+      if (!Object.prototype.hasOwnProperty.call(o, id)) continue;
+      pinned.push(`${key}.${id}=${o[id]}`);
+    }
+  }
+  assert.deepEqual(pinned, [], "per-track night|dry must defer core authenticity knobs to *|night|dry");
+});
+
 test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {
   // Two knobs are read only under one condition, so a value anywhere else is
   // dead weight that a reader takes for a live setting:
