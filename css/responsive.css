@@ -141,6 +141,13 @@
    by layer order alone — see the comment on :focus-visible there. */
 
 [hidden] { display: none !important; }
+/* Default-hidden until overlays.css (print→all) applies the portrait in-race
+   flex + chrome. Without this, a cold phone load paints the unstyled
+   #rotate-device block in document flow over #overlay (css-play withhold,
+   393×852 and 852×393). Specificity (1,0,1) loses to the overlays show rule
+   `body.in-race:not(.rotate-ok) #rotate-device`. .pane-pair hosts stay
+   [hidden] here, so they do not need a twin. */
+#rotate-device { display: none; }
 
 /* ---------- MENU MOTION (js/ui/title-fx.js) ---------- */
 /* MOTION: REDUCED, or an OS that asks for reduced motion, puts
