@@ -53,17 +53,54 @@ surface without hand-wiring:
 1. Link this repo to environment **Apex 26** ([819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025)). **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
 2. When starting a Cloud Agent, pick that environment — not a generic default. After boot, `cursor-cloud environment-info` should show `source: "Repository"`, `build.resolution: "resolved"`, and a `buildId`; run `npm run test:guards` without `npm install` first.
 3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` in Cloud):** the host
-   does **not** attach project `.mcp.json` by itself. In [Cloud Agents → Integrations & MCP](https://cursor.com/agents)
-   register all three stdio servers with the **same names and `bash` wrappers** as
-   root `.mcp.json` (`tools/mcp/*-mcp.sh`). Do **not** register `playwright-official`
-   as bare `npx @playwright/mcp` — the allowlist must say `command: bash` for that
-   name (`tests/unit/environment-json.test.mjs`). After editing ship
-   `.cursor/environment.json`, **Save** the environment so the dashboard allowlist
-   matches git (a stale save shows `npx` for the third slot and blocks the wrapper).
-   **Enable chrome-devtools** in the launch MCP dropdown; the catalog often ships
-   only two until all three are toggled on (measured 2026-09-03).
+   does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
+   In [Cloud Agents → Integrations & MCP](https://cursor.com/agents) (team-shared:
+   Dashboard → Plugins & MCPs) register these three **stdio** servers — same names /
+   `bash` wrappers as root `.mcp.json`. Pasteable catalog (keep `command: bash`;
+   do **not** use bare `npx @playwright/mcp`):
+
+```json
+{
+  "apex-tools": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["tools/mcp/apex-tools-mcp.sh", "serve"],
+    "timeout": 900000
+  },
+  "chrome-devtools": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["tools/mcp/chrome-devtools-mcp.sh", "run"]
+  },
+  "playwright-official": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["tools/mcp/playwright-mcp.sh", "run"]
+  }
+}
+```
+
+   After editing ship `.cursor/environment.json`, **Save** the environment so the
+   dashboard allowlist matches git. Each `mcpServerAllowlist` row keeps its
+   `name` and a **full launch pattern** (`*bash tools/mcp/<wrapper>.sh …`) —
+   Cursor matches `command` + `args` joined, with `*` wildcards
+   ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
+   `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
+   `{ "command": "bash" }` rows in `environment-info` (or bare `npx` for
+   playwright) and host attach fails. **Enable all three** in the launch MCP
+   dropdown (catalog often ships only two until toggled — measured 2026-09-03;
+   re-checked 2026-10-06).
 4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
 5. Per-user OAuth for any remote MCP that needs it.
+
+**Healthy Cloud session check** (after Save + new agent):
+
+| Signal | Good | Broken (this session 2026-10-06) |
+|---|---|---|
+| `environment-info` → `source` / `build.resolution` | `Repository` / `resolved` | (VM OK even when MCP empty) |
+| `environment-info` → `mcpServerAllowlist` | three named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
+| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
+| VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
 
 **MCP empty in this session?** CLI fallbacks work without attachment:
 `bash tools/mcp/apex-tools-mcp.sh call …`, `bash tools/mcp/playwright-mcp.sh run`,
@@ -72,7 +109,7 @@ surface without hand-wiring:
 end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
 VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
-`.cursor/environment.json`.
+`.cursor/environment.json`, then start a **new** agent with all three MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
