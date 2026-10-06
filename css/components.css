@@ -97,9 +97,9 @@ input[type="range"]:disabled { cursor: default; }
    measured #customize head/foot 0×0). UA dialog is also width/height
    fit-content — `.screen { inset: 0 }` does not stretch that — so a 0×0
    subtree leaves a 0-box :modal that UiLayers shownLayer() skips (selected-1
-   menu-keyboard, #standings over #pausemenu, CI 37436631474). Keep the copy
-   in dialog-platform for the same-layer family; this blocking restatement
-   is the one that races print→all. */
+   menu-keyboard, #standings over #pausemenu, CI 37439242991 / 37436631474).
+   Keep the copy in dialog-platform for the same-layer family; this blocking
+   restatement is the one that races print→all. */
 dialog.screen {
   margin: 0;
   border: 0;

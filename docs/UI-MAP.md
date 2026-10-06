@@ -444,7 +444,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#freecam`, `#garriva
 
 | Root | Important descendants |
 |---|---|
-| `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-secondary`; title actions `#mb-career`, `#mb-race`, `#mb-tt`, `#mb-vs`, `#mb-season`, `#mb-data`, `#mb-garage`, `#mb-settings`, `#mb-help` |
+| `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-explore`, `#menu-secondary`; title actions `#mb-career`, `#mb-daily`, `#mb-race`, `#mb-tt`, `#mb-vs`, `#mb-season`, `#mb-watch`, `#mb-practice`, `#mb-photo`, `#mb-garage`, `#mb-data`, `#mb-settings`, `#mb-help` |
 | `#pmsettings` | `#pmsettings-inner`, `#dlg-settings`, `#pm-settings-body`, `#pm-settings-index` |
 | Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-panel-appearance`, `#pm-display-adv`, `#advanced`, `#audioset` |
 | `#howtoplay` | `#howtoplay-inner`, `#htp-contents`, `#htp-controls`, `#htp-racing`, `#htp-pits`, `#htp-driving`, `#htp-setup`, `#htp-modes`, `#htp-friends`, `#htp-close` |
