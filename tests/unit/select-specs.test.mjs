@@ -939,8 +939,15 @@ test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR 
   assert.deepEqual(r.ids, ["monza"]);
   assert.equal(r.scoped, true, "landmark + foundation + the selector stay circuit-only");
   assert.ok(r.dataResolved.includes("tests/data/landmarks/monza.json"));
-  const clip = circuitsTouched(["js/circuits/scenery/monza.js", "tools/track/clip-baseline.json"], null);
-  assert.equal(clip.scoped, false, "clip-baseline still needs a base ref to resolve rows");
+  const clipAlone = circuitsTouched(["tools/track/clip-baseline.json"], null);
+  assert.equal(clipAlone.scoped, false, "a baseline the base git cannot show, alone, stays infra");
+  const clipWithCircuit = circuitsTouched(
+    ["tools/track/clip-baseline.json", "js/circuits/scenery/monza.js",
+     "tests/data/scenery-audit-baseline.json", "tools/track/props-tris-baseline.json"], null);
+  assert.equal(clipWithCircuit.scoped, true,
+    "unreadable baselines pin to circuits the rest of the diff already named (blob:none CI)");
+  assert.deepEqual(clipWithCircuit.ids, ["monza"]);
+  assert.ok(clipWithCircuit.dataResolved.includes("tools/track/clip-baseline.json"));
 });
 
 test("every APEX_CIRCUITS-filtered test actually reads APEX_CIRCUITS", () => {

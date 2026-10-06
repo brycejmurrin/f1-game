@@ -758,13 +758,20 @@ export function specsRacing(ids, root = ROOT) {
 }
 
 /** Circuit ids a per-circuit data file's rows changed for, or null when the
- *  diff cannot be read (then the file stays infra). */
+ *  diff cannot be read (then the file stays infra unless the rest of the diff
+ *  already named a circuit — see circuitsTouched). */
 export function dataCircuits(file, ref, root = ROOT) {
   const read = (txt) => { try { return JSON.parse(txt); } catch { return null; } };
   let before, after;
+  // A blob:none CI checkout (ci.yml select job) has HEAD blobs from checkout
+  // but not the base version of a *changed* file. `git show ref:file` then
+  // exits non-zero (persist-credentials: false cannot lazy-fetch). Returning
+  // {} here used to mark every circuit as moved. Returning null lets
+  // circuitsTouched pin the file to circuits the rest of the diff already
+  // named (PR #1015 run 37425354715: scoped=false, DROPPED 8).
   try { before = read(execFileSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })); }
-  catch { before = {}; }
-  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { after = {}; }
+  catch { return null; }
+  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { return null; }
   if (!before || !after) return null;
   const ids = new Set();
   const flat = [before, after].every((o) => Object.entries(o)
@@ -790,6 +797,7 @@ export function dataCircuits(file, ref, root = ROOT) {
 export function circuitsTouched(changed, ref, root = ROOT) {
   const ids = new Set(), dataResolved = [];
   let scoped = changed.length > 0;
+  const unresolvedData = [];
   for (const f of changed) {
     const m = CIRCUIT_FILE.exec(f);
     if (m) { ids.add(m[1]); continue; }
@@ -800,8 +808,17 @@ export function circuitsTouched(changed, ref, root = ROOT) {
     if (PER_CIRCUIT_DATA.has(f)) {
       const d = ref ? dataCircuits(f, ref, root) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
+      unresolvedData.push(f);
+      continue;
     }
     if (scopeNeutral(f)) continue;
+    scoped = false;
+  }
+  // Two-pass: a baseline the base git cannot show (blob:none) does not break
+  // scope when the rest of the diff already named the circuit. Alone, it
+  // stays infra. Order of `git diff --name-only` is not a contract.
+  for (const f of unresolvedData) {
+    if (ids.size) { dataResolved.push(f); continue; }
     scoped = false;
   }
   return { ids: [...ids].sort(), scoped: scoped && ids.size > 0, dataResolved };
