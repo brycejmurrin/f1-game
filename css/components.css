@@ -88,6 +88,31 @@ input[type="range"]:disabled { cursor: default; }
   overscroll-behavior: contain;
 }
 
+/* CLOSED DIALOG = NO BOX, OPEN DIALOG = VIEWPORT BOX.
+   These three rules used to live only in css/dialog-platform.css. That file
+   is print→all (title-critical cut). Until onload flips media, author
+   `.screen { display: grid }` beats the UA `dialog:not([open]) { display: none }`,
+   so a `hidden = false` → TopModal showModal() seam lays the dialog out closed.
+   Chromium then drops child boxes on top-layer re-attach (css-layers unit;
+   measured #customize head/foot 0×0). Without width/height:100% the host is
+   UA fit-content of those 0×0 children — UiLayers shownLayer() skips a live
+   :modal and MenuNav activeLayer() stays on the screen behind it (selected-1
+   menu-keyboard, #standings over #pausemenu). Keep the copy in dialog-platform
+   for the same-layer family; this blocking restatement is the one that races
+   print→all. */
+dialog.screen {
+  margin: 0;
+  border: 0;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  max-width: none; max-height: none;
+  width: 100%; height: 100%;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+}
+dialog.screen:not([open]) { display: none; }
+dialog.screen[open] { display: grid; }
+
 /* ---------- dialogs arrive, rather than appearing ----------
    Scoped to `.dim` — the modal sheets. The two full-screen flows (#select,
    #carsetup) are swapped inside a View Transition (game.js wraps the title/

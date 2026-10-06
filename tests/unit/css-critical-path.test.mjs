@@ -83,6 +83,17 @@ test("Barlow and unused Titillium faces live in deferred fonts-hud.css", () => {
   assert.equal(MANIFEST.CSS_PRELOAD.includes("css/fonts-hud.css"), false);
 });
 
+test("blocking sheets restate the dialog.screen closed-box guard", () => {
+  const blocking = TITLE_CRITICAL
+    .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
+  assert.match(blocking, /dialog\.screen:not\(\[open\]\)\s*\{\s*display:\s*none/,
+    "print→all dialog-platform must not leave the hidden→showModal seam unguarded");
+  assert.match(blocking, /dialog\.screen\[open\]\s*\{\s*display:\s*grid/,
+    "open dialogs need a display flip in the blocking set so dropped child boxes heal");
+  assert.match(blocking, /dialog\.screen\s*\{[^}]*width:\s*100%/,
+    "UA fit-content of a 0×0 subtree must not win before dialog-platform arrives");
+});
+
 test("blocking sheets hide #rotate-device until overlays.css arrives", () => {
   const blocking = TITLE_CRITICAL
     .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
