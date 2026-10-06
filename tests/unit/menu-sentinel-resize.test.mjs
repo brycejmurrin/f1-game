@@ -28,10 +28,14 @@ function fnBody(src, name) {
   return src.slice(start, i - 1);
 }
 
+// LAZY_CIRCUIT: loadTrack refuses a meta-only stub (no path). Sandbox defs
+// need a minimal path payload so the sentinel arm/disarm path is reached.
+const PATH_STUB = { pts: [[0, 0, 0]] };
+
 function loadTrackAt(state) {
   const arms = [];
   const _menuGate = { track: { old: true }, ready: "stale", warm: 2 };
-  const Tracks = { LIST: [{ id: "monza" }] };
+  const Tracks = { LIST: [{ id: "monza", path: PATH_STUB }] };
   const PerfGov = { sentinelArm(on) { arms.push(!!on); } };
   function raceArmedSentinel() { return state === "race" || state === "count"; }
   let built = 0;
@@ -66,7 +70,7 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
     const arms = [];
     let track = null;
     let builtTrackId = "spa", builtTrackNight = false, builtGridSlots = 22;
-    const Tracks = { LIST: [{ id: "monza" }], buildPaced: async () => ({ id: "monza", meshes: {} }) };
+    const Tracks = { LIST: [{ id: "monza", path: PATH_STUB }], buildPaced: async () => ({ id: "monza", meshes: {} }) };
     const PerfGov = { sentinelArm(on) { arms.push(!!on); } };
     function raceArmedSentinel() { return state === "race" || state === "count"; }
     function sessionDarkFor() { return false; }
@@ -75,6 +79,8 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
     function dropTrackWorld() {}
     function freeTrackMeshes() {}
     const sceneryResident = () => false;
+    // loadTrackStepped awaits ensureCircuit before build (LAZY_CIRCUIT gate).
+    const ensureCircuit = async () => {};
     let adopted = 0;
     const _loadTrackBody = () => { adopted++; };
     const load = eval("(async function(idx, live){" + fnBody(SRC, "loadTrackStepped") + "})");
