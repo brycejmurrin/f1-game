@@ -116,7 +116,9 @@
      with view angle and settles back to the livery's own colour face-on.
      Car3D.build applies it by remapping the body-paint surface id (see
      Car3D.FINISH_SURFACE) — decals, carbon, rubber and glass are untouched, and
-     it costs no extra geometry. }.
+     it costs no extra geometry. Sponsor-board / wordmark crispness is atlas
+     raster + mip policy in LiveryTex / car-draw, never a finish override
+     (garage paint lives in #1025). }.
    UNIVERSAL apply to every team; BY_TEAM are team-specific specials. A team's own
    colours are the synthesized "default" livery. Consumed by game.js
    (resolveLivery + the LIVERY tab in car setup). Colours are [r,g,b] 0..1. */

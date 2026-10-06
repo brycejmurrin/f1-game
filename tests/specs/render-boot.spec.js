@@ -129,12 +129,23 @@ test("TLX boots, installs its three marker, and presents a frame", async ({ page
   expect(s.webgl2).toBe(true);
 });
 
-test("an unset backend still boots TLX — the shipped default", async ({ page }) => {
-  // The default is what players get, and it is chosen by the ABSENCE of a key,
-  // so no test that sets one can see it change. A silent flip to the bare path
-  // would look like a working game and ship a different renderer — and with the
-  // marker gone it would look exactly like the GLX test above passing.
+test("an unset backend boots TLX when a GPU adapter exists, else GLX", async ({ page }) => {
+  // Unset means "auto": TLX only when requestAdapter() resolves, so title boot
+  // never modulepreloads three.webgpu on a no-adapter box (SwiftShader without
+  // WebGPU flags). Explicit apex26.gfxBackend=three still forces TLX (test above).
   const s = await boot(page, { "apex26.gfxBackend": null, "apex26.tlxForceGL": "1" });
   expectLiveBackend(s);
-  expect(s.backend).toBe("three");
+  const hasAdapter = await page.evaluate(async () => {
+    try {
+      if (!navigator.gpu || !navigator.gpu.requestAdapter) return false;
+      return !!(await navigator.gpu.requestAdapter());
+    } catch (_) { return false; }
+  });
+  if (hasAdapter) {
+    expect(s.backend).toBe("three");
+  } else {
+    // Bare GLX: no overlay marker (same identity as the explicit webgl2 test).
+    expect(s.backend).toBeUndefined();
+    expect(s.webgl2, "no-adapter auto path must claim WebGL2").toBe(true);
+  }
 });

@@ -426,11 +426,37 @@ const CarShade = (function () {
   /** The HEADREST: a horseshoe pad round the back of the helmet (car3d draws
    *  the head at (0, 0.715, -0.075), r 0.145), sitting on the cockpit coaming
    *  — where a dark 0.60 m bar crossed the car at helmet height, 11 cm over the
-   *  bolsters and through the back of the head. */
-  function headrest(out, col, tri, sf) {
+   *  bolsters and through the back of the head.
+   *
+   *  `style` mirrors car3d's recipe headrest: 0 coaming hoop only / 1 raised
+   *  horseshoe bolster / 2 winged bolster. Styles 1–2 used to stack flat
+   *  addBox pads on top of this hoop (Lego cushions behind every signature
+   *  cockpit); here they are pipes so the rounded build finishes the pass. */
+  function headrest(out, col, tri, sf, style) {
+    const st = Math.max(0, Math.min(2, style == null ? 0 : style | 0));
     const half = [[0.205, 0.640, 0.02], [0.208, 0.650, -0.08], [0.196, 0.660, -0.17], [0.150, 0.666, -0.245], [0.078, 0.669, -0.285]];
     const path = half.map(([x, y, z]) => [-x, y, z]).concat([[0, 0.670, -0.298]], half.slice().reverse());
-    pipe(out, fine(path, 2), col, tri, sf, { chord: 0.075, thick: 0.055, n: 8, p: 2.5, up: [0, 1, 0] });
+    // Style 0 keeps the thin dark coaming hoop; 1–2 thicken it into the carbon bolster.
+    const chord = st === 0 ? 0.075 : st === 1 ? 0.092 : 0.108;
+    const thick = st === 0 ? 0.055 : st === 1 ? 0.068 : 0.082;
+    pipe(out, fine(path, 2), col, tri, sf, { chord, thick, n: 8, p: 2.5, up: [0, 1, 0] });
+    if (st < 1) return;
+    // Side bolsters forward of the horseshoe, clear of the helmet dome (r 0.145).
+    for (const s of [-1, 1]) {
+      const wing = st === 1
+        ? [[s * 0.200, 0.645, -0.04], [s * 0.200, 0.645, -0.16], [s * 0.200, 0.645, -0.28]]
+        : [[s * 0.210, 0.670, -0.05], [s * 0.210, 0.678, -0.18], [s * 0.210, 0.685, -0.30]];
+      pipe(out, fine(wing, 2), col, tri, sf, {
+        chord: st === 1 ? 0.052 : 0.048, thick: st === 1 ? 0.055 : 0.060, n: 6, p: 2.5, up: [0, 1, 0],
+      });
+    }
+    if (st < 2) return;
+    // Upper cheek pads (winged recipe): short pipes above the side bolsters.
+    for (const s of [-1, 1]) {
+      pipe(out, fine([[s * 0.215, 0.700, -0.08], [s * 0.215, 0.705, -0.18]], 2), col, tri, sf, {
+        chord: 0.036, thick: 0.024, n: 6, p: 2.5, up: [0, 1, 0],
+      });
+    }
   }
 
   // A SIDEPOD section (car3d sidepodStations: inner/outer x, bottom/top y at
