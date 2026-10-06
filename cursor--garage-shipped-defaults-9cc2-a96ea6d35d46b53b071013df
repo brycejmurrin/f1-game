@@ -1,1 +1,1 @@
-1791288851	Cursor Agent	PR #1021 fix: menu-baseline phone goldens + packed-5 ui-resize short-wide DONE; bless CI actuals; leave AM; no merge  [cursor/garage-shipped-defaults-9cc2; session a96ea6d35d46b53b071013df]
+1791294916	Cursor Agent	PR #1021: Selected specs verdict dropped=21 after #1010 merge; green dropped=0 on new SHA; squash AM off; no merge  [cursor/garage-shipped-defaults-9cc2; session a96ea6d35d46b53b071013df]
