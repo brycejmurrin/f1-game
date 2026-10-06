@@ -547,6 +547,24 @@ test("an affected spec that cannot fit the budget runs OUTSIDE the budget, bound
   assert.ok(MAX_OVERSIZE_SHARDS >= 1 && MAX_OVERSIZE_SHARDS <= 4, "fan-out stays bounded");
 });
 
+test("a leftover billed over one overflow job still runs when room remains", () => {
+  // hud-layout: 32 tests. 26 s/test → 832 s > TARGET_SHARD_SEC. Rank 3 + cost
+  // still inside the whole budget used to leave it SKIPPED (PR #1021 run
+  // 37472255445). Overflow now admits it while room lasts; shards() splits it.
+  const big = "tests/specs/hud-layout.spec.js";
+  const small = "tests/specs/boot-guard.spec.js";
+  const nBig = declaredTests(big);
+  assert.ok(nBig > 10, `hud-layout declares ${nBig} tests`);
+  const db = at([big, small], 26);
+  const r = fit([big, small], DEFAULT_BUDGET_MIN, { db, overflowShards: 11, rank: () => 3 });
+  const running = [...r.overflow, ...r.oversize, ...r.selected].map((s) => s.file);
+  assert.ok(running.includes(big), "too-big leftover is not dropped");
+  assert.equal(r.skipped.filter((s) => s.file === big).length, 0);
+  assert.equal(r.overBudgetSpecs.filter((s) => s.file === big).length, 0);
+  const planned = shards(r, db).flatMap((j) => j.specs.split(" "));
+  assert.ok(planned.includes(big), "shards() carries the leftover spec");
+});
+
 test("a loop-expanded per-circuit spec is billed at fleet size, and split only when its EXPECTED run is long", () => {
   // The concrete failure: select billed tracks-walls as 4, packed it with
   // foundations into one shard (timeout 39), Playwright ran ~63 tests at
@@ -1082,7 +1100,7 @@ test("a routed over-budget spec is never silently dropped: run, or named, and ev
     assert.ok(poolSec <= (opts.overBudgetShards ?? MAX_OVER_BUDGET_SHARDS) * TARGET_SHARD_SEC,
       `the pool spends ${poolSec} s, over its allowance`);
   }
-  assert.ok(MAX_OVERFLOW_SHARDS >= 2 && MAX_OVER_BUDGET_SHARDS >= 1, "both allowances exist");
+  assert.ok(MAX_OVERFLOW_SHARDS >= 11 && MAX_OVER_BUDGET_SHARDS >= 1, "both allowances exist");
 });
 
 test("post-edit.sh no longer tells authors to declare > 180 s to escape the gate", () => {

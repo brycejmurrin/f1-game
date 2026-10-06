@@ -4,7 +4,8 @@
 // The invariant that matters: a knob moved on one camera changes ONLY that
 // camera, and an untuned mode frames exactly as it did before the feature.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 /* Two cases here outrun the project's shared 120 s budget, and say so rather
    than reporting a bare "Test timeout exceeded".

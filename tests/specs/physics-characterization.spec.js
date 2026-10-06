@@ -44,7 +44,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test, expect, pinFactorySeat } from "../helpers/fixtures.js";
+import { test, expect } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");

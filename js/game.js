@@ -119,7 +119,7 @@ function initRainDrops() {
 const { store, ttBoard, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
 const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/data/teams.js)
-let teamIdx = store.get("team", 0);          // shipped garage default: Mercedes (js/data/garage-defaults.js)
+let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 function storedTrackIndex() {
   const id = store.get("trackId", null);
@@ -158,7 +158,7 @@ function clampDriverIdx() {
 }
 function restoreFreePlaySelection() {
   trackIdx = idxOr(storedTrackIndex(), Tracks.LIST.length, 0);
-  teamIdx = idxOr(store.get("team", 0), Teams.LIST.length, 0);
+  teamIdx = idxOr(store.get("team", 2), Teams.LIST.length, 2);
   driverIdx = store.get("driver", 0);
   clampDriverIdx();
 }
@@ -8916,7 +8916,7 @@ customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips
 // Not over a season load() refused to write back (lossy: a circuit this build
 // does not know) — saving it here erased that circuit, or blanked a finished season.
 if (season && store.get("season", null)) { season = GameStore.migrateSeasonPoints(season); if (!SeasonCal.lastLoadLossy()) SeasonCal.save(season, { migration: true }); }
-teamIdx = idxOr(teamIdx, Teams.LIST.length, 0);
+teamIdx = idxOr(teamIdx, Teams.LIST.length, 2);
 clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
 trackIdx = idxOr(trackIdx, Tracks.LIST.length, 0);

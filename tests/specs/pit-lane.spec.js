@@ -25,7 +25,8 @@
 //
 // COST: one track build, then ~20 s of stepping. headless(true) throughout —
 // nothing here looks at a pixel.
-import { test, expect, BOOT_MS, awaitTrackBuild, pinFactorySeat } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 async function armedAt(page, { track = "monza", solo = false, rivals = false } = {}) {
   // Pin the pre-GarageDefaults seat (McLaren, empty sheet) BEFORE boot.

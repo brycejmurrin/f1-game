@@ -1,7 +1,8 @@
 // @ts-check
 // Contract tests for __apex.dolly(), __apex.roadside(), __apex.tourShots()
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 async function loadMonaco(page) {
   await page.setViewportSize({ width: 844, height: 390 });

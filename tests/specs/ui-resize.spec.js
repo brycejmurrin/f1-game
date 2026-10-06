@@ -45,7 +45,8 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
-import { test, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 900 };

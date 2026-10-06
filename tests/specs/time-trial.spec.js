@@ -2,7 +2,8 @@
 // Time Trial mode: ghost recording, ghost delta HUD, sector-split announces,
 // and the TT results panel. Uses __apex.tt() to enter TT mode programmatically.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 

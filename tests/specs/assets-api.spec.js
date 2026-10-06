@@ -19,7 +19,8 @@
 // and pins GLX via the fixture, which this file's `supported === true` check
 // already assumed. First-load mix stays on freshTest.
 
-import { sharedTest as test, test as freshTest, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 test.beforeEach(async ({ page }) => {
   // Shallow shared-page reset does not rewind the BAKED MATERIALS knob or pack.
   await page.evaluate(async () => {

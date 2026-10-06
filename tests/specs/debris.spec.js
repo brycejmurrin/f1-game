@@ -5,7 +5,8 @@
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,
 // respect the pool cap, and replay a seeded episode bit-for-bit.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 // How long rapier's WASM takes to load and initialise. Its OWN number, and
 // deliberately NOT BOOT_MS — tests/helpers/fixtures.js says in as many words

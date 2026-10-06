@@ -40,7 +40,8 @@
  * Imports from ./fixtures.js so a failure arrives with apex-state, the Log ring
  * and the page console attached.
  */
-import { test, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 

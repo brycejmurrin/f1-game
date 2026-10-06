@@ -55,8 +55,6 @@ export async function clickLive(page, id) {
   if (!hit) throw new Error(`clickLive: no element with id "${id}"`);
 }
 
-export { pinFactorySeat } from "./factory-seat.js";
-
 /**
  * Shared Playwright fixtures for Apex 26.
  *

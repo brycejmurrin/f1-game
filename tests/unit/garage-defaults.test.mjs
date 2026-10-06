@@ -178,3 +178,29 @@ test("garage-defaults.js loads before the store in the manifest", () => {
   assert.ok(gi >= 0, "garage-defaults.js missing from FULL");
   assert.ok(si > gi, "garage-defaults.js must precede store.js");
 });
+
+test("game.js keeps the McLaren call-site; GarageDefaults still wins on a miss", () => {
+  // store.get("team", 0) on js/game.js reroutes test:circuits+collisions and
+  // dropped 21 selected specs (PR #1021 run 37472255445). The miss-path team
+  // is GarageDefaults.team (0, Mercedes); the call-site stays 2 so a game.js
+  // edit is not required to ship the garage.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /store\.get\("team", 2\)/);
+  assert.doesNotMatch(game, /store\.get\("team", 0\)/);
+  const { GameStore, GarageDefaults } = load();
+  assert.equal(GameStore.store.get("team", 2), GarageDefaults.get("team"));
+  assert.equal(GarageDefaults.get("team"), 0);
+});
+
+test("pinFactorySeat lives on factory-seat.js, not the fixtures re-export", () => {
+  // Re-exporting from fixtures.js marked ~120 specs rank-2 imported and
+  // bloated the selected plan. Specs that need the pin import the helper.
+  const fixtures = fs.readFileSync(path.join(ROOT, "tests/helpers/fixtures.js"), "utf8");
+  assert.doesNotMatch(fixtures, /pinFactorySeat/);
+  const helper = fs.readFileSync(path.join(ROOT, "tests/helpers/factory-seat.js"), "utf8");
+  assert.match(helper, /export async function pinFactorySeat/);
+  for (const spec of ["physics-characterization", "pit-lane", "understeer-cue", "ui-resize"]) {
+    const src = fs.readFileSync(path.join(ROOT, `tests/specs/${spec}.spec.js`), "utf8");
+    assert.match(src, /from "\.\.\/helpers\/factory-seat\.js"/, spec);
+  }
+});

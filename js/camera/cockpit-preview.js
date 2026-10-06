@@ -7,7 +7,7 @@ const CockpitPreview = (function () {
   let readCar = null;
   function bind(read) { readCar = read; }
   function snapshot(angle) {
-    const team = Teams.LIST[GameStore.store.get("team", 0)] || Teams.LIST[0];
+    const team = Teams.LIST[GameStore.store.get("team", 2)] || Teams.LIST[2];
     const car = readCar ? readCar() : { teamId: team.id, livery: Liveries.forTeam(team)[0],
       units: typeof AppearanceOpts !== "undefined" ? AppearanceOpts.units() : "kmh" };
     return Object.assign({}, car, { angle, body: CockpitOpts.body(), interior: CockpitOpts.interior(),
