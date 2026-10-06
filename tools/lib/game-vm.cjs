@@ -619,6 +619,26 @@ async function createGame(opts) {
       const r = runFile(ctx, f, record);
       if (f === MANIFEST.PATHS.GAME) bootPromise = r;
     }
+    // LAZY_CIRCUIT: title boots meta-only TrackDefs; VM tests (and race()) build
+    // centreline from Tracks.LIST synchronously, so hydrate every full def here
+    // the way ensureCircuit() does in the browser after a pick.
+    for (const f of (MANIFEST.LAZY_CIRCUIT || [])) {
+      if (SKIP.has(f)) continue;
+      runFile(ctx, f, record);
+    }
+    if (ctx.Tracks && typeof ctx.Tracks.hydrate === "function") {
+      const TD = ctx.TrackDefs || [];
+      for (const def of ctx.Tracks.LIST || []) {
+        if (!def || !def._metaOnly) continue;
+        for (let i = TD.length - 1; i >= 0; i--) {
+          const d = TD[i];
+          if (d && d.id === def.id && d.path && d.path.pts && d.path.pts.length) {
+            ctx.Tracks.hydrate(d);
+            break;
+          }
+        }
+      }
+    }
     // The loop above is fully SYNCHRONOUS — game.js's async IIFE has not resumed
     // past its first await yet — so this lands before any draw could build a car.
     if (opts.carMeshes === false) stubCarMeshes(ctx, record);
