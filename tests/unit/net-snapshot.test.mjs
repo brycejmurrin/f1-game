@@ -102,6 +102,32 @@ test("negative wire ids are omitted so the count byte matches", () => {
   assert.equal(bytes[5], 1);
 });
 
+test("non-integer and out-of-range ids never fold onto wire id 0", () => {
+  // `null >= 0` and `false >= 0` are true in JS; then `id & 0xff` maps them
+  // (and 256) onto 0, colliding remotes on the host relay / interp map.
+  const bytes = NetSnapshot.encodeSnapshot(1, [
+    { id: null, car: car({ s: 100 }) },
+    { id: false, car: car({ s: 101 }) },
+    { id: "3", car: car({ s: 102 }) },
+    { id: 1.5, car: car({ s: 103 }) },
+    { id: 256, car: car({ s: 104 }) },
+    { id: 0, car: car({ s: 200 }) },
+    { id: 7, car: car({ s: 300 }) },
+  ]);
+  const out = NetSnapshot.decodeSnapshot(bytes);
+  assert.equal(out.cars.length, 2);
+  assert.deepEqual(out.cars.map((c) => [c.id, Math.round(c.s)]), [[0, 200], [7, 300]]);
+  assert.equal(bytes[5], 2);
+
+  const aged = NetSnapshot.encodeAged([
+    { id: null, at: 10, car: car({ s: 1 }) },
+    { id: 2, at: 20, car: car({ s: 2 }) },
+  ]);
+  const agedOut = NetSnapshot.decodeSnapshot(aged);
+  assert.equal(agedOut.cars.length, 1);
+  assert.equal(agedOut.cars[0].id, 2);
+});
+
 test("a truncated packet decodes to nothing rather than a garbage car", () => {
   const bytes = NetSnapshot.encodeSnapshot(1, [{ id: 0, car: car({ s: 500 }) }]);
   assert.equal(NetSnapshot.decodeSnapshot(bytes.slice(0, bytes.length - 4)), null);

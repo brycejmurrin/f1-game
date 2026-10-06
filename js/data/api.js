@@ -163,7 +163,10 @@ const F1API = (function () {
 
   // Grand Prix weekends for a season (for the session picker).
   function meetings(year) {
-    return request(OPENF1 + "/meetings?year=" + encodeURIComponent(year), TTL_SCHEDULE).then(function (list) {
+    // encodeURIComponent(null) is the string "null" — refuse that URL and fall
+    // back to the clock season so a cold picker never hits ?year=null.
+    const y = (year == null || year === "") ? season() : year;
+    return request(OPENF1 + "/meetings?year=" + encodeURIComponent(y), TTL_SCHEDULE).then(function (list) {
       return arr(list).map(function (m) {
         m = m || {};
         const out = {

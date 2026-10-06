@@ -15,8 +15,20 @@ const DataLive = (function () {
 
   function mergeIntervalBatch(state, batch) {
     if (batch) {
-      const values = batch.values && typeof batch.values === "object" ? batch.values : batch;
-      Object.keys(values || {}).forEach((k) => { state.intervals[k] = values[k]; });
+      // `values: null` is typeof "object" is false, so the old ternary fell
+      // through to the whole batch and wrote keys "values"/"cursor" into gaps.
+      let values;
+      if (batch.values != null && typeof batch.values === "object" && !Array.isArray(batch.values)) {
+        values = batch.values;
+      } else if (!Object.prototype.hasOwnProperty.call(batch, "values") && typeof batch === "object") {
+        values = batch;
+      } else {
+        values = {};
+      }
+      Object.keys(values).forEach((k) => {
+        if (k === "cursor" || k === "values") return;
+        state.intervals[k] = values[k];
+      });
       if (batch.cursor && (!state.intervalCursor || batch.cursor > state.intervalCursor)) {
         state.intervalCursor = batch.cursor;
       }

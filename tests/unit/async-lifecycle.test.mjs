@@ -459,6 +459,25 @@ test("LIVE completed badge has a distinct muted treatment", () => {
   assert.match(block[1], /background:/);
 });
 
+test("mergeIntervalBatch ignores values:null and never writes meta keys into gaps", () => {
+  const live = liveMergeHelpers();
+  const state = { intervals: { 44: 1.2 }, intervalCursor: "a" };
+  live._mergeIntervalBatch(state, { values: null, cursor: "b" });
+  assert.deepEqual(state.intervals, { 44: 1.2 }, "prior gaps survive a null values batch");
+  assert.equal(state.intervalCursor, "b", "cursor still advances");
+  assert.equal(state.intervals.values, undefined);
+  assert.equal(state.intervals.cursor, undefined);
+
+  live._mergeIntervalBatch(state, { values: { 4: 0.5 }, cursor: "c" });
+  assert.equal(state.intervals[4], 0.5);
+  assert.equal(state.intervals[44], 1.2);
+
+  // Snapshot shape from intervals(): a plain number map, no values wrapper.
+  const plain = { intervals: {}, intervalCursor: null };
+  live._mergeIntervalBatch(plain, { 44: 0, 4: 1.1 });
+  assert.deepEqual(plain.intervals, { 44: 0, 4: 1.1 });
+});
+
 test("LIVE position/interval requests use watermarks and never touch localStorage", async () => {
   const h = dataApiHarness([
     [
