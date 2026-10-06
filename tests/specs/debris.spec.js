@@ -5,7 +5,7 @@
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,
 // respect the pool cap, and replay a seeded episode bit-for-bit.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
 
 // How long rapier's WASM takes to load and initialise. Its OWN number, and
 // deliberately NOT BOOT_MS — tests/helpers/fixtures.js says in as many words
@@ -61,19 +61,24 @@ async function boot(page) {
   await page.addInitScript(() => {
     try { performance.setResourceTimingBufferSize(3000); } catch (_) {}
   });
+  // Factory McLaren, empty sheet — the shipped Mercedes kit has made
+  // startRace() return false ("Race start did not reach the grid") on this
+  // file's last TT boot (CI run 37401839190). Debris measures the side-world,
+  // not the garage.
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function startRace(page, id) {
-  await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
+  await page.evaluate(async (t) => { await window.__apex.race(t, "day", "dry"); }, id);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
 }
 
 async function startTT(page, id) {
-  await page.evaluate((t) => window.__apex.tt(t, "day"), id);
+  await page.evaluate(async (t) => { await window.__apex.tt(t, "day"); }, id);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
 }

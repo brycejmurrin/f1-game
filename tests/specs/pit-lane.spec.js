@@ -25,7 +25,7 @@
 //
 // COST: one track build, then ~20 s of stepping. headless(true) throughout —
 // nothing here looks at a pixel.
-import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild, pinFactorySeat } from "../helpers/fixtures.js";
 
 async function armedAt(page, { track = "monza", solo = false, rivals = false } = {}) {
   // Pin the pre-GarageDefaults seat (McLaren, empty sheet) BEFORE boot.
@@ -33,12 +33,7 @@ async function armedAt(page, { track = "monza", solo = false, rivals = false } =
   // signature parts kit; that kit changes the stopping envelope and the car
   // never latches the box under the same scripted approach. This file
   // measures the pit lane, not the garage.
-  await page.addInitScript(() => {
-    try {
-      localStorage.setItem("apex26.team", "2");
-      localStorage.setItem("apex26.parts.mclaren", "{}");
-    } catch (_) { /* private mode */ }
-  });
+  await pinFactorySeat(page);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(({ track, solo }) => solo

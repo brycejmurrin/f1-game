@@ -44,7 +44,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test, expect } from "../helpers/fixtures.js";
+import { test, expect, pinFactorySeat } from "../helpers/fixtures.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");
@@ -87,6 +87,11 @@ test("the driving model produces the same numbers it did before", async ({ page,
   // 120 s test budget on the second one under SwiftShader. Load once, reset
   // between scenarios.
   test.setTimeout(300_000);
+  // Factory McLaren, empty sheet — GarageDefaults ships Mercedes-AMG with a
+  // signature kit. This gate measures the driving model against
+  // tests/data/physics-baseline.json, which is the factory car (same pin as
+  // tools/lib/game-vm.cjs). Must land before loadTrack's goto.
+  await pinFactorySeat(page);
   // A3: explicit dry pin — loadTrack defaults wx="dry", but grip-sensitive
   // baselines must not inherit a leftover wet enum / arc from a prior test.
   await loadTrack("monza", "day", "dry");

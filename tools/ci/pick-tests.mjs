@@ -253,7 +253,7 @@ export const RULES = [
   // settings-defaults; the default team's parts kit moves the characterization
   // baseline the same way a steering default would.
   [/^js\/data\/garage-defaults\.js/, ["steering-unit", "physics-core"],
-   "garage-defaults.test.mjs; game-vm pins factory McLaren so characterization does not follow the garage"],
+   "garage-defaults.test.mjs; game-vm and physics-characterization pin factory McLaren so the baseline does not follow the garage"],
   [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
   [/^js\/ui\/onboard\.js/, ["steering-unit"], "onboard.test.mjs"],
   [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],

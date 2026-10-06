@@ -1,16 +1,23 @@
 // @ts-check
 // Contract tests for __apex.dolly(), __apex.roadside(), __apex.tourShots()
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
 
 async function loadMonaco(page) {
   await page.setViewportSize({ width: 844, height: 390 });
+  // Factory McLaren, empty sheet — GarageDefaults outfits every constructor,
+  // so a 22-car Monaco grid outruns the old 3 s sleep and dolly() sees no
+  // track (CI run 37401839190). These hooks measure cameras, not the garage.
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  // AWAIT THE RACE. __apex.race() is a thenable (js/agent/apex.js settled());
+  // firing it and sleeping 3 s left G.track null, so dolly() returned false
+  // and roadside() crashed in checkRetirements on track.total. Same contract
+  // as tests/specs/monaco-foundation.spec.js.
   await page.evaluate(async () => {
-    __apex.race("monaco");
-    await new Promise(r => setTimeout(r, 3000));
+    await __apex.race("monaco");
     __apex.go();
     await new Promise(r => setTimeout(r, 200));
     __apex.freeze(true);
