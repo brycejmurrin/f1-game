@@ -23,17 +23,22 @@ export async function armRace(page, setup, arg) {
 }
 
 export async function selectPartCategory(page) {
-  const cat = await page.evaluate(() => {
+  // PR #1075 run 37451436383: under 2 llvmpipe workers, #carsetup was visible
+  // (SetupUI.openSetup) but cs-tab-* had not been built yet. A one-shot tab
+  // click no-op'd, then waitForFunction on `.cs-opt` sat until BOOT_MS.
+  // Wait until the paid-category tab exists, click it, and a part row lands.
+  const hasPaid = await page.evaluate(() =>
+    !!(window.Parts && Parts.CATALOG.some((x) => x.options.some((o) => o.cost > 0))));
+  expect(hasPaid, "no catalog category has a paid option — a part row can never be found").toBe(true);
+  const handle = await page.waitForFunction(() => {
     const c = Parts.CATALOG.find((x) => x.options.some((o) => o.cost > 0));
-    if (!c) return null;
+    if (!c) return false;
     const tab = document.getElementById(`cs-tab-${c.id}`);
-    if (tab) tab.click();
-    return c.id;
-  });
-  expect(cat, "no catalog category has a paid option — a part row can never be found").not.toBeNull();
-  await page.waitForFunction(() => !!document.querySelector("#cs-options .cs-opt"),
-    null, { polling: 100, timeout: BOOT_MS });
-  return cat;
+    if (!tab) return false;
+    tab.click();
+    return document.querySelector("#cs-options .cs-opt") ? c.id : false;
+  }, null, { polling: 100, timeout: BOOT_MS });
+  return handle.jsonValue();
 }
 
 export async function startCareer(page, opts) {
