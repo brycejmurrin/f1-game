@@ -150,8 +150,58 @@
 #pm-calib[hidden] + #pm-calib-help { display: none; }
 /* RESET KEYS is the last reachable control when CONTROLLER is hidden.
    Sheet-body padding alone left the plate flush against .sheet-foot
-   and the bottom of the button clipped at max scroll. */
+   and the bottom of the button clipped at max scroll. Extra tap+pad on
+   the shared body also covers STEERING & ASSISTS (AIDS open under BACK). */
 #pm-panel-controls { padding-bottom: var(--tap); }
+#pm-settings-body { min-height: 0; padding-bottom: calc(var(--tap) + var(--pad)); }
+/* The dialog already hides overflow (dialog-platform.css). Nested groups
+   must not become a second scroller — at 500x385 the pane AND the page
+   both showed a bar, and the last fold sat under BACK. */
+#pmsettings { overflow: hidden; }
+#pmsettings-inner .pm-groups,
+#pmsettings-inner .pm-groups > [role="region"],
+#pmsettings-inner #advanced-inner {
+  overflow: visible;
+  min-height: 0;
+}
+/* Full-row actions (REPOSITION TOUCH CONTROLS, RECALIBRATE, RESET KEYS):
+   the shared --tap height clipped a wrapping label inside a fixed plate.
+   Size to the copy; take the full row. Chevrons stay .set-row > div > button. */
+#pmsettings-inner .pm-groups > [role="region"] > button,
+#pmsettings-inner :is(#pm-keys-section, #pm-pad-section, .pm-pad-tools) > button {
+  height: auto;
+  min-height: var(--tap);
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  overflow: visible;
+  text-overflow: clip;
+}
+/* Preset cards: RELAX's two-line blurb used to stand taller than ROOKIE /
+   STANDARD on the same wrap line. Stretch the row; below 620px (the same
+   cliff as the door-button wrap) sit 2-up so every card on a line matches. */
+#pmsettings-inner .preset-row.balanced-row { align-items: stretch; }
+#pmsettings-inner .preset-row.balanced-row > .preset-btn {
+  align-self: stretch;
+  height: unset;
+  min-height: var(--tap);
+  box-sizing: border-box;
+}
+@container sheet (max-width: 620px) {
+  #pmsettings-inner .preset-row.balanced-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    align-items: stretch;
+  }
+  /* Wide shape turns a page into two columns; action labels (REPOSITION
+     TOUCH CONTROLS) then wrap inside a half-width --tap plate. Span the row. */
+  #pmsettings-inner[data-shape="wide"] .pm-group > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
 /* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
    greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
 #pm-hudlayout .tune-row:has(input:disabled),

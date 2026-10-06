@@ -1597,6 +1597,26 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "hidden RECALIBRATE also drops its described-by copy");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
     "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-settings-body", "padding-bottom"), "calc(var(--tap) + var(--pad))",
+    "sheet-body end padding clears BACK on Controls and Steering & Assists");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings", "overflow"), "hidden",
+    "the settings dialog is not a second page scroller");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups,/, "overflow"), "visible",
+    "nested settings groups defer scrolling to the sheet body");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups > \[role="region"\] > button/, "height"), "auto",
+    "full-row action labels size to their wrapping copy, not a --tap clip");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings-inner .preset-row.balanced-row", "align-items"), "stretch",
+    "STEERING preset cards on one line share height");
+  const presetGrid = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner \.preset-row\.balanced-row$/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.ok(presetGrid, "narrow settings packs preset cards 2-up");
+  assert.equal(presetGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(presetGrid.decls.get("grid-auto-rows"), "1fr");
+  assert.equal(presetGrid.decls.get("align-items"), "stretch");
+  const fullRow = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner\[data-shape="wide"\] \.pm-group > button/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.equal(fullRow && fullRow.decls.get("grid-column"), "1 / -1",
+    "narrow wide-shape action buttons take the full row");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
