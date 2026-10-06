@@ -446,6 +446,22 @@ test("high-scale settings and Last Race retain useful local width", () => {
   assert.equal(decl(data, ".dh-table", "table-layout"), "fixed");
   assert.ok(!declares(data, ".dh-td-driver", "display", "flex"),
     "a table cell must not opt out of the fixed table layout");
+  assert.equal(decl(data, ".dh-td-driver", "overflow-wrap"), "normal",
+    "driver names wrap at spaces, not mid-word");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "overflow-wrap"), "normal");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "display"), "block",
+    "the surname sits under the chip so VERSTAPPEN keeps a full cell");
+  assert.ok(!declares(data, ".dh-td-driver", "overflow-wrap", "anywhere"));
+  assert.equal(decl(data, ".dh-cons-main .dh-name", "flex"), "0 1 auto",
+    "live/constructor names do not grow and park the team on the far right");
+  const desk = ruleFor(data, /body\[data-width="wide"\]\[data-density="normal"\]\s+\.dh-card/);
+  assert.ok(desk, "desktop hub card has a pinned height");
+  assert.equal(desk.decls.get("min-height"), "var(--dh-desk-h)");
+  assert.equal(desk.decls.get("max-height"), "var(--dh-desk-h)");
+  assert.equal(decl(data, ".dh-export-status", "font-family"), "inherit",
+    "export status is the hub face, not a monospace dump");
+  assert.equal(decl(data, ".dh-tabs", "flex-wrap"), "wrap",
+    "EXPORT must wrap, not clip, on the 760px card");
 });
 
 test("compact title column scrolls instead of clipping at high UI SIZE", () => {
@@ -1436,7 +1452,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.doesNotMatch(read("index.html"), /<h3 class="pm-group-h">(?:DRIVING CONTROLS|DISPLAY|APPEARANCE|STEERING &amp; ASSISTS|MUSIC &amp; SOUND)<\/h3>/,
     "page titles are not duplicated by hidden headings");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--text)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
@@ -1469,12 +1485,65 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--text)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
   assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "color"), "var(--text)",
+    "MUSIC fold names use --text, not steel italic");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec$/, "border-bottom"), "1px solid var(--card-line)",
+    "MUSIC & SOUND rules sit on the fold at full width, not a fading --grad-rule");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset-inner,/, "width"), "100%",
+    "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
+  assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
+    "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
+  assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
+    "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
+    "disabled TILT help keeps its slot so steer-mode changes do not reflow");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib[hidden] + #pm-calib-help", "display"), "none",
+    "hidden RECALIBRATE also drops its described-by copy");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
+    "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
+    "NEW CAREER columns keep the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
+    "LOAD CAREER FILE confirm stays stacked — no wrap jump off the pointer");
+  assert.equal(decl(css("css/career.css"), "#cr-career-load", "min-height"), "calc(var(--tap-paint) * 2)",
+    "armed OVERWRITE copy fits the reserved LOAD height");
+  assert.equal(decl(css("css/career.css"), ".cr-slot-main", "grid-column"), "1 / -1",
+    "SLOT 1 copy keeps the full card; EXPORT / IMPORT / DELETE sit underneath");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left$/, "overflow-x"), "hidden",
+    "paired career panes do not grow a second horizontal gutter");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\]:has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > \.sheet-foot$/, "grid-column"), "1 / -1",
+    "CAREER MODES BACK spans both columns");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file > button", "text-transform"), "uppercase",
+    "SAVE / LOAD / PROTECT share one uppercase plate");
+  assert.equal(decl(css("css/career-experience.css"), /\[data-career-part="nav"\]$/, "flex-wrap"), "nowrap",
+    "hub chips pan instead of wrapping under the title");
+  assert.match(decl(css("css/career-experience.css"), /\[data-career-part="calendar"\]$/, "grid-template-columns") || "",
+    /auto-fill/,
+    "season story tiles wrap in the pane instead of a clipped H strip");
+  assert.match(decl(css("css/settings.css"), "#pmsettings", "--sheet-w") || "",
+    /1020px/,
+    "SETTINGS matches the career hub width, not a 760 postcard");
+  assert.equal(decl(css("css/settings.css"), "#pm-settings-body", "scrollbar-width"), "none",
+    "DISPLAY uses the themed .sf-scroll thumb, not a white native gutter");
+  const hubGrid = rulesFor(css("css/settings-controls.css"), /^#pm-settings-index$/).find((r) =>
+    r.context.includes("@container sheet (min-width: 24rem)"));
+  assert.ok(hubGrid, "SETTINGS doors become a 2-col grid once two --balance-basis tiles fit");
+  assert.equal(hubGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(hubGrid.decls.get("align-items"), "stretch",
+    "APPEARANCE wrap stretches the pair so DISPLAY is not a short neighbour");
+  assert.equal(decl(css("css/career.css"), /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents a,/, "white-space"), "nowrap",
+    "How My Team Works topic chips stay one line");
+  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents", "scrollbar-width"), "none",
+    "How My Team Works keeps the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
+    "1px solid var(--card-line)",
+    "DISPLAY fold rules span the sheet, not a fading --grad-rule");
   assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
     "closed FEEL summary carries the live steer step");
   assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
@@ -1499,8 +1568,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
   assert.equal(decl(css("css/components.css"), "#pm-uiscale-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
-    "fold names stay heading steel");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--text)",
+    "fold names stay readable --text, not steel italic");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
     "fold ON chips pick up the live gold the inner ON buttons name");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--red)",
@@ -1566,7 +1635,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
     "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
   assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
+  // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
+  // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
+  // painted on touch; --tap-min was the 26px soft floor.
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-close', "min-height"), "var(--tap-paint)",
+    "compact VS Friend CLOSE floors at --tap-paint");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
+    "compact HOST / JOIN floor at --tap-paint");
+  // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
+    "compact VS Friend head clears --tap-paint CLOSE");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > .sheet-foot', "top"), "0",
+    "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
+
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
@@ -1670,6 +1752,22 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
+  // Flyby had --compact-at / #fb-rail but no compact rules (layout-audit 2026-10-05:
+  // sticky foot covered shot tabs; #fb-rows underHW). Pin the short-panel strip.
+  const tuner = css("css/tuner.css");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"]', "overflow"), "hidden");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-rail', "max-height"), "52%",
+    "compact flyby caps furniture so the foot stays in the dock");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] > .sheet-foot', "position"), "static",
+    "compact flyby foot must not stick over the shot strip");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overflow-x"), "auto");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "pan-x");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overscroll-behavior-x"), "contain");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots .lt-tab', "min-height"), "var(--tap-paint)");
+  assert.equal(decl(css("css/hud.css"), '#flyby-inner[data-density="compact"] #fb-freecam', "min-height"), "var(--tap-paint)",
+    "freecam floor lives in @layer hud (beats components)");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rail', "display"), "flex");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rows', "grid-column"), "2");
   const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>
     r.context.includes("@container sheet (max-width: 480px)"));
   assert.ok(narrowTabs, "narrow lighting tabs become a pan strip without waiting for compact");

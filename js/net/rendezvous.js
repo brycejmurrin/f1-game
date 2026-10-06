@@ -13,7 +13,9 @@ const NetRendezvous = (function () {
   let sessionUrl;   // QR pairing can select a relay for this document, never another tab/device
 
   const POLL_MS = 1200;             // how often to ask if the other side arrived
-  const POLL_TIMEOUT_MS = 120000;   // give up after two minutes — see the TTL
+  // Guest join of a fake/missing code must fail in the lobby in ~8–15 s (same
+  // product target as NetNostr.JOIN_TIMEOUT_MS). Not a worker mapping TTL.
+  const POLL_TIMEOUT_MS = 12000;
   const FETCH_TIMEOUT_MS = 8000;
 
   function baseUrl() {
@@ -396,7 +398,7 @@ const NetRendezvous = (function () {
   }
 
   // Errors a poll may see for a moment without the room being gone: a 429,
-  // a 5xx, a timed-out or offline request. Aborting the two-minute wait takes
+  // a 5xx, a timed-out or offline request. Aborting the poll wait takes
   // WAIT_TRANSIENT_MAX of these in a row, not one.
   const TRANSIENT = new Set(["rate_limited", "relay", "timeout", "offline"]);
   const WAIT_TRANSIENT_MAX = 5;
@@ -412,7 +414,10 @@ const NetRendezvous = (function () {
         if (!TRANSIENT.has(res.error) || ++transient >= WAIT_TRANSIENT_MAX) return res;
       } else transient = 0;
       if (Date.now() - started > POLL_TIMEOUT_MS) {
-        return ERR("expired", "Nobody joined that code. Codes only last a couple of minutes.");
+        // Lobby codeJoin already say(why.message) on !done.ok — keep this useful.
+        // waitFor is the private-relay path (32-char tokens); do not claim "six".
+        return ERR("expired",
+          "Nobody answered that code. Double-check it, or ask your friend for a fresh one.");
       }
       if (onTick) { try { onTick(Math.round((Date.now() - started) / 1000)); } catch (e) { /* a caller bug must not stop the poll */ } }
       await new Promise((r) => setTimeout(r, POLL_MS));

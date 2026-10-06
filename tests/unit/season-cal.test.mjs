@@ -972,6 +972,39 @@ test("a standalone season stamps its own luck seed once, saves it, and a reload 
   assert.match(readFileSync(join(ROOT, "js/race/quali-model.js"), "utf8"), /SeasonCal\.luckSeed\(G\.season, G\.simSeed\(\)\)/);
 });
 
+// UI-02 (hunt2): the champion banner and the results sheet's DRIVERS list
+// ranked G.cars — this race's grid — while points are keyed by SEAT. A Season
+// raced partly as MY TEAM (custom:0) then switched to McLaren kept custom:0's
+// points in season.pts, off the grid: the banner crowned NOR while STANDINGS
+// (season.pts) showed the custom seat P1. Both now rank the season table.
+test("the champion is the season.pts leader even when that seat is no longer on the grid", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.blank();
+  Object.assign(season, { round: 3, pts: { "custom:0": 60, "mclaren:0": 40, "ferrari:0": 30 }, driverCodes: { "custom:0": "YOU" } });
+  const mk = (tag) => ({ tagName: tag, children: [], style: {}, className: "", textContent: "",
+    append(...c) { this.children.push(...c); }, appendChild(c) { this.children.push(c); return c; } });
+  const els = { resultsTitle: mk("h2"), resultsTable: mk("div"), resNext: mk("button") };
+  const said = [];
+  const G = {
+    els, season, soundOn: false, cssCol: () => "#f00", announce: (m) => said.push(m),
+    cars: [
+      { driverId: "mclaren:0", code: "NOR", name: "Norris", team: { name: "McLaren", color: [1, 0.5, 0] }, isPlayer: true },
+      { driverId: "ferrari:0", code: "LEC", name: "Leclerc", team: { name: "Ferrari", color: [1, 0, 0] } },
+    ],
+  };
+  const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
+  seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx);
+  ctx.GameResults.create(G).buildChampion();
+  assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
+  const rows = els.resultsTable.children.filter((r) => /res-row/.test(r.className));
+  assert.deepEqual(rows.map((r) => r.children[2].textContent), ["YOU", "NOR", "LEC"], "FINAL STANDINGS is every seat that scored");
+  assert.deepEqual(rows.map((r) => / you$/.test(r.className)), [false, true, false], "the player's row is marked, as on every other table");
+  assert.doesNotMatch(els.resultsTable.children[1].style.cssText, /#aaa/, "the team line reads theme tokens");
+  const sheet = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.match(sheet, /const all = seasonTable\(cars, season\)\.slice\(0, 10\);/, "the results DRIVERS list ranks the same table");
+});
 
 test("repeated menu loads preserve unknown calendar ids and keep every lossy view unsavable", () => {
   const raw = { round: 2, pts: { d0: 25 }, teamPts: {}, driverCodes: {},

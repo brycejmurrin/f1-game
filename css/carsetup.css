@@ -348,23 +348,32 @@
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none; scrollbar-gutter: auto;
-  /* SNAP EACH CATEGORY. On play-shape the strip shares a row with BACK /
-     CLOSE: without snap, AERO (and later tabs) parked half-clipped at the
-     strip's right edge and read as "AER" under the foot — measured
-     ios-iphone-landscape-safari 852×344 compact, 2026-10-05, tip 36c84dc8
-     (AERO right 15px past #cs-tabs client edge; BACK clear of the strip box).
-     Modern Web Guidance scroll-snap: mandatory x + align start. */
+  /* SNAP EACH CATEGORY. Compact flattens both .cs-tab-row into this one
+     scroller (display: contents). Without snap, mid-strip labels park
+     half-clipped at the right edge beside BACK — measured Pages/live
+     ios-iphone-landscape-safari 852×344 compact LIVERY, 2026-10-05
+     (AERO right past #cs-tabs client edge). MWG css-layout / scroll-snap:
+     mandatory x + align start. ScrollFade (#cs-tabs in SEL) paints sf-l /
+     sf-r for the "more this way" edge (scrollability-affordance-hints). */
   scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--pad);
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs::-webkit-scrollbar { display: none; }
 #cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-row { display: contents; }
 #cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab {
-  /* 52 painted on touch: --tap-paint where the tap-target pass declares it,
-     the full --tap rung otherwise. The label is back at --fs-micro: the old
-     min(9px, ...) label existed only to squeeze seven columns into a grid,
-     and a panning strip has no columns to fit. */
+  /* TAP FLOOR — never crush. Live Pages (v=13789 / carsetup 0450d166aebf)
+     still shipped the pre-#924 short-landscape 2-row grid sized from the
+     WCAG-min rung (+4px) with category tabs zeroing min-height, painting
+     fifteen 30.5px tabs against a garage --tap of 52. Compact density must
+     wrap/scroll instead of zeroing the floor (MWG accessibility /
+     size-aware-styling / fluid-scaling). Prefer logical min-block-size /
+     min-inline-size so a writing-mode flip cannot reintroduce a short hit
+     target; keep the physical min-* pair for engines that resolve
+     --tap-paint only there. Livery ⧉ chips (.cs-liv-edit) stay on
+     --chip-h / the WCAG-min rung — not this rule. */
   flex: 0 0 auto; white-space: nowrap;
+  min-inline-size: var(--tap-paint, var(--tap));
+  min-block-size: var(--tap-paint, var(--tap));
   min-width: var(--tap-paint, var(--tap));
   min-height: var(--tap-paint, var(--tap));
   padding: 0 calc(var(--gap) * 0.9);
@@ -389,7 +398,7 @@
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
-  /* Prefer a shorter label padding so three category tabs clear fully beside
+  /* Prefer a shorter label padding so three+ category tabs clear fully beside
      BACK/CLOSE; height stays the sheet foot / --tap floor. */
   padding-inline: calc(var(--gap) * 0.65);
   min-width: var(--tap-paint, var(--tap));

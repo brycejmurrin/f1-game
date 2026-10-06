@@ -4,6 +4,10 @@
    Door index, then one page. Tabs hid MORE and spent a sticky row the
    phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
    .pm-doors already balances the home list; pages reuse .pm-group. */
+/* 760 left a maximised desktop with a postcard of DISPLAY and a native
+   white gutter. Career hub is 1020; match that cap and hide the native
+   bar so only the themed .sf-scroll thumb (ScrollFade) remains. */
+#pmsettings { --sheet-w: min(1020px, calc(100 * var(--vwz) - var(--pad) * 2)); }
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
@@ -14,7 +18,11 @@
   grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   align-items: start;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
 }
+#pm-settings-body::-webkit-scrollbar { display: none; }
 #pm-settings-index[hidden],
 .pm-groups > [role="region"][hidden] { display: none !important; }
 .pm-groups { min-width: 0; }
@@ -401,5 +409,21 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   min-height: var(--slider);
   margin: 0;
   box-sizing: border-box;
+}
+/* LIGHT sheet footers must live in @layer components (same layer as
+   .sheet-foot in css/components.css). A base-layer override loses the
+   cascade regardless of specificity (tokens.css documents this trap for
+   focus rings). Under Sunlight / LIGHT the foot follows the surface ladder. */
+:root[data-ui-theme="light"] .sheet-foot {
+  background: linear-gradient(180deg in oklab,
+    color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+    var(--surf-3) 70%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] .sheet-foot {
+    background: linear-gradient(180deg in oklab,
+      color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+      var(--surf-3) 70%);
+  }
 }
 } /* @layer components */

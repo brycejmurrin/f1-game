@@ -4781,8 +4781,18 @@ function updateCar(c, dt, ranked) {
   // classification neighbour — a leader has none, it can sit a lap away, and a
   // finished car coasting right ahead would count.
   // Only a car inside OT_GAP·speed can earn (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  //
+  // The O(n) ahead walk is only needed when a detection-line crossing can earn
+  // OT (otDetectOpen + crossed since last tick), or the car already holds
+  // allowance (AI fire / spend). Seed the crossing trackers the same way
+  // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
+  // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
-  for (const o of ranked) {
+  if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
+  const otOpen = raceCtl.otDetectOpen();
+  const otNeedAhead = (c.otE > 0 || c.otOn) ||
+    (!!track && otOpen && OvertakeMode.crossed(c._otS, c.s, OvertakeMode.detectS(track), otL));
+  if (otNeedAhead) for (const o of ranked) {
     if (o === c || o.finished || o.retired || pits.inLane(o)) continue;   // a car in the pit lane is not on the road
     const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
     const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
@@ -4794,7 +4804,7 @@ function updateCar(c, dt, ranked) {
   // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
   // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
   const pitHeld = pits.held(c);
-  OvertakeMode.lines(c, track, gapAhead, raceCtl.otDetectOpen());
+  OvertakeMode.lines(c, track, gapAhead, otOpen);
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
@@ -7322,12 +7332,16 @@ function render(dt) {
   // Advance one face every FOURTH frame on a live race — a full 6-face cube
   // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
   // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
-  // park() freezes physics for shots/tests — then one face per frame so a
-  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
-  // seconds-per-frame).
+  // When the governor has already cut render scale (stage 1) but has not yet
+  // shed the probe (tier still 0), slow further to every EIGHTH frame — the
+  // scale lever is the first pressure signal, and a half-rate cube still
+  // refreshes in <1 s at 60 Hz. park() freezes physics for shots/tests — then
+  // one face per frame so a parked M9 cube goes ready in 6 presents, not 24
+  // (SwiftShader is seconds-per-frame).
   // Live race/count only — results freezes above; menu flyby has no player car
   // paint that needs a probe, and a mid-results probe was a whole-world redraw.
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -7425,6 +7439,11 @@ function render(dt) {
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
+  // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
+  // a struggling device stops spawning sub-pixel puffs that only starve the pool.
+  // Squared once per frame — same divisor spray/rain already use for density.
+  const _fxCullR = 110 / (1 + ((typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0));
+  const _fxCullR2 = _fxCullR * _fxCullR;
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
     // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
@@ -7600,7 +7619,7 @@ function render(dt) {
     // starve the shared pool).
     if (state !== "menu") {
       const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
-      if (fdx * fdx + fdz * fdz < 110 * 110) {
+      if (fdx * fdx + fdz * fdz < _fxCullR2) {
         // Collision sparks — flag set by collideFx during the physics step
         // (it has no world coords there); consumed once, at the car.
         if (c.fxSparkI) {
@@ -8732,7 +8751,7 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
