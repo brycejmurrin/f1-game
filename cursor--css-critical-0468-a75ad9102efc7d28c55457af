@@ -1,0 +1,1 @@
+1791278768	Cursor Agent	PR #1101: hoist dialog.screen closed-box guard into blocking components.css (0-box :modal standings); OWNED css/components.css tests/unit/css-critical-path; FORBIDDEN js/**; no auto-merge/merge  [cursor/css-critical-0468; session a75ad9102efc7d28c55457af]
