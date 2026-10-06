@@ -544,6 +544,12 @@ function buildSetup() {
     if (badges.length) {
       const tg = document.createElement("span");
       tg.className = "cs-opt-tag";
+      const band = opt.wetTread && opt.visual && opt.visual.band;
+      if (band && band.length >= 3) {
+        const r = Math.round(band[0] * 255), g = Math.round(band[1] * 255), b = Math.round(band[2] * 255);
+        tg.style.color = "rgb(" + r + "," + g + "," + b + ")";
+        tg.style.background = "rgba(" + r + "," + g + "," + b + ",0.18)";
+      }
       tg.textContent = badges.join(" · ");
       nameRow.appendChild(tg);
     }
