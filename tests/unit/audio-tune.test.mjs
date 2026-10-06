@@ -990,6 +990,63 @@ test("a music gain created while a line is on air starts ducked", async () => {
   assert.ok(Math.abs(g.gain.value - 0.5 * 0.52 * 0.35) < 1e-9, `born at the ducked level, got ${g.gain.value}`);
 });
 
+// SPOTTER CALLS DUCK THE MUSIC TOO (#988 left this alone). The engineer path
+// ducks from radio-voice.js via setRadioDuck; the spotter never goes through
+// that module — it keys radioVoice directly — so the duck has to live on the
+// clip. Same depth as the engineer (0.35); release when the clip ends; and a
+// spotter release must not lift the music under a live engineer line (or the
+// reverse), because say() calls setRadioDuck(false) on every card replace even
+// while pack.remaining("spotter") is still holding the next line's lead.
+const clipBuf = (d) => ({ duration: d, sampleRate: SR, length: d * SR, numberOfChannels: 1, getChannelData: () => new Float32Array(1) });
+test("a spotter clip ducks the music while it is on air", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "precondition: music at the default level");
+  const h = A.radioVoice([clipBuf(0.8)], 0, { channel: "spotter" });
+  assert.ok(h, "precondition: spotter clip scheduled");
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `mid-spotter music stays ducked, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `spotter end releases the duck, got ${r.music.gain.value}`);
+});
+test("an engineer duck survives a nested spotter clip ending", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  A.setRadioDuck(true);
+  const h = A.radioVoice([clipBuf(0.5)], 0, { channel: "spotter" });
+  assert.ok(h);
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, "both holds keep the music down");
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `spotter end must not lift an engineer duck, got ${r.music.gain.value}`);
+  A.setRadioDuck(false);
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "engineer end finally releases");
+});
+test("a spotter duck survives an engineer setRadioDuck(false) while the clip is still live", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  const h = A.radioVoice([clipBuf(0.6)], 0, { channel: "spotter" });
+  assert.ok(h);
+  A.setRadioDuck(true);
+  A.setRadioDuck(false);   // stopVoice() on every card replace — unpaired with a spotter hold
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `engineer false must not cut the spotter duck short, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "spotter end releases once both holds are clear");
+});
+test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const h = A.radioVoice([clipBuf(0.4)], 0, { channel: "radio" });
+  assert.ok(h);
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+});
+
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
   const { GameAudio: A, release, ctx } = boot();
   const nodes = [];
