@@ -51,6 +51,20 @@ test("no aero option puts the front wing outboard of the front tyre", () => {
     `(a wing wider than the car is not a car)`);
 });
 
+test("no team wingStyle puts the front wing outboard of the tyre", () => {
+  const proud = [];
+  for (const team of M.Teams.LIST) {
+    const d = M.Car3D.buildComplete(team.color, team.color2,
+      { teamId: team.id, measure: true });
+    const fw = (d.parts || []).find((p) => p.name === "frontWing");
+    assert.ok(fw, `no frontWing section for team ${team.id}`);
+    const half = Math.abs(fw.centreM[0]) + fw.sizeM[0] / 2;
+    if (half > FRONT_TYRE_OUTER) proud.push(`${team.id} ${half.toFixed(3)}`);
+  }
+  assert.deepEqual(proud, [],
+    `team wingStyle pushed the wing past the tyre face ${FRONT_TYRE_OUTER.toFixed(3)} m`);
+});
+
 test("the front wing still fills the width a wing should", () => {
   // The other direction, so "fix" the above by shrinking the wing to nothing
   // fails too. Real ratio is 1700/1900 = 0.895 of the tyre-face width; hold the

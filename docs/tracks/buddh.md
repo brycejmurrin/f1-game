@@ -53,5 +53,11 @@ The outfield (−1) is open farmland almost the whole way round.
 - Cantilever soffit cladding at ~40 m access height — [Eurosafe case study](https://www.eurosafeuk.com/knowledge/case-studies/buddh-int-circuit-new-delhi).
 - Circuit length ~5.137 km, Tilke, opened Oct 2011, Greater Noida / Jaypee Sports City — Wikipedia / RacingCircuits.info.
 
+**Local DETAIL (2026-10-06 scenery pass):**
+- Closed pit complex `modelGroup("buddh-pit-complex")` with solid back + saffron/green fascia (replaces shared open-face `building()`).
+- Far outfield temple-on-hill silhouette `modelGroup("buddh-temple-hill")` — Greater Noida plain cue, **not** a surveyed on-site temple.
+- Midfield densify: denser scrub/trees + dirt service cuts; east stands set `endWalls:true` locally.
+
 **UNCERTAIN — do not treat as surveyed fact (flagged in PR):**
 - Exact stand height (slideshare 30 m vs ENR 50 m), length 138 m, 40 m cantilever projection, 56 truss count, 41 pit garages — slideshare single-source or conflicting. The in-game model uses a game-scale silhouette (~14 truss bays, ~140 m length cue) rather than those numbers as hard dimensions.
+- Temple placement / form — invented silhouette for recognizability, not a named Greater Noida mandir survey.

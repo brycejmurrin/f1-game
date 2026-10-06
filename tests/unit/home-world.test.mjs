@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../../js/ui/home-world.js', import.meta.url), 'utf8');
 const pitSource = readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8');
 
-function fixture({ side = 1, noPit = false, flyby = true } = {}) {
+function fixture({ side = 1, noPit = false, flyby = true, raf } = {}) {
   const n = 100, track = { total: 1000, n, hw: new Float32Array(n).fill(10) };
   if (!noPit) track.pit = { sIn: 100, lenM: 400, side,
     w: new Float32Array(n).fill(1), v: new Float32Array(n).fill(1), b: new Float32Array(n).fill(1),
@@ -14,7 +14,9 @@ function fixture({ side = 1, noPit = false, flyby = true } = {}) {
   const G = { state: 'menu', setupPreviewOn: false, track, camEye: [3, 6, 9], camTgt: [2, 4, 8], camFov: 62,
     gfx: { warming: () => warm }, cars: [{ untouched: true }], raceClock: 107 };
   let warm = false, reduce = false, ready = false, eligible = true, key = 'a', prepared = 0, flyCalls = 0;
-  const context = vm.createContext({ TitleFx: { mode: () => reduce ? 'reduce' : 'on' } });
+  const ctx = { TitleFx: { mode: () => reduce ? 'reduce' : 'on' } };
+  if (raf) ctx.requestAnimationFrame = raf;
+  const context = vm.createContext(ctx);
   vm.runInContext(pitSource + ';globalThis.Pit=TrackPit;', context);
   context.Tracks = {
     sample: (t, s, out) => { out.p[0] = 25; out.p[1] = 7; out.p[2] = s; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 10; return out; },
@@ -120,6 +122,25 @@ test('the outdoor subject is shifted into the visible menu pane, and Photo resto
   assert.equal(f.home.camera().shiftX,0); assert.equal(f.home.camera().shiftY,-0.55);
   f.home.begin('track',{viewKey:'photo'});
   assert.equal(f.home.camera().shiftX,0); assert.equal(f.home.camera().shiftY,0);
+});
+
+test('browser rAF defers prepareTrack so the title can paint first', () => {
+  const frames = [];
+  const raf = (fn) => { frames.push(fn); return frames.length; };
+  const f = fixture({ raf });
+  f.home.begin('track', { shot: 'hero' });
+  assert.equal(f.prepared(), 0, 'must not build the circuit on the first title frame');
+  assert.equal(frames.length, 1);
+  frames.shift()();
+  assert.equal(f.prepared(), 0);
+  assert.equal(frames.length, 1);
+  f.home.end();
+  frames.shift()();
+  assert.equal(f.prepared(), 0, 'end() cancels a pending prepare');
+  f.home.begin('track', { shot: 'hero' });
+  frames.shift()();
+  frames.shift()();
+  assert.equal(f.prepared(), 1);
 });
 
 test('custom capture/restore run once across shots and read-only FOV restoration is safe', () => {

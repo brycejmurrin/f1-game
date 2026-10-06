@@ -139,6 +139,18 @@ window.MenuNav = (function () {
     if (!layer) return;
     const dy = wheelPx(e);
     if (!dy) return;
+    // A SIDEWAYS STRIP TAKES THE WHEEL FIRST. The circuit picker's flag strip
+    // (#sel-tracks, data-orientation="horizontal") cannot move on a vertical
+    // wheel natively — Chrome only pans it from the scrollbar thumb. The
+    // ancestor walk below would otherwise return on #sel-tracks itself (or a
+    // parent pane) and leave the gesture as a no-op. Over the strip, convert
+    // deltaY to scrollLeft and stop.
+    const strip = hStrip(layer);
+    const overStrip = !!(strip && e.target && strip.contains(e.target));
+    if (overStrip) {
+      if (scrollStrip(strip, dy)) e.preventDefault();
+      return;
+    }
     // If anything from the cursor up to the layer can already take the scroll,
     // this is a normal wheel over a normal list — leave the browser alone. The
     // native path scrolls smoothly and latches; a redirect would be worse.
@@ -157,14 +169,7 @@ window.MenuNav = (function () {
       if (canScroll(el, dy, oy)) return;
       if (isRegion(el, oy)) return;
     }
-    // A SIDEWAYS STRIP TAKES THE WHEEL TOO. The circuit picker's flag strip
-    // (#sel-tracks, data-orientation="horizontal") is the one scroll region on
-    // that screen a mouse wheel cannot move natively — a vertical wheel over a
-    // horizontal scroller does nothing. Over the strip, or when no vertical
-    // pane can take the gesture, the wheel pans the strip instead.
-    const strip = hStrip(layer);
-    const overStrip = strip && strip.contains(e.target);
-    const pane = overStrip ? null : nearestPane(layer, e.clientX, e.clientY, dy);
+    const pane = nearestPane(layer, e.clientX, e.clientY, dy);
     if (pane && scrollPane(pane, dy)) { e.preventDefault(); return; }
     if (strip && scrollStrip(strip, dy)) e.preventDefault();
   }
