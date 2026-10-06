@@ -14,7 +14,9 @@ const TrackThemes = (function () {
   // into this list, so append only — never reorder or remove.
   const ORDER = ["parkland", "alpine", "oasis", "desertnight", "harbour", "marina", "tilke", "autumn",
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
-    "jungle", "lakeside", "moorland", "metropolis"];
+    "jungle", "lakeside", "moorland", "metropolis",
+    // Slice I — append only; share-code indexes the first twenty unchanged.
+    "shipyard", "saltflat", "vineyard", "stadium", "island"];
 
   const pal = (base, extra) => Object.assign({}, base || {}, extra || {});
   const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
@@ -217,6 +219,65 @@ const TrackThemes = (function () {
       pit: { mode: "street" },
       cityStyle: { neon: ["white", "cyan", "blue"], dayPal: ["steel", "bluglass", "concrete", "greyblue", "paleblue"], bias: 0.2 },
       cityM: 3600,   // the harbour preset's street budget (see there)
+    },
+    shipyard: {
+      label: "INDUSTRIAL DOCKS", blurb: "Concrete quays, cranes on the horizon, grey water under an overcast sky.",
+      swatch: ["#607d8b", "#90a4ae"],
+      theme: "modern", sceneryTheme: "permanent", night: false, street: false,
+      pal: pal(ATM.britishOvercast, { grass: [0.28, 0.34, 0.28], runoff: [0.48, 0.50, 0.52], horizon: [0.68, 0.72, 0.76], fog: [0.64, 0.68, 0.72], fogDensity: 0.0022 }),
+      terrainOuter: 80, flatTerrain: true, elevStyle: "flat",
+      furniture: { tree: "plane", fol: [0.22, 0.32, 0.20], lamp: "none", sparse: true },
+      standSet: ["steel", "concrete", "scaffold"],
+    },
+    saltflat: {
+      label: "SALT FLATS", blurb: "Blinding white ground, sparse scrub, hard noon sun on a flat plain.",
+      swatch: ["#fafafa", "#c9a35b"],
+      theme: "desert", sceneryTheme: "desert", night: false, street: false,
+      pal: pal(ATM.dustyBowl, {
+        grass: [0.92, 0.93, 0.94], runoff: [0.88, 0.86, 0.80], zenith: [0.35, 0.55, 0.88],
+        horizon: [0.90, 0.88, 0.82], fog: [0.88, 0.86, 0.80], fogDensity: 0.0012,
+        sunColor: [1.0, 0.98, 0.92], sun: [1.0, 0.98, 0.94], sunDir: [0.35, 0.75, 0.25],
+        ambientSky: [0.72, 0.74, 0.80], ambientGround: [0.70, 0.68, 0.62],
+      }),
+      terrainOuter: 140, flatTerrain: true, elevStyle: "flat", terrainMat: "SAND",
+      furniture: { tree: "acacia", fol: [0.40, 0.42, 0.22], lamp: "none", sparse: true },
+      standSet: ["alu", "sandstone", "steel"],
+    },
+    vineyard: {
+      label: "VINEYARD VALLEY", blurb: "Terraced golden rows, olive and cypress belts, warm afternoon sun.",
+      swatch: ["#c9a227", "#6b7c3a"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      // Distinct from tuscany: cooler olive foliage, brighter gold grass, lower warm sun.
+      pal: { grass: [0.48, 0.46, 0.18], runoff: [0.58, 0.48, 0.30], zenith: [0.30, 0.48, 0.78],
+        horizon: [0.90, 0.78, 0.52], fog: [0.86, 0.76, 0.56], fogDensity: 0.0015,
+        sunColor: [1.0, 0.84, 0.58], sun: [1.0, 0.86, 0.60], sunDir: [0.75, 0.28, 0.35],
+        ambientSky: [0.62, 0.56, 0.48], ambientGround: [0.40, 0.36, 0.24] },
+      terrainOuter: 150, flatTerrain: false, elevStyle: "rolling",
+      furniture: { tree: "cypress", fol: [0.22, 0.34, 0.16], lamp: "none", treeCrown: "columnar" },
+      standSet: ["sandstone", "terracotta", "concrete"],
+    },
+    stadium: {
+      label: "STADIUM NIGHT", blurb: "Floodlit bowl, dark sky, dense steel stands packed around the lap.",
+      swatch: ["#0d1117", "#ffeb3b"],
+      theme: "modern", sceneryTheme: "night-event", night: true, street: false,
+      pal: pal(ATM.coolNight, { grass: [0.10, 0.14, 0.12], runoff: [0.20, 0.22, 0.24], sunColor: [0.70, 0.75, 0.90] }),
+      dayPal: { grass: [0.22, 0.40, 0.20], runoff: COL.aquaRunoff, zenith: [0.28, 0.48, 0.80], horizon: [0.76, 0.80, 0.86] },
+      terrainOuter: 60, flatTerrain: true, elevStyle: "flat",
+      furniture: { tree: "plane", fol: [0.20, 0.34, 0.18], lamp: "post", lc: [0.95, 0.95, 1.0], sparse: true },
+      standSet: ["steel", "darkSteel", "alu"],
+    },
+    island: {
+      label: "TROPICAL ISLAND", blurb: "Turquoise water, palms, bright sand run-off, humid haze on the lagoon.",
+      swatch: ["#26c6da", "#ffe082"],
+      theme: "green", sceneryTheme: "park", night: false, street: false,
+      pal: pal(ATM.rivieraDay, {
+        grass: [0.28, 0.48, 0.22], runoff: [0.86, 0.78, 0.52],
+        zenith: [0.22, 0.52, 0.86], horizon: [0.70, 0.86, 0.90], fog: [0.68, 0.84, 0.86], fogDensity: 0.0018,
+        sunColor: [1.0, 0.96, 0.86], ambientSky: [0.58, 0.70, 0.78], ambientGround: [0.42, 0.40, 0.30],
+      }),
+      terrainOuter: 120, flatTerrain: false, elevStyle: "rolling", terrainMat: "SAND",
+      furniture: { tree: "palm", fol: [0.18, 0.42, 0.18], lamp: "none" },
+      standSet: ["pastel", "sandstone", "teal"],
     },
   };
 
@@ -669,6 +730,38 @@ const TrackThemes = (function () {
     ],
     metropolis: [
       ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 0, livery: "steel", livery2: "alu" })],
+    ],
+    shipyard: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.28, 0.34, 0.38], size: [800, 0.2, 1000] })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 1, livery: "steel", livery2: "concrete", grass: [0.36, 0.38, 0.36] })],
+      ["hangars", (api, sv, h) => hangars(api, sv, h)],
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.1, gap: 55, col: [0.20, 0.30, 0.18], col2: [0.24, 0.34, 0.20], pineFrac: 0.05, hMin: 7, hMax: 12, density: 0.2 })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 16, rMin: 200, rMax: 340, h0: 8, h1: 10, cols: [[0.42, 0.44, 0.46], [0.38, 0.40, 0.42]] })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h, { count: 5 })],
+    ],
+    saltflat: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.08, gap: 70, col: [0.42, 0.44, 0.24], col2: [0.48, 0.46, 0.28], pineFrac: 0, hMin: 5, hMax: 9, density: 0.15 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 10, hills: 1, second: false, livery: "alu", grass: [0.88, 0.86, 0.80] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 20, rMin: 220, rMax: 380, len: 220, wid: 40, h0: 6, h1: 5, cols: [[0.86, 0.84, 0.76], [0.80, 0.76, 0.66]] })],
+    ],
+    vineyard: [
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.3, gap: 32, col: [0.24, 0.36, 0.16], col2: [0.40, 0.42, 0.18], pineFrac: 0.55, hMin: 8, hMax: 15, density: 0.28 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 3, livery: "sandstone", livery2: "terracotta", grass: [0.50, 0.46, 0.20] })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 26, rMin: 150, rMax: 300, h0: 14, h1: 12, cols: [[0.56, 0.50, 0.22], [0.42, 0.46, 0.20], [0.62, 0.48, 0.24]] })],
+      ["village", (api, sv, h) => village(api, sv, h, { count: 8, walls: [[0.84, 0.78, 0.64], [0.72, 0.58, 0.40]], roof: [0.52, 0.28, 0.18], roofType: "hip" })],
+    ],
+    stadium: [
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 3, h: 18, hills: 3, stand: true, second: true, livery: "steel", livery2: "darkSteel" })],
+      ["floods", (api, sv, h) => floods(api, sv, h, { cool: true, dist: 24, h: 28 })],
+      ["paddock", (api, sv, h) => paddock(api, sv, h, { count: 7 })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 12, rMin: 180, rMax: 280, h0: 4, h1: 3, cols: [[0.12, 0.14, 0.16], [0.10, 0.12, 0.14]] })],
+    ],
+    island: [
+      ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.08, 0.52, 0.58], size: [900, 0.2, 1100] })],
+      ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.35, gap: 34, col: [0.14, 0.40, 0.16], col2: [0.20, 0.46, 0.18], pineFrac: 0, hMin: 10, hMax: 18, density: 0.3 })],
+      ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 2, h: 12, hills: 2, livery: "pastel", livery2: "teal" })],
+      ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 18, rMin: 200, rMax: 360, h0: 12, h1: 10, cols: [[0.30, 0.48, 0.28], [0.50, 0.46, 0.30]] })],
+      ["funfair", (api, sv, h) => funfair(api, sv, h, { dist: 145, r: 22 })],
     ],
   };
   /** Three hangars (corrugated-metal box, gable roof, dark door facing the
