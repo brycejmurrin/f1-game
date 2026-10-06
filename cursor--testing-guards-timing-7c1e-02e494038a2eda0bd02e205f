@@ -1,0 +1,1 @@
+1791309817	Cursor Agent	docs: Structural guards CI A/B split + wall-time prose (Insights #8 / #1075 follow-up). OWNED docs/TESTING.md tools/README.md AGENTS.md timing lines only. FORBIDDEN .github tools/ci tests js. Do not enable auto-merge or merge.  [cursor/testing-guards-timing-7c1e; session 02e494038a2eda0bd02e205f]
