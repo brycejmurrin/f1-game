@@ -708,6 +708,7 @@
     "// of the start straight ≥ the exit side, over 30 seeds; ~3 s.",
     "tests/unit/track-randomise.test.mjs",
     "tests/unit/track-retained-state.test.mjs",
+    "tests/unit/track-shot-survey.test.mjs",
     "tests/unit/trackside.test.mjs",
     "// Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead",
     "// walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.",
