@@ -643,6 +643,13 @@ export const TRACKED = [
 // other circuits' foundation specs are not candidates, and the plan carries
 // the ids so per-circuit loops (APEX_CIRCUITS) test only what moved.
 export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
+// Def vs scenery: both name the circuit for APEX_CIRCUITS / own foundation, but
+// only a DEF edit changes geometry that other specs race (T2 / #878 Bahrain
+// startFrac → steering.spec). A scenery-only Monza PR matching CIRCUIT_FILE
+// still ran specsRacing(["monza"]) — monza is the fixtures' default — and
+// billed ~120 unrelated specs; CI then DROPPED 11 and packed assets-api until
+// a 45 s waitForFunction timed out (PR #1015 run 37446466249).
+export const CIRCUIT_DEF = /^js\/circuits\/([a-z0-9_]+)\.js$/;
 // Per-circuit Must-landmark registry and that circuit's foundation spec.
 // tests/data/landmarks/<id>.json matches TRACKED (`^tests/data/`) otherwise,
 // so a new registry file made the selected gate "not circuit-only" and dropped
@@ -824,6 +831,18 @@ export function circuitsTouched(changed, ref, root = ROOT) {
   return { ids: [...ids].sort(), scoped: scoped && ids.size > 0, dataResolved };
 }
 
+/** Circuit ids whose DEF file (`js/circuits/<id>.js`, not scenery/) is in the
+ *  diff — the only ids specsRacing should see. Scenery / landmarks /
+ *  foundation / baseline rows still fill circuitsTouched().ids. */
+export function racingCircuitIds(changed) {
+  const ids = new Set();
+  for (const f of changed) {
+    const m = CIRCUIT_DEF.exec(f);
+    if (m) ids.add(m[1]);
+  }
+  return [...ids].sort();
+}
+
 // DOCS-ONLY IS "NOTHING TO SELECT", NOT "UNMATCHED". ci.yml's own push trigger
 // already ignores these paths, so a docs commit never reaches the selected gate
 // by push — but pages.yml CALLS the workflow, and workflow_call does not honour
@@ -978,7 +997,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
   // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
-  const racing = specsRacing(circ.ids);
+  const racing = specsRacing(racingCircuitIds(changed));
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);

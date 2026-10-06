@@ -13,7 +13,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
-  expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
+  expectedSec, measuredCheap, circuitsTouched, dataCircuits, racingCircuitIds, foundationSpec, CIRCUIT_FILTERED_TESTS, CIRCUIT_DEF,
   DEFAULT_BUDGET_MIN,
   SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
@@ -938,6 +938,11 @@ test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR 
   const r = circuitsTouched(files, null);
   assert.deepEqual(r.ids, ["monza"]);
   assert.equal(r.scoped, true, "landmark + foundation + the selector stay circuit-only");
+  assert.deepEqual(racingCircuitIds(files), [],
+    "scenery/landmarks/foundation do not race-route the default-fixture fleet (PR #1015 run 37446466249)");
+  assert.ok(CIRCUIT_DEF.test("js/circuits/monza.js"));
+  assert.ok(!CIRCUIT_DEF.test("js/circuits/scenery/monza.js"), "scenery is not a def");
+  assert.deepEqual(racingCircuitIds(["js/circuits/monza.js", "js/circuits/scenery/monza.js"]), ["monza"]);
   assert.ok(r.dataResolved.includes("tests/data/landmarks/monza.json"));
   const clipAlone = circuitsTouched(["tools/track/clip-baseline.json"], null);
   assert.equal(clipAlone.scoped, false, "a baseline the base git cannot show, alone, stays infra");
@@ -992,7 +997,7 @@ test("a circuit edit routes the specs that RACE that circuit, read from the file
   if (walker) assert.ok(!specsRacing(["monza"]).includes(walker), `${walker} walks the roster`);
   // Wiring: routed (rank 3, budgeted), never forced past fit() as affected.
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /const racing = specsRacing\(circ\.ids\);/);
+  assert.match(src, /const racing = specsRacing\(racingCircuitIds\(changed\)\);/);
   assert.match(src, /\.\.\.specs, \.\.\.racing\]\)\]/, "racing specs join the routed candidates");
   assert.doesNotMatch(src, /racing\.includes\(f\)\) \? [012]/, "a racing spec must not out-rank group routing");
 });
