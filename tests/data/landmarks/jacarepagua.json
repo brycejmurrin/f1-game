@@ -1,9 +1,17 @@
 {
-  "why": "Wave 6 — Jacarepaguá / Autódromo Nelson Piquet (demolished 2012): pit grandstand + timing box already authored; Tijuca ridge + lagoon shore hardscape added this wave. Exact peak/pier layout UNCERTAIN.",
+  "why": "Jacarepaguá / Autódromo Nelson Piquet (1978–89, demolished 2012): pit grandstand, timing box, Tijuca ridge, lagoon shore, period opposite-pit bleacher, fishing/sail skiffs, shore reeds, and paddock blocks. Exact peak/pier layout UNCERTAIN.",
   "ids": [
     "jacarepagua-pit-grandstand",
     "jacarepagua-timing-box",
     "jacarepagua-tijuca-ridge",
-    "jacarepagua-lagoon-shore"
+    "jacarepagua-lagoon-shore",
+    "jacarepagua-pit-bleacher",
+    "jacarepagua-shore-reeds",
+    "jacarepagua-fishing-skiff",
+    "jacarepagua-sail-skiff-a",
+    "jacarepagua-sail-skiff-b",
+    "jacarepagua-paddock-1",
+    "jacarepagua-paddock-2",
+    "jacarepagua-paddock-3"
   ]
 }
