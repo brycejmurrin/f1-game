@@ -162,10 +162,57 @@ test("lockLandscape swallows a rejection (not fullscreen, iPhone, unsupported) a
 
 test("game.js locks landscape after race fullscreen succeeds and unlocks on exit and quit", () => {
   const g = read("js/ui/platform-session.js") + read("js/game.js");
-  assert.match(g, /req\.call\(el\)\)\.then\(\(\) => \{ Input\.lockEscape\(\); if \(G.state === "race" \|\| G.state === "count"\) Input\.lockLandscape\(\); \}\)/);
-  assert.match(g, /"fullscreenchange", \(\) => \{ if \(!document\.fullscreenElement\) \{ Input\.unlockEscape\(\); Input\.unlockLandscape\(\); \}/);
+  assert.match(g, /if \(fsElement\(\)\) \{\s*Input\.lockEscape\(\); if \(G.state === "race" \|\| G.state === "count"\) Input\.lockLandscape\(\);/);
+  assert.match(g, /"fullscreenchange", syncFullscreen/);
+  assert.match(g, /"webkitfullscreenchange", syncFullscreen/);
   const quit = g.slice(g.indexOf("function quitToMenu() {"), g.indexOf("function quitToMenu() {") + 600);
   assert.match(quit, /Input\.unlockLandscape\(\)/, "quitting the race releases the lock");
+});
+
+for (const prefixed of [false, true]) test(`fullscreen tracks entry, exit and external exit (${prefixed ? "WebKit" : "standard"})`, async () => {
+  const events = new Map(), painted = [], locks = { escape: false, landscape: false };
+  let controls, exits = 0;
+  const field = prefixed ? "webkitFullscreenElement" : "fullscreenElement";
+  const event = prefixed ? "webkitfullscreenchange" : "fullscreenchange";
+  const element = {};
+  const doc = {
+    documentElement: element, [field]: null,
+    addEventListener: (name, fn) => events.set(name, fn),
+    [prefixed ? "webkitExitFullscreen" : "exitFullscreen"]() {
+      exits++; this[field] = null; events.get(event)();
+      return prefixed ? undefined : Promise.resolve();
+    },
+  };
+  element[prefixed ? "webkitRequestFullscreen" : "requestFullscreen"] = () => {
+    doc[field] = element; events.get(event)();
+    return prefixed ? undefined : Promise.resolve();
+  };
+  const sb = {
+    document: doc, G: { state: "race" }, $: () => ({}),
+    SettingRow: { labels: (v) => v, wire: (_id, config) => { controls = config; }, paint: (_row, v) => painted.push(v) },
+    Input: {
+      lockEscape: () => { locks.escape = true; }, unlockEscape: () => { locks.escape = false; },
+      lockLandscape: () => { locks.landscape = true; }, unlockLandscape: () => { locks.landscape = false; },
+    },
+  };
+  const source = read("js/ui/platform-session.js");
+  vm.runInNewContext(source.slice(source.indexOf("const fsOk ="), source.indexOf("/* ADD TO HOME SCREEN")), sb);
+  controls.write("on");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(controls.read(), "on");
+  assert.equal(painted.at(-1), "on");
+  assert.deepEqual(locks, { escape: true, landscape: true });
+  controls.write("off");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(exits, 1, "the corresponding exit API was called");
+  assert.equal(controls.read(), "off");
+  assert.equal(painted.at(-1), "off");
+  assert.deepEqual(locks, { escape: false, landscape: false });
+  controls.write("on");
+  await new Promise((resolve) => setImmediate(resolve));
+  doc[field] = null; events.get(event)();
+  assert.equal(painted.at(-1), "off");
+  assert.deepEqual(locks, { escape: false, landscape: false });
 });
 
 test("manifest.json asks for fullscreen, then standalone", () => {

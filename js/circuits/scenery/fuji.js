@@ -38,7 +38,7 @@
         guardrail, fence, tyreWall, marshalPost, gantry,
         billboard, sponsorHoarding, groundPatch, prop, backdrop,
         mountain, modelGroup, MAT, seat, vadd,
-        terrainYAt } = api;
+        terrainYAt, addMountain, addFrustum } = api;
 
       // ── palette ──────────────────────────────────────────────────────────
       // Sugi cedar: dark and blue-shifted, not European park green. Four
@@ -222,10 +222,20 @@
       // through half the fog.
       const FAR = 9400;
       const fx = fA.c[0] + ux * FAR, fz = fA.c[2] + uz * FAR;
-      mountain(fx, fz, pyMin - 46, 6400, 1760, {
-        seg: 28, seed: 11, rough: 0.085, snowline: 0.55,
-        snow: [0.95, 0.96, 1.00], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20],
-      });
+      const FUJI_BASE = pyMin - 46, FUJI_W = 6400, FUJI_H = 1760;
+      const emitFuji = (stage) => {
+        addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.62, FUJI_W * 0.42, FUJI_H * 0.18,
+          [0.14, 0.24, 0.20], 9, null);
+        addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
+          seg: 28, seed: 11, rough: 0.085, snowline: 0.55,
+          snow: [0.95, 0.96, 1.00], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20],
+        });
+      };
+      modelGroup("fuji-mount-fuji", {
+        center: [fx, FUJI_BASE + FUJI_H * 0.5, fz],
+        size: [FUJI_W, FUJI_H + 4, FUJI_W],
+        basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+      }, emitFuji, { required: true });
       // Hoei — the crater bump on the south-east flank, below the snowline and
       // the one thing that stops the cone reading as a generic triangle.
       mountain(fA.c[0] + ux * (FAR - 900) + tx * 1650,
@@ -373,11 +383,13 @@
       for (const s of [0.246, 0.256, 0.266]) groundPatch(K(s), -1, 15, [26, 0.18, 30], GRAVEL);
       spectatorHill(0.252, 0.300, -1, 30, { rows: 6, rise: 1.5, depth: 3.0, grass: SCRUB, density: 0.4 });
       forestEdge(0.255, 0.310, -1, 46, { hMin: 13, hMax: 23, col: SUGI, col2: SUGI_D, pineFrac: 0.9, density: 0.2 });
-      forestEdge(0.250, 0.320, -1, 86, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.18 });
+      // Skip 0.280-0.305 near the T1 bank (clip-audit 1.20 m at 0.292).
+      forestEdge(0.250, 0.280, -1, 86, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.18 });
+      forestEdge(0.305, 0.320, -1, 86, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.18 });
       tyreWall(0.243, 0.268, -1, 13, [0.86, 0.20, 0.16]);
       // 75R drops away from the stands and the cedar closes in on the inside.
-      forestEdge(0.272, 0.320, 1, 16, { hMin: 12, hMax: 21, col: SUGI, col2: SUGI_L, pineFrac: 0.9, density: 0.25 });
-      forestEdge(0.276, 0.330, 1, 44, { hMin: 15, hMax: 26, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.2 });
+      forestEdge(0.272, 0.300, 1, 16, { hMin: 12, hMax: 21, col: SUGI, col2: SUGI_L, pineFrac: 0.9, density: 0.25 });
+      forestEdge(0.276, 0.300, 1, 44, { hMin: 15, hMax: 26, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.2 });
       hedge(0.272, 0.318, 1, 12, 1.5, SCRUB);
       marshalPost(K(0.262), -1, 13);
       marshalPost(K(0.292), 1, 13);
@@ -386,11 +398,10 @@
       //    [0.372 -1 20 · 0.412 +1 24]
       sponsorHoarding(0.345, 0.400, -1, 12, { h: 1.3, step: 8 });
       sponsorHoarding(0.398, 0.446, 1, 14, { h: 1.2, step: 8 });
-      terrace(0.358, 0.392, -1, 20, { rows: 7, rise: 1.5, depth: 2.7, density: 0.42, conc: CONC });
-      // Coca-Cola / Toyopet bank — was bleacher(0.398..) with BACKWARDS slope
-      // −0.616 (rows fell into the outboard drop). spectatorHill follows the
-      // grade and still rises each row away from the ribbon.
-      spectatorHill(0.398, 0.422, -1, 24, {
+      // Terrace treads overlapped on the 80R curve (clip-audit 1.56 m at 0.376).
+      // One spectatorHill follows the grade without the along-step clash.
+      // One bank only — two spectatorHills on 80R shared treads (clip 1.93 m).
+      spectatorHill(0.365, 0.400, -1, 22, {
         rows: 6, rise: 1.5, depth: 2.8, grass: SCRUB, density: 0.36,
       });
       // Small spectator terrace service block and the corner's own screen.
@@ -413,8 +424,12 @@
       bleacher(0.466, 0.486, -1, 34, { rows: 5, rise: 1.3, density: 0.28 });
       marshalPost(K(0.478), -1, 13);
       forestEdge(0.470, 0.530, -1, 30, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.25 });
-      forestEdge(0.505, 0.600, 1, 30, { hMin: 16, hMax: 28, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.3 });
-      forestEdge(0.530, 0.620, -1, 24, { hMin: 15, hMax: 27, col: SUGI, col2: SUGI_L, pineFrac: 0.95, density: 0.3 });
+      // Skip 0.540-0.570: 120R folds back to ~12 m, and the far leg's guard
+      // strips lower pine tiers (ground-audit, 13 unsupported cones).
+      for (const [a, b] of [[0.505, 0.540], [0.570, 0.600]])
+        forestEdge(a, b, 1, 30, { hMin: 16, hMax: 28, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.3 });
+      for (const [a, b] of [[0.530, 0.540], [0.570, 0.620]])
+        forestEdge(a, b, -1, 24, { hMin: 15, hMax: 27, col: SUGI, col2: SUGI_L, pineFrac: 0.95, density: 0.3 });
       // A second rank further back, so the wall of cedar has depth.
       forestEdge(0.480, 0.640, 1, 62, { hMin: 17, hMax: 30, col: SUGI_D, col2: SUGI, pineFrac: 0.96, density: 0.2 });
       forestEdge(0.480, 0.640, -1, 58, { hMin: 17, hMax: 30, col: SUGI_D, col2: SUGI, pineFrac: 0.96, density: 0.2 });
@@ -432,11 +447,13 @@
       // Tarmac starts where the gravel ends (46 m; same 70 m outer edge): the
       // 12 m band both drapes covered shared a plane.
       for (const s of [0.686, 0.700, 0.716]) groundPatch(K(s), -1, 46.1, [23.9, 0.15, 40], TARMAC);
-      spectatorHill(0.672, 0.724, -1, 28, { rows: 5, rise: 1.4, depth: 3.2, grass: SCRUB, density: 0.3 });
-      forestEdge(0.640, 0.690, -1, 64, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
-      forestEdge(0.726, 0.760, -1, 58, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
-      forestEdge(0.640, 0.735, 1, 26, { hMin: 15, hMax: 26, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.25 });
-      bleacher(0.682, 0.712, -1, 50, { rows: 6, rise: 1.35, density: 0.3 });
+      spectatorHill(0.672, 0.704, -1, 28, { rows: 5, rise: 1.4, depth: 3.2, grass: SCRUB, density: 0.3 });
+      forestEdge(0.640, 0.688, -1, 64, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
+      forestEdge(0.738, 0.760, -1, 58, { hMin: 12, hMax: 20, col: SUGI_D, col2: SUGI, pineFrac: 0.9, density: 0.18 });
+      // Skip 0.688-0.716: the 300R fold, same lower-tier cull as 120R.
+      for (const [a, b] of [[0.640, 0.688], [0.716, 0.735]])
+        forestEdge(a, b, 1, 26, { hMin: 15, hMax: 26, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.25 });
+      bleacher(0.682, 0.698, -1, 56, { rows: 6, rise: 1.35, density: 0.3 });
       cameraTower(K(0.706), -1, 36, { h: 13 });
       marshalPost(K(0.712), -1, 15);
 
@@ -463,15 +480,13 @@
       forestEdge(0.724, 0.770, 1, 56, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.22 });
 
       // 11. THE 30R/45R FLICK — tree-lined and enclosed  [0.808 -1 18]
-      forestEdge(0.762, 0.860, -1, 18, { hMin: 15, hMax: 27, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.3 });
-      forestEdge(0.762, 0.860, 1, 20, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.3 });
-      forestEdge(0.766, 0.858, -1, 48, { hMin: 17, hMax: 30, col: SUGI_D, col2: SUGI, pineFrac: 0.96, density: 0.2 });
-      forestEdge(0.768, 0.856, 1, 50, { hMin: 17, hMax: 30, col: SUGI_B, col2: SUGI_D, pineFrac: 0.96, density: 0.2 });
-      // Skips 0.780-0.790: the 96 m rank there reaches ~12 m off the 0.860
-      // road, whose guard culls the trunk and leaves a crown 15 m up.
-      for (const [a, b] of [[0.770, 0.780], [0.790, 0.854]])
-        forestEdge(a, b, -1, 96, { hMin: 18, hMax: 31, col: SUGI_B, col2: SUGI_D, pineFrac: 0.97, density: 0.15 });
-      hedge(0.770, 0.856, -1, 13, 1.7, SCRUB);
+      // Skip 0.798-0.862: fold crowns + near-rank self-clips at 0.830/0.850.
+      forestEdge(0.762, 0.798, -1, 18, { hMin: 15, hMax: 27, col: SUGI, col2: SUGI_D, pineFrac: 0.95, density: 0.3 });
+      forestEdge(0.762, 0.798, 1, 20, { hMin: 15, hMax: 27, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.3 });
+      forestEdge(0.766, 0.798, -1, 48, { hMin: 17, hMax: 30, col: SUGI_D, col2: SUGI, pineFrac: 0.96, density: 0.2 });
+      forestEdge(0.768, 0.798, 1, 50, { hMin: 17, hMax: 30, col: SUGI_B, col2: SUGI_D, pineFrac: 0.96, density: 0.2 });
+      forestEdge(0.770, 0.780, -1, 96, { hMin: 18, hMax: 31, col: SUGI_B, col2: SUGI_D, pineFrac: 0.97, density: 0.15 });
+      hedge(0.770, 0.798, -1, 13, 1.7, SCRUB);
       marshalPost(K(0.808), -1, 14);
       marshalPost(K(0.838), 1, 14);
 
@@ -483,23 +498,28 @@
       building(K(0.898), 1, 30, 13, 11, 52, { wall: CLAD, window: GLASS, lit: false });
       building(K(0.920), 1, 34, 15, 8, 40, { wall: [0.36, 0.37, 0.39], window: GLASS, lit: false });
       // Infield service yard behind them: the paddock coming back into view.
-      building(K(0.862), 1, 46, 16, 10, 48, { wall: CLAD_W, window: GLASS, lit: false });
-      building(K(0.936), 1, 52, 18, 12, 56, { wall: CLAD_L, window: GLASS, floor: 3.9, lit: false });
+      building(K(0.862), 1, 34, 14, 8, 40, { wall: CLAD_W, window: GLASS, lit: false });
+      // Was gap 52 / h 12 — upper floors sat 13 m unsupported once the
+      // flicker cedars that false-supported them were culled (ground-audit).
+      building(K(0.936), 1, 28, 14, 7, 36, { wall: CLAD_L, window: GLASS, floor: 3.9, lit: false });
       groundPatch(K(0.905), 1, 22, [34, 0.16, 44], [0.30, 0.31, 0.33]);
-      groundPatch(K(0.876), 1, 58, [30, 0.16, 62], ASPH);
+      // Was gap 58 / 30×62: two 2.5 m unsupported slabs where the infield
+      // drops off the apron (ground-audit, 2026-10-05). Closer + shorter.
+      groundPatch(K(0.876), 1, 36, [22, 0.16, 48], ASPH);
       marshalPost(K(0.880), 1, 14);
       grandstandEx(0.897, -1, 14, 150, null, null,
         { tiers: 1, h: 12, roofCol: [0.31, 0.32, 0.36], fasciaCol: CLAD });
       grandstandEx(0.930, -1, 16, 160, null, null,
         { tiers: 2, h: 14, roofCol: ROOF, fasciaCol: CLAD_L });
-      terrace(0.886, 0.944, -1, 42, { rows: 8, rise: 1.5, depth: 2.7, density: 0.45, conc: CONC });
-      terrace(0.904, 0.952, -1, 70, { rows: 7, rise: 1.5, depth: 2.7, density: 0.4,
-        conc: CONC_D, concAlt: CONC });
+      terrace(0.886, 0.944, -1, 42, { rows: 8, rise: 1.5, depth: 2.7, density: 0.45, conc: CONC, step: 12 });
+      terrace(0.904, 0.940, -1, 52, { rows: 6, rise: 1.5, depth: 2.7, density: 0.4,
+        conc: CONC_D, concAlt: CONC, step: 12 });
       // Depth behind the last corner's seating.
       building(K(0.912), -1, 84, 16, 9, 66, { wall: [0.34, 0.35, 0.37], window: GLASS, lit: false });
       // Skips 0.866-0.873: the 120 m rank there reaches ~12 m off the 0.771
       // road (the flick doubles back), leaving a culled cedar's crown 18 m up.
-      for (const [a, b] of [[0.860, 0.866], [0.873, 0.960]])
+      // Skips 0.888-0.952: Panasonic terraces / last-corner stands (clip 0.907-0.939).
+      for (const [a, b] of [[0.860, 0.866], [0.873, 0.888], [0.952, 0.960]])
         forestEdge(a, b, -1, 120, { hMin: 16, hMax: 28, col: SUGI_D, col2: SUGI_B, pineFrac: 0.95, density: 0.16 });
       tyreWall(0.888, 0.912, -1, 12, [0.86, 0.20, 0.16]);
       cameraTower(K(0.896), -1, 32, { h: 12 });
@@ -515,19 +535,23 @@
         const h = hash(k * 17.3);
         if (h < 0.20) return;
         for (const side of [-1, 1]) {
+          // Infield buildings resume at GR Supra / Panasonic — a near cedar
+          // rank here grew through the blocks (clip-audit 2.0 m at 0.860/0.874).
+          const yard = (side > 0 && f > 0.845 && f < 0.955) ||
+            (side < 0 && ((f > 0.818 && f < 0.862) || (f > 0.888 && f < 0.952)));
           const near = 30 + h * 20 + (side < 0 ? 5 : 0);
           const mid = 78 + hash(k * 5.1 + side) * 54;
           const far = 158 + hash(k * 2.7 + side) * 96;
           let j = 0;
-          for (const dist of [near, mid, far]) {
+          for (const dist of yard ? [mid, far] : [near, mid, far]) {
             const a = anchor(k, side, dist);
             j++;
             if (onTrack(a.c[0], a.c[2], 9)) continue;
             pine(k, side, dist, 15 + h * 12 + j * 1.5,
               TINTS[(k + j * 2 + (side < 0 ? 1 : 0)) % 4], { slim: true });
           }
-          if (h > 0.7) tree(k, side, near + 12, 9 + h * 5, SUGI_L);
-          if (h > 0.82) bush(k, side, near - 10, SCRUB);
+          if (!yard && h > 0.7) tree(k, side, near + 12, 9 + h * 5, SUGI_L);
+          if (!yard && h > 0.82) bush(k, side, near - 10, SCRUB);
           if (h > 0.55) {
             const b = anchor(k, side, mid - 16);
             if (!onTrack(b.c[0], b.c[2], 8)) bush(k, side, mid - 16, SCRUB);

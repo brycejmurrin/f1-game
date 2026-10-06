@@ -124,3 +124,17 @@ suppressed), grounded the Racetrack Tower as `imola-racetrack-tower`, added requ
 Partenza hero `imola-partenza-stands`, and restored the Acque Minerali outer bank
 (prior `grandstand(0.51)` was fully suppressed) as a Prato-style `spectatorHill`.
 Rivazza Prato character stays on the existing spectatorHills at 0.788 / 0.830.
+
+## Outcome (2026-10-06 DETAIL)
+
+Local S/F pass (shared open-face `building()` / `grandstandEx` shells stay with #1056):
+- Dropped the 120 m red pit-wall bar and the floating 18×120 m canopy slab; short
+  crimson/white banners remain on the pit wall.
+- Pulled `forestEdge` off the pit/Partenza envelope so trunks no longer punch the
+  S/F roof.
+- Removed the Tamburello crate; Racetrack Tower got along-track glass + crimson
+  belts so it reads from the start camera (the old glass only faced `r`).
+- Closed Emilia casali (seated `addBox` + prism roof) replace open `building()`
+  town/Piratella masses; `imola-hill-villas` registers a three-house cluster.
+- Partenza / Tosa / Rivazza / Villeneuve stands use local `endWalls` (and pylons
+  on the main Partenza rake). The shared hollow-shell look is unchanged.

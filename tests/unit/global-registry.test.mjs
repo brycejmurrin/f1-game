@@ -105,7 +105,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
-  "js/game.js": ["__APEX_BUILD", "__apexReportError"], // shell build id (ghost meta) + error-report callback
+  "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE"], // Playwright init-script flag enabling the agent surface
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)

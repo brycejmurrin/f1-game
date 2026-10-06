@@ -30,12 +30,12 @@ the rows they anchor.
 |---|---|---|---|
 | 0.005 | +1 | 14 | Pit lane and garages: a long low `building` run of flat-roofed boxes, plain white/grey, with a continuous `sponsorHoarding` band along the pit wall and a `marshalPost` at the pit exit. Functional, not glamorous — this is a club circuit that happens to have F1 history. |
 | 0.015 | -1 | 20 | **REQUIRED `zolder-main-grandstand`:** permanent S/F tribune (positive-rake `modelGroup`; `grandstandEx` at gap 12 was SUPPRESSED on this fold). Camera tower + billboards behind. Source: [circuit-zolder.be museum page](https://www.circuit-zolder.be/en/about-us/museum/) ("behind the permanent grandstand at start/finish"). |
-| 0.018 | -1 | 56 | **REQUIRED `zolder-sf-museum`:** low archive hall behind the permanent tribune — wall of fame, Villeneuve carbon fragment, posters. Source: same museum page. |
+| 0.018 | -1 | 58 | **REQUIRED `zolder-sf-museum`:** low archive hall behind the permanent tribune — wall of fame, Villeneuve carbon fragment, posters. Source: same museum page. |
 | 0.028 | +1 | 54 | **REQUIRED `zolder-villeneuve-poles`:** Stefan Bongaerts paddock sculpture — five white poles (helmet / 126C2 / Ferrari / signature / maple leaves). Source: [Motorsport Guides pilgrimage](https://motorsportguides.com/a-pilgrimage-to-zolder-where-gilles-villeneuve-lost-his-life/). **Not** the chicane plaque. |
 | 0.035 | -1 | 22 | Outside of the **Earste Chicane** (T1, s≈0.0352): wide pale sand run-off, then `tyreWall` on `guardrail`, `spectatorHill`, scatter of `tree`. |
 | 0.042 | +1 | 16 | Infield of the chicane exit: `groundPatch` of bare sand, a `marshalPost`, a short `guardrail` run and the first rank of `pine` screening the paddock beyond. |
 | 0.110 | -1 | 30 | Long `forestEdge` of dark Scots pine down the run away from the chicane — the dominant wall of the outer loop. |
-| 0.180 | +1 | 16 | **REQUIRED `zolder-sterrenwacht`:** Sterrenwachtbocht (T2) — small square club building with a low observation drum. Named for the nearby Sterrenwacht / Bolderberg site ([nl.wikipedia Circuit Zolder](https://nl.wikipedia.org/wiki/Circuit_Zolder)). Exact drum diameter **UNCERTAIN**. |
+| 0.180 | +1 | 72 | **REQUIRED `zolder-sterrenwacht`:** Sterrenwachtbocht (T2) — small square club building with a low observation drum. Named for the nearby Sterrenwacht / Bolderberg site ([nl.wikipedia Circuit Zolder](https://nl.wikipedia.org/wiki/Circuit_Zolder)). Exact drum diameter **UNCERTAIN**. Seated behind pit offices on the frame-debt fold (was gap 30 through the offices). |
 | 0.194 | -1 | 20 | **Kanaalbocht** (T3, s≈0.1938) outside: low `ridge` of sandy spoil carrying the boundary, `guardrail` then `tyreWall` at the apex, `forestEdge` above the ridge line. |
 | 0.265 | -1 | 34 | Forested motorhome park in the outer loop: scattered `motorhome` between `pine` (terrain-seated), a `groundPatch` of sand track access, `forestEdge` closing it off from the circuit. |
 | 0.347 | +1 | 18 | **Lucien Bianchi bocht** (T4, s≈0.3473): fast infield-side corner — `guardrail` backed by `tyreWall`, a `marshalPost` on the exit and a pair of `billboard` panels facing the approach. |
@@ -60,3 +60,4 @@ the rows they anchor.
 - The Villeneuve **chicane** memorial is restraint-only (small plaque building). The **paddock** five-pole sculpture is the required landmark.
 - Low, functional buildings. Hotel De Pits / wellness massing is **UNCERTAIN** as a distinct silhouette and is not a required `modelGroup` this wave.
 - Wave 6 (2026-09-29): cut buried 28→7, clip severe 99→39, flatCoplanar 18→4; added four required landmarks; no frame-key change.
+- Clip pass (2026-10-05): severe 12→0. `ownPitStraight` kills the generic S/F 7-box; global pine/scrub honour OWNED; infield depth ranks removed (fold into pit/Rindt); Sterrenwacht seated behind pit offices on the frame-debt fold. No frame-key change.

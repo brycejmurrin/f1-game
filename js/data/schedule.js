@@ -37,6 +37,18 @@ const DataSchedule = (function () {
     return r.date >= new Date(now).toISOString().slice(0, 10);
   }
 
+  function bindOverflowTitle(node, text) {
+    if (!node || !node.addEventListener) return;
+    node.addEventListener("mouseenter", function () {
+      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
+      if (node.scrollWidth > node.clientWidth + 1) node.title = text;
+      else if (node.removeAttribute) node.removeAttribute("title");
+    });
+    node.addEventListener("mouseleave", function () {
+      if (node.removeAttribute) node.removeAttribute("title");
+    });
+  }
+
   function create({ el, emptyMsg }) {
     function raceRow(r, isNext) {
       const row = el("div", "dh-race");
@@ -60,7 +72,9 @@ const DataSchedule = (function () {
       if (place) subParts.push(place);
       const subText = subParts.join(" · ") || "—";
       const subEl = el("div", "dh-race-sub", subText);
-      subEl.title = subText;
+      // Native `title` stays painted after the row scrolls away (R1 tip over
+      // R2). Attach only while the line is actually ellipsized.
+      bindOverflowTitle(subEl, subText);
       main.appendChild(subEl);
       if (r.time) {
         const t = new Date(Number.isFinite(raceInstant(r)) ? raceInstant(r) : `1970-01-01T${r.time}`);
