@@ -36,7 +36,10 @@ const MirrorPass = (function () {
   // QUALITY LADDER. The mirror is never hidden for performance — a player
   // with MIRROR on and GRAPHICS: LOW (PerfGov tier 4) saw no mirror at all
   // under the first rule — it steps down instead:
-  //   full  a healthy desktop: the whole world, every frame.
+  //   full  a healthy desktop: the whole world, every frame. Audit #8:
+  //         instEvery:2 freezes instanced prop cull/upload on odd frames
+  //         (cars + chunked world still every frame) via frame.mirrorFreezeInstanced;
+  //         apex26.mirrorInstEvery=1 restores a full re-cull every frame.
   //   lite  a phone (gfx.mobileTier) or governor tier 1: every frame, but no
   //         instanced prop batches (a second frustum re-culls and re-uploads
   //         every pack each frame), no glass or water (frame.mirrorLite, read
@@ -45,11 +48,17 @@ const MirrorPass = (function () {
   //   low   tier 2-3: lite at half rate and half resolution.
   //   min   tier 4+ (GRAPHICS: LOW pins 4): a third of the frame rate, 40%.
   // Every frame is the default because a half-rate mirror reads as LAG.
+  let _instEvery = 2;
+  try {
+    const ie = localStorage.getItem("apex26.mirrorInstEvery");
+    if (ie === "1") _instEvery = 1;
+    else if (ie && +ie > 0) _instEvery = Math.min(4, Math.max(1, ie | 0));
+  } catch (_) { /* default 2 */ }
   const QUALITY = [
-    { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1 },
-    { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1 },
-    { name: "low",  lite: true,  res: 0.5, cull: 150, reach: 120, every: 2 },
-    { name: "min",  lite: true,  res: 0.4, cull: 120, reach: 100, every: 3 },
+    { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
+    { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
+    { name: "low",  lite: true,  res: 0.5, cull: 150, reach: 120, every: 2, instEvery: 1 },
+    { name: "min",  lite: true,  res: 0.4, cull: 120, reach: 100, every: 3, instEvery: 1 },
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
@@ -110,7 +119,8 @@ const MirrorPass = (function () {
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
-    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0 };
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, freezeInst: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0 };
+    let _instFreezeSkips = 0, _instRefresh = 0;
     const _aim = [0, 0, 0];   // the pass camera's ground-plane aim, for FrameLights.viewLights
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
@@ -550,12 +560,19 @@ const MirrorPass = (function () {
       const sv = _sv;
       sv.viewProj = frame.viewProj; sv.view = frame.view; sv.proj = frame.proj; sv.invProj = frame.invProj;
       sv.invViewProj = frame.invViewProj; sv.eye = frame.eye; sv.cullDist = frame.cullDist;
-      sv.lite = frame.mirrorLite; sv.sky = frameSky.invViewProj; sv.tune = frame.tune;
+      sv.lite = frame.mirrorLite; sv.freezeInst = frame.mirrorFreezeInstanced;
+      sv.sky = frameSky.invViewProj; sv.tune = frame.tune;
       const cull = _q.cull;
       frame.viewProj = _vp; frame.view = _view; frame.proj = _proj; frame.invProj = _invProj;
       frame.invViewProj = _invVP; frame.eye = _eye;
       frame.cullDist = sv.cullDist > 0 ? Math.min(sv.cullDist, cull) : cull;
       frame.mirrorLite = _q.lite;
+      // Audit #8: on full, reuse last mirror instance pack every other drawn
+      // frame (cars still redraw). First drawn frame always refreshes.
+      const ie = _q.instEvery || 1;
+      const freezeInst = !_q.lite && ie > 1 && _drawn > 0 && (_drawn % ie) !== 0;
+      frame.mirrorFreezeInstanced = freezeInst;
+      if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
       frame.tune = Object.assign(_mirTune, sv.tune || null, MIRROR_TUNE);
       frameSky.invViewProj = _invVP;
       // THE MIRROR'S OWN LAMPS (FrameLights.viewLights): frame.lights is culled
@@ -580,11 +597,12 @@ const MirrorPass = (function () {
           frame.viewProj = sv.viewProj; frame.view = sv.view; frame.proj = sv.proj; frame.invProj = sv.invProj;
           frame.invViewProj = sv.invViewProj; frame.eye = sv.eye; frame.cullDist = sv.cullDist;
           frame.mirrorLite = sv.lite;
+          frame.mirrorFreezeInstanced = sv.freezeInst;
           frame.tune = sv.tune;
           frame.lights = sv.lights; frame.tailStart = sv.tailStart; frame.tailCount = sv.tailCount;
           frameSky.invViewProj = sv.sky;
           sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
-          sv.tune = undefined; sv.lights = null;
+          sv.tune = undefined; sv.freezeInst = undefined; sv.lights = null;
         }
       }
       return began;
@@ -639,6 +657,7 @@ const MirrorPass = (function () {
       // __apex.mirror(): the setting, what this frame resolved, the backend's own
       // count, and the cockpit glass (car-draw.js glassState: live vs fallback).
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
+        instEvery: _q.instEvery || 1, instFreezeSkips: _instFreezeSkips, instRefresh: _instRefresh,
         preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null,
