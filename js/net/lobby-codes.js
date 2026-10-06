@@ -23,6 +23,16 @@ const LobbyCodes = (function () {
   // a plain-text mail client folded does not stop at the fold and read "corrupt".
   const LEAD_JUNK = /^[^A-Za-z0-9_.-]+/, TAIL_JUNK = /[^A-Za-z0-9_-]+$/;   // a code ends in base64url, as inviteFromUrl
   const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;   // \s matches none of these
+  // MAGIC.mode with no body — a wrap broke after the mode's trailing separator
+  // (APEX1.s.\n<body>). TAIL_JUNK / inviteFromUrl treat that "." as sentence
+  // punctuation and strip it, which used to set ended and drop the body, or
+  // re-join as APEX1.sBODY (missing the separator). Put the separator back.
+  function restoreModeSep(c) {
+    const magicName = NetHandshake.MAGIC || "APEX1";
+    const p = String(c || "").split(".");
+    if (p.length === 2 && p[0] === magicName && /^[szp]$/.test(p[1])) return c + ".";
+    return c;
+  }
   function codeFrom(text) {
     const raw = String(text || "").replace(INVISIBLE, "").trim();
     if (!raw) return "";
@@ -31,13 +41,20 @@ const LobbyCodes = (function () {
     let at = -1, code = "", opened = false, ended = false;
     for (let i = 0; i < tokens.length && at < 0; i++) {
       const lifted = NetHandshake.inviteFromUrl(tokens[i]);
-      if (lifted) { at = i; code = lifted; continue; }
+      if (lifted) { at = i; code = restoreModeSep(lifted); continue; }
       // A BARE code gets the link's punctuation rule too: "(APEX1.s.…)." or
       // "\"APEX1.s.…\"," — a bracket or quote before it, a sentence's end after.
       const lead = tokens[i].replace(LEAD_JUNK, "");
       if (!lead.startsWith(magic)) continue;
       at = i; opened = lead !== tokens[i];
-      code = lead.replace(TAIL_JUNK, ""); ended = code !== lead;
+      const stripped = lead.replace(TAIL_JUNK, "");
+      ended = stripped !== lead;
+      if (ended && restoreModeSep(stripped) !== stripped) {
+        code = restoreModeSep(stripped);
+        ended = false;                             // separator, not a sentence end
+      } else {
+        code = stripped;
+      }
     }
     if (at < 0) return raw;                       // peekCode says "not an invite code"
     let long = false;
@@ -46,11 +63,32 @@ const LobbyCodes = (function () {
       // keeps its punctuation-stripped form when a bracket opened the code.
       const t = tokens[i].replace(TAIL_JUNK, "");
       ended = t !== tokens[i];
-      if (!CODE_CHARS.test(t)) break;
+      if (!t || !CODE_CHARS.test(t)) break;
       if (t.length >= FRAGMENT_MIN) { code += t; long = true; continue; }
-      if (long && i === tokens.length - 1 && (!ended || opened)) code += t;   // a wrapped code's short tail
+      // A short CODE_CHARS crumb is usually English ("thanks"). Keep it when a
+      // later long code-charset fragment follows — phone soft-wrap of a URL or
+      // paste often yields a short middle line between two longer ones.
+      let more = false;
+      if (!ended) {
+        for (let j = i + 1; j < tokens.length; j++) {
+          const n = tokens[j].replace(TAIL_JUNK, "");
+          if (!n || !CODE_CHARS.test(n)) break;
+          if (n.length >= FRAGMENT_MIN) { more = true; break; }
+        }
+      }
+      if (more) { code += t; continue; }
+      // Final short tail after a long fragment: keep base64url-ish crumbs and
+      // bracketed closers, not a lone English word ("thanks" / "now") that
+      // follows a body rejoined from an APEX1.s.\n fold.
+      if (long && i === tokens.length - 1 && (!ended || opened)
+          && (opened || /[0-9_-]/.test(t) || t.length >= 10)) {
+        code += t;
+      }
       break;
     }
+    // Nothing joined after a restored separator: hand MAGIC.mode back without
+    // the trailing dot so peekCode says bad_code, not an empty-body corrupt.
+    if (/^[A-Za-z0-9]+\.[szp]\.$/.test(code)) code = code.slice(0, -1);
     return code;
   }
 
