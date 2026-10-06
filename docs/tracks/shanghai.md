@@ -87,8 +87,17 @@ Model this as three long, gentle cosine bumps, not a flat plane with two dents.
   reserve color for red kerbs, red pavilion roofs, and yellow signage.
 - Backdrop = **marsh mounds + one hazed Pudong** — never wraparound glass rings.
 - **Yu Garden paddock**: small white pavilion boxes with red roofs on island
-  pads in the lakes beside the pit.
+  pads in the lakes beside the pit (required `shanghai-yu-pavilions`; outer
+  T1 houses seated on grade).
 - Stack grandstands as **stepped box tiers**; vary height to imply the 200,000-seat scale.
+- Main S/F stand: local closed shell under the cantilever sail-roof (endWalls
+  on every bay) so the underside does not read hollow.
+- Midfield between the 上 loops: service-road ribbons, grass patches, low tech
+  sheds (sheet-03 overview was empty green).
+- Pudong cue towers use closed solid cores (not open frustum slabs); shared
+  `city.js` open-face fix stays with a separate agent.
+- Lake boardwalk registered as required landmark `shanghai-lake-boardwalk`.
+- Chinese GP pit/paddock: red/gold/yellow sponsor hoarding + billboards + motorhomes.
 
 ## Research pass — the marshland it was built on
 
