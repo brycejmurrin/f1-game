@@ -353,6 +353,20 @@ test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to 
     // A follow key: the viewer has the picture, and the director waits.
     g.sandbox.dispatchEvent({ type: "keydown", code: "Period", repeat: false, target: null, preventDefault() {}, stopPropagation() {} });
     assert.equal(RR.status().replay.broadcast.manual, true);
+    // UI-10 (hunt2): focus left on a transport button after a click kept the
+    // replay keys dead. Its character keys now reach the replay; Space stays the
+    // button's own, and a select keeps every key.
+    const key = (code, target) => g.sandbox.dispatchEvent({ type: "keydown", code, repeat: false, target, preventDefault() {}, stopPropagation() {} });
+    const inBar = (tagName, extra) => ({ tagName, ...extra, closest: (sel) => (sel === ".watch-transport" ? {} : null) });
+    const sp0 = RR.status().replay.speed, paused0 = RR.status().replay.paused;
+    key("Equal", inBar("BUTTON"));
+    assert.ok(RR.status().replay.speed > sp0, "speed up from a focused transport button");
+    key("Minus", inBar("INPUT", { type: "range" }));
+    assert.equal(RR.status().replay.speed, sp0, "and down from the focused timeline");
+    key("Space", inBar("BUTTON"));
+    assert.equal(RR.status().replay.paused, paused0, "Space presses the focused button, never pauses on top of it");
+    key("Equal", inBar("SELECT"));
+    assert.equal(RR.status().replay.speed, sp0, "a focused select keeps its keys");
     // The flag: the results take the tower down with the replay.
     RR.replay().seek(405);
     g.step(60 * 8);
@@ -586,6 +600,37 @@ test("WATCH manual and automatic reel cuts release radio and reset timeline pres
     assert.equal(replay.status().paused, !automatic, "a paused skip remains paused");
     replay.stop();
   }
+});
+
+test("WATCH: the pause card cuts a real team radio clip mid-sentence, as a hidden tab does", () => {
+  // The game loop returns before update() while paused, so tick() — and the
+  // replay clock — froze under the card while the HTMLAudio clip talked on.
+  const clips = [], observers = [];
+  const pause = { hidden: true };
+  const document = { addEventListener() {}, getElementById: (id) => (id === "pausemenu" ? pause : null) };
+  class MutationObserver {
+    constructor(fn) { this.fn = fn; observers.push(this); }
+    observe(el, o) { this.el = el; this.o = o; }
+  }
+  const { replay, G, options } = transportReplay({ document, MutationObserver, Audio: class {
+    constructor() { this.paused = true; clips.push(this); }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  } });
+  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
+  G.soundOn = true;
+  replay.start(options);
+  replay.tick(3.5);
+  assert.equal(clips.length, 1, "the clip fires at its moment");
+  assert.equal(clips[0].paused, false);
+  // What the browser does when setPaused(true) (Escape / blur / pad-lost) shows #pausemenu.
+  const flip = (hidden) => { pause.hidden = hidden; for (const o of observers) if (o.el === pause) o.fn([]); };
+  flip(false);
+  assert.equal(clips[0].paused, true, "the clip stops with the game, not when it runs out");
+  assert.equal(replay.status().paused, false, "the replay's own transport is untouched");
+  flip(true);                              // RESUME: nothing restarts a stale clip
+  assert.equal(clips[0].paused, true);
+  replay.stop();
 });
 
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
