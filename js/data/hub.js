@@ -44,6 +44,34 @@ const DataHub = (function () {
   let openFlag = false;
   let active = "schedule";
   let returnFocus = null;
+  // Title sheets that own the top layer. Late ensureDataHub().then(open)
+  // must not unhide the hub over them (How to Play was the measured case:
+  // both are dialog.screen, last showModal wins). #overlay is the title
+  // we open FROM; pause stacks stay out so in-race How-to / Watch still
+  // work. Not UiLayers.LAYER_IDS — that list includes overlay + datahub.
+  // Literal selector (not getElementById(variable)): dynamicIdReads is shrink-only.
+  const BLOCKING_SEL = (
+    "#howtoplay,#career,#career-offers,#career-history,#career-guide,#select," +
+    "#teampicker,#vsfriend,#carsetup,#photo-studio,#season-setup,#track-detail," +
+    "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
+    "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker"
+  );
+
+  function blockingLayer() {
+    const nodes = document.querySelectorAll(BLOCKING_SEL);
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i] && !nodes[i].hidden) return nodes[i];
+    }
+    return null;
+  }
+
+  function fromHelpDoor(t) {
+    while (t && t !== document) {
+      if (t.id === "mb-help" || t.id === "pm-howto") return true;
+      t = t.parentNode || t.parentElement;
+    }
+    return false;
+  }
   const state = {};               // id -> {node, at}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
 
@@ -177,6 +205,13 @@ const DataHub = (function () {
 
     root.appendChild(card);
 
+    // Capture, not bubble: #mb-help / #pm-howto unhide How to Play in their
+    // own click handlers. Close the hub first so the help sheet is not a
+    // second :modal under/over an already-open Data Hub.
+    document.addEventListener("click", function (ev) {
+      if (openFlag && fromHelpDoor(ev.target)) close();
+    }, true);
+
     // Roving-tablist arrows only. Escape and Tab containment left with the
     // dialog migration: Escape is the dialog's cancel (TopModal presses
     // data-esc-close), Tab is platform focus containment, and the old
@@ -206,6 +241,11 @@ const DataHub = (function () {
 
   function open(want) {
     if (!root) return;
+    const block = blockingLayer();
+    if (block) {
+      Log.info("data", "hub open skipped — #" + (block.id || "?") + " is up");
+      return;
+    }
     if (want && TABS.some(function (t) { return t.id === want; })) active = want;
     returnFocus = document.activeElement;
     Log.info("data", "hub open");
