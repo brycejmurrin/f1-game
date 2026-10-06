@@ -8320,13 +8320,7 @@ $("pm-phonepad-go").onclick = goPhonePad;
 // to the pause menu with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => {
-  els.howtoplay.hidden = true;
-  // Drop a stale #htp-* hash so reopen does not jump mid-pane; Escape presses
-  // this same door via data-esc-close="htp-close".
-  if (/^#htp-/.test(location.hash || "")) {
-    try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* file:/opaque */ }
-  }
-  const fromRotate = document.body.classList.contains("rotate-help-open");
+  els.howtoplay.hidden = true; const fromRotate = document.body.classList.contains("rotate-help-open");
   document.body.classList.remove("rotate-help-open"); if (fromRotate) syncRotateBlocker(true);
 };
 $("rotate-controls").onclick = () => {

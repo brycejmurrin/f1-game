@@ -1642,6 +1642,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
     "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
+  const titleFlow = read("js/ui/title-flow.js");
+  assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
+    "HTP CLOSE drops a stale #htp-* hash from title-flow, not game.js");
+  assert.match(titleFlow, /\^#htp-/);
+  assert.doesNotMatch(read("js/game.js"), /\^#htp-/);
   assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
   assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");

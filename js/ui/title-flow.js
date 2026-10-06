@@ -59,6 +59,17 @@ async function consumeGhostHash() {
 }
 consumeGhostHash();
 window.addEventListener("hashchange", consumeGhostHash);
+// HTP section links write #htp-*; CLOSE (and Esc via data-esc-close) must drop
+// a stale hash so reopen does not jump mid-pane. Keep this off game.js: that
+// file's pick-tests blast radius is circuits/physics and overflows the selected gate.
+const htpClose = $("htp-close");
+if (htpClose) {
+  htpClose.addEventListener("click", () => {
+    if (/^#htp-/.test(location.hash || "")) {
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* file:/opaque */ }
+    }
+  });
+}
 $("mb-season").onclick = () => {
   G.flow = "season"; G.session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
