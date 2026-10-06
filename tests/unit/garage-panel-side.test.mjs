@@ -137,14 +137,17 @@ test("garage present routes through Lighting Tuner multipliers", () => {
     `threshold ${def.threshold} must sit above mid-grey so fixtures do not bloom the bay`);
   assert.equal(def.contact, 0);
   assert.ok(def.tune && Number.isFinite(def.tune.sunShaftMul));
-  assert.ok(def.tune.sunShaftMul > 0 && def.tune.sunShaftMul <= 0.35,
-    `default sunShaftMul ${def.tune.sunShaftMul} is a garage scale, not the race 1.0`);
+  // A closed bay has no sun disc — screen sun-shafts from the roof fill wash
+  // liveries after orbit / team switch (PR #1119). Force off even when hot.
+  assert.equal(def.tune.sunShaftMul, 0,
+    `garage sunShaftMul must stay 0 (got ${def.tune.sunShaftMul})`);
   const hot = presentOpts({
-    exposureMul: 1.5, bloomMul: 2, threshOff: 0, sunShaftMul: 2, glareStr: 0.24,
+    exposureMul: 1.5, bloomMul: 2, threshOff: 0, sunShaftMul: 2.5, glareStr: 0.24,
   });
   assert.ok(Math.abs(hot.exposure - def.exposure * 1.5) < 1e-9);
   assert.ok(Math.abs(hot.bloom - def.bloom * 2) < 1e-9);
-  assert.ok(Math.abs(hot.tune.sunShaftMul - def.tune.sunShaftMul * 2) < 1e-9);
+  assert.equal(hot.tune.sunShaftMul, 0,
+    "hot race sunShaftMul must not reopen garage shafts");
   assert.equal(glareScale({ glareStr: 0.12 }), 1);
   assert.equal(glareScale({ glareStr: 0 }), 0);
   assert.ok(Math.abs(glareScale({ glareStr: 0.24 }) - 2) < 1e-9);
@@ -164,6 +167,8 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   assert.doesNotMatch(cam, /gfx\.present\(SP_PRESENT\)/);
   assert.doesNotMatch(cam, /spMat\.clearcoat = 0\.1/,
     "paint must not be matted to hide a present wash");
+  assert.match(cam, /wrapped\.sunShaftMul\s*=\s*0/);
+  assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
   const game = read("js/game.js");
   assert.match(game, /po\.exposure = frame\.exposure \* LT\.exposureMul/);
   assert.match(game, /po\.tune = LT;/);

@@ -1724,15 +1724,17 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   triangles, uniforms for speed / mode / strength). Same colour maths in all
   three; the shipped sign-off is `gpu-census.yml` on macOS
   (`docs/research/WEBGPU-PARITY.md` §Driving line).
-- **GARAGE FLOOR REFLECTION (2026-09-08):** on all three. `js/garage/scene.js`
-  draws the car mesh a second time through `MAT_MIRROR` (X as the preview,
-  Y for the floor; det +1, no cull flip) at `alpha 0.26` with the `noDepthTest`
-  draw option, straight after the floor and before the shell — no stencil, no
-  second floor pass, and its clip is simply every opaque draw submitted after
-  it. It shipped GLX-only: `noDepthTest` reached `gl.disable(DEPTH_TEST)` and
-  nothing else, so on WGX and TLX the mirrored car sat behind the floor's depth
-  and never drew. WGX now maps it onto the existing always-pass pipeline bit
-  (`depthCompare: "always"`, depth write already off via the blend); TLX sets
+- **GARAGE FLOOR REFLECTION (2026-09-08; restored after #1025, 2026-10-06):**
+  on all three. `js/garage/scene.js` draws the car mesh a second time through
+  `MAT_MIRROR` (X as the preview, Y for the floor; det +1, no cull flip) at
+  `alpha 0.26` with the `noDepthTest` draw option, straight after the floor and
+  before the shell — no stencil, no second floor pass, and its clip is simply
+  every opaque draw submitted after it. #1025 tried an opaque+`depthBias`
+  resolve plus a bay fade quad so close-ups would self-occlude; polygon offset
+  cannot pull a mesh metres below y=0 in front of the slab, so the contact
+  sheen vanished on the live bay — the planar ghost is the accepted look again.
+  WGX maps `noDepthTest` onto the always-pass pipeline bit (`depthCompare:
+  "always"`, depth write already off via the blend); TLX sets
   `material.depthTest = false` AND clears `transparent`, because three renders
   the transparent list after the whole opaque one regardless of renderOrder —
   left transparent, the mirror paints last and ghosts over the props it should
