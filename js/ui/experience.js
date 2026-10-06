@@ -202,6 +202,56 @@ const UiExperience = (function () {
         } catch (_) { /* probe hygiene — never block leaving Home */ }
       }
     }
+    // Resize used to sit inside the Home signature (innerWidth/Height + pane),
+    // so every narrow rotate tore down beginHome and blacks the canvas for
+    // seconds while the garage rebuilds. Signature is scene-only; viewport
+    // changes debounce to setSize/aspect (gfx.resize) + one forced present.
+    const HOME_RESIZE_MS = 120;
+    const PREVIEW_MAX_EDGE = 512;
+    let homeViewGen = 0, resizeTimer = 0;
+    let lastViewportW = window.innerWidth | 0, lastViewportH = window.innerHeight | 0;
+    function settleHomeViewport() {
+      resizeTimer = 0;
+      homeViewGen++;
+      painted = false;
+      elapsed = 0;
+      try { if (G.gfx && typeof G.gfx.resize === "function") G.gfx.resize(); } catch (_) { /* harness / pre-boot */ }
+    }
+    function onHomeViewportChange() {
+      const w = window.innerWidth | 0, h = window.innerHeight | 0;
+      if (w === lastViewportW && h === lastViewportH) return;
+      lastViewportW = w; lastViewportH = h;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(settleHomeViewport, HOME_RESIZE_MS);
+    }
+    window.addEventListener("resize", onHomeViewportChange);
+    window.addEventListener("orientationchange", onHomeViewportChange);
+    function previewSoftGfx(gfx) {
+      if (!gfx) return false;
+      try { if (gfx.softPresent && gfx.softPresent()) return true; } catch (_) { /* no soft path */ }
+      try {
+        const bs = gfx.backendState && gfx.backendState();
+        return !!(bs && (bs.softwareGL || bs.softAdapter));
+      } catch (_) { return false; }
+    }
+    function downscalePreview(sourceW, sourceH, paintFull) {
+      const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(1, sourceW, sourceH));
+      const dw = Math.max(1, Math.round(sourceW * scale));
+      const dh = Math.max(1, Math.round(sourceH * scale));
+      if (scale >= 1) {
+        const image = document.createElement("canvas");
+        image.width = dw; image.height = dh;
+        paintFull(image.getContext("2d"));
+        return image;
+      }
+      const full = document.createElement("canvas");
+      full.width = sourceW; full.height = sourceH;
+      paintFull(full.getContext("2d"));
+      const image = document.createElement("canvas");
+      image.width = dw; image.height = dh;
+      image.getContext("2d").drawImage(full, 0, 0, dw, dh);
+      return image;
+    }
     function renderHome(dt) {
       if (previewBusy) return false;
       let s = scene();
@@ -216,10 +266,11 @@ const UiExperience = (function () {
       s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
       const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-      const pane = rect ? [rect.left, rect.top, rect.width, rect.height].map(Math.round).join(":") : "full";
-      const worldView = { motion, shot: s.shot, viewKey: pane + ":" + window.innerWidth + ":" + window.innerHeight,
+      const worldView = { motion, shot: s.shot, viewKey: String(homeViewGen),
         pane: rect ? GarageExperience.freePane(rect, { left: 0, top: 0, right: innerWidth, bottom: innerHeight, width: innerWidth, height: innerHeight }) : null };
-      const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen + ":" + window.innerWidth + ":" + window.innerHeight + ":" + pane;
+      // Scene ownership only — never viewport size or menu pane (those settle
+      // via onHomeViewportChange → gfx.resize / homeViewGen).
+      const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen;
       if (signature !== sig) {
         stopHome(photoOpen); stamp();
         if (["track", "pitlane"].includes(s.mode)) {
@@ -256,7 +307,8 @@ const UiExperience = (function () {
       preview = { ...preview, ...variation.peek(preview.mode, AppearanceStudio.homeCamera()) };
       if (["static", "photo"].includes(preview.mode)) { previewMode = ""; previewGeneration++; return; }
       if (previewBusy) { previewQueued = preview; previewGeneration++; return; }
-      const previewKey = [preview.mode, preview.shot, G.teamIdx, GameStore.store.rev, window.innerWidth, window.innerHeight].join(":");
+      // Viewport size is not part of the key — a rotate must not re-capture.
+      const previewKey = [preview.mode, preview.shot, G.teamIdx, GameStore.store.rev].join(":");
       if (!["garage", "night", "studio"].includes(preview.mode)) {
         previewMode = ""; const image = document.querySelector('[data-as="preview"]');
         if (image) image.style.removeProperty("--studio-scene-image"); return;
@@ -269,13 +321,16 @@ const UiExperience = (function () {
       const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
       await frame(); await frame();
       if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
+      const gfx = G.gfx;
+      // Software GL (llvmpipe / SwiftShader) + soft-blit: a full garage capture
+      // stalls the menu for seconds; keep the CSS scene fallback instead.
+      if (previewSoftGfx(gfx)) { previewMode = previewKey; return; }
       // One real rendered garage frame inside the native settings preview. The
       // borrowed camera is restored even when capture fails or a race starts.
       previewBusy = true;
       try {
         stopHome();
         if (!deps.setupCam.beginHome(preview.mode, { motion: "still", shot: preview.shot, panel: null })) return;
-        const gfx = G.gfx;
         const readyUntil = performance.now() + 15000;
         while (performance.now() < readyUntil) {
           if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
@@ -289,13 +344,14 @@ const UiExperience = (function () {
         const pixelsPromise = gfx.capturePixels ? gfx.capturePixels() : Promise.resolve(null);
         const pixels = pending ? (await Promise.all([pixelsPromise, pending]))[0] : await pixelsPromise;
         if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden || scene().mode !== preview.mode || scene().shot !== preview.shot) return;
-        const image = document.createElement("canvas");
+        let image;
         if (pixels && pixels.data) {
-          image.width = pixels.width; image.height = pixels.height;
-          image.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height), 0, 0);
+          image = downscalePreview(pixels.width, pixels.height, (ctx) => {
+            ctx.putImageData(new ImageData(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height), 0, 0);
+          });
         } else {
-          const source = $("game-soft") || $("game"); image.width = source.width; image.height = source.height;
-          image.getContext("2d").drawImage(source, 0, 0);
+          const source = $("game-soft") || $("game");
+          image = downscalePreview(source.width, source.height, (ctx) => ctx.drawImage(source, 0, 0));
         }
         AppearanceStudio.setPreviewFrame(image.toDataURL("image/jpeg", .75)); previewMode = previewKey;
       } catch (e) { Log.debug("ui", "Garage appearance preview unavailable: " + e.message); }
