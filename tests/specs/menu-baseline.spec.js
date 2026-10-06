@@ -50,7 +50,8 @@ const SCREENS = [
     await page.waitForFunction(() => {
       const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
       if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
-      return document.querySelectorAll("#cs-options .cs-opt").length > 0;
+      return [...document.querySelectorAll("#cs-options .cs-opt")]
+        .some((o) => /torque curve/i.test(o.textContent || ""));
     }, null, { polling: 100 });
   }],
 ];
