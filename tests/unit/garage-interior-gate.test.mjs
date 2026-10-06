@@ -147,6 +147,12 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "pair rail uses a themed scrollbar, not the platform white track");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*padding:[^;]*var\(--pad\)\s+var\(--pad\)/s,
     "pair rail keeps bottom padding so ERS can scroll fully into view");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*min-height:\s*0/s,
+    "pair rail min-height 0 so the grid area can shrink and overflow-y scroll");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*max-height:\s*100%/s,
+    "pair rail max-height 100% binds the scrollport to the pane-pair row");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*overflow-y:\s*auto/s,
+    "pair rail scrolls vertically when categories overflow");
   assert.match(css, /#cs-team-card span \{[^}]*white-space:\s*normal/s,
     "garage team line wraps instead of ellipsizing the engine");
   assert.match(css, /#carsetup\[data-cs-exit="one"\] #cs-back \{ display: none; \}/);
