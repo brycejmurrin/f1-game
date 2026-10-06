@@ -1,1 +1,1 @@
-1791326401	Cursor Agent	PR#1158 perf(frame) watching CI; OWNED js/render/** js/perf/* js/camera/** js/game.js(race-loop); UNARMED  [cursor/perf-frame-gc-20c5; session 5637574953c282bad6ea3bf7]
+1791327684	Cursor Agent	PR#1158 READY full-tier watching CI; OWNED js/render+perf+camera+game race-loop; UNARMED no AM/merge  [cursor/perf-frame-gc-20c5; session 5637574953c282bad6ea3bf7]
