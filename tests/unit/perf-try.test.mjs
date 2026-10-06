@@ -545,3 +545,26 @@ test("WGX SSR pass omitted carReflect is the 0.05 tuner default", () => {
       `${name} must default an omitted carReflect through PostCommon.knob`);
   }
 });
+
+test("env-probe holds after a full 6-face cycle until the player moves", () => {
+  // Last in the shared-VM file: park() shoves AI cars back and would break the
+  // frustum-cull test above. Pin tier 0 — a long suite can shed the producer
+  // (tier≥1) and make begins look like a stuck hold. Drain → fresh cycle →
+  // silence → teleport dirty.
+  const gov = g.sandbox.PerfGov;
+  gov.setUserTier(0); gov.setTierHold(true);
+  g.apex.park(0.20, 0);
+  for (let i = 0; i < 24; i++) pumpNames();
+  g.apex.park(0.70, 0);
+  let begins = 0;
+  for (let i = 0; i < 8; i++) if (pumpNames().includes("envFaceBegin")) begins++;
+  assert.equal(begins, 6, `fresh parked cycle is exactly 6 faces, got ${begins}`);
+  let extra = 0;
+  for (let j = 0; j < 10; j++) if (pumpNames().includes("envFaceBegin")) extra++;
+  assert.equal(extra, 0, "held probe must not redraw faces while parked");
+  g.apex.park(0.15, 0);
+  let dirtyBegins = 0;
+  for (let i = 0; i < 8; i++) if (pumpNames().includes("envFaceBegin")) dirtyBegins++;
+  assert.ok(dirtyBegins >= 1, `move >4 m must break the hold (begins=${dirtyBegins})`);
+  gov.setTierHold(false);
+});
