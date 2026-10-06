@@ -564,17 +564,29 @@ export function shards(r, db = timings()) {
     const nTests = (s.ownTimeoutSec || 0) >= SELECTED_GATE.perTestTimeoutSec
       ? Math.max(1, Math.ceil(s.tests / MAX_TESTS_PER_JOB))
       : 1;
+    // Pages 37420997285 job oversize-career-1of5: Playwright --shard splits
+    // TEST GROUPS, not tests. A default-mode describe is one group, so shard
+    // 1/5 of career.spec.js ran ~101 tests (~22 min) while 2–5 finished in
+    // ~40 s. Fat UI files (career*, hud-layout) get 2 workers on ONE job
+    // instead of a fake even --shard.
+    const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
+    if (fatUi) {
+      const workers = 2;
+      items.push({ solo: true, name: `oversize-${base}`, files: [s.file], shard: "",
+        tests: s.tests, sec: Math.max(1, sec / workers), perTest, workers });
+      continue;
+    }
     const n = Math.max(nTime, nTests);
     if (n > 1) {
       for (let i = 1; i <= n; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
-          tests: Math.ceil(s.tests / n), sec: sec / n, perTest });
+          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1 });
       }
       continue;
     }
     const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
     items.push({ solo, budgeted: !!s.budgeted, pool: !!s.pool, name: `oversize-${base}`,
-      files: [s.file], shard: "", tests: s.tests, sec, perTest });
+      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
@@ -599,8 +611,9 @@ export function shards(r, db = timings()) {
       : b.items.length === 1 ? b.items[0].name : `packed-${++k}`;
     const perTest = Math.max(...b.items.map((x) => x.perTest));
     const sec = Math.round(b.sec);
+    const workers = Math.max(1, ...b.items.map((x) => x.workers || 1));
     return { name, specs: files.join(" "), shard: b.solo ? b.shard : "",
-      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest,
+      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers,
       timeout: shardCapMin(sec, perTest),
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(",") };

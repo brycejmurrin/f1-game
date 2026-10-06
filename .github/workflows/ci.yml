@@ -2126,7 +2126,7 @@ jobs:
         uses: ./.github/actions/mesa-xvfb
       - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
-          APEX_WORKERS: 1
+          APEX_WORKERS: ${{ matrix.workers || 1 }}
           APEX_FAIL_ON_FLAKY: 1
           # llvmpipe (the step above). Empty on `gl: swiftshader`, where the
           # step is skipped and playwright.config.js keeps the ANGLE default.

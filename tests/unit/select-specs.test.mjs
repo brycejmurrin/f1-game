@@ -848,25 +848,32 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   }
 });
 
-test("career / hud-layout / terrain-over-road selected legs stay under the 10 min cap", () => {
+test("career / hud-layout selected legs use 2 workers instead of a fake Playwright shard", () => {
+  // Pages 37420997285: --shard=1/5 of career.spec.js billed 21 tests per
+  // shard but ran ~101 on shard 1 (~22 min) because Playwright shards GROUPS.
   const files = [
     "tests/specs/career.spec.js",
     "tests/specs/career-season.spec.js",
     "tests/specs/career-hub.spec.js",
     "tests/specs/hud-layout.spec.js",
-    "tests/specs/terrain-over-road.spec.js",
   ];
   for (const f of files) {
     const n = declaredTests(f);
     assert.ok(n >= 1, `${f} has tests`);
     const jobs = shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY)
       .filter((j) => j.specs.includes(f));
-    assert.ok(jobs.length >= 1, `${f} must run`);
-    assert.ok(jobs.every((j) => j.timeout <= MAX_SELECTED_JOB_MIN),
-      `${f} job cap ${jobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
-    assert.ok(jobs.every((j) => j.tests <= MAX_TESTS_PER_JOB + 1),
-      `${f} packed ${jobs.map((j) => j.tests)} tests per leg (max ${MAX_TESTS_PER_JOB})`);
+    assert.equal(jobs.length, 1, `${f} must be one job, not ${jobs.length} --shard pieces`);
+    assert.equal(jobs[0].shard, "", `${f} must not use Playwright --shard`);
+    assert.equal(jobs[0].workers, 2, `${f} runs two workers so wall time halves`);
+    assert.ok(jobs[0].timeout <= MAX_SELECTED_JOB_MIN,
+      `${f} job cap ${jobs[0].timeout} exceeds ${MAX_SELECTED_JOB_MIN}`);
   }
+  const terrain = "tests/specs/terrain-over-road.spec.js";
+  const tJobs = shards(fit([terrain], 30, { rank: () => 0, db: EMPTY }), EMPTY)
+    .filter((j) => j.specs.includes(terrain));
+  assert.ok(tJobs.length >= 1, "terrain-over-road must run");
+  assert.ok(tJobs.every((j) => j.timeout <= MAX_SELECTED_JOB_MIN),
+    `terrain job cap ${tJobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
 });
 
 test("fit bills each spec at its MEASURED rate, and an unmeasured selection cuts at the fallback", () => {

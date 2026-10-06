@@ -2,9 +2,11 @@
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
+test.describe.configure({ mode: "parallel" });
+
 // Career shard: MY TEAM / objectives / reputation / rollover / contracts / determinism / history. Helpers: tests/helpers/career-boot.js
 
-test.describe("Career — objectives", () => {
+test.describe.parallel("Career — objectives", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("every round carries a brief, and the hub states it", async ({ page }) => {
@@ -80,7 +82,7 @@ test.describe("Career — objectives", () => {
   });
 });
 
-test.describe("Career — reputation", () => {
+test.describe.parallel("Career — reputation", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("a settled round moves reputation by result-vs-expectation, the brief and race craft", async ({ page }) => {
@@ -144,7 +146,7 @@ test.describe("Career — reputation", () => {
   });
 });
 
-test.describe("Career — the rollover", () => {
+test.describe.parallel("Career — the rollover", () => {
   test.use({ viewport: LANDSCAPE });
 
   // A whole season settled without driving it — the state most of these start from.
@@ -285,7 +287,7 @@ test.describe("Career — the rollover", () => {
   });
 });
 
-test.describe("Career — contracts", () => {
+test.describe.parallel("Career — contracts", () => {
   test.use({ viewport: LANDSCAPE });
 
   // A full season driven the way a player reaches the end of one: 23 rounds fast-
@@ -389,7 +391,7 @@ test.describe("Career — contracts", () => {
   });
 });
 
-test.describe("Career — determinism", () => {
+test.describe.parallel("Career — determinism", () => {
   test.use({ viewport: LANDSCAPE });
   // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
   // rather than a slow box: each test here boots, arms a real race through the
@@ -497,7 +499,7 @@ test.describe("Career — determinism", () => {
 // totals are a walk over career.history plus the season in progress, so what
 // these tests really pin is that the derivation still agrees with the save.
 
-test.describe("Career — history", () => {
+test.describe.parallel("Career — history", () => {
   test.use({ viewport: LANDSCAPE });
   // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
   // rather than a slow box: each test here boots, arms a real race through the
@@ -667,7 +669,7 @@ async function reliabilityTwice(page, level, seedA, seedB) {
   }, [RELIABILITY_SEASON, level, seedA, seedB]);
 }
 
-test.describe("Career — reliability", () => {
+test.describe.parallel("Career — reliability", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("OFF is the shipped default and nothing ever retires", async ({ page }) => {
@@ -779,7 +781,7 @@ test.describe("Career — reliability", () => {
 // property under test throughout is isolation — between slots, and between the
 // two sets, so that neither mode can cost the other room.
 
-test.describe("Career — slots", () => {
+test.describe.parallel("Career — slots", () => {
   test.use({ viewport: LANDSCAPE });
 
   // Four careers across both sets, in a known order.

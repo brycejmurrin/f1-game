@@ -8,7 +8,12 @@
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
-test.describe("Career — mode", () => {
+// Parallel so Playwright can schedule tests across workers. Default-mode
+// describes are ONE shard group (Pages 37420997285: career 1/5 ran ~101 tests
+// in ~22 min; shards 2–5 finished in ~40 s).
+test.describe.configure({ mode: "parallel" });
+
+test.describe.parallel("Career — mode", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("flow/session replace the old booleans without changing their meaning", async ({ page }) => {
@@ -43,7 +48,7 @@ test.describe("Career — mode", () => {
 
 // ── the save ─────────────────────────────────────────────────────────────────
 
-test.describe("Career — save", () => {
+test.describe.parallel("Career — save", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("starting a career writes a versioned save", async ({ page }) => {
@@ -125,7 +130,7 @@ test.describe("Career — save", () => {
 
 // ── isolation: a career must not change free play ────────────────────────────
 
-test.describe("Career — isolation", () => {
+test.describe.parallel("Career — isolation", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("the career garage is a separate build from the free-play one", async ({ page }) => {
@@ -301,7 +306,7 @@ test.describe("Career — isolation", () => {
 
 // ── the hub ──────────────────────────────────────────────────────────────────
 
-test.describe("Career — hub", () => {
+test.describe.parallel("Career — hub", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("with no save the screen offers a new career; starting one opens the hub", async ({ page }) => {
@@ -354,7 +359,7 @@ test.describe("Career — hub", () => {
 
 // ── a race weekend ───────────────────────────────────────────────────────────
 
-test.describe("Career — a round", () => {
+test.describe.parallel("Career — a round", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("finishing a round pays out, advances the calendar and returns to the hub", async ({ page }) => {
@@ -391,7 +396,7 @@ test.describe("Career — a round", () => {
 // ── driver ratings ───────────────────────────────────────────────────────────
 // Ratings apply in EVERY mode, so most of these run in a plain Grand Prix.
 
-test.describe("Driver ratings", () => {
+test.describe.parallel("Driver ratings", () => {
   test.use({ viewport: LANDSCAPE });
 
   const skills = async (page) => {
@@ -489,7 +494,7 @@ test.describe("Driver ratings", () => {
 
 // ── the garage as an R&D tree (phase 4) ──────────────────────────────────────
 
-test.describe("Career — the garage", () => {
+test.describe.parallel("Career — the garage", () => {
   test.use({ viewport: LANDSCAPE });
 
   // The garage is opened from the hub, and its rows are rebuilt on every mutation.
@@ -612,7 +617,7 @@ test.describe("Career — the garage", () => {
 // You own the eleventh team and drive one of its two cars. The other seat is a
 // hire you pay for every round.
 
-test.describe("Career — MY TEAM", () => {
+test.describe.parallel("Career — MY TEAM", () => {
   test.use({ viewport: LANDSCAPE });
 
   const startMyTeam = (page, opts) =>

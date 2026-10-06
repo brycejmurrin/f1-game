@@ -2,9 +2,11 @@
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
+test.describe.configure({ mode: "parallel" });
+
 // Career shard: reliability / slots / modes screen / guide / settlement / facility / sponsors. Helpers: tests/helpers/career-boot.js
 
-test.describe("Career — the modes screen", () => {
+test.describe.parallel("Career — the modes screen", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("the title button opens it, with or without a save", async ({ page }) => {
@@ -91,7 +93,7 @@ test.describe("Career — the modes screen", () => {
 
 // ── making and unmaking careers ──────────────────────────────────────────────
 
-test.describe("Career — new and deleted", () => {
+test.describe.parallel("Career — new and deleted", () => {
   test.use({ viewport: LANDSCAPE });
 
   const fillDriver = (page) => page.evaluate(() => {
@@ -187,7 +189,7 @@ test.describe("Career — new and deleted", () => {
 // Career's own constants, so these are really asking "does the guide still
 // agree with the rules it describes".
 
-test.describe("Career — the guide", () => {
+test.describe.parallel("Career — the guide", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("the modes screen carries one per mode", async ({ page }) => {
@@ -271,7 +273,7 @@ test.describe("Career — the guide", () => {
 // that it reaches the screen, and that the numbers on it are the ones the rules
 // actually applied.
 
-test.describe("Career — the settlement", () => {
+test.describe.parallel("Career — the settlement", () => {
   test.use({ viewport: LANDSCAPE });
   // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
   // rather than a slow box: each test here boots, arms a real race through the
@@ -318,7 +320,7 @@ test.describe("Career — the settlement", () => {
 
 // ── extra funds ──────────────────────────────────────────────────────────────
 
-test.describe("Career — extra funds", () => {
+test.describe.parallel("Career — extra funds", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("off by default, and the grant adds exactly what it says", async ({ page }) => {
@@ -368,7 +370,7 @@ test.describe("Career — extra funds", () => {
 
 // ── the facility ─────────────────────────────────────────────────────────────
 
-test.describe("Career — the facility", () => {
+test.describe.parallel("Career — the facility", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("each level permanently cuts what research costs", async ({ page }) => {
@@ -408,7 +410,7 @@ test.describe("Career — the facility", () => {
 // roster[0].left was written at signing and read by NOTHING, so the one
 // relationship the mode is built on was a static number.
 
-test.describe("Career — the hire's contract", () => {
+test.describe.parallel("Career — the hire's contract", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("it expires, and an empty seat blocks the weekend", async ({ page }) => {
@@ -474,7 +476,7 @@ test.describe("Career — the hire's contract", () => {
 
 // ── MY TEAM: sponsors ────────────────────────────────────────────────────────
 
-test.describe("Career — sponsors", () => {
+test.describe.parallel("Career — sponsors", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("MY TEAM has one and a driver career does not", async ({ page }) => {

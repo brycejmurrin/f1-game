@@ -193,6 +193,8 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   assert.match(selectedJob, /needs: \[select, guards\]/);
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
+  assert.match(selectedJob, /APEX_WORKERS: \$\{\{ matrix\.workers \|\| 1 \}\}/,
+    "career oversize jobs pass workers: 2; others stay 1");
   assert.match(selectedJob, /needs\.select\.outputs\.any == 'true'/);
 });
 
