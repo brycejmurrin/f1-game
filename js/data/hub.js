@@ -516,6 +516,9 @@ const DataHub = (function () {
         sel.sessionKey = null;
         sel.meetingKey = null;
         sel.selAt = 0;
+        // Off-season / empty latest: keep RESULTS' year pills usable. Leaving
+        // year null made buildPicker call meetings(null) → ?year=null.
+        if (sel.year == null) sel.year = apiYears()[0];
       }
       return sel.meta;
     });

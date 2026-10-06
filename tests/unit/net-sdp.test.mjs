@@ -143,6 +143,38 @@ test("an IPv6 host candidate round-trips, including :: compression", () => {
   assert.match(out, /2001:db8::1 9999 typ host/);
 });
 
+test("NAT64 / embedded-IPv4 v6 candidates keep the full address, not a truncated hextet", () => {
+  // parseInt("192.0.2.1", 16) used to stop at the dot and pack as ::192 —
+  // the peer then dialled a different address than ICE gathered.
+  const nat64 = REAL.replace("a=ice-ufrag:0BnP",
+    "a=candidate:1 1 udp 2113937151 64:ff9b::192.0.2.1 54321 typ host generation 0\r\n"
+    + "a=ice-ufrag:0BnP");
+  const out = NetSdp.unpack(NetSdp.pack(nat64));
+  assert.match(out, /64:ff9b::c000:201 54321 typ host/,
+    "64:ff9b::192.0.2.1 must survive as its two trailing hextets");
+  assert.doesNotMatch(out, /64:ff9b::192\b/, "must not silently truncate at the first dotted octet");
+
+  const bare = REAL.replace("a=ice-ufrag:0BnP",
+    "a=candidate:1 1 udp 2113937151 ::192.0.2.1 54321 typ host generation 0\r\n"
+    + "a=ice-ufrag:0BnP");
+  const bareOut = NetSdp.unpack(NetSdp.pack(bare));
+  assert.match(bareOut, /::c000:201 54321 typ host/);
+});
+
+test("dirty hextets and trailing-empty IPv4 octets are refused, never rewritten", () => {
+  // parseInt("cafeg", 16) === 0xcafe; Number("") === 0. Both used to pack a
+  // plausible-looking wrong address into the invite.
+  const dirty = REAL.replace(
+    /^a=candidate:.*$/m,
+    "a=candidate:1 1 udp 2113937151 2001:db8::cafeg 9999 typ host generation 0");
+  assert.equal(NetSdp.pack(dirty), null, "non-hex hextet must drop the candidate set");
+
+  const trail = REAL.replace(
+    /^a=candidate:.*$/m,
+    "a=candidate:1 1 udp 2113937151 192.168.1. 54321 typ host generation 0");
+  assert.equal(NetSdp.pack(trail), null, "trailing empty IPv4 octet must not become .0");
+});
+
 test("TCP and non-data components are dropped, not mangled", () => {
   // Dropping them is most of the remaining size, and a TCP candidate is
   // near-useless for a data channel across a NAT.

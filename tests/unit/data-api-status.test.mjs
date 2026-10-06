@@ -811,3 +811,23 @@ test("export gather waits 90 s when fastestLap returns HTTP 429", async () => {
   assert.ok(lapCalls >= 2, "meeting retried after the wait");
   assert.ok(out.circuits.Monza, "circuit captured after the rate-limit retry");
 });
+
+test("meetings(null) uses the clock season, never ?year=null", async () => {
+  let path = "";
+  const context = vm.createContext({
+    fetch: async (url) => {
+      path = String(url);
+      return { ok: true, status: 200, headers: { get: () => null },
+        json: async () => [], text: async () => "[]" };
+    },
+    AbortController, localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    Date, setTimeout, clearTimeout, encodeURIComponent,
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context);
+  await context.api.meetings(null);
+  assert.match(path, /\/meetings\?year=\d{4}$/);
+  assert.doesNotMatch(path, /year=null/);
+  await context.api.meetings(undefined);
+  assert.match(path, /\/meetings\?year=\d{4}$/);
+});

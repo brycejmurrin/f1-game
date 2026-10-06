@@ -67,12 +67,18 @@ const NetSnapshot = (function () {
     };
   }
 
+  function wireId(id) {
+    // null/false/"3"/1.5 all pass `id >= 0` in JS, then `id & 0xff` folds them
+    // onto 0 (or another car). Only a true integer 0..255 is a wire id.
+    return Number.isInteger(id) && id >= 0 && id <= 255;
+  }
+
   function encodeSnapshot(tick, entries) {
     const list = [];
     const src = entries || [];
     for (let i = 0; i < src.length && list.length < 255; i++) {
       const e = src[i];
-      if (!e || !(e.id >= 0)) continue;
+      if (!e || !wireId(e.id)) continue;
       list.push(e);
     }
     const n = list.length;
@@ -94,7 +100,7 @@ const NetSnapshot = (function () {
     let tick = -Infinity;
     for (let i = 0; i < src.length && list.length < 255; i++) {
       const e = src[i];
-      if (!e || !(e.id >= 0) || !Number.isFinite(e.at)) continue;
+      if (!e || !wireId(e.id) || !Number.isFinite(e.at)) continue;
       list.push(e);
       if (e.at > tick) tick = e.at;
     }
