@@ -40,7 +40,7 @@
  * Imports from ./fixtures.js so a failure arrives with apex-state, the Log ring
  * and the page console attached.
  */
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -61,6 +61,9 @@ const MAX_GAP_TICKS = 10;
  * if the stub never took, so the rig is checked before anything is measured.
  */
 async function loadRig(page, id = "monza") {
+  // Factory McLaren empty sheet: the shipped Mercedes/Downwash kit moves the
+  // grip envelope (CI selected-5: half-pace pulses 1 vs ≥3).
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });

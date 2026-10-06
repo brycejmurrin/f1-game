@@ -45,7 +45,7 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE_LANDSCAPE = { width: 852, height: 393 };
@@ -90,6 +90,16 @@ async function waitReady(page) {
   // live rect while rendering) untested, which is not this spec's concern —
   // this file asserts CSS/DOM classification, not the 3D preview.
   await page.evaluate(() => window.__apex.headless(true));
+}
+
+// Factory McLaren empty sheet BEFORE navigation: GarageDefaults would otherwise
+// open Mercedes + signature kit, which over-budget rows push #cs-done off
+// short-wide. pinFactorySeat is addInitScript, so it applies to every later
+// goto on this page.
+async function loadAt(page) {
+  await pinFactorySeat(page);
+  await page.goto("/");
+  await waitReady(page);
 }
 
 // Open the garage the way a player does. It is the densest screen in the app —
@@ -143,8 +153,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     const fresh = {};
     for (const [name, size] of SIZES) {
       await page.setViewportSize(size);
-      await page.goto("/");
-      await waitReady(page);
+      await loadAt(page);
       await openGarage(page);
       fresh[name] = await readState(page);
       expect(fresh[name].hOverflow, `${name} fresh: no horizontal overflow`).toBe(false);
@@ -154,8 +163,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // Now walk every size in one session, resizing rather than reloading, and
     // require the same answer. Load once, then never again.
     await page.setViewportSize(DESKTOP);
-    await page.goto("/");
-    await waitReady(page);
+    await loadAt(page);
     await openGarage(page);
 
     for (const [name, size] of SIZES) {
@@ -193,8 +201,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // depends on which way you arrived, so: land on portrait twice, once from
     // each direction, and require the same answer.
     await page.setViewportSize(PHONE_PORTRAIT);
-    await page.goto("/");
-    await waitReady(page);
+    await loadAt(page);
     await openGarage(page);
     const first = await readState(page);
 
@@ -220,8 +227,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // resizes and the observer never fires. Measured before the fix: the garage
     // held data-density="normal" at UI SIZE 150% with a 297px-tall sheet.
     await page.setViewportSize(SHORT_WIDE);
-    await page.goto("/");
-    await waitReady(page);
+    await loadAt(page);
     await openGarage(page);
 
     // 50, NOT 100 — and that is a real behaviour change, not a nudge to make a
@@ -275,8 +281,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
 
   test("extreme UI size yields only enough to keep dense content functional", async ({ page }) => {
     await page.setViewportSize({ width: 734, height: 343 });
-    await page.goto("/");
-    await waitReady(page);
+    await loadAt(page);
     await openGarage(page);
     await page.evaluate(() => window.__apex.uiScale(200));
     await page.waitForFunction(() => document.getElementById("cs-inner").dataset.fit === "on",
@@ -312,8 +317,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // review-by-eye plus a real-device pass; a green here does not vouch for
     // it, and this comment is what stops anyone citing it as if it did.
     await page.setViewportSize({ width: 734, height: 343 });
-    await page.goto("/");
-    await waitReady(page);
+    await loadAt(page);
     await openGarage(page);
     await page.evaluate(() => window.__apex.uiScale(200));
     await page.waitForFunction(() => document.getElementById("cs-inner").dataset.fit === "on",
@@ -397,8 +401,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       // 115% its own height is ~573 — short by its own standard — while the
       // media query reads 659 and declines to tighten anything.
       await page.setViewportSize({ width: 393, height: 659 });
-      await page.goto("/");
-      await waitReady(page);
+      await loadAt(page);
       await page.evaluate(() => window.__apex.uiScale(115));
 
       // Through the pause ladder, the way a player reaches it — opening the
@@ -489,6 +492,7 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
     // machine, not the code").
     test.setTimeout(300_000);
     await page.setViewportSize(DESKTOP);
+    await pinFactorySeat(page);
     await page.goto("/");
     await page.waitForFunction(() => window.__apex && window.__apex.race,
       null, { polling: 100, timeout: BOOT_MS });

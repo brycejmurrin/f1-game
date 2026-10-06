@@ -77,6 +77,26 @@ test("the store answers from GarageDefaults on a miss, not the call-site literal
   assert.deepEqual(store.get("setup.mercedes", {}), GarageDefaults.get("setup.mercedes"));
 });
 
+test("an empty written parts sheet is a HIT, not a GarageDefaults miss", () => {
+  const { GameStore, GarageDefaults } = load({ "apex26.parts.mclaren": "{}" });
+  assert.deepEqual(GameStore.store.get("parts.mclaren", { x: 1 }), {});
+  assert.notDeepEqual(GameStore.store.get("parts.mclaren", {}), GarageDefaults.get("parts.mclaren"));
+});
+
+test("pinFreePlay writes an empty factory sheet instead of deleting the parts key", () => {
+  const helpers = fs.readFileSync(path.join(ROOT, "tests/helpers/shared-page.js"), "utf8");
+  const pin = helpers.slice(helpers.indexOf("export async function pinFreePlay"),
+    helpers.indexOf("export async function garageTeam"));
+  assert.match(pin, /S\.set\("parts\." \+ id, p \|\| \{\}\)/);
+  assert.equal(pin.includes("removeItem"), false, "null parts must not miss into GarageDefaults");
+  const budget = fs.readFileSync(path.join(ROOT, "tests/specs/parts-budget.spec.js"), "utf8");
+  assert.match(budget, /pinFreePlay\(page, \{ team: "mclaren"/);
+  for (const spec of ["understeer-cue", "ui-resize"]) {
+    const src = fs.readFileSync(path.join(ROOT, `tests/specs/${spec}.spec.js`), "utf8");
+    assert.ok(src.includes("pinFactorySeat"), spec + " must pin factory McLaren before goto");
+  }
+});
+
 test("a stored player value still outranks the shipped garage", () => {
   const { GameStore, GarageDefaults } = load({
     "apex26.team": "2",

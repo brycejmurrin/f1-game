@@ -43,7 +43,7 @@ function getStoredParts(page, teamId) {
 async function openSetup(page, team = "mclaren", opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
-  await pinFreePlay(page, { team, click: false });   // #mb-race re-reads the store
+  await pinFreePlay(page, { team, click: false });   // empty factory sheet; #mb-race re-reads
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
