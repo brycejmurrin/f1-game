@@ -1,0 +1,1 @@
+1791301370	Cursor Agent	Bug hunt: truncated PONG liveness + carData bad dates + export 429 swallow. OWNED js/net/session.js js/data/api.js js/data/export.js + unit tests; FORBIDDEN hub.js lobby.js physics input circuits css workflows. Do not enable auto-merge or merge.  [cursor/data-net-save-bugs-ec59; session dbda49ddb84c267519cb004e]
