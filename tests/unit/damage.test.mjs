@@ -107,6 +107,22 @@ test("wall: the pin's rising edge books one strike on the wall side; a kiss book
   assert.equal(D.state(k).hits, 0);
 });
 
+test("wall: severity uses this frame's speed — accel-into-wall books, decel-to-kiss does not", () => {
+  const { Damage: D } = load();
+  // Prior frame was parked; this frame hits the wall at race speed.
+  const a = car({ x: 5, speed: 0, yawVis: 0.6 });
+  D.observe(a, 1 / 60, 90);
+  a.speed = 70; a.wasOnWall = true;
+  D.observe(a, 1 / 60, 90);
+  assert.equal(D.state(a).hits, 1, "impact speed is the rising-edge frame");
+  // Prior frame was fast; this frame is a slow brush.
+  const b = car({ x: 5, speed: 80, yawVis: 0.8 });
+  D.observe(b, 1 / 60, 90);
+  b.speed = 3; b.wasOnWall = true;
+  D.observe(b, 1 / 60, 90);
+  assert.equal(D.state(b).hits, 0, "a kiss after braking is not damage");
+});
+
 test("repair: a completed stop (pitOutT edge) and reset() zero every part", () => {
   const { Damage: D } = load();
   const c = car();

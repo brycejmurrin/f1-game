@@ -77,3 +77,13 @@ test("every planned retirement lands inside the race, with a known reason", () =
     assert.equal(p.retired, false, "planned, not yet retired");
   }
 });
+
+test("anonymous cars (no driverId/code) still draw distinct DNF plans", () => {
+  const R = load();
+  const cars = Array.from({ length: 200 }, () => ({ tier: 4, team: { id: "t0" } }));
+  R.arm(cars, { level: "real", seed: 2, round: 1 });
+  const plan = R.plan(cars);
+  assert.ok(plan.length >= 5, "a real-level anon field still plans some retirements");
+  assert.ok(new Set(plan.map((p) => p.at)).size > 1,
+    "index fallback keeps plans from collapsing onto one at=");
+});

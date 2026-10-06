@@ -115,10 +115,15 @@ const Damage = (function () {
     if (served && !r.served) reset(c);
     r.served = served;
     const on = !!c.wasOnWall;
+    // Severity from THIS frame's speed/yaw — the pin's rising edge is the
+    // impact. Reading the prior-frame cache booked accel-into-wall as a kiss
+    // (sev 0) and a decel-to-touch as a hard hit.
+    const spd = c.speed || 0;
+    const yaw = c.yawVis || 0;
     if (on && !r.onWall) {
       const side = (c.x || 0) >= 0 ? 1 : -1;
-      const inc = Math.min(1, Math.abs(Math.sin(r.yaw)));
-      const sev = Math.min(1, Math.abs(r.spd) / Math.max(1, vTop || 1) * (0.25 + 0.75 * inc) * 1.6);
+      const inc = Math.min(1, Math.abs(Math.sin(yaw)));
+      const sev = Math.min(1, Math.abs(spd) / Math.max(1, vTop || 1) * (0.25 + 0.75 * inc) * 1.6);
       if (sev >= WALL_MIN && r.cool <= 0) {
         // Steep nose-in: the front corner on the wall side; else a side scrape.
         if (inc > 0.3) apply(r, LCAR, side * WCAR * 0.4, sev);
@@ -127,8 +132,8 @@ const Damage = (function () {
       }
     }
     r.onWall = on;
-    r.spd = c.speed || 0;
-    r.yaw = c.yawVis || 0;
+    r.spd = spd;
+    r.yaw = yaw;
   }
 
   function reset(c) {
