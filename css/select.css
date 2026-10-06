@@ -455,7 +455,7 @@
    between. The map button keeps its own box (it is absolutely inset over the
    still), so a tap on the still opens CIRCUIT DETAIL either way. */
 #sel-preview-map:not([data-drawn]) { visibility: hidden; width: 0; height: 0; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
 }
 /* Caption ON the still — flag, name, grand prix — top-left; the type badges
@@ -677,7 +677,7 @@
   border: 1px solid var(--red); background: var(--plate-on); border-radius: var(--r-sm);
   transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
 }
 .sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }

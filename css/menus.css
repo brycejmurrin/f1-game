@@ -199,7 +199,7 @@
   opacity: 0;
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #menu-buttons :is(#menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
 }
 #menu-buttons :is(#menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
@@ -218,7 +218,7 @@
   opacity: 0;
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #mb-career:hover { background: var(--grad-primary); }
   #mb-career:hover::before { opacity: 1; }
 }

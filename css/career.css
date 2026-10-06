@@ -272,7 +272,7 @@
 .cr-obj-pick:not(.on)::before { content: "\00a0\00a0\00a0"; }
 /* Pointer only, with an :active twin for touch: a tap leaves :hover stuck on iOS
    (the css/tokens.css policy phone-touch-surface enforces). */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .cr-obj-pick:hover:not(.on) { color: var(--text); }
 }
 .cr-obj-pick:active:not(.on) { color: var(--text); }
@@ -412,7 +412,7 @@
 /* :hover gated per the tokens.css policy (a tap sticks :hover on iOS);
    :focus-visible stays outside the gate so keyboard focus works everywhere.
    The record card shares the pair — the two are the same gesture. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .co-offer:hover, .cr-record:hover { border-color: var(--red); background: var(--plate-on); }
 }
 .co-offer:focus-visible, .cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
@@ -508,7 +508,7 @@
   border-radius: var(--r-sm);
   transition: border-color 0.15s, background 0.15s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .cr-slot-main:hover { border-color: var(--red); background: var(--plate-on); }
 }
 .cr-slot-main:focus-visible {
@@ -558,7 +558,7 @@
   border: 1px solid var(--card-line); border-radius: var(--r-sm);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .cr-slot-del:hover,
   [data-cr-act]:hover { color: var(--red); border-color: var(--red); }
 }

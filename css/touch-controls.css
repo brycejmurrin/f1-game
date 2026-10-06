@@ -731,7 +731,7 @@ body.hud-hidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
-@media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
+@media (hover: hover) and (pointer: fine) { #hud-restore:hover { opacity: 0.95; } }
 #hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
 body.hud-hidden #pausebtn { right: calc(10px + var(--tap) + 4px + var(--sar)); opacity: 0.75; }

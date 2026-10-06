@@ -511,7 +511,11 @@ function buildSetup() {
     row.dataset.csOpt = opt.id;
     row.dataset.csCat = activeCat.id;
     row.addEventListener("focus", () => showComparison(opt));
-    row.addEventListener("pointerenter", () => showComparison(opt));
+    row.addEventListener("pointerenter", (ev) => {
+      if (ev.pointerType === "touch") return;
+      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
+      showComparison(opt);
+    });
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
 

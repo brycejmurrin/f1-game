@@ -240,7 +240,7 @@
   opacity: 0.85;
 }
 #xr-enter:focus-visible { opacity: 1; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #xr-enter:hover { opacity: 1; }
 }
 #xr-enter[aria-pressed="true"] {

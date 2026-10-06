@@ -324,7 +324,7 @@
 #pmsettings-inner #pm-metrics-details > [role="group"] > button:last-child {
   border-bottom: none;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #pm-metrics-details > [role="group"] > button:hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     box-shadow: none;
@@ -389,7 +389,7 @@
   border-radius: 0;
   box-shadow: none;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
@@ -507,7 +507,7 @@ button:has(> [data-fold]) {
   color: var(--steel);
   font-weight: 600;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     color: var(--text);
