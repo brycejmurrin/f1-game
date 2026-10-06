@@ -179,6 +179,8 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
     .toEqual([
       "bahrain-back-straight-gantry",
       "bahrain-beyon-grandstand",
+      "bahrain-control-tower",
+      "bahrain-main-tribuna",
       "bahrain-sakhir-tower",
       "bahrain-schumacher-corner",
       "bahrain-start-gantry",
