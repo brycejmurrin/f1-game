@@ -421,182 +421,178 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 
 } /* @layer components */
 
-/* ---- VS Friend chrome (UNLAYERED on purpose) ----
-   dialogs.css is @layer components; overlays.css is @layer overlays (higher).
-   Unlayered rules beat every layered sheet — same escape hatch as
-   tuner.css's #pc-toggle block. One red primary per step: HOST / JOIN /
-   CONNECT / GENERATE ANSWER / START stay hot; NEW CODE, SHARE/COPY*, and
-   SCAN are plate secondaries. Enter-code: JOIN matches the field; short-code
-   errors sit under the field, centred, field flagged. Lone step chips hide.
-   Narrow/tall keeps CLOSE in the footer. */
-#vsfriend #vs-code-host,
-#vsfriend #vs-code-share,
-#vsfriend #vs-code-copy,
-#vsfriend #vs-share-invite,
-#vsfriend #vs-copy-invite,
-#vsfriend #vs-share-answer,
-#vsfriend #vs-copy-answer,
-#vsfriend #vs-scan-answer,
-#vsfriend #vs-scan-invite {
-  background: var(--plate-opaque);
-  color: var(--text);
-  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
-  font-weight: 600;
-  letter-spacing: var(--ls-1);
-  box-shadow: none;
-}
-@media (hover: hover) {
-  #vsfriend #vs-code-host:hover,
-  #vsfriend #vs-code-share:hover,
-  #vsfriend #vs-code-copy:hover,
-  #vsfriend #vs-share-invite:hover,
-  #vsfriend #vs-copy-invite:hover,
-  #vsfriend #vs-share-answer:hover,
-  #vsfriend #vs-copy-answer:hover,
-  #vsfriend #vs-scan-answer:hover,
-  #vsfriend #vs-scan-invite:hover {
-    background: var(--plate-hover);
-    border-color: var(--plate-line);
+/* ---- VS Friend chrome (@layer overlays on purpose) ----
+   dialogs.css wraps @layer components; overlays.css owns the lobby styles in
+   @layer overlays (higher). A second top-level @layer overlays here matches
+   tuner.css's #pc-toggle → @layer hud pattern: same layer as the base rules,
+   higher specificity wins. ID-only selectors keep vs-* classes single-file
+   in overlays.css (component-inventory). One red primary per step; enter-code
+   JOIN matches the field; short-code error under the field, centred, flagged;
+   lone step chip hidden; tall CLOSE stays in the footer. */
+@layer overlays {
+  /* Plate secondaries — split lists stay under the 230-char prelude ceiling. */
+  #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
     box-shadow: none;
   }
-}
-#vsfriend #vs-code-host:active,
-#vsfriend #vs-code-share:active,
-#vsfriend #vs-code-copy:active,
-#vsfriend #vs-share-invite:active,
-#vsfriend #vs-copy-invite:active,
-#vsfriend #vs-share-answer:active,
-#vsfriend #vs-copy-answer:active,
-#vsfriend #vs-scan-answer:active,
-#vsfriend #vs-scan-invite:active {
-  background: var(--plate-press);
-  box-shadow: none;
-}
+  #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
+    box-shadow: none;
+  }
+  #vsfriend :is(#vs-scan-answer, #vs-scan-invite) {
+    background: var(--plate-opaque);
+    color: var(--text);
+    border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+    font-weight: 600;
+    letter-spacing: var(--ls-1);
+    box-shadow: none;
+  }
+  @media (hover: hover) {
+    #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):hover,
+    #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):hover,
+    #vsfriend :is(#vs-scan-answer, #vs-scan-invite):hover {
+      background: var(--plate-hover);
+      border-color: var(--plate-line);
+      box-shadow: none;
+    }
+  }
+  #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):active,
+  #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):active,
+  #vsfriend :is(#vs-scan-answer, #vs-scan-invite):active {
+    background: var(--plate-press);
+    box-shadow: none;
+  }
 
-/* Dark code boxes — no nested light scroll, placeholder never mid-word. */
-#vsfriend textarea.vs-code,
-#vsfriend input.vs-code {
-  color-scheme: dark;
-  background: color-mix(in oklab, var(--carbon) 78%, transparent);
-  color: var(--text);
-  border: 1px solid var(--plate-line);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--steel) 55%, transparent) transparent;
-}
-#vsfriend textarea.vs-code::-webkit-scrollbar,
-#vsfriend input.vs-code::-webkit-scrollbar {
-  width: 8px; height: 8px; background: transparent;
-}
-#vsfriend textarea.vs-code::-webkit-scrollbar-track,
-#vsfriend input.vs-code::-webkit-scrollbar-track {
-  background: transparent;
-}
-#vsfriend textarea.vs-code::-webkit-scrollbar-thumb,
-#vsfriend input.vs-code::-webkit-scrollbar-thumb {
-  background: color-mix(in oklab, var(--steel) 55%, transparent);
-  border-radius: 4px;
-}
-#vsfriend .vs-code::placeholder {
-  color: var(--dim);
-  opacity: 1;
-  word-break: normal;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-#vsfriend .vs-code:not([readonly]):placeholder-shown {
-  word-break: normal;
-  overflow-wrap: break-word;
-}
+  /* Dark code boxes by id — no nested light scroll; placeholder keeps words. */
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer) {
+    color-scheme: dark;
+    background: color-mix(in oklab, var(--carbon) 78%, transparent);
+    color: var(--text);
+    border: 1px solid var(--plate-line);
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--steel) 55%, transparent) transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar {
+    width: 8px; height: 8px; background: transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--steel) 55%, transparent);
+    border-radius: 4px;
+  }
+  #vsfriend :is(#vs-code-in, #vs-invite, #vs-answer-in, #vs-invite-in, #vs-answer)::placeholder {
+    color: var(--dim);
+    opacity: 1;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
+  }
+  #vsfriend :is(#vs-code-in, #vs-answer-in, #vs-invite-in):placeholder-shown {
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
 
-/* Flatten enter-code so the status can sit between field and JOIN. */
-#vsfriend #vs-body:has(#vs-code:not([hidden])) {
-  display: flex;
-  flex-direction: column;
-}
-#vsfriend #vs-code:not([hidden]),
-#vsfriend #vs-code-input:not([hidden]) {
-  display: contents;
-}
-#vsfriend #vs-code:not([hidden]) > .vs-col-head {
-  order: 1;
-  width: min(100%, 22rem);
-  margin-inline: auto;
-  justify-content: center;
-}
-#vsfriend #vs-code:not([hidden]) > .vs-hint {
-  order: 2;
-  width: min(100%, 22rem);
-  margin-inline: auto;
-  text-align: center;
-}
-#vsfriend #vs-code-show:not([hidden]) {
-  order: 3;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--gap) * 2 / 3);
-}
-#vsfriend #vs-code-in {
-  order: 4;
-  width: min(100%, 22rem);
-  max-width: none;
-  margin-inline: auto;
-  box-sizing: border-box;
-}
-#vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status {
-  order: 5;
-  text-align: center;
-  margin-inline: auto;
-  max-width: min(100%, 22rem);
-  width: 100%;
-}
-#vsfriend #vs-code-go {
-  order: 6;
-  width: min(100%, 22rem);
-  max-width: none;
-  margin-inline: auto;
-  box-sizing: border-box;
-}
-#vsfriend:has(#vs-code-input:not([hidden])):has(#vs-status.vs-error) #vs-code-in {
-  border-color: var(--red);
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--red) 70%, transparent);
-}
+  /* Flatten enter-code so the status can sit between field and JOIN. */
+  #vsfriend #vs-body:has(#vs-code:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+  }
+  #vsfriend #vs-code:not([hidden]),
+  #vsfriend #vs-code-input:not([hidden]) {
+    display: contents;
+  }
+  #vsfriend #vs-code:not([hidden]) > h3 {
+    order: 1;
+    width: min(100%, 22rem);
+    margin-inline: auto;
+    justify-content: center;
+  }
+  #vsfriend #vs-code:not([hidden]) > p {
+    order: 2;
+    width: min(100%, 22rem);
+    margin-inline: auto;
+    text-align: center;
+  }
+  #vsfriend #vs-code-show:not([hidden]) {
+    order: 3;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--gap) * 2 / 3);
+  }
+  #vsfriend #vs-code-in {
+    order: 4;
+    width: min(100%, 22rem);
+    max-width: none;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+  #vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status {
+    order: 5;
+    text-align: center;
+    margin-inline: auto;
+    max-width: min(100%, 22rem);
+    width: 100%;
+  }
+  #vsfriend #vs-code-go {
+    order: 6;
+    width: min(100%, 22rem);
+    max-width: none;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+  /* Flag the field when #vs-status carries the error class (set by lobby.js). */
+  #vsfriend:has(#vs-code-input:not([hidden])):has(#vs-status[class~="vs-error"]) #vs-code-in {
+    border-color: var(--red);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--red) 70%, transparent);
+  }
 
-#vsfriend .vs-step:not(.vs-two) .vs-num { display: none; }
+  /* Lone room-code step: hide the "1" chip (first span in the h3). */
+  #vsfriend #vs-code > h3 > span:first-child { display: none; }
 
-#vsfriend #vs-joining .vs-col > .vs-hint {
-  margin-inline: 0;
-  text-align: start;
-  align-self: stretch;
-}
-#vsfriend #vs-code-entry > .vs-hint {
-  text-align: center;
-}
+  #vsfriend #vs-joining section > p {
+    margin-inline: 0;
+    text-align: start;
+    align-self: stretch;
+  }
+  #vsfriend #vs-code-entry > p {
+    text-align: center;
+  }
 
-/* Narrow / tall: CLOSE stays in the footer (compact overlays parks it in the head). */
-#vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot,
-#vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot {
-  position: relative;
-  top: auto;
-  right: auto;
-  z-index: auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  min-height: var(--tap-paint);
-  padding: calc(var(--pad) * 0.35) var(--pad);
-  /* revert-layer → components .sheet-foot gradient (no new rawColor literals). */
-  background: revert-layer;
-}
-#vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot::before,
-#vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot::before {
-  content: "";
-  display: block;
-  position: absolute; left: 0; right: 0; top: 0; height: 1px;
-  background: var(--grad-rule);
-  pointer-events: none;
-}
-#vsfriend #vsfriend-inner[data-shape="tall"] > #vs-head,
-#vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > #vs-head {
-  padding-right: var(--pad);
-}
+  /* Narrow / tall: CLOSE stays in the footer (compact parks it in the head). */
+  #vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot {
+    position: relative;
+    top: auto;
+    right: auto;
+    z-index: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    min-height: var(--tap-paint);
+    padding: calc(var(--pad) * 0.35) var(--pad);
+    background: revert-layer;
+  }
+  #vsfriend #vsfriend-inner[data-shape="tall"] > .sheet-foot::before,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > .sheet-foot::before {
+    content: "";
+    display: block;
+    position: absolute; left: 0; right: 0; top: 0; height: 1px;
+    background: var(--grad-rule);
+    pointer-events: none;
+  }
+  #vsfriend #vsfriend-inner[data-shape="tall"] > #vs-head,
+  #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > #vs-head {
+    padding-right: var(--pad);
+  }
+} /* @layer overlays */
