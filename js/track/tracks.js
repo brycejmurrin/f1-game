@@ -586,14 +586,21 @@ const Tracks = (function () {
     if (idx < 0) return false;
     if (circuitPayloadResident(LIST[idx])) return true;
     const next = fromRaw(raw);
+    // Materialize on `next` first so elevations/bridges get fmap'd, then copy
+    // onto the stable LIST entry. Transferring the points getter alone closes
+    // over `next`, so materialize would mutate the throwaway while
+    // buildCenterline still reads unmapped elev on `cur` (Shanghai crest /
+    // Singapore low.frac / Suzuka required-model CI reds).
+    const pts = next.points;
     const cur = LIST[idx];
     for (const k of Object.keys(next)) {
       if (k === "points") continue;
       cur[k] = next[k];
     }
     delete cur._metaOnly;
-    const desc = Object.getOwnPropertyDescriptor(next, "points");
-    if (desc) Object.defineProperty(cur, "points", desc);
+    Object.defineProperty(cur, "points", {
+      value: pts, writable: true, configurable: true, enumerable: true
+    });
     // Keep TrackDefs aligned for any reader that still walks the raw list.
     const TD = (typeof window !== "undefined" && window.TrackDefs) || [];
     for (let i = 0; i < TD.length; i++) {
