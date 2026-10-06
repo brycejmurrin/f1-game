@@ -429,6 +429,40 @@
       "js/editor/designer.js"
     ]
   ],
+    LAZY_XR: [
+    "js/xr/xr-plan.js",
+    "js/xr/xr-rig.js",
+    "js/xr/xr-input.js",
+    "js/xr/xr-session.js",
+    "js/xr/apex-xr.js",
+    "js/xr/xr-ui.js"
+  ],
+    LAZY_XR_EDGES: [
+    [
+      "js/xr/xr-plan.js",
+      "js/xr/apex-xr.js"
+    ],
+    [
+      "js/xr/xr-rig.js",
+      "js/xr/xr-input.js"
+    ],
+    [
+      "js/xr/xr-rig.js",
+      "js/xr/xr-session.js"
+    ],
+    [
+      "js/xr/xr-input.js",
+      "js/xr/xr-session.js"
+    ],
+    [
+      "js/xr/xr-session.js",
+      "js/xr/xr-ui.js"
+    ],
+    [
+      "js/xr/apex-xr.js",
+      "js/xr/xr-ui.js"
+    ]
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

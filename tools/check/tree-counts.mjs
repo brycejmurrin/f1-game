@@ -267,7 +267,8 @@ export function zeroRefModulesReport(corpus) {
   const manifest = createRequire(import.meta.url)("../manifest.cjs");
   const mods = new Set();
   for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
-    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || []])
+    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || [],
+    manifest.LAZY_XR || []])
     for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
   if (corpus === undefined) {
     const files = [];

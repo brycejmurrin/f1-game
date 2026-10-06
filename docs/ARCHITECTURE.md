@@ -474,14 +474,14 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `xr-rig.js` | `XrRig` | tag | XR seated-rig math (pure). |
-| `xr-input.js` | `XrInput` | tag | XR controller → Input.remoteSample / remoteEvent. |
-| `xr-session.js` | `XrSession` | tag | WebXR immersive-vr session owner (Phase 0 spike). |
-| `xr-plan.js` | `XRPlan` | tag | XRPlan: pure boot-time VR renderer path selection. |
 | `xr-opts.js` | `XROpts` | tag | XROpts: SETTINGS › DISPLAY rows for VR MODE + VR RENDERER. |
-| `apex-xr.js` | `ApexXR` | tag | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
-| `xr-ui.js` | `XrUi` | tag | ENTER VR button (Phase 0). |
 | `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
+| `xr-plan.js` | `XRPlan` | LAZY_XR | XRPlan: pure boot-time VR renderer path selection. |
+| `xr-rig.js` | `XrRig` | LAZY_XR | XR seated-rig math (pure). |
+| `xr-input.js` | `XrInput` | LAZY_XR | XR controller → Input.remoteSample / remoteEvent. |
+| `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner (Phase 0 spike). |
+| `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
+| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
 
 **`js/render/glx/shaders/`**
 

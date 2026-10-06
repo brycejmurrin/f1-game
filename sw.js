@@ -398,6 +398,13 @@ async function precacheAssetLists() {
     "js/editor/canvas.js",
     "js/editor/profile.js",
     "js/editor/designer.js",
+    // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
+    "js/xr/xr-plan.js",
+    "js/xr/xr-rig.js",
+    "js/xr/xr-input.js",
+    "js/xr/xr-session.js",
+    "js/xr/apex-xr.js",
+    "js/xr/xr-ui.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });
@@ -522,7 +529,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then

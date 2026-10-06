@@ -113,6 +113,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_DATA, "LAZY_DATA");
   add(MANIFEST.LAZY_NET, "LAZY_NET");
   add(MANIFEST.LAZY_EDITOR || [], "LAZY_EDITOR");
+  add(MANIFEST.LAZY_XR || [], "LAZY_XR");
   return out;
 }
 

@@ -365,14 +365,11 @@ const FULL = [
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
-  // WebXR Phase 0 — seated immersive-vr (capability, rig math, input, UI, boot).
-  "js/xr/xr-rig.js",
-  "js/xr/xr-input.js",
-  "js/xr/xr-session.js",
-  "js/xr/xr-plan.js",   // pure path selection (task 20); before ApexXR / XROpts
+  // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
+  // the game.js façade (applyEyes / present no-op until LAZY_XR lands). The
+  // session, rig, ENTER VR button and bootPick live in LAZY_XR — title never
+  // names them, and a session without navigator.xr never fetches them.
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
-  "js/xr/apex-xr.js",   // bootPick / detect / noteFallback façade
-  "js/xr/xr-ui.js",
   "js/xr/xr-boot.js",
   "js/ui/hud.js",
   "js/ui/results-story.js",
@@ -956,6 +953,28 @@ const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" &
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
+// WEBXR SESSION (js/xr/* minus the boot façade). ~42 KB behind navigator.xr /
+// ENTER VR / an armed apex26.xr — a flat title session runs none of it.
+// xr-boot.js / xr-opts.js stay FULL: game.js calls XrBoot every frame (no-op
+// until XrSession exists) and SETTINGS paints VR rows at eval.
+const LAZY_XR = [
+  "js/xr/xr-plan.js",    // XRPlan: pure path selection
+  "js/xr/xr-rig.js",     // XrRig: seated eye math
+  "js/xr/xr-input.js",   // XrInput: controller → Input.remoteSample
+  "js/xr/xr-session.js", // XrSession: immersive-vr owner
+  "js/xr/apex-xr.js",    // ApexXR: bootPick / detect (renderer-boot typeof-guards)
+  "js/xr/xr-ui.js",      // XrUi: ENTER VR button
+];
+// Call-time only (mapFrame / start / bootPick); order is the inject order.
+const LAZY_XR_EDGES = [
+  ["js/xr/xr-plan.js", "js/xr/apex-xr.js"],
+  ["js/xr/xr-rig.js", "js/xr/xr-input.js"],
+  ["js/xr/xr-rig.js", "js/xr/xr-session.js"],
+  ["js/xr/xr-input.js", "js/xr/xr-session.js"],
+  ["js/xr/xr-session.js", "js/xr/xr-ui.js"],
+  ["js/xr/apex-xr.js", "js/xr/xr-ui.js"],
+];
+
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
 // FRIEND lobby — that a solo session never runs a byte of. The biggest single
@@ -1354,6 +1373,7 @@ module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
+  LAZY_XR, LAZY_XR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };
