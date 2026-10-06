@@ -2104,14 +2104,13 @@ function dropTrackWorld() {
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
 // drive-out keeps animating. Frees the old world first, adopts the new one whole; a
 // newer build or live() going false abandons it and frees its partial uploads.
-// The race arms the sentinel and then enters "count", not "race": a stepped build
-// abandoned by startRace() finishes during the countdown and must not disarm it.
+// Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
   const prevId = builtTrackId;
-  try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
+  try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
     dropTrackWorld();
@@ -2135,18 +2134,8 @@ function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
-  // ARM THE CRASH SENTINEL ACROSS THE BUILD. This function's own comment calls
-  // the build's transient peak "the moment a near-limit phone gets jetsam
-  // killed", and it runs from scheduleFlybyTrack() 120 ms after the player
-  // settles on a circuit in the PICKER — i.e. in the menu, where the sentinel
-  // was armed only at race start. A kill here therefore left crashStrikes 0 and
-  // no webglcontextlost (a jetsam takes the whole process, so the handler never
-  // runs), which is exactly the state the affected iPhone reported and exactly
-  // why the memory hunt kept coming back empty.
-  //
-  // Diagnostic, not a behaviour change: the flag is what the NEXT boot reads to
-  // know the last session died. Cleared below whether or not the build throws.
-  try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
+  // Menu/flyby reaches here too; only a live race/count session arms the sentinel.
+  try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   try {
     return _loadTrackBody(idx, def);
   } finally {
@@ -8984,7 +8973,8 @@ audioPanel.init();
 // needs one: the picker draws from Tracks.LIST + the committed stills, startRace()/
 // openQuali() build the real track, RACE SETTINGS schedules the one menu flyby
 // (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
-window.addEventListener("resize", () => gfx.resize());
+// One rAF per resize burst — GLX reallocates HDR/bloom on a real size change.
+function scheduleGfxResize() { if (scheduleGfxResize._raf) return; const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 0); scheduleGfxResize._raf = raf(() => { scheduleGfxResize._raf = 0; gfx.resize(); }); } window.addEventListener("resize", scheduleGfxResize);
 lastFrame = performance.now();
 XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
   setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
