@@ -1048,7 +1048,7 @@ function objectiveMet(o, ctx) {
   switch (o.type) {
     case "finish": return ctx.pos <= o.value;
     case "points": return ctx.pts >= o.value;
-    case "clean": return !ctx.player.retired && !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
+    case "clean": return !ctx.player.retired && !ctx.player.dsq && !(ctx.player.cuts | 0) && !(ctx.player.penalty | 0);
     case "beatMate": return !ctx.mate || ctx.pos < ctx.matePos;
     case "outQualMate": return !ctx.mate || (ctx.player.gridPos || 99) < (ctx.mate.gridPos || 99);
     default: return false;
@@ -1137,7 +1137,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
   const matePts = mate && scored(mate) ? (table[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
-  const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
+  const cleanRun = !player.retired && !player.dsq && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
                         double: dbl, clean: cleanRun,
                         craft: Math.round(craft * 100) / 100 });

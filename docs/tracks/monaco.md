@@ -68,16 +68,18 @@ checklist rather than trivia:
 | T2 Beau Rivage | "Beautiful shore" — the uphill run along the coastline | n/a (geometry) |
 | T3 Massenet | Jules Massenet, opera composer — **a statue of him stands by the corner** | yes (added) |
 | T4 Casino Square | Casino de Monte-Carlo, opened 1865, and its fountains | yes |
-| T5/T7 Mirabeau Sup./Inf. | The former Mirabeau Hotel, right of T7 — **now an apartment block** | partial — the block is generic city mass |
-| T6 Hairpin | Was the *Station* Hairpin (a railway station stood there); then Loews, Grand Hotel, now **Fairmont** | yes |
+| T5/T7 Mirabeau Sup./Inf. | The former Mirabeau Hotel, right of T7 — **now an apartment block** | yes (`monaco-mirabeau-apartments`) |
+| T6 Hairpin | Was the *Station* Hairpin (a railway station stood there); then Loews, Grand Hotel, now **Fairmont** | yes (`monaco-fairmont-main` + wings) |
 | T8 Portier | Le Portier, the residential quarter | n/a |
 | T9 Tunnel | — | yes |
 | T10/11 Nouvelle Chicane | Was Chicane du Port; rebuilt and renamed 1986 | yes |
-| T12 Tabac | A tobacconist's shop nestled into the corner | shop not modelled |
+| T12 Tabac | A tobacconist's shop nestled into the corner | yes (`monaco-tabac-shop`) |
 | T13–16 Swimming Pool | **Stade Nautique Rainier III**, which the 1973 layout was rerouted around | yes |
 | T18 La Rascasse | The bar over the barriers, named for a Mediterranean fish | yes |
 | T19 Antony Noghès | Founder of the Monaco GP; also originated the chequered flag | n/a |
 
-Remaining gaps worth a future pass: the **Tabac** tobacconist itself, and
-giving the **Mirabeau** apartment block its own identity instead of generic
-city mass.
+DETAIL pass 2026-10-05: Tabac shop (striped awning + fascia), Mirabeau
+apartments (balcony rails + night glow), Fairmont hairpin hotel as closed
+`monaco-fairmont-*` modelGroups with balcony rails, harbour quay steps /
+shore lip / bollard densify (local only — no shared water core), S/F +
+Rascasse fence banners, harbour-side paddock motorhomes, quay night glow.
