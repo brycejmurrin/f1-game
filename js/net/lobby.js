@@ -1759,19 +1759,21 @@ const NetLobby = (function () {
     // Title sheets that own the top layer. ensureNet().then(open) must not
     // unhide #vsfriend after How to Play (or Career / Select / …) already
     // opened — both are dialog.screen, last showModal wins. Same race class as
-    // DataHub.open's blockingLayer (js/data/hub.js). #overlay is the title we
-    // open FROM; pause stacks stay out so mid-race help is untouched.
-    const BLOCKING_IDS = [
-      "howtoplay", "career", "career-offers", "career-history", "career-guide",
-      "select", "teampicker", "carsetup", "photo-studio", "season-setup",
-      "track-detail", "race-settings", "customize", "trackdesigner", "standings",
-      "quali", "spotifypanel", "lighting", "camtune", "flyby", "freecam",
-      "garrival", "duel-picker", "datahub",
-    ];
+    // DataHub.open's blockingLayer (js/data/hub.js): one static selector, no
+    // dynamic getElementById loop. Omit #vsfriend (we open it); include #datahub.
+    // #overlay is the title we open FROM; pause stacks stay out so mid-race
+    // help is untouched.
+    const BLOCKING_SEL = (
+      "#howtoplay,#career,#career-offers,#career-history,#career-guide,#select," +
+      "#teampicker,#carsetup,#photo-studio,#season-setup,#track-detail," +
+      "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
+      "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker,#datahub"
+    );
     function blockingTitleSheet() {
-      for (let i = 0; i < BLOCKING_IDS.length; i++) {
-        const n = $(BLOCKING_IDS[i]);
-        if (n && !n.hidden) return n;
+      if (typeof document.querySelectorAll !== "function") return null;
+      const nodes = document.querySelectorAll(BLOCKING_SEL);
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i] && !nodes[i].hidden) return nodes[i];
       }
       return null;
     }

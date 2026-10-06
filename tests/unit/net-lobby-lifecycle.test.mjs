@@ -41,6 +41,16 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     visibilityState: "visible",
     getElementById: (id) => elements.get(id) || null,
     querySelector: () => null,
+    // Same shape as data-hub-picker's VM doc — blockingTitleSheet uses one
+    // static #id,#id selector (no dynamic $(id) reads).
+    querySelectorAll(sel) {
+      const out = [];
+      String(sel).split(",").forEach((part) => {
+        const id = part.replace(/^#/, "").trim();
+        if (id && elements.has(id)) out.push(elements.get(id));
+      });
+      return out;
+    },
     addEventListener(type, fn) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
