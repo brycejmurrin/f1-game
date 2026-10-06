@@ -65,6 +65,9 @@ const DesignerCanvas = (function () {
     // A press on a handle before a deliberate drag: select-only until the
     // threshold (and, on touch, a short hold or a prior selection) is met.
     let press = null;                // { id, i, wasSel, t0, touch }
+    // pickOnly: select handles only (scenery / elevation / test) — no insert,
+    // drag, nudge or double-tap delete. Tap still selects without moving.
+    let pickOnly = false;
     let preview = null;              // setTool's ghost: (i) → { pts: [[x, z]…] } | null
     let ghost = null, ghostKey = null; // its last answer, and the (fn, anchor, loop) it answered
     let last = null;                 // the pointer's latest canvas-relative position
@@ -157,6 +160,7 @@ const DesignerCanvas = (function () {
     }
     /** Promote a select-only press into a real drag once the gesture is deliberate. */
     function tryArmDrag(p) {
+      if (pickOnly) return false;
       if (mode !== "press" || !press || !start) return false;
       const dist = Math.hypot(p.x - start.x, p.y - start.y);
       if (dist <= dragThresh()) return false;
@@ -180,6 +184,7 @@ const DesignerCanvas = (function () {
     }
     function armHold(id, i) {
       cancelHold();
+      if (pickOnly) return;
       if (typeof hooks.onContext !== "function" || typeof globalThis.setTimeout !== "function") return;
       const me = { id, i, timer: null };
       me.timer = globalThis.setTimeout(() => {
@@ -232,7 +237,7 @@ const DesignerCanvas = (function () {
         return;
       }
       const k = hitSegment(p.x, p.y);
-      if (k >= 0 && tool === "select" && !ev.shiftKey) {
+      if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
         taps[taps.length - 1] = { kind: "insert", i: k + 1 };
         beginDrag(k + 1, true);
         work[dragI] = place(toWX(p.x), toWZ(p.y));
@@ -341,7 +346,7 @@ const DesignerCanvas = (function () {
       render();
     }
     function onDblClick(ev) {
-      if (tool !== "select") return;           // a double-tap under a stamp tool is two stamps, never a delete
+      if (tool !== "select" || pickOnly) return;           // a double-tap under a stamp tool is two stamps, never a delete
       const [a, b] = taps.slice(-2);
       taps = [];
       if (!a || !b || a.kind !== "pick" || b.kind !== "pick" || a.i !== b.i) return;
@@ -373,13 +378,13 @@ const DesignerCanvas = (function () {
         case "]": cycleSel(1); ev.preventDefault(); return;
         case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
         case "Escape": if (sel >= 0) { sel = -1; span = -1; if (hooks.onSelect) hooks.onSelect(-1); render(); ev.preventDefault(); } return;
-        case "Delete": case "Backspace": if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
+        case "Delete": case "Backspace": if (pickOnly) return; if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;
         default: return;
       }
       // With nothing selected the arrows are not ours: MenuNav walks focus off
       // the canvas (a pad has no Tab), so the key must stay un-prevented.
-      if (sel < 0 || sel >= N) return;
+      if (sel < 0 || sel >= N || pickOnly) return;
       ev.preventDefault();
       if (hooks.onBegin) hooks.onBegin();
       const out = pts.map((p) => [p[0], p[1]]);
@@ -587,7 +592,7 @@ const DesignerCanvas = (function () {
     function render() {
       // MenuNav (js/ui/menu-nav.js) reads this: a focused canvas owns the
       // arrows only while they move something.
-      const arrows = sel >= 0 ? "own" : "pass";
+      const arrows = (sel >= 0 && !pickOnly) ? "own" : "pass";
       if (canvas.dataset && canvas.dataset.arrows !== arrows) canvas.dataset.arrows = arrows;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, W, H);
@@ -605,9 +610,11 @@ const DesignerCanvas = (function () {
       setHeat(v) { heat = v && v.length ? v : null; render(); },
       setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; render(); },
       /** previewFn (optional): (pointIndex) → { pts: [[x, z]…] } | null, world
-       *  coords — drawn as the dashed ghost of what the tool would stamp there. */
-      setTool(name, previewFn) {
+       *  coords — drawn as the dashed ghost of what the tool would stamp there.
+       *  opts.pickOnly: select only (no insert / drag / nudge / double-tap delete). */
+      setTool(name, previewFn, opts) {
         tool = name || "select"; canvas.style.cursor = tool === "draw" ? "crosshair" : "default";
+        pickOnly = !!(opts && opts.pickOnly);
         const fn = typeof previewFn === "function" ? previewFn : null;
         if (fn || preview) { preview = fn; ghost = null; ghostKey = null; render(); }
       },
