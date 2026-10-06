@@ -67,6 +67,52 @@ async function boot(page) {
 }
 
 test.describe("Screen wake lock — held for the duration of a race", () => {
+  // Same four RaceWakeLock cases as tests/unit/wake-lock-vm.test.mjs: a
+  // rejected release() must not surface as an unhandled rejection, whether
+  // the grant is late or the throw is sync. Isolated from the race path so
+  // the twin count stays 13-for-13 without extra SwiftShader laps.
+  for (const late of [false, true]) {
+    for (const synchronous of [false, true]) {
+      test(`${late ? "late grant" : "held lock"} handles ${synchronous ? "synchronous" : "asynchronous"} release failure`, async ({ page }) => {
+        await boot(page);
+        const result = await page.evaluate(async ({ late, synchronous }) => {
+          let grant;
+          const messages = [];
+          Object.defineProperty(navigator, "wakeLock", {
+            configurable: true,
+            value: { request: () => new Promise((resolve) => { grant = resolve; }) },
+          });
+          const origInfo = Log.info;
+          Log.info = (_ns, message) => messages.push(message);
+          try {
+            const owner = RaceWakeLock.create();
+            let releases = 0;
+            const lock = {
+              addEventListener() {},
+              release() {
+                releases++;
+                if (synchronous) throw new Error("release denied");
+                return Promise.reject(new Error("release denied"));
+              },
+            };
+            owner.hold();
+            if (late) owner.drop();
+            grant(lock);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (!late) owner.drop();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            return { releases, wanted: owner.wanted(), messages };
+          } finally {
+            Log.info = origInfo;
+          }
+        }, { late, synchronous });
+        expect(result.releases).toBe(1);
+        expect(result.wanted).toBe(false);
+        expect(result.messages).toEqual([late ? "late wake-lock release failed" : "wake lock was already released"]);
+      });
+    }
+  }
+
   test("starting a race requests the lock", async ({ page }) => {
     await mockWakeLock(page);
     await boot(page);
