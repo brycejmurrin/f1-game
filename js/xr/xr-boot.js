@@ -131,7 +131,33 @@ const XrBoot = (function () {
     return chainWindowRaf(tickFn);
   }
 
-  function bind(api) {
+  let _xrLoad = null;
+  let _bindApi = null;
+  function ensureXr() {
+    if (typeof XrSession !== "undefined" && typeof XrUi !== "undefined" && typeof ApexXR !== "undefined") {
+      if (_bindApi && !_bound) bindInner(_bindApi);
+      return Promise.resolve(true);
+    }
+    if (_xrLoad) return _xrLoad;
+    const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_XR) || [];
+    const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_XR_EDGES) || [];
+    if (!files.length || typeof ScriptLoader === "undefined") {
+      Log.warn("xr", "XR bundle is not in this build");
+      return Promise.resolve(false);
+    }
+    _xrLoad = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+      if (!ok) {
+        _xrLoad = null;
+        Log.warn("xr", "the XR bundle did not load");
+        return false;
+      }
+      if (_bindApi && !_bound) bindInner(_bindApi);
+      return true;
+    });
+    return _xrLoad;
+  }
+
+  function bindInner(api) {
     if (_bound || typeof XrSession === "undefined") return;
     _tickBody = api && api.tickBody;
     _windowRaf = api && api.windowTick;
@@ -174,22 +200,40 @@ const XrBoot = (function () {
     _bound = true;
   }
 
+  function bind(api) {
+    _bindApi = api;
+    if (typeof XrSession === "undefined") return;
+    bindInner(api);
+  }
+
+  function wantXrBundle() {
+    try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
+    try { if (localStorage.getItem("apex26.xrEnterPending") === "1") return true; } catch (_) { /* blocked */ }
+    return typeof navigator !== "undefined" && !!navigator.xr;
+  }
+
   function mountUi() {
-    if (typeof XrUi !== "undefined") XrUi.mount(document.body);
     if (typeof window !== "undefined") {
       window.__apexXr = {
         diag: () => diag(),
         setFoveation: (v) => setFoveation(v),
         canAttach: () => canAttach(),
+        ensure: ensureXr,
       };
     }
-    // After a backend-switch reload, auto-enter once XR is attachable.
-    if (consumePendingEnter() && typeof XrSession !== "undefined") {
-      Promise.resolve(XrSession.probe()).then((ok) => {
-        if (!ok || !canAttach()) return;
-        return XrSession.start();
-      }).catch(() => { /* auto-enter best-effort */ });
-    }
+    const finish = () => {
+      if (typeof XrUi !== "undefined") XrUi.mount(document.body);
+      // After a backend-switch reload, auto-enter once XR is attachable.
+      if (consumePendingEnter() && typeof XrSession !== "undefined") {
+        Promise.resolve(XrSession.probe()).then((ok) => {
+          if (!ok || !canAttach()) return;
+          return XrSession.start();
+        }).catch(() => { /* auto-enter best-effort */ });
+      }
+    };
+    if (typeof XrUi !== "undefined") { finish(); return; }
+    if (!wantXrBundle()) return;
+    ensureXr().then((ok) => { if (ok) finish(); });
   }
 
   /**
@@ -259,7 +303,7 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, applyEyes, present, afterTick, chainWindowRaf,
     findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers
