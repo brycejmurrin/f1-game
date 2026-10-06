@@ -50,11 +50,12 @@ surface without hand-wiring:
 
 **One-time Dashboard (not inventable from git):**
 
-1. Save / Build the environment from this repo’s `.cursor/environment.json`.
-2. Mirror the three servers under **Integrations & MCP** (same names/commands;
+1. Link this repo to environment **Apex 26** ([819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025)). **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
+2. When starting a Cloud Agent, pick that environment — not a generic default. After boot, `cursor-cloud environment-info` should show `source: "Repository"`, `build.resolution: "resolved"`, and a `buildId`; run `npm run test:guards` without `npm install` first.
+3. Mirror the three servers under **Integrations & MCP** (same names/commands;
    prefer HTTP when a server can be remote; stdio needs the install script).
-3. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
-4. Per-user OAuth for any remote MCP that needs it.
+4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
+5. Per-user OAuth for any remote MCP that needs it.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
