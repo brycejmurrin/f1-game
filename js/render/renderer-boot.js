@@ -60,14 +60,22 @@ async function gpuAdapterAvailable() {
     const adapterP = navigator.gpu.requestAdapter();
     // Cap the probe: a stuck requestAdapter() on broken WebGPU stacks delays
     // the entire title boot (unset default waits here before choosing GLX).
-    // 250 ms is enough for a real adapter to resolve; null/timeout → GLX.
+    // Hang cap is seconds (not ~250 ms): CI adapters often need longer than a
+    // sub-second race; only treat as absent when requestAdapter rejects,
+    // returns null, or the hang timer fires. Clear the timer if the adapter
+    // settles first so a slow-but-real adapter is never raced out.
     // No setTimeout (some VM harnesses): await the adapter alone.
     if (typeof setTimeout !== "function") return !!(await adapterP);
-    const ad = await Promise.race([
-      adapterP,
-      new Promise((resolve) => { setTimeout(() => resolve(null), 250); }),
-    ]);
-    return !!ad;
+    let timer = null;
+    try {
+      const ad = await Promise.race([
+        adapterP,
+        new Promise((resolve) => { timer = setTimeout(() => resolve(null), 4000); }),
+      ]);
+      return !!ad;
+    } finally {
+      if (timer != null) clearTimeout(timer);
+    }
   } catch (_) {
     return false;
   }
