@@ -1,1 +1,1 @@
-1791294916	Cursor Agent	PR #1021: Selected specs verdict dropped=21 after #1010 merge; green dropped=0 on new SHA; squash AM off; no merge  [cursor/garage-shipped-defaults-9cc2; session a96ea6d35d46b53b071013df]
+1791296082	Cursor Agent	PR #1021: pushed 83b3836a8 dropped=0 overlay; tooling-fast 416 pass; squash AM off; no merge  [cursor/garage-shipped-defaults-9cc2; session a96ea6d35d46b53b071013df]
