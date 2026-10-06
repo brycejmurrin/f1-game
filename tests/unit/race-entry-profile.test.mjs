@@ -143,6 +143,22 @@ test("requestWarm / raiseHandoff / span / afterPresent keep game.js thin", () =>
   assert.ok(P.snapshot().marks.some((m) => m.n === "handoff:lower"));
 });
 
+test("afterPresent lowers handoff on ctxLost even while warming (race-start fail-fast)", () => {
+  // Without this, a lost device left warming() true / begin() false and never
+  // reached afterPresent — HUD Wave 3 surveys hung on "race start never completes".
+  const P = load();
+  P.begin("startRace");
+  let stops = 0;
+  const screen = { phase: () => "handoff", stop() { stops++; } };
+  const gfx = {
+    warming: () => true,
+    backendState: () => ({ ctxLost: true }),
+  };
+  P.afterPresent(screen, gfx, true);
+  assert.equal(stops, 1);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "handoff:lower-lost"));
+});
+
 const ENTRY_SRC = fs.readFileSync(path.join(ROOT, "js/race/session-entry.js"), "utf8");
 
 test("hidden mirror preparation keeps the handoff up until its main present", () => {
