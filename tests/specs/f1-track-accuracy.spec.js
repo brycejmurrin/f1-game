@@ -89,9 +89,17 @@ test("every game circuit matches its pinned real-circuit reference", async ({ pa
   // rebuilds every circuit and compares each against its pinned reference.
   test.setTimeout(300_000);
   await page.goto("/");
-  // Each circuit's OSM trace is the `path` key of its def (js/circuits/<id>.js),
-  // copied onto the built def; Tracks loads after every circuit file.
+  // Title boots LAZY_CIRCUIT meta stubs (picker fields only). Hydrate every
+  // full js/circuits/<id>.js before reading path.pts — same gate as race entry.
   await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 52, null, { polling: 100 });
+  await page.evaluate(async () => {
+    const ensure = window.__apex && window.__apex.ensureCircuit;
+    if (!ensure) throw new Error("ensureCircuit not on __apex — circuit meta split needs a hydrate gate");
+    for (let i = 0; i < Tracks.LIST.length; i++) {
+      if (Tracks.LIST[i] && Tracks.LIST[i].custom) continue;
+      await ensure(i);
+    }
+  });
   const gameCircuits = await page.evaluate(() =>
     Object.fromEntries(Tracks.LIST.map((definition) => [
       definition.id,

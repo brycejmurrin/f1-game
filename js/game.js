@@ -88,7 +88,7 @@ const lazyBundles = LazyBundles.create({
     if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2125,6 +2125,12 @@ function dropTrackWorld() {
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
+  // LAZY_CIRCUIT: path/pal/sectors land via ensureCircuit before any build.
+  // Callers (flyby / startRace / intro) already await ensureScenery (which
+  // chains ensureCircuit); this gate covers a direct stepped load and races
+  // the in-flight memo so a meta stub never reaches Tracks.buildPaced.
+  await ensureCircuit(idx);
+  if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
   const prevId = builtTrackId;
@@ -2152,6 +2158,13 @@ function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
+  // Sync build: caller must have awaited ensureCircuit (or game-vm hydrated).
+  // A title meta stub has no path — refuse rather than throw deep in realPoints.
+  if (def && !def.custom && !(Tracks.circuitPayloadResident
+      ? Tracks.circuitPayloadResident(def)
+      : (def.path && def.path.pts && def.path.pts.length && !def._metaOnly))) {
+    throw new Error("loadTrack: circuit \"" + (def && def.id) + "\" still meta-only — await ensureCircuit(idx) first");
+  }
   // Menu/flyby reaches here too; only a live race/count session arms the sentinel.
   try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   try {
@@ -3328,6 +3341,7 @@ const G = {
   get aiPace() { return AiBand.mode(); },
   set aiPace(v) { store.set("aiPace", AiBand.setMode(v)); },
   store, tickUi, scheduleFlybyTrack,
+  ensureCircuit: (idx) => ensureCircuit(idx),
   // Same deferred-arrow trick for the garage <-> select plumbing: js/garage/setup-sheet.js is
   // created before js/ui/select-screen.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.

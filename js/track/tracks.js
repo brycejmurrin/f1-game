@@ -561,14 +561,43 @@ const Tracks = (function () {
     }
   }
 
-  // Raw def → LIST entry: js/track/core/def.js (fromRaw copies every authored
-  // field the engine reads off the BUILT def; its lazy `points` getter runs
-  // realPoints + the startFrac/hwZones remaps on first touch, bit-identical).
-  const LIST = DEFS.map(fromRaw);
+  // fromRaw (def.js): authored fields + lazy points (realPoints / startFrac / hwZones).
+  const LIST = DEFS.map((d) => {
+    const def = fromRaw(d);
+    if (d && d._metaOnly) def._metaOnly = true;
+    return def;
+  });
 
-  // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
-  function ensurePoints(def) {
-    return def.points;
+  function ensurePoints(def) { return def.points; }
+
+  // LAZY_CIRCUIT: title meta stubs; hydrate in place so SEASON / saved indexes hold.
+  function circuitPayloadResident(def) {
+    return !!(def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly);
+  }
+  function hydrate(raw) {
+    if (!raw || !raw.id) return false;
+    const idx = LIST.findIndex((t) => t && t.id === raw.id);
+    if (idx < 0) return false;
+    if (circuitPayloadResident(LIST[idx])) return true;
+    const next = fromRaw(raw);
+    // Force points on `next` first (elev/bridge fmap), then copy onto LIST[idx].
+    // Moving the getter alone closes over `next` → Shanghai/Singapore/Suzuka CI reds.
+    const pts = next.points, cur = LIST[idx];
+    for (const k of Object.keys(next)) if (k !== "points") cur[k] = next[k];
+    delete cur._metaOnly;
+    Object.defineProperty(cur, "points", { value: pts, writable: true, configurable: true, enumerable: true });
+    // Mutate TrackDefs in place — foundation holds find() refs across race().
+    const TD = (typeof window !== "undefined" && window.TrackDefs) || [];
+    for (let i = 0; i < TD.length; i++) {
+      if (!TD[i] || TD[i].id !== raw.id) continue;
+      if (TD[i] === raw) { delete TD[i]._metaOnly; continue; }
+      const dst = TD[i];
+      for (const k of Object.keys(dst)) delete dst[k];
+      Object.assign(dst, raw);
+      delete dst._metaOnly;
+    }
+    if (typeof TrackMaps !== "undefined" && TrackMaps.invalidate) TrackMaps.invalidate(raw.id);
+    return true;
   }
 
   const SEASON = LIST.filter((t) => !t.classic);
@@ -697,5 +726,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
 })();

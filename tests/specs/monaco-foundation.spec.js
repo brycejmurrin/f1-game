@@ -65,14 +65,18 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         ],
       };
     };
+    // Await race first: object-literal order would snapshot meta-only fields
+    // before Tracks.hydrate mutates this held TrackDefs.find() ref in place.
+    const day = await inspect("day");
+    const night = await inspect("night");
     return {
       definition: {
         terrainOuter: definition.terrainOuter,
         sceneryCoordinates: definition.sceneryCoordinates,
         dressingExclusions: definition.dressingExclusions,
       },
-      day: await inspect("day"),
-      night: await inspect("night"),
+      day,
+      night,
     };
   });
 

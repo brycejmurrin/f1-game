@@ -144,8 +144,13 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
 test("Madrid terrain drops away from the road instead of forming a raised floor", async ({ page }) => {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  const terrain = await page.evaluate(() => {
-    const def = Tracks.LIST.find((entry) => entry.id === "madrid");
+  const terrain = await page.evaluate(async () => {
+    // LAZY_CIRCUIT meta stub has no path — hydrate before buildCenterline.
+    const idx = Tracks.LIST.findIndex((entry) => entry.id === "madrid");
+    const ensure = window.__apex && window.__apex.ensureCircuit;
+    if (!ensure) throw new Error("ensureCircuit not on __apex");
+    await ensure(idx);
+    const def = Tracks.LIST[idx];
     const track = Tracks.buildCenterline(def);
     const surface = TrackSurface.profile(def, track);
     const k = Math.round(0.75 * track.n) % track.n;

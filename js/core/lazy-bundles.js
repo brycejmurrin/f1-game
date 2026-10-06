@@ -10,6 +10,49 @@ const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 // LAZY_RACE — the race payload, fetched before the first race.
 const RACE_FILES = ApexRoster.LAZY_RACE;
+// LAZY_CIRCUIT (tools/manifest.cjs): full js/circuits/<id>.js payload. Title
+// boots with GENERATED meta.js (~picker fields only); path/pal/sectors/kit
+// hydrate here before buildCenterline / Tracks.build / TrackMaps.compute.
+const CIRCUITS_DIR = ApexRoster.CIRCUITS_DIR || "js/circuits";
+const _circuitLoads = new Map();
+function circuitResident(def) {
+  return !!(typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(def));
+}
+function ensureCircuit(idx) {
+  const def = Tracks.LIST[idx];
+  if (!def || circuitResident(def) || def.custom) return Promise.resolve();
+  let p = _circuitLoads.get(def.id);
+  if (!p) {
+    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], []).then((ok) => {
+      _circuitLoads.delete(def.id);
+      if (!ok) {
+        Log.warn("track", "circuit payload failed to load: " + def.id);
+        return false;
+      }
+      // The authored file pushes onto TrackDefs; find the full raw and hydrate
+      // the existing LIST entry in place (SEASON / indexes stay valid).
+      const all = window.TrackDefs || [];
+      let raw = null;
+      for (let i = all.length - 1; i >= 0; i--) {
+        const d = all[i];
+        if (d && d.id === def.id && d.path && d.path.pts && d.path.pts.length) { raw = d; break; }
+      }
+      if (!raw) {
+        Log.warn("track", "circuit payload missing path after load: " + def.id);
+        return false;
+      }
+      return Tracks.hydrate(raw);
+    });
+    _circuitLoads.set(def.id, p);
+  }
+  // Reject when hydrate/load fails so ensureScenery / startRace never build a
+  // meta stub (a swallowed false left Tracks.build throwing "has no path").
+  return p.then((ok) => {
+    if (ok === false || !circuitResident(Tracks.LIST[idx])) {
+      throw new Error("circuit payload not resident: " + (def && def.id));
+    }
+  });
+}
 // LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
 // that circuit's bespoke scenery() closure — all 40 were 1,083 KB of boot
 // script for a session that builds ONE of them.
@@ -41,15 +84,18 @@ function sceneryModels(def) {
   return Assets.modelsReady(0, fn ? String(fn) : "");
 }
 function ensureScenery(idx) {
-  const def = Tracks.LIST[idx];
-  const models = () => sceneryModels(def);
-  if (!def || def.scenery || sceneryResident(def.id)) return models().then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
-  let p = _sceneryLoads.get(def.id);
-  if (!p) {
-    p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
-    _sceneryLoads.set(def.id, p);
-  }
-  return p.then(models).then(() => {});
+  // Path payload before scenery: Tracks.build / buildCenterline need def.path.
+  return ensureCircuit(idx).then(() => {
+    const def = Tracks.LIST[idx];
+    const models = () => sceneryModels(def);
+    if (!def || def.scenery || sceneryResident(def.id)) return models().then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
+    let p = _sceneryLoads.get(def.id);
+    if (!p) {
+      p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
+      _sceneryLoads.set(def.id, p);
+    }
+    return p.then(models).then(() => {});
+  });
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
 // menu button, which a session that never opens DATA runs no byte of. Unlike
@@ -209,6 +255,7 @@ async function raceAssets() {
   // one a player is most likely to race and the one the __apex no-track
   // fallback would build, so fetch its scenery up front rather than making the
   // first GO wait for it.
+  ensureCircuit(deps.getContext().trackIdx);
   ensureScenery(deps.getContext().trackIdx);
   // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
   // networkidle wall. First pointerdown / SOUND click / Settings /
@@ -219,7 +266,7 @@ async function raceAssets() {
   if (window.LightPresets) deps.applyLightTuneIfReady();
 }
 
-return { SCENERY_DIR, sceneryResident, raceAssets, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface };
 }
   return { create };
 })();

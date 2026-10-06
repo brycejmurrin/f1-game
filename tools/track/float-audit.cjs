@@ -141,10 +141,7 @@ function buildContext(opts) {
     };
   }
   ctx.__prims = prims;
-  for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
-                    .filter((f) => f.endsWith(".js")).sort()) {
-    runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
-  }
+  for (const id of MANIFEST.CIRCUITS) runFile(MANIFEST.circuitPath(id));
   // …and the split-out scenery closures (LAZY_SCENERY). The .js filter above
   // only sees the top level, so without this every circuit builds BARE — road
   // and terrain, no dressing — and the numbers look plausible enough to trust.

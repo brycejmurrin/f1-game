@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
@@ -652,11 +653,13 @@ test("an old save without roundPts normalises to {} and a bad lastFl is dropped"
 // ── 2026 REAL: the calendar as raced, with per-round sprints ─────────────────
 
 // The REAL circuit roster, read from the circuit files themselves (id +
-// classic flag), in script-tag order — so "every id exists" is checked against
-// what ships, not against the eight-circuit stub above.
+// classic flag), in CIRCUITS / LAZY_CIRCUIT order — so "every id exists" is
+// checked against what ships, not against the eight-circuit stub above.
+// Title boots GENERATED js/track/circuit-meta.js; full defs are tagless
+// (LAZY_CIRCUIT), so reading index.html script tags no longer finds them.
 function realTracks() {
-  const html = readFileSync(join(ROOT, "index.html"), "utf8");
-  const files = [...html.matchAll(/src="(js\/circuits\/[a-z_]+\.js)/g)].map((m) => m[1]);
+  const MANIFEST = createRequire(import.meta.url)(join(ROOT, "tools/manifest.cjs"));
+  const files = MANIFEST.LAZY_CIRCUIT || MANIFEST.CIRCUITS.map(MANIFEST.circuitPath);
   const LIST = files.map((f) => {
     const s = readFileSync(join(ROOT, f), "utf8");
     return { id: /\bid:\s*"([^"]+)"/.exec(s)[1], name: f, classic: /\bclassic:\s*true/.test(s) };
