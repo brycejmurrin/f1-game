@@ -162,6 +162,52 @@ test.describe("Track designer", () => {
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
   });
 
+  test("scenery props palette: place / remove / save / reload keeps authored props", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 19);
+    await page.evaluate(() => {
+      TrackDesigner.setMode("scenery");
+      TrackDesigner.setPropKind("stand");
+      TrackDesigner.cyclePoint(1);
+      TrackDesigner.placeProp();
+      TrackDesigner.setPropKind("gantry");
+      TrackDesigner.placeProp();
+      TrackDesigner.setPropKind("billboard");
+      TrackDesigner.placeProp();
+    });
+    await expect(page.locator('#trackdesigner [data-prop="stand"]')).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator('#trackdesigner [data-role="props"]')).toBeVisible();
+    const before = await page.evaluate(() => {
+      const d = TrackDesigner.state().design;
+      return { n: (d.props || []).length, kinds: (d.props || []).map((p) => p.kind).join(",") };
+    });
+    expect(before.n).toBe(3);
+    expect(before.kinds).toBe("stand,gantry,billboard");
+    await page.evaluate(() => TrackDesigner.removeProp("billboard"));
+    const mid = await page.evaluate(() => (TrackDesigner.state().design.props || []).map((p) => p.kind).join(","));
+    expect(mid).toBe("stand,gantry");
+    const saved = await page.evaluate(() => TrackDesigner.save());
+    expect(saved && saved.ok).toBe(true);
+    await page.evaluate(() => TrackDesigner.close());
+    // Reload: CustomTracks syncs props into the def scenery closure.
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    const stored = await page.evaluate((id) => {
+      const it = CustomTracks.get(id);
+      const t = Tracks.LIST.find((x) => x.id === id);
+      return {
+        props: it && it.props ? it.props.map((p) => p.kind).join(",") : "",
+        hasScenery: !!(t && typeof t.scenery === "function"),
+      };
+    }, saved.id);
+    expect(stored.props).toBe("stand,gantry");
+    expect(stored.hasScenery).toBe(true);
+    await page.evaluate((id) => window.__apex.race(id), saved.id);
+    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
+  });
+
   test("a saved circuit survives a reload: the registry re-appends it and the stored id resolves", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);
