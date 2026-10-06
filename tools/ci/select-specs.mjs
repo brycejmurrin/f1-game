@@ -167,7 +167,8 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // supplies Mercedes on a miss), bot/spec-timings still billed hud-layout at
 // 829 s — over one TARGET_SHARD_SEC job, so overflow refused it at 9 even
 // with leftover room. 10 shards still dropped dev-tools (129 s) after
-// hud-layout took the leftover; 11 carries both.
+// hud-layout took the leftover; 11 carries both. A sibling 9→12 raise on
+// 7cf57c60d is superseded: routing shrink makes 12 unnecessary.
 export const MAX_OVERFLOW_SHARDS = 11;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
