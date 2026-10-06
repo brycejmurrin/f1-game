@@ -793,6 +793,28 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
+test("solo oversize mega keeps --shard (selected gate does not peel itself)", () => {
+  // PR #1113 / #1109: select-specs already shards tlx-probes 1/3. Peeling the
+  // lone file dropped --shard (megaSoloFlags) and ran all 17 tests on shard 1
+  // inside a 6 min cap billed for 6; shards 2/3 exited green with no tests.
+  const tlx = "tests/specs/tlx-probes.spec.js";
+  assert.equal(isMegaSweepSpec(tlx), true, "tlx-probes test.slow() is mega-class");
+  const solo = [tlx, "--retries=0", "--timeout=180000", "--max-failures=3", "--shard=1/3"];
+  const { mega, rest, peeled } = partitionMegaSweepArgs(solo);
+  assert.equal(peeled, false);
+  assert.deepEqual(mega, []);
+  assert.deepEqual(rest, solo);
+  assert.deepEqual(playwrightShard(solo), { index: 1, total: 3 });
+});
+
+test("shardCapMin leaves wrap-up room after Mesa setup", () => {
+  // PR #1109 image-grade-visual 1of2: 5 tests billed ~265 s → used to cap at
+  // 8 min; 5/5 passed in 379 s after 113 s Mesa, then the kill hit upload.
+  assert.equal(shardCapMin(265), MAX_SELECTED_JOB_MIN);
+  assert.equal(shardCapMin(163), 8);
+  assert.equal(shardCapMin(1), 6);
+});
+
 test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
   // modes nightly 2026-10-04 (run 37195789273): career AND quali solo on shard
   // 1 = 1827 s against 185/276/410 s on shards 2-4.
