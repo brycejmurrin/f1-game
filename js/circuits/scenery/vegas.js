@@ -485,14 +485,15 @@
               Math.max(hB, 1), tint, 24, null);
           }
           addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.92, 7.0, SPHERE_HI, 28, null);
-          // Bright polar cap + vertical LED meridians — Sphere reads as LED orb,
-          // not a stacked frustum onion (sheet-02 signature was too dark/plain).
-          addCyl(stage, [a.c[0], baseY + rad * 1.78, a.c[2]], rad * 0.22, 6.5, SPHERE_HI, 16, null);
+          // Bright polar cap + chunky vertical LED meridians — Sphere reads as
+          // an LED orb from the track (thin 2.4 m ribs vanished in QA panels).
+          addCyl(stage, [a.c[0], baseY + rad * 1.78, a.c[2]], rad * 0.38, 10, SPHERE_HI, 16, null);
+          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 1.02, 10, [1.0, 0.35, 0.85], 28, null);
           for (let m = 0; m < 4; m++) {
             const ang = (m / 4) * Math.PI * 2;
             const mx = a.c[0] + Math.cos(ang) * rad * 0.96;
             const mz = a.c[2] + Math.sin(ang) * rad * 0.96;
-            addBox(stage, [mx, baseY + rad, mz], [2.4, rad * 1.55, 2.4], SPHERE_HI, null);
+            addBox(stage, [mx, baseY + rad, mz], [7.2, rad * 1.55, 7.2], SPHERE_HI, null);
           }
         }, { required: true });
         // Cyan / lime runoff stripe near the Sphere.
@@ -743,29 +744,35 @@
           const b = [a.r, a.u, a.t];
           const h = hash(Math.round(sRacing * 997) + (side > 0 ? 41 : 7));
           const neon = NEON[Math.floor(h * 97) % NEON.length];
-          const along = 5.5 + h * 3.0;
-          const depth = 3.0;
-          const H = 4.4 + h * 1.8;
-          const wall = [0.10 + h * 0.10, 0.09 + h * 0.04, 0.12 + h * 0.08];
+          const along = 10 + h * 5;
+          const depth = 3.2;
+          const H = 10 + h * 4;
+          const wall = [0.08, 0.07, 0.10];
           addBox(out, vadd(a.c, a.u, H / 2), [depth, H, along], wall, b);
-          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.25)), a.u, H * 0.78),
-            [0.26, 0.85, along * 0.88], neon, b);
-          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.9)), a.u, 2.7),
-            [1.5, 0.14, along * 0.82], neon, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.32)), a.u, H * 0.84),
+            [0.45, 1.8, along * 0.94], neon, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 1.5)), a.u, 3.6),
+            [2.6, 0.32, along * 0.9], neon, b);
           out._mat = MAT.GLASS;
-          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.14)), a.u, 1.8),
-            [0.14, 1.8, along * 0.55],
-            [neon[0] * 0.55 + 0.15, neon[1] * 0.55 + 0.1, neon[2] * 0.55 + 0.1], b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.18)), a.u, 2.6),
+            [0.22, 3.6, along * 0.72],
+            [neon[0] * 0.7 + 0.2, neon[1] * 0.7 + 0.15, neon[2] * 0.7 + 0.15], b);
           out._mat = 0;
-          addBox(out, vadd(vadd(vadd(a.c, a.t, along * 0.5), a.r, -side * 0.5), a.u, H * 0.55),
-            [0.6, H * 0.6, 0.4], neon, b);
+          const pyl = vadd(vadd(a.c, a.t, along * 0.52), a.r, -side * 0.35);
+          addCyl(out, pyl, 0.32, 16, [0.16, 0.16, 0.18], 6, b);
+          addBox(out, vadd(pyl, a.u, 12.5), [0.55, 8.5, 3.6], neon, b);
         };
         // Sparse, clip-safe placements (avoid neonTower hotspots ~0.53 / 0.60 / 0.69).
         for (const [s, side, gap] of [
-          [0.500, -1, 10.5], [0.512, 1, 10.8], [0.545, -1, 10.5], [0.558, 1, 10.8],
-          [0.635, -1, 10.5], [0.648, 1, 10.8], [0.712, -1, 10.5], [0.728, 1, 10.8],
-          [0.755, -1, 10.5], [0.770, 1, 10.8],
+          [0.500, -1, 11.4], [0.512, 1, 11.7], [0.545, -1, 11.4], [0.558, 1, 11.7],
+          [0.635, -1, 11.4], [0.648, 1, 11.7], [0.712, -1, 11.4], [0.728, 1, 11.7],
+          [0.755, -1, 11.4], [0.770, 1, 11.7],
         ]) stripShop(s, side, gap);
+        // Street-level Strip billboards (gap 16 clears shop pylons at ~10.5–14).
+        for (const [s, side, col] of [
+          [0.503, 1, MAGENTA], [0.546, 1, CYAN], [0.557, -1, WARM],
+          [0.637, 1, MAGENTA], [0.715, -1, CYAN], [0.757, 1, VIOLET],
+        ]) billboard(K(sl(s)), side, 16, 16, 11, col);
         // Two short sidewalk pads well clear of Bellagio pool patches (flat-
         // coplanar ratchet); denser apron runs exceeded the flatCoplanar cap.
         for (const [s, side] of [[0.508, -1], [0.508, 1], [0.760, -1], [0.760, 1]]) {

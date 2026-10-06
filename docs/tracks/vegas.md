@@ -80,4 +80,4 @@ Sphere on Koval, Strip densify on Sands Ave — so the racing Strip read thin
 (PR #928 follow-up). Re-keyed heroes + Strip canyon through `sl()` onto the
 racing frame; registered `tests/data/landmarks/vegas.json`.
 
-**2026-10-06 — DETAIL pass.** Strengthened Sphere LED meridians, Caesars pediment/columns, Bellagio crown + lake-edge posts, Paris tower rings, Wynn/Encore copper twins on Sands, Strip storefront pods + sidewalk pads, and far-skyline width variety. Hollow grey open-face buildings stay on shared `building()` (#1056); not closed here.
+**2026-10-06 — DETAIL pass.** Strengthened Sphere LED meridians (chunky ribs + magenta equator), Caesars pediment/columns, Bellagio crown + lake-edge posts, Paris tower rings, Wynn/Encore copper twins on Sands, Strip storefront pods with pylon signs + sidewalk pads, street-level Strip billboards, and far-skyline width variety. Hollow grey open-face buildings stay on shared `building()` (#1056); not closed here.
