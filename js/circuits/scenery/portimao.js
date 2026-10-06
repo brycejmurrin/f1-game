@@ -439,11 +439,9 @@
             [0.4, 0.65, 126], ALG_GREEN, b);
           addBox(stage, vadd(vadd(vadd(foot, a.r, side * (-1.55)), a.t, 38), a.u, 11.9),
             [0.4, 0.65, 26], ALG_RED, b);
-          // Dilatation joint stripes between the four bays.
-          for (let j = -1; j <= 2; j++) {
-            addBox(stage, vadd(vadd(foot, a.t, j * 32 - 16), a.u, 6.5),
-              [9, 11, 0.35], [0.22, 0.24, 0.26], b);
-          }
+          // No extra dilatation slabs: each bay already has grandstandEx
+          // endWalls, and a 9×11 t-normal stripe sat 2.8 mm off that shell
+          // (same-facing, 2.2 m² — coplanar-audit portimao).
           // End fascias close the open shell from the S/F orbit.
           for (const sgn of [-1, 1]) {
             addBox(stage, vadd(vadd(foot, a.t, sgn * 64), a.u, 6.8),
@@ -709,9 +707,11 @@
       signBoard(K(0.300), -1, 7.5, "corner", 5);
       signBoard(K(0.640), 1, 7.5, "corner", 11);
       sponsorHoarding(0.940, 0.060, -1, 3.4, { h: 1.15, step: 9 });
-      // Algarve branding strips on the main straight and T1 approach.
+      // Algarve branding strips on the main straight (+1) and T1 approach
+      // (-1). T1 starts after the S/F wrap (0.060) so two along() boards
+      // cannot share a plane (5.8 m² / 8.8 mm — coplanar-audit portimao).
       sponsorHoarding(0.970, 0.040, 1, 3.2, { h: 1.05, step: 10 });
-      sponsorHoarding(0.040, 0.090, -1, 3.6, { h: 1.1, step: 11 });
+      sponsorHoarding(0.065, 0.090, -1, 3.6, { h: 1.1, step: 11 });
       for (const s of [0.02, 0.08, 0.48, 0.70]) {
         billboard(K(s), hash(K(s)) < 0.5 ? -1 : 1, 11, 14, 5.0, [0.16, 0.44, 0.26]);
       }
