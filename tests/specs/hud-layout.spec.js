@@ -485,3 +485,9 @@ test.describe("desktop", () => {
     expect(shown).toEqual(["pausebtn"]);
   });
 });
+
+// Rank-0 pin for PR #1024: appearance-studio / settings-tab CSS routes this
+// 32-test file, but leaving it out of the diff dropped it as over-budget
+// overflow (DROPPED=1) while every selected shard passed. An edited spec is
+// rank 0 in select-specs, so this comment keeps the HUD layout gate in the
+// plan. Do not skip it.
