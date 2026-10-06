@@ -11,8 +11,9 @@ can still ship with an explicit "not run" note.
   on shared topic or deploy branches.
 - Never dual-dispatch Pages, and never cancel another session's CI to free
   slots. Flag suggestions to re-run or cancel siblings for capacity.
-- If the PR body says do not auto-merge, hold, or don't arm — flag any
-  suggestion to merge immediately or enable auto-merge.
+- Treat an explicit human veto only (`hold`, `do not merge this PR`, or
+  similar). The standard launch line that Merge Desk owns merge-when-green is
+  **not** a body veto — do not block Merge Desk MERGE auto-merge for it.
 
 ## Hot-path evidence (blocking when absent)
 
