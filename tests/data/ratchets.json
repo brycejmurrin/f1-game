@@ -21,7 +21,7 @@
       "lines": 13807
     },
     "js/net/lobby.js": {
-      "lines": 2026
+      "lines": 2013
     },
     "js/render/glx/glx.js": {
       "lines": 2832
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 341,
+      "ceiling": 338,
       "slack": 0
     },
     "rawColorDistinct": {
@@ -59,7 +59,7 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 310,
+      "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {

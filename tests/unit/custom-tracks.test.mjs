@@ -236,8 +236,8 @@ test("toRaw hands the factory what a circuit file would author", () => {
 test("the picker knows the custom tail (source contract)", () => {
   const src = read("js/ui/select-screen.js");
   assert.match(src, /\["custom", "MY CIRCUITS"\]/, "a MY CIRCUITS chip");
-  assert.match(src, /filter === "season" && \(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
-  assert.match(src, /filter === "custom" && !t\.custom/, "MY CIRCUITS shows only customs");
+  assert.match(src, /filter === "season"\) return !\(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
+  assert.match(src, /filter === "custom"\) return !!t\.custom/, "MY CIRCUITS shows only customs");
   assert.match(src, /trb trb-custom/, "the CUSTOM badge");
   assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
   assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
