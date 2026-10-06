@@ -237,6 +237,8 @@ const SceneryCity = (function () {
         // DAY must match NIGHT: a rejected wall mass must not leave orphan
         // facade rails / panes / mullions (the open-face / skeletal-slab look
         // on Vegas/Baku/Sochi/Imola — W4-AUDIT 2026-08, survey 2026-10-05).
+        // Fleet census 2026-10-06: fires once (anderstorp k=203, −22 tris).
+        // interlagos/shanghai/jeddah/vegas/baku/imola: zero buildingMass rejects.
         if (ok === false) { out._mat = 0; glassBuf._mat = 0; return false; }
         const rows = Math.max(2, Math.min(8, Math.round(sh / floorH)));
         const fh = sh / rows;
