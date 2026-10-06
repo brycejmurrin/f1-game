@@ -24,18 +24,24 @@ export async function armRace(page, setup, arg) {
 
 export async function selectPartCategory(page) {
   // PR #1075 run 37451436383: under 2 llvmpipe workers, #carsetup was visible
-  // (SetupUI.openSetup) but cs-tab-* had not been built yet. A one-shot tab
-  // click no-op'd, then waitForFunction on `.cs-opt` sat until BOOT_MS.
-  // Wait until the paid-category tab exists, click it, and a part row lands.
+  // (SetupUI.openSetup logged) but cs-tab-* had not been built yet. A one-shot
+  // tab click no-op'd, then waitForFunction on `.cs-opt` sat until BOOT_MS on
+  // the TEAM pane (no .cs-opt rows). Poll until the paid-category tab exists,
+  // click it, and a part row lands — still one BOOT_MS budget.
+  //
+  // Parts is a script-scope `const` (js/car/parts.js), not window.Parts.
+  // page.evaluate sees the global lexical binding; window.Parts is undefined
+  // and a window.Parts property guard fails instantly (reproduced 2026-10-06).
   const hasPaid = await page.evaluate(() =>
-    !!(window.Parts && Parts.CATALOG.some((x) => x.options.some((o) => o.cost > 0))));
+    typeof Parts !== "undefined" && Parts.CATALOG.some((x) => x.options.some((o) => o.cost > 0)));
   expect(hasPaid, "no catalog category has a paid option — a part row can never be found").toBe(true);
   const handle = await page.waitForFunction(() => {
+    if (typeof Parts === "undefined" || !Parts.CATALOG) return false;
     const c = Parts.CATALOG.find((x) => x.options.some((o) => o.cost > 0));
     if (!c) return false;
-    const tab = document.getElementById(`cs-tab-${c.id}`);
+    const tab = document.getElementById("cs-tab-" + c.id);
     if (!tab) return false;
-    tab.click();
+    if (!document.querySelector("#cs-options .cs-opt")) tab.click();
     return document.querySelector("#cs-options .cs-opt") ? c.id : false;
   }, null, { polling: 100, timeout: BOOT_MS });
   return handle.jsonValue();
