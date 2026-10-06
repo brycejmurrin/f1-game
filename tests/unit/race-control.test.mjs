@@ -88,6 +88,22 @@ test("a winner never ends the race while a human is still driving", () => {
     "the first multiplayer human finishing must not remove the other human");
 });
 
+test("finishOrder ranks a missing or non-finite finishT after a real clock", () => {
+  // finishOrder used (a.finishT + a.penalty) raw: null+0 === 0 ranked a car with
+  // no finishT FIRST among same-lap finishers, and undefined penalty → NaN.
+  const { finishOrder } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const early = { id: "early", lap: 6, finishT: 100, penalty: 0 };
+  const late = { id: "late", lap: 6, finishT: 110, penalty: 0 };
+  const missing = { id: "missing", lap: 6, finishT: null, penalty: 0 };
+  const nanT = { id: "nan", lap: 6, finishT: NaN, penalty: 0 };
+  const noPen = { id: "nopen", lap: 6, finishT: 105 };   // penalty undefined
+  const ids = (arr) => arr.map((c) => c.id);
+  assert.deepEqual(ids([missing, early, late].sort(finishOrder)), ["early", "late", "missing"]);
+  assert.deepEqual(ids([nanT, early].sort(finishOrder)), ["early", "nan"]);
+  assert.deepEqual(ids([noPen, early, late].sort(finishOrder)), ["early", "nopen", "late"]);
+  assert.ok(finishOrder(early, { ...early, penalty: 5 }) < 0, "a +5 s penalty ranks later");
+});
+
 test("runOrder serves a running car's time penalty on the road, at the race's speed", () => {
   // endRace sorted the cars still running at the flag by progress alone, so a
   // +5 s track-limits penalty was printed on the sheet and never applied.

@@ -1364,7 +1364,7 @@ const PitLane = (function () {
       // flag. Softer is faster and shorter-lived, so among the sets that go the
       // distance take the shortest-lived one; if nothing reaches, take the set
       // that gets closest and accept that there is another stop coming.
-      const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
+      const lapsLeft = Math.max(1, lapsToFlag(c));
       const lasts = right.filter(function (r) {
         return G.tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
       });
@@ -1486,11 +1486,17 @@ const PitLane = (function () {
     }
     const COMPOUND_WARN_LAPS = 5;
     function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }
+    /** Racing laps still owed including the lap the car is ON.
+     *  `c.lap` counts S/F crossings (grid 0; winner flags at lapsTarget+1), so
+     *  remaining = lapsTarget - lap + 1. pickFor / think / wetLapsToStop once
+     *  used lapsTarget - lap and were one short of the flag. */
+    function lapsToFlag(c) {
+      return Math.max(0, (G.lapsTarget || 0) - ((c && c.lap) || 0) + 1);
+    }
     /** The player still owes the second compound with the race nearly run. */
     function compoundDue(c) {
       if (!c || !twoCompoundApplies() || typeof SportingRegs === "undefined") return false;
-      const left = (G.lapsTarget || 0) - (c.lap || 0) + 1;   // c.lap is the lap the car is ON
-      return left <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
+      return lapsToFlag(c) <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
     function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
@@ -1598,7 +1604,7 @@ const PitLane = (function () {
           || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2
           || (c.lap || 0) - (c._recutLap || -99) < AiDrive.STRAT.REPLAN_GAP)) return false;
       const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
-      const lapsLeft = G.lapsTarget - lap + 1;
+      const lapsLeft = lapsToFlag({ lap });
       const oldNext = plan.lapsAt[done];
       // NO `oldNext == null` EXIT. It sat here, so a plan that said NO STOP —
       // or whose stops were all served — could never be revised: tyres going
@@ -1707,7 +1713,7 @@ const PitLane = (function () {
      *  otherwise midway between the first lap a fresh wet reaches the flag and
      *  the lap this one is gone — the split that wastes least of either set. */
     function wetLapsToStop(c, tread) {
-      const lap = c.lap || 0, left = Math.max(0, G.lapsTarget - lap);
+      const lap = c.lap || 0, left = lapsToFlag(c);
       if (!G.tyres.lapsLeft || !G.tyres.lapsOn) return 99;
       const fresh = G.tyres.planLaps(TyreModel.AI_CLASS[TyreModel.classForTread(tread)].life, G.lapsTarget) / (c.pitPlan.loadK || 1);
       // The measured rate only after two laps on the set (replan's rule): one
@@ -1782,7 +1788,7 @@ const PitLane = (function () {
       q.wrongTread = wrongTread;
       // …so the worn rule can ask whether the stop has laps left to pay for
       // itself (AiDrive.wornPays).
-      q.lapsLeft = Math.max(0, (G.lapsTarget || 0) - (c.lap || 0));
+      q.lapsLeft = lapsToFlag(c);
       q.pitLossLaps = plan.pitLossLaps;
       q.scripted = !!plan.scripted;   // a real race's plan (js/race/real-race.js planFor)
       const why = AiDrive.pitNow(q);
@@ -1792,7 +1798,7 @@ const PitLane = (function () {
       // wrong, and pits again — a stop every lap.
       const wetCls = TyreModel.classForTread(wantTread);
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
-      const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
+      const lapsLeft = Math.max(1, lapsToFlag(c));
       const planned = plan.seq[(c.pitStops || 0) + 1];
       // …and in a wet race EVERY stop fits the wet tread: the plan's classes are
       // dry, so a planned stop on inters bolted on a slick, which was then the
