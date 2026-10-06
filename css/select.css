@@ -266,7 +266,7 @@
   pointer-events: none;
   box-shadow: var(--edge);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #sel-tracks[data-mode="season"] .track-row[data-tip]:hover::before {
     content: attr(data-tip);
     position: absolute;
