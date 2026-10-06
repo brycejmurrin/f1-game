@@ -21,6 +21,7 @@
 // will not match. Regenerate with `npm run test:baseline -- --update-snapshots`
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -34,17 +35,18 @@ const SCREENS = [
   }],
   ["select", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-race").click());
-    await page.waitForFunction(() => !document.getElementById("select").hidden);
+    await page.waitForFunction(() => !document.getElementById("select").hidden,
+      null, { polling: 100, timeout: BOOT_MS });
     await page.waitForFunction(
-      () => document.querySelectorAll("#sel-tracks .track-row").length > 5);
+      () => document.querySelectorAll("#sel-tracks .track-row").length > 5,
+      null, { polling: 100, timeout: BOOT_MS });
   }],
   ["garage", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden);
-    await page.evaluate(() => {
-      const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-      (t.find((e) => /ENGINE/i.test(e.textContent || "")) || t[1] || t[0])?.click();
-    });
+    // #carsetup unhides before buildSetup fills tabs (openSetup two-rAF
+    // yield, #1024). Click ENGINE after the identity settle — hiding
+    // #game on desktop remounts the pair sheet back to TEAM.
+    await waitGarageSheet(page);
   }],
 ];
 
@@ -102,6 +104,19 @@ for (const [shapeName, viewport] of SHAPES) {
         // screenshot suite should never carry.
         await page.evaluate(() => document.fonts && document.fonts.ready);
         await page.waitForTimeout(600);   // let the sheet settle and measure
+        if (screenName === "garage") {
+          await page.evaluate(() => {
+            const el = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+            if (!el) throw new Error("menu-baseline: no ENGINE tab after settle");
+            el.click();
+          });
+          await page.waitForFunction(() => {
+            const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+            const opts = document.getElementById("cs-options");
+            return !!(tab && tab.getAttribute("aria-selected") === "true"
+              && opts && /INSPECT ENGINE/i.test(opts.textContent || ""));
+          }, null, { polling: 100, timeout: 15_000 });
+        }
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,
           animations: "disabled",
