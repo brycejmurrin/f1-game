@@ -227,7 +227,9 @@
         addFrustum(out, [mx, pyMin - 4 + mh * 0.30, mz], baseR, baseR * 0.58, mh * 0.7, rock, 6);
       }
 
-      //     with per-tower radius jitter so it never reads as a cloned ring. ---
+      // Far skyline — vary WIDTH / height / crown tint so the ring is not one
+      // cloned extrusion (sheet-02 overview). Keep every solid ground-seated:
+      // stepped/cylinder experiments floated crowns off pyMin (float-audit).
       {
         const sky = trad + 300;
         const skyN = 44;
@@ -237,7 +239,8 @@
           const rr = sky + (hash(i * 31 + 9) - 0.5) * 160;
           const mx = cx + Math.cos(a) * rr, mz = cz + Math.sin(a) * rr;
           if (onTrack(mx, mz, 80)) continue;
-          const bh = 50 + h * 130, bw = 34 + h2 * 30, bd = 34 + h2 * 26;
+          const slim = (i % 5 === 1) ? 0.62 : (i % 5 === 3) ? 1.18 : 1.0;
+          const bh = 50 + h * 130, bw = (34 + h2 * 30) * slim, bd = (34 + h2 * 26) * (2.0 - slim * 0.5);
           const tint = SKYTINT[i % SKYTINT.length];
           const lvl = 0.46 + h2 * 0.16;
           const skin = [tint[0] * lvl + 0.06, tint[1] * lvl + 0.06, tint[2] * lvl + 0.08];
@@ -423,6 +426,35 @@
       building(K(0.22), 1, 26, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
+      // Wynn / Encore — copper twin towers on Sands Ave approach just before
+      // Venetian Strip entry (racing ~0.445, LEFT). Closed solid cores —
+      // not shared building() open-face path. Gap 62 clears cityFront / Venetian.
+      {
+        const a = anchor(K(sl(0.445)), -1, 62);
+        const b = [a.r, a.u, a.t];
+        const COPPER = [0.55, 0.28, 0.18];
+        const COPPER_D = [0.38, 0.18, 0.12];
+        const WIN_C = [1.0, 0.72, 0.35];
+        modelGroup("vegas-wynn-encore", {
+          center: vadd(a.c, a.u, 55),
+          size: [52, 118, 70],
+          basis: b,
+        }, (stage) => {
+          // Twin offset slabs + shared podium.
+          seat.box(stage, a.c, [40, 12, 58], COPPER_D, b);
+          for (const [toff, hgt] of [[-14, 96], [14, 88]]) {
+            const c = vadd(vadd(a.c, a.t, toff), a.u, 12);
+            seat.box(stage, c, [22, hgt, 28], COPPER, b);
+            stage._mat = MAT.GLASS;
+            addBox(stage, vadd(c, a.u, hgt * 0.45), [23, hgt * 0.72, 26], WIN_C, b);
+            stage._mat = 0;
+            addBox(stage, vadd(c, a.u, hgt + 1), [14, 3.5, 16], [1.0, 0.55, 0.22], b);
+          }
+          // Shared neon canopy over the porte-cochère.
+          addBox(stage, vadd(vadd(a.c, a.r, -18), a.u, 8), [8, 1.2, 40], [1.0, 0.45, 0.18], b);
+        }, { required: true });
+      }
+
       {
         // MSG Sphere — inside the T5–T9 loop (Wikipedia circuit map; RaceFans
         // track walk). Re-keyed 2026-10-05: bare K(0.30)/side -1 sat on Koval
@@ -453,6 +485,16 @@
               Math.max(hB, 1), tint, 24, null);
           }
           addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.92, 7.0, SPHERE_HI, 28, null);
+          // Bright polar cap + chunky vertical LED meridians — Sphere reads as
+          // an LED orb from the track (thin 2.4 m ribs vanished in QA panels).
+          addCyl(stage, [a.c[0], baseY + rad * 1.78, a.c[2]], rad * 0.38, 10, SPHERE_HI, 16, null);
+          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 1.02, 10, [1.0, 0.35, 0.85], 28, null);
+          for (let m = 0; m < 4; m++) {
+            const ang = (m / 4) * Math.PI * 2;
+            const mx = a.c[0] + Math.cos(ang) * rad * 0.96;
+            const mz = a.c[2] + Math.sin(ang) * rad * 0.96;
+            addBox(stage, [mx, baseY + rad, mz], [7.2, rad * 1.55, 7.2], SPHERE_HI, null);
+          }
         }, { required: true });
         // Cyan / lime runoff stripe near the Sphere.
         groundPatch(K(sl(0.292)), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
@@ -467,6 +509,22 @@
           { id: "vegas-sphere-runoff-cyan-inner", samples: 3 });
         groundPatch(K(sl(0.325)), -1, 6.5, [5, 0.18, 22], [0.25, 0.75, 0.35],
           { id: "vegas-sphere-runoff-lime-inner", samples: 3 });
+        // Approach neon pylons + sparse crowd band (no plaza groundPatch —
+        // flat-coplanar with Sphere runoff decals when samples overlapped).
+        for (let p = 0; p < 6; p++) {
+          const ps = 0.268 + p * 0.008;
+          const pa = anchor(K(sl(ps)), 1, 38 + (p % 2) * 6);
+          const pb = [pa.r, pa.u, pa.t];
+          const ncol = NEON[p % NEON.length];
+          addCyl(out, pa.c, 0.35, 9, [0.22, 0.22, 0.26], 5, pb);
+          addBox(out, vadd(pa.c, pa.u, 9.2), [1.6, 1.4, 1.6], ncol, pb);
+        }
+        {
+          const ca = anchor(K(sl(0.278)), 1, 48), cb = [ca.r, ca.u, ca.t];
+          out._mat = MAT.FABRIC;
+          addBox(out, vadd(ca.c, ca.u, 0.9), [4.5, 1.6, 48], LOT_FANS[0], cb);
+          out._mat = 0;
+        }
       }
 
       backdrop(K(sl(0.45)), 1, 240, [180, 30, 120], DARKROCK);
@@ -503,8 +561,11 @@
           stage._mat = 0;
           seat.box(stage, vadd(a.c, a.u, 70), [34, 10, 50], IVORY, b);
           addBox(stage, vadd(a.c, a.u, 78), [28, 3.5, 44], GOLD_UP, b);
-          for (const off of [-24, 0, 24])
-            seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -18), 1.1, 16, IVORY, 8, b);
+          // Pediment + cornice so the ivory mass reads as Caesars, not a slab.
+          addBox(stage, vadd(vadd(a.c, a.r, -20), a.u, 16), [2.2, 3.2, 58], GOLD_UP, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -19.2), a.u, 72), [1.4, 2.4, 46], GOLD_UP, b);
+          for (const off of [-28, -14, 0, 14, 28])
+            seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -20), 1.15, 16, IVORY, 8, b);
         }, { required: true });
         place(K(sl(0.62)), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
         place(K(sl(0.62)), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
@@ -528,8 +589,18 @@
           stage._mat = 0;
           seat.box(stage, vadd(a.c, a.u, 66), [32, 8, 88], [0.42, 0.40, 0.38], b);
           addBox(stage, vadd(a.c, a.u, 72), [20, 2.5, 60], [1.0, 0.78, 0.28], b);
+          // Crown neon band — keep proud of the roof slab (no coplanar fight).
+          addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
         }, { required: true });
         place(K(sl(0.68)), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+        // Lake-edge balustrade posts (no shore groundPatch — was flat-coplanar
+        // with the existing pool-strip / apron decals).
+        for (let i = 0; i < 6; i++) {
+          const s = 0.664 + i * 0.007;
+          const ba = anchor(K(sl(s)), 1, 15);
+          addCyl(out, ba.c, 0.18, 1.4, [0.55, 0.52, 0.48], 5, [ba.r, ba.u, ba.t]);
+          addBox(out, vadd(ba.c, ba.u, 1.45), [0.55, 0.18, 0.55], [0.95, 0.85, 0.45], [ba.r, ba.u, ba.t]);
+        }
       }
       const bellagioJets = 18;
       const jetCols = [CYAN, [0.15, 0.50, 1.00], LED, [0.30, 0.85, 1.00], BLUE, MAGENTA, [0.20, 0.90, 0.95], ROSE];
@@ -557,7 +628,18 @@
         // the ground (0.8 m sink): invisible. Raw box from 0.3 m under grade,
         // no blockAt — the pylon base above already bounds the car at 15 m.
         const a = anchor(K(sl(0.74)), -1, 22);
-        addBox(out, vadd(a.c, a.u, 0.65), [14, 1.3, 14], [0.95, 0.75, 0.20], [a.r, a.u, a.t]);
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, 0.65), [14, 1.3, 14], [0.95, 0.75, 0.20], b);
+        // Base rings at the TOWER foot (gap 68) — grounded, no mid-air lattice.
+        const tw = anchor(K(sl(0.74)), -1, 68);
+        const tb = [tw.r, tw.u, tw.t];
+        out._mat = MAT.METAL;
+        for (const y of [8, 22, 40]) {
+          addBox(out, vadd(tw.c, tw.u, y), [14 - y * 0.08, 0.7, 14 - y * 0.08], [0.62, 0.52, 0.36], tb);
+        }
+        out._mat = 0;
+        // Lit tip seated on the tower mast height (connected, not a free float).
+        addBox(out, vadd(tw.c, tw.u, 132), [2.4, 4, 2.4], [1.0, 0.85, 0.35], tb);
       }
       building(K(sl(0.73)), -1, 24, 36, 55, 34, { wall: [0.62, 0.58, 0.48], window: [1.0, 0.82, 0.30], floor: 7 });
       {
@@ -653,6 +735,50 @@
         cityFront(s0, s1,  1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
           palette: casinoPalR, lit: true, windowCol: CYAN });
 
+        // Street-level storefront pods — closed solid cores (NOT building()).
+        // Gap ~10.5 sits between barrier neon (~3) and palms (15) / cityFront
+        // (19). Thin depth avoids neonTower / signature-tower clips.
+        const stripShop = (sRacing, side, gap) => {
+          const k = K(sl(sRacing));
+          const a = anchor(k, side, gap);
+          const b = [a.r, a.u, a.t];
+          const h = hash(Math.round(sRacing * 997) + (side > 0 ? 41 : 7));
+          const neon = NEON[Math.floor(h * 97) % NEON.length];
+          const along = 10 + h * 5;
+          const depth = 3.2;
+          const H = 10 + h * 4;
+          const wall = [0.08, 0.07, 0.10];
+          addBox(out, vadd(a.c, a.u, H / 2), [depth, H, along], wall, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.32)), a.u, H * 0.84),
+            [0.45, 1.8, along * 0.94], neon, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 1.5)), a.u, 3.6),
+            [2.6, 0.32, along * 0.9], neon, b);
+          out._mat = MAT.GLASS;
+          addBox(out, vadd(vadd(a.c, a.r, -side * (depth / 2 + 0.18)), a.u, 2.6),
+            [0.22, 3.6, along * 0.72],
+            [neon[0] * 0.7 + 0.2, neon[1] * 0.7 + 0.15, neon[2] * 0.7 + 0.15], b);
+          out._mat = 0;
+          const pyl = vadd(vadd(a.c, a.t, along * 0.52), a.r, -side * 0.35);
+          addCyl(out, pyl, 0.32, 16, [0.16, 0.16, 0.18], 6, b);
+          addBox(out, vadd(pyl, a.u, 12.5), [0.55, 8.5, 3.6], neon, b);
+        };
+        // Sparse, clip-safe placements (avoid neonTower hotspots ~0.53 / 0.60 / 0.69).
+        for (const [s, side, gap] of [
+          [0.500, -1, 11.4], [0.512, 1, 11.7], [0.545, -1, 11.4], [0.558, 1, 11.7],
+          [0.635, -1, 11.4], [0.648, 1, 11.7], [0.712, -1, 11.4], [0.728, 1, 11.7],
+          [0.755, -1, 11.4], [0.770, 1, 11.7],
+        ]) stripShop(s, side, gap);
+        // Street-level Strip billboards (gap 16 clears shop pylons at ~10.5–14).
+        for (const [s, side, col] of [
+          [0.503, 1, MAGENTA], [0.546, 1, CYAN], [0.557, -1, WARM],
+          [0.637, 1, MAGENTA], [0.715, -1, CYAN], [0.757, 1, VIOLET],
+        ]) billboard(K(sl(s)), side, 16, 16, 11, col);
+        // Two short sidewalk pads well clear of Bellagio pool patches (flat-
+        // coplanar ratchet); denser apron runs exceeded the flatCoplanar cap.
+        for (const [s, side] of [[0.508, -1], [0.508, 1], [0.760, -1], [0.760, 1]]) {
+          groundPatch(K(sl(s)), side, 8.0, [6, 0.14, 16], LOT_ASPHALT,
+            { id: `vegas-strip-sidewalk-${side > 0 ? "r" : "l"}-${Math.round(s * 1000)}`, samples: 3 });
+        }
         // Tall signature casino towers punched along the canyon (prominent landmarks)
         for (let j = 0; j < 8; j++) {
           const s = 0.485 + (j + 0.5) / 8 * 0.33, side = (j % 2) ? -1 : 1;

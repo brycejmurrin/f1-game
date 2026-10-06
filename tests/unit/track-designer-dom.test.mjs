@@ -165,6 +165,7 @@ test("share out / in: a code, a link and an exported file all load back as the s
   const url = await b.D.share();
   assert.equal(url, b.CD.shareUrl(code));
   assert.deepEqual(plain(written), [url]);
+  assert.equal(msgText(b), "Share link copied", "no character-count noise in the status");
   // Three ways in, each a different design first so the load is visible.
   for (const text of [code, url, JSON.stringify(env)]) {
     b.D.randomise(99); b.D.preview();
@@ -684,6 +685,12 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   assert.ok(H.LIMITS.includes(L.items + " saved circuits"), "library limit");
   tabs[0].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [false, true, true]);
+  // MY CIRCUITS empty: the note is a .td-empty that spans the full .td-grid.
+  tabs[1].click();
+  const empty = lib.querySelector(".td-empty");
+  assert.ok(empty, "empty library copy");
+  assert.match(empty.textContent, /No saved circuits yet/);
+  assert.ok(empty.parentNode.classList.contains("td-grid"), "lives in the card grid");
 });
 
 test("the first-open card: shown once, HOW TO switches tab, GOT IT stores apex26.designerCoached; a later open has none", () => {
@@ -758,6 +765,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   }
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
+  // SELECT (no stamp kind): 2 CORNERS stays in the rail so numbering never skips 1 → 3.
+  assert.deepEqual(labels().slice(0, 5), ["1 SHAPE", "2 CORNERS", "3 LOOK", "4 DETAILS", "5 CHECKS"]);
+  const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
+  assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under SELECT");
+  assert.match(shapeG.querySelector(".td-hint").textContent, /^Pick STRAIGHT/);
   b.D.setTool("corner");
   const all = labels();
   assert.deepEqual([all[0]].concat(all.slice(2)), ["1 SHAPE", "3 LOOK", "4 DETAILS", "5 CHECKS", "TURNS", "SHARE CODE"]);
@@ -769,6 +781,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.equal(labels()[1], "2 CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
   b.D.setTool("straight");
   assert.equal(labels()[1], "2 CORNERS · STRAIGHT 200 m");
+  // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
+  assert.match(css, /\.td-rail \{[^}]*overflow-x:\s*hidden/, "rail clips horizontal overflow");
+  assert.match(css, /\.td-rail \{[^}]*scrollbar-gutter:\s*stable/, "rail reserves scrollbar gutter");
+  assert.match(css, /\.td-tab \{[^}]*flex:\s*1 1 0/, "equal-width tabs (no jump)");
+  assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
 });
 
 test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {
@@ -1296,8 +1313,11 @@ test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, els
   assert.deepEqual([shared[0].title, shared[0].text], [name, url], "the full link always rides the share text");
   assert.ok(texts.includes(name) && texts.includes("APEX 26 · TRACK DESIGNER"), "name and mark drawn: " + texts.join(" | "));
   assert.ok(texts.some((t) => /km · \d+ corners · est lap \d+:\d\d\.\d$/.test(t)), "the facts line");
-  const urlLines = texts.filter((t) => /#track=|^https?:|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
+  const urlLines = texts.filter((t) => /#track=|^https?:|^\.\.\.|…|^[A-Za-z0-9._~%-]+$/.test(t) && t !== name);
   assert.ok(urlLines.length >= 1 && urlLines.length <= 3, "the link in at most three lines: " + urlLines.join(" | "));
+  // apex8: greedy wrapChars split "…#track=" into "…#trac" / "k=…" — never break inside #track=
+  assert.equal(urlLines.some((t) => /#trac$/i.test(t) || /^k=/i.test(t)), false, "no mid-word #track wrap: " + urlLines.join(" | "));
+  assert.ok(urlLines.some((t) => /#track=/.test(t) || t === "#track="), "#track= token stays whole: " + urlLines.join(" | "));
   assert.equal(msgText(b), "Card shared");
   // No file sharing here: the native bridge where the shell has one…
   canShare = false;
@@ -1327,6 +1347,26 @@ test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, els
   assert.equal(await b.D.shareCard(), false);
   assert.equal(canvases.length, n0);
   assert.match(msgText(b), /Fix the red issues before sharing/);
+});
+
+test("CARD re-entry: a second shareCard while the first is mid-share is refused (no double download)", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  recordingCanvas(b, [], []);
+  b.ctx.File = File;
+  let release = null;
+  b.ctx.navigator = {
+    canShare: (d) => Array.isArray(d.files) && d.files.every((f) => f instanceof File),
+    share: () => new Promise((resolve) => { release = resolve; }),
+  };
+  const first = b.D.shareCard();
+  // cardCanvas is async: wait until nav.share has been entered (cardBusy held).
+  for (let i = 0; i < 40 && typeof release !== "function"; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(typeof release, "function", "first call entered nav.share");
+  assert.equal(await b.D.shareCard(), false, "re-entry refused while busy");
+  release();
+  assert.equal(await first, true);
+  assert.equal(msgText(b), "Card shared");
 });
 
 test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, drops the car at rest on the selected point and goes green; a failed start comes back with the reason", async () => {

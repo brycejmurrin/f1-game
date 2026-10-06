@@ -85,3 +85,15 @@ gaps. Two authenticity gaps remained:
 - **Rooftop detail.** Satellite dishes (~38 % of roofs) and, on raw houses
   only, exposed **rebar stubs** on the unfinished slab — the *laje* left ready
   for a storey that may never come.
+
+## DETAIL pass (2026-10-05)
+
+Contact-sheet residuals after #963 (lake on terrain):
+
+- Closed solid `addBox` favela / skyline cores (no `kind:"jenga"` / no shared
+  `backdrop` isBld towers — open-face fix stays with the city.js agent).
+- Favela hillside densified (extra patches + denser alleys).
+- Guarapiranga shore boardwalk + pier (`interlagos-guarapiranga-shore`) and
+  denser shoreline palms/trees.
+- Senna S / Arquibancadas yellow–green livery, pit BR GP fascia, crowd cubes
+  on main tribuna and Curva 1 banks.

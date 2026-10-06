@@ -114,6 +114,10 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      // Set by onDeviceLost: abort in-flight compileAsync so warming() cannot
+      // stick true forever (race-start handoff waited on !warming via afterPresent,
+      // and render() returned early while warming — HUD surveys hung).
+      let _deviceLost = false;
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
@@ -831,6 +835,13 @@ const TLX = (function () {
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
+        // Abort program warm first: compileAsync after a loss often never
+        // settles, and warming()===true makes game.js skip present/afterPresent
+        // forever (handoff card + HUD survey hang). Clear before any reload.
+        _deviceLost = true;
+        _warmRequested = false;
+        _warmPending = null;
+        _warmDone = true;
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
             setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
@@ -891,8 +902,15 @@ const TLX = (function () {
             // use (iOS 18.7.2 RC lost every context — model-viewer#5100):
             // from the fourth, stop and say so instead.
             if (n === 3) setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 1200);
-            else if (typeof window.__apexReportError === "function")
-              window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+            else {
+              if (typeof window.__apexReportError === "function")
+                window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + n + " times) — reload to try again, or pick another RENDERER in settings."));
+              try {
+                if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+                  RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+                }
+              } catch (_) { /* picker absent in harness */ }
+            }
           }
         } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
       };
@@ -922,7 +940,7 @@ const TLX = (function () {
       } catch (_) { spatialUpscale = false; }
       function setSpatialUpscale(on) {
         spatialUpscale = !!on;
-        resize();
+        resizeNow();
         return spatialUpscale;
       }
       function getSpatialUpscale() { return spatialUpscale; }
@@ -2651,11 +2669,11 @@ const TLX = (function () {
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
       let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
-      function resize() {
-        // Window/settings callbacks also reach here while the frame loop waits
-        // for compilation. Keep its targets alive; the next frame applies the
-        // latest CSS size and settings once the warm task releases ownership.
-        if (_warmPending) { cssSizeCache.markDirty(); return; }
+      // Window resize (game.js) and settings can fire many times per drag frame.
+      // Coalesce those to one target realloc per animation frame; begin() and
+      // setRenderScale force an immediate apply so the draw sees the new size.
+      let _resizeRaf = 0, _resizeNow = false;
+      function applyResize() {
         // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
         if (_xrActive) return;
         // CSS size only — NEVER fall back to the backing store. Hidden canvases
@@ -2722,6 +2740,34 @@ const TLX = (function () {
           }
           if (post) post.resize(rw, rh);
         }
+      }
+      function resize() {
+        // Window/settings callbacks also reach here while the frame loop waits
+        // for compilation. Keep its targets alive; the next frame applies the
+        // latest CSS size and settings once the warm task releases ownership.
+        if (_warmPending) { cssSizeCache.markDirty(); return; }
+        if (_resizeNow) { applyResize(); return; }
+        if (_resizeRaf) return;
+        const schedule = typeof requestAnimationFrame === "function"
+          ? requestAnimationFrame
+          : (fn) => setTimeout(fn, 0);
+        _resizeRaf = schedule(() => {
+          _resizeRaf = 0;
+          if (_warmPending) { cssSizeCache.markDirty(); return; }
+          applyResize();
+        });
+      }
+      function resizeNow() {
+        _resizeNow = true;
+        try {
+          if (_resizeRaf) {
+            try {
+              if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(_resizeRaf);
+            } catch (_) { /* harness */ }
+            _resizeRaf = 0;
+          }
+          resize();
+        } finally { _resizeNow = false; }
       }
 
       const noopMesh = () => ({ __tlx: true, count: 0 });
@@ -2905,7 +2951,7 @@ const TLX = (function () {
         setRenderScale(s) {
           const v = Math.min(1, Math.max(0.5, +s || 0));
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
-          renderScale = v; resize(); return true;
+          renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
         setSpatialUpscale, getSpatialUpscale,
@@ -3544,19 +3590,29 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
+            // readPixels is a synchronous GPU→CPU stall. The Promise executor
+            // used to run it on the caller's turn — Settings › Appearance's
+            // MutationObserver → previewScene paid 10–15 s under ForceGL /
+            // llvmpipe before the first await, freezing the tab (profiled
+            // 2026-10-05). Yield one macrotask so menu UI can paint; every
+            // consumer already awaits the Promise.
             return new Promise((resolve, reject) => {
-              try {
-                const w = W, h = H;
-                if (!(w > 0 && h > 0)) throw new Error("no frame size");
-                const raw = new Uint8Array(w * h * 4);
-                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-                const data = new Uint8ClampedArray(w * h * 4);
-                for (let y = 0; y < h; y++) {
-                  const src = (h - 1 - y) * w * 4;
-                  data.set(raw.subarray(src, src + w * 4), y * w * 4);
-                }
-                resolve({ width: w, height: h, data });
-              } catch (e) { reject(e); }
+              const run = () => {
+                try {
+                  const w = W, h = H;
+                  if (!(w > 0 && h > 0)) throw new Error("no frame size");
+                  const raw = new Uint8Array(w * h * 4);
+                  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+                  const data = new Uint8ClampedArray(w * h * 4);
+                  for (let y = 0; y < h; y++) {
+                    const src = (h - 1 - y) * w * 4;
+                    data.set(raw.subarray(src, src + w * 4), y * w * 4);
+                  }
+                  resolve({ width: w, height: h, data });
+                } catch (e) { reject(e); }
+              };
+              if (typeof setTimeout === "function") setTimeout(run, 0);
+              else run();
             });
           }
           const rt = _captureRT();
@@ -3632,9 +3688,10 @@ const TLX = (function () {
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         warm() {
+          if (_deviceLost) return;
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
-        warming() { return !!_warmPending; },
+        warming() { return !_deviceLost && !!_warmPending; },
         // --- WebXR (Phase 0) -------------------------------------------------
         // Seated stereo via XRWebGLLayer on the WebGL2 backend. Intentionally
         // NOT three.xr / setAnimationLoop / ArrayCamera: those overwrite the
@@ -3739,7 +3796,7 @@ const TLX = (function () {
         },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
-          resize();
+          resizeNow();
           _instAlive.clear();
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
@@ -4138,7 +4195,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (_warmRequested && !_warmPending) startProgramWarm(opts);
+          if (_warmRequested && !_warmPending && !_deviceLost) startProgramWarm(opts);
           if (_warmPending) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
@@ -4606,6 +4663,7 @@ const TLX = (function () {
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
               presents: _presentN, healed: _healTried,
+              ctxLost: !!_deviceLost,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager); tsl-lit's frame block left that group for
               // renderGroup (SHARED_UNIFORMS), so what remains per draw is

@@ -88,9 +88,20 @@ Metropolitano (~3 km south) stays off the skyline — too far.
   madringDeck fascia hung off the front row (was buried on the rising verge);
   wrap-around wall split away from engine corner tyre-caps (coplanar fights).
 
+## DETAIL pass 2026-10-05 (sheet-03)
+
+- **`madrid-sf-tribuna`** (required): footing + columns + Madrid-red fascia under
+  the S/F `grandstandEx` bays (closes the floating red / open-shell read).
+- IFEMA stands: thick closed backs + end walls + seat colour; midfield service
+  roads, plaza pads, low pavilion sheds.
+- Cuatro Torres + nearer skyline: solid closed box cores (no `city.js` edit).
+- Pit/paddock: motorhomes, hospitality tents, tyre stacks, denser Madrid GP
+  billboards / hoarding.
+
 ### Sources
 - https://www.formula1.com/en/latest/article/circuit-guide-everything-you-need-to-know-about-the-madring.NF7Mh3iag3w9GUPlihwJA
 - https://en.wikipedia.org/wiki/Madring
 - https://www.madring.com/en/circuit
 - https://www.motorsportmagazine.com/articles/single-seaters/f1/madrings-la-monumental-the-banked-corner-thats-unlike-anything-else-in-f1/
 - https://www.tracksideseats.com/f1/guides/madring-grandstand-guide (grandstand numbering — UNCERTAIN vs turns)
+- https://www.ifema.es/en (IFEMA pavilion campus identity)

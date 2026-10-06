@@ -171,6 +171,11 @@ test("the circuit resolves by name before country, and the weather and hour read
   assert.equal(D.trackIdFor({ country_name: "United States", circuit_short_name: "Austin" }, TRACKS), "cota");
   assert.equal(D.trackIdFor({ country_name: "Azerbaijan", circuit_short_name: "Baku" }, TRACKS), "baku");
   assert.equal(D.trackIdFor({ country_name: "Nowhere", circuit_short_name: "X" }, TRACKS), null);
+  assert.equal(D.trackIdFor({ country_name: "Bahrain", circuit_short_name: "Kuala Lumpur" }, TRACKS), null,
+    "a moved venue is not an invented circuit id — placeLabel owns the display country");
+  const tabSrc = fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8");
+  assert.doesNotMatch(tabSrc, /["']kuala lumpur["']\s*:/,
+    "trackIdFor must not grow a kuala lumpur → sepang alias; that key is Tracks-owned");
   assert.equal(D.todFor({ date_start: "2026-10-11T12:00:00+00:00", gmt_offset: "08:00:00" }), "night", "Singapore at 20:00 local");
   assert.equal(D.todFor({ date_start: "2026-03-01T15:00:00+00:00", gmt_offset: "03:00:00" }), "dusk", "Bahrain at 18:00 local");
   assert.equal(D.todFor({ date_start: "nope" }), "default");

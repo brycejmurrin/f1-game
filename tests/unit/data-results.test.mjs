@@ -99,10 +99,11 @@ const DRIVERS = [
   { num: 1, code: "NOR", name: "Lando Norris", team: "McLaren" }
 ];
 
-async function render(meta, results, drivers = DRIVERS) {
+async function render(meta, results, drivers = DRIVERS, extraApi = {}) {
   const api = {
     sessionResult: () => Promise.resolve(results),
-    sessionDrivers: () => Promise.resolve(drivers)
+    sessionDrivers: () => Promise.resolve(drivers),
+    ...extraApi
   };
   const dom = makeDom();
   const mod = loadModule(api);
@@ -364,4 +365,17 @@ test("a missing driver list still classifies by car number", async () => {
   const tree = await loadResults();
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(rows(tree)[0], ["1", "#44 Car 44", "—", "20", "1:20.500", "—"]);
+});
+
+test("RESULTS header remaps a moved venue through placeLabel", async () => {
+  const tree = await render(
+    { sessionKey: 1, name: "Race", type: "Race", circuit: "Kuala Lumpur", country: "Bahrain", dateStart: "2026-10-04T12:00:00Z" },
+    [{ pos: 1, num: 1, laps: 57, points: 25, dnf: false, dns: false, dsq: false, duration: 5400, gap: 0 }],
+    DRIVERS,
+    { placeLabel: (c, n) => (c === "Kuala Lumpur" && n === "Bahrain" ? "Kuala Lumpur, Malaysia" : [c, n].filter(Boolean).join(", ")) }
+  );
+  const metaEl = find(tree, (n) => hasCls(n, "dh-lr-meta"))[0];
+  assert.ok(metaEl, "the session header meta line exists");
+  assert.match(metaEl.text, /Kuala Lumpur, Malaysia/);
+  assert.doesNotMatch(metaEl.text, /Kuala Lumpur, Bahrain/);
 });
