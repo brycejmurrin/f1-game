@@ -1,1 +1,1 @@
-1791309185	Cursor Agent	HUD Desk #1131: pushed COMPACT seed fix 230cbb5; AM disabled again (Bryce re-armed); watching CI  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
+1791309238	Cursor Agent	HUD Desk #1131: STOP disabling AM — Bryce/Merge Desk keep SQUASH armed; CI triage only if red  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
