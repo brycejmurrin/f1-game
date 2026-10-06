@@ -167,7 +167,6 @@ Cloud agent stall abort, handoff fields, and merge-not-rebase: full text in
 - Pages: one green tip → one train; do not dual-dispatch Pages.
 - Browser MCP on cloud VMs: prefer isolated Playwright + chrome-devtools from `.cursor/mcp.json` / the environment allowlist; do not expect reliable hits on live github.io from the VM — serve locally (`npx serve` / `http.server`) for verification when possible.
 - Acceptance: every cloud PR body must name an exact verify command or measured check.
-- Ready gate: before draft→ready (or asking CI Watch / another agent to flip), run `node tools/ci/ready-gate.mjs` on the tip and require exit 0. Tip-green without tooling-fast is how #1111 burned Structural guards on `designer-canvas.test.mjs`.
 
 ## Git branch & deploy
 Work happens on a `cursor/<topic>-<hash>` branch (short topic slug + 4–8 char disambiguator; Cursor cloud often supplies the suffix). New topic heads are `cursor/<topic>-<hash>`; legacy `claude/<topic>` PRs stay mid-flight, no new `claude/<topic>` feature branches. The deploy / ship branch remains
