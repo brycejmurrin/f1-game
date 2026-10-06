@@ -1,6 +1,17 @@
 @layer overlays {
 /* The studio stays inside the existing Settings layer. Its controls never ghost. */
 #pmsettings-inner #pm-panel-appearance[data-appearance-studio]:not([hidden]) { display: block; }
+/* Sheet stays interactive while the deferred garage preview warms; busy is a cue only. */
+#pm-panel-appearance[aria-busy="true"] { cursor: progress; }
+#pm-panel-appearance[aria-busy="true"]::after {
+  content: "Loading preview…";
+  display: block;
+  margin: var(--gap) 0 0;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+}
 #appearance-studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 #appearance-studio [data-as="controls"] { display: grid; gap: var(--gap); min-width: 0; }
 #appearance-studio [data-as="box"] { padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); min-width: 0; }

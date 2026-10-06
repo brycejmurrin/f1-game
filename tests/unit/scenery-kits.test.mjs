@@ -1135,3 +1135,69 @@ test("rejected vehicle bodies and awnings leave no phantom footprint or detached
   assert.equal(noAwning.reserve(noAwning.out, noAwning.out.pos.length, [[1, 0, 0], [0, 1, 0], [0, 0, 1]]), false);
   assert.equal(noAwning.masses.length, 1, "empty range has no reservation");
 });
+
+// DAY building() section() must drop facade rails/panes/mullions when the
+// solid wall mass is rejected — same early-return the night path already had
+// (open-face / skeletal-slab bug, survey 2026-10-05).
+function dayBuildingHarness(rejectMass) {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Models = load("js/track/scenery/models.js", "TrackModels");
+  const out = Models.scratch(8);
+  const glassBuf = Models.scratch(4);
+  const kinds = [];
+  const p = {
+    c: [40, 2, -10],
+    r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1],
+  };
+  const ctx = {
+    out, glassBuf, def: { id: "test", street: false }, theme: "neutral",
+    NIGHT: false, MAT: Geom.MAT, lod: (n) => n,
+    seat: { prism: () => {} },
+    addBox: (buf, c, s, col, b) => Geom.addBox(buf, c, s, col, b),
+    addCyl: (...a) => Geom.addCyl(...a),
+    addCone: (...a) => Geom.addCone(...a),
+    addFrustum: (...a) => Geom.addFrustum(...a),
+    addPrism: (...a) => Geom.addPrism(...a),
+    addPyramid: (...a) => Geom.addPyramid(...a),
+    rejBox: () => false, blockAt: () => {}, onTrack: () => false,
+    hash: () => 0.2, vadd: Geom.vadd, kitOf: () => null,
+    anchor: () => p, along: () => p,
+    massBlocked: () => false, massAdd: () => {},
+    terrainYAt: () => null, treeInFootprint: () => false,
+    note: () => {}, noteSuppressed: () => {},
+    instance: (_key, spec, _builder, meta) => {
+      kinds.push(meta && meta.kind);
+      if (rejectMass && meta && meta.kind === "buildingMass") return 0;
+      // Real instance() returns landed prim count; addBox's void return is not a vote.
+      Geom.addBox(out, spec.o, spec.s, spec.col || [0.5, 0.5, 0.5], [spec.r, spec.u, spec.t]);
+      return 1;
+    },
+  };
+  const City = load("js/track/scenery/city.js", "SceneryCity", {
+    TrackSceneryData: {},
+    TrackGraph: { NODE_COLOR: [1, 1, 1] },
+    TrackGeom: Geom,
+  });
+  return {
+    kinds,
+    build: () => City.create(ctx).building(10, 1, 20, 12, 24, 10, { arch: "flat" }),
+  };
+}
+
+test("day building() drops facade kit when the wall mass is rejected", () => {
+  const ok = dayBuildingHarness(false);
+  ok.build();
+  assert.ok(ok.kinds.includes("buildingMass"), "wall mass emits when accepted");
+  assert.ok(ok.kinds.includes("facadeRail"), "rails dress an accepted wall");
+  assert.ok(ok.kinds.includes("windowPane"), "panes dress an accepted wall");
+
+  const rejected = dayBuildingHarness(true);
+  rejected.build();
+  assert.ok(rejected.kinds.includes("buildingMass"), "mass attempt still recorded");
+  assert.equal(rejected.kinds.filter((k) => k === "facadeRail").length, 0,
+    "rejected wall must not leave orphan floor-slab rails");
+  assert.equal(rejected.kinds.filter((k) => k === "windowPane").length, 0,
+    "rejected wall must not leave orphan window panes");
+  assert.equal(rejected.kinds.filter((k) => k === "facadeMullion").length, 0,
+    "rejected wall must not leave orphan mullions");
+});

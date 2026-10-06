@@ -1361,23 +1361,20 @@ test("passReach: no move that cannot be half alongside by the turn-in", () => {
 // with wrap-around, lapped (2L) cars, finished cars, NaN progress and speeds
 // from reversing to 95 m/s; the scan is lifted out of game.js, not copied.
 test("the overtake car-ahead pre-reject is result-identical to the full wrap scan", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const a = src.indexOf("let ahead = null, gapAhead = Infinity;");
-  const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
-  const b = src.indexOf(endMark, a);
-  assert.ok(a > 0 && b > a, "the scan is where this test expects it");
-  // otNeedAhead gates the walk in game.js; force it on (and drop the raceCtl
-  // seed) so this test still compares the pre-reject body to the full wrap.
-  let body = src.slice(a, b + endMark.length)
-    .replace(/if \(c\._otLap[\s\S]*?c\._otS = c\.s; \}\n/, "")
-    .replace(/const otOpen = raceCtl\.otDetectOpen\(\);\n/, "")
-    .replace(/const otNeedAhead =[\s\S]*?;\n/, "const otNeedAhead = true;\n");
-  const scan = new Function("c", "ranked", "track", "OT_GAP", "pits",
-    body + "\nreturn { ahead, gapAhead };");
-  // A car in the pit lane or retired is not the car ahead ON THE ROAD
-  // (verify-physics #15); the reference applies the same skip.
+  const ctx = vm.createContext({
+    Math, Number, Object, WeakMap, console,
+    Log: { info() {}, enabled() { return false; } },
+    IncidentSim: { owns: () => false, notifyCar() {} },
+    DebrisWorld: { active: () => false },
+    Tracks: { wallAt: () => 100 },
+  });
+  for (const path of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, path), "utf8"), ctx, { filename: path });
+  }
+  const Collide = vm.runInContext("Collide", ctx);
   const pits = { inLane: (o) => !!o.inLane };
-  const ref = (c, ranked, track, OT_GAP) => {   // the unfiltered scan, as it was
+  const skip = (o) => pits.inLane(o);
+  const ref = (c, ranked, track) => {
     let ahead = null, gapAhead = Infinity;
     for (const o of ranked) {
       if (o === c || o.finished || o.retired || pits.inLane(o)) continue;
@@ -1398,11 +1395,15 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
     const cars = Array.from({ length: n }, () => {
       const r = rnd();
       const prog = r < 0.02 ? NaN
-        : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;   // 0-2 laps up
+        : (r < 0.5 ? cluster + (rnd() - 0.5) * 300 : rnd() * L) + Math.floor(rnd() * 3) * L;
       return { prog, _snapProg: prog, finished: rnd() < 0.05, retired: rnd() < 0.03, inLane: rnd() < 0.05, speed: [-3, 0, 1, 1.5][Math.floor(rnd() * 8)] ?? rnd() * 95 };
     });
+    Collide.fillArcBuckets(cars, L, 34, (car) => car._snapProg);
     for (const c of cars) {
-      const want = ref(c, cars, track, OT_GAP), got = scan(c, cars, track, OT_GAP, pits);
+      const want = ref(c, cars, track);
+      const otW = OT_GAP * c.speed + 1;
+      const raw = Collide.scanOtAhead(c, L, otW, skip);
+      const got = { ahead: raw.ahead, gapAhead: raw.ahead && c.speed > 1 ? raw.gapAhead / c.speed : Infinity };
       const wantArmed = want.gapAhead < OT_GAP, gotArmed = got.gapAhead < OT_GAP;
       assert.equal(gotArmed, wantArmed, `trial ${trial}: armed differs`);
       if (wantArmed) {

@@ -337,18 +337,23 @@ const UiExperience = (function () {
       if (previewMode === previewKey || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
       const generation = ++previewGeneration;
       if (G.state !== "menu" || G.setupPreviewOn || !["garage", "night", "studio"].includes(preview.mode)) return;
+      // Yield two frames so Settings › Appearance can paint (and drop aria-busy)
+      // before stopHome/beginHome take the main thread for a garage capture.
+      const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      await frame(); await frame();
+      if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
       // One real rendered garage frame inside the native settings preview. The
       // borrowed camera is restored even when capture fails or a race starts.
-      stopHome();
-      if (!deps.setupCam.beginHome(preview.mode, { motion: "still", shot: preview.shot, panel: null })) return;
       previewBusy = true;
       try {
+        stopHome();
+        if (!deps.setupCam.beginHome(preview.mode, { motion: "still", shot: preview.shot, panel: null })) return;
         const gfx = G.gfx;
         const readyUntil = performance.now() + 15000;
         while (performance.now() < readyUntil) {
           if (generation !== previewGeneration || G.state !== "menu" || $("pmsettings").hidden || $("pm-panel-appearance").hidden) return;
           if (!(gfx.warming && gfx.warming()) && deps.setupCam.renderHome(0)) break;
-          await new Promise((resolve) => requestAnimationFrame(resolve));
+          await frame();
         }
         if (performance.now() >= readyUntil) return;
         if (gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
