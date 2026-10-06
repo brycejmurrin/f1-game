@@ -5075,7 +5075,10 @@ test("TLX ignores a timing result after disabling or restarting its measurement 
 
 test("all track loaders release selector ownership before building, even on failure", () => {
   const _menuGate = { track: { old: true }, ready: "0|default|dry", warm: 2 };
-  const Tracks = { LIST: [{}] }, PerfGov = { sentinelArm() {} }, state = "menu";
+  // Resident stub: loadTrack refuses meta-only circuits (LAZY_CIRCUIT); this
+  // test asserts ownership release on _loadTrackBody failure, not hydrate.
+  const Tracks = { LIST: [{ id: "stub", path: { pts: [[0, 0, 0]] } }], circuitPayloadResident: () => true };
+  const PerfGov = { sentinelArm() {} }, state = "menu";
   const _loadTrackBody = () => {
     assert.equal(_menuGate.track, null);
     assert.equal(_menuGate.ready, "");
@@ -5333,7 +5336,12 @@ test("selector retains a different circuit during compilation, then releases it 
   const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
   const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
   const shadowPass = { reset() { assert.equal(compiling, false, "shadow programs also retain ownership until compile settles"); } };
-  const Tracks = { LIST: [{ id: "a" }, { id: "b" }], buildPaced: async def => { builds.push(def.id); return { id: def.id, meshes: {} }; } };
+  const Tracks = {
+    LIST: [{ id: "a", path: { pts: [[0, 0, 0]] } }, { id: "b", path: { pts: [[0, 0, 0]] } }],
+    circuitPayloadResident: () => true,
+    buildPaced: async def => { builds.push(def.id); return { id: def.id, meshes: {} }; },
+  };
+  const ensureCircuit = async () => {};
   const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
   const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");

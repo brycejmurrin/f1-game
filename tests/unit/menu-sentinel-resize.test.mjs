@@ -31,7 +31,9 @@ function fnBody(src, name) {
 function loadTrackAt(state) {
   const arms = [];
   const _menuGate = { track: { old: true }, ready: "stale", warm: 2 };
-  const Tracks = { LIST: [{ id: "monza" }] };
+  // Unit harness: mark stub resident so loadTrack's LAZY_CIRCUIT meta-only
+  // guard (production safety) does not fire before the sentinel body runs.
+  const Tracks = { LIST: [{ id: "monza", path: { pts: [[0, 0, 0]] } }], circuitPayloadResident: () => true };
   const PerfGov = { sentinelArm(on) { arms.push(!!on); } };
   function raceArmedSentinel() { return state === "race" || state === "count"; }
   let built = 0;
@@ -66,7 +68,13 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
     const arms = [];
     let track = null;
     let builtTrackId = "spa", builtTrackNight = false, builtGridSlots = 22;
-    const Tracks = { LIST: [{ id: "monza" }], buildPaced: async () => ({ id: "monza", meshes: {} }) };
+    const Tracks = {
+      LIST: [{ id: "monza", path: { pts: [[0, 0, 0]] } }],
+      circuitPayloadResident: () => true,
+      buildPaced: async () => ({ id: "monza", meshes: {} }),
+    };
+    // loadTrackStepped awaits ensureCircuit before build; harness has no lazy loader.
+    async function ensureCircuit() {}
     const PerfGov = { sentinelArm(on) { arms.push(!!on); } };
     function raceArmedSentinel() { return state === "race" || state === "count"; }
     function sessionDarkFor() { return false; }
