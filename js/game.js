@@ -4412,6 +4412,10 @@ function update(dt) {
     const s = cars[i];
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
+  // One wrap-aware fill for the whole field; each updateCar walks adjacent
+  // buckets (plus extra for mirrorReach / OT window). Not a rank-neighbour
+  // walk: a lapped car is a lap away in ranked[] and beside you on the road.
+  if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
@@ -4523,6 +4527,9 @@ const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, 
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
+const TRAFFIC_BUCKET_M = TOW_RANGE;
+function _snapProgOf(c) { return c._snapProg; }
+function _otSkipLane(o) { return pits.inLane(o); }
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -4691,49 +4698,19 @@ function updateCar(c, dt, ranked) {
     roadL = c.x + hw - 0.5; roadR = hw - 0.5 - c.x;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
-    // FULL FIELD, and it has to be: `ranked` sorts by CUMULATIVE prog while the
-    // window below is on the WRAPPED delta — a lapped car is a whole lap away in
-    // rank yet right beside us on the road, so any rank-neighbour walk breaks
-    // long before reaching it (the same miss resolveCollisions calls out).
-    // The O(n) pass is the price of seeing lapped traffic.
+    // Adjacent arc buckets, wrap-aware: ranked[] is CUMULATIVE prog, the window
+    // is the WRAPPED delta — a lapped car is a lap away in rank and beside us
+    // on the road (the same miss resolveCollisions calls out). Cheap reject kept.
     const L = track.total;
     // sep (consumer below) is fused into this scan — its window is a subset of [-13,+34].
     // BACK: the mirrors reach (AiDrive.mirrorReach — a time behind, not a flat 13 m).
     const BACK = AiDrive.mirrorReach(aiT, c.speed), REJ = Math.max(34.1, BACK + 0.1);
     const MIN_GAP = AiDrive.minLatGap(hw, !!track.street);
-    for (let i = 0; i < ranked.length; i++) {
-      const o = ranked[i];
-      if (o === c || o.finished) continue;
-      let dprog = o._snapProg - c.prog;
-      if (!Number.isFinite(dprog)) continue;
-      // Cheap reject before wrap — same pattern as pairContact (PERF-FINDINGS Δprog 5.01%).
-      const ad = dprog < 0 ? -dprog : dprog;
-      if (ad > REJ && ad < L - REJ) continue;
-      dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-      if (dprog < -BACK || dprog > 34) continue;   // extended both ways: slipstream ahead, chaser behind
-      const dx = o._snapX - c.x;
-      const adp = dprog < 0 ? -dprog : dprog;
-      if (adp < 5.5) {            // alongside: eats the room on its side
-        if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
-        else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-        // Nearest ACROSS the road, not along it: with a car on each side, the one
-        // half a metre closer in arc but two lanes away was chosen over the one
-        // we were touching, so the rub constraint below aimed at the wrong car
-        // (collision bench S5: two seconds of contact with nobody yielding).
-        const adx = dx < 0 ? -dx : dx;
-        if (adx < alongAdx) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdx = adx; }
-      }
-      if (adp < 6.5) {
-        nearbyN++;
-        const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
-        if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);   // push AWAY from o
-      }
-      // A car that just passed us (or that we just gave up on) is our blocker across the lane too, until the lockout ends: concede the place, do not run parallel and swap back (AiDrive.repassLock).
-      if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !track.street ? 6 : BLOCKER_HALF_W)) { blocker = o; blockerGap = dprog; }
-      if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TOW_HALF_W) { towCar = o; towGap = dprog; }   // wake giver
-      if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < (!track.street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { chaser = o; chaserGap = -dprog; }  // attacker behind: our lane, or the next one inside half a second
-    }
-    roomL = Math.max(0, roomL); roomR = Math.max(0, roomR);
+    const ts = Collide.scanTraffic(c, L, BACK, REJ, MIN_GAP, !!track.street, roomL, roomR);
+    roomL = ts.roomL; roomR = ts.roomR; nearbyN = ts.nearbyN; sep = ts.sep;
+    blocker = ts.blocker; blockerGap = ts.blockerGap; towCar = ts.towCar; towGap = ts.towGap;
+    chaser = ts.chaser; chaserGap = ts.chaserGap;
+    alongO = ts.alongO; alongDx = ts.alongDx; alongDprog = ts.alongDprog; alongAdx = ts.alongAdx;
     _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
     _aiBoxed.blocker = blocker; _aiBoxed.blockerGap = blockerGap; _aiBoxed.street = !!track.street;
     const boxed = AiDrive.isBoxed(_aiBoxed);
@@ -4809,11 +4786,9 @@ function updateCar(c, dt, ranked) {
   const otOpen = raceCtl.otDetectOpen();
   const otNeedAhead = (c.otE > 0 || c.otOn) ||
     (!!track && otOpen && OvertakeMode.crossed(c._otS, c.s, OvertakeMode.detectS(track), otL));
-  if (otNeedAhead) for (const o of ranked) {
-    if (o === c || o.finished || o.retired || pits.inLane(o)) continue;   // a car in the pit lane is not on the road
-    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
-    const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
-    if (d > 0.5 && d < gapAhead) { ahead = o; gapAhead = d; }
+  if (otNeedAhead) {
+    const ot = Collide.scanOtAhead(c, otL, otW, _otSkipLane);
+    ahead = ot.ahead; gapAhead = ot.gapAhead;
   }
   gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;
   // vStd, not a bare c.speed: a THRESHOLD in real m/s means something different
@@ -4876,20 +4851,8 @@ function updateCar(c, dt, ranked) {
     // BENEFIT below sits behind the driver gate.
     c.towing = 0; c.wake = 0;
     if (track) {
-      let tc = null, tg = Infinity; const L = track.total;
-      for (let i = 0; i < ranked.length; i++) {
-        const o = ranked[i];
-        // …and never a RETIRED car: retireCar parks it about 5 m off line,
-        // inside this |dx| < TOW_HALF_W window on a narrow circuit, and a
-        // stationary wreck does not punch a hole in the air.
-        if (o === c || o.finished || o.retired) continue;
-        let dprog = o._snapProg - c.prog;
-        if (!Number.isFinite(dprog)) continue;
-        const ad = dprog < 0 ? -dprog : dprog;
-        if (ad > TOW_RANGE + 0.1 && ad < L - TOW_RANGE - 0.1) continue;
-        dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-        if (dprog > 0.5 && dprog < tg && Math.abs(o._snapX - c.x) < TOW_HALF_W) { tc = o; tg = dprog; }
-      }
+      const tw = Collide.scanTow(c, track.total);
+      const tc = tw.tc, tg = tw.tg;
       if (tc) c.wake = wakeOf(tg, tc._snapX - c.x);
       if (tc && !braking && Math.abs(c.steerVis || 0) < 0.12) {
         c.towing = c.wake;
