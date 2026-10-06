@@ -31,9 +31,45 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
+
+for (const late of [false, true]) {
+  for (const synchronous of [false, true]) {
+    test(`${late ? "late grant" : "held lock"} handles ${synchronous ? "synchronous" : "asynchronous"} release failure`, async () => {
+      let grant, releases = 0;
+      const messages = [];
+      const ctx = vm.createContext({
+        navigator: { wakeLock: { request: () => new Promise((resolve) => { grant = resolve; }) } },
+        document: { hidden: false },
+        Log: { info: (_ns, message) => messages.push(message) },
+        Promise,
+      });
+      vm.runInContext(readFileSync(new URL("../../js/core/wake-lock.js", import.meta.url), "utf8"), ctx);
+      const owner = vm.runInContext("RaceWakeLock.create()", ctx);
+      const lock = {
+        addEventListener() {},
+        release() {
+          releases++;
+          if (synchronous) throw new Error("release denied");
+          return Promise.reject(new Error("release denied"));
+        },
+      };
+      owner.hold();
+      if (late) owner.drop();
+      grant(lock);
+      await new Promise((resolve) => setImmediate(resolve));
+      if (!late) owner.drop();
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(releases, 1);
+      assert.equal(owner.wanted(), false);
+      assert.deepEqual(messages, [late ? "late wake-lock release failed" : "wake lock was already released"]);
+    });
+  }
+}
 
 let g = null;
 before(async () => { g = await createGame({ storage: { trackId: "bahrain" } }); });
