@@ -1,1 +1,1 @@
-1791326535	Cursor Agent	perf(boot) #1156 READY tip 0fca1d4; watching full-tier CI; UNARMED; no merge  [cursor/perf-boot-hitches-640d; session 548b2d8129c2a388bc8cec61]
+1791328456	Cursor Agent	perf(boot) #1156 adapter-cap CI fix: OWNED js/render/renderer-boot.js tests/unit/boot-idle-prefetch*  [cursor/perf-boot-hitches-640d; session 548b2d8129c2a388bc8cec61]
