@@ -92,19 +92,22 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // Let the first worker finish installing so controllerchange cannot
-        // restyle CSS/fonts mid-shot (CI 37459850548). Do NOT set
-        // serviceWorkers:"block": Playwright resolves register() with
-        // undefined and the shell overlayed r.scope (CI 37463034163).
-        await page.evaluate(async () => {
-          if (!navigator.serviceWorker) return;
-          try {
-            await Promise.race([
-              navigator.serviceWorker.ready,
-              new Promise((resolve) => setTimeout(resolve, 8000)),
-            ]);
-          } catch (_) { /* blocked or unsupported */ }
-        });
+        // `ready` is not enough: it resolves when a worker is active for the
+        // registration, before clients.claim(). CI 37466745467 logged
+        // controllerchange at 9855ms during the 12.1s phone title shot —
+        // the claim restyled CSS/fonts after ready, FOUT widened .bigbtn
+        // min-content, and RACE A FRIEND wrapped onto its own row (GARAGE
+        // clipped). Wait until this page is controlled, then two rAFs,
+        // then fonts. Do NOT set serviceWorkers:"block": Playwright
+        // resolves register() with undefined and the shell overlayed
+        // r.scope (CI 37463034163).
+        await page.waitForFunction(() => {
+          if (!navigator.serviceWorker) return true;
+          return !!navigator.serviceWorker.controller;
+        }, null, { polling: 100, timeout: 15_000 }).catch(() => {});
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
         // Wait for IDENTITY chrome + Titillium before shooting.
         // css/fonts-hud.css and select/carsetup are print→all (#1101).
         // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
@@ -167,6 +170,18 @@ for (const [shapeName, viewport] of SHAPES) {
           return Math.abs(tit - fb) > 2;
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.waitForTimeout(600);   // let the sheet settle and measure
+        if (screenName === "title") {
+          // FOUT reflow is done when GARAGE sits fully on-screen. The
+          // wrapped phone actual (227059, CI 37466745467) clipped it
+          // under DATA HUB / TRACK DESIGNER — do not bless that frame.
+          await page.waitForFunction(() => {
+            const garage = document.getElementById("mb-garage");
+            if (!garage || garage.hidden) return false;
+            const g = garage.getBoundingClientRect();
+            return g.height > 8 && g.width > 40
+              && g.top >= -1 && g.bottom <= window.innerHeight + 1;
+          }, null, { polling: 100, timeout: 15_000 });
+        }
         if (screenName === "garage") {
           await page.evaluate(() => {
             const el = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
