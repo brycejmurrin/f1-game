@@ -42,12 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
-// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
-// uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
-// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
-// renderer call goes through.
+// Renderer selection: unset apex26.gfxBackend → TLX if requestAdapter() ok,
+// else GLX (skip three.webgpu); ="three" forces TLX; ="webgpu" uses WGX when
+// an adapter exists; ="webgl2" uses GLX. Deferred-backend init failure also
+// falls back to GLX. This async IIFE awaits while loading the selected
+// renderer, or when the lazy __apex surface loads (localhost / tests /
+// ?apex=1). `gfx` is the handle every later renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
