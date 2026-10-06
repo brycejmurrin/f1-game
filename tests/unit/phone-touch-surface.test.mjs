@@ -87,7 +87,8 @@ test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG fl
 });
 
 test("the dock's tap rungs clear 44px at both width tiers", () => {
-  const docks = rulesFor(css("css/touch-controls.css"), "body:not(.desktop) .dock").filter((r) => r.decls.has("--tap"));
+  // Selector is comma-joined with the desktop :has stub arm — match by regex.
+  const docks = rulesFor(css("css/touch-controls.css"), /body:not\(\.desktop\) \.dock/).filter((r) => r.decls.has("--tap"));
   assert.equal(docks.length, 2, "one base landscape dock rule and one <=700px tier");
   for (const r of docks) {
     const tap = rung(r.decls.get("--tap"), "dock --tap"), hold = rung(r.decls.get("--hold"), "dock --hold");
@@ -102,10 +103,12 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
     // 100 % the zoom stays 1, so the literals must not grow to compensate.
     assert.match(r.decls.get("--tap"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
     assert.match(r.decls.get("--hold"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
+    assert.match(r.selector, /body\.desktop \.dock:has\(\.touchbtn:not\(\[hidden\]\)\)/,
+      "desktop SurveyHud stubs join the same dock size ladder (aero×shift-up clear)");
   }
   const ov = css("css/touch-controls.css");
-  assert.equal(decl(ov, "body:not(.desktop) .dock .touchbtn", "width"), "var(--tap)");
-  assert.equal(decl(ov, /^body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
   // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
   // only UP: --hud-btn-z is the top band's zoom floored at 1, so --tap-hud
   // never drops under the --tap rung. The restore eye stays on --tap itself.
@@ -120,16 +123,27 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
   const ov = css("css/touch-controls.css");
-  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "width"), "var(--hold)");
-  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "height"), "var(--hold)");
-  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps", "padding-bottom"), "calc(var(--gap) * 7 / 6)");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps \.touchbtn/, "width"), "var(--hold)");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps \.touchbtn/, "height"), "var(--hold)");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps/, "padding-bottom"), "calc(var(--gap) * 7 / 6)");
   // OT | BRAKE share a row in buttons mode — the right dock needs a wider
   // column gap than the shared --gap*2/3 or the translucent circles merge.
-  const right = ruleFor(ov, "body.steer-buttons:not(.desktop) #dock-right", "column-gap");
+  // Manual (shifts | taps) and desktop stubs with a lit shift column share the arm.
+  const right = ruleFor(ov, /body\.steer-buttons:not\(\.desktop\) #dock-right/, "column-gap");
+  assert.ok(right, "buttons-mode right dock column-gap rule exists");
   assert.equal(right.decls.get("column-gap"), "max(var(--r-lg), var(--gap))",
     "buttons-mode right dock keeps ≥--r-lg (14px) between the taps and pedals columns");
   assert.equal(right.decls.get("row-gap"), "calc(var(--gap) * 2 / 3)",
     "buttons-mode right dock keeps the shared row gap when groups wrap");
+  assert.match(right.selector, /body\.manual:not\(\.desktop\) #dock-right/,
+    "manual shifts|taps get the same column floor so UP/DN clear BOOST/OT/AERO");
+});
+
+test("fixed ladder uses 12px --btn-gap so AERO / OT / BOOST do not merge", () => {
+  const src = read("css/touch-controls.css");
+  assert.match(src, /--btn-gap:\s*12px/, "fixed portrait/desktop ladder clears AERO×OT×BOOST");
+  assert.match(src, /body\.desktop \.dock:has\(\.touchbtn:not\(\[hidden\]\)\)/,
+    "desktop SurveyHud stubs join the landscape dock flex (not the fixed ladder over chips)");
 });
 
 /* ── the dock at 390px tall ──────────────────────────────────────────────── */
@@ -137,14 +151,14 @@ test("buttons-mode modifier taps ride the hold rung like pedals and steer", () =
 test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, and fitHud's cap is wired as the net", () => {
   const ov = css("css/touch-controls.css");
   const tk = css("css/tokens.css");
-  const dock = rulesFor(ov, "body:not(.desktop) .dock").find((r) => r.decls.has("--tap") && !r.context.some((c) => /max-width/.test(c)));
+  const dock = rulesFor(ov, /body:not\(\.desktop\) \.dock/).find((r) => r.decls.has("--tap") && !r.context.some((c) => /max-width/.test(c)));
   const tap = rung(dock.decls.get("--tap"), "--tap"), hold = rung(dock.decls.get("--hold"), "--hold");
   // --gap on a landscape phone is the density switch's 8px, not :root's 12.
   const dense = rulesFor(tk, ":root", { context: /orientation: landscape\) and \(max-height: 560px/ })[0];
   assert.ok(dense, "tokens.css keeps the landscape/max-height density switch");
   const gap = px(dense.decls.get("--gap"), "dense --gap");
   // The dock's own spacing: gap * 2/3 between buttons, gap * 7/6 under held groups.
-  assert.equal(decl(ov, "body:not(.desktop) .dock", "gap"), "calc(var(--gap) * 2 / 3)");
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock/, "gap"), "calc(var(--gap) * 2 / 3)");
   const held = ruleFor(ov, /^body:not\(\.desktop\) #grp-pedals,/, "padding-bottom");
   assert.equal(held.decls.get("padding-bottom"), "calc(var(--gap) * 7 / 6)");
   const dockGap = gap * 2 / 3, heldPad = gap * 7 / 6;
