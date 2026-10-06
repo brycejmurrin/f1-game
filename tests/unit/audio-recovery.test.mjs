@@ -353,3 +353,18 @@ test("with no media element at all, the cap falls back to the file size", async 
   r.A.addTracks([UPLOAD]); r.A.playTrackId(UPLOAD.id); await flush();
   assert.ok(r.decoded.includes(UPLOAD.url), "a 2 MB upload decodes");
 });
+
+// SOUND OFF -> ON mid-race restarts the rain from the LIVE weather. panel.js
+// keyed it off G.raceWeather (the grid's weather), so a dry race the weather arc
+// turned wet came back with no rain after a SOUND toggle, and a wet race that
+// dried out came back raining. Every other startRain caller asks isRaining().
+test("the SOUND toggle restarts rain from the live weather, not the grid's raceWeather", () => {
+  const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
+  const on = panel.slice(panel.indexOf('else if ((G.state === "race" || G.state === "count") && !G.paused) {'));
+  const block = on.slice(0, on.indexOf("syncAudioPanel();"));
+  assert.match(block, /GameAudio\.startEngine\(\);/, "precondition: found the mid-race SOUND ON block");
+  assert.doesNotMatch(block, /raceWeather/, "the grid's weather does not describe a race the arc has turned");
+  assert.match(block, /if \(G\.isRaining\(\)\) GameAudio\.startRain\(\);/);
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /\bisRaining: \(\) => isRaining\(\),/, "G.isRaining is exported to the panel");
+});

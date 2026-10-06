@@ -113,7 +113,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   padding: 0; font-size: var(--fs-5);
   color: var(--text);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-close:hover { color: var(--text); }
 }
 .dh-close:active { color: var(--text); }
@@ -144,7 +144,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-tab:hover { color: var(--text); }
 }
 .dh-tab:active { color: var(--text); }
@@ -195,7 +195,7 @@ body[data-density="compact"] .dh-race-sub {
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(7.1 * var(--fs-micro))), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(11.2 * var(--fs-micro))), 1fr));
   overflow-x: hidden;
   overscroll-behavior-x: auto;
   touch-action: pan-y;
@@ -205,15 +205,19 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
-/* 7.1 fonts above is TELEMETRY, the widest label, at this padding (measured:
-   91px of text at a 14px font + 2 x 4px) — the column must never be narrower
-   than the label it holds. */
+/* 11.2 fonts above is WATCH & DRIVE, the widest label (TELEMETRY was 7.1
+   and overflowed the plate at ~500px). The column must never be narrower
+   than the label it holds; white-space:normal is the fallback if a cell
+   still shrinks. */
 /* --tap-paint, not --tap-min: the portrait tabs painted 110x38 on a 393x659
    phone (layout-audit 2026-10-05), under the 52 touch floor. */
 body[data-shape="tall"][data-width="narrow"] .dh-tab {
   width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
   min-height: var(--tap-paint);
   font-size: var(--fs-micro);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 
 .dh-content {
@@ -323,7 +327,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   padding-left: 7px;
   border-radius: 0 var(--r-xs) var(--r-xs) 0;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-row:hover { background: var(--plate); }
 }
 /* The leader gets the faintest possible wash — enough that the top of the table
@@ -388,7 +392,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-bottom: 1px solid var(--card-line);
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   /* :not(.dh-cut) — an elimination band is a rule across the table, not a row
      of data, so it does not light up when the pointer passes over it. */
   .dh-table tbody tr:not(.dh-cut):hover { background: rgba(255,255,255,0.03); }
@@ -494,7 +498,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 /* A striped row still answers the pointer: .dh-row's own hover fill, at the
    stripe's weight and later (gated like every :hover, css/tokens.css policy). */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   :root[data-look-datahub-stripes="on"] #datahub .dh-row:not(.dh-row-lead):nth-child(even):hover { background: var(--plate); }
 }
 :root[data-look-datahub-stripes="on"] #datahub .dh-table tbody tr:nth-child(even):not(.dh-cut, .dh-lap-board, .dh-lr-p1, .dh-lr-p2, .dh-lr-p3, [aria-expanded="true"]) {
@@ -616,7 +620,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); margin: 0; color: inherit; font: inherit;
   letter-spacing: var(--ls-2); cursor: pointer; transition: opacity 0.12s;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   button.dh-legend-item:hover { background: var(--plate); }
 }
 button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
@@ -729,7 +733,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   background: var(--plate); color: var(--text); font-size: var(--fs-4);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .dh-lane-x:hover { background: color-mix(in oklab, var(--red) 80%, transparent); border-color: var(--red); }
 }
 .dh-lane-clear { background: rgba(255, 255, 255, 0.04); }

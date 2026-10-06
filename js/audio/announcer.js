@@ -567,10 +567,25 @@ const Announcer = (function () {
       const owned = !!speaking; speaking = null;
       if (owned) try { synth.cancel(); } catch (e) { /* already ended */ }
     }
-    // Hidden tab: stop the read ourselves. Speaking into a background tab is
-    // what RadioVoice's own notes say bricks the iOS synthesiser until reload.
-    if (typeof document !== "undefined" && document.addEventListener) {
-      document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+    // Pause paths cut the read the same way RadioVoice.halt does for the radio
+    // (#988 / #1029 / #1064). speechSynthesis / recorded pack clips sit outside
+    // the WebAudio graph, so GameAudio.stopEngine() never reaches them.
+    // LITERAL ids — shell-ids.test.mjs ratchets dynamic getElementById counts.
+    if (typeof document !== "undefined") {
+      const pause = document.getElementById("pausemenu");
+      const garage = document.getElementById("carsetup");
+      const observe = (el, on) => {
+        if (el && typeof MutationObserver === "function") new MutationObserver(on).observe(el, { attributes: true, attributeFilter: ["hidden"] });
+      };
+      // G.paused survives rotate-block / photo-studio re-hiding the card in the
+      // same task (MutationObserver runs after the task with hidden===true).
+      observe(pause, () => { if (G.paused || !pause.hidden) stop(); });
+      // openPitWork freezes behind #carsetup without showing #pausemenu.
+      observe(garage, () => { if (!garage.hidden) stop(); });
+      // Hidden tab: speaking into a background tab bricks iOS synthesis until reload.
+      if (document.addEventListener) {
+        document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+      }
     }
 
     /** The facts a script needs that only the BUILT track knows. Guarded hard:
