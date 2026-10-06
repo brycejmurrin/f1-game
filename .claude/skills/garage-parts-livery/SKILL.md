@@ -88,6 +88,26 @@ ran >2 min at loadavg 8): background it, and skip it above loadavg 4.
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
 
+## BEFORE pack — fetch, do not recapture
+
+Car/garage agents MUST NOT capture their own 11-team garage BEFORE grid
+(`garage-angles.mjs --budget=12m` / wheels-tyres runs). That costs 12–28 min
+on llvmpipe and is why **Garage before** exists.
+
+```sh
+node tools/garage-angles-fetch.mjs                  # merge-base with ship
+node tools/garage-angles-fetch.mjs --sha HEAD --out artifacts/garage-before
+gh workflow run garage-before.yml -f ref=claude/f1-game-project-26h3ng
+```
+
+The pack is `garage-before-<sha>` (MANIFEST.json: team, preset, file, sha,
+timestamp). If the exact SHA has no pack, the script takes the nearest
+ancestor and prints compare-API staleness (commits + js/car|garage|render
+files). Capture only AFTER shots for the angles you changed, then
+`--baseline=` / `--against=` against the fetched pack. Workflow:
+`.github/workflows/garage-before.yml` — macos, 4 team shards, not a
+required check. Not Car shot (`carview.html` has no garage room).
+
 ## Design loop — spine top / side, fin, any paint row
 
 1. **Placement, no browser** (0.2 s): `node tools/car/spine-station.mjs --team=X --png=artifacts/spine`

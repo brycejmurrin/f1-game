@@ -166,6 +166,13 @@ const DataHub = (function () {
     contentEl = el("div", "dh-content");
     contentEl.id = "dh-panel";
     contentEl.setAttribute("role", "tabpanel");
+    // Native title tooltips do not dismiss on scroll — a hovered schedule
+    // row leaves its tip painted over the next one. Drop titles on the
+    // panel scroller; overflow tips re-attach on the next mouseenter.
+    contentEl.addEventListener("scroll", function () {
+      const titled = contentEl.querySelectorAll("[title]");
+      for (let i = 0; i < titled.length; i++) titled[i].removeAttribute("title");
+    }, { passive: true });
     card.appendChild(contentEl);
 
     root.appendChild(card);
@@ -264,14 +271,24 @@ const DataHub = (function () {
       tabButtons[k].setAttribute("aria-selected", k === id ? "true" : "false");
       tabButtons[k].tabIndex = k === id ? 0 : -1;
     }
-    // Scroll the active tab button into view on narrow screens where tabs overflow
+    // Scroll the active tab into view only when the strip actually overflows
+    // and the button is clipped — a wrap row (desktop) or a fully-visible
+    // chip must not pan SCHEDULE off the left edge.
     const activeBtn = tabButtons[id];
     if (contentEl && activeBtn) contentEl.setAttribute("aria-labelledby", activeBtn.id);
     // An explicit `behavior` beats CSS scroll-behavior, so neither reduced-
     // motion backstop (the OS query, MOTION: REDUCED's html[data-motion])
     // reaches this scroll: ask both here, as js/ui/hud.js motionReduced does.
-    if (activeBtn && activeBtn.scrollIntoView) {
-      activeBtn.scrollIntoView({ inline: "nearest", behavior: motionReduced() ? "auto" : "smooth", block: "nearest" });
+    const strip = activeBtn && (activeBtn.parentElement || activeBtn.parentNode);
+    const overflow = !!(strip && (strip.scrollWidth - strip.clientWidth > 1));
+    if (overflow && activeBtn && activeBtn.scrollIntoView) {
+      const left = activeBtn.offsetLeft || 0;
+      const right = left + (activeBtn.offsetWidth || 0);
+      const viewL = strip.scrollLeft || 0;
+      const viewR = viewL + strip.clientWidth;
+      if (left < viewL || right > viewR) {
+        activeBtn.scrollIntoView({ inline: "nearest", behavior: motionReduced() ? "auto" : "smooth", block: "nearest" });
+      }
     }
     // Mark content area so CSS can zero-out padding for split-layout tabs
     if (contentEl) contentEl.classList.toggle("dh-has-split", id === "live" || id === "telemetry");
@@ -472,12 +489,14 @@ const DataHub = (function () {
 
   function setSelectOptions(selectEl, opts, selectedVal) {
     clear(selectEl);
+    let title = "";
     opts.forEach(function (o) {
       const op = el("option", null, o.label);
       op.value = String(o.value);
-      if (String(o.value) === String(selectedVal)) op.selected = true;
+      if (String(o.value) === String(selectedVal)) { op.selected = true; title = o.label; }
       selectEl.appendChild(op);
     });
+    if (title) selectEl.title = title; else selectEl.removeAttribute("title");
   }
 
   function buildPicker(onPick) {
