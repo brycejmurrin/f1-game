@@ -42,12 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
-// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
-// uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
-// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
-// renderer call goes through.
+// Renderer selection: unset apex26.gfxBackend → TLX if requestAdapter() ok,
+// else GLX (skip three.webgpu); ="three" forces TLX; ="webgpu" uses WGX when
+// an adapter exists; ="webgl2" uses GLX. Deferred-backend init failure also
+// falls back to GLX. This async IIFE awaits while loading the selected
+// renderer, or when the lazy __apex surface loads (localhost / tests /
+// ?apex=1). `gfx` is the handle every later renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
@@ -2203,6 +2203,8 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
+    _envHold = false; _envFace = -1; _envLatchTod = null;
+    _envLatch.fill(NaN); _envLatch[7] = -1;
     // Only a NEW circuit re-keys the ghost. A tuner TIME preview flipping
     // day<->dark rebuilds the same one, and re-keying there dropped the lap
     // being recorded and filed later PBs under the context-less slot instead
@@ -2608,8 +2610,24 @@ async function startRaceBody() {
   if (announcer.stop) announcer.stop();
   if (hud.resetRace) hud.resetRace();
   rlap("resets");
-  loadTrack(trackIdx);
+  // Pace the rebuild: sync loadTrack + warmCarAssets was one ≤3 s long task
+  // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
+  // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
+  // live() stays true: this session owns the build (menu prep uses a generation gate).
+  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
+  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
+  if (vmNoFramePump) loadTrack(trackIdx);
+  else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
+  // Break the remaining sync legs (settings → car meshes) into separate tasks.
+  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
+  // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) await yieldMain();
+  if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2744,6 +2762,8 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  if (!vmNoFramePump) await yieldMain();   // do not glue car-mesh warm onto the settings/grid sync stretch
+  if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
@@ -2752,7 +2772,8 @@ async function startRaceBody() {
   const entryPlayer = player;
   if (!headlessMode && !document.hidden)
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
-  if (player !== entryPlayer || state !== "count") return false;
+  if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
+  if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -4346,7 +4367,7 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    return;
+    GameAudio.setGridIdle(player, { soundOn, wet: isWetRoad(), step: _audioParamStep }); return;
   }
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
@@ -6381,8 +6402,9 @@ let setupPreviewOn = false;
 // → glass → water → gate), shared verbatim by the MAIN camera pass and the
 // live env-probe faces (which re-render the world around the player car so the
 // paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
-let _envFace = -1;   // probe face cursor: one of the 6 cube faces per frame
-let _frameNo = 0;    // render frame counter (env-probe cadence, etc.)
+// _envFace cursor; after face 5, _envHold until move/sun/wet/tod/lights (audit 2026-10-05 #2).
+let _envFace = -1, _frameNo = 0, _envHold = false, _envLatchTod = null;
+const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4;
 // Set by GLX's webglcontextlost handler (persisted) — once a device has lost the
 // context we skip the extra per-frame env-probe pass on every subsequent load so
 // the reflection feature can't keep exhausting a memory-constrained GPU.
@@ -6582,9 +6604,24 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
+/** True when the bound backend reports a lost context/device (GLX/TLX backendState). */
+function gfxContextLost() {
+  try { const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
+  catch (_) { return false; }
+}
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
   if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  // Context / device loss: shadow+begin already no-op, but render used to return
+  // before afterPresent (begin===false / stuck warm) and leave handoff up forever.
+  // Inline the stop (not RaceEntryProfile) so tests/unit/garage-arrival's render
+  // prefix extract stays self-contained; afterPresent still marks lower-lost when
+  // a later present path reaches it.
+  if (gfxContextLost()) {
+    try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
+    if (loadingScreen.phase() === "handoff") loadingScreen.stop();
+    return;
+  }
   if (gfx.warming && gfx.warming()) return;
   if (uiExperience && uiExperience.renderHome(dt)) return;
   // The live Home garage returned above. Other menus hide undrawn canvases
@@ -7320,47 +7357,41 @@ function render(dt) {
   const _floodEmit = _atmo.floodEmit(frame.sunDir ? frame.sunDir[1] : null);
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
-  // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car every fourth frame on a live race (full refresh every 24 frames). The car-paint clearcoat
-  // samples it for REAL reflections of the surroundings — trees, buildings,
-  // track, sky — including everything behind the camera that SSR can't see.
-  // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  // Skip it under a free/debug camera (dbgCam): the probe re-draws the whole world
-  // a second time each frame and is anchored to the player car, which isn't the
-  // subject while flying the lighting-tuner free camera — dropping it here removes
-  // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  // Advance one face every FOURTH frame on a live race — a full 6-face cube
-  // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
-  // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
-  // park() freezes physics for shots/tests — then one face per frame so a
-  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
-  // seconds-per-frame).
-  // Live race/count only — results freezes above; menu flyby has no player car
-  // paint that needs a probe, and a mid-results probe was a whole-world redraw.
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
-    _envFace = (_envFace + 1) % 6;
+  // ── Live env probe: one 64px cubemap face / 4th race frame (full cube / 24);
+  // clearcoat samples real surroundings SSR can't see. carEnvCube=0 skips; dbgCam
+  // skips (OOM). Stage-1 renderScale<0.98 → every 8th frame (_envMask). park() →
+  // 1 face/frame. After face 5: HOLD until move/sun/wet/tod/lights (audit 2026-10-05 #2).
+  const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
-    const _pex = smp2.p[0] + smp2.r[0] * player.x,
-          _pez = smp2.p[2] + smp2.r[2] * player.x;
-    const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
-    if (_envInv) {
-      frameSky.invViewProj = _envInv;
-      // THE `finally` IS LOAD-BEARING: it prevents a frozen game, not a lost
-      // reflection. envFaceBegin raises GLX's `_envActive`, begin() branches on
-      // it every frame, and envFaceEnd is its ONLY lowering — so a throw below
-      // left the whole game rendering into a 64-pixel cubemap for the life of
-      // the tab, under a canvas stuck on its last good frame. Ledger 2026-09-22.
-      // Same early-Z order as the main camera (opaque → sky). The 64² face
-      // is ~200× smaller, but the sky still filled every pixel the world
-      // then overwrote. Glow stays off on the probe (`false` below).
-      try {
-        drawWorldMeshes(frame, night, wet, _floodEmit, false);
-        gfx.drawSky(frameSky);
-      } finally {
-        gfx.envFaceEnd(_envFace);
+    const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
+    const _es = frame.sunDir || [0, 1, 0], _ew = frame.wetness || 0, _elg = frame.allLightsGen || 0;
+    if (_envHold) {
+      const dx = _pex - _envLatch[0], dy = _pey - _envLatch[1], dz = _pez - _envLatch[2];
+      if (dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
+        || Math.abs(_es[0] - _envLatch[3]) > 1e-4 || Math.abs(_es[1] - _envLatch[4]) > 1e-4 || Math.abs(_es[2] - _envLatch[5]) > 1e-4
+        || Math.abs(_ew - _envLatch[6]) > 1e-3 || raceTimeOfDay !== _envLatchTod || _elg !== _envLatch[7])
+        { _envHold = false; _envFace = -1; }
+    }
+    if (!_envHold) {
+      _envFace = (_envFace + 1) % 6;
+      const _envInv = gfx.envFaceBegin(_envFace, [_pex, _pey, _pez], frame);
+      if (_envInv) {
+        frameSky.invViewProj = _envInv;
+        // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd
+        // is its ONLY lowering — a throw here froze the tab into a 64px cube (2026-09-22).
+        try { drawWorldMeshes(frame, night, wet, _floodEmit, false); gfx.drawSky(frameSky); }
+        finally { gfx.envFaceEnd(_envFace); }
+      }
+      if (_envFace === 5) {
+        _envHold = true; _envLatchTod = raceTimeOfDay;
+        _envLatch[0] = _pex; _envLatch[1] = _pey; _envLatch[2] = _pez; _envLatch[3] = _es[0];
+        _envLatch[4] = _es[1]; _envLatch[5] = _es[2]; _envLatch[6] = _ew; _envLatch[7] = _elg;
       }
     }
-  } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) {
+    gfx.envProbeReset(); _envHold = false; _envFace = -1;   // tier 1 sheds PRODUCER; envReady latches
+  }
   // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
   mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
@@ -7435,6 +7466,11 @@ function render(dt) {
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
+  // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
+  // a struggling device stops spawning sub-pixel puffs that only starve the pool.
+  // Squared once per frame — same divisor spray/rain already use for density.
+  const _fxCullR = 110 / (1 + ((typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0));
+  const _fxCullR2 = _fxCullR * _fxCullR;
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
     // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
@@ -7610,7 +7646,7 @@ function render(dt) {
     // starve the shared pool).
     if (state !== "menu") {
       const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
-      if (fdx * fdx + fdz * fdz < 110 * 110) {
+      if (fdx * fdx + fdz * fdz < _fxCullR2) {
         // Collision sparks — flag set by collideFx during the physics step
         // (it has no world coords there); consumed once, at the car.
         if (c.fxSparkI) {
@@ -8742,7 +8778,7 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
@@ -8996,6 +9032,6 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // ...and a link pasted into a tab that is ALREADY running only fires
 // hashchange. The lobby's own listener exists once the bundle is up; until
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
-if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
+if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); }); if (typeof SurveyHud !== "undefined") SurveyHud.boot({ $, els, document, loadingScreen, canvas });
 
 })();

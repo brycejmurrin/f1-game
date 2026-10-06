@@ -223,3 +223,11 @@ test("drawing: the live drag swaps the bump into the built heights analytically;
   assert.doesNotThrow(() => { h.pr.setBuilt(null); h.pr.render(); h.pr.resize(); h.pr.reset(); h.pr.destroy(); });
   assert.equal(h.grips().length, 0, "nothing built: nothing to grip");
 });
+
+test("flat elevation: one height label when max and min round equal (no colliding dual 0 m)", () => {
+  const h = boot();
+  h.pr.render();
+  const heightLabels = h.rec.texts.filter((t) => /^-?\d+ m$/.test(t));
+  assert.equal(heightLabels.length, 1, "one label on a flat strip: " + heightLabels.join(", "));
+  assert.equal(heightLabels[0], "0 m");
+});

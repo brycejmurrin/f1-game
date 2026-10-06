@@ -777,7 +777,17 @@ const GLXBackend = (function () {
         var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
         if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
-        else if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
+        else {
+          if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
+          // Same recovery panel boot uses when GLX.init fails — not only the
+          // JS error card — so a CPU-limited box past the reload budget gets
+          // RETRY / USE WEBGL2 instead of a silent dead canvas + stuck handoff.
+          try {
+            if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+              RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+            }
+          } catch (_) { /* picker absent in harness */ }
+        }
       } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
     }, false);
     // The restore obeys the same two-reload budget as the loss: a device that

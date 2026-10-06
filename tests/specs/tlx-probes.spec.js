@@ -79,14 +79,23 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
-  test("the shipped unset backend boots TLX/Three", async ({ page }) => {
+  test("the shipped unset backend boots TLX when a GPU adapter exists", async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.removeItem("apex26.gfxBackend"); } catch (_) {}
     });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    const backend = await page.evaluate(() => GLX.backend);
-    expect(backend).toBe("three");
+    const info = await page.evaluate(async () => {
+      let hasAdapter = false;
+      try {
+        if (navigator.gpu && navigator.gpu.requestAdapter) hasAdapter = !!(await navigator.gpu.requestAdapter());
+      } catch (_) { hasAdapter = false; }
+      return { backend: GLX.backend, hasAdapter };
+    });
+    // This file's launch pins WebGPU flags so an adapter usually resolves; when
+    // it does not, unset auto-selects GLX and skips three.webgpu (renderer-boot).
+    if (info.hasAdapter) expect(info.backend).toBe("three");
+    else expect(info.backend).toBeUndefined();
   });
 
   test("the canvas is OPAQUE — the tag in alpha can never become opacity", async ({ page }) => {

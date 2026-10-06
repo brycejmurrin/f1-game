@@ -39,26 +39,53 @@ valid_entry() {
   fi
 }
 
+# Process substitution (`<(…)`) needs /dev/fd. Some agents and CI images do not
+# have it (this sandbox: "No such file or directory"). Temp files do.
+scratch_list() {
+  local fn="$1" out
+  out="$(mktemp)"
+  "$fn" >"$out"
+  printf '%s\n' "$out"
+}
+
 if [[ "$MODE" == "--check" ]]; then
   if [[ ! -d "$DST" ]]; then echo "no mirror at .agents/skills (run without --check)"; exit 1; fi
   drift=0
-  diff <(want) <(have) >/dev/null || drift=1
+  wantf="$(scratch_list want)"
+  havef="$(scratch_list have)"
+  diff "$wantf" "$havef" >/dev/null || drift=1
   while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
     if ! valid_entry "$name"; then echo "invalid mirror: $name" >&2; drift=1; fi
-  done < <(want)
-  if [[ "$drift" == 0 ]]; then echo "mirror up to date ($(want | wc -l | tr -d ' ') skills)"; exit 0; fi
-  echo ".agents/skills differs from .claude/skills — re-run to repair"; diff <(want) <(have) || true; exit 1
+  done <"$wantf"
+  if [[ "$drift" == 0 ]]; then
+    echo "mirror up to date ($(wc -l <"$wantf" | tr -d ' ') skills)"
+    rm -f "$wantf" "$havef"
+    exit 0
+  fi
+  echo ".agents/skills differs from .claude/skills — re-run to repair"
+  diff "$wantf" "$havef" || true
+  rm -f "$wantf" "$havef"
+  exit 1
 fi
 
+wantf="$(scratch_list want)"
 while IFS= read -r name; do
-  [[ -f "$SRC/$name/SKILL.md" ]] || { echo "Missing source SKILL.md: $name" >&2; exit 1; }
-done < <(want)
+  [[ -n "$name" ]] || continue
+  [[ -f "$SRC/$name/SKILL.md" ]] || { echo "Missing source SKILL.md: $name" >&2; rm -f "$wantf"; exit 1; }
+done <"$wantf"
 mkdir -p "$DST"
+havef="$(scratch_list have)"
 # stale entries out
-while IFS= read -r name; do [[ -d "$SRC/$name" ]] || rm -rf "${DST:?}/$name"; done < <(have)
 while IFS= read -r name; do
+  [[ -n "$name" ]] || continue
+  [[ -d "$SRC/$name" ]] || rm -rf "${DST:?}/$name"
+done <"$havef"
+while IFS= read -r name; do
+  [[ -n "$name" ]] || continue
   if [[ "$MODE" == "--copy" ]]; then rm -rf "${DST:?}/$name"; cp -R "$SRC/$name" "$DST/$name"
   else [[ -L "$DST/$name" && "$(readlink "$DST/$name")" == "../../.claude/skills/$name" && -d "$DST/$name" ]] || { rm -rf "${DST:?}/$name"; ln -s "../../.claude/skills/$name" "$DST/$name"; }
   fi
-done < <(want)
-echo "mirrored $(want | wc -l | tr -d ' ') skills into .agents/skills (${MODE:-symlinks})"
+done <"$wantf"
+echo "mirrored $(wc -l <"$wantf" | tr -d ' ') skills into .agents/skills (${MODE:-symlinks})"
+rm -f "$wantf" "$havef"

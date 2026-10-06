@@ -50,6 +50,9 @@ export const SCREENS = {
   howtoplay: { name: "How to play", root: "#howtoplay", clicks: ["#mb-help"] },
   vsfriend: { name: "VS friend lobby", root: "#vsfriend", clicks: ["#mb-vs"] },
   pause: { name: "Pause menu", root: "#pausemenu", clicks: ["#pausebtn"], race: "monza" },
+  // APEX_SURVEY_HUD=1: cockpit HUD without startRace / scenery warm (Wave 3 survey).
+  hud: { name: "Survey HUD (no race)", root: "#hud", clicks: [], surveyHud: true },
+  hudpause: { name: "Survey pause (no race)", root: "#pausemenu", clicks: ["#pausebtn"], surveyHud: true },
 };
 
 const ALIASES = {
@@ -62,6 +65,8 @@ const ALIASES = {
   vs: "vsfriend",
   paused: "pause",
   pausemenu: "pause",
+  surveyhud: "hud",
+  "survey-hud": "hud",
 };
 
 export function resolveScreen(id) {
@@ -153,7 +158,7 @@ Usage:
   node tools/ui/css-play.mjs settings --inject ".sheet{max-height:80vh}" --json
 
 Flags:
-  --screen ID       title|select|garage|settings|career|datahub|howtoplay|vsfriend|pause
+  --screen ID       title|select|garage|settings|career|datahub|howtoplay|vsfriend|pause|hud|hudpause
   --sel CSS         extra querySelectorAll hits in the DOM dump
   --css css/FILE    hot-swap that stylesheet from disk (?play=<mtime>, no cache bump)
   --inject CSS      overlay <style id="apex-css-play"> after the screen opens
@@ -167,6 +172,8 @@ Flags:
   --no-shot         DOM dump only
   --list            catalog
   --help
+
+hud / hudpause: ?APEX_SURVEY_HUD=1 (no race / scenery warm).
 
 Same CLI via the Playwright wrapper:
   ./tools/mcp/playwright-mcp.sh play --screen settings
@@ -333,7 +340,10 @@ export async function runCssPlay(opts) {
     const page = await browser.newPage({
       viewport: { width: opts.viewport.width, height: opts.viewport.height },
     });
-    await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 90000 });
+    const bootUrl = def.surveyHud
+      ? srv.url + (srv.url.includes("?") ? "&" : "?") + "APEX_SURVEY_HUD=1"
+      : srv.url;
+    await page.goto(bootUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
       polling: 100, timeout: 30000,
     });
@@ -345,7 +355,17 @@ export async function runCssPlay(opts) {
     if (opts.scale != null && !Number.isNaN(opts.scale)) {
       await page.evaluate((n) => window.__apex.uiScale(n), opts.scale);
     }
-    if (def.race) {
+    if (def.surveyHud) {
+      await page.waitForSelector("#hud:not([hidden])", { timeout: 15000 });
+      await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 15000 });
+      // Steer ◀ ▶ would cover BRAKE/ERS; the fixture must leave them hidden.
+      await page.waitForFunction(() => {
+        const sl = document.getElementById("btn-steer-left");
+        const sr = document.getElementById("btn-steer-right");
+        const hud = document.getElementById("hud");
+        return hud && !hud.hidden && (!sl || sl.hidden) && (!sr || sr.hidden);
+      }, null, { polling: 100, timeout: 15000 });
+    } else if (def.race) {
       await page.evaluate(async (id) => {
         await window.__apex.race(id);
         window.__apex.go();
