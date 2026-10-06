@@ -964,7 +964,10 @@
       // Madrid GP hoarding densify (sheet-03: missing trackside banners).
       sponsorHoarding(0.08, 0.11, -1, 6.5, { h: 1.4, style: "panel" });
       sponsorHoarding(0.48, 0.52, 1, 6.5, { h: 1.4, style: "panel" });
-      sponsorHoarding(0.88, 0.92, 1, 6.2, { h: 1.3, style: "panel" });
+      // Was 0.88–0.92 side +1 gap 6.2: that run sat on the same along-track
+      // nodes as hedge(0.84, 0.94, 1, 9) and their ±t end faces coplanar-fought
+      // (4 pairs / 2 spots, 4.0 mm, 2.4 m² — coplanar-audit 8 > baseline 6).
+      sponsorHoarding(0.26, 0.30, 1, 6.2, { h: 1.3, style: "panel" });
       sponsorHoarding(0.74, 0.78, -1, 7.0, { h: 1.5, style: "panel" });
       cameraTower(at(0.078), 1, 20, { h: 16 });
       cameraTower(at(0.75), -1, 56, { h: 18 });
