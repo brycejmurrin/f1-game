@@ -184,4 +184,24 @@ test.describe("garage active aero", () => {
     expect(after.az).toBeCloseTo(chosen.az, 5);
     expect(after.dist).toBeCloseTo(chosen.dist, 5);
   });
+
+  // Screen sun-shafts from the bay sky fill washed liveries white/sky-blue after
+  // team switch + orbit (live garage sheet 2026-10-06). presentOpts must keep
+  // shafts at 0 even when the Home track's LT.sunShaftMul is hot — a pixel
+  // washout gate would need soft-present + luminance, which this suite cannot
+  // afford; the live knob is the same contract and is assertable in one evaluate.
+  test("presentOpts keeps screen sun-shafts off after team switches", async ({ page }) => {
+    await openGarage(page);
+    const teams = ["mercedes", "ferrari", "redbull", "astonmartin"];
+    for (const id of teams) {
+      const shaft = await page.evaluate((tid) => {
+        const r = window.__apex.garageTeam(tid);
+        if (!r || !r.ok) throw new Error("garageTeam " + tid + ": " + JSON.stringify(r));
+        window.__apex.garageFrame("hero", { az: 1.1, el: 0.35 });
+        window.__apex.garageStep(1 / 30, 24);
+        return SetupCamera.presentOpts().tune.sunShaftMul;
+      }, id);
+      expect(shaft, `${id} sunShaftMul`).toBe(0);
+    }
+  });
 });

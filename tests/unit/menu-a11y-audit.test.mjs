@@ -510,6 +510,8 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
   const SKIP = {
     overlay: "the title page itself — the document's main content, not a layer over it",
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
+    // Pre-race plate: role=status (not region/dialog); named via aria-label.
+    loading: "status plate — announces once, not a navigable region",
   };
   for (const id of loadLayerIds()) {
     if (SKIP[id]) continue;
@@ -526,6 +528,14 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
     assert.ok(by || label, `#${id} has an accessible name`);
     if (by) for (const ref of by[1].split(/\s+/)) assert.ok(ids.has(ref), `#${id} aria-labelledby → #${ref} exists`);
   }
+  // #loading stays role=status + data-esc="none" (Escape refused; pause via KeyP
+  // is refused in platform-session.js). Pin both so the layer list cannot drift
+  // back to a nameless / Esc-open plate.
+  const loadingTag = openTag("loading");
+  assert.ok(loadingTag, "#loading is in index.html");
+  assert.match(loadingTag, /role="status"/, "#loading announces as status");
+  assert.match(loadingTag, /aria-label="[^"]+"/, "#loading has an accessible name");
+  assert.match(loadingTag, /data-esc="none"/, "#loading refuses Escape");
   // #announce (LIGHTS OUT, FINAL LAP, SAVE RESTORED…) is visual only; its spoken twin
   // #announce-live is the one polite live region, so nothing is read twice.
   assert.match(openTag("announce-live"), /role="status"[^>]*aria-live="polite"/, "#announce-live is the polite live region");
@@ -539,6 +549,7 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
 
 test("Escape/back is one behaviour: every layer names its own door, and every door exists", () => {
   const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
+  assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
   for (const id of loadLayerIds()) {
     const tag = openTag(id);
     if (NO_DOOR[id]) { assert.doesNotMatch(tag, /data-esc/, `#${id} refuses no key and names no door`); continue; }
@@ -616,6 +627,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
   const SKIP = {
     "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
     "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",
+    loading: "status plate — no scroll region, no selected chips",
   };
   for (const id of layers) {
     if (SKIP[id]) continue;

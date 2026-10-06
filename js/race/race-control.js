@@ -122,9 +122,15 @@ const RaceControl = (function () {
   }
   // Classification comparator for finishers: more laps first, then the clock
   // (finishT + penalty). `lap` counts crossings, so it is the same metric for
-  // the winner (lapsTarget + 1) and a car flagged a lap down.
+  // the winner (lapsTarget + 1) and a car flagged a lap down. Non-finite
+  // finishT (null / NaN) ranks LAST — raw `null + 0 === 0` put a missing clock
+  // first among same-lap finishers; undefined penalty → NaN broke the sort.
   function finishOrder(a, b) {
-    return (b.lap - a.lap) || ((a.finishT + a.penalty) - (b.finishT + b.penalty));
+    const clock = (c) => {
+      const t = c && c.finishT;
+      return Number.isFinite(t) ? t + (c.penalty || 0) : Infinity;
+    };
+    return ((b.lap || 0) - (a.lap || 0)) || (clock(a) - clock(b));
   }
 
   // Classification comparator for cars STILL RUNNING at the flag: progress,

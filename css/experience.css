@@ -1,8 +1,13 @@
 /* Apex 26 — readable live paddock and contextual race doors; existing primitives (Home explore tier). */
 @layer overlays {
-  /* Filled accent surfaces use contrast ink rather than the page's theme ink. */
+  /* Filled accent surfaces use contrast ink rather than the page's theme ink.
+     CAREER (solid --red) needs --menu-accent-ink. Retention / primary / explore
+     are dark plates with a red leading edge only — ember/amber ink is near
+     --bg, so without the override DAILY TIME TRIAL painted black-on-carbon
+     (shipped menuAccent ember, 2026-10-06 phone landscape). */
   .bigbtn:not(.alt) { color: var(--menu-accent-ink, var(--text)); }
   #overlay #mb-career .mb-sub { color: inherit; }
+  #menu-retention .bigbtn,
   #menu-primary .bigbtn,
   #menu-explore .bigbtn { color: var(--text); }
   #pm-race-context { grid-column: 1 / -1; display: grid; gap: 0; line-height: 1.25; padding: calc(var(--gap) / 2) var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }

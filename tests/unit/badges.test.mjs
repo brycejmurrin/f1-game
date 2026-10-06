@@ -61,6 +61,8 @@ test("the unlock rules read the player's classified result and nothing else", ()
   assert.deepEqual(host(B.forRace(win({ pos: 3, cuts: 2 }))), ["podium"], "P3 with cuts: podium, no clean sheet");
   assert.deepEqual(host(B.forRace(win({ pos: 7, fastest: true }))), ["fastest_lap", "clean_race"]);
   assert.deepEqual(host(B.forRace(win({ pos: 1, retired: true }))), [], "a retirement earns nothing");
+  assert.deepEqual(host(B.forRace(win({ pos: 1, dsq: "one dry compound" }))), [],
+    "a DSQ earns nothing (not CLEAN SHEET / podium / venue), matching Career.cleanRun");
   assert.deepEqual(host(B.forRace(win({ pos: 9, penalty: 5 }))), [], "a penalty is not a clean sheet");
   assert.deepEqual(host(B.forRace(win({ pos: 12, finished: false, fastest: true }))), [],
     "still running at the flag: classified, but no fastest lap and no clean sheet");

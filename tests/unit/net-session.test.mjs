@@ -527,6 +527,43 @@ test("a PONG without t2 (21 bytes) is still a sample, read as if unheld", () => 
   assert.equal(session.offset(), 0);
 });
 
+// Truncated type=4 must not refresh lastHeardAt after sync — otherwise a silent
+// (or hostile) peer keeps the 6 s timeout from firing and the rival freezes
+// with no AI hand-back.
+test("a truncated PONG after sync does not keep the session alive past timeout", () => {
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(77) });
+  const realSend = tb.send.bind(tb);
+  let answerPings = true;
+  tb.onMessage((ch, data) => {
+    if (!answerPings || ch !== NetTransport.STATE) return;
+    const dv = NetSnapshot.toView(data);
+    if (!dv || dv.byteLength < 13 || dv.getUint8(0) !== NetSession.PING) return;
+    const out = new DataView(new ArrayBuffer(29));
+    out.setUint8(0, NetSession.PONG);
+    out.setUint32(1, dv.getUint32(1));
+    out.setFloat64(5, dv.getFloat64(5));
+    out.setFloat64(13, 0);
+    out.setFloat64(21, 0);
+    realSend(NetTransport.STATE, new Uint8Array(out.buffer));
+  });
+  const near = NetSession.create({
+    transport: ta, timeoutMs: 600, pingEveryMs: 500, syncPingEveryMs: 100,
+  });
+  let t = 0;
+  while (t < 400) { t += 25; near.pump(t); tb.pump(t); }
+  assert.equal(near.synced(), true, "pair must sync before the truncated flood");
+  answerPings = false;
+  const heardAtSync = near.lastHeard();
+  for (; t <= 1400; t += 50) {
+    realSend(NetTransport.STATE, new Uint8Array([NetSession.PONG]));
+    near.pump(t);
+    tb.pump(t);
+  }
+  assert.equal(near.alive(), false, "truncated PONGs must not defeat the silence timeout");
+  assert.ok(near.lastHeard() === heardAtSync || near.lastHeard() < 400,
+    "lastHeard must not track the truncated flood");
+});
+
 test("session.close() reports 'local' to its own handlers and 'transport' to the peer's", () => {
   // release() closes the transport, whose close event fires synchronously,
   // and the handler saw `alive` still true: our own close() was reported as

@@ -45,6 +45,11 @@ const GLXBackend = (function () {
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
+  // Fallback for the two-reload budget when sessionStorage throws (Safari
+  // private / quota). Without it, both the loss timer and the restore reload
+  // bailed, leaving a restored context with _ctxLost still set — a silent
+  // dead canvas. In-memory only, so a real new visit still gets two attempts.
+  let _sessLostN = 0;
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
@@ -772,28 +777,33 @@ const GLXBackend = (function () {
         } catch (_) { /* no document events: the restore handler below is the remaining path */ }
         return;
       }
+      var _n;
       try {
         var _rk = "apex26.ctxLostReloads";
-        var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
+        _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
-        if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
-        else {
-          if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
-          // Same recovery panel boot uses when GLX.init fails — not only the
-          // JS error card — so a CPU-limited box past the reload budget gets
-          // RETRY / USE WEBGL2 instead of a silent dead canvas + stuck handoff.
-          try {
-            if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
-              RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
-            }
-          } catch (_) { /* picker absent in harness */ }
-        }
-      } catch (_) { /* No sessionStorage: skip the auto-recovery rather than risk an unbounded reload loop with no way to count attempts. */ }
+      } catch (_) { _n = ++_sessLostN; }
+      if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
+      else {
+        if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
+        // Same recovery panel boot uses when GLX.init fails — not only the
+        // JS error card — so a CPU-limited box past the reload budget gets
+        // RETRY / USE WEBGL2 instead of a silent dead canvas + stuck handoff.
+        try {
+          if (typeof RendererPicker !== "undefined" && RendererPicker.showUnavailable) {
+            RendererPicker.showUnavailable({ panel: document.getElementById("nogl") });
+          }
+        } catch (_) { /* picker absent in harness */ }
+      }
     }, false);
     // The restore obeys the same two-reload budget as the loss: a device that
     // loses the context every boot and gets it back reloaded without limit.
+    // Storage failure must NOT skip the reload — that was a dead canvas after
+    // webglcontextrestored (the loss handler also failed to arm its timer).
     canvas.addEventListener("webglcontextrestored", function () {
-      try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+      var n = 0;
+      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+      if (n > 2) return;
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
@@ -1297,7 +1307,12 @@ const GLXBackend = (function () {
     // ImageBitmap or ImageData all carry width/height.
     return _texNote(tex, "content2D", src && src.width, src && src.height, 1);
   }
-  function freeTexture(t) { if (t) { _texForget(t); gl.deleteTexture(t); } }
+  function freeTexture(t) {
+    if (!t) return;
+    _texForget(t);
+    if (ctxGone()) return;   // driver already dropped the unit; deleteTexture would be INVALID_OPERATION
+    gl.deleteTexture(t);
+  }
 
   // ── Baked PBR material texture arrays ──────────────────────────────────────
   // One TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID, so the lit shader can
@@ -2192,6 +2207,7 @@ const GLXBackend = (function () {
     return batch._shadowPacked;
   }
   function cullInstances(batch, planes, opts) {
+    if (ctxGone()) return 0;
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
     const shadow = !!(opts && opts.upload === false);
     // There is one camera GPU instance buffer, so only its resident pack can be
@@ -2347,7 +2363,7 @@ const GLXBackend = (function () {
   }
 
   function freeInstancedBatch(batch) {
-    if (!batch) return;
+    if (!batch || ctxGone()) return;
     if (batch.ibo) gl.deleteBuffer(batch.ibo);
     if (batch.cbo) gl.deleteBuffer(batch.cbo);
     if (batch.shadowIbo) { gl.deleteBuffer(batch.shadowIbo); batch.shadowIbo = null; }
