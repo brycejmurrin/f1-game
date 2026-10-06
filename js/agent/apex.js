@@ -268,6 +268,7 @@ const api = {
     if (!G.player || !G.track) return false;
     G.skyViewOverride = null;   // clear any sky override so normal chase cam resumes
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
@@ -1323,6 +1324,7 @@ const api = {
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;

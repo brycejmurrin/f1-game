@@ -5,7 +5,19 @@ import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
+// Shipped HELMET cam + large type change compact HUD geometry. Pin the previous
+// look so this file stays a redesign-fit contract, not a camera-default test.
+const PIN_PREVIOUS_LOOK = () => {
+  try {
+    localStorage.setItem("apex26.textSize", '"normal"');
+    localStorage.setItem("apex26.uiContrast", '"off"');
+    localStorage.setItem("apex26.homeScene", '"garage"');
+    localStorage.setItem("apex26.camMode", "3");
+  } catch (_) {}
+};
+
 async function waitReady(page) {
+  await page.addInitScript(PIN_PREVIOUS_LOOK);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 20 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race,

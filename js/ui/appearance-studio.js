@@ -16,14 +16,18 @@ const AppearanceStudio = (function () {
     homeScene: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"], backgroundMotion: ["still", "ambient"],
     homeCamera: ["auto", "hero", "front", "side", "rear"],
   };
-  const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: "brand", hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
-    textSize: "normal", uiContrast: "off", cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: "on", uiScale: null,
+  // Visual RESET SCOPE writes this snapshot. Prefer SettingsDefaults when a key
+  // is listed there so RESET restores the same shipped prefs a fresh install gets.
+  const shipped = (k, d) => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
+    ? SettingsDefaults.get(k) : d;
+  const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
+    textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: "on", uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
-    hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: "auto",
+    hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null,
-    homeScene: "garage", backgroundMotion: "still", homeCamera: "auto" });
+    homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
@@ -59,8 +63,8 @@ const AppearanceStudio = (function () {
   const undoStack = [], sceneListeners = [];
   function say(message) { if (ui) ui.status.textContent = message; }
   function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
-  function scene() { const mode = store.get("homeScene", "garage"), motion = store.get("backgroundMotion", "still"); return { mode: ENUMS.homeScene.includes(mode) ? mode : "garage", motion: motion === "ambient" ? "ambient" : "still" }; }
-  function homeCamera() { const value = store.get("homeCamera", "auto"); return ENUMS.homeCamera.includes(value) ? value : "auto"; }
+  function scene() { const mode = store.get("homeScene", "photo"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : "photo", motion: motion === "ambient" ? "ambient" : "still" }; }
+  function homeCamera() { const value = store.get("homeCamera", "side"); return ENUMS.homeCamera.includes(value) ? value : "side"; }
   function setHomeCamera(value) { const next = snapshot(); next.homeCamera = value; return applySnapshot(next); }
   function effectiveSceneMotion() {
     const s = scene();

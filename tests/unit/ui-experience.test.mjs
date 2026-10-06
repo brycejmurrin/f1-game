@@ -104,7 +104,7 @@ test('Home Photo keeps its manual camera through resize and temporary hiding, th
     GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
     GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
     AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
-    addEventListener() {}, Log: { warn() {} } };
+    addEventListener() {}, setTimeout, clearTimeout, Log: { warn() {} } };
   sandbox.window = sandbox;
   const local = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
@@ -125,6 +125,123 @@ test('Home Photo keeps its manual camera through resize and temporary hiding, th
   dom.byId('photo-studio').hidden = false; ui.renderHome(1 / 60);
   assert.equal(current.shot, 'hero', 'a later photo cannot inherit the discarded manual pose');
   ui.stopHome(); assert.deepEqual(current, { shot: 'garage-before-Home', dist: 8 });
+});
+
+test('narrow resize does not stopHome/beginHome; debounced settle only calls gfx.resize', () => {
+  assert.match(code, /const sig = s\.mode \+ ":" \+ s\.shot \+ ":" \+ motion \+ ":" \+ photoOpen;/);
+  assert.doesNotMatch(code, /const sig = [^;\n]*innerWidth/);
+  assert.match(code, /HOME_RESIZE_MS/);
+  assert.match(code, /viewKey:\s*String\(homeViewGen\)/);
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let begins = 0, ends = 0, resizes = 0, owned = false;
+  const timers = [];
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { begins++; owned = true; return true; },
+    endHome() { ends++; owned = false; }, homeState: () => owned ? {} : null, renderHome: () => true,
+  };
+  const listeners = {};
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1280, innerHeight: 720,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn); },
+    setTimeout(fn, ms) { const id = timers.length; timers.push({ fn, ms }); return id; },
+    clearTimeout(id) { if (timers[id]) timers[id].fn = null; },
+    Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const gfx = { resize() { resizes++; } };
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx }, { setupCam, trackReady: () => true });
+  ui.renderHome(1 / 60);
+  assert.equal(begins, 1);
+  sandbox.innerWidth = 500; sandbox.innerHeight = 900;
+  ui.renderHome(1 / 60);
+  assert.equal(begins, 1, 'viewport change alone must not beginHome again');
+  assert.equal(ends, 0, 'viewport change alone must not endHome');
+  assert.equal(dom.byId('overlay').dataset.homeReady, '1', 'homeReady stays while session lives');
+  assert.ok(listeners.resize && listeners.resize.length, 'resize listener registered');
+  listeners.resize.forEach((fn) => fn());
+  assert.equal(resizes, 0, 'resize is debounced');
+  assert.equal(timers.length, 1);
+  timers[0].fn();
+  assert.equal(resizes, 1, 'settle calls gfx.resize once');
+  assert.equal(begins, 1);
+});
+
+test('previewScene skips software GL and downscales capture edges', async () => {
+  assert.match(code, /previewSoftGfx/);
+  assert.match(code, /PREVIEW_MAX_EDGE\s*=\s*512/);
+  assert.doesNotMatch(code, /previewKey\s*=\s*\[[^\]]*innerWidth/);
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'carsetup']) dom.byId(id).hidden = true;
+  dom.byId('pmsettings').hidden = false;
+  dom.byId('pm-panel-appearance').hidden = false;
+  let begins = 0, frames = [];
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { begins++; return true; }, endHome() {}, homeState: () => ({}), renderHome: () => true,
+  };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1280, innerHeight: 720,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {}, rev: 1 } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: {
+      scene: () => ({ mode: 'garage', motion: 'still', shot: 'hero' }), homeCamera: () => 'hero', onSceneChange() {},
+      setPreviewFrame(url) { frames.push(url); return true; },
+    },
+    addEventListener() {}, setTimeout, clearTimeout, queueMicrotask,
+    requestAnimationFrame: (fn) => { fn(); return 1; },
+    ImageData: class ImageData { constructor(data, w, h) { this.data = data; this.width = w; this.height = h; } },
+    Uint8ClampedArray, Log: { warn() {}, debug() {} },
+    performance: { now: () => 0 },
+  };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  // Soft path: no beginHome / no frame
+  const softGfx = { softPresent: () => true, backendState: () => ({ softwareGL: true }) };
+  const uiSoft = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx: softGfx, teamIdx: 0 },
+    { setupCam, trackReady: () => true });
+  await uiSoft.previewScene({ mode: 'garage', shot: 'hero' });
+  assert.equal(begins, 0, 'software GL skips garage capture');
+  assert.equal(frames.length, 0);
+  // Hardware path: capture downscales a 1024 edge to PREVIEW_MAX_EDGE
+  begins = 0; frames = [];
+  const pixels = { width: 1024, height: 768, data: new Uint8ClampedArray(1024 * 768 * 4) };
+  const hardGfx = {
+    softPresent: () => false, backendState: () => ({ softwareGL: false }),
+    warming: () => false, capturePixels: async () => pixels,
+  };
+  // Fresh module instance so previewMode latch from soft skip does not suppress hard
+  const local2 = vm.createContext({ ...sandbox, document: dom.document });
+  local2.window = local2;
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local2);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local2);
+  const uiHard = local2.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx: hardGfx, teamIdx: 0 },
+    { setupCam, trackReady: () => true });
+  // Canvas stub for downscale
+  const canvases = [];
+  local2.document.createElement = (tag) => {
+    if (tag !== 'canvas') return dom.document.createElement(tag);
+    const c = { width: 0, height: 0, getContext() {
+      return {
+        putImageData() {},
+        drawImage(src) { c._from = src && { w: src.width, h: src.height }; },
+      };
+    }, toDataURL() { return `data:image/jpeg;${c.width}x${c.height}`; } };
+    canvases.push(c);
+    return c;
+  };
+  await uiHard.previewScene({ mode: 'garage', shot: 'hero' });
+  assert.equal(begins, 1);
+  assert.equal(frames.length, 1);
+  assert.match(frames[0], /512x384/, 'preview capture is capped at PREVIEW_MAX_EDGE');
 });
 
 test('a Home Photo SUBJECT pick closes the studio, swaps the scene for the visit and reopens through the door; DONE restores', async () => {
