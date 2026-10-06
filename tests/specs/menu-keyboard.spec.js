@@ -374,9 +374,11 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
-
+    // TopModal mirrors `hidden` onto showModal() before evaluate returns.
+    // Do not waitForFunction here: park() plus an open menu parks the game's
+    // rAF, so a waiter that still samples on animation frames never sees an
+    // already-true predicate (the track-detail test below documents the same
+    // park). A second evaluate is the same check without depending on frames.
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
       modal: document.getElementById("standings").matches(":modal"),
@@ -388,8 +390,6 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
     // …and the arrow key lands inside it, which is the behaviour that was lost.
     await page.keyboard.press("ArrowDown");
-    await page.waitForFunction(() => document.getElementById("standings").contains(document.activeElement),
-      null, { polling: 100, timeout: 5_000 });
     expect(await page.evaluate(() =>
       document.getElementById("standings").contains(document.activeElement))).toBe(true);
   });
