@@ -21,6 +21,7 @@ stayed separate in the 2026-09-03 pass.
 | Skill | Use it when |
 |---|---|
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`); read-only: the fix for what it finds is new-track / survey-track. |
+| **apex-connector** | Grok custom connector for `apex_*` tools (`apex_status`, pick tests, shot, eval) via `apex-http-up.mjs`. Not the phone browser connector and not the three stdio servers in `.mcp.json`. |
 | **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI (`caution().level` 0, `stuckT` growing; a flag or safety car stuck out is race-incidents-control), `js/physics/ai-drive.js`. |
 | **asset-pack** | Missing/wrong/garbled baked PBR materials in `assets/pack` (TLX garble included; read `__apex.assets().uploaded` first), MAT-layer mismatches, `js/render/shared/assets.js` / `tools/gen/assets.mjs`, `matTexMix` / `__apex.assets()` / `matTex()`. |
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |

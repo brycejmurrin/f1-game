@@ -309,6 +309,8 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | Tool | Does | Paired skill |
 |---|---|---|
 | **mcp/apex-extras.mjs** | Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit. | check-changes |
+| **mcp/apex-http-up.mjs** | Publish the apex_* Grok connector. Reuse a live address; start one only when it is dead. | apex-connector |
+| **mcp/apex-http.mjs** | Grok connector for apex_* tools: streamable HTTP on 127.0.0.1:3714 with a bearer token. Not a .mcp.json server. | apex-connector |
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |

@@ -2146,7 +2146,7 @@ const RESOURCES = [
 /** tools/call requests still running, by JSON-RPC id, for notifications/cancelled. */
 const inflight = new Map();
 
-async function handleRpc(msg) {
+export async function handleRpc(msg) {
   // MCP 2025-06-18 removed JSON-RPC batching. Reject arrays and primitive
   // envelopes without dereferencing them or terminating the shared server.
   // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic
