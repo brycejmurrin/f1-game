@@ -21,6 +21,7 @@
 // will not match. Regenerate with `npm run test:baseline -- --update-snapshots`
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -40,11 +41,18 @@ const SCREENS = [
   }],
   ["garage", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden);
+    // #carsetup unhides before buildSetup paints tabs. ENGINE click before
+    // aria-busy clears leaves TEAM selected (CI 37452342027, 0.03 ratio).
+    await waitGarageSheet(page);
     await page.evaluate(() => {
       const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
       (t.find((e) => /ENGINE/i.test(e.textContent || "")) || t[1] || t[0])?.click();
     });
+    await page.waitForFunction(() => {
+      const engine = [...document.querySelectorAll("#cs-tabs .cs-tab")]
+        .find((e) => /ENGINE/i.test(e.textContent || ""));
+      return !!(engine && engine.getAttribute("aria-selected") === "true");
+    }, null, { polling: 100, timeout: 15000 });
   }],
 ];
 
