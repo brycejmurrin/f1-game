@@ -315,6 +315,25 @@ test("BROADCAST director rules: the tightest battle up the order first, the next
   } finally { g.close(); }
 });
 
+test("BROADCAST battles: reuses one pooled array across calls (Director / PiP / ExtraRigs hot path)", async () => {
+  const g = await createGame({ track: "baku" });
+  try {
+    const B = vm.runInContext("Broadcast", g.ctx);
+    const cars = [{ key: "a", prog: 1000, speed: 60 }, { key: "b", prog: 970, speed: 60 }, { key: "c", prog: 600, speed: 60 }, { key: "d", prog: 590, speed: 60 }];
+    const a = B.battles(cars);
+    const snap = host(a);
+    const b = B.battles(cars);
+    assert.equal(b, a, "same pooled fights array");
+    assert.deepEqual(host(b), snap, "content stable across reuse");
+    assert.equal(b.length, 2);
+    // Fewer battles: length shrinks without allocating a new array.
+    const tight = [{ key: "a", prog: 1000, speed: 60 }, { key: "b", prog: 400, speed: 60 }];
+    const c = B.battles(tight);
+    assert.equal(c, a, "still the pool when the fight count drops");
+    assert.equal(c.length, 0, "3 s gap is not a battle");
+  } finally { g.close(); }
+});
+
 test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to the car in the next event with a new shot, a follow key hands the picture over, the results take it down", async () => {
   const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
   try {
