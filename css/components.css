@@ -88,6 +88,24 @@ input[type="range"]:disabled { cursor: default; }
   overscroll-behavior: contain;
 }
 
+/* Native <dialog> UA is width/height: fit-content. `.screen { inset: 0 }` does
+   not stretch that. dialog-platform.css owns the same rules plus ::backdrop;
+   they MUST also live here so a stacked :modal has a viewport box before that
+   sheet's onload. Otherwise the layer stack skips a zero-size #standings over
+   #pausemenu (menu-keyboard selected-1, CI 37439242991 / 37436631474). */
+dialog.screen {
+  margin: 0;
+  border: 0;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  max-width: none; max-height: none;
+  width: 100%; height: 100%;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+}
+dialog.screen:not([open]) { display: none; }
+dialog.screen[open] { display: grid; }
+
 /* ---------- dialogs arrive, rather than appearing ----------
    Scoped to `.dim` — the modal sheets. The two full-screen flows (#select,
    #carsetup) are swapped inside a View Transition (game.js wraps the title/
