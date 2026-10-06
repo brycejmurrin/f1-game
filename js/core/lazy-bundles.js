@@ -210,9 +210,9 @@ async function raceAssets() {
   // fallback would build, so fetch its scenery up front rather than making the
   // first GO wait for it.
   ensureScenery(deps.getContext().trackIdx);
-  // Prefetch audio so a title→race click still has a sync gesture window for
-  // AudioContext.unlock; startRace awaits ensureAudio either way.
-  ensureAudio();
+  // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
+  // networkidle wall. First pointerdown / SOUND click / startRace pulls it
+  // (startRace awaits ensureAudio before startEngine).
   if (window.LightPresets) return;
   await loadBackendScripts(RACE_FILES, []);
   if (window.LightPresets) deps.applyLightTuneIfReady();
