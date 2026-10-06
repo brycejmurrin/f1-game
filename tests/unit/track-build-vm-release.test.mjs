@@ -182,6 +182,11 @@ const STRIP = {
   //   0.2 m wider + yacht glow band; then landmark re-key on this PR.
   // → post-rekey hairpin cityFront removed + Fairmont thinned (CI sweeps):
   //   273417/254782 (2026-10-05)
+  // → city.js day-section early-return re-measure 273417/254782 (2026-10-06).
+  //   CI on the first open-face commit saw 273465/… from a trial grandstandEx
+  //   endWalls default-on; that default was reverted (tris +~3k/30 circuits).
+  //   city.js-only: monaco STRIP unchanged. PR #1062 also bumps this row —
+  //   whichever lands second re-measures.
   monaco: { before: 273417, after: 254782 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
