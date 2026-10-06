@@ -731,6 +731,19 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   opacity: 0.90;
   background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
+/* PHONE PORTRAIT: the centred POS/LAP/TIME/BEST row is wider than the slot
+   beside #minimap (survey 390×844: tower x=31–359 vs map x=10–138, ranked
+   tower × map). Park map + gaps under the measured tower — same --hud-top-h
+   stack as hud-map-low / broadcast. Must follow the #minimap rule above so
+   this `top` wins cascade. 54px is the unfitted tower (SurveyHud never runs
+   fitHud). max-width 500 keeps tablet portrait (≥744) and any landscape
+   (phone 844×390, desktop) on the top-left cluster. */
+@media (orientation: portrait) and (max-width: 500px) {
+  #minimap,
+  .hud-gaps {
+    top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+  }
+}
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
    exactly its border box, so what the CSS says here IS where the image goes.
