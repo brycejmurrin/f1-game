@@ -28,3 +28,4 @@ Use when capturing live Apex UI screenshots systematically (menus, garage, HUD).
 - Box may lack GPU: if race hangs or Graphics unavailable, save that state and stop race HUD; use user-provided cockpit shots for HUD overlaps.
 - Share sampler with UI Survey / Cars via SendToAgent (FYI).
 - Name files with stable slugs matching the checklist.
+- Do not enable auto-merge or merge. Model Auto/`default` only.

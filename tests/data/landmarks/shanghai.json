@@ -1,9 +1,10 @@
 {
-  "why": "Wave 5 — Shanghai International Circuit (wing piers are literal modelGroups; decks stay on overheadSpan. pudong/boardwalk stay required at runtime but their emit bodies exceed the 2200-char BATCH-01 window).",
+  "why": "Wave 5 + detail 2026-10-05 — Shanghai International Circuit (wing piers, lotus secondary stand, Yu pavilions, lake boardwalk). pudong emit exceeds BATCH-01 window but stays required at runtime.",
   "ids": [
     "shanghai-wing-east",
     "shanghai-wing-west",
     "shanghai-circles-stand",
-    "shanghai-yu-pavilions"
+    "shanghai-yu-pavilions",
+    "shanghai-lake-boardwalk"
   ]
 }
