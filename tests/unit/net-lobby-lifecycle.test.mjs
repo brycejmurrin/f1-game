@@ -253,6 +253,20 @@ test("cancel then reopen prevents the prior lobby generation from attaching", as
   h.lobby.cancel();
 });
 
+// ensureNet().then(open) races How to Play the same way DataHub.open does:
+// both are dialog.screen, last showModal wins. Refuse while a title sheet is up.
+test("open() is a no-op while How to Play is visible", () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }) });
+  const howto = { id: "howtoplay", hidden: false };
+  h.elements.set("howtoplay", howto);
+  assert.equal(h.lobby.open(), false, "must refuse under How to Play");
+  assert.equal(h.elements.get("vsfriend").hidden, true, "lobby stays closed");
+  howto.hidden = true;
+  assert.equal(h.lobby.open(), true, "title-only: lobby opens as before");
+  assert.equal(h.elements.get("vsfriend").hidden, false);
+  h.lobby.cancel();
+});
+
 test("MAKE ANSWER during a join still fetching relay credentials waits for the transport", async () => {
   // rtc-e2e / rtc-e2e-3p 2026-09-27: __apex.lobbyJoin fires join() and
   // makeAnswer() back to back, and a guest who opened an invite link taps MAKE
