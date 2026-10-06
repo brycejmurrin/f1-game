@@ -106,6 +106,26 @@ test("TLX post construction failure unwinds targets, textures, and tracked mater
   for (const material of h.made.materials) assert.equal(material.disposeCount, 1);
 });
 
+test("TLX soft blit pools the unstride buffer and writes ImageData in one pass", () => {
+  // Audit #3 / PERF soft-present: a full-frame Uint8ClampedArray + second RGBA
+  // copy every present was a young-gen / long-task source on HeadlessChrome.
+  const src = read("js/render/three/tlx.js");
+  assert.match(src, /let _unstridePool = null/);
+  assert.match(src, /function _ensureUnstridePool\(need\)/);
+  assert.match(src, /function _unstrideIntoSoft\(src, w, h, dest\)/);
+  const unstride = src.slice(src.indexOf("function _unstrideRgba"), src.indexOf("function _unstrideIntoSoft"));
+  assert.doesNotMatch(unstride, /new Uint8ClampedArray\(w \* h \* 4\)/,
+    "per-present full-frame alloc must be gone from _unstrideRgba");
+  assert.match(unstride, /_ensureUnstridePool\(need\)/);
+  const start = src.slice(src.indexOf("function _startSoftBlitRead"), src.indexOf("function _queueSoftBlit"));
+  assert.match(start, /readRenderTargetPixelsAsync\(req\.rt/);
+  assert.match(start, /_unstrideIntoSoft\(src, w, h, _softImg\.data\)/);
+  assert.doesNotMatch(start, /_readLdr\(req/,
+    "soft blit must not take the pooled capture path (extra copy)");
+  assert.match(src, /data: new Uint8ClampedArray\(pack\.data\)/,
+    "capturePixels must clone off the pool so a held shot stays stable");
+});
+
 test("TLX soft present serializes reads, coalesces newest, and rejects stale sizes", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0/);

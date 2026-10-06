@@ -33,7 +33,7 @@ const TrackDesigner = (function () {
       { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); tap the road to add one, double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
       { n: 3, title: "Corners", text: "Still in EDIT, choose CORNER / HAIRPIN / CHICANE / S-BEND, set radius and angle, then tap where it should begin — UNDO takes a stamp back." },
       { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select (height stays put), then drag vertically — or use POINT m / Flat / Rolling / Hilly. Old saves without heights load flat." },
-      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD, then name the circuit." },
+      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD. Optionally place a few props (stand, gantry, trees, water, flood, billboard) — capped so the circuit stays cheap." },
       { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
@@ -52,6 +52,8 @@ const TrackDesigner = (function () {
   const ui = {};                       // named nodes, built once
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
+  // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
+  let propKind = "stand";
   const undo = [], redo = [];
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
@@ -98,7 +100,7 @@ const TrackDesigner = (function () {
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
     if (mode === "elevation") return "ELEVATION: tap a grip to select (height stays) · drag vertically to edit · POINT m / Flat / Rolling / Hilly";
-    if (mode === "scenery") return "SCENERY: pick a theme and tune TIME / TREES / CROWD";
+    if (mode === "scenery") return "SCENERY: theme + TIME / TREES / CROWD · pick a PROP then PLACE AT POINT (or REMOVE LAST)";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
@@ -400,6 +402,47 @@ const TrackDesigner = (function () {
     const next = Object.assign({}, design);
     if (look) next.look = look; else delete next.look;
     commit(next, "look");
+    return true;
+  }
+  /** Scenery props palette: select which kind PLACE AT POINT will add. */
+  function setPropKind(kind) {
+    if (typeof TrackDesignerProps === "undefined" || !TrackDesignerProps.has(kind)) return false;
+    if (propKind === kind) return false;
+    propKind = kind;
+    refreshControls();
+    return true;
+  }
+  /** Place the selected prop kind at the selected control point (or start). */
+  function placeProp(kind) {
+    if (typeof TrackDesignerProps === "undefined" || !design || !design.pts.length) return false;
+    const k = kind || propKind;
+    if (!TrackDesignerProps.has(k)) return false;
+    if (!TrackDesignerProps.canPlace(design.props, k)) {
+      message("Prop cap reached for " + (TrackDesignerProps.LABELS[k] || k), true);
+      return false;
+    }
+    const i = sel >= 0 ? sel : 0;
+    const s = TrackDesignerProps.pointFrac(design.pts, i);
+    const next = TrackDesignerProps.place(design.props, k, { s, side: 1 });
+    if (!next) return false;
+    const d = Object.assign({}, design);
+    if (next.length) d.props = next; else delete d.props;
+    commit(d, "prop");
+    message("Placed " + (TrackDesignerProps.LABELS[k] || k) + " at point " + (i + 1));
+    return true;
+  }
+  /** Remove the last prop of the selected kind (or any last prop when none match). */
+  function removeProp(kind) {
+    if (typeof TrackDesignerProps === "undefined" || !design) return false;
+    const list = design.props;
+    if (!list || !list.length) { message("No props to remove", true); return false; }
+    const k = kind || propKind;
+    let next = TrackDesignerProps.removeLast(list, k);
+    if (next.length === list.length) next = TrackDesignerProps.removeLast(list, null);
+    if (next.length === list.length) return false;
+    const d = Object.assign({}, design);
+    if (next.length) d.props = next; else delete d.props;
+    commit(d, "prop");
     return true;
   }
   function setWidth(hw) {
@@ -767,6 +810,33 @@ const TrackDesigner = (function () {
       }
       ui.look[key] = row; theme.appendChild(row);
     }
+    // Slice H: capped place/remove props palette (themes stay primary).
+    ui.propsLabel = el("div", "td-label", "PROPS");
+    theme.appendChild(ui.propsLabel);
+    ui.props = el("div", "td-chips");
+    ui.props.dataset.role = "props";
+    ui.props.setAttribute("role", "group");
+    ui.props.setAttribute("aria-label", "Scenery props");
+    if (typeof TrackDesignerProps !== "undefined") {
+      for (const id of TrackDesignerProps.KINDS) {
+        const b = btn(TrackDesignerProps.LABELS[id] || id.toUpperCase(), "sel-chip", () => setPropKind(id));
+        b.dataset.prop = id;
+        b.setAttribute("aria-pressed", "false");
+        ui.props.appendChild(b);
+      }
+    }
+    theme.appendChild(ui.props);
+    const propActs = el("div", "td-chips");
+    propActs.dataset.role = "prop-actions";
+    ui.propPlace = btn("PLACE AT POINT", "sel-chip", () => placeProp());
+    ui.propRemove = btn("REMOVE LAST", "sel-chip", () => removeProp());
+    ui.propPlace.setAttribute("aria-label", "Place the selected prop at the selected control point");
+    ui.propRemove.setAttribute("aria-label", "Remove the last placed prop of the selected kind");
+    propActs.append(ui.propPlace, ui.propRemove);
+    theme.appendChild(propActs);
+    ui.propsHint = el("div", "td-hint", "");
+    ui.propsHint.dataset.role = "props-hint";
+    theme.appendChild(ui.propsHint);
     // circuit
     const circuit = group("4 DETAILS");
     ui.name = el("input", "td-input"); ui.name.type = "text"; ui.name.maxLength = CustomTracks.LIMITS.name; ui.name.autocomplete = "off"; ui.name.spellcheck = false;
@@ -957,6 +1027,26 @@ const TrackDesigner = (function () {
       if (!b.dataset || !b.dataset.look) continue;
       const on = b.dataset.look === key + ":" + look[key]; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
     }
+    if (ui.props && typeof TrackDesignerProps !== "undefined") {
+      const c = TrackDesignerProps.counts(design.props);
+      for (const b of ui.props.children) {
+        if (!b.dataset || !b.dataset.prop) continue;
+        const id = b.dataset.prop;
+        const on = propKind === id;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        const n = c[id] || 0, cap = TrackDesignerProps.CAPS[id];
+        b.textContent = (TrackDesignerProps.LABELS[id] || id.toUpperCase()) + " " + n + "/" + cap;
+        b.disabled = !TrackDesignerProps.canPlace(design.props, id) && !on;
+      }
+      if (ui.propsHint) {
+        ui.propsHint.textContent = c.total
+          ? (c.total + "/" + TrackDesignerProps.TOTAL + " props · select a kind, select a point, PLACE AT POINT")
+          : "Optional · select a kind, select a point, PLACE AT POINT · caps keep the circuit cheap";
+      }
+      if (ui.propPlace) ui.propPlace.disabled = !(design.pts && design.pts.length) || !TrackDesignerProps.canPlace(design.props, propKind);
+      if (ui.propRemove) ui.propRemove.disabled = !(design.props && design.props.length);
+    }
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     if (ui.country) ui.country.value = design.country || "";
     ui.width._refresh();
@@ -1146,7 +1236,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, pending: !!previewT,
+      open: openFlag, tool, mode, sel, span, pending: !!previewT, propKind,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1812,7 +1902,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setPropKind, placeProp, removeProp, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank };

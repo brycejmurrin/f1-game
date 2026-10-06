@@ -33,6 +33,16 @@ permissions:
   pages: write
   id-token: write
 
+# SINGLE-FLIGHT TRAIN (2026-10-06). Workflow-level group so only one Pages
+# run occupies runners at a time on this branch (plus at most one pending
+# replacement). cancel-in-progress stays false: never kill a live publish or
+# gate mid-flight. Job-level pages-gate / pages groups remain as belt-and-
+# braces for the ci and deploy jobs. poke-train must not dispatch when tip
+# CI is pending/failed (see ci.yml).
+concurrency:
+  group: pages-train-${{ github.ref }}
+  cancel-in-progress: false
+
 # THE CONTRACT (2026-09-10): a run tests ONE commit, stages THAT commit, and
 # publishes THAT artifact — never the branch tip, never anything its own gate
 # did not see. Three rules make that livable under this branch's push rate
