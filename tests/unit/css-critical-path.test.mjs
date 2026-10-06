@@ -92,6 +92,7 @@ test("blocking sheets restate the dialog.screen closed-box guard", () => {
     "open dialogs need a display flip in the blocking set so dropped child boxes heal");
   assert.match(blocking, /dialog\.screen\s*\{[^}]*width:\s*100%/,
     "UA fit-content of a 0×0 subtree must not win before dialog-platform arrives");
+  assert.match(blocking, /dialog\.screen\s*\{[^}]*height:\s*100%/);
 });
 
 test("blocking sheets hide #rotate-device until overlays.css arrives", () => {
