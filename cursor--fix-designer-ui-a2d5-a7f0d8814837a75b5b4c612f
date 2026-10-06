@@ -1,1 +1,1 @@
-1791329223	Cursor Agent	PR#1161 draft watching CI — OWNED js/editor/{designer,canvas}.js + designer unit tests; FORBIDDEN themes/circuits/lighting/car; UNARMED no AM/merge  [cursor/fix-designer-ui-a2d5; session a7f0d8814837a75b5b4c612f]
+1791329831	Cursor Agent	PR#1161 READY — watching full-tier CI; OWNED js/editor/{designer,canvas}.js + designer units; UNARMED no AM/merge  [cursor/fix-designer-ui-a2d5; session a7f0d8814837a75b5b4c612f]
