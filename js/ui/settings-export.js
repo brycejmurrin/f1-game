@@ -607,8 +607,12 @@ function applyCareer(file, revisions) {
   return { ok: true, applied: r.written.length + (r.selectionWritten ? 1 : 0), skipped, failed, reason: null };
 }
 
-function download(obj, name) {
+async function download(obj, name) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
+  if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+    await NativeDownload.saveBlob(blob, name);
+    return;
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -684,19 +688,24 @@ function create(G) {
   const saveBtn = (id, label, title, make, name) => {
     const b = document.createElement("button");
     b.id = id; b.type = "button"; b.textContent = label; b.title = title;
-    b.onclick = () => {
-      disarm();
+    b.onclick = async () => {
+      if (b.disabled) return;
+      disarm(); unflash(b);
+      b.disabled = true;
+      b.textContent = `${label} — SAVING…`;
       try {
+        tick();
         const file = make();
-        download(file, name(file));
+        await download(file, name(file));
         const n = file.changed ? `${file.changed.length} changed` : `${file.count} keys`;
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
         flash(b, label, "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
+      } finally {
+        b.disabled = false;
       }
-      tick();
     };
     return b;
   };
