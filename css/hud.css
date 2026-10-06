@@ -1912,10 +1912,11 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   bottom: auto;
-  /* Same shape as #hud-limits: the sat offset divides by this element's own
-     zoom (--hud-z-bot). --hud-sec-h is the sector box, already in top-band
-     units; at the phone sizes these two zooms meet it sits under the box. */
-  top: calc((8px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
+     then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
+     S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
+     units; at phone sizes bot/top zooms meet so it still clears the box. */
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
 }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
    the car) to the left column, sitting on top of the left dock (the steer

@@ -125,3 +125,24 @@ test("shell + sheet + toggles: the opt-in readouts are wired without class token
   for (const g of ["HudRelative.tick", "HudStrategy.tick", "HudInputs.frame"]) assert.ok(hud.includes(g), g + " is called by GameHud");
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });
+
+// TOUCH HOME: INPUTS ships under the sector box (css/hud.css). #hud-sectors /
+// #hud-limits clear PAUSE via (8px + tap-hud + 4px + sat) / --hud-z. Omitting
+// tap-hud + 4px puts the trace ~44px up into S1–S3 at touch --tap 52
+// (12 − 56 = −44 at z=1). The rule's own comment says "Same shape as #hud-limits".
+test("touch INPUTS home clears PAUSE/CAM like #hud-limits (not through the sector strip)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  const touch = css.match(/body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)\s*\{([^}]+)\}/);
+  assert.ok(touch, "touch #hud-inputs home rule exists");
+  const top = touch[1].match(/top:\s*([^;]+);/);
+  assert.ok(top, "touch INPUTS sets top");
+  assert.match(top[1], /var\(--tap-hud\)/, "PAUSE/CAM stack (tap-hud) must be in the top calc");
+  assert.match(top[1], /var\(--hud-sec-h/, "sector-box height keeps the trace under S3");
+  // Anchor on the position:fixed home (not body.hud-bcam #hud-limits { display }).
+  const limTop = css.match(/#hud-limits\s*\{\s*position:\s*fixed;[\s\S]*?top:\s*([^;]+);/);
+  assert.ok(limTop, "#hud-limits home top exists");
+  // Same pause clearance prefix as limits; gap under the box may differ.
+  const pauseStack = /\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)/;
+  assert.match(limTop[1], pauseStack, "limits pin (control)");
+  assert.match(top[1], pauseStack, "inputs must share limits' pause/cam stack");
+});
