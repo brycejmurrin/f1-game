@@ -41,6 +41,16 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     visibilityState: "visible",
     getElementById: (id) => elements.get(id) || null,
     querySelector: () => null,
+    // Same shape as data-hub-picker's VM doc — blockingTitleSheet uses one
+    // static #id,#id selector (no dynamic $(id) reads).
+    querySelectorAll(sel) {
+      const out = [];
+      String(sel).split(",").forEach((part) => {
+        const id = part.replace(/^#/, "").trim();
+        if (id && elements.has(id)) out.push(elements.get(id));
+      });
+      return out;
+    },
     addEventListener(type, fn) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
@@ -250,6 +260,20 @@ test("cancel then reopen prevents the prior lobby generation from attaching", as
   assert.equal((await staleHost).error, "cancelled");
   assert.equal((await currentJoin).ok, true);
   assert.deepEqual(h.transports, ["guest"], "only the reopened generation may create a transport");
+  h.lobby.cancel();
+});
+
+// ensureNet().then(open) races How to Play the same way DataHub.open does:
+// both are dialog.screen, last showModal wins. Refuse while a title sheet is up.
+test("open() is a no-op while How to Play is visible", () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }) });
+  const howto = { id: "howtoplay", hidden: false };
+  h.elements.set("howtoplay", howto);
+  assert.equal(h.lobby.open(), false, "must refuse under How to Play");
+  assert.equal(h.elements.get("vsfriend").hidden, true, "lobby stays closed");
+  howto.hidden = true;
+  assert.equal(h.lobby.open(), true, "title-only: lobby opens as before");
+  assert.equal(h.elements.get("vsfriend").hidden, false);
   h.lobby.cancel();
 });
 

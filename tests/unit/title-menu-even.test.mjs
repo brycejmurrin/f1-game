@@ -123,6 +123,15 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   );
   assert.match(experience, /#menu-brand :is\(#soundbtn, #disclaimer\) \{[\s\S]*background:\s*var\(--carbon\)/,
     "Sound and the disclaimer stay on solid --carbon over a bright livery");
+  // Retention / primary / explore are dark plates; only CAREER is solid --red.
+  // Without this override, .bigbtn:not(.alt) { color: var(--menu-accent-ink) }
+  // paints DAILY TIME TRIAL black-on-carbon when menuAccent is ember
+  // (2026-10-06 phone landscape).
+  assert.match(
+    experience,
+    /#menu-retention \.bigbtn,\s*#menu-primary \.bigbtn,\s*#menu-explore \.bigbtn \{ color: var\(--text\)/,
+    "DAILY / RACE / explore plates keep --text, not --menu-accent-ink",
+  );
 });
 
 test("title scrollers never paint a ScrollFade thumb", () => {

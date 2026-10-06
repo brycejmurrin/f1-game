@@ -365,6 +365,15 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   for (const [t, side] of [["--sat", "top"], ["--sar", "right"], ["--sab", "bottom"], ["--sal", "left"]]) {
     assert.equal(decl(tk, ":root", t), `env(safe-area-inset-${side}, 0px)`);
   }
+  // Title landscape: a centred 30rem #ios-install sat over RACE A FRIEND /
+  // SEASON (layout-audit ios-iphone-landscape, 2026-10-06). Park it under
+  // the brand column on compact-wide.
+  const src = read("css/touch-controls.css");
+  assert.match(
+    src,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
+    "compact-wide title parks #ios-install under the brand column, not over the doors",
+  );
 });
 
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
