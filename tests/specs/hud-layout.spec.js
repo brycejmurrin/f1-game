@@ -79,8 +79,22 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // must clear the timing row it hangs under, the flag chip, and the gaps strip.
 const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits", "#announce"];
 
+// Shipped TEXT SIZE large / HIGH CONTRAST / HOME SCENE photo / HELMET cam
+// (settings-defaults) change HUD zoom and onboard chrome. This file measures
+// the previous look (cockpit + normal type). Putting the spec in the diff
+// also ranks it 0 so select-specs cannot drop it as over-budget overflow.
+const PIN_PREVIOUS_LOOK = () => {
+  try {
+    localStorage.setItem("apex26.textSize", '"normal"');
+    localStorage.setItem("apex26.uiContrast", '"off"');
+    localStorage.setItem("apex26.homeScene", '"garage"');
+    localStorage.setItem("apex26.camMode", "3");
+  } catch (_) {}
+};
+
 async function race(page, steer, manual, ins, opts) {
   const o = opts || {};
+  await page.addInitScript(PIN_PREVIOUS_LOOK);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
