@@ -155,13 +155,17 @@ const RaceEntryProfile = (() => {
     finally { if (mine === generation) mark(name + ":end"); }
   }
 
-  /** Lower the handoff card on the first painted present; tick the window. */
+  /** Lower the handoff card on the first painted present; tick the window.
+   *  Context-loss fail-fast: a lost device never presents, so treat ctxLost as
+   *  !warming and drop the handoff — otherwise HUD surveys wait forever. */
   function afterPresent(screen, gfx, preparing = false) {
     const handoff = screen.phase() === "handoff", watching = armed && presentationEnabled;
     if (handoff || watching) {
-      const warming = preparing || !!(gfx.warming && gfx.warming());
+      let lost = false;
+      try { const s = gfx && gfx.backendState && gfx.backendState(); lost = !!(s && s.ctxLost); } catch (_) { lost = false; }
+      const warming = !lost && (preparing || !!(gfx.warming && gfx.warming()));
       if (watching) notePresent(warming);
-      if (handoff && !warming) { mark("handoff:lower"); screen.stop(); }
+      if (handoff && !warming) { mark(lost ? "handoff:lower-lost" : "handoff:lower"); screen.stop(); }
     }
     tickFrame();
   }
