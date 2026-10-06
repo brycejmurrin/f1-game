@@ -2240,8 +2240,52 @@ jobs:
     # designed one, a draft's fast run superseded by its ready_for_review run
     # on the same sha seconds in — reported `selected specs cancelled` as a
     # RED verdict on the superseded run (#510). A cancelled run has no verdict.
+    #
+    # CANCEL + CLEAN JUNIT IS INFRA-RETRY, NOT A HARD FAIL (2026-10-06). A
+    # matrix shard killed by its job cap after `= run passed` (PR #1109 run
+    # 37493213168: oversize-image-grade-visual-1of2 during junit upload)
+    # reports `needs.selected.result=cancelled` while sibling junit has zero
+    # failures. tools/ci/selected-gate-verdict.mjs reads every shard's junit
+    # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
+    # infra-retry and exits 0. ci-verdict defers `selected` to this job when
+    # this job is green, so the aggregator does not re-fail on the rollup.
     if: ${{ !cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
     steps:
+      # Junit must land BEFORE the verdict: cancel/red with clean junit is
+      # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the
+      # same staged tree. Checkout is required for the decision too (not only
+      # carry-forward), so it is not continue-on-error when selected ran.
+      - name: Checkout the gate verdict scripts
+        if: ${{ needs.selected.result != 'skipped' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci
+      # Sparse checkout for an empty/skipped plan: still need the verdict script
+      # (guards/select/dropped rules). Cheap; no junit download.
+      - name: Checkout the gate verdict scripts (empty plan)
+        if: ${{ needs.selected.result == 'skipped' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci
+      # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
+      - name: Every shard's junit
+        if: ${{ needs.selected.result != 'skipped' }}
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: spec-timings-junit-selected-*
+          path: junit-in
+      - name: Stage junit for the verdict
+        if: ${{ needs.selected.result != 'skipped' }}
+        continue-on-error: true
+        run: |
+          mkdir -p carry
+          i=0
+          for f in $(find junit-in -name junit.xml 2>/dev/null); do
+            i=$((i+1)); mkdir -p "carry/test-results-$i"; cp "$f" "carry/test-results-$i/junit.xml"
+          done
       # A DROPPED SPEC IS A RED, WHATEVER ELSE RAN (2026-10-04). This used to
       # read `dropped` only when `selected` was skipped, so a plan that ran
       # one spec and named forty others as unaffordable was green. The
@@ -2262,63 +2306,25 @@ jobs:
           DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -u
-          echo "select=$SELECT selected=$SELECTED guards=$GUARDS dropped=${DROPPED:-?} called=$CALLED draft=$DRAFT"
-          case "$GUARDS" in
-            success|skipped) ;;
-            *) echo "::error::Structural guards $GUARDS — selected legs skipped"; exit 1 ;;
-          esac
-          case "$SELECT" in
-            success) ;;
-            *) echo "::error::the selection itself did not pass ($SELECT)"; exit 1 ;;
-          esac
-          case "$SELECTED" in
-            success) echo "selected specs passed" ;;
-            skipped)
-              if [ "$DRAFT" = "true" ]; then echo "draft PR: selected legs skipped (ready_for_review runs them)"
-              else echo "the plan had no jobs"
-              fi
-              ;;
-            *) echo "::error::selected specs $SELECTED"; exit 1 ;;
-          esac
-          if [ "${DROPPED:-0}" != "0" ]; then
-            if [ "$CALLED" = "true" ]; then
-              echo "::warning::the train's plan dropped ${DROPPED} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here"
-            else
-              echo "::error::the plan dropped ${DROPPED} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change."
-              exit 1
-            fi
-          elif [ "$SELECTED" = "skipped" ]; then
-            echo "nothing this diff touches has a spec — an empty plan is a pass"
-          fi
+          JUNIT_ROOT=carry
+          if [ ! -d "$JUNIT_ROOT" ]; then JUNIT_ROOT=""; fi
+          node tools/ci/selected-gate-verdict.mjs ${JUNIT_ROOT:+--junit-root "$JUNIT_ROOT"}
       # THE FAILING-SPEC CARRY-FORWARD, ONCE PER RUN (2026-10-04). Every
       # shard's junit (the timings artifacts above) is read here and saved
       # under one key, so a failure in ANY selected/overbudget/oversize job
-      # reaches the next run's rank-1 hoist. Reporting only: none of these
-      # steps decides the verdict.
-      - name: Checkout the junit reader
-        if: ${{ always() && needs.selected.result != 'skipped' }}
-        continue-on-error: true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: tools/ci
-      # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
-      - name: Every shard's junit
-        if: ${{ always() && needs.selected.result != 'skipped' }}
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: spec-timings-junit-selected-*
-          path: junit-in
+      # reaches the next run's rank-1 hoist. Reporting only after the verdict
+      # has already decided (a clean cancel must not be blocked by cache save).
       - name: Record failing specs for the next run
         if: ${{ always() && needs.selected.result != 'skipped' }}
         continue-on-error: true
         run: |
           mkdir -p carry
-          i=0
-          for f in $(find junit-in -name junit.xml 2>/dev/null); do
-            i=$((i+1)); mkdir -p "carry/test-results-$i"; cp "$f" "carry/test-results-$i/junit.xml"
-          done
+          if [ ! -d carry/test-results-1 ] && [ -d junit-in ]; then
+            i=0
+            for f in $(find junit-in -name junit.xml 2>/dev/null); do
+              i=$((i+1)); mkdir -p "carry/test-results-$i"; cp "$f" "carry/test-results-$i/junit.xml"
+            done
+          fi
           node tools/ci/junit-failed.mjs carry > .selected-failed.txt || true
       - name: Save failing specs
         if: ${{ always() && needs.selected.result != 'skipped' }}
@@ -2448,25 +2454,44 @@ jobs:
       # merged so far; it is limited to "no pages.yml run is queued or running
       # on this branch", which keeps it to one train at a time. Any doubt (API
       # error, empty answer) pokes, as before.
+      # SINGLE-FLIGHT + TIP-CI GATE (2026-10-06). Never dual-dispatch Pages while
+      # a train is already queued/running. Never poke for a tip whose ship-fast
+      # CI is still pending, failed, or cancelled (Pages run 37497278920 was
+      # dispatched for 85de0ac while tip CI 37496991170 was still in_progress).
+      # cancel-in-progress stays false on pages.yml — we skip the poke instead
+      # of cancelling a live train.
       - name: Is this commit still the tip, or is no train moving?
         id: tip
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -u
           TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
-          if [ -n "$TIP" ] && [ "$TIP" != "$GITHUB_SHA" ]; then
-            # Runs not yet completed (queued, waiting, pending, requested, in_progress).
-            ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
-              --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
-            if [ "$ACTIVE" = "0" ] || [ -z "$ACTIVE" ]; then
-              echo "poke=true" >> "$GITHUB_OUTPUT"
-              echo "POKING from a superseded commit: the tip moved to $TIP and no train is queued or running, so the train gates $TIP now" | tee -a "$GITHUB_STEP_SUMMARY"
-            else
-              echo "poke=false" >> "$GITHUB_OUTPUT"
-              echo "NOT POKING: the tip moved to $TIP and $ACTIVE train run(s) are already queued or running" | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
-          else
+          # Runs not yet completed (queued, waiting, pending, requested, in_progress).
+          ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
+          if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "0" ]; then
+            echo "poke=false" >> "$GITHUB_OUTPUT"
+            echo "NOT POKING: $ACTIVE train run(s) already queued or running (single-flight)" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "$TIP" ] || [ "$TIP" = "$GITHUB_SHA" ]; then
+            # This run is the tip (or tip unreadable — poke as before on doubt).
             echo "poke=true" >> "$GITHUB_OUTPUT"
+            echo "POKING tip ${GITHUB_SHA:0:7}: fast tier green and no train moving" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Tip moved: only poke when tip push CI already concluded success.
+          TIP_CI=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$GITHUB_REF_NAME&event=push&per_page=30" 2>/dev/null \
+            | jq -r --arg tip "$TIP" '[.workflow_runs[] | select(.head_sha == $tip)] | .[0] | "\(.status)|\(.conclusion // "")"' || true)
+          STATUS="${TIP_CI%%|*}"
+          CONC="${TIP_CI#*|}"
+          if [ "$STATUS" = "completed" ] && [ "$CONC" = "success" ]; then
+            echo "poke=true" >> "$GITHUB_OUTPUT"
+            echo "POKING from a superseded commit: tip $TIP already has green ship-fast CI and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "poke=false" >> "$GITHUB_OUTPUT"
+            echo "NOT POKING: tip moved to $TIP but tip CI is ${STATUS:-unknown}/${CONC:-none} (need completed/success)" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - name: Dispatch pages.yml on this branch
         if: steps.tip.outputs.poke == 'true'
