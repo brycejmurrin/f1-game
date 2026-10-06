@@ -244,7 +244,12 @@ test("the overtake scan skips pit-lane and retired cars", () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
   const scan = src.slice(src.indexOf("let ahead = null, gapAhead = Infinity"), src.indexOf("gapAhead = ahead && c.speed > 1"));
   assert.ok(scan.length > 50 && scan.length < 1200, "anti-vacuity: found the detection scan");
-  assert.match(scan, /if \(o === c \|\| o\.finished \|\| o\.retired \|\| pits\.inLane\(o\)\) continue;/);
+  assert.match(scan, /Collide\.scanOtAhead/);
+  assert.match(scan, /_otSkipLane/);
+  const collide = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
+  const onOt = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
+  assert.match(onOt, /o\.finished \|\| o\.retired/);
+  assert.match(onOt, /s\.skip && s\.skip\(o\)/);
 });
 
 // ---------------------------------------------------------------------------

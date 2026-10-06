@@ -71,11 +71,169 @@ const Collide = (() => {
   // Both cars can be human and rotated: each support is bounded by its
   // half-diagonal. Use the pair bound for rejection AND arc buckets.
   const LCAR_MAX = 2 * Math.hypot(HL, WL);
+
+  // Wrap-aware arc buckets shared by resolveCollisions (width = LCAR_MAX) and
+  // updateCar's traffic / slipstream / OT-ahead scans (wider reach, same fill).
+  // floor(L/width), not ceil: a sliver last bucket put a seam pair two ids
+  // apart so the neighbour walk missed them. Tail folds into bucket 0.
+  // Arrays are reused: clear is length=0, a slot is allocated once per id.
+  const _arcBuckets = [];
+  const _arcBucketIds = [];
+  let _arcNB = 0, _arcWidth = LCAR_MAX, _arcL = 1;
+  function _arcProg(c) {
+    if (c && c._snapProg != null && Number.isFinite(c._snapProg)) return c._snapProg;
+    return c && c._nOk ? c._nProg : (c ? c.prog : 0);
+  }
+  function _arcClear() {
+    for (let i = 0; i < _arcBucketIds.length; i++) {
+      const id = _arcBucketIds[i];
+      const arr = _arcBuckets[id];
+      if (arr) arr.length = 0;
+    }
+    _arcBucketIds.length = 0;
+  }
+  function fillArcBuckets(ranked, L, width, progOf) {
+    _arcClear();
+    L = L || 1;
+    width = width || LCAR_MAX;
+    const nB = Math.max(1, Math.floor(L / width) | 0);
+    _arcNB = nB; _arcWidth = width; _arcL = L;
+    const of = progOf || _arcProg;
+    const n = ranked.length;
+    for (let i = 0; i < n; i++) {
+      const c = ranked[i];
+      const prog = of(c);
+      let b = Math.floor((((prog % L) + L) % L) / width) % nB;
+      if (b < 0) b += nB;
+      let arr = _arcBuckets[b];
+      if (!arr) { arr = _arcBuckets[b] = []; }
+      if (arr.length === 0) _arcBucketIds.push(b);
+      arr.push(c);
+    }
+    return nB;
+  }
+  // Visit other cars in buckets covering ±reach of c (wrap-aware). `fn` is a
+  // caller-owned stable function — this must not allocate. Cheap-reject stays
+  // at the call site. span = floor(reach/width)+1 so a car on a bucket edge
+  // still sees someone `reach` metres away; if that covers the whole lap we
+  // walk occupied ids once instead of duplicating.
+  function forArcNear(c, L, reach, fn, progOf) {
+    const nB = _arcNB;
+    if (!nB || !fn) return;
+    const of = progOf || _arcProg;
+    const p = of(c);
+    const W = _arcWidth;
+    const LL = L || _arcL || 1;
+    let b0 = Math.floor((((p % LL) + LL) % LL) / W) % nB;
+    if (b0 < 0) b0 += nB;
+    const span = Number.isFinite(reach) ? (Math.floor(reach / W) | 0) + 1 : nB;
+    if (!Number.isFinite(reach) || nB <= 2 * span + 1) {
+      const nIds = _arcBucketIds.length;
+      for (let k = 0; k < nIds; k++) {
+        const arr = _arcBuckets[_arcBucketIds[k]];
+        if (!arr) continue;
+        for (let i = 0; i < arr.length; i++) {
+          const o = arr[i];
+          if (o !== c) fn(o);
+        }
+      }
+      return;
+    }
+    for (let d = -span; d <= span; d++) {
+      let id = b0 + d;
+      id %= nB;
+      if (id < 0) id += nB;
+      const arr = _arcBuckets[id];
+      if (!arr || !arr.length) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const o = arr[i];
+        if (o !== c) fn(o);
+      }
+    }
+  }
+  function _liveProg(c) { return c.prog; }
+  const PC = typeof PhysicsConsts !== "undefined" ? PhysicsConsts : {};
+  const _towRange = PC.TOW_RANGE || 34, _towHalfW = PC.TOW_HALF_W || 4, _blockerHalfW = PC.BLOCKER_HALF_W || 2.2;
+  const _traf = {
+    c: null, L: 0, BACK: 0, REJ: 0, MIN_GAP: 0, street: false,
+    roomL: 0, roomR: 0, nearbyN: 0, sep: 0,
+    blocker: null, blockerGap: Infinity, towCar: null, towGap: Infinity,
+    chaser: null, chaserGap: Infinity,
+    alongO: null, alongDx: 0, alongDprog: 0, alongAdx: Infinity,
+  };
+  function _onTrafO(o) {
+    const s = _traf, c = s.c;
+    if (o.finished) return;
+    let dprog = o._snapProg - c.prog;
+    if (!Number.isFinite(dprog)) return;
+    const ad = dprog < 0 ? -dprog : dprog, L = s.L, REJ = s.REJ;
+    if (ad > REJ && ad < L - REJ) return;
+    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+    if (dprog < -s.BACK || dprog > 34) return;
+    const dx = o._snapX - c.x;
+    const adp = dprog < 0 ? -dprog : dprog;
+    if (adp < 5.5) {
+      if (dx >= 0) s.roomR = Math.min(s.roomR, Math.abs(dx) - 1.0);
+      else s.roomL = Math.min(s.roomL, Math.abs(dx) - 1.0);
+      const adx = dx < 0 ? -dx : dx;
+      if (adx < s.alongAdx) { s.alongO = o; s.alongDx = dx; s.alongDprog = dprog; s.alongAdx = adx; }
+    }
+    if (adp < 6.5) {
+      s.nearbyN++;
+      const deficit = s.MIN_GAP - (dx < 0 ? -dx : dx);
+      if (deficit > 0) s.sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
+    }
+    if (dprog > 0.5 && dprog < s.blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !s.street ? 6 : _blockerHalfW)) { s.blocker = o; s.blockerGap = dprog; }
+    if (dprog > 0.5 && dprog < s.towGap && Math.abs(dx) < _towHalfW) { s.towCar = o; s.towGap = dprog; }
+    if (dprog < -0.5 && -dprog < s.chaserGap && Math.abs(dx) < (!s.street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { s.chaser = o; s.chaserGap = -dprog; }
+  }
+  function scanTraffic(c, L, BACK, REJ, MIN_GAP, street, roomL, roomR) {
+    const s = _traf;
+    s.c = c; s.L = L; s.BACK = BACK; s.REJ = REJ; s.MIN_GAP = MIN_GAP; s.street = !!street;
+    s.roomL = roomL; s.roomR = roomR; s.nearbyN = 0; s.sep = 0;
+    s.blocker = null; s.blockerGap = Infinity; s.towCar = null; s.towGap = Infinity;
+    s.chaser = null; s.chaserGap = Infinity;
+    s.alongO = null; s.alongDx = 0; s.alongDprog = 0; s.alongAdx = Infinity;
+    forArcNear(c, L, REJ, _onTrafO, _liveProg);
+    s.roomL = Math.max(0, s.roomL); s.roomR = Math.max(0, s.roomR);
+    return s;
+  }
+  const _ot = { c: null, L: 0, W: 0, ahead: null, gapAhead: Infinity, skip: null };
+  function _onOtO(o) {
+    const s = _ot, c = s.c;
+    if (o.finished || o.retired || (s.skip && s.skip(o))) return;
+    const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp, L = s.L, otW = s.W;
+    if (adp > otW && adp < L - otW) return;
+    const d = ((dp + L / 2) % L + L) % L - L / 2;
+    if (d > 0.5 && d < s.gapAhead) { s.ahead = o; s.gapAhead = d; }
+  }
+  function scanOtAhead(c, L, otW, skip) {
+    _ot.c = c; _ot.L = L; _ot.W = otW; _ot.ahead = null; _ot.gapAhead = Infinity; _ot.skip = skip || null;
+    forArcNear(c, L, otW, _onOtO, _liveProg);
+    return _ot;
+  }
+  const _tow = { c: null, L: 0, tc: null, tg: Infinity };
+  function _onTowO(o) {
+    const s = _tow, c = s.c;
+    if (o.finished || o.retired) return;
+    let dprog = o._snapProg - c.prog;
+    if (!Number.isFinite(dprog)) return;
+    const ad = dprog < 0 ? -dprog : dprog, L = s.L;
+    if (ad > _towRange + 0.1 && ad < L - _towRange - 0.1) return;
+    dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+    if (dprog > 0.5 && dprog < s.tg && Math.abs(o._snapX - c.x) < _towHalfW) { s.tc = o; s.tg = dprog; }
+  }
+  function scanTow(c, L) {
+    _tow.c = c; _tow.L = L; _tow.tc = null; _tow.tg = Infinity;
+    forArcNear(c, L, _towRange + 0.1, _onTowO, _liveProg);
+    return _tow;
+  }
+
   // "This frame actually separated them" is a millimetre, never `corr > 0`: at
   // the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
   // rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
   // — while nothing moves. Measured at dProg = -4.75.
-    const CORR_EPS = 1e-3;
+  const CORR_EPS = 1e-3;
 
   function create(G, collideFx, ownsPose = () => false) {
     Log.info("game", "Collide.create");
@@ -236,39 +394,10 @@ const Collide = (() => {
     // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
     // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
     const COL_BUCKET_M = LCAR_MAX;   // was LCAR — see LCAR_MAX: two yawed cars can span 5.2 m
-    const _colBuckets = [];   // sparse: bucketId → car[]
-    const _colBucketIds = []; // compact list of occupied bucket ids this pass
     let _colShifted = false;  // shiftLong this step — skip idle re-buckets
-
-    function _colClearBuckets() {
-      for (let i = 0; i < _colBucketIds.length; i++) {
-        const id = _colBucketIds[i];
-        const arr = _colBuckets[id];
-        if (arr) arr.length = 0;
-      }
-      _colBucketIds.length = 0;
-    }
-
+    function _colProgOf(c) { return c._nOk ? c._nProg : c.prog; }
     function _colFillBuckets(ranked) {
-      _colClearBuckets();
-      const L = track.total || 1;
-      // floor, not ceil: ceil made the LAST bucket a sliver (L mod width < LCAR),
-      // so a touching pair straddling the seam could sit two buckets apart and the
-      // (id+1)%nB neighbour walk never met them — no contact resolution right at
-      // the line. floor folds the tail into bucket 0 (the trailing %nB below),
-      // keeping every bucket >= a car length and the seam pair adjacent.
-      const nB = Math.max(1, Math.floor(L / COL_BUCKET_M) | 0);
-      for (let i = 0; i < ranked.length; i++) {
-        const c = ranked[i];
-        const prog = c._nOk ? c._nProg : c.prog;
-        let b = Math.floor((((prog % L) + L) % L) / COL_BUCKET_M) % nB;
-        if (b < 0) b += nB;
-        let arr = _colBuckets[b];
-        if (!arr) { arr = _colBuckets[b] = []; }
-        if (arr.length === 0) _colBucketIds.push(b);
-        arr.push(c);
-      }
-      return nB;
+      return fillArcBuckets(ranked, track.total || 1, COL_BUCKET_M, _colProgOf);
     }
     function sepShares(a, b) {
       const hum = AiDrive.humanInvMass(!!track.street);
@@ -500,11 +629,11 @@ const Collide = (() => {
     // which is the whole point. Omitted (the separation pass, which runs once)
     // it stays forward, exactly as before.
     function _colForBucketPairs(nB, fn, fwd) {
-      const nIds = _colBucketIds.length;
+      const nIds = _arcBucketIds.length;
       for (let k = 0; k < nIds; k++) {
         const bi = fwd === false ? nIds - 1 - k : k;
-        const id = _colBucketIds[bi];
-        const A = _colBuckets[id];
+        const id = _arcBucketIds[bi];
+        const A = _arcBuckets[id];
         if (!A || !A.length) continue;
         for (let i = 0; i < A.length; i++) {
           const a = A[i];
@@ -514,7 +643,7 @@ const Collide = (() => {
         // including the wrap edge (nB-1 → 0).
         if (nB < 2) continue;
         const id2 = (id + 1) % nB;
-        const B = _colBuckets[id2];
+        const B = _arcBuckets[id2];
         if (!B || !B.length) continue;
         for (let i = 0; i < A.length; i++) {
           const a = A[i];
@@ -630,5 +759,5 @@ const Collide = (() => {
     return { resolveCollisions, pairContact };
   }
 
-  return { create, LCAR, WCAR };
+  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow };
 })();
