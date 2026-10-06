@@ -15,7 +15,7 @@ const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs")
 export const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 export const plain = (o) => JSON.parse(JSON.stringify(o));
 
-export const BOOT_FILES = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"];
+export const BOOT_FILES = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/props.js", "js/editor/custom-tracks.js"];
 export const EDITOR_FILES = ["js/editor/shape.js", "js/editor/stamps.js", "js/editor/randomise.js", "js/editor/validate.js", "js/editor/insight.js", "js/editor/codec.js"];
 
 /** The engine + registry + editor over a store seeded with `stored` (short keys). */
@@ -35,7 +35,7 @@ export function bootEditor(stored = {}) {
   for (const f of BOOT_FILES.concat(EDITOR_FILES)) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   // TrackMaps (FULL) is what bakeTurns prefers; it needs AeroZones/Log only at call time.
   vm.runInContext(read("js/ui/track-maps.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/track-maps.js" });
-  return { Tracks, ctx, data, S: ctx.TrackShape, ST: ctx.TrackStamps, TR: ctx.TrackRandom, V: ctx.TrackValidate, CD: ctx.TrackCodec, C: ctx.CustomTracks, T: ctx.TrackThemes };
+  return { Tracks, ctx, data, S: ctx.TrackShape, ST: ctx.TrackStamps, TR: ctx.TrackRandom, V: ctx.TrackValidate, CD: ctx.TrackCodec, C: ctx.CustomTracks, T: ctx.TrackThemes, P: ctx.TrackDesignerProps };
 }
 
 /** An a×b ellipse of n control points on the 0.25 m lattice (≈ 4.1 km at 800×500). */
