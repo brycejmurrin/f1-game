@@ -1,1 +1,1 @@
-1791319524	Cursor Agent	PR#1134: raise tracks.js ratchet +47 for LAZY_CIRCUIT hydrate; tooling A/B already green; UNARMED; no merge  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
+1791319705	Cursor Agent	PR#1134 sync-pr after #1135 merge; ratchet shrink already pushed; UNARMED; no merge  [cursor/perf-circuit-meta-bb18; session 724aaadc80873d175a8f09ee]
