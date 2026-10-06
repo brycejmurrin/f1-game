@@ -142,6 +142,10 @@ const CustomTracks = (function () {
     const kerb = sanitizeKerbStyle(it.kerbStyle);
     if (kerb !== "flat") parts.push("kerb:" + kerb);
     if (it.berms === false) parts.push("berms:0");
+    // Authored props (slice H) rebuild scenery; absent when empty so older ids hold.
+    if (it.props && it.props.length) {
+      parts.push("props:" + it.props.map((p) => p.kind + "@" + p.s + ":" + p.side + ":" + p.gap).join(","));
+    }
     return parts.join("|");
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
@@ -193,6 +197,11 @@ const CustomTracks = (function () {
     const kerb = sanitizeKerbStyle(raw.kerbStyle);
     if (kerb !== "flat") it.kerbStyle = kerb;
     if (sanitizeBerms(raw.berms) === false) it.berms = false;
+    // Authored scenery props (TrackDesignerProps): absent when empty / all invalid.
+    if (typeof TrackDesignerProps !== "undefined" && TrackDesignerProps.sanitize) {
+      const props = TrackDesignerProps.sanitize(raw.props);
+      if (props) it.props = props;
+    }
     if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;

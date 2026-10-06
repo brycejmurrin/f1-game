@@ -14,6 +14,7 @@ import {
   partitionMegaSweepArgs,
   megasForThisShard,
   megaSoloFlags,
+  playwrightShard,
 } from "./select-specs.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -190,11 +191,26 @@ const cli = join(ROOT, "node_modules", ".bin", "playwright");
 // on a fresh worker). Peel them out of the shared argv; run the rest as usual;
 // re-launch each mega in its own Playwright process on the ONE shard
 // megaShardPlan gives it (or when unsharded) so nothing inherits that Chromium. --list keeps them inline.
+//
+// EXCEPTION — megas-only + --shard=i/n (selected oversize jobs). select-specs
+// shards() already splits one fat file across runners with Playwright's count
+// shard and sizes timeout-minutes for 1/n of the work. megaShardPlan would pin
+// that file to shard 1 and megaSoloFlags would DROP --shard, so 1ofN ran the
+// whole file under a 1/N kill timer while 2ofN…NofN exited empty in ~1 s
+// (PR #1110: oversize-tlx-probes-1of3 cancelled at the 6 min cap; siblings
+// success with "mega-sweep solos on this shard: none"). Honour native --shard.
 const listing = args.includes("--list");
-const { mega, rest, peeled } = listing ? { mega: [], rest: args, peeled: false }
+let { mega, rest, peeled } = listing ? { mega: [], rest: args, peeled: false }
   : partitionMegaSweepArgs(args);
 const hasSpecTarget = (list) => list.some((a) => !a.startsWith("-")
   && (a.includes("*") || /\.spec\.js$/.test(a) || /tests\//.test(a)));
+const shardTok = playwrightShard(args);
+if (peeled && mega.length > 0 && shardTok && !hasSpecTarget(rest)) {
+  console.error(`[playwright] megas-only + --shard=${shardTok.index}/${shardTok.total}: native Playwright shard (${mega.join(" ")}); skip megaShardPlan`);
+  peeled = false;
+  mega = [];
+  rest = args;
+}
 const mainArgs = peeled ? rest : args;
 // Each mega runs on exactly ONE shard, spread by expected time (megaShardPlan).
 const megaHere = peeled ? megasForThisShard(args, mega) : [];

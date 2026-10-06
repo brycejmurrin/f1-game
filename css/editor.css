@@ -173,6 +173,20 @@
   grid-template-columns: none;
   min-width: 0;
 }
+/* Slice H: scenery props palette under 3 LOOK — kind chips + place/remove. */
+#trackdesigner .td-chips[data-role="props"],
+#trackdesigner .td-chips[data-role="prop-actions"] {
+  display: flex; flex-wrap: wrap;
+  gap: calc(var(--gap) / 2);
+  min-width: 0;
+}
+#trackdesigner .td-chips[data-role="props"] > .sel-chip {
+  font-variant-numeric: tabular-nums;
+}
+#trackdesigner .td-hint[data-role="props-hint"] {
+  line-height: 1.35;
+  min-height: 1.35em;
+}
 .td-foot {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--gap);
