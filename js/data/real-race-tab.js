@@ -35,7 +35,10 @@ const DataRealRace = (function () {
   // ── The script builder (pure; tests/unit/real-race-script.test.mjs) ──────
 
   /** Game circuit for an OpenF1 session: the country's current-season circuit
-   *  first (Tracks.SEASON order), else any circuit of that country, else null. */
+   *  first (Tracks.SEASON order), else any circuit of that country, else null.
+   *  Venue→id aliases below are the Tracks handoff. Display country for a
+   *  moved meeting (OpenF1 "Kuala Lumpur" + GP country "Bahrain") is
+   *  F1API.placeLabel only — do not invent a kuala lumpur → sepang key here. */
   function trackIdFor(session, tracks) {
     const list = arr(tracks);
     const country = String(session.country_name || session.country || "").toLowerCase();
@@ -852,7 +855,9 @@ const DataRealRace = (function () {
     function paint(script, slot) {
       const head = el("div");
       head.appendChild(el("div", "dh-lr-name", (script.year ? script.year + " " : "") + script.name + (script.session !== "Race" ? " · " + script.session : "")));
-      const meta = [script.circuit, script.country].filter(Boolean).join(", ");
+      const meta = (typeof F1API !== "undefined" && F1API.placeLabel)
+        ? F1API.placeLabel(script.circuit, script.country)
+        : [script.circuit, script.country].filter(Boolean).join(", ");
       const winner = script.drivers.find((d) => d.pos === 1);
       head.appendChild(el("div", "dh-lr-meta", [meta, script.dateStart ? fmtDateTime(script.dateStart) : "", script.laps + " laps",
         winner ? "won by " + winner.name : "", script.cautions.filter((c) => c.level < 4).length + " safety car / VSC", script.weather.toUpperCase()].filter(Boolean).join(" · ")));

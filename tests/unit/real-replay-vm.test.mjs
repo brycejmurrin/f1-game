@@ -602,6 +602,37 @@ test("WATCH manual and automatic reel cuts release radio and reset timeline pres
   }
 });
 
+test("WATCH: the pause card cuts a real team radio clip mid-sentence, as a hidden tab does", () => {
+  // The game loop returns before update() while paused, so tick() — and the
+  // replay clock — froze under the card while the HTMLAudio clip talked on.
+  const clips = [], observers = [];
+  const pause = { hidden: true };
+  const document = { addEventListener() {}, getElementById: (id) => (id === "pausemenu" ? pause : null) };
+  class MutationObserver {
+    constructor(fn) { this.fn = fn; observers.push(this); }
+    observe(el, o) { this.el = el; this.o = o; }
+  }
+  const { replay, G, options } = transportReplay({ document, MutationObserver, Audio: class {
+    constructor() { this.paused = true; clips.push(this); }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  } });
+  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
+  G.soundOn = true;
+  replay.start(options);
+  replay.tick(3.5);
+  assert.equal(clips.length, 1, "the clip fires at its moment");
+  assert.equal(clips[0].paused, false);
+  // What the browser does when setPaused(true) (Escape / blur / pad-lost) shows #pausemenu.
+  const flip = (hidden) => { pause.hidden = hidden; for (const o of observers) if (o.el === pause) o.fn([]); };
+  flip(false);
+  assert.equal(clips[0].paused, true, "the clip stops with the game, not when it runs out");
+  assert.equal(replay.status().paused, false, "the replay's own transport is untouched");
+  flip(true);                              // RESUME: nothing restarts a stale clip
+  assert.equal(clips[0].paused, true);
+  replay.stop();
+});
+
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
   const { replay, G, cars, drivers, options } = transportReplay();
   drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;
