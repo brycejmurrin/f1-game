@@ -238,6 +238,16 @@
      what the comment above this rule has always asked for. */
   pointer-events: none;
 }
+/* Title landscape: the door column is the right half, and a centred 30rem
+   banner still paints over RACE A FRIEND / SEASON (layout-audit ios-iphone-
+   landscape, 2026-10-06). Park it under the brand column; Share stays in the
+   bottom toolbar either way. */
+:where(body[data-shape="wide"][data-density="compact"]) #ios-install {
+  right: auto;
+  width: min(22rem, calc(50% - var(--safe-l) - var(--gap)));
+  max-width: none;
+  margin: 0;
+}
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
