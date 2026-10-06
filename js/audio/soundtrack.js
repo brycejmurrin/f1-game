@@ -1,7 +1,7 @@
 /* GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live context/master/enabled/engineRunning/sfxOk plus clamp01/now/resumeRejected; the host calls suspendMusic and resetContext at lifecycle boundaries. */
 "use strict";
 
-const GameAudioSoundtrack = (function () {
+var GameAudioSoundtrack = (function () {
   function create(host) {
     let musicVol = 0.5;
     const MUSIC_FULL = 0.52;

@@ -24,11 +24,13 @@ const MANIFEST = await import(path.join(ROOT, "tools/manifest.cjs")).then((m) =>
 
 // Rosters are arrays or {group: [files]} objects; take every string either way.
 const flat = (v) => Array.isArray(v) ? v.flatMap(flat) : (v && typeof v === "object") ? Object.values(v).flatMap(flat) : (typeof v === "string" ? [v] : []);
-const allFiles = [...new Set(["FULL", "DEFERRED", "LAZY_AGENT", "LAZY_NET", "LAZY_DATA", "LAZY_RACE", "LAZY_CIRCUIT", "LAZY_SCENERY", "LAZY_EDITOR", "LAZY_XR", "LAZY_CAM_EDITOR", "LAZY_CAREER_UI"].flatMap((k) => flat(MANIFEST[k])))]
+const allFiles = [...new Set(["FULL", "DEFERRED", "LAZY_AGENT", "LAZY_NET", "LAZY_DATA", "LAZY_AUDIO", "LAZY_RACE", "LAZY_CIRCUIT", "LAZY_SCENERY", "LAZY_EDITOR", "LAZY_XR", "LAZY_CAM_EDITOR", "LAZY_CAREER_UI"].flatMap((k) => flat(MANIFEST[k])))]
   .filter((f) => f.startsWith("js/") && fs.existsSync(path.join(ROOT, f)));
 
 const globalOf = (text) => {
-  const m = text.match(/^const ([A-Z][A-Za-z0-9_]*) = \(function \(\) \{/m);
+  // `var` is required for LAZY_AUDIO reinjection (stub → real); `const` elsewhere.
+  const m = text.match(/^(?:const|var) ([A-Z][A-Za-z0-9_]*) = \(function \(\) \{/m)
+    || text.match(/^(?:const|var) ([A-Z][A-Za-z0-9_]*) = \(\(\) => \{/m);
   return m ? m[1] : null;
 };
 

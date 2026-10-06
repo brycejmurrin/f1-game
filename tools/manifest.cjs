@@ -220,23 +220,13 @@ const FULL = [
   "js/input/haptics.js",
   "js/input/hold-buttons.js",
   "js/input/input.js",
-  "js/audio/signal.js",
-  "js/audio/soundtrack.js",
-  "js/audio/radio-fx.js",
-  "js/audio/tone-model.js",
-  "js/audio/engine.js",
-  "js/audio/music-lib.js",
-  "js/audio/spotify.js",
-  "js/audio/rivals.js",
-  "js/audio/car-sfx.js",
-  "js/audio/voice-pack.js",
-  "js/audio/radio-voice.js",
+  // AUDIO STUB — the ~449 KB engine/panel/voice stack is LAZY_AUDIO (loaded on
+  // first gesture or race start). The stub keeps menus from throwing and is
+  // reassigned via top-level `var` when the real bundle lands.
+  "js/audio/stub.js",
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
-  "js/audio/announcer-recorded.js",
-  "js/audio/announcer.js",
-  "js/audio/panel.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -340,7 +330,7 @@ const FULL = [
   "js/lighting/tuner-panel.js",
   "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
-  "js/audio/driving-cues.js",
+  // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
@@ -571,10 +561,10 @@ const HARD_EDGES = [
   ["js/input/pad-menu.js", "js/input/input.js"],
   ["js/input/haptics.js", "js/input/input.js"],
   ["js/input/hold-buttons.js", "js/input/input.js"],
-  ["js/audio/signal.js", "js/audio/engine.js"],
-  ["js/audio/soundtrack.js", "js/audio/engine.js"],
-  ["js/audio/radio-fx.js", "js/audio/engine.js"],
-  ["js/audio/tone-model.js", "js/audio/engine.js"],
+  // js/audio's intra-directory pairs moved to LAZY_AUDIO_EDGES when the
+  // engine/panel stack left FULL (HARD_EDGES needs both ends in FULL).
+  ["js/audio/stub.js", "js/game.js"],   // game.js calls AudioPanel/RadioVoice/Announcer/RivalAudio/CarSfx at eval
+  ["js/audio/stub.js", "js/input/steer-tuning.js"], // SteerTuning.create calls DrivingCues.create when present
   ["js/car/car-shade.js", "js/car/car3d.js"],
   ["js/core/store.js", "js/ui/appearance-studio.js"],
   ["js/ui/watch-transport.js", "js/race/real-replay.js"],
@@ -760,10 +750,6 @@ const HARD_EDGES = [
   ["js/lighting/frame-lights.js", "js/lighting/lighting.js"],        // …and setFrameLights/appendCarTailLights
   ["js/lighting/lighting.js", "js/lighting/profiles.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
-  ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
-  ["js/audio/radio-voice.js", "js/game.js"],   // game.js calls RadioVoice.inert() at eval time
-  ["js/audio/announcer.js", "js/game.js"],     // game.js calls Announcer.inert() at eval time
-  ["js/audio/radio-voice.js", "js/audio/announcer.js"],  // the announcer borrows speakable() and the per-channel tune
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
@@ -790,11 +776,8 @@ const HARD_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],  // RaceRadio.create builds a RadioLines dealer (call time, keep ordered)
   ["js/race/race-facts.js", "js/race/race-radio.js"],   // …and a RaceFacts tracker
   ["js/race/spotter.js", "js/race/race-radio.js"],      // …and a Spotter
-  ["js/audio/voice-pack.js", "js/audio/radio-voice.js"], // RadioVoice.create builds a VoicePack
   ["js/race/race-radio.js", "js/game.js"],               // game.js calls RaceRadio.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
-  ["js/audio/driving-cues.js", "js/input/steer-tuning.js"], // SteerTuning.create calls DrivingCues.create(G)
-  ["js/audio/driving-cues.js", "js/game.js"],             // game.js calls DrivingCues.tick() each frame
   ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
@@ -886,6 +869,41 @@ const LAZY_EDGES = [
 // defaults rather than throwing, and game.js re-applies once it lands.
 const LAZY_RACE = [
   "js/lighting/presets.js",
+];
+
+// AUDIO ENGINE + PANEL (~449 KB). Title/menus only need the stub in FULL;
+// the real WebAudio graph, radio voice, announcer and mixer load on first
+// sound gesture or race start (ensureAudio). Order IS the eval order. Exports
+// are top-level `var` so reinjection reassigns the stub bindings.
+const LAZY_AUDIO = [
+  "js/audio/signal.js",
+  "js/audio/soundtrack.js",
+  "js/audio/radio-fx.js",
+  "js/audio/tone-model.js",
+  "js/audio/engine.js",
+  "js/audio/music-lib.js",
+  "js/audio/spotify.js",
+  "js/audio/rivals.js",
+  "js/audio/car-sfx.js",
+  "js/audio/voice-pack.js",
+  "js/audio/radio-voice.js",
+  "js/audio/announcer-recorded.js",
+  "js/audio/announcer.js",
+  "js/audio/panel.js",
+  "js/audio/driving-cues.js",
+];
+const LAZY_AUDIO_EDGES = [
+  ["js/audio/signal.js", "js/audio/engine.js"],
+  ["js/audio/soundtrack.js", "js/audio/engine.js"],
+  ["js/audio/radio-fx.js", "js/audio/engine.js"],
+  ["js/audio/tone-model.js", "js/audio/engine.js"],
+  ["js/audio/engine.js", "js/audio/music-lib.js"],
+  ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
+  ["js/audio/radio-voice.js", "js/audio/announcer.js"],
+  ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],
+  ["js/audio/engine.js", "js/audio/panel.js"],
+  ["js/audio/radio-voice.js", "js/audio/panel.js"],
+  ["js/audio/announcer.js", "js/audio/panel.js"],
 ];
 
 // THE DATA HUB (js/data/*), 154 KB behind ONE menu button. Jolpica/OpenF1
@@ -1405,6 +1423,7 @@ module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,

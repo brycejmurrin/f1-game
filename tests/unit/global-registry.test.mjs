@@ -55,6 +55,13 @@ const report = checkGraph(scan);
 // Files allowed to eval-assign MORE than one global, with the exact set.
 const MULTI_GLOBAL = {
   "js/core/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
+  // Title-boot audio stub: installs the full LAZY_AUDIO surface so menus do not
+  // throw; ensureAudio() reinjects the real modules (var reassignment).
+  "js/audio/stub.js": [
+    "Announcer", "AudioPanel", "CarSfx", "DrivingCues", "GameAudio",
+    "GameAudioRadioFx", "GameAudioSignal", "GameAudioSoundtrack", "GameAudioToneModel",
+    "RadioVoice", "RecordedAnnouncer", "RivalAudio", "VoicePack",
+  ],
 };
 
 // Globals deliberately written by MANY files (accumulator idiom:
@@ -65,6 +72,10 @@ const MULTI_GLOBAL = {
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
   TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
+  // LAZY_AUDIO reinjection: stub.js then the real module (cap 2 each).
+  GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
+  GameAudioToneModel: 2, CarSfx: 2, RivalAudio: 2, VoicePack: 2,
+  RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
 };
 
 // Accumulator globals that are PRODUCT DATA designed to grow — no writer-count

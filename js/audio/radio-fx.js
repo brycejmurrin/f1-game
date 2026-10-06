@@ -1,7 +1,7 @@
 /* GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use the SFX bus, recorded voices use master. resetContext stops the bed and disconnects every cached voice chain (M8). */
 "use strict";
 
-const GameAudioRadioFx = (function () {
+var GameAudioRadioFx = (function () {
   function create(host, signal) {
     /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
      *

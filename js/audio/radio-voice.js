@@ -7,7 +7,7 @@
 // completely different unlock and failure surface. Housing it in GameAudio would
 // assert a routing that does not exist, and that misconception is the single
 // most load-bearing fact about this feature.
-const RadioVoice = (function () {
+var RadioVoice = (function () {
   // The three channels js/game.js radioWho already partitions `kind` into. The
   // VOICE carries the channel, which is why speakable() below drops the WHO
   // line: reading "RACE CONTROL. Plus five second penalty" spends a second of a

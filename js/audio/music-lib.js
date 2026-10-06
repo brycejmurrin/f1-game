@@ -208,8 +208,26 @@ window.MusicLib = (function () {
     });
   }
 
+  // Push cache entries the real GameAudio playlist is missing. LAZY_AUDIO can
+  // evaluate music-lib while the title stub is still bound: stub addTracks is a
+  // noop, readyPromise memoises, and a later init() would never rehydrate.
+  function syncPlaylist() {
+    const a = audio();
+    if (!a || a._stub || typeof a.addTracks !== "function" || typeof a.tracks !== "function") return;
+    const have = new Set((a.tracks() || []).map((t) => t && t.id));
+    const entries = [];
+    for (const m of cache) {
+      const id = pid(m.id);
+      if (have.has(id)) continue;
+      const url = urls.get(m.id);
+      if (!url) continue;
+      entries.push({ id, name: m.name, url });
+    }
+    if (entries.length) a.addTracks(entries);
+  }
+
   function init() {
-    if (readyPromise) return readyPromise;
+    if (readyPromise) return readyPromise.then(() => { syncPlaylist(); });
     Log.info("audio", "MusicLib.init");
     readyPromise = readAll().then((recs) => {
       recs.sort((a, b) => (a.added || 0) - (b.added || 0));
@@ -219,6 +237,7 @@ window.MusicLib = (function () {
         return { id: rec.id, name: rec.name, size: rec.size, added: rec.added };
       });
       if (entries.length) call("addTracks", entries);
+      syncPlaylist();
       render();
     }).catch((e) => {
       usable = false; cache = []; readyPromise = null; render();

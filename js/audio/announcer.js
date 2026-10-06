@@ -11,7 +11,7 @@
 // browsing menus. So it owns its own gate and its own utterance, and borrows
 // only the parts that are genuinely shared: the voice list, the per-channel
 // tune, and speakable().
-const Announcer = (function () {
+var Announcer = (function () {
   // The channel name is the one RadioVoice.TONE carries for us, so the voice
   // picker in js/audio/panel.js needs no special case — an announcer row is a
   // VOICE_CHANNELS entry like any other.
