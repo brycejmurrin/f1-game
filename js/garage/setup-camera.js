@@ -29,9 +29,12 @@ function panelCover(pr, cr, cw, ch, camTop) {
 //   threshold = clamp(base + LT.threshOff, 0.4, 1.2) * baseExposure
 //   tune.sunShaftMul is FORCED OFF. The bay's "sun" is a soft roof fill
 //   (GarageScene.SKYLIGHT, dir Y≈0.86) — PostCommon.sunScreen still arms a
-//   ~0.35 screen-shaft from that fill. After #1025 restored glossy dry-day
-//   paint those rays washed liveries (PR #1119). A closed pit bay has no sun
-//   disc. Exposure / bloom / glare still route through LT.
+//   ~0.35 screen-shaft from that fill, and the composite then marches bloom
+//   toward the skylight UV. After #1025 restored glossy dry-day paint, those
+//   crepuscular rays washed liveries white/sky-blue once the camera (or a
+//   team switch + orbit) put the fill on-screen. A closed pit bay has no sun
+//   disc; SCREEN SUN-SHAFT is a race/outdoor knob. Exposure / bloom / glare
+//   still route through LT so the Lighting Tuner can dial the bay.
 // Bases are a showroom, not a night-bloom track: 1.04 / 0.20 / 0.86, not the
 // old hardcoded 1.28 / 0.70 / 0.62. Slider 1 / glare 0.12 = these defaults.
 const SP_EXPOSURE = 1.04;
@@ -55,6 +58,8 @@ function presentOpts(tune) {
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
   const wrapped = T && typeof T === "object" ? Object.create(T) : {};
+  // Kill screen sun-shafts regardless of the race slider / track preset.
+  // Object.create(T) still carries the rest of the image-grade knobs.
   wrapped.sunShaftMul = 0;
   return {
     exposure: SP_EXPOSURE * exposureMul,

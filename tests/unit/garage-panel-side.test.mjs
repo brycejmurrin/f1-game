@@ -138,7 +138,7 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   assert.equal(def.contact, 0);
   assert.ok(def.tune && Number.isFinite(def.tune.sunShaftMul));
   // A closed bay has no sun disc — screen sun-shafts from the roof fill wash
-  // liveries after orbit / team switch (PR #1119). Force off even when hot.
+  // liveries after orbit / team switch. Force off even when the race slider is hot.
   assert.equal(def.tune.sunShaftMul, 0,
     `garage sunShaftMul must stay 0 (got ${def.tune.sunShaftMul})`);
   const hot = presentOpts({
@@ -167,6 +167,8 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   assert.doesNotMatch(cam, /gfx\.present\(SP_PRESENT\)/);
   assert.doesNotMatch(cam, /spMat\.clearcoat = 0\.1/,
     "paint must not be matted to hide a present wash");
+  // The bay sky fill is not a sun disc — presentOpts must zero screen shafts
+  // (a scale factor left enough energy to wash Ferrari/RBR/AM after orbit).
   assert.match(cam, /wrapped\.sunShaftMul\s*=\s*0/);
   assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
   const game = read("js/game.js");

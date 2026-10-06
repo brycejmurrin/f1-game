@@ -185,8 +185,11 @@ test.describe("garage active aero", () => {
     expect(after.dist).toBeCloseTo(chosen.dist, 5);
   });
 
-  // Screen sun-shafts from the bay sky fill washed liveries after team switch +
-  // orbit (PR #1119). presentOpts must keep shafts at 0 even when LT is hot.
+  // Screen sun-shafts from the bay sky fill washed liveries white/sky-blue after
+  // team switch + orbit (live garage sheet 2026-10-06). presentOpts must keep
+  // shafts at 0 even when the Home track's LT.sunShaftMul is hot — a pixel
+  // washout gate would need soft-present + luminance, which this suite cannot
+  // afford; the live knob is the same contract and is assertable in one evaluate.
   test("presentOpts keeps screen sun-shafts off after team switches", async ({ page }) => {
     await openGarage(page);
     const teams = ["mercedes", "ferrari", "redbull", "astonmartin"];

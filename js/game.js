@@ -4222,6 +4222,9 @@ function quitToMenu() {
   // on a browser with no speechSynthesis — so quitting mid-transmission left the
   // hiss running over the title screen. The sting is GameAudio's, so it ends here
   // with everything else rather than borrowing another module's lifetime.
+  // Spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s
+  // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
+  radioVoice.halt();
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
@@ -8594,7 +8597,7 @@ function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
   paused = true;
-  GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
+  GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
   openGarage("pit");
 }
 /** Back to the race. Called by BOTH garage exits — there is no "cancel" here
@@ -8608,7 +8611,7 @@ function closePitWork() {
   if (added > 0 && typeof announce === "function") announce("WORK DONE — +" + added + "s", 1.8, "race");
   paused = false;
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
-  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (isRaining()) GameAudio.startRain(); }
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
@@ -8737,9 +8740,10 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
-  // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
+  // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
+  // must not hiss over a frozen race; both starts are no-ops when already playing.
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }

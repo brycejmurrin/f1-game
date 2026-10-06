@@ -2524,9 +2524,11 @@
      <dialog>: it is never dismissed by Escape, takes no focus, and must let
      the WebGL canvas behind it show through during its first phase — a modal
      dialog's backdrop would sit between the two. `role="status"` because that
-     is what it is; it announces once and asks nothing. The `hidden` attribute
-     and the .screen class are what clearMenuScreens() closes it with. -->
-<div id="loading" class="screen" role="status" aria-label="Preparing race" hidden>
+     is what it is; it announces once and asks nothing. `data-esc="none"` and
+     UiLayers DEFS entry keep Escape from pausing under the plate; KeyP is
+     refused in platform-session.js. The `hidden` attribute and the .screen
+     class are what clearMenuScreens() closes it with. -->
+<div id="loading" class="screen" role="status" aria-label="Preparing race" data-esc="none" hidden>
   <div id="ld-card">
     <h2 id="ld-wordmark">APEX&nbsp;26</h2>
     <div id="ld-body">
@@ -3565,6 +3567,7 @@
 <script defer crossorigin="anonymous" src="js/track/build-client.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/editor/track-themes.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/editor/props.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/editor/custom-tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-geometry.js?v=dev"></script>

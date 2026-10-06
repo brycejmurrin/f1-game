@@ -85,11 +85,11 @@ test("long-press: a handle held 500 ms fires onContext once, keeps it selected a
   assert.equal(h.ev.changes.length, 0, "the release after a long-press moves nothing");
   assert.deepEqual(h.ev.picks, [], "…and picks nothing");
   assert.equal(h.cv.selection().sel, 5, "the held handle stays selected");
-  // The next press is an ordinary drag again.
+  // The next press is an ordinary drag again (mouse: threshold alone is enough).
   const b = h.scr(h.pts[8]);
-  h.fire("pointerdown", b, 2);
-  h.fire("pointermove", h.off(b, 30, 0), 2);
-  h.fire("pointerup", h.off(b, 30, 0), 2);
+  h.fire("pointerdown", b, 2, { pointerType: "mouse" });
+  h.fire("pointermove", h.off(b, 30, 0), 2, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(b, 30, 0), 2, { pointerType: "mouse" });
   assert.equal(h.ev.changes.length, 1);
   assert.equal(h.ev.changes[0].kind, "move");
   assert.equal(h.ev.contexts.length, 1);
@@ -191,8 +191,8 @@ test("measurement chip: R <n> m while dragging a handle on a curve, STRAIGHT on 
   const h = boot();
   assert.equal(h.cv.measure(), null, "nothing dragged or spanned: no chip");
   const a = h.scr(h.pts[6]);
-  h.fire("pointerdown", a, 1);
-  h.fire("pointermove", h.off(a, 12, 5), 1);
+  h.fire("pointerdown", a, 1, { pointerType: "mouse" });
+  h.fire("pointermove", h.off(a, 12, 5), 1, { pointerType: "mouse" });
   const text = h.cv.measure();
   assert.match(text, /^R \d+ m$/);
   h.rec.texts.length = 0; h.cv.render();
@@ -214,26 +214,25 @@ test("measurement chip: R <n> m while dragging a handle on a curve, STRAIGHT on 
   // A collinear triple reads STRAIGHT, also while the point slides along its line.
   const s = boot({}, [[0, 0], [50, 0], [100, 0], [100, 60], [0, 60]]);
   const b = s.scr([50, 0]);
-  s.fire("pointerdown", b, 1);
+  s.fire("pointerdown", b, 1, { pointerType: "mouse" });
+  s.fire("pointermove", s.off(b, 15, 0), 1, { pointerType: "mouse" });
   assert.equal(s.cv.measure(), "STRAIGHT");
-  s.fire("pointermove", s.off(b, 15, 0), 1);
-  assert.equal(s.cv.measure(), "STRAIGHT");
-  s.fire("pointerup", s.off(b, 15, 0), 1);
+  s.fire("pointerup", s.off(b, 15, 0), 1, { pointerType: "mouse" });
 });
 
-test("touch targets: a press 27 px from a handle picks it with pointerType touch, not with a mouse", () => {
-  assert.equal(boot().DC.HIT_PX, 24, "the mouse radius is unchanged");
+test("touch targets: a press 32 px from a handle picks it with pointerType touch, not with a mouse", () => {
+  assert.equal(boot().DC.HIT_PX, 28, "mouse pick radius (larger than the drawn dot)");
   const h = boot();
-  assert.equal(h.DC.HIT_TOUCH, 30);
-  // 27 px radially outward from handle 0 (on +x): clear of the loop's segments.
-  const at = h.off(h.scr(h.pts[0]), 27, 0);
+  assert.equal(h.DC.HIT_TOUCH, 44);
+  // 32 px radially outward from handle 0 (on +x): outside mouse HIT_PX, inside HIT_TOUCH.
+  const at = h.off(h.scr(h.pts[0]), 32, 0);
   h.fire("pointerdown", at, 1, { pointerType: "mouse" });
   h.fire("pointerup", at, 1, { pointerType: "mouse" });
-  assert.deepEqual(h.ev.picks, [], "a mouse at 27 px misses");
+  assert.deepEqual(h.ev.picks, [], "a mouse at 32 px misses");
   assert.equal(h.ev.changes.length, 0, "…and is a pan, not an insert");
   h.fire("pointerdown", at, 2, { pointerType: "touch" });
   h.fire("pointerup", at, 2, { pointerType: "touch" });
-  assert.deepEqual(h.ev.picks, [0], "a finger at 27 px picks the handle");
+  assert.deepEqual(h.ev.picks, [0], "a finger at 32 px picks the handle");
   // Handles draw 1.5x under touch (the last pointer type seen); a mouse puts them back.
   const plainR = () => { h.rec.arcs.length = 0; h.cv.render(); return Math.min(...h.rec.arcs); };
   assert.equal(plainR(), 4.5 * 1.5, "an unselected handle under touch");
