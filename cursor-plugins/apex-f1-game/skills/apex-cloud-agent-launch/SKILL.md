@@ -22,7 +22,7 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 ## Prompt template (fill gaps)
 1. **Goal** — outcome, not line edits.
 2. **Context** — symptoms, PR number/URL, attached files/images.
-3. **Constraints** — include `OWNED:` / `FORBIDDEN:` globs, done-when, shot/test caps, and the exact line `Do not arm auto-merge yourself; Merge Desk owns merge-when-green (MERGE commit only).` Draft PR unless asked. Stay in lane (UI/cars/tracks/perf/audio/net). Sync = merge `origin/claude/f1-game-project-26h3ng`; never rebase or force-push. Pre-push = `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle. No CI poll loops (`ci-watch.mjs` / CI Watch, not `sleep` / `gh run view`).
+3. **Constraints** — include `OWNED:` / `FORBIDDEN:` globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` Draft PR unless asked. Stay in lane (UI/cars/tracks/perf/audio/net). Sync = merge `origin/claude/f1-game-project-26h3ng`; never rebase or force-push. Pre-push = `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle. No CI poll loops (`ci-watch.mjs` / CI Watch, not `sleep` / `gh run view`).
 4. **Success** — PR link or clear “no PR”; tests run / named not-run. Mark ready **within 15 min of tip-green** (CI Watch flips otherwise). Close-out must pass the stall/handoff gate in `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 5. Invite the agent to verify its own diagnosis.
 

@@ -13,7 +13,7 @@ Use when messaging an Apex specialty Grok bot or writing its status/digest.
 - **Cars** — meshes, liveries, garage presentation
 - **Tracks** — scenery, landmarks, audits
 - **Perf** — boot, CSS, particles, probes, GL backends
-- **CI Watch** — CI/Pages watcher; specialty bots never arm auto-merge; Merge Desk owns merge-when-green (MERGE commit only)
+- **CI Watch** — CI/Pages watcher; agents never arm auto-merge; only CI Watch arms SQUASH on ready PRs
 - **Audio** — radio, SFX, mute, spotter
 - **Net** — multiplayer, TURN, lobby, VS Friend net
 - **Docs** — indexes, handoffs, docs-only PRs
@@ -33,4 +33,4 @@ Full stall-abort + merge-not-rebase text: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2
 - `priority: true` only if they must act or someone is waiting.
 - FYI / status → `priority: false`.
 - Do not fan out the same ask to every specialist unless the user asked.
-- Agents never arm auto-merge themselves; Merge Desk owns merge-when-green (MERGE commit only). Sync = merge origin ship, never rebase/force.
+- Agents never arm auto-merge; only CI Watch arms SQUASH on ready PRs. Sync = merge origin ship, never rebase/force.

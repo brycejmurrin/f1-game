@@ -58,8 +58,8 @@ tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
 no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
 the normal train once green.
 
-Specialty bots and cloud agents never arm auto-merge themselves; Merge Desk
-owns merge-when-green (MERGE commit only). Disable any armed MERGE/REBASE
-auto-merge and tell Merge Desk + CI Watch + Grok Bot. Sync by merging
+Only CI Watch arms auto-merge (SQUASH only) on ready PRs; agents/sessions/tools
+never arm or merge — mark ready at tip-green. Disable any foreign MERGE/REBASE
+arm and tell CI Watch + Grok Bot. Sync by merging
 origin/ship; never rebase or force-push. Launch prompts carry
-`Do not arm auto-merge yourself; Merge Desk owns merge-when-green (MERGE commit only).`
+`Do not enable auto-merge or merge.`

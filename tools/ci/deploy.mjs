@@ -641,28 +641,15 @@ function pushWithRetry(oursProse = false) {
 
 /* --pr without the gh CLI. The remote containers have GH_TOKEN/GITHUB_TOKEN and
    curl (through the agent proxy) but no gh, which left --pr printing a compare
-   URL and the session merging by hand (PR #178, 2026-09-22). Same three steps
-   as the gh path — find an open PR for the head, create one from the branch's
-   last real commit, enable auto-merge — over REST only.
-   The token travels as a curl config on stdin, never on the argv.
+   URL and the session merging by hand (PR #178, 2026-09-22). Same steps as the
+   gh path — find an open PR for the head, or create one from the branch's last
+   real commit — over REST only. Never arm auto-merge: only CI Watch arms
+   SQUASH on ready PRs (2026-10-06). The token travels as a curl config on
+   stdin, never on the argv.
 
    NOT GraphQL (2026-09-22, measured): `api.github.com/graphql` is refused from
-   Claude Code sessions, and the refusal is a plain `{"message": …}` with NO
-   `errors` array — so the first version of this function read it as success
-   and told two PRs (#182, #184) that auto-merge was armed when no
-   `auto_merge_enabled` event ever reached either timeline, and both were
-   merged by hand. Auto-merge goes through the session's CCR REST route
-   instead, and the result is VERIFIED by reading the PR back rather than
-   inferred from the absence of an error.
-
-   AND THE ANSWER IS NO, on this repo: the first honest run (PR #186) got
-   "Pull request Branch does not have required protected branch rules".
-   `claude/f1-game-project-26h3ng` has no branch protection, so there is
-   nothing for auto-merge to wait on and GitHub refuses to arm it — which is
-   why no PR has ever auto-merged here, #178 included. Expect the "NOT armed"
-   note and merge the PR yourself once CI is green; that is the tool working,
-   not failing. Enabling it would mean adding required checks to the deploy
-   branch, which is a train-latency decision, not a tooling one. */
+   Claude Code sessions. Historical auto-merge arming via CCR REST was removed
+   so agents/tools cannot MERGE-arm (#1134/#1135). */
 const REPO = "brycejmurrin/f1-game";
 function ghApi(token, method, url, body) {
   const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method, "-w", "\n%{http_code}",
@@ -692,11 +679,8 @@ export function openPrRest(branch, token) {
   const list = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
   if (!list.ok) throw new Error(`PR lookup failed (HTTP ${list.status}): ${JSON.stringify(list.json).slice(0, 200)}`);
   const open = list.json;
-  // The reuse path confirms auto-merge too: a second `--pr` on the same branch
-  // used to return no `autoMerge` key at all, so the verdict silently lost it.
   if (Array.isArray(open) && open[0]?.html_url) {
-    const am = autoMerge(token, api, open[0].number);
-    return { pr: open[0].html_url, autoMerge: am.autoMerge, note: `PR already open; the push updated it. ${am.note}` };
+    return { pr: open[0].html_url, note: "PR already open; the push updated it. Do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
   }
   // The title comes from the branch's last REAL commit, not from HEAD: a
   // deploy merges the base tip before it opens the PR, so HEAD is almost
@@ -712,32 +696,9 @@ export function openPrRest(branch, token) {
   const [title, body] = head.split("\0");
   const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
   if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
-  return { pr: pr.html_url, ...autoMerge(token, api, pr.number) };
+  return { pr: pr.html_url, note: "PR opened; do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
 }
 
-/** Arm auto-merge and CONFIRM it, because "no error" is not evidence: the
- *  GraphQL refusal that fooled #182 and #184 was a 200-shaped message body.
- *  `/pulls/{n}/ccr/auto_merge` is a route of the SESSION'S proxy, not of
- *  api.github.com — against the real API it 404s, and this reports NOT armed.
- *
- *  NOTHING here may throw. The PR already exists by the time we are called, so
- *  an exception would lose its URL and fail a deploy whose gate already
- *  passed — and the proxy answers 403/405/407 with non-JSON bodies, which is
- *  exactly when ghApi throws. Every failure degrades to "NOT armed", which is
- *  the honest answer and the one the session can act on. */
-export function autoMerge(token, api, number) {
-  try {
-    const put = ghApi(token, "PUT", `${api}/pulls/${number}/ccr/auto_merge`, { merge_method: "merge" });
-    const back = ghApi(token, "GET", `${api}/pulls/${number}`).json;
-    if (back?.auto_merge) {
-      return { autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
-    }
-    const why = (put.json && (put.json.message || put.json.error)) || `HTTP ${put.status}`;
-    return { autoMerge: false, note: `auto-merge NOT armed (${String(why).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
-  } catch (e) {
-    return { autoMerge: false, note: `auto-merge NOT armed (${String(e.message || e).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
-  }
-}
 function openPr(branch) {
   must(git(["push", "-u", REMOTE, branch]), "push session branch");
   const gh = spawnSync("gh", ["--version"], { encoding: "utf8" });
@@ -747,22 +708,12 @@ function openPr(branch) {
     return { pr: null, note: `gh not installed and no GH_TOKEN/GITHUB_TOKEN — open https://github.com/${REPO}/compare/${DEPLOY_BRANCH}...${branch}?expand=1` };
   }
   const existing = spawnSync("gh", ["pr", "list", "--head", branch, "--base", DEPLOY_BRANCH, "--json", "url", "-q", ".[0].url"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
-  if (existing) return { pr: existing, note: "PR already open; the push updated it" };
+  if (existing) return { pr: existing, note: "PR already open; the push updated it. Do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
   const created = spawnSync("gh", ["pr", "create", "--base", DEPLOY_BRANCH, "--head", branch, "--fill"], { cwd: ROOT, encoding: "utf8" });
   if (created.status !== 0) throw new Error("gh pr create failed: " + created.stderr);
   const url = created.stdout.trim().split("\n").pop();
-  // The SAME rule as the REST path above: arming is not evidence of armed.
-  // This line used to discard `gh pr merge --auto`'s status and return
-  // "enabled" unconditionally, so a box WITH gh got the identical lie the REST
-  // path was fixed for — and on this repo the call always fails, because the
-  // deploy branch has no protected branch rules. Read the PR back instead.
-  const armed = spawnSync("gh", ["pr", "merge", "--auto", "--merge", url], { cwd: ROOT, encoding: "utf8" });
-  const back = spawnSync("gh", ["pr", "view", url, "--json", "autoMergeRequest", "-q", ".autoMergeRequest"],
-    { cwd: ROOT, encoding: "utf8" });
-  const on = back.status === 0 && back.stdout.trim() && back.stdout.trim() !== "null";
-  if (on) return { pr: url, autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
-  const why = (armed.stderr || armed.stdout || "").trim().split("\n")[0] || `gh exit ${armed.status}`;
-  return { pr: url, autoMerge: false, note: `auto-merge NOT armed (${why.slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
+  // Never arm auto-merge here (2026-10-06): only CI Watch arms SQUASH on ready PRs.
+  return { pr: url, note: "PR opened; do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
 }
 
 /* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented

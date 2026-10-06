@@ -9,7 +9,7 @@ description: >-
 
 Repo: `brycejmurrin/f1-game`. Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
-**Merge pacing:** specialty bots and cloud agents never arm auto-merge themselves; Merge Desk owns merge-when-green (MERGE commit only). Disable any armed MERGE/REBASE auto-merge and tell Merge Desk + CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
+**Merge pacing:** only CI Watch arms auto-merge (SQUASH only) on ready PRs; agents/sessions/tools never arm or merge — mark ready at tip-green. Disable any foreign MERGE/REBASE arm and tell CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
 
 ## What to watch (do not conflate)
 
