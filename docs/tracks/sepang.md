@@ -29,8 +29,8 @@ Gently rolling reclaimed plantation, with one genuine drop and one climb.
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | 0.95–1.00 | L | near | **Main Grandstand + Hibiscus Canopy** (`sepang-main-grandstand-canopy`): 6 curved petal bays on masts over a bare raked terrace; no over-track spans. Opposite the pit lane (`ownPitStraight`). |
-| 0.95–1.00 | R | near | Pit terrace: deep open garage arcade, first-floor gallery walkway on slim posts, green accent band (`sepang-pit-bay-*`) |
-| 0.010 | R | near | Race control: tall narrow glazed **fin** with an oversailing louvre hood (`sepang-race-control`) |
+| 0.95–1.00 | R | near | Engine pit complex (hand `sepang-pit-bay-*` groups are superseded). Paddock hospitality, asphalt car parks and a service lane sit further out on +1. |
+| 0.006 | R | mid | Race control: tall glazed **fin** behind the pit complex (`sepang-race-control`); gap 14 sat inside the engine pits and never emitted |
 | 0.065 | L | near | **K1 Grandstand** at T1–T2 (`sepang-t1-grandstand`): positive-rake covered stand on the outside of the right-hander |
 | 0.02–0.05 | L | far | Long slatted **shaded walkway** on slim posts — every path on this site is covered |
 | 0.06 | R | near | T1–T2 gravel apron (40×56) + red tyre wall |
@@ -59,6 +59,7 @@ Gently rolling reclaimed plantation, with one genuine drop and one climb.
 - Keep the haze heavy and the horizon near-white; crisp distance is wrong for the equator.
 - Put green accent banding on venue-owned structures and nothing else.
 - Paddock motorhomes sit on discrete pads behind the pit terrace and skip placements where `terrainYAt` disagrees with the anchor by >2.5 m (was burying props ~8 m on the verge slope).
+- DETAIL 2026-10-06: register `sepang-race-control` (reseated outside the pit footprint) and `sepang-klia-skyline`; paddock hospitality + car parks on the pit +1 infield; extra billboards and an LED hoarding on the back straight. The 0.10–0.90 palm grid is unchanged.
 
 ## Sourced vs uncertain
 | Claim | Status |
