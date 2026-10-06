@@ -365,7 +365,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   border-radius: var(--r-xs); cursor: pointer;
   touch-action: manipulation;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 }
 #pmsettings-inner .pm-doors button {

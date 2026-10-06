@@ -15,4 +15,6 @@ Local Cursor plugin bundling reusable Apex 26 (`brycejmurrin/f1-game`) skills fo
 Already under `~/.cursor/plugins/local/apex-f1-game/` for local discovery. To share: publish as a marketplace plugin or copy this folder.
 
 ## Ship defaults
-Repo `https://github.com/brycejmurrin/f1-game`, branch `claude/f1-game-project-26h3ng`.
+Repo `https://github.com/brycejmurrin/f1-game`. Deploy / ship branch `claude/f1-game-project-26h3ng`. Topic work: `cursor/<topic>-<hash>` draft PRs into ship. Model `default` (Auto) only.
+
+Launch/handoff/CI rules follow repo `AGENTS.md` plus `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md` and `docs/notes/APEX-STEWARD-CARD-2026-10-05.md`. Only CI Watch arms squash auto-merge on ready PRs; agents never merge/arm.

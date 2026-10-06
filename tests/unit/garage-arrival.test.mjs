@@ -491,10 +491,16 @@ function garageEntryRegressionHarness() {
   vm.runInContext(introGameSource.slice(helperStart, helperEnd), c);
   // Run the real visibility, readiness and garage render routing. The world
   // draw is outside this test; it must never be reached while the garage owns it.
+  // gfxContextLost lives just above render() — include it so the prefix extract
+  // matches production after the context-loss fail-fast (PR hang fix).
   const renderStart = introGameSource.indexOf('function render(dt) {');
   const renderEnd = introGameSource.indexOf('  gfx.resize();\n  // No track yet', renderStart);
   assert.ok(renderStart >= 0 && renderEnd > renderStart, 'production render prefix extraction');
-  vm.runInContext(introGameSource.slice(renderStart, renderEnd) + '\n}', c);
+  const lostStart = introGameSource.lastIndexOf('function gfxContextLost()', renderStart);
+  const lostFn = lostStart >= 0 && lostStart < renderStart
+    ? introGameSource.slice(lostStart, renderStart)
+    : 'function gfxContextLost() { return false; }\n';
+  vm.runInContext(lostFn + introGameSource.slice(renderStart, renderEnd) + '\n}', c);
   c.sheetFixture = { sheet, btn, back, label: 'START RACE' };
   vm.runInContext('_introSheet = sheetFixture;', c);
   return {

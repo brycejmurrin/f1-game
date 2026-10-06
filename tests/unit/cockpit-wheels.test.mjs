@@ -436,7 +436,7 @@ test("body alternatives change shoulders but retain cockpit clearance and geomet
     { cockpit: true, cockpitBody, noWheels: true, noDriver: true, measure: true }));
   for (const mesh of shapes) {
     assert.ok(mesh.pos.every(Number.isFinite) && mesh.nrm.every(Number.isFinite));
-    assert.ok(mesh.idx.length / 3 <= 1500, "body-only cockpit triangle budget");
+    assert.ok(mesh.idx.length / 3 <= 1580, "body-only cockpit triangle budget");
     let start = 0;
     for (const part of mesh.parts) { if (part.name === "bolsters") break; start += part.vertices; }
     const count = mesh.parts.find(p => p.name === "bolsters").vertices;

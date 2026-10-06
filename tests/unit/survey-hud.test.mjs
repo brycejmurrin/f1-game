@@ -118,8 +118,25 @@ test("apply: shows #hud + docks + pausebtn; hides overlay / nogl; no race warm",
   assert.ok(fx.body.classList.contains("in-race"));
   assert.equal(fx.nodes.get("btn-brake").hidden, false, "touch stub unhides pedals");
   assert.ok((fx.nodes.get("dock-left")._kids || []).includes(fx.nodes.get("grp-pedals")));
+  assert.equal((fx.nodes.get("dock-left")._kids || []).includes(fx.nodes.get("grp-steer")), false,
+    "steer group stays out of dock-left");
+  assert.equal(fx.nodes.get("btn-steer-left").hidden, true, "steer ◀ stays hidden");
+  assert.equal(fx.nodes.get("btn-steer-right").hidden, true, "steer ▶ (play glyph) stays hidden");
+  assert.equal(fx.nodes.get("grp-steer").hidden, true);
+  assert.ok(fx.body.classList.contains("steer-touch"));
+  assert.equal(fx.body.classList.contains("manual"), false, "auto-tilt fixture, not manual+steer");
   assert.ok(busyCalls === 1 || stopCalls >= 1, "uses loading busy or stop (no parallel overlay)");
   assert.equal(SH.active(fx.document), true);
+});
+
+test("apply: hides WATCH transport play chrome if present", () => {
+  const fx = fakeDom();
+  const wt = { className: "watch-transport", hidden: false };
+  fx.document.querySelector = (sel) => (sel === ".watch-transport" ? wt : null);
+  fx.body.classList.add("watch-controls-on");
+  assert.equal(SH.apply({ ...fx, loadingScreen: { stop() {} } }), true);
+  assert.equal(wt.hidden, true);
+  assert.equal(fx.body.classList.contains("watch-controls-on"), false);
 });
 
 test("apply: works without LoadingScreen.busy (pre-#1012 tip)", () => {
@@ -230,6 +247,8 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   const play = read("tools/ui/css-play.mjs");
   assert.match(play, /surveyHud:\s*true/);
   assert.match(play, /APEX_SURVEY_HUD=1/);
+  assert.match(play, /btn-steer-right/);
+  assert.match(play, /polling:\s*100/);
   assert.match(read("index.html"), /js\/ui\/survey-hud\.js\?v=dev/);
 });
 

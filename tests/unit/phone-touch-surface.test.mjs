@@ -20,7 +20,8 @@
  *     the background zoom guard and multi-touch driving behavior.
  *
  * CONFIRMED-OK and pinned so they stay that way: every `:hover` in css/ is
- * gated on `(hover: hover)`; every scroll container contains its overscroll;
+ * gated on `(hover: hover) and (pointer: fine)` (css/race-setup.css and
+ * css/dialogs.css may still use `(hover: hover)` only — follow-up); every scroll container contains its overscroll;
  * the dock's tap rungs clear 44px at both width tiers; the tallest dock
  * column fits a 390px-tall landscape phone at HUD SIZE 200 % before fitHud's
  * `--hud-z-dock` cap even has to act; double-tap zoom is refused on every
@@ -223,14 +224,33 @@ test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z"
 /* ── touch policy across css/ ────────────────────────────────────────────── */
 
 test("every :hover rule in css/ is gated on (hover: hover) — a tap sticks :hover on iOS", () => {
+  const FOLLOW_UP = new Set(["css/race-setup.css", "css/dialogs.css"]);
   const ungated = [];
+  const coarseHover = [];
+  // Physical files only: readCssSource concatenates race-setup into select/menus.
   for (const file of CSS_FILES) {
-    for (const r of css(file)) {
+    const rules = cssRules(read(file));
+    for (const r of rules) {
       if (!/:hover/.test(r.selector)) continue;
       if (!r.context.some((c) => /hover\s*:\s*hover/.test(c))) ungated.push(`${file} ${r.selector}`);
+      else if (!FOLLOW_UP.has(file) && !r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
+        coarseHover.push(`${file} ${r.selector}`);
+      }
     }
   }
-  assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and give touch an :active twin (css/tokens.css policy)");
+  assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and (pointer: fine); touch uses :active (css/tokens.css policy)");
+  assert.deepEqual(coarseHover, [], "non-follow-up :hover must also sit in (pointer: fine); skip css/race-setup.css + css/dialogs.css");
+});
+
+test("JS hover-only UI skips touch / (hover: none) so a tap does not latch a tooltip", () => {
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /pointerenter[\s\S]{0,220}pointerType === ["']touch["']/,
+    "garage part comparison must ignore touch pointerenter");
+  assert.match(sheet, /matchMedia\(["']\(hover: none\)["']\)/,
+    "garage part comparison must skip when the device cannot hover");
+  const sched = read("js/data/schedule.js");
+  assert.match(sched, /mouseenter[\s\S]{0,280}matchMedia\(["']\(hover: none\)["']\)/,
+    "schedule overflow title must not attach on (hover: none)");
 });
 
 test("every scroll container contains its overscroll (no chaining into the page behind)", () => {
