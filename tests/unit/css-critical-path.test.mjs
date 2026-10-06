@@ -83,6 +83,14 @@ test("Barlow and unused Titillium faces live in deferred fonts-hud.css", () => {
   assert.equal(MANIFEST.CSS_PRELOAD.includes("css/fonts-hud.css"), false);
 });
 
+test("blocking components.css owns the dialog.screen box so print→all cannot 0-box a :modal", () => {
+  const components = fs.readFileSync(path.join(ROOT, "css/components.css"), "utf8");
+  assert.match(components, /dialog\.screen:not\(\[open\]\)\s*\{\s*display:\s*none/);
+  assert.match(components, /dialog\.screen\[open\]\s*\{\s*display:\s*grid/);
+  assert.match(components, /dialog\.screen\s*\{[^}]*width:\s*100%/);
+  assert.match(components, /dialog\.screen\s*\{[^}]*height:\s*100%/);
+});
+
 test("blocking and preload byte census stay under the post-cut ceilings", () => {
   const blocked = MANIFEST.CSS.filter((f) => !MANIFEST.CSS_DEFERRED.includes(f));
   assert.deepEqual(blocked, TITLE_CRITICAL);

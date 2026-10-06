@@ -374,8 +374,16 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    /* Blocking components.css now owns dialog.screen 100% box + [open] grid
+       so print→all dialog-platform cannot leave a 0×0 :modal. Wait for :modal
+       AND a non-zero box so UiLayers.top names #standings, not #pausemenu. */
+    await page.waitForFunction(() => {
+      const s = document.getElementById("standings");
+      if (!s || !s.matches(":modal")) return false;
+      const r = s.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return false;
+      return (window.MenuNav.activeLayer() || {}).id === "standings";
+    }, null, { polling: 100, timeout: 5_000 });
 
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
