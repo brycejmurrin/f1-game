@@ -44,7 +44,9 @@ function boot(store, build) {
 
 test("a race that never ended is counted as a crash", () => {
   // The mechanism itself, so the expiry below cannot pass by breaking it.
-  const store = { "apex26.crashStrikesBuild": "900", "apex26.raceActive": "1" };
+  // SENT_TICKED is the session that presented: SENT_ACTIVE alone is a menu
+  // world build (loadTrackStepped) and must not spend a strike.
+  const store = { "apex26.crashStrikesBuild": "900", "apex26.raceActive": "1", "apex26.raceTicked": "1" };
   const g = boot(store, 900);
   assert.equal(g.strikes(), 1, "one strike for the race that did not finish");
   assert.equal(g.tierFloor(), 2, "one strike sheds the lamp-shadow/SSR tier");
@@ -78,7 +80,7 @@ test("an update mid-race is not a crash", () => {
 test("within the SAME build the strikes still accumulate", () => {
   // The expiry must not defeat the sentinel: a phone dying repeatedly on one
   // build has to keep degrading.
-  const store = { "apex26.crashStrikesBuild": "898", "apex26.crashStrikes": "1", "apex26.raceActive": "1" };
+  const store = { "apex26.crashStrikesBuild": "898", "apex26.crashStrikes": "1", "apex26.raceActive": "1", "apex26.raceTicked": "1" };
   const g = boot(store, 898);
   assert.equal(g.strikes(), 2);
   assert.equal(g.tierFloor(), 4);
@@ -92,6 +94,30 @@ test("clearStrikes() is the manual way out", () => {
   assert.equal(g.strikes(), 0);
   assert.equal(g.tierFloor(), 0);
   assert.equal(store["apex26.crashStrikes"], "0", "and it survives the next boot");
+});
+
+test("a menu world build that never raced is not a crash", () => {
+  // js/game.js loadTrackStepped arms SENT_ACTIVE for Home/flyby prep. A reload
+  // during post-Quali SCENE LOADING left that flag set with no race frame.
+  const store = { "apex26.crashStrikesBuild": "900", "apex26.raceActive": "1" };
+  const g = boot(store, 900);
+  assert.equal(g.strikes(), 0, "no tick() means no session, so no strike");
+  assert.equal(g.tierFloor(), 0);
+  assert.equal(store["apex26.raceActive"], undefined);
+  assert.equal(store["apex26.raceTicked"], undefined);
+});
+
+test("the first race tick stamps the session so a later kill still counts", () => {
+  const store = { "apex26.crashStrikesBuild": "900" };
+  const g = boot(store, 900);
+  g.sentinelArm(true);
+  assert.equal(store["apex26.raceActive"], "1");
+  assert.equal(store["apex26.raceTicked"], undefined);
+  g.tick(16.7);
+  assert.equal(store["apex26.raceTicked"], "1");
+  g.sentinelArm(false);
+  assert.equal(store["apex26.raceActive"], undefined);
+  assert.equal(store["apex26.raceTicked"], undefined);
 });
 
 test("desktop never enters safe mode at all", () => {

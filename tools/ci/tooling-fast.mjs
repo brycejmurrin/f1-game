@@ -465,6 +465,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
+  // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
+  "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
@@ -597,6 +600,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
+  // foot clearance — css/race-setup.css + season-ui.js only.
+  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/session-contracts.test.mjs",
@@ -651,6 +657,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
+  // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
+  "tests/unit/survey-hud.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/team-livery.test.mjs",

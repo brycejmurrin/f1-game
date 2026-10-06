@@ -217,6 +217,19 @@ const TrackGraph = (function () {
       }
       const m = model(key, build);
       if (!m.ops.length) { dropped++; return 0; }
+      // A pine is one object. Lower crown tiers can hit a doubled-back ribbon
+      // (Fuji 120R / 300R / 30R-45R) while the trunk and upper cones clear it,
+      // so the soup kept 10–28 m unsupported cones. Dry-run the guards; if any
+      // op would drop, plant nothing.
+      if (meta && meta.kind === "pine" && emit) {
+        const verd = m._whole || (m._whole = new Uint8Array(m.ops.length));
+        out._dryRun = true;
+        out._recVerdicts = verd;
+        out._vIdx = 0;
+        const nLand = replay(m, place, emit, out);
+        out._dryRun = false; out._recVerdicts = null;
+        if (nLand !== m.ops.length) { dropped++; return 0; }
+      }
       const prefer = !!(out && out._preferInstance && emit);
       let landed;
       if (prefer) {

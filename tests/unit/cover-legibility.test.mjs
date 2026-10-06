@@ -72,14 +72,19 @@ const { RecCtx } = loadCrests();
 function loadAtlas() {
   let last = null;
   const sb = { console, Math, Object, Array, String, Number, JSON, Map, Set, isNaN, isFinite, parseInt, parseFloat,
+    // First RecCtx wins: preview downscale must not wipe recorded paint ops.
     document: { querySelector: () => null,
-                createElement: () => ({ getContext: () => (last = new RecCtx()), width: 0, height: 0 }) } };
+                createElement: () => {
+                  const rec = new RecCtx();
+                  return { getContext: () => { if (!last) last = rec; return rec; }, width: 0, height: 0 };
+                } } };
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   return { LT: vm.runInContext("LiveryTex", sb), Teams: vm.runInContext("Teams", sb),
-           Liveries: vm.runInContext("Liveries", sb), ops: () => last.ops };
+           Liveries: vm.runInContext("Liveries", sb), ops: () => last.ops,
+           beginPaint: () => { last = null; } };
 }
 
 const lin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
@@ -170,7 +175,8 @@ test("every cover design a player can pick is visible on every car", () => {
         // plate — per background it lands on), so the mark designs are its.
         if (MARK_DESIGNS[row.key].has(id)) continue;
         const liv = Object.assign({}, base, { [row.key]: id });
-        A.LT.buildAtlas(team.id, liv, 7, true);
+        A.beginPaint();
+        A.LT.buildAtlas(team.id, liv, 7, true, true);
         const s = survey(A.ops(), A.LT.REGIONS[row.region], bg);
         if (s.painted === 0) continue;          // bare is a legitimate design
         if (s.read >= floor) continue;

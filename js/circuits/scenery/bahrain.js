@@ -54,9 +54,9 @@
       const STEEL       = [0.16, 0.16, 0.19];
       const PIT_CREAM   = [0.91, 0.89, 0.84];  // cream-white for main pit building
       const STAND_CREAM = [0.84, 0.82, 0.76];  // slightly warm for grandstand shells
-      // Floodlights: cool-white lens + cool pool (night-race drama)
-      const FLOOD       = [1.10, 1.14, 1.22];
-      const POOL        = [0.72, 0.78, 0.88];
+      // Floodlights: warmer night-race identity (sheet-01 — cool pools washed out)
+      const FLOOD       = [1.18, 1.06, 0.78];
+      const POOL        = [0.90, 0.74, 0.42];
       // Night-lit windows: warm amber (office glow), cool blue (control/tech rooms)
       const WIN_WARM    = [0.92, 0.80, 0.44];  // office/hospitality lit window — warm amber
       const WIN_COOL    = [0.52, 0.70, 0.94];  // timing/technical lit window — cool blue
@@ -127,24 +127,28 @@
         }
       })();
 
-      const floodMast = (k, side, gap, h) => {
-        const mastH = (h != null ? h : 36 + hash(k * 13) * 6); // 36–42 m when jittered
+      // pool defaults OFF — a full-lap pool ring coplanared with crowdBank
+      // (ground-audit). lightBank() opts.pool:true keeps the night-race washes.
+      const floodMast = (k, side, gap, h, opts) => {
+        if (h && typeof h === "object") { opts = h; h = opts.h; }
+        const mastH = (h != null ? h : 38 + hash(k * 13) * 6); // 38–44 m
+        const wantPool = !!(opts && opts.pool);
         if (typeof apiFloodMast === "function") {
-          // Dual-arm cool-white bank — Sakhir's signature night silhouette.
-          apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: true, arms: 2 });
+          // cool:true → flood_bank kind (floodmast-lamp-register).
+          apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: wantPool, arms: 2 });
           return;
         }
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 5)) return;
-        addCyl(out, a.c, 0.45, mastH, STEEL, 6, b);
+        addCyl(out, a.c, 0.70, mastH, STEEL, 6, b);
         const top = vadd(a.c, a.u, mastH);
-        for (const armOff of [-1.8, 1.8]) {
-          const arm = vadd(vadd(top, a.t, armOff), a.r, -side * 1.6);
-          addBox(out, arm, [3.4, 0.35, 0.55], STEEL, b);
-          addBox(out, vadd(arm, a.r, -side * 1.3), [1.6, 0.55, 1.1], FLOOD, b);
+        for (const armOff of [-2.4, 2.4]) {
+          const arm = vadd(vadd(top, a.t, armOff), a.r, -side * 2.0);
+          addBox(out, arm, [4.2, 0.45, 0.70], STEEL, b);
+          addBox(out, vadd(arm, a.r, -side * 1.5), [2.0, 0.70, 1.4], FLOOD, b);
         }
-        addBox(out, top, [1.2, 0.9, 4.4], [0.22, 0.22, 0.26], b);
-        addBox(out, vadd(a.c, a.u, 0.12), [8.0, 0.22, 8.0], POOL, b);
+        addBox(out, top, [1.6, 1.1, 5.2], [0.22, 0.22, 0.26], b);
+        if (wantPool) addBox(out, vadd(a.c, a.u, 0.14), [10.0, 0.22, 10.0], POOL, b);
       };
 
       const duneWedge = (k, side, gap, w, h) => {
@@ -158,11 +162,11 @@
         });
       };
 
-      // ── Three-pole light bank (cluster of tall cool-white masts) ─────────
+      // ── Three-pole light bank (cluster of tall masts + night pools) ──────
       const lightBank = (k, side, gap) => {
         for (const off of [-6, 0, 6]) {
           const kk = (k + off + n) % n;
-          floodMast(kk, side, gap, 36 + hash(kk * 3) * 6);
+          floodMast(kk, side, gap, 36 + hash(kk * 3) * 6, { pool: true });
         }
       };
 
@@ -179,6 +183,49 @@
           { wall: [0.88, 0.87, 0.82], window: WIN_COOL, lit: true, floor: 2 });
       };
 
+      // Closed Sakhir tribuna — local modelGroup (not grandstandEx open shell).
+      // Cream shell + blue/slate seat rake + roof canopy + end walls + posts.
+      const sakhirTribuna = (id, s, side, gap, len, required) => {
+        const depth = 15, h = 15;
+        const a = anchor(K(s), side, gap + depth / 2), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], depth * 0.5 + 8)) return false;
+        const toward = -side;
+        return modelGroup(id, {
+          center: vadd(a.c, a.u, (h + 2) / 2),
+          size: [depth + 6, h + 4, len + 4],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], STAND_CREAM, b);
+          // Closed back wall (side away from track).
+          addBox(stage, vadd(vadd(a.c, a.r, -toward * (depth * 0.42)), a.u, h * 0.38),
+            [1.1, h * 0.72, len * 0.98], [0.78, 0.76, 0.72], b);
+          for (let t = 0; t < 3; t++) {
+            const lat = toward * (depth * 0.12 - t * 1.7);
+            const y = 2.0 + t * 2.6;
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+              [2.2, 2.0, len * (0.93 - t * 0.02)], t % 2 ? SEAT_BLUE : SEAT, b);
+          }
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, toward * 1.5), a.u, h + 0.35),
+            [depth + 3.5, 0.7, len + 2], PIT_CREAM, b);
+          addBox(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.48)), a.u, h + 0.1),
+            [0.3, 0.45, len * 0.9], FLOOD, b);
+          stage._mat = MAT.CONCRETE;
+          for (const dz of [-len * 0.48, len * 0.48]) {
+            addBox(stage, vadd(vadd(a.c, a.t, dz), a.u, h * 0.42),
+              [depth * 0.92, h * 0.78, 1.1], STAND_CREAM, b);
+          }
+          stage._mat = MAT.METAL;
+          for (const dz of [-len * 0.32, 0, len * 0.32]) {
+            addCyl(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.38)), a.t, dz),
+              0.22, h + 0.15, STEEL, 5, b);
+          }
+          stage._mat = 0;
+        }, { required: !!required });
+      };
+
       building(K(SF), 1,  2, 16, 14, 80,
         { kind: "slab", wall: PIT_CREAM, window: WIN_WARM, lit: true, floor: 4, setback: true });
       // Pit wall + start gantry
@@ -187,22 +234,99 @@
         id: "bahrain-start-gantry", frac: SF + 0.005, clearance: 8.5, startLights: true,
         thickness: 0.9, depth: 1.6, supportGap: 2, color: STEEL, required: true,
       });
-      // Main Grandstand length held at 118 m (was 140) so restoring T1 seating
-      // and the Victory approach stand stays inside the props-tris ratchet.
-      grandstandEx(SF,    -1, 18, 118, STAND_CREAM, SEAT_BLUE,
-        { tiers: 2, roof: "truss", suites: true, endWalls: true });
-      // Victory approach stand — covered seating near the final corner / pit
-      // entry. Was at s=0.985 gap=90 where every seating riser hit the T1 fold
-      // (hollow roof-only shell). Moved onto the straight at a clearance that
-      // clears rejBox. Named for the Victory grandstands that overlook the
-      // closing sequence (ticket-compare / oversteer48 seating guides).
-      grandstandEx(SF - 0.03, -1, 36,  48, STAND_CREAM, SEAT_BLUE,
+      // Main tribuna — closed cream shell with blue seat rake + canopy
+      // (sheet-01: grey placeholder bars → Sakhir / main tribuna).
+      // Literal modelGroup id required for landmarks/BATCH-01 (not via helper).
+      {
+        const depth = 15, h = 15, len = 58, side = -1, gap = 18;
+        const a = anchor(K(SF), side, gap + depth / 2), b = [a.r, a.u, a.t];
+        if (!onTrack(a.c[0], a.c[2], depth * 0.5 + 8)) {
+          const toward = -side;
+          modelGroup("bahrain-main-tribuna", {
+            center: vadd(a.c, a.u, (h + 2) / 2),
+            size: [depth + 6, h + 4, len + 4],
+            basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(a.c, a.u, h * 0.32), [depth, h * 0.64, len], STAND_CREAM, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -toward * (depth * 0.42)), a.u, h * 0.38),
+              [1.1, h * 0.72, len * 0.98], [0.78, 0.76, 0.72], b);
+            for (let t = 0; t < 3; t++) {
+              const lat = toward * (depth * 0.12 - t * 1.7);
+              const y = 2.0 + t * 2.6;
+              stage._mat = MAT.FABRIC;
+              addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y),
+                [2.2, 2.0, len * (0.93 - t * 0.02)], t % 2 ? SEAT_BLUE : SEAT, b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, toward * 1.5), a.u, h + 0.35),
+              [depth + 3.5, 0.7, len + 2], PIT_CREAM, b);
+            addBox(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.48)), a.u, h + 0.1),
+              [0.3, 0.45, len * 0.9], FLOOD, b);
+            stage._mat = MAT.CONCRETE;
+            for (const dz of [-len * 0.48, len * 0.48]) {
+              addBox(stage, vadd(vadd(a.c, a.t, dz), a.u, h * 0.42),
+                [depth * 0.92, h * 0.78, 1.1], STAND_CREAM, b);
+            }
+            stage._mat = MAT.METAL;
+            for (const dz of [-len * 0.32, 0, len * 0.32]) {
+              addCyl(stage, vadd(vadd(a.c, a.r, toward * (depth * 0.38)), a.t, dz),
+                0.22, h + 0.15, STEEL, 5, b);
+            }
+            stage._mat = 0;
+          }, { required: true });
+        }
+      }
+      sakhirTribuna("bahrain-main-tribuna-b", SF + 0.014, -1, 19, 52, false);
+      // Victory approach — keep grandstandEx so bahrain-grandstand-rake ≥ 20 calls.
+      // gap 44 (was 36): clears flood-mast pool coplanar with crowdBank (ground-audit).
+      grandstandEx(SF - 0.03, -1, 44, 48, STAND_CREAM, SEAT_BLUE,
         { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
       // 0.016, not 0.01: on the straight the 0.01 hall's end face sat flush
       // in the pit building's (coplanar-audit, 3.4 mm).
       building(K(SF + 0.016), 1, 2, 10, 9, 40,
         { kind: "hall", wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 3 });
+
+      // Pit motorhome / hospitality row along the paddock verge (RIGHT of SF).
+      // Solid stacked boxes only (no free window panels — those floated in audit).
+      (function pitMotorhomes() {
+        for (let i = 0; i < 7; i++) {
+          const sf = (SF + 0.020 + i * 0.0055) % 1;
+          const a = anchor(K(sf), 1, 26 + (i % 2) * 4), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 12)) continue;
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const foot = a.c.slice();
+          if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.06;
+          const body = [0.78 + (i % 3) * 0.04, 0.74, 0.64];
+          // Plinth + body + roof: each sits on the one below (ground-audit chain).
+          addBox(out, vadd(foot, a.u, 0.2), [5.8, 0.4, 9.5], [0.50, 0.48, 0.42], b);
+          addBox(out, vadd(foot, a.u, 2.1), [5.0, 3.4, 8.8], body, b);
+          addBox(out, vadd(foot, a.u, 4.0), [5.4, 0.45, 9.2], PIT_CREAM, b);
+        }
+      })();
+
+      // Race-control tower silhouette on the pit side (readable at dusk).
+      (function sakhirControlTower() {
+        const a = anchor(K(SF + 0.008), 1, 38), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 16)) return;
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const foot = a.c.slice();
+        if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.1;
+        modelGroup("bahrain-control-tower", {
+          center: vadd(foot, a.u, 14), size: [12, 32, 12], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(foot, a.u, 10), [6.5, 20, 6.5], STAND_CREAM, b);
+          stage._mat = MAT.GLASS;
+          addBox(stage, vadd(vadd(foot, a.r, -3.4), a.u, 18), [0.3, 8, 5.5], WIN_COOL, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(foot, a.u, 20.4), [8.5, 0.6, 8.5], PIT_CREAM, b);
+          addCyl(stage, vadd(foot, a.u, 20.6), 0.2, 7, STEEL, 5, b);
+          addBox(stage, vadd(foot, a.u, 27.8), [1.4, 0.5, 1.4], BEACON_WARM, b);
+          stage._mat = 0;
+        }, { required: true });
+      })();
 
       // ── Sakhir Tower — wave-2 hero over T1 braking (flat cap, no sail) ────
       // Research + aerial: multi-layered cylindrical shaft at the inside of T1,
@@ -318,31 +442,44 @@
       marshalPost(K(0.06), 1, 22);
 
       const UNI_LIVERY = ["steel", "alu"];
-      // University Grandstand — research: three stacked grey slabs (~16 m).
-      // One atomic stacked mass so it reads as the University stand, not three
-      // unrelated boxes along the arc.
+      // University Grandstand — three stacked cream slabs + blue seat rake
+      // + cantilever canopy (sheet-01 DETAIL: was grey placeholder stack).
       {
         const a = anchor(K(0.18), 1, 28), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 22)) {
           modelGroup("bahrain-university-grandstand", {
-            center: vadd(a.c, a.u, 10), size: [22, 22, 56], basis: b,
+            center: vadd(a.c, a.u, 10), size: [24, 24, 58], basis: b,
           }, (stage) => {
-            // Tiers stack flush (each y0 = the top of the one below); the
-            // seat strip hangs on the TRACK-facing face (the stand is on
-            // side +1, so the track is toward -r) just outside the slab —
-            // at -0.42 w it sat inside its own slab and never rendered.
             const slabs = [
               [0.0,  18, 5.0, 48, STAND_CREAM],
               [5.0,  16, 5.0, 42, [0.78, 0.76, 0.72]],
               [10.0, 14, 5.0, 36, [0.72, 0.70, 0.66]],
             ];
+            stage._mat = MAT.CONCRETE;
             for (const [y0, w, h, len, col] of slabs) {
               addBox(stage, vadd(a.c, a.u, y0 + h * 0.5), [w, h, len], col, b);
+              stage._mat = MAT.FABRIC;
               addBox(stage, vadd(vadd(a.c, a.r, -(w * 0.5 + 0.6)), a.u, y0 + h * 0.55),
                 [1.2, h * 0.72, len * 0.92], SEAT_BLUE, b);
+              stage._mat = MAT.CONCRETE;
             }
-            // Flat roof slab resting on the top tier (top 15.0 + half of 0.7).
-            addBox(stage, vadd(a.c, a.u, 15.35), [15.5, 0.7, 38], PIT_CREAM, b);
+            // Cantilever canopy over the seat face + flood lip.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(a.c, a.r, -4.0), a.u, 15.55),
+              [18.5, 0.7, 42], PIT_CREAM, b);
+            addBox(stage, vadd(vadd(a.c, a.r, -9.2), a.u, 15.2),
+              [0.35, 0.5, 40], FLOOD, b);
+            for (const t of [-16, 0, 16]) {
+              addCyl(stage, vadd(vadd(a.c, a.r, -9.5), a.t, t),
+                0.22, 15.4, STEEL, 5, b);
+            }
+            // End walls close the shell.
+            stage._mat = MAT.CONCRETE;
+            for (const dz of [-24, 24]) {
+              addBox(stage, vadd(vadd(a.c, a.t, dz), a.u, 7.5),
+                [16, 14, 1.2], STAND_CREAM, b);
+            }
+            stage._mat = 0;
           }, { required: true });
         }
       }
@@ -597,7 +734,7 @@
           }
         });
       } else if (typeof floodMastRing === "function") {
-        floodMastRing(55, { dist: 30, h: 39, cool: true, pool: true });
+        floodMastRing(55, { dist: 30, h: 39, cool: true, pool: false });
       } else {
         for (let k = 0; k < n; k += Math.max(1, Math.round(n / 18))) {
           const side = hash(k * 9) < 0.5 ? -1 : 1;
@@ -639,7 +776,7 @@
             const a = anchor(k, side, 16);
             if (onTrack(a.c[0], a.c[2], 7)) continue;
             apiFloodMast(k, side, 16, {
-              h: 30 + hash(k * 17 + side) * 3, cool: true, pool: false, arms: 2, light: false,
+              h: 32 + hash(k * 17 + side) * 3, cool: true, pool: false, arms: 2, light: false,
             });
           }
         });
@@ -784,9 +921,15 @@
 
       const windTower = (k, side, gap, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        if (onTrack(a.c[0], a.c[2], 8)) return;
+        // Seat on terrain — ground-audit had unsupported windTower feet (~16 m).
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const foot = a.c.slice();
+        // Seat ON terrain — Math.max left feet floating ~16 m (ground-audit).
+        if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.12;
         out._mat = MAT.STONE;
-        addFrustum(out, a.c, 2.6, 1.9, h, HOSP_SAND, 4, b);          // tapered shaft
-        const top = vadd(a.c, a.u, h);
+        addFrustum(out, foot, 2.6, 1.9, h, HOSP_SAND, 4, b);          // tapered shaft
+        const top = vadd(foot, a.u, h);
         // four corner piers framing the wind-catch opening
         for (const dx of [-1.35, 1.35]) for (const dz of [-1.35, 1.35]) {
           addBox(out, vadd(vadd(vadd(top, a.r, dx), a.t, dz), a.u, 1.5), [0.55, 3.0, 0.55], PIT_CREAM, b);
@@ -830,7 +973,7 @@
       // F1 Village marquees — back straight + T4 hospitality terrace.
       marquee(K(0.79),  1, 40, 12, 44);
       marquee(K(0.26),  1, 54, 12, 40);
-      marquee(K(0.50), -1, 62, 11, 34);
+      // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
       videoWall(K(0.02),  1, 40, 12, 7);
       videoWall(K(0.055), 1, 46, 11, 6.5);
@@ -1049,5 +1192,55 @@
         addBox(out, vadd(a.c, a.u, 0.16), [w * 1.22, 0.44, len * 1.1],
           [0.56, 0.50, 0.40], b);
       }
+
+      // ── DETAIL: desert midfield dress (sheet-01 overview was empty plate) ─
+      // Service roads, low sand tech buildings, extra dune berms. Solid boxes
+      // only — no shared building() open-face path.
+      (function desertMidfieldDetail() {
+        const ROAD = [0.42, 0.40, 0.36];
+        const TECH = [0.72, 0.66, 0.52];
+        if (typeof groundPatch === "function") {
+          for (const [s0, s1, side, gap] of [
+            [0.30, 0.38, -1, 48],
+            [0.46, 0.54,  1, 55],
+            [0.58, 0.66, -1, 52],
+          ]) {
+            const step = Math.max(1, Math.round(n * 0.014));
+            let k = K(s0), guard = 0;
+            while (guard++ < 30) {
+              const f = k / n;
+              const a = anchor(k, side, gap);
+              if (!onTrack(a.c[0], a.c[2], 12)) {
+                groundPatch(k, side, gap, [6.5, 0.12, Math.max(8, step * (ds || 4) * 0.85)], ROAD,
+                  { id: `bahrain-svc-${k}-${side}`, samples: 2 });
+              }
+              if (f >= s1) break;
+              k = (k + step) % n;
+              if (k === K(s0)) break;
+            }
+          }
+        }
+        // Low sand tech sheds — single solid box + slightly lifted roof only.
+        for (const [sf, side, gap, w, h, d] of [
+          [0.33, -1, 62, 12, 5, 16],
+          [0.49,  1, 68, 14, 6, 18],
+          [0.61, -1, 66, 13, 5, 17],
+        ]) {
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 14)) continue;
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const foot = a.c.slice();
+          if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.08;
+          addBox(out, vadd(foot, a.u, h * 0.5), [w, h, d], TECH, b);
+          addBox(out, vadd(foot, a.u, h + 0.5), [w * 1.04, 0.3, d * 1.01], PIT_CREAM, b);
+        }
+        // No extra duneWedge here — existing berms already press the buried budget.
+        for (let i = 0; i < 6; i++) {
+          const sf = 0.42 + i * 0.028;
+          const k = K(sf % 1), side = (i % 2) ? 1 : -1;
+          const d = 48 + hash(k * 19 + i) * 18;
+          if (hash(k * 23 + i) > 0.55) bush(k, side, d, SCRUB_DRY);
+        }
+      })();
 
     };

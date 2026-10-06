@@ -110,6 +110,12 @@
   grid-column: 1 / -1;
   min-width: 0;
 }
+/* small-phone @ UI SIZE 200%: sheet fit-cap paints zoom ~1.81, pane content
+   ~89 CSS px. The ‹ select › cluster min-content is 4rem + two --tap-min
+   chevrons + gaps (~120px), so #pm-coach-next sat 28px past the pane
+   (time-trial Driving zoom matrix). Wrap the cluster; do not lower the 4rem
+   value floor (that clips MANUAL / DEFAULT on other pages). */
+#pm-panel-driving .set-row > div { flex-wrap: wrap; }
 #pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
 #pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
   font-size: var(--fs-micro);
@@ -359,7 +365,7 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   border-radius: var(--r-xs); cursor: pointer;
   touch-action: manipulation;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 }
 #pmsettings-inner .pm-doors button {
