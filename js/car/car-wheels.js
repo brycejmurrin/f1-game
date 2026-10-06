@@ -15,8 +15,8 @@ const CarWheels = (function () {
     const COVER    = [0.24, 0.245, 0.27];    // dish wall
     const COVER_IN = [0.14, 0.14, 0.16];     // its floor, deepest in shadow
     const LIP_R  = 0.90;    // rim lip runs rimR*0.90 .. rimR
-    const DISH_R = 0.46;    // dish wall ends here, where the hubcap starts
-    const DISH_D = 0.030;   // and is recessed this far INBOARD
+    const DISH_R = 0.40;    // dish wall ends here, where the hubcap starts
+    const DISH_D = 0.050;   // recessed inboard — 50 mm so the bowl reads in the garage
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                       grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
@@ -54,7 +54,7 @@ const CarWheels = (function () {
       // is ~15 mm of radius and ~8 mm of surface, the same step the knob had
       // before. The knob's RANGE grows; nothing is widened to let a thin recipe
       // through.
-      const TYRE_CROWN = 0.966, CROWN_W = 0.075;
+      const TYRE_CROWN = 0.948, CROWN_W = 0.090;
       const SH1 = 0.920, SH1_W = 0.11, SH2 = 0.874, SH2_W = 0.15;
       const edgeRm = tyreShoulder === 2 ? SH2 : tyreShoulder === 1 ? SH1 : TYRE_CROWN;
       const grooveCount = tyreStyle && tyreStyle.grooves != null
@@ -124,14 +124,14 @@ const CarWheels = (function () {
         const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
         addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.rubber);
         // The COVER, in three rings instead of one flat fan from the rim to a
-        // point. The fan was geometrically fine and read as a plain grey disc at
-        // every distance: it ran straight into the tyre with no edge, and its apex
-        // sat 12 mm OUTBOARD, so it was a cone pointing at the camera — the one
-        // shape a single light cannot shade. A 2022-on covered wheel is a dark rim
-        // lip, a face dished INWARD behind it, and a raised hub boss; that is three
-        // depth planes, and it is the depth that makes the wheel read, not the
-        // number of triangles.
-        if (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) {
+        // point. A 2022-on covered wheel is a dark rim lip, a face dished
+        // INWARD behind it, and a raised hub boss. Two segments at the
+        // caliper clock stay open so the rotor and a duct/caliper peek
+        // through — a solid disc hid them completely.
+        const aMid = (i + 0.5) / SEG * Math.PI * 2;
+        const calClock = brakeStyle && brakeStyle.caliperPos || 0;
+        const peekCal = Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
+        if ((!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal) {
           for (const sd of [[x1, 1], [x0, -1]]) {
             const xw = sd[0], dir = sd[1];
             const P = (rad, a, dx) => [xw + dir * dx,
@@ -160,9 +160,9 @@ const CarWheels = (function () {
           const a = (k / 5) * Math.PI * 2 + 0.31, hw = 0.13;
           const P = (rad, aa, dx) => [xw + dir * dx,
             cy + rad * Math.cos(aa), cz + rad * Math.sin(aa)];
-          addQuad(out, P(rimR * DISH_R, a - hw, DISH_D * 0.66), P(rimR * DISH_R, a + hw, DISH_D * 0.66),
-                       P(rimR * 0.30, a + hw * 1.8, DISH_D * 0.66), P(rimR * 0.30, a - hw * 1.8, DISH_D * 0.66),
-                       COVER, SURFACES.carbon);
+          addQuad(out, P(rimR * DISH_R, a - hw, DISH_D * 0.22), P(rimR * DISH_R, a + hw, DISH_D * 0.22),
+                       P(rimR * 0.28, a + hw * 1.8, DISH_D * 0.22), P(rimR * 0.28, a - hw * 1.8, DISH_D * 0.22),
+                       LIP, SURFACES.metal);
         }
       }
       const rotorOuter = r * Math.min(0.40, 0.32 * rotorScale);
@@ -367,10 +367,15 @@ const CarWheels = (function () {
           }
         }
       }
+      const calOut = fixedOut || out;
+      const cr = r * 0.78;
+      const calA = brakeStyle && brakeStyle.caliperPos || 0;
+      // Inboard leading-edge duct scoop — visible through the cover peek.
+      const ductMul = brakeStyle && brakeStyle.duct != null ? brakeStyle.duct : 1;
+      addBox(calOut, cx, cy + 0.035, cz + r * 0.38,
+             w * 0.42, 0.048 * Math.max(0.65, ductMul), 0.062 * Math.max(0.65, ductMul),
+             INTAKE, SURFACES.carbon);
       if (caliperColor) {
-        const calOut = fixedOut || out;
-        const cr = r * 0.78;                     // top edge, just inside the tread band
-        const calA = brakeStyle && brakeStyle.caliperPos || 0;
         const padCol = [caliperColor[0]*0.30, caliperColor[1]*0.30, caliperColor[2]*0.30];
         const calLvl = Math.max(0, Math.min(2, Math.round((brakeStyle && brakeStyle.caliper) || 0)));
         if (calLvl === 0) {
@@ -407,6 +412,10 @@ const CarWheels = (function () {
                  w * 0.55, 0.024, 0.040, caliperColor, SURFACES.metal);
           addBox(calOut, cx, cY + 0.048, cZ, 0.014, 0.016, 0.016, [0.55, 0.55, 0.58], SURFACES.metal);
         }
+      } else {
+        const peek = [0.28, 0.18, 0.12];
+        addBox(calOut, cx, cy + Math.cos(calA) * cr, cz + Math.sin(calA) * cr,
+               w * 0.88, 0.040, 0.050, peek, SURFACES.metal);
       }
     }
 

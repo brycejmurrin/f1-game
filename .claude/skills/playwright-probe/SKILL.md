@@ -56,6 +56,7 @@ node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
 
 # ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
+node tools/garage-angles-fetch.mjs --out artifacts/garage-before   # BEFORE pack; do not recapture the grid
 node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
 node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
 # every axis is a LIST — one boot walks the product (--plan prints it first):
