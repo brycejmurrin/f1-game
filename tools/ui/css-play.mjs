@@ -358,6 +358,13 @@ export async function runCssPlay(opts) {
     if (def.surveyHud) {
       await page.waitForSelector("#hud:not([hidden])", { timeout: 15000 });
       await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 15000 });
+      // Steer ◀ ▶ would cover BRAKE/ERS; the fixture must leave them hidden.
+      await page.waitForFunction(() => {
+        const sl = document.getElementById("btn-steer-left");
+        const sr = document.getElementById("btn-steer-right");
+        const hud = document.getElementById("hud");
+        return hud && !hud.hidden && (!sl || sl.hidden) && (!sr || sr.hidden);
+      }, null, { polling: 100, timeout: 15000 });
     } else if (def.race) {
       await page.evaluate(async (id) => {
         await window.__apex.race(id);

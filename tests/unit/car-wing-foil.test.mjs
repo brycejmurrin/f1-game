@@ -56,6 +56,42 @@ test("one flap is a closed foil, not a 48-triangle plank", () => {
   assert.equal(tris(flap), 100);
 });
 
+test("twist and teCurve reshape a flap without adding triangles", () => {
+  const spec = {
+    le: [2.50, 0.092], te: [2.24, 0.146], half: 0.72, thick: 0.020,
+    taper: 0.96, sweep: 0.04, rise: 0.04, attachHalf: 0.75, y: 0, z: 0,
+  };
+  const flat = Car3D.buildFlapGeom(spec, C1);
+  const bent = Car3D.buildFlapGeom({ ...spec, twist: 0.22, teCurve: 0.10, chordTaper: 0.32 }, C1);
+  assert.equal(tris(bent), tris(flat));
+  const moved = bent.pos.some((v, i) => Math.abs(v - flat.pos[i]) > 1e-4);
+  assert.ok(moved, "twist/teCurve should move vertices");
+  // Most-aft vertex at the tip sits forward of mid-span (planform arc) and
+  // above it (outboard twist) so a garage 3/4 does not read as stacked planks.
+  const teAt = (mesh, xMin, xMax) => {
+    let best = null;
+    for (let i = 0; i < mesh.pos.length; i += 3) {
+      const x = Math.abs(mesh.pos[i]), y = mesh.pos[i + 1], z = mesh.pos[i + 2];
+      if (x < xMin || x > xMax) continue;
+      if (!best || z < best.z) best = { y, z };
+    }
+    return best;
+  };
+  const mid = teAt(bent, 0.20, 0.52), tip = teAt(bent, 0.73, 0.77);
+  assert.ok(mid && tip, "need mid-span and tip TE samples");
+  assert.ok(tip.z > mid.z + 0.012, `tip TE should bow forward: mid ${mid.z.toFixed(3)} tip ${tip.z.toFixed(3)}`);
+  assert.ok(tip.y > mid.y + 0.006, `tip TE should twist up: mid ${mid.y.toFixed(3)} tip ${tip.y.toFixed(3)}`);
+});
+
+test("TEAM_STYLE carries a per-team wingStyle", () => {
+  assert.ok(Car3D.TEAM_STYLE.ferrari.wingStyle, "ferrari missing wingStyle");
+  const ids = Object.keys(Car3D.TEAM_STYLE);
+  const arches = new Set(ids.map((id) => Car3D.TEAM_STYLE[id].wingStyle.arch));
+  const twists = new Set(ids.map((id) => Car3D.TEAM_STYLE[id].wingStyle.twist));
+  assert.ok(arches.size >= 4, "endplate arch should differ across the grid");
+  assert.ok(twists.size >= 4, "flap twist should differ across the grid");
+});
+
 test("default body and cockpit stay under the absolute triangle ceilings", () => {
   const body = tris(Car3D.build(C1, C2, { noWheels: true }));
   const cockpit = tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true, cockpit: true }));
@@ -170,10 +206,9 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
       if (n > worst.tris) worst = { num: d.num, tris: n };
     }
   assert.ok(worst.tris <= 6800, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
-  // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
-  // 1428) fits the existing budget. The straps sit between the eye and the dash
-  // coaming, filling the lower frame that the coaming never reaches.
-  assert.ok(cockpit <= 1500, `cockpit ${cockpit} > 1500`);
+  // 1500 -> 1580: arched two-loft plate + always-on crown rail + foot fence.
+  // First-person still carries the exterior cascade. Measured 1552.
+  assert.ok(cockpit <= 1580, `cockpit ${cockpit} > 1580`);
   // THE WHEELS LIVE HERE NOW. tests/specs/parts-physics.spec.js carried a second
   // copy of the body/cockpit/wheel ceilings, drifted from these by two raises,
   // and was red without anyone seeing it — a ratchet with two owners has none.
