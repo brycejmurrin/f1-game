@@ -15,7 +15,7 @@
 // fresh page did. UNVERIFIED IN A BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
+import { toMenu, forgetStored, pinFreePlay, freeBuildOff, waitGarageSheet } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -47,7 +47,7 @@ async function openSetup(page, team = "mclaren", opts) {
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await waitGarageSheet(page);
   await freeBuildOff(page);
   // `draw` opts BACK IN to the render loop. The garage draws a live turntable
   // and getSetupPreviewMesh() re-keys on partsVisualKey, so every option click
@@ -72,7 +72,7 @@ async function reopenSetup(page) {
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await waitGarageSheet(page);
 }
 
 test.describe("Parts persistence — localStorage writes", () => {

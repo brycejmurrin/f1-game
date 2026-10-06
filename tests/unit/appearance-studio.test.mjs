@@ -96,12 +96,12 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.applyPreset("classic"); assertControls(false);
 });
 
-test("Studio waits for deferred legacy Appearance controls before wrapping them", () => {
+test("Studio mounts once the document has passed loading (interactive included)", () => {
   for (const readyState of ["interactive", "complete", "loading"]) {
     const lookedUp = [], events = [];
     load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; },
       addEventListener(name, callback) { events.push({ name, callback }); } });
-    if (readyState !== "complete") {
+    if (readyState === "loading") {
       assert.equal(lookedUp.length, 0); assert.equal(events[0].name, "DOMContentLoaded");
       events[0].callback();
     } else assert.equal(events.length, 0);
@@ -248,4 +248,44 @@ test("Studio retains quarter-percent scales and previews independent HUD accent 
   assert.equal(preview.style.getPropertyValue("--preview-panel-opacity"), "0.2");
   studio.applySnapshot({ ...studio.snapshot(), uiContrast: "high" });
   assert.equal(preview.style.getPropertyValue("--preview-panel-opacity"), "1");
+});
+
+test("Opening Appearance marks the panel busy and defers scene preview off the click stack", () => {
+  const dom = makeDom();
+  const panel = dom.byId("pm-panel-appearance");
+  const settings = dom.byId("pmsettings");
+  panel.hidden = true; settings.hidden = false;
+  panel.prepend = (node) => panel.insertBefore(node, panel.firstChild);
+  const observers = [];
+  const rafQueue = [];
+  const sceneHits = [];
+  const context = vm.createContext({
+    document: dom.document, GameStore: { store: { get: (_k, d) => d, set: () => true } },
+    Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
+    requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
+    MutationObserver: class {
+      constructor(cb) { this.cb = cb; observers.push(this); }
+      observe() {}
+    },
+    ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
+    matchMedia: () => ({ matches: false }),
+    innerWidth: 1000, innerHeight: 500,
+  });
+  context.window = context;
+  vm.runInContext(source, context);
+  context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
+  sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
+  assert.equal(observers.length, 1, "studio watches the appearance panel");
+  panel.hidden = false;
+  observers[0].cb([{ attributeName: "hidden" }]);
+  assert.equal(panel.getAttribute("aria-busy"), "true");
+  assert.equal(sceneHits.length, 0, "preview must not run on the same turn as the open click");
+  assert.ok(rafQueue.length >= 1);
+  const first = rafQueue.splice(0, rafQueue.length);
+  for (const fn of first) fn();
+  assert.ok(rafQueue.length >= 1, "second frame schedules the real open work");
+  const second = rafQueue.splice(0, rafQueue.length);
+  for (const fn of second) fn();
+  assert.equal(panel.getAttribute("aria-busy"), null);
+  assert.ok(sceneHits.length >= 1, "garage preview runs after the sheet has a frame");
 });

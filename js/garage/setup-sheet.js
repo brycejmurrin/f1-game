@@ -1201,12 +1201,25 @@ function endLivPreview(team) {
 
 function openSetup() {
   Log.info("ui", "SetupUI.openSetup");
-  buildSetup();
+  // Show the garage sheet first, then build its DOM off the click stack.
+  // Change Car used to call buildSetup() before unhiding #carsetup, so the
+  // select/season screen froze with no sheet (and Back stopped responding).
   els.select.hidden = true;
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;
-  $("carsetup").hidden = false;
+  const cs = $("carsetup");
+  cs.hidden = false;
   G.setupPreviewOn = true;
+  cs.setAttribute("aria-busy", "true");
+  const finish = () => {
+    try { buildSetup(); }
+    finally { cs.removeAttribute("aria-busy"); }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+  } else {
+    finish();
+  }
 }
 
 // THE PAINT EDITOR DOES NOT OUTLIVE THE GARAGE. Only CANCEL and SAVE & FIT

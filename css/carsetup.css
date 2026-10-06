@@ -1662,6 +1662,18 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
   #carsetup:has(#cs-cam-panel:not([hidden])) #cs-stats-inner { display: none; }
 }
 
+/* Change Car / garage open: sheet is up while buildSetup fills tabs (aria-busy). */
+#carsetup[aria-busy="true"] #cs-inner { cursor: progress; opacity: 0.72; }
+#carsetup[aria-busy="true"] #cs-inner::before {
+  content: "Loading garage…";
+  display: block;
+  margin: 0 0 var(--gap);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+}
+
 /* The pit arrival owns the canvas until the car is parked. */
 #carsetup.cs-arriving #cs-inner,
 #carsetup.cs-arriving #cs-stack { visibility: hidden; pointer-events: none; }
