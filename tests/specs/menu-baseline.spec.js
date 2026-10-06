@@ -21,6 +21,7 @@
 // will not match. Regenerate with `npm run test:baseline -- --update-snapshots`
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -40,11 +41,17 @@ const SCREENS = [
   }],
   ["garage", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden);
-    await page.evaluate(() => {
-      const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-      (t.find((e) => /ENGINE/i.test(e.textContent || "")) || t[1] || t[0])?.click();
-    });
+    // #carsetup is shown BEFORE buildSetup fills the tabs (openSetup yields
+    // two rAF so Change Car never freezes). A visible-only wait then clicks
+    // ENGINE against an empty rail — or the remount resets TEAM. Wait until
+    // aria-busy clears and #cs-budget is painted, then click ENGINE.
+    await waitGarageSheet(page);
+    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
+    await page.waitForFunction(() => {
+      const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
+      return document.querySelectorAll("#cs-options .cs-opt").length > 0;
+    }, null, { polling: 100 });
   }],
 ];
 
