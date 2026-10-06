@@ -438,12 +438,15 @@ const RealReplay = (function () {
     // radio-voice.js cuts its own lines for on this same observer. Cut, not
     // held: like a hidden tab, the clip's moment has passed by the resume.
     // LITERAL id (tests/unit/shell-ids.test.mjs), as radio-voice.js does.
+    // Gate on G.paused too: rotate-block / photo-mode re-hide #pausemenu in the
+    // same task as setPaused(true), so MutationObserver runs after the card is
+    // already hidden again and `!pause.hidden` alone never fires (#1029's twin).
     const cutClip = () => { if (run && run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; } };
     if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
       document.addEventListener("visibilitychange", () => { if (document.hidden) cutClip(); });
       const pause = typeof document.getElementById === "function" ? document.getElementById("pausemenu") : null;
       if (pause && typeof MutationObserver === "function") {
-        new MutationObserver(() => { if (!pause.hidden) cutClip(); }).observe(pause, { attributes: true, attributeFilter: ["hidden"] });
+        new MutationObserver(() => { if (G.paused || !pause.hidden) cutClip(); }).observe(pause, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
     // A real clip is an HTMLAudioElement, outside the WebAudio master, so SOUND
