@@ -1,0 +1,1 @@
+1791328673	Cursor Agent	fix(designer): scenery UI bugs — OWNED js/editor/{designer,props,canvas,stamps}.js css/editor.css tests/unit/track-designer* tests/unit/designer-{canvas,props}*; FORBIDDEN js/lighting/** js/car/** js/circuits/** js/editor/track-themes.js; no Slice H relaunch; no AM  [cursor/fix-designer-ui-a2d5; session a7f0d8814837a75b5b4c612f]
