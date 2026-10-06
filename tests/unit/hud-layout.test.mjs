@@ -20,7 +20,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -37,7 +37,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   });
   const run=vm.runInContext("("+helper[0].replace(/\n\nconst measure$/,"")+")",ctx);
   const invoke=(fn,arg)=>vm.runInContext("("+fn.toString()+")",ctx)(arg);
-  const page={goto:async()=>{},reload:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
+  const page={goto:async()=>{},reload:async()=>{},addInitScript:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
     waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
     waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
   await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
