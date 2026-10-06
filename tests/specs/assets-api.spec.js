@@ -20,7 +20,6 @@
 // already assumed. First-load mix stays on freshTest.
 
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
-
 test.beforeEach(async ({ page }) => {
   // Shallow shared-page reset does not rewind the BAKED MATERIALS knob or pack.
   await page.evaluate(async () => {
