@@ -1161,13 +1161,7 @@ const SceneryNature = (function () {
         if (!rejBox(suiteC, [3.2, 3.0, len - 3], [sc.r, sc.u, sc.t]))
           addBox(out, suiteC, [3.2, 3.0, len - 3], suiteCol, [sc.r, sc.u, sc.t]);
       }
-      // End walls default ON so kit / bare grandstand() calls close the
-      // seating cross-section (Madrid/Catalunya/Nurburgring open-face survey
-      // 2026-10-05). Pass endWalls:false to keep a deliberately open bay
-      // (Indianapolis oval banks, Dijon). Skip when there is no roof slab to
-      // span — a roof:"none" stand is already an open terrace.
-      const wantEnds = opts.endWalls != null ? !!opts.endWalls : roofKind !== "none";
-      if (wantEnds) {
+      if (opts.endWalls) {
         for (const sgn of [-1, 1]) {
           const base = vadd(a.c, a.t, sgn * (len / 2));
           const drop = Math.max(0, base[1] - groundUnder(base[0], base[2])) + 0.3;

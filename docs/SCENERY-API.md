@@ -442,7 +442,7 @@ delegates to it, so existing calls are unchanged.
 | `h` | back-shell height (default 12) |
 | `roof` | `"cantilever"` (default), `"flat"` (tight over the shell), `"truss"` (open lattice deck on cross-braces), `"none"` (uncovered bleacher) |
 | `suites` | glazed hospitality band under the roof (strictly opt-in — pass `true`) |
-| `endWalls` | closing walls at both ends (default ON when a roof is present; pass `false` to leave open) |
+| `endWalls` | closing walls at both ends (strictly opt-in — pass `true`) |
 | `pylons` | support columns under the roof's trackside edge (strictly opt-in — pass `true`) |
 | `roofCol` / `fasciaCol` / `suiteCol` | explicit colour overrides |
 
