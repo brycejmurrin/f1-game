@@ -21,7 +21,7 @@ function fakeDom(els, modalOrder) {
     close() { this._modal = false; },
     _z: e.z,
     children: [],
-    getBoundingClientRect: () => ({ width: 800, height: 600 }),
+    getBoundingClientRect: () => e.box || { width: 800, height: 600 },
     matches(sel) { return sel === ":modal" ? this._modal : false; },
   });
   const nodes = els.map(node);
@@ -76,6 +76,22 @@ test("any modal outranks any z-index, and hidden layers never rank", () => {
     ["teampicker"],
   );
   assert.equal(U.top().id, "teampicker", "a dialog is in the top layer, above every z-index");
+});
+
+test("a zero-box modal still outranks the sized screen behind it", () => {
+  // Chromium can leave a freshly showModal()'d dialog at 0×0 after the
+  // hidden→[open] seam (css/dialog-platform.css). shownLayer() would skip it
+  // and hand the layer to #pausemenu — menu-keyboard's "open modal is the
+  // active layer" wait then times out with TopModal already logging #standings.
+  const U = fakeDom(
+    [
+      { id: "pausemenu", modal: true, z: 30 },
+      { id: "standings", modal: true, box: { width: 0, height: 0 } },
+    ],
+    ["pausemenu", "standings"],
+  );
+  assert.equal(U.top().id, "standings",
+    ":modal wins even when getBoundingClientRect is empty");
 });
 
 test("with no dialogs open the z-index ranking is unchanged", () => {
