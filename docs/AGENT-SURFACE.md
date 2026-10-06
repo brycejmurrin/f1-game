@@ -81,12 +81,15 @@ surface without hand-wiring:
 ```
 
    After editing ship `.cursor/environment.json`, **Save** the environment so the
-   dashboard allowlist matches git (`mcpServerAllowlist` rows must keep their
-   `name` fields — `tests/unit/environment-json.test.mjs`). A stale save shows
-   three nameless `{ "command": "bash" }` rows in `environment-info`, or `npx`
-   for the playwright slot, and host attach fails. **Enable all three** in the
-   launch MCP dropdown (catalog often ships only two until toggled — measured
-   2026-09-03; re-checked 2026-10-06).
+   dashboard allowlist matches git. Each `mcpServerAllowlist` row keeps its
+   `name` and a **full launch pattern** (`*bash tools/mcp/<wrapper>.sh …`) —
+   Cursor matches `command` + `args` joined, with `*` wildcards
+   ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
+   `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
+   `{ "command": "bash" }` rows in `environment-info` (or bare `npx` for
+   playwright) and host attach fails. **Enable all three** in the launch MCP
+   dropdown (catalog often ships only two until toggled — measured 2026-09-03;
+   re-checked 2026-10-06).
 4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
 5. Per-user OAuth for any remote MCP that needs it.
 
@@ -95,7 +98,7 @@ surface without hand-wiring:
 | Signal | Good | Broken (this session 2026-10-06) |
 |---|---|---|
 | `environment-info` → `source` / `build.resolution` | `Repository` / `resolved` | (VM OK even when MCP empty) |
-| `environment-info` → `mcpServerAllowlist` | three rows with `name` + `command: "bash"` | nameless `{command:"bash"}` ×3 |
+| `environment-info` → `mcpServerAllowlist` | three named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
 | Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
 | VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
 

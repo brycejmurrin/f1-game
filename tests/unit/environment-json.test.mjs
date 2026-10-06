@@ -9,6 +9,19 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 const ENV_JSON = path.join(ROOT, ".cursor/environment.json");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
 
+/** Full launch string Cursor allowlists match (command + args joined). */
+function mcpLaunch(row) {
+  return [row.command, ...(row.args || [])].join(" ");
+}
+
+/** Glob `*` → `.*` for a single allowlist pattern (Cursor MCP allowlist). */
+function patternMatches(pattern, text) {
+  const re = new RegExp(
+    `^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
+  );
+  return re.test(text);
+}
+
 test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
   const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
   assert.equal(env.name, "Apex 26");
@@ -67,22 +80,30 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
   const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const allowByName = new Map((env.mcpServerAllowlist || []).map((row) => [row.name, row.command]));
-  // Live Build bld-20261006-83ec36f4 listed playwright-official as npx while
-  // .mcp.json launches it via bash tools/mcp/playwright-mcp.sh — set membership
-  // alone would not catch that per-name mismatch.
+  // Cursor matches allowlist `command` against the full launch string
+  // (command + args joined) with `*` wildcards — not bare "bash".
+  // https://cursor.com/docs/enterprise/model-and-integration-management
+  const patterns = [];
   for (const row of env.mcpServerAllowlist || []) {
     assert.equal(typeof row.name, "string", "each mcpServerAllowlist row needs a name (dashboard sync drops attach)");
     assert.ok(row.name.length > 0, "mcpServerAllowlist name must be non-empty");
-    assert.equal(row.command, "bash", `${row.name} allowlist command must be bash`);
+    assert.equal(typeof row.command, "string", `${row.name} allowlist command must be a string pattern`);
+    assert.ok(row.command.includes("*"), `${row.name} allowlist command should use a leading * for resolved bash paths`);
+    assert.notEqual(row.command, "bash", `${row.name} must not use bare bash (collides for all three wrappers)`);
+    patterns.push(row.command);
   }
+  assert.equal(new Set(patterns).size, patterns.length, "each allowlist command pattern must be unique");
   for (const [name, row] of Object.entries(cfg.mcpServers)) {
     assert.ok(allowByName.has(name), `${name} must appear in mcpServerAllowlist by name`);
-    assert.equal(
-      allowByName.get(name),
-      row.command,
-      `${name} allowlist command must match .mcp.json (got ${allowByName.get(name)}, want ${row.command})`,
-    );
     assert.equal(row.command, "bash", `${name} catalog command must be bash (script wrappers)`);
+    const launch = mcpLaunch(row);
+    const pattern = allowByName.get(name);
+    assert.ok(
+      patternMatches(pattern, launch) || patternMatches(pattern, `/usr/bin/${launch}`) || patternMatches(pattern, `/bin/${launch}`),
+      `${name} allowlist pattern ${JSON.stringify(pattern)} must match launch ${JSON.stringify(launch)}`,
+    );
+    // Guard the old npx playwright slot: pattern must mention the bash wrapper script.
+    assert.match(pattern, /tools\/mcp\/.*-mcp\.sh/, `${name} pattern must pin the repo wrapper script`);
   }
   // No orphans: every allowlist name is a catalog server (dashboard aliases
   // belong in Cursor Integrations & MCP, not this file).
