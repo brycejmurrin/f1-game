@@ -42,12 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
-// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
-// uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
-// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
-// renderer call goes through.
+// Renderer selection: unset apex26.gfxBackend → TLX if requestAdapter() ok,
+// else GLX (skip three.webgpu); ="three" forces TLX; ="webgpu" uses WGX when
+// an adapter exists; ="webgl2" uses GLX. Deferred-backend init failure also
+// falls back to GLX. This async IIFE awaits while loading the selected
+// renderer, or when the lazy __apex surface loads (localhost / tests /
+// ?apex=1). `gfx` is the handle every later renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
@@ -1779,7 +1779,8 @@ function gridOrderFor(base) {
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
-  if (rule === "revchamp" && isChampionship() && season && !base) {
+  // Round 1 (nobody scored) falls through to gridUp's pace order, as STANDINGS does: the all-zero table sorted by driver id.
+  if (rule === "revchamp" && isChampionship() && season && !base && Object.values(season.pts || {}).some((p) => p > 0)) {
     // SPEND THE JITTER ANYWAY. gridUp() draws one simRnd() per car when it
     // builds its own order, so a rule that returns a full order without
     // drawing leaves every later consumer (the AI overtake fire, the start
@@ -2607,8 +2608,22 @@ async function startRaceBody() {
   if (announcer.stop) announcer.stop();
   if (hud.resetRace) hud.resetRace();
   rlap("resets");
-  loadTrack(trackIdx);
+  // Pace the rebuild: sync loadTrack + warmCarAssets was one ≤3 s long task
+  // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
+  // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
+  // live() stays true: this session owns the build (menu prep uses a generation gate).
+  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
+  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  if (vmNoFramePump) loadTrack(trackIdx);
+  else if (!(await loadTrackStepped(trackIdx, () => true))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
+  // Break the remaining sync legs (settings → car meshes) into separate tasks.
+  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
+  // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) await yieldMain();
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2743,6 +2758,7 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  if (!vmNoFramePump) await yieldMain();   // do not glue car-mesh warm onto the settings/grid sync stretch
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
@@ -2751,7 +2767,7 @@ async function startRaceBody() {
   const entryPlayer = player;
   if (!headlessMode && !document.hidden)
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
-  if (player !== entryPlayer || state !== "count") return false;
+  if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -2993,29 +3009,9 @@ function endRace(forcedOrder) {
   const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
   run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
-  // LAPS FIRST (FIA 2026 SR B2.5.5(a)): a car still running when the race
-  // ends takes the flag on its next crossing, so it counts one more lap. A
-  // lapped car that crossed was put ahead of every lead-lap car still on its
-  // last lap (P2 and 18 points for a car a lap down). Stable sort: within a
-  // lap count, finishers keep the clock order and runners their progress.
-  const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
-  // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (FIA 2026 SR B2.5.5(b)), retired or not: a
-  // car that failed on the last lap scores where it stopped, not behind the
-  // field with nothing. Below that it is not classified. c.classified carries
-  // the verdict to the points tables (SeasonCal.award, career settlement).
-  // c.lap is the lap a car is ON (the winner's reads laps+1 at the flag), so
-  // laps COMPLETED is c.lap - 1 for every car. With no finisher (the only human
-  // retired, finishDelay ended it early) the leader on the road is the reference.
-  const ref = fin.length ? fin : run;
-  const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
-  const minDone = Math.floor(0.9 * winDone);
-  const lateOut = winDone > 0 ? out.filter((c) => (c.lap || 0) - 1 >= minDone) : [];
-  // A flagged backmarker must meet the same distance floor. Still-running cars
-  // keep the provisional classification used by the short results countdown.
-  for (const c of cars) c.classified = !c.dsq && ((!c.retired && (!c.finished || (c.lap || 0) - 1 >= minDone)) || lateOut.includes(c));
-  const live = fin.concat(run, lateOut).sort((a, b) => lapsAt(b) - lapsAt(a));
+  // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
-  const order = netOrder(forcedOrder || live.concat(out.filter((c) => !lateOut.includes(c)), dsq));   // DSQ: last, no points
+  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out).concat(dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
@@ -3032,8 +3028,8 @@ function endRace(forcedOrder) {
     for (const c of cars) if (!c.retired && !c.dsq && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const careerScoring = isCareer();
     const scored = careerScoring
-      ? Career.scoreRound(order, player, fastest)
-      : SeasonCal.award(season, order, fastest);
+      ? Career.scoreRound(order, player, fastest, RaceControl.shortRun(cars, lapsTarget))
+      : SeasonCal.award(season, order, fastest, RaceControl.shortRun(cars, lapsTarget));   // no flag: the shortened-race scale
     const settles = careerScoring ? !!scored : scored === "race";
     // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
     // classification is that same weekend and goes with it. Left behind, it keeps
@@ -4800,8 +4796,18 @@ function updateCar(c, dt, ranked) {
   // classification neighbour — a leader has none, it can sit a lap away, and a
   // finished car coasting right ahead would count.
   // Only a car inside OT_GAP·speed can earn (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  //
+  // The O(n) ahead walk is only needed when a detection-line crossing can earn
+  // OT (otDetectOpen + crossed since last tick), or the car already holds
+  // allowance (AI fire / spend). Seed the crossing trackers the same way
+  // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
+  // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
-  for (const o of ranked) {
+  if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
+  const otOpen = raceCtl.otDetectOpen();
+  const otNeedAhead = (c.otE > 0 || c.otOn) ||
+    (!!track && otOpen && OvertakeMode.crossed(c._otS, c.s, OvertakeMode.detectS(track), otL));
+  if (otNeedAhead) for (const o of ranked) {
     if (o === c || o.finished || o.retired || pits.inLane(o)) continue;   // a car in the pit lane is not on the road
     const dp = o._snapProg - c.prog, adp = dp < 0 ? -dp : dp; if (adp > otW && adp < otL - otW) continue;
     const d = ((dp + otL / 2) % otL + otL) % otL - otL / 2;   // full wrap (a twice-lapped car is 2L back in prog)
@@ -4813,7 +4819,7 @@ function updateCar(c, dt, ranked) {
   // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
   // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
   const pitHeld = pits.held(c);
-  OvertakeMode.lines(c, track, gapAhead, raceCtl.otDetectOpen());
+  OvertakeMode.lines(c, track, gapAhead, otOpen);
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
@@ -6218,8 +6224,9 @@ function retireCar(c, reason) {
   c.dnf = reason || "mechanical";
   c.dnfAt = null;
   // The owner's word, on the reliable channel: nothing else carries it and a
-  // rival left "running" holds the other screen's result to the hard cap.
-  if (netPlay.active() && (c.local || (!c.human && netPlay.role() === "host"))) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
+  // rival left "running" holds the other screen's result to the hard cap. The
+  // HOST owns its AI too: a guest posed it running, raced into it, scored it.
+  if ((c.local || (!c.human && netPlay.ownsRaceControl())) && netPlay.active()) netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, driverId: c.driverId, retired: c.dnf, invalid: true });
   Tracks.sample(track, c.s, smp);
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);
@@ -7340,12 +7347,16 @@ function render(dt) {
   // Advance one face every FOURTH frame on a live race — a full 6-face cube
   // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
   // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
-  // park() freezes physics for shots/tests — then one face per frame so a
-  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
-  // seconds-per-frame).
+  // When the governor has already cut render scale (stage 1) but has not yet
+  // shed the probe (tier still 0), slow further to every EIGHTH frame — the
+  // scale lever is the first pressure signal, and a half-rate cube still
+  // refreshes in <1 s at 60 Hz. park() freezes physics for shots/tests — then
+  // one face per frame so a parked M9 cube goes ready in 6 presents, not 24
+  // (SwiftShader is seconds-per-frame).
   // Live race/count only — results freezes above; menu flyby has no player car
   // paint that needs a probe, and a mid-results probe was a whole-world redraw.
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -7443,6 +7454,11 @@ function render(dt) {
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
+  // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
+  // a struggling device stops spawning sub-pixel puffs that only starve the pool.
+  // Squared once per frame — same divisor spray/rain already use for density.
+  const _fxCullR = 110 / (1 + ((typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0));
+  const _fxCullR2 = _fxCullR * _fxCullR;
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
     // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
@@ -7618,7 +7634,7 @@ function render(dt) {
     // starve the shared pool).
     if (state !== "menu") {
       const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
-      if (fdx * fdx + fdz * fdz < 110 * 110) {
+      if (fdx * fdx + fdz * fdz < _fxCullR2) {
         // Collision sparks — flag set by collideFx during the physics step
         // (it has no world coords there); consumed once, at the car.
         if (c.fxSparkI) {
@@ -8703,6 +8719,7 @@ els.resNext.onclick = () => {
     // After a SPRINT the round has not advanced, so this re-selects the circuit
     // the weekend is already at — the Grand Prix is its second half.
     trackIdx = SeasonCal.trackIndex(season.round);
+    raceLaps = SeasonCal.roundLaps(raceLaps, season, Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps);
   }
   els.results.hidden = true;
   // Every championship SESSION that races qualifies first — every round, and on
@@ -8749,7 +8766,7 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
@@ -9003,6 +9020,6 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // ...and a link pasted into a tab that is ALREADY running only fires
 // hashchange. The lobby's own listener exists once the bundle is up; until
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
-if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
+if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); }); if (typeof SurveyHud !== "undefined") SurveyHud.boot({ $, els, document, loadingScreen, canvas });
 
 })();

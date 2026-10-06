@@ -199,9 +199,9 @@ const DataExport = (function () {
       const wrap = el("div", "dh-export");
       wrap.appendChild(el("div", "dh-export-note",
         "Pulls one fast-lap GPS trace per circuit from OpenF1 (runs in your browser). " +
-        "The lap starts at the start/finish line, so it captures where each S/F really is. " +
-        "Pick a season, Gather (~10 min — paced to avoid rate limits), then Download a ZIP " +
-        "(traces JSON + a labelled map image per circuit) and send it to me."));
+        "The lap starts at the start/finish line, so it captures where each start/finish really is. " +
+        "Pick a season, press Gather (about 10 minutes, paced so the feed is not overloaded), then Download a ZIP " +
+        "of the traces and a labelled map per circuit. Keep Data Hub open while it gathers."));
 
       const yearRow = el("div", "dh-pick-years");
       const OPENF1_FIRST_YEAR = 2023;
@@ -229,7 +229,7 @@ const DataExport = (function () {
       row.appendChild(dlBtn);
       wrap.appendChild(row);
 
-      const status = el("pre", "dh-export-status",
+      const status = el("div", "dh-export-status",
         "Not gathered yet. Choose a season, press Gather, and keep Data Hub open for about 10 minutes. Download unlocks when gathering completes.");
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");

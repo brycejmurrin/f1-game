@@ -847,7 +847,13 @@ function fitHud() {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
   }
-  const dockRW = hitsRight && !limLeft ? dockR.width / chromeZ : 0;
+  // Publish whenever the right dock has a box — not only when LIMITS would hit
+  // it. Touch #hud-sectors sits ABOVE the limits chip and was already under
+  // BOOST while --dock-r-w stayed 0 (SIZE 150% landscape, 2026-10-05). CSS
+  // applies that var to sectors only on body.steer-touch; buttons still use
+  // it for limits/damage. Limits that move left (:root[data-limits-left])
+  // ignore `right`. Empty dock → 0 → desktop unchanged.
+  const dockRW = (dockR && dockR.width) ? dockR.width / chromeZ : 0;
   hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
   // THE DOCK CAP IS ASKED OF FIXED LAYOUTS, NOT OF THE ONE ON SCREEN. A dock is
   // a wrap-reverse row, so its height depends on the zoom: at HUD 150% on a
@@ -1032,6 +1038,15 @@ function skinAccent(t) {
 // The bar width is compared as a whole percent: Math.round IS toFixed(0) for
 // 0..100 (both round half up), so the string is built only when it moves.
 let _rpmPct = -1;
+// #hud-speed's .hud-unit sibling — resolved once. AppearanceOpts.applyReadability
+// still writes "KM/H" for settings copy; paintInstruments re-asserts the short
+// plate (KPH/MPH) every frame so phone-cockpit float matches the wheel LCD.
+let _speedUnitEl = null;
+function speedUnitEl() {
+  if (_speedUnitEl) return _speedUnitEl;
+  if (els.speed && els.speed.parentElement) _speedUnitEl = els.speed.parentElement.querySelector(".hud-unit");
+  return _speedUnitEl;
+}
 function paintInstruments(player) {
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
@@ -1047,7 +1062,14 @@ function paintInstruments(player) {
     hToggle(els.tach, "redline", _redline);
   }
   const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
-  hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
+  // One SPD plate (HudReadouts.spdPlate): same n + MPH|KPH as the wheel LCD.
+  if (_ro && typeof _ro.spdPlate === "function") {
+    const plate = _ro.spdPlate(kph);
+    hText(els.speed, "" + plate.n);
+    hText(speedUnitEl(), plate.unit);
+  } else {
+    hText(els.speed, "" + (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(kph) : Math.round(kph)));
+  }
 }
 
 function updateHud(force, dtMs) {

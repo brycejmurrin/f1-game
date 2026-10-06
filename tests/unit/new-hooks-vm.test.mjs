@@ -426,18 +426,22 @@ test("Silverstone uses grounded required landmarks and airfield-scale terrain", 
   assert.equal(geometry.every((entry) => entry.ok), true);
 
   const requiredIds = models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
-  arrayContaining(requiredIds, ["silverstone-control-tower", "silverstone-start-gantry"]);
-  // The Wing's hand-placed facades sit ON the pit lane since the scenery frame
-  // was fixed (sceneryStartFrac 0.64 -> 0.02, DEFECT-LEDGER "silverstone"), so
-  // the engine's pit complex supersedes all four, as it does Portimao's pit
-  // block. Under the old frame they "emitted" on Maggotts. Pinned by id and
-  // reason, so the complex eating anything else still shows up.
-  const wingSegments = models.suppressed.filter((entry) => entry.id.startsWith("silverstone-wing-facade-"));
-  deepEq(wingSegments.map((entry) => entry.id).sort(), [
+  arrayContaining(requiredIds, [
+    "silverstone-control-tower", "silverstone-start-gantry",
+    "silverstone-wing-wave-roof",
     "silverstone-wing-facade-1", "silverstone-wing-facade-2",
     "silverstone-wing-facade-3", "silverstone-wing-facade-4",
+    "silverstone-t2-hangar-west", "silverstone-t2-hangar-centre",
+    "silverstone-t2-hangar-east",
   ]);
-  assert.equal(wingSegments.every((entry) => /superseded by the pit complex/.test(entry.reason)), true);
+  // Wing facades + wave roof sit behind pit keep (no longer superseded).
+  const wingIds = models.emitted.map((e) => e.id).filter((id) => id.startsWith("silverstone-wing-"));
+  arrayContaining(wingIds, [
+    "silverstone-wing-facade-1", "silverstone-wing-facade-2",
+    "silverstone-wing-facade-3", "silverstone-wing-facade-4",
+    "silverstone-wing-wave-roof",
+  ]);
+  deepEq(models.suppressed.filter((entry) => entry.id.startsWith("silverstone-wing-")), []);
   deepEq(hardRequired(models), []);
   for (const span of models.emitted.filter((entry) => entry.overhead)) gte(span.clearance, 4.8);
 });

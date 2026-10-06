@@ -11,6 +11,7 @@ const Onboard = (function () {
   const BIT = { brake: 1, ot: 2, aero: 4 };
   const ALL = 7;
   const GAP = 8;                // s between marks — never two at once
+  const RETRY = 1;              // s before a mark the banner refused is offered again
   const RACES_MAX = 2;          // after two races the player has seen enough
   const TAIL = {
     brake: "into the corner",
@@ -89,10 +90,15 @@ const Onboard = (function () {
     function fire(key) {
       load();
       if (shown & BIT[key]) return false;
+      // SEEN ONLY ONCE THE BANNER TOOK IT. announce() drops "coach" lines on
+      // the TV cameras and on a full queue and says so (false); the bit used to
+      // be saved first, so a first race watched on a TV camera spent the marks
+      // unseen, for good. A refusal leaves the mark armed and retries after a
+      // beat (not every frame).
+      if (G.announce(`${verb(key)} — ${TAIL[key]}`, 2.5, "coach") === false) { cool = RETRY; return false; }
       shown |= BIT[key];
       store.set(KEY, shown);
       cool = GAP;
-      G.announce(`${verb(key)} — ${TAIL[key]}`, 2.5, "coach");
       Log.info("ui", `Onboard ${key}`);
       return true;
     }

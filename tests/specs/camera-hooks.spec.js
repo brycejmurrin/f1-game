@@ -8,9 +8,11 @@ async function loadMonaco(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  // AWAIT THE RACE. __apex.race() is a thenable (js/agent/apex.js settled());
+  // firing it and sleeping 3 s left G.track null, so dolly() returned false
+  // and tourShots() was 0 vs 16. Same contract as monaco-foundation.spec.js.
   await page.evaluate(async () => {
-    __apex.race("monaco");
-    await new Promise(r => setTimeout(r, 3000));
+    await __apex.race("monaco");
     __apex.go();
     await new Promise(r => setTimeout(r, 200));
     __apex.freeze(true);

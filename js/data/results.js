@@ -28,13 +28,11 @@ const DataResults = (function () {
 
   // Race distance: 2:04:44.859 (an hour is not guaranteed — a red-flagged
   // sprint can come in under one).
+  // Dom.fmtRaceClock rounds BEFORE it splits: this split first and printed
+  // 3599.9996 as "59:60.000".
   function fmtClock(s) {
     if (typeof s !== "number" || !isFinite(s) || s <= 0) return null;
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s - h * 3600) / 60);
-    const r = s - h * 3600 - m * 60;
-    const mm = (h && m < 10 ? "0" : "") + m;
-    return (h ? h + ":" : "") + mm + ":" + (r < 10 ? "0" : "") + r.toFixed(3);
+    return Dom.fmtRaceClock(s);
   }
 
   function fmtGap(v) {
@@ -173,7 +171,9 @@ const DataResults = (function () {
       head.id = "dh-lr-head";
       head.appendChild(el("div", "dh-lr-name", meta.name || meta.type || "Session"));
       const parts = [];
-      const place = [meta.circuit, meta.country].filter(Boolean).join(", ");
+      const place = (typeof F1API !== "undefined" && F1API.placeLabel)
+        ? F1API.placeLabel(meta.circuit, meta.country)
+        : [meta.circuit, meta.country].filter(Boolean).join(", ");
       if (place) parts.push(place);
       if (meta.dateStart) parts.push(fmtDateTime(meta.dateStart));
       head.appendChild(el("div", "dh-lr-meta", parts.join(" · ")));

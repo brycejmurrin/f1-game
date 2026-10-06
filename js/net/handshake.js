@@ -140,16 +140,25 @@ const NetHandshake = (function () {
     if (pc.iceGatheringState === "complete") return Promise.resolve(true);
     return new Promise((resolve) => {
       let done = false;
+      let timer = null;
       const finish = (complete) => {
         if (done) return;
         done = true;
         pc.removeEventListener("icegatheringstatechange", onChange);
-        clearTimeout(timer);
+        pc.removeEventListener("icecandidate", onCand);
+        if (timer != null) clearTimeout(timer);
         resolve(complete);
       };
       const onChange = () => { if (pc.iceGatheringState === "complete") finish(true); };
+      // null candidate = end of gathering (spec). Honor it even when the
+      // gathering-state event is late or missed — otherwise a finished gather
+      // between the pre-check and the listener hangs until gatherTimeoutMs.
+      const onCand = (e) => { if (!e.candidate) finish(true); };
       pc.addEventListener("icegatheringstatechange", onChange);
-      const timer = setTimeout(() => finish(false), timeoutMs || GATHER_TIMEOUT_MS);
+      pc.addEventListener("icecandidate", onCand);
+      // Re-check AFTER listen: completion in the gap above must not hang.
+      if (pc.iceGatheringState === "complete") { finish(true); return; }
+      timer = setTimeout(() => finish(false), timeoutMs || GATHER_TIMEOUT_MS);
     });
   }
 

@@ -3,6 +3,16 @@
 /* Shared sheet chrome stays fixed; only the composition/library body scrolls.
    Viewport lengths and hardware insets are expressed in the sheet's own zoom. */
 #ps-panel { --fit-at: 260px; position: absolute; right: calc(var(--safe-r) / var(--sheet-scale, var(--ui-scale))); top: calc(var(--safe-t) / var(--sheet-scale, var(--ui-scale))); width: min(340px, calc(42 * var(--vwz))); height: calc((100svh - var(--safe-t) - var(--safe-b)) / var(--sheet-scale, var(--ui-scale))); max-height: none; pointer-events: auto; }
+/* Sheet busy: DONE / CAPTURE take the main thread on software GL. Disable
+   immediately and veil the sheet (same --scrim / --red tokens as .dh-spinner). */
+#ps-panel[aria-busy="true"] { cursor: progress; }
+#ps-panel[aria-busy="true"]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: color-mix(in oklab, var(--scrim) 45%, transparent);
+  pointer-events: none;
+}
+#ps-panel[aria-busy="true"] .sheet-foot .bigbtn { opacity: 0.55; }
 #ps-panel .sheet-head { flex-wrap: nowrap; }
 #ps-body { display: flex; flex-direction: column; gap: var(--gap); overscroll-behavior: contain; }
 #ps-body > section { display: flex; flex-direction: column; gap: calc(var(--gap) * .6); min-width: 0; }
