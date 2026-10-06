@@ -815,7 +815,7 @@ function buildStudioRig() {
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
-let camMode = Math.min(Math.max(store.get("camMode", 3) | 0, 0), CAM_MODES.length - 1);
+let camMode = Math.min(Math.max(store.get("camMode", 19) | 0, 0), CAM_MODES.length - 1);
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a
 // whole championship; `session` is what this one visit to the track IS. They
 // are genuinely independent — a career weekend qualifies then races, so a

@@ -135,7 +135,8 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before); assert.equal(studio.undo(), false);
   studio.applyPreset("classic", "screen"); assert.equal(values.homeScene, "static");
   assert.equal(values.uiTheme, "light"); assert.equal(values.hudProfile, "minimal");
-  studio.reset("screen"); assert.equal(values.homeScene, "garage"); assert.equal(values.uiTheme, "light");
+  // Screen-scope RESET restores the shipped home scene (photo), not the prior garage value.
+  studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
 });
 
 test("Named profiles can be updated and deleted without changing the live visual state", () => {
@@ -162,7 +163,7 @@ test("Profile boundary rejects duplicates and bad ids and enforces the saved-pro
 });
 
 test("Scene events and independent background motion respect OS reduce and unsubscribe", () => {
-  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "garage", motion: "still" });
+  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
   const changes = []; const stop = studio.onSceneChange((v) => changes.push(plain(v)));
   studio.setScene("night", "ambient"); assert.deepEqual(plain(studio.scene()), { mode: "night", motion: "ambient" });
   assert.equal(studio.effectiveSceneMotion(), "still"); assert.equal(changes.length, 1); stop(); studio.setScene("studio", "still"); assert.equal(changes.length, 1);
@@ -189,15 +190,15 @@ test("Unrelated visual edits do not restart the Home scene", () => {
 
 test("Home camera defaults and hostile saved choices normalize without expanding scene payload", () => {
   const fresh = load().studio;
-  assert.equal(fresh.homeCamera(), "auto"); assert.equal(fresh.snapshot().homeCamera, "auto");
+  assert.equal(fresh.homeCamera(), "side"); assert.equal(fresh.snapshot().homeCamera, "side");
   const { studio, values } = load({ homeScene: "unknown", homeCamera: "driver" });
-  assert.equal(studio.homeCamera(), "auto"); assert.deepEqual(plain(studio.scene()), { mode: "garage", motion: "still" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
   const changes = []; studio.onSceneChange((value) => changes.push(plain(value)));
   studio.setScene("garage", "still"); studio.setHomeCamera("front");
   assert.equal(values.homeCamera, "front"); assert.equal(studio.homeCamera(), "front"); assert.equal(changes.length, 2);
   assert.deepEqual(changes.at(-1), { mode: "garage", motion: "still" });
   studio.setHomeCamera("front"); assert.equal(changes.length, 2);
-  studio.setHomeCamera("bad"); assert.equal(values.homeCamera, "auto"); assert.equal(changes.length, 3);
+  studio.setHomeCamera("bad"); assert.equal(values.homeCamera, "side"); assert.equal(changes.length, 3);
 });
 
 test("Circuit, pit lane and mixed environments persist through named visual profiles", () => {
@@ -216,12 +217,12 @@ test("Circuit, pit lane and mixed environments persist through named visual prof
 });
 
 test("Home scoped reset includes camera and environment while undo preserves other screens", () => {
-  const { studio, values } = load({ homeScene: "pitlane", homeCamera: "rear", backgroundMotion: "ambient", hudProfile: "broadcast", uiTheme: "light", raceSettings: { laps: 18 } });
+  const { studio, values } = load({ homeScene: "pitlane", homeCamera: "rear", backgroundMotion: "still", hudProfile: "broadcast", uiTheme: "light", raceSettings: { laps: 18 } });
   const before = plain(studio.snapshot()); studio.reset("screen");
-  assert.equal(studio.homeCamera(), "auto"); assert.deepEqual(plain(studio.scene()), { mode: "garage", motion: "still" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light"); assert.deepEqual(values.raceSettings, { laps: 18 });
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before);
-  studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "auto");
+  studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "side");
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light");
 });
 
@@ -238,7 +239,8 @@ test("profile apply, reset and Undo disclose session-only restoration when stora
 
 test("Studio retains quarter-percent scales and previews independent HUD accent and contrast precedence", () => {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
-  const { studio } = load({ uiScale: 109.25, hudPanelOpacity: 20 }, true, false, dom.document,
+  // Pin uiContrast off so panel opacity is visible; shipped default is high (solid).
+  const { studio } = load({ uiScale: 109.25, hudPanelOpacity: 20, uiContrast: "off" }, true, false, dom.document,
     { getComputedStyle: () => ({ getPropertyValue: key => key === "--accent" ? "#00a3e0" : "" }) });
   const descendants = node => [node, ...node.children.flatMap(descendants)];
   const nodes = descendants(dom.byId("appearance-studio")), input = nodes.find(node => node.getAttribute("aria-label") === "UI size");

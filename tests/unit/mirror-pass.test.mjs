@@ -112,15 +112,15 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
 }
 
 test("AUTO shows the mirror in an onboard view on a hardware renderer, and not in chase", () => {
-  const onboard = boot({ cam: "cockpit" });
+  const onboard = boot({ mode: "auto", cam: "cockpit" });
   onboard.render();
   assert.equal(onboard.mp.state().shown, true);
   assert.equal(onboard.frameEl.hidden, false);
   assert.ok(onboard.classes.has("hud-mirror-on"), "the radio card / flag step-down class");
-  const helmet = boot({ cam: "helmet" });
+  const helmet = boot({ mode: "auto", cam: "helmet" });
   helmet.render();
   assert.equal(helmet.mp.state().shown, true, "HELMET is an onboard view with no road behind it, like COCKPIT");
-  const chase = boot({ cam: "chase" });
+  const chase = boot({ mode: "auto", cam: "chase" });
   chase.render();
   assert.equal(chase.mp.state().shown, false);
   assert.equal(chase.calls.filter((c) => c[0] === "begin").length, 0, "no pass when hidden");
@@ -128,7 +128,7 @@ test("AUTO shows the mirror in an onboard view on a hardware renderer, and not i
 });
 
 test("AUTO sheds a software renderer; ON keeps it; OFF and the countdown never draw", () => {
-  const soft = boot({ soft: true });
+  const soft = boot({ mode: "auto", soft: true });
   soft.render();
   assert.equal(soft.mp.state().shown, false, "AUTO + software");
   const on = boot({ mode: "on", soft: true, cam: "chase" });
@@ -147,14 +147,14 @@ test("AUTO sheds a software renderer; ON keeps it; OFF and the countdown never d
     low.render();
     assert.equal(low.mp.state().shown, true, "ON at tier " + tier);
   }
-  const phone = boot({ mobile: true, cam: "cockpit" });
+  const phone = boot({ mode: "auto", mobile: true, cam: "cockpit" });
   phone.render();
   assert.equal(phone.mp.state().shown, true, "AUTO in the cockpit on a phone");
   assert.equal(phone.mp.state().quality, "lite");
 });
 
 test("the MIRROR key turns off what shows, and on what does not, and persists it", () => {
-  const h = boot({ cam: "cockpit" });
+  const h = boot({ mode: "auto", cam: "cockpit" });
   h.render();
   assert.equal(h.mp.state().shown, true);
   h.press(); h.render();
@@ -474,7 +474,8 @@ test("race preparation lets the main warm run first, then draws the actual hidde
 });
 
 test("preparation follows real eligibility, quality and current layout", async () => {
-  for (const options of [{mode:"off"}, {cam:"chase"}, {soft:true}, {bc:true}, {state:"race"}]) {
+  // Pin AUTO where the case is about AUTO eligibility, not the stored default.
+  for (const options of [{mode:"off"}, {mode:"auto", cam:"chase"}, {mode:"auto", soft:true}, {bc:true}, {state:"race"}]) {
     const h = boot({state:"count", ...options});
     assert.equal(await h.mp.prepareRace(), false);
     assert.equal(h.mp.preparing(), false); assert.equal(h.timers.size, 0);
