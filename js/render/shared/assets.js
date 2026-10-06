@@ -77,11 +77,32 @@ const Assets = (function () {
   // https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#imagebitmapoptions
   const BITMAP_OPTS = Object.freeze({ premultiplyAlpha: "none", colorSpaceConversion: "none" });
 
+  // Break strip decode into short tasks: 17× createImageBitmap on a ~1.6 MB
+  // pack strip was one contiguous main-thread hitch during the title idle
+  // Assets.load() kick. scheduler.yield when present; else a microtask / 0-ms
+  // timer. VM unit harnesses often lack setTimeout — resolve immediately then.
+  function _yieldDecode() {
+    try {
+      if (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function") {
+        return scheduler.yield();
+      }
+    } catch (_) { /* fall through */ }
+    if (typeof queueMicrotask === "function") {
+      return new Promise((resolve) => { queueMicrotask(resolve); });
+    }
+    if (typeof setTimeout === "function") {
+      return new Promise((resolve) => { setTimeout(resolve, 0); });
+    }
+    return Promise.resolve();
+  }
+
   async function _decodeStrip(blob, size, present) {
     const out = new Array(MAT_LAYERS);
     try {
+      let n = 0;
       for (let i = 0; i < MAT_LAYERS; i++) {
         if (!present[i]) continue;
+        if (n++) await _yieldDecode();
         out[i] = await createImageBitmap(blob, 0, i * size, size, size, BITMAP_OPTS);
       }
       return out;
@@ -96,8 +117,10 @@ const Assets = (function () {
       const full = await createImageBitmap(blob, BITMAP_OPTS);
       const alt = new Array(MAT_LAYERS);
       try {
+        let n = 0;
         for (let i = 0; i < MAT_LAYERS; i++) {
           if (!present[i]) continue;
+          if (n++) await _yieldDecode();
           alt[i] = await createImageBitmap(full, 0, i * size, size, size, BITMAP_OPTS);
         }
         return alt;
@@ -465,8 +488,16 @@ const Assets = (function () {
     const m = await manifest();
     const ids = _idsNamedIn(m, String(src));
     if (!ids.length) return 0;
-    const got = await Promise.all(ids.map((id) => model(id)));
-    return got.reduce((n, g) => n + (g ? 1 : 0), 0);
+    // Fetch in parallel (shared model() memos), but parse/settle one at a time
+    // with a yield so a multi-model scenery set does not glue one long task
+    // onto race entry / flyby build.
+    const pending = ids.map((id) => model(id));
+    let n = 0;
+    for (let i = 0; i < pending.length; i++) {
+      if (i) await _yieldDecode();
+      if (await pending[i]) n++;
+    }
+    return n;
   }
 
   // Prefetch EVERY model in the pack. Resolves to the number now resident.

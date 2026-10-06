@@ -1,0 +1,126 @@
+// Boot / race-entry idle prefetch: LazyBundles.raceAssets, TrackBuildClient.idleWarm,
+// renderer-boot adapter probe cap, Assets strip-decode yields.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import path from "path";
+import vm from "vm";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (rel) => readFileSync(path.join(root, rel), "utf8");
+
+test("raceAssets schedules scenery on microtask and LAZY_RACE on idle", () => {
+  const src = read("js/core/lazy-bundles.js");
+  assert.match(src, /function scheduleIdle\(fn, timeoutMs\)/, "idle helper");
+  assert.match(src, /requestIdleCallback\(fn, \{ timeout: ms \}\)/, "rIC with timeout");
+  assert.match(src, /else setTimeout\(fn, Math\.min\(ms, 800\)\)/, "Safari timer fallback");
+  assert.match(src, /function raceAssets\(\)/, "sync scheduler (not async await on critical path)");
+  assert.match(src, /queueMicrotask\(kickScenery\)/, "scenery on microtask (game-vm rIC is a no-op)");
+  assert.match(src, /scheduleIdle\(\(\) => \{\s*if \(window\.LightPresets\) return/, "lights on idle");
+  assert.doesNotMatch(src, /ensureCircuit\(deps\.getContext\(\)\.trackIdx\);\s*ensureScenery/,
+    "no redundant ensureCircuit kick beside ensureScenery");
+  assert.match(src, /TrackBuildClient\.idleWarm/, "build worker warm from raceAssets");
+});
+
+test("raceAssets microtask kicks scenery/worker; idle injects lights", async () => {
+  const loader = read("js/core/script-loader.js");
+  const bundles = read("js/core/lazy-bundles.js");
+  const idles = [];
+  let warmCalls = 0, lightLoads = 0;
+  const ctx = vm.createContext({
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      // Avoid CIRCUITS_DIR + runInContext in this file (load-order scenery roster guard).
+      SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
+      LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+    },
+    window: { __APEX_BUILD: "test", LightPresets: null },
+    Tracks: {
+      LIST: [{ id: "monza", custom: true, scenery: () => {} }],
+      circuitPayloadResident: () => true,
+      hydrate: () => true,
+    },
+    TrackScenery: { monza: () => {} },
+    TrackBuildClient: { idleWarm() { warmCalls++; } },
+    Assets: { modelsReady: () => Promise.resolve(0) },
+    Log: { warn() {}, info() {} },
+    els: { datahub: {} },
+    queueMicrotask: (fn) => queueMicrotask(fn),
+    requestIdleCallback(fn, opts) { idles.push({ fn, opts }); return idles.length; },
+    setTimeout() { throw new Error("setTimeout fallback must not run when rIC exists"); },
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) {
+        lightLoads++;
+        queueMicrotask(() => {
+          ctx.window.LightPresets = {};
+          node.onload();
+        });
+      } },
+    },
+  });
+  vm.runInContext(loader + "\n" + bundles + `
+    const lb = LazyBundles.create({
+      els, loadBackendScripts: ScriptLoader.create().load,
+      getContext: () => ({ trackIdx: 0 }),
+      applyLightTuneIfReady() {},
+      bindAgent() {}, createNetwork() { return { wire() {} }; },
+      onAudioReady() {},
+    });
+    globalThis.__raceAssets = lb.raceAssets;
+  `, ctx);
+  ctx.__raceAssets();
+  assert.equal(warmCalls, 0, "microtask not yet drained");
+  assert.equal(idles.length, 1, "only lights on idle");
+  assert.equal(idles[0].opts.timeout, 2500);
+  await new Promise((r) => queueMicrotask(r));
+  assert.equal(warmCalls, 1, "idleWarm from scenery microtask");
+  assert.equal(lightLoads, 0, "lights not yet");
+  await idles[0].fn();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(lightLoads, 1, "LAZY_RACE injected on idle");
+  assert.ok(ctx.window.LightPresets, "presets global set after inject");
+});
+
+test("TrackBuildClient.idleWarm no-ops when build worker is off", () => {
+  const src = read("js/track/build-client.js");
+  assert.match(src, /function idleWarm\(\)/);
+  assert.match(src, /if \(!enabled\(\)\) return null/);
+  assert.match(src, /requestIdleCallback\(kick, \{ timeout: 3000 \}\)/);
+  const main = vm.createContext({
+    localStorage: { getItem: () => "0", setItem() {} },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {} },
+    location: { href: "http://x/" },
+    Worker: class { constructor() { throw new Error("must not spawn when off"); } },
+    Log: { warn() {}, info() {} },
+    performance: { now: () => 0 },
+    requestIdleCallback(fn) { fn(); return 1; },
+    setTimeout() {},
+    URL,
+  });
+  vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main);
+  assert.equal(main.TrackBuildClient.idleWarm(), null);
+});
+
+test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
+  const boot = read("js/render/renderer-boot.js");
+  assert.match(boot, /Promise\.race\(\[\s*adapterP,/, "adapter probe is raced");
+  // Hang cap must be seconds-scale: a 250 ms race loses to real CI adapters and
+  // leaves unset backend undefined instead of "three" (render-boot / tlx-probes).
+  assert.match(boot, /setTimeout\(\(\) => resolve\(null\), 4000\)/, "4 s adapter hang cap");
+  assert.match(boot, /clearTimeout\(timer\)/, "clear hang timer when adapter settles first");
+  assert.match(boot, /typeof setTimeout !== "function"/, "VM harness without timers still awaits adapter");
+  assert.match(boot, /requestIdleCallback\(kick, \{ timeout: 800 \}\)/,
+    "three modulepreload waits for an idle slice");
+  assert.match(boot, /rel = "modulepreload"/);
+});
+
+test("Assets strip decode yields between layers", () => {
+  const src = read("js/render/shared/assets.js");
+  assert.match(src, /function _yieldDecode\(\)/);
+  assert.match(src, /scheduler\.yield/);
+  assert.match(src, /queueMicrotask/);
+  assert.match(src, /if \(n\+\+\) await _yieldDecode\(\)/);
+});
