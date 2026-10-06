@@ -1,0 +1,1 @@
+1791267331	Cursor Agent	PR #1053 portimao coplanar-faces: OWNED scenery/portimao.js + portimao coplanar/geometry baseline rows; FORBIDDEN js/track/scenery/* city.js nature.js grandstandEx core other circuits ratchets workflows; COMMIT LOCAL no push until CI Watch push released  [cursor/portimao-detail-654b; session 7a1203a89de8ce4ae0281dd1]
