@@ -464,6 +464,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
+  // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
+  "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
