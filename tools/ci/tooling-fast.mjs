@@ -206,6 +206,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
   "tests/unit/css-comments.test.mjs",
+  "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
