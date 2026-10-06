@@ -374,8 +374,14 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    /* WAIT FOR :modal AND the layer rank, same 5 s budget. Visible arrives
+       before showModal (TopModal's MutationObserver), and a :modal standings
+       used to lose activeLayer() to #pausemenu when it had no modalOrder stamp.
+       polling: 100 — park() stops the rAF loop (see track-detail below). */
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: 5_000 });
 
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
@@ -600,8 +606,10 @@ test.describe("Escape is BACK", () => {
     // it. The sheet's own open path is `hidden = false` either way (TopModal
     // mirrors that onto showModal), which is exactly what is under test here.
     await page.evaluate(() => { document.getElementById("standings").hidden = false; });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: 5_000 });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() =>
       document.getElementById("standings").hidden === true &&
