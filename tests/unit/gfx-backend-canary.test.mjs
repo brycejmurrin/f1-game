@@ -356,34 +356,79 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
   h.GLX.drawSkidBatch(new Float32Array(64), 4, true);
   h.GLX.drawGlow([0, 0, 0, 1, 1, 1, 5], 0.2);
   h.GLX.drawParticles(new Float32Array(16), 16, false);
+  // Shadow passes run BEFORE begin() in the live frame — they must fail closed
+  // too, or INVALID_OPERATION spam continues after CONTEXT_LOST_WEBGL.
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  h.GLX.shadowBegin(lightVP);
   h.GLX.castShadow(mesh, model);
   h.GLX.castShadowChunked(chunked, model);
+  h.GLX.castShadowInstanced(batch);
+  h.GLX.shadowEnd();
+  h.GLX.carShadowBegin(lightVP, 1);
+  h.GLX.castShadow(mesh, model);
+  h.GLX.carShadowEnd();
+  h.GLX.lampShadowBegin(lightVP, 0);
+  h.GLX.castShadowInstanced(batch, 1);
+  h.GLX.lampShadowEnd();
   h.GLX.present({});
   assert.deepEqual(h.calls.map((c) => c[0]), [], "no entry point touches a lost context");
   assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 0, "updateInstances reports nothing resident");
+  assert.equal(h.GLX.backendState().ctxLost, true, "backendState names the loss for race-start fail-fast");
 });
 
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
   // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
   // no exception, so the error overlay never painted. TLX reports the same
-  // cap through __apexReportError; GLX now matches it.
+  // cap through __apexReportError; GLX now matches it. Past the budget also
+  // opens the Graphics unavailable panel (RETRY / USE WEBGL2).
   for (const prior of ["0", "2"]) {
     const h = bootGlx();
     const reports = [];
+    const panels = [];
     h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
+    h.sandbox.RendererPicker = { showUnavailable: (opts) => panels.push(opts && opts.panel && opts.panel.id) };
+    h.sandbox.document.getElementById = (id) => ({ id });
     h.sandbox.sessionStorage.setItem("apex26.ctxLostReloads", prior);
     h.sandbox.__timers.length = 0;
     h.loseContext();
     if (prior === "0") {
       assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
       assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
+      assert.equal(panels.length, 0, "under the budget: no unavailable panel yet");
     } else {
       assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
       assert.equal(reports.length, 1, "past the cap the player is told");
       assert.equal(reports[0][0], "gfx");
       assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+      assert.deepEqual(panels, ["nogl"], "past the cap: Graphics unavailable panel");
     }
   }
+});
+
+test("TLX aborts program warm on device loss so race-start cannot hang on warming()", () => {
+  // compileAsync after a loss often never settles; warming() stuck true made
+  // game.js skip present/afterPresent forever (HUD survey hang).
+  const src = code("js/render/three/tlx.js");
+  assert.match(src, /let _deviceLost = false/);
+  assert.match(src, /renderer\.onDeviceLost = function[\s\S]{0,400}?_deviceLost = true/);
+  assert.match(src, /_warmRequested = false;\s*_warmPending = null;\s*_warmDone = true/);
+  assert.match(src, /warming\(\)\s*\{\s*return !_deviceLost && !!_warmPending/);
+  assert.match(src, /ctxLost:\s*!!_deviceLost/);
+  assert.match(src, /RendererPicker\.showUnavailable/);
+});
+
+test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () => {
+  const src = code("js/game.js");
+  assert.match(src, /function gfxContextLost\(\)/);
+  assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
+  assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
+  const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
+  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !gfxContextLost\(\)\)/,
+    "#976 paced load aborts mid-step when the context is already lost");
+  assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
+    "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
+  assert.match(body, /if \(player !== entryPlayer \|\| \(state !== "count" && state !== "race"\)\) return false/,
+    "#1085 lights-out during paced entry still counts as reached grid");
 });
 
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
@@ -2520,53 +2565,32 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
     "whether NoBlending + opacityNode=tag still ghosts cars");
 });
 
-test("the garage floor reflection's noDepthTest reaches all three backends", () => {
-  // js/garage/scene.js draws the car a second time through MAT_MIRROR, under
-  // the floor, with { alpha: 0.26, noDepthTest: true }. It shipped GLX-only:
-  // gl.disable(DEPTH_TEST) was the whole implementation, so on WGX and TLX the
-  // mirrored car sat behind the floor's depth and never drew at all — the bug
-  // reads as "the garage has no reflection on three".
+test("the garage floor reflection depth-resolves with bias on all three backends", () => {
+  // Close-ups ghosted when the mirror used noDepthTest + alpha blend: every
+  // triangle showed through. The bay now resolves opaque (alpha 1 + depthBias)
+  // after the room so nearest surfaces win, then fades with a bay quad.
   const scene = code("js/garage/scene.js");
-  assert.match(scene, /noDepthTest:\s*true/,
-    "the garage mirror no longer asks for noDepthTest — retire this pin with it");
+  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
+    "garage mirror must resolve opaque for depth write / self-occlusion");
+  assert.match(scene, /depthBias:\s*MIRROR_BIAS/,
+    "under-floor mesh needs depthBias to clear the floor without noDepthTest");
+  assert.doesNotMatch(scene, /noDepthTest:\s*true/,
+    "noDepthTest ghosted helmet/wheels/wings — do not bring it back for the mirror");
+  assert.match(scene, /function mirrorSheen\(/,
+    "sheen falls off with distance from the car");
 
+  // depthBias must still reach every backend (the resolve pass depends on it).
   const glx = code("js/render/glx/glx.js");
-  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must read opts.noDepthTest");
-  assert.match(glx, /disable\(gl\.DEPTH_TEST\)/, "GLX must disable the depth test for it");
+  assert.match(glx, /opts\.depthBias/, "GLX draw() must read opts.depthBias");
+  assert.match(glx, /setPolyOffset/, "GLX must apply polygon offset for depthBias");
 
-  // WGX: the same state as its always-pass (decal) pipeline. Anchor on the
-  // depthCompare that bit selects, so folding it into some other flag name
-  // still has to keep "always" reachable from noDepthTest.
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /opts\.noDepthTest/, "WGX _litPipeline must read opts.noDepthTest");
-  assert.match(wgx, /depthCompare:\s*\w+\s*\?\s*"always"/,
-    "WGX's always-pass pipeline is what noDepthTest has to select");
-  assert.match(wgx, /b\.noDepthTest\s*=\s*o\.noDepthTest/,
-    "the normalized _litOpts bag must carry noDepthTest, or the pooled path drops it");
+  assert.match(wgx, /depthBias/, "WGX must carry depthBias into the lit pipeline");
 
-  // TLX has TWO halves, and the second is the one three hides: present() gives
-  // every draw renderOrder = submission index, but three renders the whole
-  // TRANSPARENT list after the whole opaque one whatever the renderOrder. Left
-  // transparent, an alpha<1 mirror paints LAST and ghosts over the props it
-  // should be hidden behind — so the material must stay in the opaque list.
   const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  const at = lit.indexOf("o.noDepthTest");
-  assert.ok(at > 0, "tsl-lit makeMaterial must read o.noDepthTest");
-  const body = lit.slice(at, at + 240);
-  assert.match(body, /depthTest\s*=\s*false/, "TLX must clear material.depthTest");
-  assert.match(body, /depthWrite\s*=\s*false/, "a mirror that writes depth clips the shell drawn after it");
-  assert.match(body, /transparent\s*=\s*false/,
-    "TLX must keep the mirror in the OPAQUE list — three defers the transparent " +
-    "list past every opaque draw, which is the clip this reflection relies on");
-  // The material cache is keyed by opts; without the flag a plain alpha-0.26
-  // material and the mirror share one entry and whichever minted first wins.
-  assert.match(TLX, /o\.noDepthTest\s*\?\s*"\|nd"/,
-    "tlx materialFor key must distinguish noDepthTest variants");
-  // three's own pipeline cache must also see it, or the state never reaches
-  // the GPU (the same class of miss as the polygonOffset backport above).
-  assert.match(THREE_BUNDLE, /r\.depthWrite,r\.depthTest,/,
-    "bundled three's pipeline cache key dropped depthTest — depthTest:false " +
-    "would silently share a pipeline with a depth-tested material");
+  assert.match(lit, /o\.depthBias/, "tsl-lit makeMaterial must read o.depthBias");
+  assert.match(TLX, /o\.depthBias\s*\?\s*"\|db"/,
+    "tlx materialFor key must distinguish depthBias variants");
 });
 
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
@@ -4218,7 +4242,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
   assert.match(beginBody, /frame\.eye\s*=\s*eye/,
     "probe eye must be the car, not the chase camera");
   assert.match(beginBody, /ENV_CULL_M/,
-    "probe must cap draw distance like GLX (300 m when envCull is on)");
+    "probe must cap draw distance like GLX (150 m when envCull is on)");
   assert.match(beginBody, /lit\.updateFrame\(frame\)/,
     "probe runs before gfx.begin — updateFrame must push this frame's lighting");
   const endAt = src.indexOf("envFaceEnd(face)");

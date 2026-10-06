@@ -47,12 +47,33 @@
   src: url("../assets/fonts/saira-apex26-800-italic.woff2") format("woff2");
 }
 /* Native same-document View Transitions (progressive enhancement — menus.js
-   wraps its screen swaps in document.startViewTransition when supported). Give
-   the default root crossfade a snappy, game-appropriate duration, and cancel it
-   entirely under prefers-reduced-motion. Outside the layer blocks: these UA
+   wraps its screen swaps in document.startViewTransition when supported). The
+   UA default is a 0.22s plus-lighter cross-fade of BOTH root snapshots, which
+   prints the title tiles over the Grand Prix list and the Career sheet. Fade
+   the old snapshot out first, then fade the new in over an opaque --bg scrim;
+   mix-blend-mode:normal drops the UA plus-lighter keyframe. Reduced-motion
+   still cancels the animation entirely. Outside the layer blocks: these UA
    pseudo-elements aren't part of the normal element cascade. */
-::view-transition-old(root),
-::view-transition-new(root) { animation-duration: 0.22s; }
+@keyframes apex-vt-fade-out { to { opacity: 0; } }
+@keyframes apex-vt-fade-in { from { opacity: 0; } }
+::view-transition { background-color: var(--bg); }
+::view-transition-old(root) {
+  animation-name: apex-vt-fade-out;
+  animation-duration: 0.10s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+  z-index: 0;
+}
+::view-transition-new(root) {
+  animation-name: apex-vt-fade-in;
+  animation-duration: 0.14s;
+  animation-delay: 0.10s;
+  animation-timing-function: ease-in;
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),
   ::view-transition-old(*),

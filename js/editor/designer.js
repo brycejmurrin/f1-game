@@ -15,6 +15,13 @@ const TrackDesigner = (function () {
   const S = TrackShape;
   const PREVIEW_MS = 80, DRAFT_MS = 600, UNDO_CAP = 100, NUDGE_MS = 500, IMPORT_MAX = 64 * 1024;
   const TOOLS = [["select", "SELECT"], ["draw", "DRAW"], ["straight", "STRAIGHT"], ["corner", "CORNER"], ["hairpin", "HAIRPIN"], ["chicane", "CHICANE"], ["sbend", "S-BEND"]];
+  const MODES = Object.freeze([
+    ["draw", "DRAW"],
+    ["edit", "EDIT"],
+    ["elevation", "ELEVATION"],
+    ["scenery", "SCENERY"],
+    ["test", "TEST"],
+  ]);
   const STEPS = { L: 10, R: 5, deg: 5 };
   const PARAM_LABEL = { L: "LENGTH m", R: "RADIUS m", deg: "ANGLE °" };
   const LOOK_ROWS = [["time", "TIME OF DAY"], ["trees", "TREES"], ["crowd", "CROWD"]];
@@ -22,18 +29,18 @@ const TrackDesigner = (function () {
    *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
   const HOWTO = Object.freeze({
     STEPS: Object.freeze([
-      { n: 1, title: "Start", text: "RANDOMISE gives you a legal circuit to start from, TRACK OF THE DAY gives everyone the same one today, and START FROM… traces a real circuit. Or pick DRAW and draw one closed loop in a single stroke — it closes and smooths itself." },
-      { n: 2, title: "Shape", text: "Drag the white points to bend the road; tap the road to add a point, and double-tap a point (or DELETE POINT) to remove it. Pinch or wheel to zoom, drag empty space to pan, and FIT VIEW recentres the circuit." },
-      { n: 3, title: "Corners", text: "Choose CORNER, HAIRPIN, CHICANE or S-BEND, set its radius, angle and LEFT or RIGHT, then tap the point where it should begin (STRAIGHT works the same way with a length). To reshape a corner already there, tap its row under TURNS and press REPLACE THE SELECTED SPAN — UNDO takes either back." },
-      { n: 4, title: "Start line", text: "Select a point and press START HERE to put the start line there. It needs a long straight behind it for the grid and the pit lane." },
-      { n: 5, title: "Look", text: "Pick one of twenty themes and tune it with TIME OF DAY (AUTO keeps the theme's own sky; NIGHT adds floodlights), TREES and CROWD. Then name the circuit and set the half-width of the road (SPAN WIDTH narrows just the stretch you have selected)." },
-      { n: 6, title: "Checks", text: "Red rows block saving; amber rows are only warnings (FIA lines are Grade 1 advice). Tap a row to see where it is, and tap FIX (or FIX ALL) to let the designer repair it." },
-      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or select a point and press TEST HERE to drive from it; QUIT brings you back): your circuits live in MY CIRCUITS here and under the MY CIRCUITS chip in the race picker. SHARE copies a link, CARD makes a picture of the circuit to send, and EXPORT / IMPORT move a circuit as a file." },
+      { n: 1, title: "Start", text: "Pick a MODE (DRAW / EDIT / ELEVATION / SCENERY / TEST), then RANDOMISE, TRACK OF THE DAY, START FROM…, or DRAW one closed loop." },
+      { n: 2, title: "Shape", text: "In EDIT, drag white points; tap the road to add one; double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
+      { n: 3, title: "Corners", text: "Still in EDIT, choose CORNER / HAIRPIN / CHICANE / S-BEND, set radius and angle, then tap where it should begin — UNDO takes a stamp back." },
+      { n: 4, title: "Elevation", text: "In ELEVATION, drag grips on the strip under the map, or use Flat / Rolling / Hilly. Each control point has its own height; old saves without heights load flat." },
+      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD, then name the circuit." },
+      { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
+      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
     GESTURES: Object.freeze([
-      { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan." },
+      { input: "Touch", text: "Drag a point to move it · tap the road to add one · double-tap a point to delete it · press and hold a point for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, drag a grip up or down (≥44 px targets)." },
       { input: "Mouse", text: "Drag a point to move it · click the road to add one · double-click a point to delete it · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape after it · Esc lets go of it · on the elevation strip under the canvas, Enter adds a hill at the selected point, [ and ] pick one, Up/Down set its height and Left/Right move it." },
+      { input: "Keyboard", text: "Tab to the canvas · [ and ] step through the points · arrows move the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape · Esc lets go · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
@@ -43,7 +50,7 @@ const TrackDesigner = (function () {
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
   let cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
-  let design = null, verdict = null, sel = -1, span = -1, tool = "select";
+  let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   const undo = [], redo = [];
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
@@ -63,7 +70,19 @@ const TrackDesigner = (function () {
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
   const fmtLap = (s) => { if (!(s > 0)) return "—"; const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };
   function blank() {
-    return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
+    return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
+  }
+  /** Parallel heights for the current pts (Flat when missing — old saves). */
+  function ensureHeights(d) {
+    if (!d || !Array.isArray(d.pts)) return d;
+    const src = d.heights;
+    d.heights = (typeof ElevPresets !== "undefined" ? ElevPresets.sanitize(d.pts, src)
+      : (typeof CustomTracks !== "undefined" && CustomTracks.sanitizeHeights ? CustomTracks.sanitizeHeights(d.pts, src)
+        : d.pts.map((_, i) => (Array.isArray(src) && Number.isFinite(+src[i]) ? +src[i] : 0))));
+    return d;
+  }
+  function flatHeights(pts) {
+    return (Array.isArray(pts) ? pts : []).map(() => 0);
   }
   function message(text, warn) {
     if (!ui.msg) return;
@@ -78,10 +97,13 @@ const TrackDesigner = (function () {
   function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
+    if (mode === "elevation") return "ELEVATION: drag grips on the strip under the map · Flat / Rolling / Hilly presets · each point has its own height";
+    if (mode === "scenery") return "SCENERY: pick a theme and tune TIME / TREES / CROWD";
+    if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
+    if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
-    return tool === "draw" ? "DRAW: draw one closed loop in a single stroke — it closes and smooths itself"
-      : kind ? kind.label + ": tap a point to stamp it after that point (shift-tap a second point to replace the span between them)"
-        : "SELECT: drag points · tap the road to add one · double-tap a point to delete it · wheel or pinch to zoom";
+    return kind ? kind.label + ": tap a point to stamp it after that point (shift-tap a second point to replace the span between them)"
+      : "SELECT: drag points · tap the road to add one · double-tap a point to delete it · wheel or pinch to zoom";
   }
   /** "CORNER R 45 m × 90° LEFT" — what STAMP will lay down with the stepper values. */
   function stampExample() {
@@ -164,7 +186,19 @@ const TrackDesigner = (function () {
       const span = A[k + 1][0] - A[k][0];
       return (A[k][1] + (span > 0 ? (x - A[k][0]) / span : 0) * (A[k + 1][1] - A[k][1])) / LP;
     };
-    return Object.assign({}, d, zoneMap(d, at, false));
+    return Object.assign({}, d, zoneMap(d, at, false), { heights: remapHeights(d, oldPts, newPts) });
+  }
+  /** Keep per-node heights on shared control points; new points start flat. */
+  function remapHeights(d, oldPts, newPts) {
+    const oldH = Array.isArray(d.heights) ? d.heights : [];
+    const idx = new Map();
+    for (let i = 0; i < oldPts.length; i++) idx.set(oldPts[i][0] + "," + oldPts[i][1], i);
+    const next = new Array(newPts.length);
+    for (let j = 0; j < newPts.length; j++) {
+      const k = idx.get(newPts[j][0] + "," + newPts[j][1]);
+      next[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : 0;
+    }
+    return typeof ElevPresets !== "undefined" ? ElevPresets.sanitize(newPts, next) : next;
   }
 
   // ── state transitions ─────────────────────────────────────────────────────
@@ -180,8 +214,11 @@ const TrackDesigner = (function () {
     nudge = kind === "nudge" ? { sel, t: now } : null;
     next.pts = lattice(next.pts);
     if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
+    ensureHeights(next);
     design = next;
     afterChange(kind);
+    // First real edit dismisses the coach so SHAPE / mode chips stay usable.
+    if (ui.coach && kind && kind !== "blank" && kind !== "undo" && kind !== "redo") dismissCoach(false);
   }
   function afterChange(kind) {
     if (sel >= design.pts.length) sel = -1;
@@ -274,7 +311,7 @@ const TrackDesigner = (function () {
     if (p.length > CustomTracks.LIMITS.ptsMax) p = S.rdp(p, 2);
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: p, originId: undefined }), "draw");   // a new circuit: SAVE adds, never replaces
+    commit(Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined }), "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -292,7 +329,7 @@ const TrackDesigner = (function () {
     const base = Object.assign({}, design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: r.pts, seed: r.seed, originId: undefined }), "randomise");   // a new circuit, as DRAW
+    commit(Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined }), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
@@ -301,7 +338,11 @@ const TrackDesigner = (function () {
     const pts = design.pts;
     if (pts.length < 3) return false;
     // The start point stays; every arc fraction f is 1 − f on the reversed loop.
-    const next = Object.assign({}, design, { pts: [pts[0]].concat(pts.slice(1).reverse()) }, zoneMap(design, (f) => 1 - f, true));
+    const hs = Array.isArray(design.heights) ? design.heights : flatHeights(pts);
+    const next = Object.assign({}, design, {
+      pts: [pts[0]].concat(pts.slice(1).reverse()),
+      heights: [hs[0] || 0].concat(hs.slice(1).reverse()),
+    }, zoneMap(design, (f) => 1 - f, true));
     commit(next, "reverse");
     message("Direction reversed");
     return true;
@@ -312,7 +353,11 @@ const TrackDesigner = (function () {
     let L = 0, upto = 0;
     for (let k = 0; k < N; k++) { const a = pts[k], b = pts[(k + 1) % N]; const d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (k < i) upto += d; L += d; }
     const f = L ? upto / L : 0;
-    const next = Object.assign({}, design, { pts: S.rotate(pts, i) }, zoneMap(design, (v) => v - f, false));
+    const hs = Array.isArray(design.heights) ? design.heights.slice() : flatHeights(pts);
+    const next = Object.assign({}, design, {
+      pts: S.rotate(pts, i),
+      heights: hs.length === pts.length ? hs.slice(i).concat(hs.slice(0, i)) : flatHeights(pts),
+    }, zoneMap(design, (v) => v - f, false));
     sel = 0; span = -1;
     commit(next, "start");
     message("Start line moved");
@@ -327,8 +372,8 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { pts: next }), "delete");
     return true;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = JSON.parse(undo.pop()); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = JSON.parse(redo.pop()); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
+  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = ensureHeights(JSON.parse(undo.pop())); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = ensureHeights(JSON.parse(redo.pop())); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -361,13 +406,35 @@ const TrackDesigner = (function () {
     return st && st.pts.length ? { pts: [[a[0], a[1]]].concat(st.pts) } : null;
   }
   /** cv.setTool(name, previewFn): a canvas without the ghost ignores the second argument. */
-  function canvasTool() { if (!cv) return; if (TrackStamps.KINDS[tool]) cv.setTool(tool, ghost); else cv.setTool(tool); }
+  function canvasTool() {
+    if (!cv) return;
+    if (mode === "draw") { cv.setTool("draw"); return; }
+    if (mode === "elevation" || mode === "scenery" || mode === "test") { cv.setTool("select"); return; }
+    if (TrackStamps.KINDS[tool]) cv.setTool(tool, ghost); else cv.setTool(tool);
+  }
   function setTool(name) {
     const was = tool;
     tool = TOOLS.some((t) => t[0] === name) ? name : "select";
+    // Stamp / draw chips also switch mode so the rail stays coherent.
+    if (tool === "draw" && mode !== "draw") mode = "draw";
+    else if (tool !== "draw" && (mode === "draw" || mode === "elevation" || mode === "scenery" || mode === "test")) mode = "edit";
     canvasTool();
     refreshControls();
-    if (tool !== was && built && design) message(toolHint());   // once per choice: the stage hint is hidden on a phone
+    if (ui.coach) dismissCoach(false);
+    if (tool !== was && built && design) message(toolHint());
+  }
+  function setMode(name) {
+    const next = MODES.some((m) => m[0] === name) ? name : "edit";
+    if (next === mode) { refreshControls(); return mode; }
+    mode = next;
+    if (mode === "draw") tool = "draw";
+    else if (mode === "edit" && tool === "draw") tool = "select";
+    else if (mode !== "edit" && mode !== "draw") tool = "select";
+    canvasTool();
+    refreshControls();
+    if (ui.coach) dismissCoach(false);
+    if (built && design) message(toolHint());
+    return mode;
   }
   /** Unsaved work about to be replaced → one UNDO away, and kept under
    *  apex26.customTrackDraftPrev so the new design's autosave cannot clobber
@@ -388,6 +455,7 @@ const TrackDesigner = (function () {
     if (!kept) { undo.length = 0; redo.length = 0; }
     design = copy(item);
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
+    ensureHeights(design);   // old saves without heights → flat zeros
     if (origin) design.originId = origin; else delete design.originId;
     sel = -1; span = -1; nudge = null;
     afterChange(label || "load");
@@ -469,6 +537,18 @@ const TrackDesigner = (function () {
     ui.ctx.appendChild(ui.ctxTest);
     canvas.addEventListener("pointerdown", () => hideCtx());
     stage.append(canvas, ui.stats, ui.hint, ui.ctx);
+    // Canvas toolbar: UNDO / REDO always visible (not buried under DETAILS).
+    ui.toolbar = el("div", "td-chips");
+    ui.toolbar.setAttribute("data-role", "toolbar");
+    ui.toolbar.setAttribute("role", "toolbar");
+    ui.toolbar.setAttribute("aria-label", "Edit history");
+    ui.undo = btn("UNDO", "sel-chip", () => doUndo());
+    ui.redo = btn("REDO", "sel-chip", () => doRedo());
+    ui.undo.setAttribute("aria-keyshortcuts", "Control+Z Meta+Z");
+    ui.redo.setAttribute("aria-keyshortcuts", "Control+Shift+Z Meta+Shift+Z");
+    ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
+    ui.toolbar.append(ui.undo, ui.redo, ui.fitBtn);
+    stage.appendChild(ui.toolbar);
     // rail
     const rail = el("div", "td-rail");
     const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
@@ -550,25 +630,31 @@ const TrackDesigner = (function () {
     list("Controls", HOWTO.GESTURES.map((g) => g.input.toUpperCase() + " — " + g.text));
     list("Limits", [HOWTO.LIMITS]);
   }
-  /** The first-open card: one info row and HOW TO / GOT IT, until GOT IT or a close. */
+  /** The first-open card: docks BELOW the mode/SHAPE tools (never covers them),
+   *  until GOT IT, a mode/tool change, or the first edit. */
   function showCoach() {
     if (ui.coach || coached() || !ui.paneDesign) return;
     const lead = randomisedOnOpen ? "RANDOMISE gave you a circuit to start from. " : "";
     const card = el("div", "td-group");
-    const li = el("div", "td-issue", lead + "Drag the white points, add corners with the tools, then SAVE and RACE. Open HOW TO for the full guide.");
+    card.setAttribute("data-role", "coach");
+    const li = el("div", "td-issue", lead + "Use the MODE tabs (DRAW / EDIT / ELEVATION / SCENERY / TEST). Drag the white points, then SAVE and RACE. Open HOW TO for the full guide.");
     li.dataset.level = "info";
     const row = el("div", "td-chips");
     const howTo = btn("HOW TO", "sel-chip", () => showPane("howto"));
     row.append(howTo, btn("GOT IT", "sel-chip", () => dismissCoach(true)));
     card.append(li, row);
-    ui.coach = card; ui.coachFirst = howTo;   // open() focuses this, so the rail stays scrolled to the card
-    ui.paneDesign.insertBefore(card, ui.paneDesign.firstChild);
+    ui.coach = card; ui.coachFirst = howTo;
+    // Dock after the tool groups so SHAPE chips stay clickable (FINDINGS #3 / UX-1).
+    const anchor = ui.checksGroup || ui.themeGroup || null;
+    if (anchor && anchor.parentNode === ui.paneDesign) ui.paneDesign.insertBefore(card, anchor);
+    else ui.paneDesign.appendChild(card);
   }
   function dismissCoach(focusRail) {
     if (!ui.coach) return;
     setCoached();
-    ui.coach.remove(); ui.coach = null;
-    if (focusRail && ui.tools && ui.tools.firstChild) ui.tools.firstChild.focus();
+    ui.coach.remove(); ui.coach = null; ui.coachFirst = null;
+    if (focusRail && ui.modes && ui.modes.firstChild) ui.modes.firstChild.focus();
+    else if (focusRail && ui.tools && ui.tools.firstChild) ui.tools.firstChild.focus();
   }
   /** The canvas's press-and-hold: DELETE · START HERE · CLOSE for point i, anchored at the press. */
   function showCtx(i, at) {
@@ -600,6 +686,17 @@ const TrackDesigner = (function () {
     return row;
   }
   function buildDesignPane(pane) {
+    // Mode tabs first — clear switch between draw / edit / elevation / scenery / test.
+    const modes = group("MODE");
+    ui.modes = el("div", "td-chips");
+    ui.modes.setAttribute("role", "tablist");
+    ui.modes.setAttribute("aria-label", "Designer mode");
+    for (const [id, label] of MODES) {
+      const b = btn(label, "sel-chip", () => setMode(id));
+      b.dataset.mode = id; b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "tab");
+      ui.modes.appendChild(b);
+    }
+    modes.appendChild(ui.modes);
     // tools
     // The rail reads as the order a circuit is built in: 1 SHAPE … 5 CHECKS.
     const tools = group("1 SHAPE");
@@ -611,6 +708,7 @@ const TrackDesigner = (function () {
     // The stage's hint is hidden on a phone (css/editor.css): this copy stays in the rail.
     ui.toolHint = el("div", "td-hint", toolHint());
     tools.append(ui.tools, ui.toolHint);
+    ui.toolsGroup = tools;
     // stamp params
     ui.shape = group("2 CORNERS");
     ui.shapeLabel = ui.shape._label;
@@ -629,6 +727,7 @@ const TrackDesigner = (function () {
     ui.shape.append(ui.apply, ui.shapeHint);
     // theme
     const theme = group("3 LOOK");
+    ui.themeGroup = theme;
     ui.themes = el("div", "td-chips");
     for (const id of TrackThemes.ORDER) {
       const p = TrackThemes.get(id);
@@ -679,16 +778,29 @@ const TrackDesigner = (function () {
     ui.reverse = btn("REVERSE", "sel-chip", () => reverse());
     ui.start = btn("START HERE", "sel-chip", () => setStart(sel));
     ui.del = btn("DELETE POINT", "sel-chip", () => deletePoint(sel));
-    ui.undo = btn("UNDO", "sel-chip", () => doUndo());
-    ui.redo = btn("REDO", "sel-chip", () => doRedo());
-    ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
-    actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.undo, ui.redo, ui.fitBtn);
+    actions.append(ui.randomise, ui.reverse, ui.start, ui.del);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
     ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
     actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
+    // Elevation presets (always built; shown in elevation mode).
+    ui.elevGroup = group("ELEVATION");
+    ui.elevPresets = el("div", "td-chips");
+    ui.elevPresets.setAttribute("aria-label", "Elevation presets");
+    for (const name of ["flat", "rolling", "hilly"]) {
+      const b = btn(name.toUpperCase(), "sel-chip", () => applyElevPreset(name));
+      b.dataset.elev = name;
+      ui.elevPresets.appendChild(b);
+    }
+    ui.elevHint = el("div", "td-hint", "Drag grips on the strip · Flat clears heights · Rolling / Hilly write smooth per-node heights");
+    ui.elevNode = stepper("POINT m", () => {
+      if (!design || sel < 0 || !design.heights) return 0;
+      return design.heights[sel] || 0;
+    }, (v) => setNodeHeight(sel, v), 1, (v) => (v > 0 ? "+" : "") + v);
+    ui.elevGroup.append(ui.elevPresets, ui.elevHint, ui.elevNode);
     // issues
     const issues = el("div", "td-group");
+    ui.checksGroup = issues;
     // The label row carries FIX ALL (shown while a red issue has an automatic fix).
     const head = el("div", "td-chips");
     ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
@@ -706,7 +818,7 @@ const TrackDesigner = (function () {
     ui.load = btn("LOAD", "sel-chip", () => loadFrom(ui.code.value));
     loadRow.appendChild(ui.load);
     sharing.append(ui.code, loadRow);
-    pane.append(tools, ui.shape, theme, circuit, issues, sharing);
+    pane.append(modes, tools, ui.shape, ui.elevGroup, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
     buildDesigned(circuit);
@@ -792,25 +904,34 @@ const TrackDesigner = (function () {
   }
   function refreshControls() {
     if (!built || !design) return;
+    if (ui.modes) for (const b of ui.modes.children) {
+      const on = b.dataset.mode === mode;
+      b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    }
     for (const b of ui.tools.children) { const on = b.dataset.tool === tool; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     const kind = TrackStamps.KINDS[tool];
-    // Keep the group visible so the 1…5 numbering never skips; hide only the stamp controls.
-    ui.shape.hidden = false;
-    if (ui.shapeHint) ui.shapeHint.hidden = !!kind;
-    if (ui.apply) ui.apply.hidden = !kind;
+    const showElev = mode === "elevation";
+    if (ui.toolsGroup) ui.toolsGroup.hidden = !(mode === "edit" || mode === "draw");
+    // #1039: keep 2 CORNERS in the rail so numbering never skips 1 → 3; hide only stamp controls (and only outside EDIT).
+    if (ui.shape) ui.shape.hidden = mode !== "edit";
+    if (ui.elevGroup) ui.elevGroup.hidden = !showElev;
+    if (ui.themeGroup) ui.themeGroup.hidden = !(mode === "scenery");
+    if (ui.shapeHint) ui.shapeHint.hidden = !!kind || mode !== "edit";
+    if (ui.apply) ui.apply.hidden = !kind || mode !== "edit";
     for (const key of ["L", "R", "deg"]) {
       const row = ui.paramRows[key];
-      row.hidden = !(kind && key in kind.params);
+      row.hidden = !(kind && key in kind.params) || mode !== "edit";
       if (!row.hidden) { params[key] = clampParam(key, params[key] != null ? params[key] : kind.params[key]); row._refresh(); }
     }
-    const dir = !!(kind && "dir" in kind.params);
+    const dir = !!(kind && "dir" in kind.params) && mode === "edit";
     ui.dirL.hidden = ui.dirR.hidden = !dir;
-    if (kind) {
+    if (kind && mode === "edit") {
       ui.dirL.classList.toggle("active", params.dir === 1); ui.dirR.classList.toggle("active", params.dir === -1);
       ui.dirL.setAttribute("aria-pressed", params.dir === 1 ? "true" : "false"); ui.dirR.setAttribute("aria-pressed", params.dir === -1 ? "true" : "false");
       ui.apply.textContent = span >= 0 && sel >= 0 ? "REPLACE THE SELECTED SPAN" : sel >= 0 ? "STAMP AFTER POINT " + (sel + 1) : "STAMP AT THE START";
       ui.shapeLabel.textContent = "2 CORNERS · " + stampExample();
-    } else {
+    } else if (ui.shapeLabel) {
       ui.shapeLabel.textContent = "2 CORNERS";
     }
     for (const b of ui.themes.children) { const on = b.dataset.theme === design.theme; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
@@ -823,9 +944,12 @@ const TrackDesigner = (function () {
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     if (ui.country) ui.country.value = design.country || "";
     ui.width._refresh();
-    ui.undo.disabled = !undo.length; ui.redo.disabled = !redo.length;
+    if (ui.undo) ui.undo.disabled = !undo.length;
+    if (ui.redo) ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
+    if (ui.elevNode) { ui.elevNode.hidden = !(showElev && sel >= 0); if (!ui.elevNode.hidden) ui.elevNode._refresh(); }
+    if (root) root.dataset.mode = mode;
     refreshAuthoring();
     syncProfile();
     if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
@@ -930,6 +1054,14 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (ev.type === "keydown" && (ev.key === "z" || ev.key === "Z") && (ev.ctrlKey || ev.metaKey)) {
+      if (!openFlag) return;
+      const t = ev.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      ev.preventDefault();
+      if (ev.shiftKey) doRedo(); else doUndo();
+      return;
+    }
     if (profileBack(ev)) return;
     if (!openFlag || !canvas || sel < 0 || document.activeElement !== canvas) return;
     if (ev.type === "keydown" && ev.key !== "Escape") return;
@@ -937,7 +1069,7 @@ const TrackDesigner = (function () {
     sel = -1; span = -1;
     if (cv) cv.setSelection(sel, span);
     refreshControls();
-    const first = ui.tools && ui.tools.children[0];
+    const first = (ui.modes && ui.modes.children[0]) || (ui.tools && ui.tools.children[0]);
     if (first) first.focus();
   }
   function open(opts) {
@@ -971,7 +1103,8 @@ const TrackDesigner = (function () {
     // tool chip scrolled a phone's rail past the card (portrait, 412x915, measured).
     queueMicrotask(() => {
       if (!openFlag) return;
-      const first = ui.coach && ui.coachFirst ? ui.coachFirst : (ui.tools && ui.tools.firstChild);
+      // Prefer MODE tabs so the coach (docked below) never steals the first focus scroll.
+      const first = (ui.modes && ui.modes.firstChild) || (ui.coach && ui.coachFirst) || (ui.tools && ui.tools.firstChild);
       if (first) first.focus();
     });
     schedulePreview();
@@ -995,7 +1128,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, sel, span, pending: !!previewT,
+      open: openFlag, tool, mode, sel, span, pending: !!previewT,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1007,6 +1140,7 @@ const TrackDesigner = (function () {
       heat: heatOn,
       candidates: cands.map((c) => ({ seed: c.seed >>> 0, score: +c.score.toFixed(3) })),
       thumbs: { cached: thumbTr.size, maxPts: Math.max(0, ...[...thumbTr.values()].map((t) => t.n)) },
+      coach: !!ui.coach,
     };
   }
 
@@ -1103,7 +1237,7 @@ const TrackDesigner = (function () {
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
     commit(Object.assign({}, design, {
-      pts: f.pts, baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, originId: undefined, name: CustomTracks.sanitizeName(def.name + " REMIX"),
+      pts: f.pts, heights: flatHeights(f.pts), baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, originId: undefined, name: CustomTracks.sanitizeName(def.name + " REMIX"),
       hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [],
     }), "seed:" + id);
     if (ui.name) ui.name.value = design.name;
@@ -1258,106 +1392,76 @@ const TrackDesigner = (function () {
     return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
   }
 
-  // ── elevation: the strip under the canvas (DesignerProfile) ──
-  // prof: the strip's api. Its hills are the design's `elevations` (cosine
-  // bumps, s a fraction of the BUILT lap — the frame tracks.js builds them in);
-  // every edit is one commit kind elev:add | elev:move | elev:del, one UNDO entry.
-  // Known and pre-existing: remapZones keeps a hill's fraction of the CONTROL
-  // polygon across an insert / delete / stamp, while the engine reads it as a
-  // fraction of the built lap — the two differ by ~1–2 % of a lap. Not fixed here.
+  // ── elevation: per-node heights[] + the strip (DesignerProfile) ──
+  // Control points stay [x, z]; heights[i] is metres at point i (0.25 m lattice).
+  // Presets write heights and clear legacy cosine elevations so the strip matches
+  // the road. Old saves without heights load flat (ensureHeights).
   let prof = null;
-  const hillOf = (b) => (typeof DesignerProfile !== "undefined" ? DesignerProfile.hill(b) : b);
-  const hills = () => (design && Array.isArray(design.elevations) ? design.elevations : []);
-  /** The strip under the main canvas, and the selected hill's steppers at the
-   *  END of 4 DETAILS (the touch / pad path; shown only while a hill is selected). */
   function buildProfile(stage) {
     if (typeof DesignerProfile === "undefined" || !stage) return;
     ui.profile = el("canvas");
-    ui.profile.setAttribute("data-role", "profile");
+    ui.profile.setAttribute("data-role", "profile"); // queryable in tests + CSS
     ui.profile.setAttribute("aria-label", "Elevation profile");
-    stage.insertBefore(ui.profile, ui.stats);           // straight under the main canvas
+    // Under the main canvas, above stats — always mounted (CSS keeps it on phone).
+    stage.insertBefore(ui.profile, ui.stats);
     prof = DesignerProfile.create(ui.profile, {
-      onAdd: (sM) => addBump(sM),
-      onChange: (i, patch, live) => { if (!live) setBump(i, patch); },
-      onRemove: (i) => removeBump(i),
-      onSelect: () => refreshHill(),
+      onChange: (i, h, live) => { if (!live) setNodeHeight(i, h); },
+      onSelect: (i) => {
+        if (i >= 0) { sel = i; span = -1; if (cv) cv.setSelection(sel, span); }
+        refreshControls();
+      },
     });
-    const cur = () => hills()[prof.selected()] || null;
-    const at = (patch) => { const i = prof.selected(); if (i >= 0) setBump(i, patch); };
-    ui.hill = stepper("HILL m", () => (cur() ? cur().rise : 0), (v) => at({ rise: v }), 1, (v) => (v > 0 ? "+" : "") + v);
-    // The stepper moves halfM by 20 and shows the hill's whole length (2·halfM), as the strip's label does.
-    ui.hillLen = stepper("HILL LENGTH m", () => (cur() ? cur().halfM : DesignerProfile.ADD.halfM), (v) => at({ halfM: v }), 20, (v) => String(2 * v));
-    ui.hillRow = el("div", "td-chips");
-    ui.hillRow.appendChild(btn("REMOVE HILL", "sel-chip", () => { const i = prof.selected(); if (i >= 0) removeBump(i); }));
-    const circuit = ui.width && ui.width.parentNode;
-    for (const r of [ui.hill, ui.hillLen, ui.hillRow]) { r.hidden = true; if (circuit) circuit.appendChild(r); }
   }
-  /** A hill at sM metres along the built lap: { halfM 160, rise +6 } (under the 8 % cap). */
-  function addBump(sM) {
-    const tr = verdict && verdict.tr, list = hills();
-    if (!design || !tr || !Number.isFinite(sM)) { message("Build a loop first, then add hills to it", true); return -1; }
-    if (list.length >= CustomTracks.LIMITS.zones) { message("A circuit holds " + CustomTracks.LIMITS.zones + " hills — remove one to add another", true); return -1; }
-    const ADD = typeof DesignerProfile !== "undefined" ? DesignerProfile.ADD : { halfM: 160, rise: 6 };
-    const b = hillOf({ s: sM / tr.total, halfM: ADD.halfM, rise: ADD.rise });
-    commit(Object.assign({}, design, { elevations: list.concat([b]) }), "elev:add");
-    const i = hills().length - 1;
+  function setNodeHeight(i, h) {
+    if (!design || !(i >= 0 && i < design.pts.length)) return false;
+    ensureHeights(design);
+    const next = design.heights.slice();
+    const v = typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4;
+    // Keep the screen selection on this node so POINT m / strip stay in sync.
+    sel = i; span = -1;
+    if (next[i] === v) {
+      if (cv) cv.setSelection(sel, span);
+      if (prof) prof.select(i);
+      refreshControls();
+      return false;
+    }
+    next[i] = v;
+    // Clear legacy cosine hills so they do not stack on node heights.
+    commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:node");
     if (prof) prof.select(i);
-    refreshHill();
-    message("Hill added — drag it up or down on the strip, sideways to move it");
-    return i;
-  }
-  /** Reshape hill i: patch { s (lap fraction), rise, halfM }, clamped onto the stored lattice. */
-  function setBump(i, patch) {
-    const list = hills();
-    if (!(i >= 0 && i < list.length)) return false;
-    const o = list[i], b = hillOf(Object.assign({}, o, patch));
-    if (b.s === o.s && b.halfM === o.halfM && b.rise === o.rise) { refreshHill(); return false; }
-    const next = list.slice(); next[i] = b;
-    commit(Object.assign({}, design, { elevations: next }), "elev:move");
-    if (prof) prof.select(i);
-    refreshHill();
     return true;
   }
-  function removeBump(i) {
-    const list = hills();
-    if (!(i >= 0 && i < list.length)) return false;
-    commit(Object.assign({}, design, { elevations: list.filter((_, j) => j !== i) }), "elev:del");
-    if (prof) prof.select(-1);
-    refreshHill();
-    message("Hill removed — UNDO brings it back");
+  function applyElevPreset(style) {
+    if (!design || !design.pts.length) { message("Draw or randomise a loop first", true); return false; }
+    if (typeof ElevPresets === "undefined") { message("Elevation presets unavailable", true); return false; }
+    const r = ElevPresets.apply(style, design.pts, { seed: design.seed });
+    commit(Object.assign({}, design, { heights: r.heights, elevations: [] }), "elev:" + r.style);
+    message(r.style === "flat" ? "Elevation cleared (flat)" : "Applied " + r.style.toUpperCase() + " elevation — UNDO to revert");
+    if (mode !== "elevation") setMode("elevation");
     return true;
   }
-  function selectBump(i) { if (!prof) return -1; prof.select(i); refreshHill(); return prof.selected(); }
-  function refreshHill() {
-    if (!ui.hill) return;
-    const on = !!(prof && hills()[prof.selected()]);
-    ui.hill.hidden = ui.hillLen.hidden = ui.hillRow.hidden = !on;
-    if (on) { ui.hill._refresh(); ui.hillLen._refresh(); }
-  }
-  /** The strip follows the design (its hills, the main canvas's selected point as a cursor). */
   function syncProfile() {
     if (!prof || !design) return;
-    prof.setBumps(hills());
+    ensureHeights(design);
+    if (prof.setHeights) prof.setHeights(design.heights);
     const tr = verdict && verdict.tr, pts = design.pts;
     let at = null;
-    if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }   // the control polygon's share: near the built arc
+    if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }
     prof.setCursor(at);
-    refreshHill();
+    if (sel >= 0 && mode === "elevation") prof.select(sel);
   }
-  /** After each preview: the built heights, speeds, control loop and the grade / crest / dip issues. */
   function renderProfile() {
     if (!prof) return;
     prof.setBuilt(verdict && verdict.tr, heatV, design && design.pts);
     prof.setIssues(verdict ? verdict.issues : []);
     syncProfile();
   }
-  /** Escape / B with the strip focused and a hill selected: let go of the hill first. */
   function profileBack(ev) {
     if (!openFlag || !prof || !ui.profile || document.activeElement !== ui.profile || prof.selected() < 0) return false;
     if (ev.type === "keydown" && ev.key !== "Escape") return false;
     ev.preventDefault(); ev.stopPropagation();
     prof.select(-1);
-    refreshHill();
+    refreshControls();
     return true;
   }
 
@@ -1430,7 +1534,7 @@ const TrackDesigner = (function () {
     const c = cands[i];
     if (!c || candBusy || !design) return false;
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), seed: c.seed >>> 0, originId: undefined }), "randomise");
+    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), heights: flatHeights(c.pts), elevations: [], seed: c.seed >>> 0, originId: undefined }), "randomise");
     if (cv) cv.fit();
     message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
     return true;
@@ -1690,10 +1794,9 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
-    addBump, setBump, removeBump, selectBump,
     setSpanWidth, setCornerBank };
 })();
 Object.freeze(TrackDesigner);

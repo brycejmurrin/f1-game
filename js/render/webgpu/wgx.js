@@ -1106,6 +1106,7 @@ const WGX = (function () {
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
+    const ENV_CULL_M = 150;
     // Face cameras. WebGPU render-to-texture is y-DOWN (framebuffer row 0 is
     // NDC top) where GL's is y-up, so GLX's GL-correct up-vectors store every
     // face mirrored vertically here. The lit shader compensates at SAMPLE time
@@ -3949,10 +3950,11 @@ const WGX = (function () {
       _envFrame = frame;
       _envSvVP = svVP; _envSvEye = svEye; _envSvCull = svCull;
       frame.viewProj = _envVP; frame.eye = eye;
-      // Radial cull for the probe (GLX envFaceBegin): without this a 64²
-      // reflection target re-draws the whole 900 m city. Cap at 300 m; keep
-      // a tighter main-camera cull when present.
-      frame.cullDist = svCull > 0 ? Math.min(svCull, 300) : 300;
+      // Radial cull for leftover probe geometry (GLX envFaceBegin). Chunked
+      // city is skipped on probe faces (game.js envProbe + drawChunked no-op
+      // while _envEncoder is live). Cap remaining at 150 m; keep a tighter
+      // main-camera cull when present.
+      frame.cullDist = svCull > 0 ? Math.min(svCull, ENV_CULL_M) : ENV_CULL_M;
       _writeFrame(frame);
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       // This frame's shadow passes are still PENDING (they ride the frame
@@ -5623,7 +5625,7 @@ const WGX = (function () {
 
     const createChunkedMesh = (...a) => CHK.createChunkedMesh(...a);
     const freeChunkedMesh = (...a) => CHK.freeChunkedMesh(...a);
-    const drawChunked = (...a) => CHK.drawChunked(...a);
+    const drawChunked = (...a) => { if (_envEncoder) return; CHK.drawChunked(...a); };
     const _chunkFirstIndex = (ch) => CHK.chunkFirstIndex(ch);
 
     const shadowBegin = (...a) => SHD.shadowBegin(...a);

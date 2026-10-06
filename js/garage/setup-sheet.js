@@ -309,7 +309,7 @@ function buildTeamOptions(optsEl, team) {
   const body = document.createElement("span"); body.className = "tm-body";
   const name = document.createElement("span"); name.className = "tm-name"; name.textContent = team.name;
   const sub = document.createElement("span"); sub.className = "tm-sub";
-  sub.textContent = `${team.short} · ${team.engine || ""} engine`;
+  sub.textContent = [team.short, team.engine].filter(Boolean).join(" · ");
   body.append(name, sub);
   const chev = document.createElement("span");
   chev.className = "tm-chev"; chev.textContent = "▾"; chev.setAttribute("aria-hidden", "true");
@@ -361,7 +361,17 @@ function buildTeamOptions(optsEl, team) {
   }
 }
 
+// BACK stays only when DONE is a different door (RACE SETUP from #select).
+// Title / career / pit / lobby: the labelled dismiss is the one foot action.
+function syncGarageExitChrome() {
+  const root = $("carsetup"), done = $("cs-done");
+  if (!root || !done) return;
+  if (done.textContent === "RACE SETUP") root.removeAttribute("data-cs-exit");
+  else root.setAttribute("data-cs-exit", "one");
+}
+
 function buildSetup() {
+  syncGarageExitChrome();
   const team = Teams.LIST[G.teamIdx];
   // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
   if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
@@ -479,7 +489,7 @@ function buildSetup() {
   // LIVERY adds this grid; TEAM and the part cats must not inherit it.
   // Measured 2026-08-18 Playwright MCP: switching LIVERY → TEAM left
   // `cs-liv-grid` on #cs-options, so #cs-team-card painted 91×64 with
-  // `.tm-name` at 14px (`McLaren` / `MCL · Mercedes engine` truncated).
+  // `.tm-name` at 14px (`McLaren` / `MCL · Mercedes` truncated).
   optsEl.classList.remove("cs-liv-grid");
   if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
@@ -534,6 +544,12 @@ function buildSetup() {
     if (badges.length) {
       const tg = document.createElement("span");
       tg.className = "cs-opt-tag";
+      const band = opt.wetTread && opt.visual && opt.visual.band;
+      if (band && band.length >= 3) {
+        const r = Math.round(band[0] * 255), g = Math.round(band[1] * 255), b = Math.round(band[2] * 255);
+        tg.style.color = "rgb(" + r + "," + g + "," + b + ")";
+        tg.style.background = "rgba(" + r + "," + g + "," + b + ",0.18)";
+      }
       tg.textContent = badges.join(" · ");
       nameRow.appendChild(tg);
     }

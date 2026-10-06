@@ -383,7 +383,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
        so print→all dialog-platform cannot leave a 0×0 :modal. Wait for :modal
        AND a non-zero box so UiLayers.top names #standings, not #pausemenu.
        BOOT_MS, not 5 s: the material pack can still own the main thread
-       after unhide (this box: TopModal open at 29 s, pack loaded at 46 s). */
+       after unhide (this box: TopModal open at 29 s, pack loaded at 46 s).
+       polling: 100 — park() stops the rAF loop (see track-detail below). */
     await page.waitForFunction(() => {
       const s = document.getElementById("standings");
       if (!s || !s.matches(":modal")) return false;
@@ -615,8 +616,10 @@ test.describe("Escape is BACK", () => {
     // it. The sheet's own open path is `hidden = false` either way (TopModal
     // mirrors that onto showModal), which is exactly what is under test here.
     await page.evaluate(() => { document.getElementById("standings").hidden = false; });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: 5_000 });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() =>
       document.getElementById("standings").hidden === true &&

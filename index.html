@@ -1185,7 +1185,7 @@
           <details id="pm-visual-tuners" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
             <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
-              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby (its FREE CAMERA flies anywhere and sets shots) and the pit-garage arrival. Start a race, then pause to preview changes on track.</p>
+              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby (its FREE CAMERA flies anywhere and sets shots) and the pit-garage arrival. Start a race, then pause to preview changes on track. The Lighting Tuner also applies in the garage (exposure, bloom, screen sun-shaft, lens glare).</p>
               <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
               <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
               <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
@@ -2959,9 +2959,10 @@
       <div id="cs-tabs" class="pane pair-side"></div>
       <div id="cs-options" class="pane pair-main"></div>
     </div>
-    <!-- BACK returns to whichever screen opened the GARAGE; DONE goes FORWARD
-         (from the circuit picker it lands on race settings). Escape presses
-         BACK — see data-esc-close on #carsetup. -->
+    <!-- BACK stays visible only when DONE is a forward door (RACE SETUP from
+         the circuit picker). From title / career / pit / lobby the two agree,
+         so #carsetup[data-cs-exit=one] hides BACK. Escape still presses #cs-back
+         (data-esc-close) — the control remains in the DOM. -->
     <div class="sheet-foot"><button id="cs-back" class="bigbtn alt">BACK</button><button id="cs-done" class="bigbtn">DONE</button></div>
   </div>
 </div>

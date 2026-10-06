@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
 const ctx = vm.createContext({ PhysicsConsts: { X_OPEN_RATE: 1, X_CLOSE_RATE: 1 } });
 vm.runInContext(read("js/garage/setup-camera.js"), ctx);
-const { panelCover } = vm.runInContext("SetupCamera", ctx);
+const { panelCover, presentOpts, glareScale } = vm.runInContext("SetupCamera", ctx);
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 const noCam = () => { throw new Error("camTop must only be read on the portrait axis"); };
 const CANVAS = rect(0, 0, 1440, 900);
@@ -113,4 +113,59 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   assert.match(css, /:root\[data-look-garage-glass="solid"\] #carsetup #cs-inner \{ background: var\(--carbon\); \}/);
   assert.match(css, /:root\[data-look-garage-glass="glass"\]:not\(\[data-ui-contrast="high"\]\) #carsetup #cs-inner \{/);
   assert.match(css, /:root\[data-look-garage-stats="hide"\] #carsetup #cs-stats-inner \{ display: none; \}/);
+});
+
+test("REAR-WING sits back and slightly above the wing", () => {
+  const cam = read("js/garage/setup-camera.js");
+  const m = /wingRear:\s*\{[^}]*el:\s*([0-9.]+)[^}]*dist:\s*([0-9.]+)/.exec(cam);
+  assert.ok(m, "wingRear must stay a named SP_VIEWS entry");
+  assert.ok(Number(m[1]) >= 0.46, `el ${m[1]} still frames too low`);
+  assert.ok(Number(m[2]) >= 4.2, `dist ${m[2]} still sits too close`);
+});
+
+test("garage present routes through Lighting Tuner multipliers", () => {
+  assert.equal(typeof presentOpts, "function");
+  assert.equal(typeof glareScale, "function");
+  const def = presentOpts({
+    exposureMul: 1, bloomMul: 1, threshOff: 0, sunShaftMul: 1, glareStr: 0.12,
+  });
+  assert.ok(def.exposure > 0.92 && def.exposure < 1.12,
+    `default garage exposure ${def.exposure} should sit near 1, not the old 1.28 wash`);
+  assert.ok(def.bloom > 0.10 && def.bloom < 0.32,
+    `default garage bloom ${def.bloom} should be a studio amount, not the old 0.70`);
+  assert.ok(def.threshold >= 0.75,
+    `threshold ${def.threshold} must sit above mid-grey so fixtures do not bloom the bay`);
+  assert.equal(def.contact, 0);
+  assert.ok(def.tune && Number.isFinite(def.tune.sunShaftMul));
+  assert.ok(def.tune.sunShaftMul > 0 && def.tune.sunShaftMul <= 0.35,
+    `default sunShaftMul ${def.tune.sunShaftMul} is a garage scale, not the race 1.0`);
+  const hot = presentOpts({
+    exposureMul: 1.5, bloomMul: 2, threshOff: 0, sunShaftMul: 2, glareStr: 0.24,
+  });
+  assert.ok(Math.abs(hot.exposure - def.exposure * 1.5) < 1e-9);
+  assert.ok(Math.abs(hot.bloom - def.bloom * 2) < 1e-9);
+  assert.ok(Math.abs(hot.tune.sunShaftMul - def.tune.sunShaftMul * 2) < 1e-9);
+  assert.equal(glareScale({ glareStr: 0.12 }), 1);
+  assert.equal(glareScale({ glareStr: 0 }), 0);
+  assert.ok(Math.abs(glareScale({ glareStr: 0.24 }) - 2) < 1e-9);
+});
+
+test("INTER and WET tyre chips take their ink from the compound visual.band", () => {
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /opt\.wetTread && opt\.visual && opt\.visual\.band/,
+    "wet compounds paint the chip from visual.band, not the gold exclusive tag");
+  assert.match(sheet, /tg\.style\.color = "rgb\(" \+ r \+ "," \+ g \+ "," \+ b \+ "\)"/);
+});
+
+test("the garage frame calls presentOpts and glareScale; the race path still owns LT", () => {
+  const cam = read("js/garage/setup-camera.js");
+  assert.match(cam, /gfx\.present\(presentOpts\(/);
+  assert.match(cam, /glareScale\(/);
+  assert.doesNotMatch(cam, /gfx\.present\(SP_PRESENT\)/);
+  assert.doesNotMatch(cam, /spMat\.clearcoat = 0\.1/,
+    "paint must not be matted to hide a present wash");
+  const game = read("js/game.js");
+  assert.match(game, /po\.exposure = frame\.exposure \* LT\.exposureMul/);
+  assert.match(game, /po\.tune = LT;/);
+  assert.doesNotMatch(game, /presentOpts\(/);
 });
