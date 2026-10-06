@@ -1,1 +1,1 @@
-1791260449	Cursor Agent	PR1021: pin empty livery.custom so parts-liveries creator tests do not inherit GarageDefaults; selected-1 is ship #1083/#1085  [cursor/garage-shipped-defaults-9cc2; session cf193b78d711a4c522692a7c]
+1791272039	Cursor Agent	PR1021: merge ship to clear CONFLICTING; commit local; push after hold lifts  [cursor/garage-shipped-defaults-9cc2; session cf193b78d711a4c522692a7c]
