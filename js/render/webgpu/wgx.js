@@ -4975,7 +4975,7 @@ const WGX = (function () {
       }
       const src = batch.srcMatrices;
       const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : batch._instPacked;
-      const sc = batch.srcColors;
+      const sc = shadow ? null : batch.srcColors;   // depth pipelines ignore tint lanes
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
         const idx = cs[ks[ci]].idx;

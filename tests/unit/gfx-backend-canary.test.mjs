@@ -4191,10 +4191,12 @@ test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit
     "matrixWorldAutoUpdate latch moved — re-check whether acquireMesh still must promote");
   const acq = src.indexOf("function acquireMesh");
   assert.notEqual(acq, -1, "acquireMesh moved");
-  const body = src.slice(acq, acq + 1400);   // the occurrence-keyed lookup (2026-09-02) sits before the stamp
+  const body = src.slice(acq, acq + 2800);   // skip-unchanged matrix path (perf(frame)) lengthened the stamp
   assert.match(body, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
-    "acquireMesh must promote m.matrix into matrixWorld — without it every " +
+    "acquireMesh must promote m.matrix into matrixWorld on a dirty write — without it every " +
     "draw() with a non-identity model (cars) renders at the world origin");
+  assert.match(body, /__tlxIdent/,
+    "identity/dirty skip latch must remain so unchanged MAT_IDENT draws skip the copy");
 });
 
 test("three's WebGPU backend still maps the alpha parameter to the canvas alphaMode", () => {

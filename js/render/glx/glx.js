@@ -376,6 +376,17 @@ const GLXBackend = (function () {
     else { p[0] = v[0]; p[1] = v[1]; p[2] = v[2]; }
     gl.uniform3fv(loc, v);
   }
+  // vec4 twin of uf3 — pit lane/box change once per session; begin() runs up
+  // to ~8× a game frame (env faces + main), so uncached uniform4f re-stated
+  // them every begin.
+  function uf4(loc, cache, key, a, b, c, d) {
+    if (!loc) return;
+    const p = cache[key];
+    if (p !== undefined && p[0] === a && p[1] === b && p[2] === c && p[3] === d) return;
+    if (p === undefined) cache[key] = [a, b, c, d];
+    else { p[0] = a; p[1] = b; p[2] = c; p[3] = d; }
+    gl.uniform4f(loc, a, b, c, d);
+  }
 
   // VAO bind cache — drawElements requires the right VAO, but consecutive draws
   // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
@@ -1961,12 +1972,14 @@ const GLXBackend = (function () {
     // LENGTH is what the shader tests, so nothing is drawn until one is armed.
     {
       const pl = frame.pitLane;
-      gl.uniform4f(litU.uPitLane, pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
+      uf4(litU.uPitLane, _litUf, "pitLane", pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
       const pb = frame.pitBox;   // (through, halfLen) — zero halfLen = no box
-      gl.uniform4f(litU.uPitBox, pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
+      uf4(litU.uPitBox, _litUf, "pitBox", pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
     }
     uf1(litU.uLampFog, _litUf, "lampFog", frame.lampFog != null ? frame.lampFog : 0.0);
-    gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
+    // uTime is frame-global: begin() re-enters for each env face with the same
+    // value, so uf1 collapses the redundant uploads inside one game frame.
+    uf1(litU.uTime, _litUf, "time", frame.time != null ? frame.time : 0.0);
     uf1(litU.uCloudCover, _litUf, "cloudCover", frame.cloud != null ? frame.cloud : 0.0);
     uf1(litU.uCloudSpeed, _litUf, "cloudSpeed", frame.cloudSpeed != null ? frame.cloudSpeed : 1.0);
     uf1(litU.uCloudShadowDim, _litUf, "cloudShadowDim", T && T.cloudShadowDim != null ? T.cloudShadowDim : 0.80);
@@ -2196,14 +2209,8 @@ const GLXBackend = (function () {
       gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
       gl.bufferData(gl.ARRAY_BUFFER, batch._shadowPacked.byteLength, gl.DYNAMIC_DRAW);
     }
-    if (batch.packColors) {
-      if (!batch._shadowColors) batch._shadowColors = new Float32Array(batch.packColors.length);
-      if (!batch.shadowCbo) {
-        batch.shadowCbo = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
-        gl.bufferData(gl.ARRAY_BUFFER, batch._shadowColors.byteLength, gl.DYNAMIC_DRAW);
-      }
-    }
+    // DEPTH_VS reads only instance matrices (locations 5-8) — never colours.
+    // Skip allocating/uploading shadowCbo; the lit path keeps cbo for drawing.
     return batch._shadowPacked;
   }
   function cullInstances(batch, planes, opts) {
@@ -2242,7 +2249,8 @@ const GLXBackend = (function () {
     const src = batch.srcMatrices;
     const dst = shadow ? (_shadowPackFor(batch) || batch.packMatrices) : batch.packMatrices;
     const sc = batch.srcColors;
-    const dc = shadow ? (batch._shadowColors || null) : batch.packColors;
+    // Shadow depth ignores instance colour — do not pack or upload it.
+    const dc = shadow ? null : batch.packColors;
     let n = 0;
     if (cellKeyN >= 0 && ks) {
       for (let ci = 0; ci < cellKeyN; ci++) {
@@ -2282,10 +2290,6 @@ const GLXBackend = (function () {
       if (n && batch.shadowIbo && dst === batch._shadowPacked) {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
-        if (dc && batch.shadowCbo) {
-          gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
-          gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
-        }
       }
       return n;
     }
