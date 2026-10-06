@@ -40,10 +40,12 @@ const DT = 1 / 60;
 const VMAX = 72;
 
 /** A VM with consts + skidmarks + particles + car-fx; Math.random seeded. */
-function load({ mobile = false, vTop = VMAX, particlesStub = null } = {}) {
+function load({ mobile = false, vTop = VMAX, particlesStub = null, autoShed = 0, random = null } = {}) {
   const rng = makeRng(0xca7f);
-  const seededMath = Object.assign(Object.create(Math), { random: () => rng.unit() });
-  const ctx = vm.createContext({ Float32Array, Uint8Array, Array, Math: seededMath, Object, WeakMap, JSON, Number });
+  const unit = random || (() => rng.unit());
+  const seededMath = Object.assign(Object.create(Math), { random: unit });
+  const ctx = vm.createContext({ Float32Array, Uint8Array, Array, Math: seededMath, Object, WeakMap, JSON, Number,
+    PerfGov: { autoShed: () => autoShed | 0 } });
   ctx.window = ctx;
   seedLog(ctx);
   for (const f of ["js/physics/consts.js", "js/fx/skidmarks.js", "js/fx/particles.js", "js/fx/car-fx.js"])
@@ -375,4 +377,49 @@ test("emission follows the requested rate at any frame rate: plank embers at 10,
     const rate = spawned / 20;
     assert.ok(Math.abs(rate / 110 - 1) <= 0.03, `${hz} fps: ${rate.toFixed(1)} embers/s, want 110 (the 4-per-call clamp gave ${Math.min(110, 4 * hz)})`);
   }
+});
+
+test("tyreSmoke/sparks/kickup/scrape shed with PerfGov.autoShed like spray", () => {
+  // Deterministic nOf / kickup dust: random=0 → floor only when the quotient is
+  // whole (nOf still rounds a fraction up when random < frac).
+  const full = load({ autoShed: 0, random: () => 0 }).P;
+  const half = load({ autoShed: 1, random: () => 0 }).P;
+  const third = load({ autoShed: 2, random: () => 0 }).P;
+  const ask = 6;   // divisible by 1+shed for shed 0/1/2
+  full.tyreSmoke(0, 0, 0, 0, 0, 0.5, ask);
+  half.tyreSmoke(0, 0, 0, 0, 0, 0.5, ask);
+  third.tyreSmoke(0, 0, 0, 0, 0, 0.5, ask);
+  assert.equal(full.count(), ask, "shed 0 keeps the requested smoke count");
+  assert.equal(half.count(), ask / 2, "shed 1 halves smoke");
+  assert.equal(third.count(), ask / 3, "shed 2 thirds smoke");
+  for (const P of [full, half, third]) P.clear();
+  full.sparks(0, 0, 0, 0, 1, 10, ask);
+  half.sparks(0, 0, 0, 0, 1, 10, ask);
+  assert.equal(full.count(), ask);
+  assert.equal(half.count(), ask / 2, "shed 1 halves sparks");
+  for (const P of [full, half]) P.clear();
+  full.kickup(0, 0, 0, 0, 0, 0.4, 0.3, 0.2, ask);
+  half.kickup(0, 0, 0, 0, 0, 0.4, 0.3, 0.2, ask);
+  assert.equal(full.count(), ask * 2, "random=0 always spawns the dust twin");
+  assert.equal(half.count(), ask, "shed 1 halves kickup (chunk + dust)");
+  for (const P of [full, half]) P.clear();
+  full.scrape(0, 0, 0, 0, 70, ask);
+  half.scrape(0, 0, 0, 0, 70, ask);
+  assert.equal(full.count(), ask);
+  assert.equal(half.count(), ask / 2, "shed 1 halves scrape");
+  for (const P of [full, half]) P.clear();
+  full.spray(0, 0, 0, 0, 0, 1, ask);
+  half.spray(0, 0, 0, 0, 0, 1, ask);
+  assert.equal(full.count(), ask);
+  assert.equal(half.count(), ask / 2, "spray still sheds (shared shedDiv)");
+});
+
+test("game.js: FX emit ball and env-probe cadence ride the governor", () => {
+  const game = read("js/game.js");
+  assert.match(game, /_fxCullR = 110 \/ \(1 \+ /, "emit ball shrinks with autoShed");
+  assert.match(game, /fdx \* fdx \+ fdz \* fdz < _fxCullR2/, "emitters use the shed-scaled squared radius");
+  assert.doesNotMatch(game, /fdx \* fdx \+ fdz \* fdz < 110 \* 110/, "fixed 110 m ball is gone");
+  assert.match(game, /_envMask = \(!frozen && gfx\.getRenderScale && gfx\.getRenderScale\(\) < 0\.98\) \? 7 : 3/,
+    "probe cadence softens when render scale is already cut");
+  assert.match(game, /\(_frameNo & _envMask\) === 0/, "live probe faces use the scale-aware mask");
 });

@@ -487,11 +487,12 @@ const RaceRadio = (function () {
     const f2 = () => last || {};
 
     // The spotter (js/race/spotter.js) rides this tick: car left / right / clear,
-    // from the recorded voice only.
+    // from the recorded voice only. Never in a WATCH: a replay has no engineer,
+    // and the spotter is the engineer's voice calling cars round a puppet.
     const spotter = typeof Spotter !== "undefined" ? Spotter.create(G) : null;
     function update(dt) {
       if (!Number.isFinite(dt) || dt <= 0) return;
-      if (spotter) spotter.update(dt);
+      if (spotter) spotter.update(dt, !!watch);
       // RADIO CHECK (js/input/input.js): consumed on every tick, raced or not, so
       // a press in a menu cannot fire at the next green light.
       const asked = typeof Input !== "undefined" && Input.consumeRadio ? Input.consumeRadio() : false;

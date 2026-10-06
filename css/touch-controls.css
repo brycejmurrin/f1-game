@@ -491,6 +491,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      BRAKE and the steer arrows — same diameter and the same lift from the edge. */
   body.steer-buttons:not(.desktop) #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
   body.steer-buttons:not(.desktop) #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
+  /* OT sits BESIDE BRAKE in this mode (taps column | pedals column). The shared
+     dock gap of --gap*2/3 left only ~6–7 painted px between two hold-sized
+     circles at 130–150% BUTTON SIZE — translucent fills then read as one merged
+     control (player cockpit shots, 2026-10-05). Widen the RIGHT dock's column
+     gap only; row gap and the left dock keep the tighter shared spacing. */
+  body.steer-buttons:not(.desktop) #dock-right {
+    column-gap: max(var(--r-lg), var(--gap));
+    row-gap: calc(var(--gap) * 2 / 3);
+  }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
