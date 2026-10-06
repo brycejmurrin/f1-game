@@ -1519,7 +1519,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.index().hidden, false);
   assert.equal(h.nav.back(), true, "BACK on home tells the caller to close");
   const game = code("js/game.js");
-  assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*openSettings\(\s*\)/,
+  assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*(?:ensureAudio\(\)\s*\.then\(\(\)\s*=>\s*\{\s*)?if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*(?:\}\s*\)\s*;\s*)?openSettings\(\s*\)/,
     "title Settings opens the same stack via openSettings → showCurrent");
   assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
     "title Settings must not force MORE");

@@ -357,21 +357,22 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `signal.js` | `GameAudioSignal` | tag | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
-| `soundtrack.js` | `GameAudioSoundtrack` | tag | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
-| `radio-fx.js` | `GameAudioRadioFx` | tag | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
-| `tone-model.js` | `GameAudioToneModel` | tag | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
-| `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
-| `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
-| `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
-| `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
-| `car-sfx.js` | `CarSfx` | tag | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
-| `voice-pack.js` | `VoicePack` | tag | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
-| `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
-| `announcer-recorded.js` | `RecordedAnnouncer` | tag | A recorded read owns its pending load as well as its playing clips. |
-| `announcer.js` | `Announcer` | tag | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
-| `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
-| `driving-cues.js` | `DrivingCues` | tag | assist-gated audio driving cues (braking tone + L/R corner calls). |
+| `stub.js` | `GameAudio` | tag | audio stub for the title script wall. |
+| `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
+| `soundtrack.js` | `GameAudioSoundtrack` | LAZY_AUDIO | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
+| `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
+| `tone-model.js` | `GameAudioToneModel` | LAZY_AUDIO | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
+| `engine.js` | `GameAudio` | LAZY_AUDIO | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
+| `music-lib.js` | `MusicLib` | LAZY_AUDIO | MusicLib — bring your own music. |
+| `spotify.js` | `SpotifyMusic` | LAZY_AUDIO | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
+| `rivals.js` | `RivalAudio` | LAZY_AUDIO | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
+| `car-sfx.js` | `CarSfx` | LAZY_AUDIO | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
+| `voice-pack.js` | `VoicePack` | LAZY_AUDIO | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
+| `radio-voice.js` | `RadioVoice` | LAZY_AUDIO | The radio banner, spoken aloud by the browser's own speech synthesiser. |
+| `announcer-recorded.js` | `RecordedAnnouncer` | LAZY_AUDIO | A recorded read owns its pending load as well as its playing clips. |
+| `announcer.js` | `Announcer` | LAZY_AUDIO | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |
+| `panel.js` | `AudioPanel` | LAZY_AUDIO | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
+| `driving-cues.js` | `DrivingCues` | LAZY_AUDIO | assist-gated audio driving cues (braking tone + L/R corner calls). |
 
 **`js/physics/`**
 
