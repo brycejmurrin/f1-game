@@ -132,13 +132,22 @@ test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch 
   assert.doesNotMatch(yml, /group:\s*pages\b/);
 });
 
-test("desktop workflow's pull_request paths cover every name stage-files.mjs packages", async () => {
+test("desktop workflow's pull_request paths are packaging-only (not the staged game tree)", async () => {
   const { stagedNames } = await import("../../tools/desktop/stage-files.mjs");
   const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
   const block = yml.split(/\n  pull_request:\n/)[1].split(/\n  [a-z_]+:\n/)[0];
   const paths = [...block.matchAll(/^\s+- "([^"]+)"/gm)].map((m) => m[1]);
-  const missing = [...stagedNames()].filter((n) => !paths.includes(n) && !paths.includes(`${n}/**`));
-  assert.deepEqual(missing, [], "a staged file changes the package, so a PR touching it must run pack-smoke");
+  assert.deepEqual(paths.sort(), [
+    ".github/workflows/desktop.yml",
+    "desktop/**",
+    "tools/desktop/**",
+  ], "pack-smoke runs when the Electron shell or stager changes, not on every js/css PR");
+  const staged = [...stagedNames()];
+  const leaked = paths.filter((p) => {
+    const name = p.replace(/\/\*\*$/, "");
+    return staged.includes(name);
+  });
+  assert.deepEqual(leaked, [], "a staged game/shell path in desktop.yml restarts Pack smoke on ordinary PRs");
 });
 
 function loadSpotify(opts = {}) {
