@@ -446,6 +446,22 @@ test("high-scale settings and Last Race retain useful local width", () => {
   assert.equal(decl(data, ".dh-table", "table-layout"), "fixed");
   assert.ok(!declares(data, ".dh-td-driver", "display", "flex"),
     "a table cell must not opt out of the fixed table layout");
+  assert.equal(decl(data, ".dh-td-driver", "overflow-wrap"), "normal",
+    "driver names wrap at spaces, not mid-word");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "overflow-wrap"), "normal");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "display"), "block",
+    "the surname sits under the chip so VERSTAPPEN keeps a full cell");
+  assert.ok(!declares(data, ".dh-td-driver", "overflow-wrap", "anywhere"));
+  assert.equal(decl(data, ".dh-cons-main .dh-name", "flex"), "0 1 auto",
+    "live/constructor names do not grow and park the team on the far right");
+  const desk = ruleFor(data, /body\[data-width="wide"\]\[data-density="normal"\]\s+\.dh-card/);
+  assert.ok(desk, "desktop hub card has a pinned height");
+  assert.equal(desk.decls.get("min-height"), "var(--dh-desk-h)");
+  assert.equal(desk.decls.get("max-height"), "var(--dh-desk-h)");
+  assert.equal(decl(data, ".dh-export-status", "font-family"), "inherit",
+    "export status is the hub face, not a monospace dump");
+  assert.equal(decl(data, ".dh-tabs", "flex-wrap"), "wrap",
+    "EXPORT must wrap, not clip, on the 760px card");
 });
 
 test("compact title column scrolls instead of clipping at high UI SIZE", () => {

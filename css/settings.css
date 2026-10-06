@@ -402,4 +402,20 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   margin: 0;
   box-sizing: border-box;
 }
+/* LIGHT sheet footers must live in @layer components (same layer as
+   .sheet-foot in css/components.css). A base-layer override loses the
+   cascade regardless of specificity (tokens.css documents this trap for
+   focus rings). Under Sunlight / LIGHT the foot follows the surface ladder. */
+:root[data-ui-theme="light"] .sheet-foot {
+  background: linear-gradient(180deg in oklab,
+    color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+    var(--surf-3) 70%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] .sheet-foot {
+    background: linear-gradient(180deg in oklab,
+      color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+      var(--surf-3) 70%);
+  }
+}
 } /* @layer components */
