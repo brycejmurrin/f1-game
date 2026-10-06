@@ -319,7 +319,7 @@ function stepSetupAero(dt) {
   setupPreviewAeroX = clamp(setupPreviewAeroX + Math.sign(want - setupPreviewAeroX) * step,
                             Math.min(setupPreviewAeroX, want), Math.max(setupPreviewAeroX, want));
 }
-function setSetupAero(on) {
+function setSetupAero(on, opts) {
   const was = setupPreviewXOn;
   setupPreviewXOn = !!on;
   // Switching X-mode ON from the untouched turntable AIMS at the rear wing.
@@ -335,8 +335,9 @@ function setSetupAero(on) {
   // indistinguishable from a broken feature and was reported as one. The wing
   // preset sits at 4.6 m, where the travel is still readable and both endplates
   // stay in the visible half. A player already close in on something has aimed
-  // deliberately, so they keep their shot.
-  if (setupPreviewXOn && !was && (setupPreviewSpin || setupPreviewDist > 5)) setSetupView("wingRear");
+  // deliberately, so they keep their shot. `keepCam` (garageAero opts) skips
+  // the snap so a test can toggle flaps without stealing the camera.
+  if (!(opts && opts.keepCam) && setupPreviewXOn && !was && (setupPreviewSpin || setupPreviewDist > 5)) setSetupView("wingRear");
   const b = $("cs-aero");
   if (b) {
     // `active` drives the lit style (and is what AriaState reads); the attribute

@@ -57,6 +57,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
   "tests/unit/a11y-pwa-pass.test.mjs",
+  "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —

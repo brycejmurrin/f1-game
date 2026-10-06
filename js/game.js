@@ -1419,7 +1419,12 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const finish = resolveLivery(team).finish || null;
-  if (still || b === 0 || b === 1) { const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only); if (set) gfx.draw(set, modelMat, mat); return; }
+  if (still || b === 0 || b === 1) {
+    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only);
+    if (set) gfx.draw(set, modelMat, mat);
+    if (b >= 0.5 && CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, 1);
+    return;
+  }
   const flaps = Car3D.aeroFlaps(aLvl, style);   // NOT `els` — that name is the
   for (let i = 0; i < flaps.length; i++) {      // file-wide DOM registry
     const fg = flaps[i];
@@ -1443,6 +1448,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
     const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish);
     if (mesh) gfx.draw(mesh, W, mat);
   }
+  if (CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, b);
 }
 
 // partsVisualKey(teamId) -> cheap cache key for the resolved cosmetic tiers
@@ -3277,7 +3283,7 @@ const G = {
     const aSt = teamDecalState(Teams.LIST[teamIdx], true);
     return { aLvl: aSt.val, style: aSt.aero || null };
   },
-  setSetupAero: (on) => setupCam.setSetupAero(on),
+  setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
   get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   // A preset that bundles assists (ROOKIE) may set keys game.js owns —
