@@ -92,18 +92,28 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
+        // Let the first worker finish installing so controllerchange cannot
+        // restyle CSS/fonts mid-shot (CI 37459850548). Do NOT set
+        // serviceWorkers:"block": Playwright resolves register() with
+        // undefined and the shell overlayed r.scope (CI 37463034163).
+        await page.evaluate(async () => {
+          if (!navigator.serviceWorker) return;
+          try {
+            await Promise.race([
+              navigator.serviceWorker.ready,
+              new Promise((resolve) => setTimeout(resolve, 8000)),
+            ]);
+          } catch (_) { /* blocked or unsupported */ }
+        });
         // Wait for IDENTITY chrome + Titillium before shooting.
         // css/fonts-hud.css and select/carsetup are print→all (#1101).
-        // CI 37457907852 still wrapped phone title/select at 0.08 after a
-        // fonts-hud-only wait: (1) load('700 16px "Titillium Web"') is 700
-        // NORMAL but can resolve from the title-critical 600 face without
-        // fetching fonts-hud's 700-normal woff2 — .bigbtn is weight 700
-        // not italic, so font-display:swap paints system-ui (wider wrap)
-        // until that face is actually loaded; (2) a load listener + 5s
-        // page timer is skipped when onload already set media=all;
-        // (3) getComputedStyle().fontFamily is the specified stack, not
-        // the used face. Flip every print sheet to all, FontFace-load the
-        // three title-critical + .bigbtn files, then poll FontFace.status.
+        // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
+        // already ships italic 700 (synth-bolds 800). A used-face gate on
+        // NORMAL 700 can pass from fonts-hud while doors still paint
+        // system-ui (wider min-content → 2×2 wrap, GARAGE clipped).
+        // getComputedStyle().fontFamily is the specified stack, not the
+        // used face. Flip print sheets to all, FontFace-load the three
+        // title faces, then measure italic 800 vs Arial.
         await page.evaluate(() => {
           for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
             if (link.media === "print") link.media = "all";
@@ -145,13 +155,14 @@ for (const [shapeName, viewport] of SHAPES) {
           if (!loaded("italic", 700) || !loaded("normal", 600) || !loaded("normal", 700)) {
             return false;
           }
-          // Used-face gate: fontFamily is always the stack.
+          // Used-face gate: fontFamily is always the stack. Measure the
+          // face .bigbtn actually requests (italic 800), not 700-normal.
           const ctx = document.createElement("canvas").getContext("2d");
           if (!ctx) return true;
           const sample = "HOW TO PLAY RACE";
-          ctx.font = '700 48px "Titillium Web"';
+          ctx.font = 'italic 800 48px "Titillium Web"';
           const tit = ctx.measureText(sample).width;
-          ctx.font = "700 48px Arial, sans-serif";
+          ctx.font = "italic 800 48px Arial, sans-serif";
           const fb = ctx.measureText(sample).width;
           return Math.abs(tit - fb) > 2;
         }, null, { polling: 100, timeout: BOOT_MS });
