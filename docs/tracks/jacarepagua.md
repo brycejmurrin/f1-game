@@ -33,14 +33,16 @@ Dead flat, and notorious for it (STATS F1: drained swamp, no notable height diff
 |------|------|----------|-----------------|
 | 0.975 | R | near | **Pit grandstand** (`jacarepagua-pit-grandstand`, required): open pit boxes + deck + stepped seating under brise-soleil |
 | 0.998 | R | near | Squat **timing box** (`jacarepagua-timing-box`, required) on the roofline |
+| 0.00 | L | near | Period timber **pit bleacher** (`jacarepagua-pit-bleacher`, required) with pale crowd bands opposite the pits |
 | far NE | — | far | **Tijuca ridge** (`jacarepagua-tijuca-ridge`, required): world-space forested granite silhouette NE of the lap bounds — exact peak alignment UNCERTAIN |
 | 0.96–0.99 | L | near | Brazilian flagpole rank against the massif |
-| 0.95–0.05 | L | near | Green-and-gold hoarding run down the pit straight |
+| 0.95–0.05 | L | near | Green-and-gold hoarding + eight period billboards down the pit straight |
 | 0.075 | R | near | Turn 1 **sand trap** + red tyre wall |
 | 0.066–0.085 | L | mid | Concrete terrace outside Turn 1 (gap cleared past former city pack) |
 | ~~0.14–0.24~~ | — | — | Grass crowd banks removed this wave (shared planes with city pack / self; flatCoplanar) — T1/T9 terraces remain |
-| 0.36–0.50 | L | near | **Lagoon frontage**: sandy restinga, reflective Lagoa sheet, shore hardscape (`jacarepagua-lagoon-shore`, required). Jetty stub is generic — exact pier layout UNCERTAIN |
-| 0.40–0.50 | L | mid | Coconut palms on the shore only |
+| 0.36–0.50 | L | near | **Lagoon frontage**: sandy restinga, waterField cells (`jacarepagua-lagoa`) + shore hardscape (`jacarepagua-lagoon-shore`, required). Jetty stub is generic — exact pier layout UNCERTAIN |
+| 0.43 | L | near | Shore reeds (`jacarepagua-shore-reeds`) + fishing/sail skiffs on the basin |
+| 0.40–0.60 | L | mid | Coconut palms on the shore; infield trees only in the 0.50–0.635 RIGHT pocket (JAC-M3: 0.11–0.34 / 0.65–0.85 stay furniture-only) |
 | 0.622 | R | near | Sand trap + blue tyre wall; aluminium terrace opposite |
 | 0.882 | R | near | Late sand trap + yellow tyre wall |
 | — | one arc | far | **PEDRA BRANCA MASSIF**: steep forested granite peaks over roughly half the horizon |
@@ -57,8 +59,8 @@ Do **not** use Interlagos corner names (Curva do Sol / Reta Oposta) here.
 ## 6. Modelling notes
 - Place the Pedra Branca mountain arc FIRST; keep height high relative to width and roughness low (smooth granite domes).
 - Add the required Tijuca ridge as a compact inland silhouette, not a second full ring (a full ring reads as a crater).
-- Keep inland vegetation LOW (JAC-M3 foliage exclusion); coconut palms only on the lagoon shore.
-- Water is centred on its anchor — lagoon setback must exceed half-width; keep the basin compact.
+- JAC-M3: no tall planting on the 0.11–0.34 and 0.65–0.85 legs (furniture only). Coconut palms on the lagoon rank; a light infield tree pocket at 0.50–0.635 RIGHT.
+- Lagoon is a waterField/waterBand of cells (not one 120×320 plate); setback still has to miss the folded lap.
 - City pack on the modern theme shared planes with near-track GA and place boxes — excluded for the whole lap this wave (`dressingExclusions` city). Pedra Branca mountains + morro housing supply the Rio skyline.
 - Keep the ground plane flat. Do not invent Interlagos-style elevation drama.
 

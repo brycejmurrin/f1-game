@@ -132,7 +132,19 @@ const RaceSettings = (function () {
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
-      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY" : qualifies ? "START " + qName : "START RACE";
+      const practice = typeof UiExperience !== "undefined" && UiExperience.isPracticePick && UiExperience.isPracticePick();
+      const rsTitle = $("dlg-racesettings");
+      if (rsTitle) {
+        rsTitle.textContent = netRoom ? "RACE SETTINGS"
+          : practice ? "PRACTICE SETTINGS"
+          : isTimeTrial() ? "TIME TRIAL SETTINGS"
+          : "RACE SETTINGS";
+      }
+      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY"
+        : qualifies ? "START " + qName
+        : practice ? "START PRACTICE"
+        : isTimeTrial() ? "START TIME TRIAL"
+        : "START RACE";
       wireRaceSettings();
       const tt = isTimeTrial();
       const daily = tt && G.daily ? G.daily.current() : null;
@@ -294,8 +306,8 @@ const RaceSettings = (function () {
       if (body.dataset.wired) return;
       body.dataset.wired = "1";
       const after = () => { buildRaceSettings(); if (G.soundOn) GameAudio.uiTick(); };
-      const wire = (id, read, write) => SettingRow.wire(id, { read, write: (v) => { write(v); after(); } });
-      wire("rs-laps", () => G.raceLaps, (v) => { G.raceLaps = +v; });
+      const wire = (id, read, write, extra) => SettingRow.wire(id, Object.assign({ read, write: (v) => { write(v); after(); } }, extra));
+      wire("rs-laps", () => G.raceLaps, (v) => { G.raceLaps = +v; }, { wrap: false });
       wire("rs-weather", () => G.raceWeather, (v) => { G.raceWeather = v; scheduleFlybyTrack(); });
       wire("rs-mixed", () => (G.raceChangeable ? "mixed" : "stable"), (v) => {
         G.raceChangeable = v === "mixed";

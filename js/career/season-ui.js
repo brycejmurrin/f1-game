@@ -104,7 +104,9 @@ function create(G) {
     pane.textContent = "";
 
     pane.appendChild(head("PRESETS", "ss-presets-label"));
-    const pre = el("div", "chip-row");
+    // balanced-row: eight chips wrap from local space (css/race-setup.css
+    // --balance-basis on #ss-presets) so REVERSE never sits alone on a line.
+    const pre = el("div", "chip-row balanced-row");
     pre.id = "ss-presets";
     pre.setAttribute("role", "group");
     pre.setAttribute("aria-labelledby", "ss-presets-label");
