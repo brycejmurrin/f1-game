@@ -129,15 +129,17 @@ window.UiLayers = (function () {
      screen, the pause settings over the pause menu) and z-index is how the CSS
      expresses that order — but a showModal() dialog is in the TOP LAYER, above
      every z-index there is, so it wins outright. Opening order ranks dialogs;
-     DOM order breaks z-index ties between non-modal layers. */
+     DOM order breaks z-index ties between non-modal layers.
+     Rank a :modal layer even at 0×0: Chromium can drop its box after the
+     hidden→showModal seam, and shownLayer would then pick the screen behind. */
   function top() {
     const modalRank = (el) => modalOrder.get(el) || 0;
     let best = null;
     let bestRank = -Infinity;
     let bestModal = false;
     for (const el of document.querySelectorAll(ALL_SEL)) {
-      if (!shownLayer(el)) continue;
       const modal = isModal(el);
+      if (!modal && !shownLayer(el)) continue;
       const rank = modal ? modalRank(el) : (parseInt(getComputedStyle(el).zIndex, 10) || 0);
       // A modal always outranks a non-modal; between two modals (or two
       // non-modals) the higher rank wins, ties going to the later element.
