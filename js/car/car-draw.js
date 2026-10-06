@@ -221,6 +221,7 @@ const CarDraw = (function () {
       if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
       delete _decalTexCache[key]; delete _decalTexFail[key];
       _decalTexUse.delete(key); _photoKeys.delete(key);
+      _hiResDone.delete(key); _hiResPending.delete(key);
       const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
     }
     function invalidateDecalTextures(teamId) {
@@ -333,17 +334,55 @@ const CarDraw = (function () {
       } catch (_) { /* renderer may clamp; ignore */ }
       return t;
     }
+    // Desktop player hi-res (2048×2560, ~26.7 MB) is DEFERRED: boot / garage
+    // open / warmCarAssets / prepareMenuCarAssets sync-upload the 1024 preview
+    // only, then requestIdleCallback (setTimeout fallback) swaps in the full
+    // atlas. AI and mobile never schedule — atlasDiv has no larger upload.
+    const _hiResPending = new Set(), _hiResDone = new Set();
+    function schedulePlayerHiRes(team, num, key) {
+      if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
+      if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
+      if (_hiResDone.has(key) || _hiResPending.has(key)) return;
+      _hiResPending.add(key);
+      const kick = function () {
+        try {
+          if (!(key in _decalTexCache)) return;   // LRU / invalidate won the race
+          if (!G.gfx || !G.gfx.createTexture) return;
+          const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, true, true);
+          const next = crispPlayerDecal(G.gfx.createTexture(canvas));
+          const prev = _decalTexCache[key];
+          _decalTexCache[key] = next;
+          _hiResDone.add(key);
+          if (prev && G.gfx.freeTexture) G.gfx.freeTexture(prev);
+          if (next && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
+        } catch (e) {
+          Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
+        } finally {
+          _hiResPending.delete(key);
+        }
+      };
+      if (typeof requestIdleCallback === "function")
+        requestIdleCallback(function () { kick(); }, { timeout: 2500 });
+      else
+        setTimeout(kick, 0);
+    }
     function getCarDecalTexture(team, num, isPlayer) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
       const key = decalKeyFor(team, num, isPlayer);
-      if (key in _decalTexCache) _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
-      else {
+      if (key in _decalTexCache) {
+        _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
+        // A cache hit that never got a hi-res pass (e.g. warmed as preview)
+        // still schedules — idempotent via _hiResPending / _hiResDone.
+        if (isPlayer) schedulePlayerHiRes(team, num, key);
+      } else {
         let t = null;
         try {
-          t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer));
+          // Sync path is ALWAYS the preview tier for the player (hiRes false).
+          // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
+          t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false));
           if (isPlayer) t = crispPlayerDecal(t);
         }
         catch (e) {
@@ -355,6 +394,7 @@ const CarDraw = (function () {
           if (n < 3) return null;
         }
         _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick);
+        if (isPlayer && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
         // recently drawn goes, never one the field drew this frame.
         while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {

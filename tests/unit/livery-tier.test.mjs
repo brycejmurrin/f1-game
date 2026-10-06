@@ -12,8 +12,12 @@
  * So atlasDiv() is pure and pinned here, headlessly, and the rasterised result
  * stays where the boundary says it belongs.
  *
+ * Desktop player hi-res (2048) is DEFERRED off boot / garage-open — car-draw
+ * sync-uploads the 1024 preview, then requestIdleCallback-swaps the full
+ * atlas. That deferral is pinned below against car-draw.js source + a rig.
+ *
  * The other half of the policy — photo mode upgrading the cars it draws to the
- * full tier, lazily and within a bound — lives in js/car/car-draw.js
+ * player tier, lazily and within a bound — lives in js/car/car-draw.js
  * (decalTextureFor / planPhotoAtlases) and is RUN below against that source,
  * because a fixed downshift with no upgrade path is exactly what would show up
  * in a screenshot, and an unbounded upgrade is ~147 MB.
@@ -49,10 +53,13 @@ test("the authored atlas is the size the memory arithmetic assumes", () => {
   assert.equal(atlasBytes(1), 27962020);
 });
 
-test("desktop: the player keeps full resolution, AI uploads at 512×640", () => {
-  assert.equal(LiveryTex.atlasDiv(true, false), 1, "the player's own car stays authored-size");
-  assert.equal(LiveryTex.atlasDiv(false, false), 4, "AI cars upload at 512x640 (same absolute as pre-2048 half)");
+test("desktop: player preview is 1024, hi-res is 2048, AI stays 512×640", () => {
+  assert.equal(LiveryTex.atlasDiv(true, false, false), 2, "boot/garage sync path is 1024×1280 preview");
+  assert.equal(LiveryTex.atlasDiv(true, false, true), 1, "deferred hi-res is authored 2048×2560");
+  assert.equal(LiveryTex.atlasDiv(false, false), 4, "AI cars upload at 512x640");
+  assert.equal(atlasBytes(2), 6990500, "preview mip chain stays ~6.67 MB");
   assert.equal(atlasBytes(4), 1747620, "desktop AI mip chain stays ~1.67 MB");
+  assert.equal(LiveryTex.playerHiResDeferred(false), true, "desktop player must defer hi-res");
 });
 
 test("mobile keeps the same absolute upload sizes as the 1024-era policy", () => {
@@ -61,29 +68,32 @@ test("mobile keeps the same absolute upload sizes as the 1024-era policy", () =>
   assert.equal(LiveryTex.atlasDiv(false, true), 8);
   assert.equal(atlasBytes(4), 1747620);
   assert.equal(atlasBytes(8), 436900);
+  assert.equal(LiveryTex.playerHiResDeferred(true), false, "mobile has no larger player upload to defer");
 });
 
 test("the desktop grid stays well under the old every-car-full figure", () => {
-  const everyFull = 22 * atlasBytes(1);                    // every car at authored full
-  const tiered = atlasBytes(1) + 21 * atlasBytes(4);       // player full, 21 AI at 512×640
+  // Steady-state after deferral: player hi-res + 21 AI at 512.
+  const everyFull = 22 * atlasBytes(1);
+  const tiered = atlasBytes(1) + 21 * atlasBytes(4);
+  // Boot / garage-open before deferral completes: player preview + AI.
+  const openPath = atlasBytes(2) + 21 * atlasBytes(4);
   const mb = (b) => b / 1048576;
-  // Pre-tier / pre-2048 plan figure was ~147 MB for 22 × 1024×1280. Authored
-  // 2048 makes every-full ~587 MB; the tiered desktop grid is ~62 MB.
   assert.ok(mb(everyFull) > 500, `every-full ${mb(everyFull).toFixed(2)} MB`);
   assert.ok(mb(tiered) < 70, `tiered ${mb(tiered).toFixed(2)} MB should stay under 70`);
+  assert.ok(mb(openPath) < 45, `open-path ${mb(openPath).toFixed(2)} MB must stay near the old ~42 MB grid`);
   assert.ok(mb(everyFull) - mb(tiered) > 400,
     `expected to free >400 MB vs every-full, freed ${(mb(everyFull) - mb(tiered)).toFixed(1)}`);
 });
 
 test("a tier is never bigger than the one above it", () => {
-  // Guard the guard: a sign flip or a swapped ternary would still satisfy every
-  // exact-value assertion above if someone rewrote them together.
   for (const mobile of [false, true]) {
-    assert.ok(LiveryTex.atlasDiv(true, mobile) <= LiveryTex.atlasDiv(false, mobile),
-      "the player's car must never be coarser than an AI car");
+    assert.ok(LiveryTex.atlasDiv(true, mobile, false) <= LiveryTex.atlasDiv(false, mobile),
+      "the player's preview must never be coarser than an AI car");
+    assert.ok(LiveryTex.atlasDiv(true, mobile, true) <= LiveryTex.atlasDiv(false, mobile),
+      "the player's hi-res must never be coarser than an AI car");
   }
-  assert.ok(LiveryTex.atlasDiv(true, true) >= LiveryTex.atlasDiv(true, false),
-    "mobile must never be finer than desktop");
+  assert.ok(LiveryTex.atlasDiv(true, true) >= LiveryTex.atlasDiv(true, false, false),
+    "mobile must never be finer than desktop preview");
 });
 
 test("photo mode routes every drawn car through the lazy full-tier picker", () => {
@@ -104,6 +114,21 @@ test("photo mode routes every drawn car through the lazy full-tier picker", () =
     "the per-frame plan runs before the decal queue is drawn");
 });
 
+test("desktop player hi-res atlas upload is deferred off boot and garage-open", () => {
+  // Apex Perf condition: no synchronous 26.7 MB upload on garage open.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
+  assert.match(src, /function schedulePlayerHiRes\(/,
+    "car-draw must own a deferred hi-res scheduler");
+  assert.match(src, /requestIdleCallback/,
+    "hi-res must go through requestIdleCallback (or its setTimeout fallback)");
+  assert.match(src, /buildAtlas\([^;]+,\s*(?:!!)?isPlayer,\s*false\)/,
+    "the sync getCarDecalTexture path must pass hiRes=false");
+  assert.match(src, /buildAtlas\([^;]+,\s*true,\s*true\)/,
+    "the deferred kick must pass hiRes=true");
+  assert.doesNotMatch(src, /buildAtlas\([^;]+,\s*(?:!!)?isPlayer,\s*true\)/,
+    "sync path must never request hi-res inline");
+});
+
 // THE PHOTO-MODE ATLAS POLICY, run for real against the car-draw.js decal
 // section (2026-10-04). It used to ask for the full tier on EVERY drawn car:
 // entering photo mode on a grid built ~21 full atlases in one frame and kept
@@ -112,11 +137,17 @@ test("photo mode routes every drawn car through the lazy full-tier picker", () =
 function decalRig() {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
-  const built = [], freed = [];
+  const built = [], freed = [], idle = [];
   const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => "std",
     gfx: { createTexture: (a) => { const t = { atlas: a }; built.push(a); return t; }, freeTexture: (t) => freed.push(t.atlas) } };
-  const LiveryTex = { buildAtlas: (team, _l, num, full) => team + "#" + num + (full ? ":full" : ":half") };
-  const make = new Function("G", "LiveryTex", "deps", "Log", `
+  // 5th arg hiRes: preview vs deferred full. isPlayer without hiRes → preview.
+  const LiveryTex = {
+    IS_MOBILE: false,
+    playerHiResDeferred: (mobile) => !mobile,
+    buildAtlas: (team, _l, num, isPlayer, hiRes) =>
+      team + "#" + num + (hiRes ? ":hi" : (isPlayer ? ":prev" : ":half")),
+  };
+  const make = new Function("G", "LiveryTex", "deps", "Log", "requestIdleCallback", "setTimeout", "idle", `
     const DECAL_TEX_CACHE_MAX = 36;
     const _decalTeams = [], _decalNums = [], _decalMats = [], _decalSetup = [];
     let _decalCount = 0;
@@ -132,9 +163,12 @@ function decalRig() {
       },
       cached: () => Object.keys(_decalTexCache).length,
       photo: () => _photoKeys.size,
+      flushHiRes() { while (idle.length) idle.shift()(); },
+      hiResDone: () => _hiResDone.size,
     };`);
-  const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} });
-  return { G, api, built, freed };
+  const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} },
+    (cb) => { idle.push(cb); }, (cb) => { idle.push(cb); }, idle);
+  return { G, api, built, freed, idle };
 }
 const team = (id) => ({ id });
 function grid(n) {
@@ -143,16 +177,30 @@ function grid(n) {
   return cars;
 }
 
-test("entering photo mode on a grid builds ONE full atlas a frame, nearest the camera first", () => {
+test("sync player atlas is preview; hi-res lands only after idle flush", () => {
+  const { api, built } = decalRig();
+  const cars = grid(3);
+  const drawn = api.frame(cars);
+  assert.equal(drawn[0], "me#1:prev", "garage/boot draw uses the 1024 preview");
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0, "no hi-res upload before idle");
+  assert.equal(built.filter((a) => a.endsWith(":prev")).length, 1);
+  assert.ok(built.filter((a) => a.endsWith(":half")).length >= 3);
+  api.flushHiRes();
+  assert.equal(api.hiResDone(), 1, "one deferred hi-res completed");
+  assert.ok(built.some((a) => a === "me#1:hi"), "hi-res atlas was built after idle");
+  assert.equal(api.frame(cars)[0], "me#1:hi", "draws swap to hi-res once ready");
+});
+
+test("entering photo mode on a grid builds ONE player-tier atlas a frame, nearest the camera first", () => {
   const { G, api, built } = decalRig();
   const cars = grid(21);
-  api.frame(cars);                               // racing: player full, rivals half
+  api.frame(cars);                               // racing: player preview, rivals half
   const racing = built.length;
-  assert.equal(built.filter((a) => a.endsWith(":full")).length, 1, "only the player's car is full outside photo mode");
+  assert.equal(built.filter((a) => a.endsWith(":prev")).length, 1, "only the player's car is player-tier outside photo mode");
   G.photoMode = true;
   const drawn = api.frame(cars);
   assert.equal(built.length - racing, 1, "one atlas build on the first photo frame, not twenty-one");
-  assert.equal(drawn[1], "t1#11:full", "the rival nearest the camera got it");
+  assert.equal(drawn[1], "t1#11:prev", "the rival nearest the camera got the player-tier preview");
   assert.equal(drawn[2], "t2#12:half", "the rest draw their half tier while they wait");
   api.frame(cars);
   assert.equal(built.length - racing, 2, "and one more the next frame");
@@ -171,16 +219,15 @@ test("the photo set follows the camera, and closing photo mode frees every photo
   G.camEye = [0, 0, 5 + 21 * 8];
   for (let f = 0; f < 10; f++) api.frame(back);
   assert.equal(api.photo(), 6, "still bounded");
-  assert.ok(freed.some((a) => a === "t1#11:full"), "a full atlas no longer drawn was evicted for one in view");
+  assert.ok(freed.some((a) => a === "t1#11:prev"), "a player-tier atlas no longer drawn was evicted for one in view");
   const drawn = api.frame(back);
-  assert.ok(drawn.every((a) => a.endsWith(":full")), "the six cars in view are all full now");
+  assert.ok(drawn.every((a) => a.endsWith(":prev") || a.endsWith(":hi")), "the six cars in view are all player-tier now");
   G.photoMode = false;
   const before = freed.length;
   api.frame(cars);
   assert.equal(freed.length - before, 6, "the first frame after photo mode frees the six photo atlases");
   assert.equal(api.photo(), 0);
-  assert.ok(!freed.includes("me#1:full"), "the player's own full atlas is never a photo atlas");
-  assert.ok(built.filter((a) => a === "me#1:full").length === 1, "and it was never rebuilt");
+  assert.ok(!freed.includes("me#1:prev"), "the player's own preview atlas is never a photo atlas");
 });
 
 test("the decal cache evicts the least recently drawn atlas, never the live field", () => {

@@ -32,22 +32,28 @@ const LiveryTex = (function () {
   // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v).
   // Ten times the geometry. One authored atlas with its mip chain is ~26.7 MB.
   //
-  //   tier            player   AI     upload px        a full grid
-  //   mobile             4      8     512 / 256        ~37 MB   (same absolutes)
-  //   desktop            1      4     2048 / 512       ~62 MB   (was ~42 at 1024)
+  //   tier                 player   AI     upload px        notes
+  //   mobile                  4      8     512 / 256        unchanged absolutes
+  //   desktop preview         2      4     1024 / 512       boot + garage-open
+  //   desktop hi-res          1      —     2048             deferred (car-draw)
   //
-  // AI at 512×640 is ample at racing distance; CLOSE-UP / photo mode asks for
-  // the full tier for every car it draws (js/car/car-draw.js decalTextureFor).
-  // That upgrade is lazy and bounded: the tier is part of the decal cache key,
-  // at most one full atlas is built per frame, at most PHOTO_ATLAS_MAX are
-  // held, and they are freed when the mode closes.
+  // The 26.7 MB hi-res player atlas must NOT upload on boot or garage open —
+  // car-draw paints the 1024 preview first, then requestIdleCallback-upgrades
+  // to 2048 (mipmapped). AI stays at 512×640. Photo-mode rival upgrades reuse
+  // the same player-tier key and the same deferral.
   //
   // Pure on purpose: rasterising a livery needs a browser (see the boundary
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
   // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
-  function atlasDiv(isPlayer, mobile) {
+  // hiRes: desktop player only; ignored for AI and mobile (no larger upload).
+  function atlasDiv(isPlayer, mobile, hiRes) {
     if (mobile) return isPlayer ? 4 : 8;
-    return isPlayer ? 1 : 4;
+    if (!isPlayer) return 4;
+    return hiRes ? 1 : 2;
+  }
+  // True when a desktop player preview can be upgraded to a larger atlas.
+  function playerHiResDeferred(mobile) {
+    return atlasDiv(true, !!mobile, false) > atlasDiv(true, !!mobile, true);
   }
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
@@ -1845,7 +1851,9 @@ const LiveryTex = (function () {
   }
 
   // ── main ─────────────────────────────────────────────────────────────────
-  function buildAtlas(teamId, colors = {}, numberOverride, isPlayer) {
+  // hiRes: desktop player full 2048 upload. Callers that must stay off the
+  // boot / garage-open path pass false (or omit) and let car-draw defer true.
+  function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
     const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
     canvas.width = SIZE;
@@ -2706,8 +2714,8 @@ const LiveryTex = (function () {
     // Upload at a fraction of the authored size. All layout stays authored at
     // SIZE (UVs are FRACTIONS of the atlas — resolution-independent); only the
     // uploaded texture shrinks. See atlasDiv for the tiers and the measurement
-    // behind them.
-    const div = atlasDiv(!!isPlayer, IS_MOBILE);
+    // behind them. hiRes is desktop-player-only (atlasDiv ignores it elsewhere).
+    const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
     if (div > 1) {
       const small = document.createElement("canvas");
       small.width = SIZE / div; small.height = SIZE_H / div;
@@ -2782,7 +2790,7 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, SIZE_H, atlasDiv, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
