@@ -195,7 +195,7 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `npm run test:tooling-fast` (structural, no browser; most of the unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16) |
+| in the edit loop | `npm run test:tooling-fast` (structural, no browser; most of the unit files — ~5 min one at a time, ~2 min via `node tools/ci/tooling-fast.mjs --jobs=3`, which is what `verify-change` runs on a quiet box; MEASURED 2026-09-16). In CI the same suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2` and `2/2`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
@@ -434,7 +434,7 @@ tools directly.)
 | Group | What it runs |
 |---|---|
 | `guards` | the 31 CROSS-FILE guards in ~12 s — every one asserts a relationship BETWEEN files (or, for `no-bare-console`, `log-namespaces`, `html-sink-lint` and `lexical-window-guard`, a rule across all of `js/`; `test-coverage-audit` and `prepush-gate-coverage` put every test file in a group the gate runs) (a registry against the tree, a generated file against its source, a ceiling against what it measures), and `global-registry` parses every manifest file so a syntax error cannot reach a commit. Run it BEFORE EVERY COMMIT (AGENTS.md rule 3): four failures in one session — a suite registered in none of its registries, `tools/README.md` and `package.json` hand-edited when both are generated, and a missing comma that would have broken the game's boot — were all inside this group and all found instead by a ~10-minute deploy. `deploy.mjs` reads the same group for its post-rejection re-verify, so the two cannot drift apart. |
-| `tooling-fast` | the structural half — most unit files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling-fast` | the structural half — most unit files, ~5 min one at a time (317 s measured 2026-09-16), ~2 min at `--jobs=3` — via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1` inside each file; `--jobs=N` files at once, LONGEST FIRST by `tests/data/tooling-fast-timings.json` — refresh it with `--record` — each child under `--test-timeout` plus a per-file wall that fails a hung file by name) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop. **CI (#1075):** the suite is split across two parallel jobs — `Structural guards (tooling A)` and `Structural guards (tooling B)` — then the aggregator `Structural guards` runs ratchet/audit (~8 min wall, 461 s median 2026-10-05 per the `ci.yml` header); that aggregator name is what `ready-gate.mjs` requires green before draft→ready |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), the friend-race quali handoff (`quali-handoff-vm`), physics parity (`physics-characterization-vm`) and the fourteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is the bulk of it, ~3 min through the worker pool; the rest are 2–30 s each), plus `game-vm-pool` — the pool's own parity suite; in CI's node suites, which the Pages gate runs unconditionally. **Twelve of those browser specs no longer run on the blocking gate** — `tools/ci/twinned-specs.mjs` lists the pairs and holds the drift check that keeps the substitution honest (equal declared test counts, and the twin's group must still be gated, derived from ci.yml). They still run in their own group on the nightly. `new-hooks` is NOT among them: its Madrid foundation test is deliberately unported |
 | `game-vm-a` | `elevation-tracks-vm.test.mjs` ALONE, on its own CI runner (`node-suites` matrix slice `vm-a`, 2026-09-16; since 2026-09-30 TWO runners, `vm-a1` / `vm-a2`, each building every other circuit through `APEX_CIRCUIT_SHARD=i/2` — `tools/lib/circuit-scope.cjs` `shard`, a partition of the roster, so the pair is exactly this file): it builds 40 circuits and was 399-400 s on this box, the floor of any split of `game-vm` — until the same day's `tools/lib/game-vm-pool.cjs` put the 42 per-circuit races in four worker VMs: 191-210 s, 47/47 green every run (`APEX_VM_POOL=0`, the serial path, still measures 400 s; this box was shared with other agents' suites throughout, the 210 s run at mean load 5.1 of four cores). As one slice the whole group measured 9.2-9.4 min and set the job's wall; with this file alone the slice was ~6.5 min on a runner and the pool should take it to ~2. Partition — `game-vm` is still the full list locally |
@@ -1020,10 +1020,14 @@ day from several agents, and a deploy per push meant a 14-job gate and a Pages
 deployment per commit, gates cancelling each other in bursts, and the account's
 20 job slots spent re-testing trees one commit apart. Two tiers replace it:
 
-- **Fast tier, per push to the deploy branch** (`ci.yml`, `on: push`): guards,
-  node suites, parts census, driving-model, change-aware selection. Five to
-  nine minutes, four slots, its own concurrency group so sessions never cancel
-  each other's verdict. This run is the answer to "did my push break anything".
+- **Fast tier, per push to the deploy branch** (`ci.yml`, `on: push`):
+  Structural guards as two parallel tooling-fast halves
+  (`Structural guards (tooling A)` / `(tooling B)`) plus the aggregator
+  still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 —
+  `ci.yml` header; #1075), node suites, parts census, driving-model,
+  change-aware selection. Five to nine minutes, four slots, its own
+  concurrency group so sessions never cancel each other's verdict. This run
+  is the answer to "did my push break anything".
 - **The train** (`pages.yml`; started by `ci.yml`'s `poke-train` job when a
   deploy-branch push's fast tier goes green, by a manual `workflow_dispatch`
   = "deploy now", and by the cron `7,27,47 * * * *` as a backstop — GitHub's
@@ -1055,16 +1059,18 @@ The ship branch is a **merge train**: merge **one large PR at a time**; batch
 small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
 mark ready only when final; keep about six or fewer ready PRs open
 (AGENTS.md §Concurrent PRs). Before marking ready, Merge Desk runs
-`node tools/ci/ready-gate.mjs` (tooling-fast / Structural guards green on the
-tip) and `node tools/ci/ready-full-cap.mjs` (refuse when ≥3 ready PRs already
-have in-progress or queued full-tier `ci.yml`; draft fast-tier stays uncapped).
-Sync with `node tools/ci/sync-pr.mjs <branch>`
+`node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
+CI check-run named `Structural guards` — the aggregator after the
+`Structural guards (tooling A)` / `(tooling B)` halves — or a local
+full-suite stamp) and `node tools/ci/ready-full-cap.mjs` (refuse when ≥3
+ready PRs already have in-progress or queued full-tier `ci.yml`; draft
+fast-tier stays uncapped). Sync with `node tools/ci/sync-pr.mjs <branch>`
 once before the final CI run — do **not** enable auto-update-branch bots or a
-require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (Structural
-guards, PR only) prints how far the head is behind ship and emits a
-`::warning::` over 10 commits; it never fails the job. Deploy / Pages runs
-keep their own concurrency groups with `cancel-in-progress: false` so a
-publish is never cancelled by a later tick.
+require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (on the
+Structural guards aggregator, PR only) prints how far the head is behind
+ship and emits a `::warning::` over 10 commits; it never fails the job.
+Deploy / Pages runs keep their own concurrency groups with
+`cancel-in-progress: false` so a publish is never cancelled by a later tick.
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
 
@@ -1097,7 +1103,7 @@ Two always-judged checks give the gate fixed names:
 
 | Lane | When | What |
 |---|---|---|
-| **Draft PR** | `pull_request` + draft | Fast tier: guards (incl. behind-ship), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
+| **Draft PR** | `pull_request` + draft | Fast tier: Structural guards A/B shards + aggregator (incl. behind-ship on the aggregator), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
 | **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
 | **Ship push** | push to deploy branch | Fast tier only; a green run pokes the Pages train from the tip, or from a superseded commit when no train is queued or running. Pushes share one no-cancel `ship-fast` group: the running fast tier finishes and only the newest waiting push stays queued (`docs/notes/CI-MERGE-BURST-2026-10-03.md`). |
 | **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
