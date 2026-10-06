@@ -1,7 +1,9 @@
 {
-  "why": "Bahrain hollow-stand fix — T1 naming marker (Michael Schumacher Corner, 2014); Beyon/Batelco covered stand at T9–10",
+  "why": "Bahrain DETAIL 2026-10-05 — closed main tribuna + control tower; keep Sakhir Tower / University / Schumacher / Beyon heroes",
   "ids": [
     "bahrain-sakhir-tower",
+    "bahrain-main-tribuna",
+    "bahrain-control-tower",
     "bahrain-university-grandstand",
     "bahrain-schumacher-corner",
     "bahrain-beyon-grandstand"
