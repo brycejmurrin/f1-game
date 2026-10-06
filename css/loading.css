@@ -67,7 +67,8 @@
 #loading[data-phase="card"] #ld-card,
 #loading[data-phase="hold"] #ld-card,
 #loading[data-phase="build"] #ld-card,
-#loading[data-phase="handoff"] #ld-card { opacity: 1; transform: none; }
+#loading[data-phase="handoff"] #ld-card,
+#loading[data-phase="busy"] #ld-card { opacity: 1; transform: none; }
 /* The reveal starts from [hidden] (display: none), which gives a transition
    nothing to start from: without this the card snapped in and the fade and rise
    above never ran. */

@@ -980,7 +980,7 @@ test("the world key includes the grid size, and a failed build does not keep the
   assert.match(game, /const menuKey = \(idx\) => \[idx, raceTimeOfDay, raceWeather, fieldSize\(\)\]\.join\("\|"\);/);
   assert.equal((game.match(/\[(trackIdx|want|idx), (raceTimeOfDay|tod), (raceWeather|weather)\]\.join\("\|"\)/g) || []).length, 0, "every menu key goes through menuKey()");
   assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(loadingScreen\.phase\(\) === "build" && !setupPreviewOn\);/, "the no-world card shows no stale circuit, nor a build card over the results");
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, "the no-world card shows no stale circuit, nor a build/busy card over the results");
 });
 
 test("plans are reused when they still hold, and re-planned when they do not", async () => {
