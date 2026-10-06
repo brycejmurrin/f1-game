@@ -7333,12 +7333,16 @@ function render(dt) {
   // Advance one face every FOURTH frame on a live race — a full 6-face cube
   // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
   // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
-  // park() freezes physics for shots/tests — then one face per frame so a
-  // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
-  // seconds-per-frame).
+  // When the governor has already cut render scale (stage 1) but has not yet
+  // shed the probe (tier still 0), slow further to every EIGHTH frame — the
+  // scale lever is the first pressure signal, and a half-rate cube still
+  // refreshes in <1 s at 60 Hz. park() freezes physics for shots/tests — then
+  // one face per frame so a parked M9 cube goes ready in 6 presents, not 24
+  // (SwiftShader is seconds-per-frame).
   // Live race/count only — results freezes above; menu flyby has no player car
   // paint that needs a probe, and a mid-results probe was a whole-world redraw.
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -7436,6 +7440,11 @@ function render(dt) {
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
+  // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
+  // a struggling device stops spawning sub-pixel puffs that only starve the pool.
+  // Squared once per frame — same divisor spray/rain already use for density.
+  const _fxCullR = 110 / (1 + ((typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0));
+  const _fxCullR2 = _fxCullR * _fxCullR;
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
     // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
@@ -7611,7 +7620,7 @@ function render(dt) {
     // starve the shared pool).
     if (state !== "menu") {
       const fdx = tmpP[0] - camEye[0], fdz = tmpP[2] - camEye[2];
-      if (fdx * fdx + fdz * fdz < 110 * 110) {
+      if (fdx * fdx + fdz * fdz < _fxCullR2) {
         // Collision sparks — flag set by collideFx during the physics step
         // (it has no world coords there); consumed once, at the car.
         if (c.fxSparkI) {
@@ -8743,7 +8752,7 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Both starts are no-ops when already playing.
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); if (isRaining()) GameAudio.startRain(); }
