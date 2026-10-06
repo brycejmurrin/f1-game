@@ -194,6 +194,13 @@ export const TARGET_SHARD_SEC = 360;
 // timeouts). The kill timer is a ceiling for a passing run plus setup, not
 // "every test times out". --max-failures still stops a red early.
 export const MAX_SELECTED_JOB_MIN = 10;
+// Fat UI files (career*, hud-layout) cannot use Playwright --shard (it
+// splits GROUPS). One job, 2 workers. PR #1075 run 37446472987: career
+// 27/37 passed then cancelled at 9 min (~39 s/test); career-season 15/36
+// at 6 min (~46 s/test). spec-timings still reflect fake-shard leftovers
+// so billed seconds are a lie; floor the plan and the kill timer here.
+export const FAT_UI_SEC_PER_TEST = 45;
+export const FAT_UI_SELECTED_JOB_MIN = 18;
 // Over-budget / high-timeout specs (career, hud-layout): Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file.
 export const MAX_TESTS_PER_JOB = 8;
@@ -304,10 +311,10 @@ export function megaSoloFlags(args) {
 // not the spend: a passing run never approaches it. A killed job reads as
 // "0 failures", which this file's history shows hiding a dead deploy, so the
 // cap is derived from the plan, never guessed.
-export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTimeoutSec) => {
+export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTimeoutSec, maxMin = MAX_SELECTED_JOB_MIN) => {
   const setupMin = 3;
   const workMin = Math.ceil(Math.max(0, expectedSec) / 60);
-  return Math.min(MAX_SELECTED_JOB_MIN, Math.max(6, workMin + setupMin));
+  return Math.min(maxMin, Math.max(6, workMin + setupMin));
 };
 
 /** Seconds one row of the plan is expected to take: its tests at the spec's
@@ -572,8 +579,10 @@ export function shards(r, db = timings()) {
     const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
     if (fatUi) {
       const workers = 2;
+      const secFat = Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers);
       items.push({ solo: true, name: `oversize-${base}`, files: [s.file], shard: "",
-        tests: s.tests, sec: Math.max(1, sec / workers), perTest, workers });
+        tests: s.tests, sec: Math.max(1, secFat), perTest, workers,
+        maxCapMin: FAT_UI_SELECTED_JOB_MIN });
       continue;
     }
     const n = Math.max(nTime, nTests);
@@ -612,9 +621,10 @@ export function shards(r, db = timings()) {
     const perTest = Math.max(...b.items.map((x) => x.perTest));
     const sec = Math.round(b.sec);
     const workers = Math.max(1, ...b.items.map((x) => x.workers || 1));
+    const maxCapMin = Math.max(MAX_SELECTED_JOB_MIN, ...b.items.map((x) => x.maxCapMin || MAX_SELECTED_JOB_MIN));
     return { name, specs: files.join(" "), shard: b.solo ? b.shard : "",
       tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers,
-      timeout: shardCapMin(sec, perTest),
+      timeout: shardCapMin(sec, perTest, maxCapMin),
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(",") };
   });

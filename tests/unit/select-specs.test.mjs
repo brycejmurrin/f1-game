@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
+  FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, foundationSpec, CIRCUIT_FILTERED_TESTS,
@@ -718,7 +719,7 @@ test("an over-budget spec runs whether the diff EDITS it or merely routes it", (
   assert.deepEqual(full.overBudgetSpecs.map((s) => s.file), [over], "an exhausted pool drops it BY NAME");
   const rjobs = shards(routed, EMPTY).filter((x) => x.specs.includes(over));
   const declared = maxDeclaredTimeout(over) / 1000;
-  assert.ok(rjobs.length >= 1 && rjobs.every((j) => j.perTest === declared && j.timeout === shardCapMin(j.sec, declared)),
+  assert.ok(rjobs.length >= 1 && rjobs.every((j) => j.perTest === declared && j.timeout === shardCapMin(j.sec, declared, FAT_UI_SELECTED_JOB_MIN)),
     "a routed over-budget job is capped at the spec's own per-test timeout too");
 
   // Every job carrying it has a kill timer derived from the spec's OWN
@@ -727,7 +728,7 @@ test("an over-budget spec runs whether the diff EDITS it or merely routes it", (
   const own = edited.oversize[0].ownTimeoutSec;
   const jobs = shards(edited, EMPTY).filter((x) => x.specs.includes(over));
   assert.ok(jobs.length >= 1, "the edited spec gets at least one job");
-  assert.ok(jobs.every((j) => j.perTest === own && j.timeout === shardCapMin(j.sec, own)),
+  assert.ok(jobs.every((j) => j.perTest === own && j.timeout === shardCapMin(j.sec, own, FAT_UI_SELECTED_JOB_MIN)),
     "each job is capped at the spec's own per-test timeout");
   if (jobs.length > 1) assert.ok(jobs.every((j) => /^\d+\/\d+$/.test(j.shard)), "a split plan carries --shard tokens");
 });
@@ -865,8 +866,12 @@ test("career / hud-layout selected legs use 2 workers instead of a fake Playwrig
     assert.equal(jobs.length, 1, `${f} must be one job, not ${jobs.length} --shard pieces`);
     assert.equal(jobs[0].shard, "", `${f} must not use Playwright --shard`);
     assert.equal(jobs[0].workers, 2, `${f} runs two workers so wall time halves`);
-    assert.ok(jobs[0].timeout <= MAX_SELECTED_JOB_MIN,
-      `${f} job cap ${jobs[0].timeout} exceeds ${MAX_SELECTED_JOB_MIN}`);
+    assert.equal(jobs[0].timeout, shardCapMin(jobs[0].sec, jobs[0].perTest, FAT_UI_SELECTED_JOB_MIN),
+      `${f} kill timer must use the fat-UI ceiling, not the packed 10 min one`);
+    assert.ok(jobs[0].timeout <= FAT_UI_SELECTED_JOB_MIN,
+      `${f} job cap ${jobs[0].timeout} exceeds ${FAT_UI_SELECTED_JOB_MIN}`);
+    assert.ok(jobs[0].sec >= (n * FAT_UI_SEC_PER_TEST) / 2 - 1,
+      `${f} billed ${jobs[0].sec}s must floor at ~${FAT_UI_SEC_PER_TEST}s/test / 2 workers (PR #1075 37446472987)`);
   }
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const tJobs = shards(fit([terrain], 30, { rank: () => 0, db: EMPTY }), EMPTY)
