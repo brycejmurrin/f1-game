@@ -1,0 +1,16 @@
+{
+  "live": "https://brycejmurrin.github.io/f1-game/",
+  "apexSha": "9be462a14a2d89a69bae45358e80e8eaf754b02c",
+  "build": 14034,
+  "served": "scratch/live-career-tip (local static of live apex-sha)",
+  "viewport": "1280x800",
+  "shotCount": 19,
+  "graphicsUnavailable": false,
+  "findings": [
+    "CAREER MODES #cr-left scrolls ~104px at 1280x800; PROTECT LOCAL SAVES sits in that overflow (easy to miss).",
+    "Practice entry keeps TIME TRIAL title; PRACTICE SESSION band is the only mode cue.",
+    "Daily entry is TT select chrome; TODAY'S CHALLENGE chip + Montreal selection identify it.",
+    "Assists split: Race Settings ASSISTS & WEAR vs Settings STEERING & ASSISTS — no single summary sheet.",
+    "Settings BACKUP & RESTORE excludes career; career SAVE/LOAD only on CAREER MODES (copy cross-links OK)."
+  ]
+}
