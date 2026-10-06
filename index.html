@@ -2478,17 +2478,16 @@
      tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
      as a div, because the conversion commit lost this hunk in a merge. -->
 <dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
-  <!-- The canonical .sheet-head on a full-bleed dialog — the .dh-card
-       precedent (css/data.css): the class delivers the paint and the red h2;
-       track-detail.css keeps only the flex/padding deltas the .sheet grid
-       would otherwise supply. The h2 keeps its id (aria-labelledby target;
-       menus.js sets textContent). Close is the shared .dh-close icon recipe —
-       .tdc-close-btn had become a byte-identical copy of it in round 7. -->
+  <!-- Same .screen.dim > .sheet stack as standings / race-settings — not a
+       one-off full-bleed overlay. The head is the shared .sheet-head (white
+       title + red rail). Map wrap id is load-bearing: openTrackDetail fits
+       the canvas from it. -->
+  <div id="td-inner" class="sheet">
   <div id="track-detail-header" class="sheet-head">
     <h2 id="track-detail-name"></h2>
     <button id="track-detail-close" autofocus class="dh-close" aria-label="Close">&#x2715;</button>
   </div>
-  <div id="track-detail-body">
+  <div id="track-detail-body" class="sheet-body">
     <div id="track-detail-canvas-wrap">
       <canvas id="track-detail-canvas" width="800" height="560" role="img" aria-label="Circuit layout diagram"></canvas>
     </div>
@@ -2507,11 +2506,10 @@
         <div class="tds-subtitle">AERO ZONES</div>
         <div id="track-detail-drs-list"></div>
       </div>
-      <div id="track-detail-corners">
-        <div class="tdc-title">TURNS</div>
-        <div id="track-detail-list"></div>
-      </div>
+      <div class="tdc-title">TURNS</div>
+      <div id="track-detail-list"></div>
     </div>
+  </div>
   </div>
 </dialog>
 
@@ -3651,6 +3649,7 @@
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/sheet-shape.js?v=dev"></script>

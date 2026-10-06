@@ -49,3 +49,40 @@ test("a malformed time falls back to the date-only rules", () => {
   assert.ok(Number.isNaN(S.raceInstant(r)));
   assert.match(S.dateLabel(r), /22/);
 });
+
+test("schedule venue lines do not stamp a native title (scroll leaves it hung)", async () => {
+  const nodes = [];
+  function el(tag, cls, text) {
+    const n = {
+      tag, cls, text: text || "", attrs: {}, listeners: {}, children: [],
+      addEventListener(t, f) { (n.listeners[t] = n.listeners[t] || []).push(f); },
+      removeAttribute(k) { delete n.attrs[k]; },
+      set title(v) { n.attrs.title = v; },
+      get title() { return n.attrs.title; },
+      appendChild(c) { n.children.push(c); return c; },
+      classList: { add() {} },
+      scrollWidth: 0, clientWidth: 0
+    };
+    nodes.push(n);
+    return n;
+  }
+  const ctx2 = vm.createContext({
+    F1API: { schedule: () => Promise.resolve([{
+      round: 1, name: "Australian Grand Prix", circuit: "Albert Park Circuit",
+      locality: "Melbourne", country: "Australia", date: "2026-03-08", time: "05:00:00Z"
+    }]) }
+  });
+  vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx2, { filename: "schedule.js" });
+  const { loadSchedule } = ctx2.DataSchedule.create({ el, emptyMsg: (t) => el("div", "empty", t) });
+  await loadSchedule();
+  const sub = nodes.find((n) => n.cls === "dh-race-sub");
+  assert.ok(sub, "a venue line exists");
+  assert.equal(sub.attrs.title, undefined, "no title until the line actually ellipsizes");
+  sub.listeners.mouseenter[0]();
+  assert.equal(sub.attrs.title, undefined, "a fully-visible line still has no title");
+  sub.scrollWidth = 400; sub.clientWidth = 120;
+  sub.listeners.mouseenter[0]();
+  assert.equal(sub.attrs.title, "Albert Park Circuit · Melbourne, Australia");
+  sub.listeners.mouseleave[0]();
+  assert.equal(sub.attrs.title, undefined, "leave clears the tip so scroll cannot hang it");
+});

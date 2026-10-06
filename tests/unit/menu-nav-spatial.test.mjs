@@ -161,6 +161,15 @@ test("MenuNav exports step so tests can call the spatial walker", () => {
     "step (and the rest of the surface) must stay on the MenuNav return object");
 });
 
+test("onWheel pans a horizontal strip before the vertical ancestor walk", () => {
+  const wheel = extractFn(SRC, "onWheel");
+  const stripAt = wheel.indexOf("const overStrip");
+  const walkAt = wheel.indexOf("for (let el = e.target");
+  assert.ok(stripAt >= 0 && walkAt >= 0, "overStrip and the ancestor walk are both in onWheel");
+  assert.ok(stripAt < walkAt, "strip hit is decided before canScroll/isRegion can no-op the gesture");
+  assert.match(wheel, /if \(overStrip\) \{[\s\S]*scrollStrip\(strip, dy\)/);
+});
+
 test("pickSideways: mid-list ArrowLeft lands in the adjacent column at similar height", () => {
   const { pickSideways } = loadMenuNav();
   const from = { id: "zandvoort", x: 400, y: 300 };

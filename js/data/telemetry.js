@@ -72,7 +72,9 @@ const DataTelemetry = (function () {
         title.appendChild(el("span", null, meta.name || meta.type || "Session"));
         if (meta.type && meta.type !== meta.name) title.appendChild(el("span", "dh-live-type", meta.type));
         info.appendChild(title);
-        const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
+        const place = (typeof F1API !== "undefined" && F1API.placeLabel)
+          ? F1API.placeLabel(meta.circuit, meta.country, " · ")
+          : [meta.circuit, meta.country].filter(Boolean).join(" · ");
         if (place) info.appendChild(el("div", "dh-live-sub", place));
         // Two short lines — a single long ·-joined string was clipped mid-word
         // in the narrow split pane ("drag chart to .").
