@@ -737,23 +737,34 @@ const TrackDesigner = (function () {
     // Always keep 2 CORNERS in the rail (hiding the whole group left 1 SHAPE → 3 LOOK).
     ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under 1 SHAPE to stamp.");
     ui.shape.append(ui.apply, ui.shapeHint);
-    // theme
+    // theme — colour swatch tiles (preset.swatch pair), not text-only chips
     const theme = group("3 LOOK");
     ui.themeGroup = theme;
     ui.themes = el("div", "td-chips");
+    ui.themes.dataset.role = "themes";
+    ui.themes.setAttribute("role", "group");
+    ui.themes.setAttribute("aria-label", "Theme");
     for (const id of TrackThemes.ORDER) {
       const p = TrackThemes.get(id);
-      const b = btn("", "sel-chip", () => setTheme(id)); b.dataset.theme = id;
-      // Palette entries are linear RGB triples (js/circuits defs); the picker's
-      // swatch idiom (select-screen.js) writes the same inline background.
-      const c = (p.pal && (p.pal.grass || p.pal.sand || p.pal.runoff)) || (p.furniture && p.furniture.fol) || null;
+      const label = p.label || id.toUpperCase();
+      const b = btn("", "sel-chip", () => setTheme(id));
+      b.dataset.theme = id;
+      b.setAttribute("aria-label", label);
+      b.setAttribute("aria-pressed", "false");
+      if (p.blurb) b.title = p.blurb;
+      // Reuse .swatch (select.css); editor.css sizes it as a dual-colour tile.
       const sw = el("span", "swatch");
-      if (Array.isArray(c) && c.length >= 3) sw.style.background = "rgb(" + c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(",") + ")";
-      b.append(sw, document.createTextNode(p.label || id.toUpperCase()));
+      sw.setAttribute("aria-hidden", "true");
+      sw.style.background = TrackThemes.swatchCss(id);
+      const name = el("span", "", label);
+      name.dataset.role = "theme-label";
+      b.append(sw, name);
       ui.themes.appendChild(b);
     }
     theme.appendChild(ui.themes);
     ui.themeBlurb = el("div", "td-hint", "");
+    ui.themeBlurb.dataset.role = "theme-blurb";
+    ui.themeBlurb.setAttribute("aria-live", "polite");
     theme.appendChild(ui.themeBlurb);
     // Scenery options (TrackThemes.LOOK): one chip row per knob, under its theme.
     ui.look = {};

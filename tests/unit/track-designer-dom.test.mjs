@@ -1517,16 +1517,36 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
   const T = b.ctx.TrackThemes;
   assert.equal(T.ORDER.length, 20);
+  assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
+  // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
+  for (const id of T.ORDER) {
+    const p = T.PRESETS[id];
+    assert.ok(Array.isArray(p.swatch) && p.swatch.length === 2, id + " has a swatch pair");
+    assert.match(p.swatch[0], /^#[0-9a-fA-F]{6}$/, id + " swatch[0] hex");
+    assert.match(p.swatch[1], /^#[0-9a-fA-F]{6}$/, id + " swatch[1] hex");
+    assert.equal(T.swatchCss(id), "linear-gradient(135deg," + p.swatch[0] + " 50%," + p.swatch[1] + " 50%)");
+  }
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
   assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
-  const blurb = walk(b.root).find((e) => e.classList && e.classList.contains("td-hint") && e.textContent === T.get(b.D.state().design.theme).blurb);
+  for (const chip of themeChips) {
+    const p = T.get(chip.dataset.theme);
+    assert.equal(chip.getAttribute("aria-label"), p.label || chip.dataset.theme);
+    const sw = chip.children.find((c) => c.classList && c.classList.contains("swatch"));
+    assert.ok(sw, chip.dataset.theme + " has a swatch");
+    assert.equal(sw.getAttribute("aria-hidden"), "true");
+    assert.equal(sw.style.background, T.swatchCss(chip.dataset.theme), chip.dataset.theme + " paints its swatch pair");
+    const lab = chip.children.find((c) => c.dataset && c.dataset.role === "theme-label");
+    assert.ok(lab && lab.textContent === (p.label || chip.dataset.theme.toUpperCase()), chip.dataset.theme + " keeps a visible label");
+  }
+  const blurb = walk(b.root).find((e) => e.dataset && e.dataset.role === "theme-blurb");
   assert.ok(blurb, "the active theme's blurb is shown");
+  assert.equal(blurb.textContent, T.get(b.D.state().design.theme).blurb);
   assert.equal(b.D.setTheme("winter"), true);
   assert.equal(blurb.textContent, T.PRESETS.winter.blurb, "…and follows the theme");
   const look = (key, v) => walk(b.root).find((e) => e.dataset && e.dataset.look === key + ":" + v);
@@ -1551,4 +1571,9 @@ test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TR
   assert.notEqual(b.C.sanitize(b.D.state().design).id, idLook);
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.look), { time: "auto", trees: "normal", crowd: "packed" }, "UNDO restores the previous look");
+  // CSS contract: LOOK tiles live in editor.css without new class tokens.
+  const css = read("css/editor.css");
+  assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\]\s*\{/, "theme grid");
+  assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\] \.swatch\s*\{/, "theme swatch paint box");
+  assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
 });
