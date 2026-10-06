@@ -1,1 +1,0 @@
-1791301417	Cursor Agent	fix(ui): #loading Escape/pause gate. OWNED js/ui/layers.js js/ui/platform-session.js index.html(#loading) tests/unit/menu-a11y-audit.test.mjs (+ modal.js only if needed). FORBIDDEN other js/ui css physics. Branch cursor/fix-loading-esc-7ded. Do not enable auto-merge or merge.  [claude/f1-game-project-26h3ng; session 23fe1a834337a1ce966ffb5d]
