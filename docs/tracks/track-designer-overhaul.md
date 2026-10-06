@@ -43,7 +43,7 @@ Why not keep cosine-only: Bryce asked for per-node height; the control spline al
 | **E+F** | Banking UI + kerb styles | Reuse `bankZones`; kerbs (**flat / sausage / rumble**) ship **with** the banking slice — not a separate early PR |
 | **G** | Berms on banked corners | After E+F; mesh + surface |
 | **H** | Scenery: theme-first + small props palette | Themes stay primary; palette = capped place/remove (stand, gantry, trees, water, flood, billboard) |
-| **I** | Optional new themes | Append-only if Bryce still wants more after D |
+| **I** | Optional new themes | **Done (append-only):** `shipyard` · `saltflat` · `vineyard` · `stadium` · `island` — ORDER length 25; first 20 indexes unchanged; reuse `swatchCss` |
 | **J** | Quick in-editor test lap | Later follow-up (after modes land): short drive/flyby without a full race boot if Perf allows; else clearer RACE/TT CTA |
 
 ## Parallelism
