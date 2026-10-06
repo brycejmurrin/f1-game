@@ -106,11 +106,8 @@
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
-  /* INSTALL APP is position:fixed bottom-left; ANIMATE BACKGROUND docks there
-     on a live Home scene. Lift the chip one tap above the toggle. */
-  body:has(#home-motion:not([hidden])) #install-chip {
-    bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
-  }
+  /* INSTALL APP lift lives in css/overlays.css, scoped to tall / compact-wide
+     / live-scene wide so desktop Classic (title-desktop golden) is untouched. */
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim)); grid-template-rows: auto minmax(0, 1fr); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
   /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0

@@ -123,8 +123,6 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   );
   assert.match(experience, /#menu-brand :is\(#soundbtn, #disclaimer\) \{[\s\S]*background:\s*var\(--carbon\)/,
     "Sound and the disclaimer stay on solid --carbon over a bright livery");
-  assert.match(experience, /body:has\(#home-motion:not\(\[hidden\]\)\) #install-chip/,
-    "INSTALL APP lifts above ANIMATE BACKGROUND instead of sharing the same corner");
 });
 
 test("title scrollers never paint a ScrollFade thumb", () => {
