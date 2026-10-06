@@ -413,6 +413,13 @@ test("redirectUri() is origin + pathname with no query or hash", async ({ page }
 test("redirectUri() strips a query and hash the game was launched with", async ({ page }) => {
   await page.goto("/?track=monza#hash");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => typeof SpotifyMusic !== "undefined",
+    null, { polling: 100, timeout: BOOT_MS }
+  );
   const got = await page.evaluate(() => ({
     uri: SpotifyMusic.redirectUri(),
     href: location.href,
