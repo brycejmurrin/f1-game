@@ -197,7 +197,7 @@ function lazyFiles() {
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
-    ...(MANIFEST.LAZY_XR || [])];
+    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -243,7 +243,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
-                   ...(MANIFEST.LAZY_XR || [])]) {
+                   ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -263,7 +263,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
-    ...(MANIFEST.LAZY_XR || [])];
+    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -436,6 +436,18 @@ test("FULL editor files are the picker boot half only (LAZY_EDITOR already lifte
   ]);
   for (const f of MANIFEST.LAZY_EDITOR) {
     assert.ok(!MANIFEST.FULL.includes(f), `${f} is LAZY_EDITOR — must not also be FULL`);
+  }
+});
+
+test("LAZY_CAM_EDITOR is tagless; FULL keeps FlybyPanel algebra + CamTunerPanel stub", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const full = new Set(MANIFEST.FULL);
+  assert.ok(full.has("js/camera/flyby-panel.js"), "shot algebra stays FULL for loadSaved at boot");
+  assert.ok(full.has("js/camera/cam-tuner-boot.js"), "CamTunerPanel stub stays FULL");
+  assert.ok(!full.has("js/camera/tuner-panel.js"));
+  assert.ok(!full.has("js/camera/flyby-editor.js"));
+  for (const f of (MANIFEST.LAZY_CAM_EDITOR || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_CAM_EDITOR but still has a <script> tag`);
   }
 });
 

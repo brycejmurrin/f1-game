@@ -463,6 +463,11 @@
       "js/xr/xr-ui.js"
     ]
   ],
+    LAZY_CAM_EDITOR: [
+    "js/camera/tuner-panel.js",
+    "js/camera/flyby-editor.js"
+  ],
+    LAZY_CAM_EDITOR_EDGES: [],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

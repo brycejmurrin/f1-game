@@ -327,7 +327,7 @@ const FULL = [
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
   "js/lighting/tuner-panel.js",
-  "js/camera/tuner-panel.js",
+  "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
   "js/audio/driving-cues.js",
   "js/input/steer-tuning.js",
@@ -975,6 +975,15 @@ const LAZY_XR_EDGES = [
   ["js/xr/apex-xr.js", "js/xr/xr-ui.js"],
 ];
 
+// CAMERA TUNER + FLYBY SHOT EDITOR panels (~48 KB). Pause-menu authoring
+// only; title flyby reads FlybyPanel.loadSaved() which stays FULL with the
+// shot algebra. Opened from #pm-camtune / #pm-flyby.
+const LAZY_CAM_EDITOR = [
+  "js/camera/tuner-panel.js",   // CamTunerEditor
+  "js/camera/flyby-editor.js",  // FlybyEditor
+];
+const LAZY_CAM_EDITOR_EDGES = [];
+
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
 // FRIEND lobby — that a solo session never runs a byte of. The biggest single
@@ -1373,7 +1382,7 @@ module.exports = {
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
-  LAZY_XR, LAZY_XR_EDGES,
+  LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

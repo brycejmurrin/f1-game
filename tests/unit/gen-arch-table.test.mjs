@@ -64,7 +64,7 @@ test("every non-data manifest file gets exactly one row", () => {
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
     ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET, ...(MANIFEST.LAZY_EDITOR || []),
-    ...(MANIFEST.LAZY_XR || []),
+    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
   ].filter((f) => !dataFiles.has(f));
   const named = new Set(rows.map((r) => r.file));
   const missing = rostered.filter((f) => !named.has(path.posix.basename(f)));

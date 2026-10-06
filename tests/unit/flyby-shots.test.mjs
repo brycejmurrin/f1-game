@@ -297,7 +297,7 @@ test("resuming releases the flyby editor's parked camera", () => {
     const body = game.slice(i, game.indexOf("\nfunction ", i + 10));
     assert.match(body, /flybyPanel\.closeFlyby\(false\)/, fn + " closes the flyby editor");
   }
-  const panel = fs.readFileSync(path.join(ROOT, "js/camera/flyby-panel.js"), "utf8");
+  const panel = fs.readFileSync(path.join(ROOT, "js/camera/flyby-editor.js"), "utf8");
   const j = panel.indexOf("function closeFlyby(");
   const body = panel.slice(j, panel.indexOf("\n}", j));
   assert.match(body, /if \(!isOpen\(\)\) return;/,

@@ -446,7 +446,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). |
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
-| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
+| `cam-tuner-boot.js` | `CamTunerPanel` | tag | CAMERA TUNER boot stub (FULL). |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
 | `drive-chase.js` | `DriveChase` | tag | lens only for the chase family. vantage.js owns the pose: distance, corner lead, the brake tuck, the drift swing. |
@@ -457,6 +457,8 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
+| `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
+| `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
 
 **`js/perf/`**
 

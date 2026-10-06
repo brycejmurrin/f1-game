@@ -289,7 +289,7 @@ test("solve() is handed the saved list, not just a track and a progress", () => 
 });
 
 test("the panel saves on every edit, and a pristine list clears the key", () => {
-  const src = read("js/camera/flyby-panel.js");
+  const src = read("js/camera/flyby-editor.js");
   assert.match(src, /function edited\(\)\s*\{\s*persist\(\);/,
     "edited() is the one funnel every mutation goes through — persisting anywhere else means DONE, ESCAPE or " +
     "QUIT can still lose an afternoon of framing");
@@ -403,7 +403,7 @@ test("the preview flies a COPY re-taken when the list's contents change", () => 
   // FlybySeq caches plans and corner bindings per shot/list object, and the
   // sliders edit the list in place: passing it straight to flybyCam previewed
   // the first plan forever (a corner shot's x/y/off/corner did nothing).
-  const src = read("js/camera/flyby-panel.js");
+  const src = read("js/camera/flyby-editor.js");
   assert.ok(!/flybyCam\(u, ensure\(\)\)/.test(src), "preview does not hand FlybySeq the list it edits in place");
   assert.match(src, /flybyCam\(u, playable\(\)\)/, "preview flies playable()");
   assert.match(src, /JSON\.stringify\(ensure\(\)\)/, "playable() keys its copy on the list's contents");

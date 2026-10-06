@@ -405,6 +405,9 @@ async function precacheAssetLists() {
     "js/xr/xr-session.js",
     "js/xr/apex-xr.js",
     "js/xr/xr-ui.js",
+    // LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels
+    "js/camera/tuner-panel.js",
+    "js/camera/flyby-editor.js",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });
@@ -529,7 +532,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$/.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then
