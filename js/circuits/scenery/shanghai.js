@@ -228,14 +228,16 @@
         // at 0); exact stand length is UNCERTAIN, the read is "huge stand".
         // https://en.wikipedia.org/wiki/Shanghai_International_Circuit
         // https://www.autosport.com/f1/news/analysis-china-raises-f1-to-new-heights-5067038/5067038/
-        // Detail 2026-10-05: every bay gets endWalls + a local closed shell under
-        // the cantilever so the crimson/alu sail-roof no longer reads hollow
-        // from the S/F cameras (sheet-03). Shared grandstandEx stays untouched.
+        // Detail 2026-10-05: local soffit + inset end fascias close the hollow
+        // sail-roof from the S/F cameras (sheet-03). Engine endWalls stay on the
+        // two OUTER bays only — interior `endWalls: true` put each bay's 0.5 m
+        // end wall on the same plane as that bay's shellSection (2.4 m², 6.6 mm;
+        // coplanar-audit --why names mainGrandstand). Shared grandstandEx untouched.
         for (let i = 0; i < 7; i++) {
           const sBay = sl(-0.052 + i * 0.0098);
           grandstandEx(sBay, -1, 12, 52, null, null, {
             livery: i % 2 ? "alu" : "crimson", tiers: 2, roof: "cantilever",
-            suites: true, endWalls: true, pylons: true,
+            suites: true, endWalls: i === 0 || i === 6, pylons: true,
           });
           // Closed under-sail soffit only — a thin slab under the cantilever
           // overhang (trackside of the stand shell), offset so it does not
@@ -244,12 +246,16 @@
           out._mat = MAT.METAL;
           addBox(out, vadd(aS.c, aS.u, 12.05), [7.2, 0.42, 46],
             i % 2 ? WHITE : [0.88, 0.86, 0.84], bS);
-          // End fascias close the bay sides under the roof (extra to endWalls).
-          for (const sgn of [-1, 1]) {
-            const aE = anchor(K(sBay), -1, 14);
-            addBox(out, vadd(vadd(aE.c, aE.t, sgn * 24), aE.u, 6.2),
-              [10.5, 11.5, 0.55], i % 2 ? [0.78, 0.80, 0.84] : [0.55, 0.24, 0.24],
-              [aE.r, aE.u, aE.t]);
+          // Inset end fascias (t ±23.2 vs half-length 26) close interior bays
+          // without sharing the shell's end plane; skip the two outer bays —
+          // those already have grandstandEx endWalls.
+          if (i !== 0 && i !== 6) {
+            for (const sgn of [-1, 1]) {
+              const aE = anchor(K(sBay), -1, 14);
+              addBox(out, vadd(vadd(aE.c, aE.t, sgn * 23.2), aE.u, 6.2),
+                [10.5, 11.5, 0.55], i % 2 ? [0.78, 0.80, 0.84] : [0.55, 0.24, 0.24],
+                [aE.r, aE.u, aE.t]);
+            }
           }
           out._mat = 0;
         }
