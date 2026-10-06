@@ -137,6 +137,10 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
     "photo rivals mint the player-tier preview with allowHiRes=false");
   assert.match(src, /reapHiResGrave\(\)/,
     "the hi-res swap must not free prev until after the next material bind");
+  assert.match(src, /_hiResGrave\.push\(\{\s*key:\s*key,\s*tex:\s*prev\s*\}\)/,
+    "grave entries are keyed so dropDecalTexture can free a parked preview");
+  assert.match(src, /g\.key !== key/,
+    "invalidate/LRU/photo-release walk the grave by cache key");
   const tex = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
   assert.match(tex, /setTransform\(\s*1\s*\/\s*div/,
     "preview/AI/mobile must paint at upload size via setTransform, not a 2048 then downscale");
@@ -186,6 +190,7 @@ function decalRig() {
         for (let i = 0; i < n; i++) idle.shift()({ didTimeout: true, timeRemaining: () => 0 });
       },
       hiResDone: () => _hiResDone.size,
+      invalidate(teamId) { invalidateDecalTextures(teamId); },
     };`);
   const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} },
     (cb) => { idle.push(cb); }, (cb) => { idle.push(cb); }, idle);
@@ -234,6 +239,23 @@ test("hi-res swap does not free prev while a material still holds it", () => {
   assert.ok(!freed.includes(prev), "preview stays alive until the next bind");
   api.frame(cars);
   assert.ok(freed.includes(prev), "preview is reaped after materials re-read the cache");
+});
+
+test("invalidate frees both the live atlas and a parked hi-res-swap preview", () => {
+  // custom-team.spec.js color-save: invalidateDecalTextures("custom") must
+  // free the first custom atlas even if the idle kick already swapped 2048
+  // in and parked the 1024 preview. Dropping only the live cache entry
+  // leaked id 7 while freeing the hi-res (id 9).
+  const { api, built, freed } = decalRig();
+  const cars = grid(0);
+  api.frame(cars);
+  api.flushHiRes();
+  assert.ok(built.includes("me#1:prev") && built.includes("me#1:hi"));
+  assert.ok(!freed.includes("me#1:prev"), "preview is still parked, not yet reaped");
+  api.invalidate("me");
+  assert.ok(freed.includes("me#1:prev"), "parked preview is freed on invalidate");
+  assert.ok(freed.includes("me#1:hi"), "live hi-res is freed on invalidate");
+  assert.equal(api.cached(), 0);
 });
 
 test("entering photo mode on a grid builds ONE player-tier atlas a frame, nearest the camera first", () => {

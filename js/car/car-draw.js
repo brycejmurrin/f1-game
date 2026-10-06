@@ -223,6 +223,17 @@ const CarDraw = (function () {
       _decalTexUse.delete(key); _photoKeys.delete(key);
       _hiResDone.delete(key); _hiResPending.delete(key);
       const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
+      // A deferred hi-res swap parks the preview in _hiResGrave until the next
+      // bind. Invalidate / LRU / photo-release must free that parked tex now
+      // — otherwise a color-save leaks the preview (custom-team.spec.js).
+      if (_hiResGrave.length) {
+        for (let i = _hiResGrave.length - 1; i >= 0; i--) {
+          const g = _hiResGrave[i];
+          if (!g || g.key !== key) continue;
+          if (g.tex && g.tex !== tex && G.gfx && G.gfx.freeTexture) G.gfx.freeTexture(g.tex);
+          _hiResGrave.splice(i, 1);
+        }
+      }
     }
     function invalidateDecalTextures(teamId) {
       const prefix = teamId + ":";
@@ -340,11 +351,11 @@ const CarDraw = (function () {
     // atlas. AI, mobile, and photo-mode rivals never schedule — atlasDiv has
     // no larger upload, and photo rivals stay on the preview.
     const _hiResPending = new Set(), _hiResDone = new Set();
-    const _hiResGrave = [];   // prev preview tex; free AFTER the next bind
+    const _hiResGrave = [];   // {key, tex} prev preview; free AFTER the next bind
     function reapHiResGrave() {
       if (!_hiResGrave.length) return;
       if (G.gfx && G.gfx.freeTexture) {
-        for (let i = 0; i < _hiResGrave.length; i++) G.gfx.freeTexture(_hiResGrave[i]);
+        for (let i = 0; i < _hiResGrave.length; i++) G.gfx.freeTexture(_hiResGrave[i].tex);
       }
       _hiResGrave.length = 0;
     }
@@ -362,7 +373,7 @@ const CarDraw = (function () {
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
           _hiResDone.add(key);
-          if (prev && prev !== next) _hiResGrave.push(prev);
+          if (prev && prev !== next) _hiResGrave.push({ key: key, tex: prev });
           if (next && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
         } catch (e) {
           Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
