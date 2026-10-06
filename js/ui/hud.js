@@ -468,37 +468,58 @@ function layoutRect(el) {
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
 const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
-// THE CENTRE LANE: where neither slot fits, the card hangs centred under the
-// tower (or the mirror, or the flag), and a long message at max-width reached
-// the dock column there too. --announce-lane-w is twice the distance from the
-// screen's centre to the nearest dock group in the band the centred card can
-// occupy (the tower's bottom down LANE_ROWS), less the gap — SCREEN px, and
-// css/hud.css caps a touch card's width by it over its own zoom. No group in
-// the band (desktop: both docks empty) removes it, so the cap falls away.
-const LANE_ROWS = 200;
+// THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
+// tower. A long message at a centred max-width reached whichever dock sat
+// closer to the middle (tilt auto, 852×393: pedals on the left, BOOST on the
+// right — a symmetric half from the pedals still covered BOOST). --announce-lane-left
+// / -tf / -w are that gap; css/hud.css left-aligns a touch card there over its
+// own zoom. TILT's tap column lives on the bottom edge, below the old 200px
+// band, so the band is the rest of the viewport. No group (desktop: empty docks)
+// removes the vars, so the cap falls away and the card stays centred.
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  const cx = window.innerWidth / 2, y0 = t ? t.bottom : 0;
-  let half = Infinity;
+  const W = window.innerWidth, H = window.innerHeight || 0;
+  const y0 = t ? t.bottom : 0, mid = W / 2;
+  let sal = 0, sar = 0;
+  if (typeof getComputedStyle === "function" && root) {
+    try {
+      const cs = getComputedStyle(root);
+      sal = parseFloat(cs.getPropertyValue("--sal")) || 0;
+      sar = parseFloat(cs.getPropertyValue("--sar")) || 0;
+    } catch (_) { /* mini-dom / detached root */ }
+  }
+  let left = sal, right = W - sar, any = false;
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) {
     const r = g.getBoundingClientRect();
-    if (!r || !r.width || !r.height || r.top >= y0 + LANE_ROWS || r.bottom <= y0) continue;
-    if (r.left >= cx) half = Math.min(half, r.left - cx - RADIO_TOP_GAP);
-    else if (r.right <= cx) half = Math.min(half, cx - r.right - RADIO_TOP_GAP);
+    if (!r || !r.width || !r.height || r.top >= H || r.bottom <= y0) continue;
+    any = true;
+    if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
+    else left = Math.max(left, r.right);
   }
-  hStyle(root, "--announce-lane-w", half === Infinity ? "" : (2 * Math.max(0, half)).toFixed(1) + "px");   // "" removes it
+  const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
+  const on = any && w > 0;
+  hStyle(root, "--announce-lane-left", on ? "calc(" + x.toFixed(1) + "px / var(--hud-z))" : "");
+  hStyle(root, "--announce-lane-tf", on ? "none" : "");
+  hStyle(root, "--announce-lane-w", on ? w.toFixed(1) + "px" : "");
+  if (!on && root && root.style && root.style.removeProperty) {
+    root.style.removeProperty("--announce-lane-left");
+    root.style.removeProperty("--announce-lane-tf");
+    root.style.removeProperty("--announce-lane-w");
+  }
 }
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
   announceLane(root);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
-  const bound = (r, needPast) => {
-    if (!r || !r.width || !r.height || !(r.top < t.bottom && r.bottom > t.top)) return;
+  // Pause / cam share the tower's rows. Dock groups bound a wrapping card too
+  // (min-height is the tower, a long line in the 96px slot grows about that far).
+  const bound = (r, needPast, bot) => {
+    if (!r || !r.width || !r.height || !(r.top < bot && r.bottom > t.top)) return;
     if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
   };
-  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true);
-  if (t) for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false);
+  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true, t ? t.bottom : 0);
+  if (t) for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, t.bottom + t.height);
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
   if (!fits) return;

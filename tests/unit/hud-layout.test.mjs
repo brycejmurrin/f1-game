@@ -617,6 +617,10 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body\.steer-touch #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
     "touch sectors take the same --dock-r-w clearance as limits/damage");
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: var\(--announce-lane-left, 50%\)/,
+    "touch #announce sits in the published dock lane, not at 10px+sal over TILT's left dock");
+  assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
+    "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*body\.steer-touch #dock-right \{ anchor-name: --apex-dock-right; \}[\s\S]*body\.steer-touch #hud-sectors \{[^}]*position-anchor: --apex-dock-right;/,
     "touch sectors also tether to the right dock via CSS anchor positioning");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.

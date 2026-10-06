@@ -958,35 +958,38 @@ test("the radio card's top-row slot ends at a touch dock group in the tower's ro
   boost._rect = { left: 540, top: 30, right: 628, bottom: 118, width: 88, height: 88 };   // over the slot's start
   h.refit();
   assert.ok(!on(), "a dock group over the slot's start leaves no top-row slot");
-  boost._rect = { left: 600, top: 120, right: 688, bottom: 208, width: 88, height: 88 };  // below the tower's rows
+  boost._rect = { left: 600, top: 120, right: 688, bottom: 208, width: 88, height: 88 };  // below tower+card height (8+54+54=116)
   h.refit();
-  assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under the tower's rows does not bound it");
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under a wrapping card does not bound the top-row slot");
 });
 
-test("on touch the centred radio card is capped to the lane between the dock groups (cockpit BOOST, 844x390)", () => {
-  // Survey 2026-10-04: #announce [500,66 223x65] over #btn-boost [603,72 88x88].
-  const h = fitHarness(), lane = () => h.root.style.getPropertyValue("--announce-lane-w");
-  // innerWidth 800 (centre 400); the tower ends at y 62, so the band is 62..262.
-  // Both fixture groups (0..150, 650..800 at y 200) leave 400 - 150 - 8 = 242 a side.
+test("on touch the radio card is left-aligned in the gap between the dock groups", () => {
+  // Tilt auto 852×393: a centred half from the left pedals still covered BOOST.
+  const h = fitHarness();
+  const lane = () => h.root.style.getPropertyValue("--announce-lane-w");
+  const laneLeft = () => h.root.style.getPropertyValue("--announce-lane-left");
+  // innerWidth 800; fixture groups 0..150 and 650..800 at y 200 (below the tower).
+  assert.equal(laneLeft(), "calc(158.0px / var(--hud-z))");
   assert.equal(lane(), "484.0px");
   const boost = h.dom.document.createElement("div"); boost.className = "boost";
   h.dom.byId("dock-right").appendChild(boost);
   boost._rect = { left: 520, top: 72, right: 608, bottom: 160, width: 88, height: 88 };
   h.refit();
-  assert.equal(lane(), (2 * (520 - 400 - 8)).toFixed(1) + "px", "BOOST in the band ends the lane at its left edge");
+  assert.equal(laneLeft(), "calc(158.0px / var(--hud-z))", "the left dock still starts the lane");
+  assert.equal(lane(), (520 - 8 - 158).toFixed(1) + "px", "BOOST ends the lane at its left edge");
   boost._rect = { left: 520, top: 300, right: 608, bottom: 388, width: 88, height: 88 };
   h.refit();
-  assert.equal(lane(), "484.0px", "a group below the band does not narrow it");
+  assert.equal(lane(), (520 - 8 - 158).toFixed(1) + "px", "TILT's bottom tap column still ends the lane");
   for (const g of [boost, ...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();
   assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");
-  // The CSS: touch only, both widths over the card's own zoom; the side and
-  // top-row slots outweigh it with their own dock-aware widths.
+  assert.equal(laneLeft(), "");
   const css = read("css/hud.css");
   const rule = css.match(/body:not\(\.desktop\) #announce \{[^}]*\}/);
   assert.ok(rule, "a touch-only #announce lane rule");
   assert.match(rule[0], /max-width: min\(440px, calc\(72 \* var\(--vwzh\)\), calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
   assert.match(rule[0], /min-width: min\(200px, calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: var\(--announce-lane-left, 50%\)/);
   assert.doesNotMatch(css, /body\.desktop[^{]*#announce[^{]*\{[^}]*announce-lane/, "desktop never reads the lane");
 });
 
