@@ -7,15 +7,20 @@
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
-        bush, ridge, mountain,
+        bush, ridge, mountain, tree,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace, scaffoldStand,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
+        waterField, waterBand, terrainYAt,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
 
       const PALM = [0.18, 0.44, 0.20], PALM_D = [0.14, 0.36, 0.17];
       const RESTINGA = [0.34, 0.44, 0.24];   // low sandy coastal scrub
       const SAND = [0.76, 0.71, 0.56];
+      const LAGOON = [0.26, 0.46, 0.60];
+      const PALE_CROWD = [
+        [0.90, 0.88, 0.82], [0.84, 0.82, 0.76], [0.72, 0.74, 0.78], [0.94, 0.90, 0.80],
+      ];
 
       const { cx, cz, radius: rad } = lapBounds();
       for (const rg of [
@@ -45,20 +50,19 @@
       }
 
       // THE MORRO HOUSING. Rio's granite hills carry dense self-built housing up
-      // their lower slopes, and no other circuit in the game has anything like
-      // it — a bare green mountain reads as alpine or Malaysian, and this one
-      // must read as Rio. Small flat-roofed concrete boxes in saturated paint,
-      // stacked tight and stepping UP the slope, each roof carrying the water
-      // tank and antenna clutter that is most of what you actually see at
-      // distance. Placed in world space against pyMin like the mountains
-      // themselves, since this is far outside the terrain ribbon.
+      // their lower slopes. Survey jacarepagua-1 read the old stack as floating
+      // multicolour crowd cubes on the mountain face — they sat on pyMin with
+      // no hillside under them, in crowd yellow/green. Each cluster now sits on
+      // a granite/dirt berm and uses Rio concrete skins (terracotta / cream /
+      // pale blue), not tribune crowd bands.
       {
         const SKIN = [
-          [0.86, 0.72, 0.52], [0.80, 0.44, 0.34], [0.72, 0.74, 0.66],
-          [0.58, 0.66, 0.62], [0.86, 0.82, 0.68], [0.66, 0.52, 0.44],
-          [0.84, 0.62, 0.36], [0.60, 0.64, 0.72],
+          [0.78, 0.62, 0.48], [0.72, 0.40, 0.32], [0.82, 0.78, 0.70],
+          [0.58, 0.60, 0.66], [0.86, 0.80, 0.68], [0.62, 0.48, 0.40],
+          [0.76, 0.54, 0.34], [0.52, 0.58, 0.68],
         ];
         const ROOF = [0.62, 0.60, 0.56], TANK = [0.30, 0.36, 0.46];
+        const ROCK = [0.46, 0.44, 0.42];
         for (let c = 0; c < 6; c++) {
           const frac = 0.62 + (c / 5) * 0.66;
           const ang = frac * 6.2832;
@@ -66,13 +70,16 @@
           const r = rad + 165 + hc * 55;
           const bx = cx + Math.cos(ang) * r, bz = cz + Math.sin(ang) * r;
           if (onTrack(bx, bz, 40)) continue;
+          // One cheap berm per cluster (not dual 8-seg frustums) so the boxes
+          // read as seated housing, not floating crowd cubes.
+          addBox(out, [bx, pyMin + 2.4, bz], [62, 4.8, 70], ROCK);
           for (let row = 0; row < 6; row++) {
-            const climb = row * 9.5;
-            const back = row * 13;
+            const climb = 5.1 + row * 8.2;
+            const back = row * 9;
             for (let i = 0; i < 9; i++) {
               const h = hash(c * 131 + row * 17 + i * 7);
               if (h < 0.18) continue;   // gaps — alleys and rock outcrops
-              const along = (i - 4) * 15 + (h - 0.5) * 8;
+              const along = (i - 4) * 14 + (h - 0.5) * 7;
               const wx = bx + Math.cos(ang) * back - Math.sin(ang) * along;
               const wz = bz + Math.sin(ang) * back + Math.cos(ang) * along;
               const hh = 5 + h * 5;                       // one to three storeys
@@ -90,33 +97,48 @@
         }
       }
 
-      // 2. THE LAGOON — Jacarepaguá sat on Cabo Pombeba on the Lagoa de
-      //    Jacarepaguá (demolished Nov 2012 for the Olympic Park). Reflective
-      //    sheet stays on waterSurface; the required modelGroup is the near
-      //    shore hardscape so BATCH-01 can pin a literal id.
-      // A water body is centred on its anchor, so its SETBACK has to exceed its
-      // own half-width or the footprint swallows the road. The lap also folds
-      // back close on this side, so the engine only accepts a fairly compact
-      // basin here — 120 m across at 120 m out, measured with the footprint
-      // probe rather than guessed.
-      waterSurface(K(0.470), -1, 120, [120, 0.18, 320], [0.26, 0.46, 0.60],
+      // 2. THE LAGOON — recut from one 120×320 waterSurface plate into
+      //    terrain-following waterField cells (per-cell onTrack reject) plus
+      //    draped near-shore boxes next to jacarepagua-lagoon-shore. Keep the
+      //    lagoa id on the field so it still emits as required water.
+      waterField(K(0.470), -1, 86, 162, 130, 12, LAGOON,
         { id: "jacarepagua-lagoa", required: true });
+      waterBand(0.400, 0.545, -1, 78, 150, 12, LAGOON);
       // Sandy restinga shoreline between the track and the water.
       groundPatch(K(0.470), -1, 55, [60, 0.18, 300], SAND,
         { id: "jacarepagua-shoreline", samples: 10 });
+      {
+        const C = 10;
+        for (let i = 0; i < 6; i++) {
+          const s = 0.422 + i * 0.018;
+          const gap = 96 + (i % 3) * 8;
+          const a = anchor(K(s), -1, gap);
+          const mx = a.c[0], mz = a.c[2];
+          if (onTrack(mx, mz, 16)) continue;
+          let lo = 1e9, hi = -1e9;
+          for (const fx of [-0.4, 0.4]) for (const fz of [-0.4, 0.4]) {
+            const y = terrainYAt(mx + fx * C, mz + fz * C);
+            if (y == null || !isFinite(y)) { lo = 1e9; break; }
+            if (y < lo) lo = y; if (y > hi) hi = y;
+          }
+          if (!(lo < 1e8)) continue;
+          const top = hi + 0.08, bot = lo - 0.12;
+          addBox(out, [mx, (top + bot) / 2, mz], [C, Math.max(0.22, top - bot), C], LAGOON);
+        }
+      }
       {
         // Lagoon shore hardscape: low concrete edge + jetty stub + shade
         // canopy, reading as the marshland waterfront without inventing a
         // modern marina (site is historic / demolished — 1980s photos only).
         const a = anchor(K(0.470), -1, 78);
         const b = [a.r, a.u, a.t];
-        const WATER = [0.26, 0.46, 0.60], EDGE = [0.72, 0.70, 0.64];
+        const EDGE = [0.72, 0.70, 0.64];
         modelGroup("jacarepagua-lagoon-shore", {
           center: vadd(a.c, a.u, 2.4), size: [36, 8, 90], basis: b,
         }, (stage) => {
           // Shallow near-shore water slab (sits under the reflective sheet).
           addBox(stage, vadd(vadd(a.c, a.r, -14), a.u, 0.12),
-            [28, 0.22, 84], WATER, b);
+            [28, 0.22, 84], LAGOON, b);
           // Restinga sand apron + concrete edge beam facing the track.
           addBox(stage, vadd(vadd(a.c, a.r, 6), a.u, 0.18),
             [14, 0.28, 80], SAND, b);
@@ -138,7 +160,89 @@
           }
         }, { required: true });
       }
-      every(20, (k) => {
+      // Albert-Park-style reed clumps on the sandy shore (one required hero).
+      {
+        const plantReeds = (s, dist, seed) => {
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 6)) return;
+          modelGroup("jacarepagua-shore-reeds", {
+            center: vadd(a.c, a.u, 2.2), size: [15, 4.5, 15], basis: b,
+          }, (stage) => {
+            addBox(stage, vadd(a.c, a.u, 0.18), [7.2, 0.36, 7.2],
+              [0.24, 0.44, 0.22], b);
+            for (let j = 0; j < 7; j++) {
+              const lateral = (hash(seed + j * 7) - 0.5) * 8;
+              const along = (hash(seed + j * 11) - 0.5) * 8;
+              const stem = vadd(vadd(a.c, a.r, lateral), a.t, along);
+              const sh = 2.2 + hash(seed + j * 13) * 1.0;
+              addCyl(stage, vadd(stem, a.u, 0.18), 0.10, sh,
+                [0.34, 0.48, 0.20], 4, b);
+              addCone(stage, vadd(stem, a.u, 0.18 + sh), 0.55, 1.0,
+                [0.42, 0.54, 0.24], 5, b);
+            }
+          }, { required: true });
+        };
+        plantReeds(0.430, 70, 31);
+        // Extra clumps as raw prims (not extra modelGroups) so they don't
+        // need landmark ids; same Albert-Park reed recipe.
+        for (const [s, dist, seed] of [[0.470, 74, 47], [0.515, 68, 61]]) {
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 6)) continue;
+          addBox(out, vadd(a.c, a.u, 0.18), [6.4, 0.32, 6.4], [0.24, 0.44, 0.22], b);
+          for (let j = 0; j < 6; j++) {
+            const lateral = (hash(seed + j * 7) - 0.5) * 7;
+            const along = (hash(seed + j * 11) - 0.5) * 7;
+            const stem = vadd(vadd(a.c, a.r, lateral), a.t, along);
+            const sh = 2.0 + hash(seed + j * 13) * 0.9;
+            addCyl(out, vadd(stem, a.u, 0.18), 0.10, sh, [0.34, 0.48, 0.20], 4, b);
+            addCone(out, vadd(stem, a.u, 0.18 + sh), 0.5, 0.9, [0.42, 0.54, 0.24], 5, b);
+          }
+        }
+      }
+      // Period fishing / sail skiffs (~5 prims). Hero is required; extras are
+      // registered too so every modelGroup we emit is on the landmark list.
+      {
+        const emitSkiff = (stage, c, a, b, hull, sail, sc) => {
+          addBox(stage, vadd(c, a.u, 0.38 * sc), [2.2 * sc, 0.76 * sc, 8.2 * sc], hull, b);
+          addBox(stage, vadd(vadd(c, a.t, -1.4 * sc), a.u, 1.05 * sc),
+            [1.6 * sc, 0.7 * sc, 2.4 * sc], [0.90, 0.88, 0.82], b);
+          addCyl(stage, vadd(vadd(c, a.t, 0.6 * sc), a.u, 0.38 * sc),
+            0.10 * sc, 6.4 * sc, [0.78, 0.76, 0.72], 5, b);
+          addPrism(stage, vadd(vadd(c, a.t, 0.6 * sc), a.u, 3.4 * sc),
+            [0.14 * sc, 5.2 * sc, 3.2 * sc], sail, b);
+          addCyl(stage, vadd(vadd(c, a.r, 0.7 * sc), a.u, 0.38 * sc),
+            0.10 * sc, 1.4 * sc, [0.40, 0.34, 0.26], 5, b);
+        };
+        const placeSkiff = (s, dist, seed) => {
+          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 10)) return null;
+          const gy = terrainYAt(a.c[0], a.c[2]);
+          const keel = gy != null && isFinite(gy) ? gy + 0.08 : a.c[1] + 0.08;
+          return { a, b, c: [a.c[0], keel, a.c[2]], keel,
+            sc: 0.82 + hash(seed) * 0.28,
+            hull: seed & 1 ? [0.22, 0.24, 0.28] : [0.86, 0.82, 0.72],
+            sail: seed & 1 ? [0.90, 0.88, 0.80] : [0.94, 0.86, 0.20] };
+        };
+        {
+          const p = placeSkiff(0.448, 112, 11);
+          if (p) modelGroup("jacarepagua-fishing-skiff", {
+            center: [p.c[0], p.keel + 3.6 * p.sc, p.c[2]], size: [7 * p.sc, 10 * p.sc, 16 * p.sc], basis: p.b,
+          }, (stage) => emitSkiff(stage, p.c, p.a, p.b, p.hull, p.sail, p.sc), { required: true });
+        }
+        {
+          const p = placeSkiff(0.478, 124, 23);
+          if (p) modelGroup("jacarepagua-sail-skiff-a", {
+            center: [p.c[0], p.keel + 3.6 * p.sc, p.c[2]], size: [7 * p.sc, 10 * p.sc, 16 * p.sc], basis: p.b,
+          }, (stage) => emitSkiff(stage, p.c, p.a, p.b, p.hull, p.sail, p.sc), { required: true });
+        }
+        {
+          const p = placeSkiff(0.508, 108, 37);
+          if (p) modelGroup("jacarepagua-sail-skiff-b", {
+            center: [p.c[0], p.keel + 3.6 * p.sc, p.c[2]], size: [7 * p.sc, 10 * p.sc, 16 * p.sc], basis: p.b,
+          }, (stage) => emitSkiff(stage, p.c, p.a, p.b, p.hull, p.sail, p.sc), { required: true });
+        }
+      }
+      every(16, (k) => {
         const s = k / n;
         if (s < 0.36 || s > 0.60) return;
         const h = hash(k * 17);
@@ -146,7 +250,17 @@
         // back 60-90 m out (the 0.00-0.06 and 0.92-0.93 legs), so rows that far
         // out stand on the back straight (32 dropped every build).
         palm(k, -1, 28 + h * 12, 13 + h * 5, h < 0.5 ? PALM : PALM_D);
-        if (h > 0.5) palm(k, -1, 40 + h * 8, 12 + h * 5, PALM_D);
+        if (h > 0.55) palm(k, -1, 40 + h * 8, 12 + h * 5, PALM_D);
+      });
+      // Infield pocket (RIGHT of 0.50–0.64). JAC-M3 still forbids tall planting
+      // on the 0.11–0.34 and 0.65–0.85 exposed legs — those stay furniture.
+      every(28, (k) => {
+        const s = k / n;
+        if (s < 0.50 || s > 0.635) return;
+        const h = hash(k * 41 + 9);
+        if (h < 0.45) return;
+        tree(k, 1, 22 + h * 14, 8 + h * 4, PALM, { crown: "round" });
+        if (h > 0.72) palm(k, 1, 34 + h * 8, 11 + h * 3, PALM_D);
       });
 
       // TIJUCA MASSIF silhouette — the district sits between Maciço da Tijuca
@@ -202,9 +316,9 @@
         if (h < 0.32) return;
         bush(k, h < 0.68 ? -1 : 1, 8 + h * 8, h < 0.6 ? RESTINGA : [0.28, 0.38, 0.20]);
       });
-      // JAC-M3: no tall inland planting. The restinga bushes above are the
-      // complete off-lagoon vegetation pass; coconut palms remain confined to
-      // the authored shoreline rank at 0.36–0.60.
+      // JAC-M3: 0.11–0.34 and 0.65–0.85 stay furniture-only (guardrail /
+      // marshals / boards). Palms stay on the lagoon rank; infield trees are
+      // the 0.50–0.635 RIGHT pocket above.
 
       {
         const a = anchor(K(0.975), 1, 13);
@@ -249,42 +363,74 @@
           addBox(stage, vadd(a.c, a.u, 21.6), [10, 0.5, 14], [0.70, 0.69, 0.66], b);
         }, { required: true });
       }
+      // Period timber bleacher opposite the pits (left of the pit straight).
+      // One modelGroup — the shared bleacher() helper left 26 unsupported
+      // crowd-bands and blew the 5 % tris budget.
+      {
+        const a = anchor(K(0.000), -1, 16);
+        const b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-pit-bleacher", {
+          center: vadd(a.c, a.u, 5.2), size: [16, 14, 88], basis: b,
+        }, (stage) => {
+          const FRAME = [0.42, 0.33, 0.24], PLANK = [0.58, 0.52, 0.44];
+          addBox(stage, vadd(vadd(a.c, a.r, 3.5), a.u, 0.2), [12, 0.4, 82], [0.70, 0.68, 0.62], b);
+          for (let r = 0; r < 6; r++) {
+            const y = 0.55 + r * 0.70;
+            addBox(stage, vadd(vadd(a.c, a.r, r * 0.95), a.u, y),
+              [1.1, 0.18, 80], PLANK, b);
+            stage._mat = MAT.FABRIC;
+            addBox(stage, vadd(vadd(a.c, a.r, r * 0.95), a.u, y + 0.45),
+              [0.75, 0.72, 78], PALE_CROWD[r % 4], b);
+            stage._mat = 0;
+          }
+          for (const tOff of [-38, -12, 12, 38]) {
+            addCyl(stage, vadd(vadd(a.c, a.t, tOff), a.r, 5.2), 0.20, 6.4, FRAME, 5, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, 5.4), a.u, 6.2), [0.22, 0.18, 80], FRAME, b);
+        }, { required: true });
+      }
       gantry(0.0, 8.5, [0.15, 0.15, 0.18]);
       gantry(0.955, 8.0, [0.15, 0.15, 0.18]);
-      for (let i = 0; i < 3; i++) {
-        const a = anchor(K(0.916 + i * 0.020), 1, 46);
-        const b = [a.r, a.u, a.t];
-        modelGroup(`jacarepagua-paddock-${i + 1}`, {
-          center: vadd(a.c, a.u, 7), size: [20, 16, 40], basis: b,
-        }, (stage) => {
-          const WALL = [0.90, 0.88, 0.82], SHADE = [0.52, 0.50, 0.46];
-          // Raised on pilotis — the ground floor is open shaded space.
-          for (let p = 0; p < 7; p++)
-            addCyl(stage, vadd(a.c, a.t, (p - 3) * 5.6), 0.26, 3.6, WALL, 6, b);
-          addBox(stage, vadd(a.c, a.u, 3.9), [15, 0.6, 36], [0.80, 0.78, 0.74], b);
-          // Two storeys set back behind the screen.
-          addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 7.2), [11, 6.0, 34], SHADE, b);
-          for (let cRow = 0; cRow < 5; cRow++) {
-            const y = 5.0 + cRow * 1.5;
-            for (let cCol = 0; cCol < 22; cCol++) {
-              if ((cRow + cCol) % 3 === 0) continue;      // the perforations
-              addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, y),
-                a.t, (cCol - 10.5) * 1.55), [0.45, 1.15, 1.15], WALL, b);
-            }
+      const emitPaddock = (stage, a, b) => {
+        const WALL = [0.90, 0.88, 0.82], SHADE = [0.52, 0.50, 0.46];
+        for (let p = 0; p < 7; p++)
+          addCyl(stage, vadd(a.c, a.t, (p - 3) * 5.6), 0.26, 3.6, WALL, 6, b);
+        addBox(stage, vadd(a.c, a.u, 3.9), [15, 0.6, 36], [0.80, 0.78, 0.74], b);
+        addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 7.2), [11, 6.0, 34], SHADE, b);
+        for (let cRow = 0; cRow < 5; cRow++) {
+          const y = 5.0 + cRow * 1.5;
+          for (let cCol = 0; cCol < 22; cCol++) {
+            if ((cRow + cCol) % 3 === 0) continue;
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, y),
+              a.t, (cCol - 10.5) * 1.55), [0.45, 1.15, 1.15], WALL, b);
           }
-          // The lattice's concrete mullions, slab top (4.2) to eave soffit
-          // (12.35): every block touches one, so the screen — and the eave and
-          // fins it now carries — stands on the slab instead of hanging free.
-          for (let m = 0; m <= 22; m++)
-            addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, 8.275),
-              a.t, (m - 11) * 1.55), [0.45, 8.15, 0.4], WALL, b);
-          // Deep flat eave with vertical brise-soleil fins on the sun side.
-          addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 12.6), [19, 0.5, 38],
-            [0.88, 0.86, 0.80], b);
-          for (let f = 0; f < 12; f++)
-            addBox(stage, vadd(vadd(vadd(a.c, a.r, -8.4), a.u, 10.6),
-              a.t, (f - 5.5) * 3.1), [0.9, 4.2, 0.28], [0.84, 0.82, 0.76], b);
-        });
+        }
+        for (let m = 0; m <= 22; m++)
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.0), a.u, 8.275),
+            a.t, (m - 11) * 1.55), [0.45, 8.15, 0.4], WALL, b);
+        addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 12.6), [19, 0.5, 38],
+          [0.88, 0.86, 0.80], b);
+        for (let f = 0; f < 12; f++)
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, -8.4), a.u, 10.6),
+            a.t, (f - 5.5) * 3.1), [0.9, 4.2, 0.28], [0.84, 0.82, 0.76], b);
+      };
+      {
+        const a = anchor(K(0.916), 1, 46), b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-paddock-1", {
+          center: vadd(a.c, a.u, 7), size: [20, 16, 40], basis: b,
+        }, (stage) => emitPaddock(stage, a, b), { required: true });
+      }
+      {
+        const a = anchor(K(0.936), 1, 46), b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-paddock-2", {
+          center: vadd(a.c, a.u, 7), size: [20, 16, 40], basis: b,
+        }, (stage) => emitPaddock(stage, a, b), { required: true });
+      }
+      {
+        const a = anchor(K(0.956), 1, 46), b = [a.r, a.u, a.t];
+        modelGroup("jacarepagua-paddock-3", {
+          center: vadd(a.c, a.u, 7), size: [20, 16, 40], basis: b,
+        }, (stage) => emitPaddock(stage, a, b), { required: true });
       }
       every(48, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
@@ -292,8 +438,16 @@
         motorhome(k, 1, 62 + h * 10, 10, 4, 6, { wall: [0.72 + h * 0.18, 0.72, 0.72] });
       });
       broadcastCompound(K(0.908), 1, 78, { vans: 2, dishes: 2, mastH: 9 });
-      // Brazilian green-and-gold hoardings.
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.10, 0.44, 0.24]);
+      // Period 1978–89 boards: green / gold / blue / white, eight along the
+      // pit straight (the old pass had three). Offset from the flag rank at
+      // dist 7 so they sit behind the poles, not through them.
+      const BOARD = [
+        [0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88],
+      ];
+      for (const [s, side, gap, bi] of [
+        [0.956, -1, 11, 0], [0.974, -1, 11, 1], [0.990, -1, 11, 2], [0.006, -1, 11, 3],
+        [0.022, -1, 11, 0], [0.038, -1, 11, 1], [0.978, 1, 12, 2], [0.018, 1, 12, 3],
+      ]) billboard(K(s), side, gap, 11, 4.4, BOARD[bi]);
       sponsorHoarding(0.955, 0.055, -1, 5.5, {
         h: 1.5, step: 11,
         palette: [[0.10, 0.44, 0.24], [0.94, 0.86, 0.20], [0.10, 0.22, 0.52], [0.92, 0.90, 0.88]],

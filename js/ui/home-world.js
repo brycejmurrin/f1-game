@@ -17,7 +17,7 @@ const HomeWorld = (function () {
     deps = deps || {};
     let mode = "", motion = "still", shot = 0, key, viewKey, pane = null, saved = null, owned = false;
     let track = null, endpoints = null, painted = false, pending = true, cut = true;
-    let clock = 0, credit = 0, moving = false, fallback = false;
+    let clock = 0, credit = 0, moving = false, fallback = false, prepGen = 0;
     const pose = { eye: [0, 6, -10], tgt: [0, 0, 0], fov: 45, shiftX: 0, shiftY: 0, cut: true };
     const a = sample(), b = sample();
     const eligible = () => deps.eligible ? !!deps.eligible() : G.state === "menu" && !G.setupPreviewOn;
@@ -53,10 +53,24 @@ const HomeWorld = (function () {
       mode = want; shot = nextShot; motion = nextMotion; key = nextKey; viewKey = opts.viewKey; pane = opts.pane || null;
       track = null; endpoints = null; clock = 0; fallback = false; dirty();
       moving = motion === "ambient" && !reduced();
-      if (prepare && deps.prepareTrack) deps.prepareTrack();
+      if (prepare && deps.prepareTrack) {
+        // Two rAF so the title paints and hit-tests before loadTrackStepped
+        // takes the main thread (post-Quali Home circuit: measured 13 s freeze
+        // once PHOTO STUDIO flipped). Node tests have no rAF — prepare now.
+        const gen = ++prepGen;
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (gen !== prepGen || !owned || !mode) return;
+              deps.prepareTrack();
+            });
+          });
+        } else deps.prepareTrack();
+      }
       return true;
     }
     function end() {
+      prepGen++;
       if (!owned) return;
       const before = saved;
       owned = false; saved = null; mode = ""; track = null; endpoints = null; clock = 0; dirty();
