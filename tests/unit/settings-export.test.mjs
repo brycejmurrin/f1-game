@@ -92,6 +92,7 @@ function bootImportUI(opts = {}) {
   const timers = new Map();
   let seq = 0, reloads = 0;
   const b = boot({ ...opts, globals: {
+    ...(opts.globals || {}),
     document: dom.document, location: { reload: () => reloads++ },
     setTimeout: (fn, ms) => { timers.set(++seq, { fn, ms }); return seq; },
     clearTimeout: (id) => timers.delete(id),
@@ -121,6 +122,46 @@ test("backup controls mount once in their own settings page, outside renderer op
   }
   b.SettingsExport.create(b.G);
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
+});
+
+for (const fail of [false, true]) test(`native backup waits for sharing and reports ${fail ? "failure" : "success"}`, async () => {
+  let finish, calls = 0, saved;
+  const held = new Promise((resolve, reject) => { finish = () => fail ? reject(new Error("disk full")) : resolve(); });
+  const b = bootImportUI({ globals: {
+    Blob,
+    URL: { createObjectURL() { throw new Error("native backup must not use an anchor"); } },
+    NativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return held; } },
+  } });
+  const button = b.dom.byId("pm-settings-all");
+  const pending = button.onclick();
+  assert.equal(calls, 1);
+  assert.equal(button.disabled, true);
+  assert.match(button.textContent, /SAVING/);
+  assert.doesNotMatch(button.textContent, /SAVED/);
+  await button.onclick();
+  assert.equal(calls, 1, "another tap cannot start a duplicate export");
+  assert.equal(saved.blob.type, "application/json");
+  assert.equal(JSON.parse(await saved.blob.text()).format, "apex26-settings-v1");
+  assert.match(saved.name, /\.json$/);
+  finish();
+  await pending;
+  assert.equal(button.disabled, false);
+  assert.match(button.textContent, fail ? /FAILED/ : /SAVED/);
+  assert.equal(calls, 1);
+});
+
+test("browser backup retains its download anchor and re-enables the button", async () => {
+  const urls = [];
+  const b = bootImportUI({ globals: {
+    Blob,
+    URL: { createObjectURL: (blob) => { urls.push(blob); return "blob:test"; }, revokeObjectURL() {} },
+    NativeDownload: { viable: () => false, saveBlob() { throw new Error("browser must not use native sharing"); } },
+  } });
+  await b.dom.byId("pm-settings-all").onclick();
+  assert.equal(urls.length, 1);
+  assert.equal(JSON.parse(await urls[0].text()).format, "apex26-settings-v1");
+  assert.match(b.dom.byId("pm-settings-all").textContent, /SAVED/);
+  assert.equal(b.dom.byId("pm-settings-all").disabled, false);
 });
 
 const volumeFile = (v) => JSON.stringify({ format: "apex26-settings-v1", settings: { audio: { volMusic: v } } });

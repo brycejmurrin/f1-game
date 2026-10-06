@@ -21,7 +21,11 @@
  *   3. failing that, the NEWEST `chromium-*` under each root, so a sandbox whose
  *      preinstalled build lags the package (this container: chromium-1194 with
  *      playwright 1.63 → 1243) keeps working instead of failing to launch.
- *   4. a system Chromium/Chrome executable on PATH or a conventional path.
+ *   4. the matching `chromium_headless_shell-<rev>` (then the newest). Playwright
+ *      1.49+ can ship only that shell — `executablePath()` still names a full
+ *      `chromium-<rev>` that was never unpacked, and every MCP status then
+ *      reports "Chrome: (not found)" while `chromium.launch()` works.
+ *   5. a system Chromium/Chrome executable on PATH or a conventional path.
  *
  * Roots: PLAYWRIGHT_BROWSERS_PATH, then ~/.cache/ms-playwright (Linux) and
  * ~/Library/Caches/ms-playwright (macOS), then /opt/pw-browsers (the sandbox's
@@ -92,6 +96,15 @@ export const CHROMIUM_LAYOUTS = [
   "chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium",
 ];
 
+/** Layouts under `chromium_headless_shell-<rev>/`, the browser Playwright
+ *  actually launches when the full Chromium archive was not installed. */
+export const HEADLESS_SHELL_LAYOUTS = [
+  "chrome-headless-shell-linux64/chrome-headless-shell",
+  "chrome-headless-shell-linux/chrome-headless-shell",
+  "chrome-headless-shell-mac-arm64/chrome-headless-shell",
+  "chrome-headless-shell-mac/chrome-headless-shell",
+];
+
 /** playwright-core/browsers.json's revision for `name`, or null when the package is absent. */
 export function browsersJsonRevision(name = "chromium") {
   try {
@@ -122,10 +135,32 @@ export function browserRoots(env = process.env) {
 const revOf = (dir) => Number(dir.slice("chromium-".length));
 const isRevDir = (dir) => /^chromium-\d+$/.test(dir);
 
-function exeIn(root, dir) {
-  for (const rel of CHROMIUM_LAYOUTS) {
+function exeIn(root, dir, layouts = CHROMIUM_LAYOUTS) {
+  for (const rel of layouts) {
     const exe = path.join(root, dir, rel);
     if (executableFile(exe)) return exe;
+  }
+  return undefined;
+}
+
+const shellRevOf = (dir) => Number(dir.slice("chromium_headless_shell-".length));
+const isShellDir = (dir) => /^chromium_headless_shell-\d+$/.test(dir);
+
+function resolveShell(roots, rev) {
+  if (rev) {
+    for (const root of roots) {
+      const exe = exeIn(root, `chromium_headless_shell-${rev}`, HEADLESS_SHELL_LAYOUTS);
+      if (exe) return { path: exe, source: `headless-shell:${rev} under ${root}` };
+    }
+  }
+  for (const root of roots) {
+    let dirs;
+    try { dirs = readdirSync(root).filter(isShellDir).sort((a, b) => shellRevOf(b) - shellRevOf(a)); }
+    catch (_) { continue; }
+    for (const d of dirs) {
+      const exe = exeIn(root, d, HEADLESS_SHELL_LAYOUTS);
+      if (exe) return { path: exe, source: `headless-shell newest:${shellRevOf(d)} under ${root}` };
+    }
   }
   return undefined;
 }
@@ -155,6 +190,8 @@ export function resolveChromium({ env = process.env, roots = browserRoots(env), 
       if (exe) return { path: exe, source: `newest:${revOf(d)} under ${root}${rev ? ` (browsers.json wants ${rev}, not installed)` : ""}` };
     }
   }
+  const shell = resolveShell(roots, rev);
+  if (shell) return shell;
   return systemChromium({ env, paths: systemPaths });
 }
 

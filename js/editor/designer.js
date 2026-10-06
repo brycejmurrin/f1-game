@@ -624,7 +624,9 @@ const TrackDesigner = (function () {
     ui.dirR = btn("TURNS RIGHT", "sel-chip", () => { params.dir = -1; refreshControls(); });
     dirRow.append(ui.dirL, ui.dirR); ui.shape.appendChild(dirRow);
     ui.apply = btn("STAMP AT SELECTED POINT", "sel-edit", () => applyStamp(sel >= 0 ? sel : 0, span >= 0 ? span : null));
-    ui.shape.appendChild(ui.apply);
+    // Always keep 2 CORNERS in the rail (hiding the whole group left 1 SHAPE → 3 LOOK).
+    ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under 1 SHAPE to stamp.");
+    ui.shape.append(ui.apply, ui.shapeHint);
     // theme
     const theme = group("3 LOOK");
     ui.themes = el("div", "td-chips");
@@ -728,7 +730,7 @@ const TrackDesigner = (function () {
     if (ui.code) ui.code.value = url;
     let copied = false;
     try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
-    message(copied ? "Share link copied (" + url.length + " characters)" : "Share link is in the SHARE CODE field — copy it from there", !copied);
+    message(copied ? "Share link copied" : "Share link is in the SHARE CODE field — copy it from there", !copied);
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
   }
@@ -792,15 +794,24 @@ const TrackDesigner = (function () {
     if (!built || !design) return;
     for (const b of ui.tools.children) { const on = b.dataset.tool === tool; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     const kind = TrackStamps.KINDS[tool];
-    ui.shape.hidden = !kind;
+    // Keep the group visible so the 1…5 numbering never skips; hide only the stamp controls.
+    ui.shape.hidden = false;
+    if (ui.shapeHint) ui.shapeHint.hidden = !!kind;
+    if (ui.apply) ui.apply.hidden = !kind;
+    for (const key of ["L", "R", "deg"]) {
+      const row = ui.paramRows[key];
+      row.hidden = !(kind && key in kind.params);
+      if (!row.hidden) { params[key] = clampParam(key, params[key] != null ? params[key] : kind.params[key]); row._refresh(); }
+    }
+    const dir = !!(kind && "dir" in kind.params);
+    ui.dirL.hidden = ui.dirR.hidden = !dir;
     if (kind) {
-      for (const key of ["L", "R", "deg"]) { const row = ui.paramRows[key]; row.hidden = !(key in kind.params); if (!row.hidden) { params[key] = clampParam(key, params[key] != null ? params[key] : kind.params[key]); row._refresh(); } }
-      const dir = "dir" in kind.params;
-      ui.dirL.hidden = ui.dirR.hidden = !dir;
       ui.dirL.classList.toggle("active", params.dir === 1); ui.dirR.classList.toggle("active", params.dir === -1);
       ui.dirL.setAttribute("aria-pressed", params.dir === 1 ? "true" : "false"); ui.dirR.setAttribute("aria-pressed", params.dir === -1 ? "true" : "false");
       ui.apply.textContent = span >= 0 && sel >= 0 ? "REPLACE THE SELECTED SPAN" : sel >= 0 ? "STAMP AFTER POINT " + (sel + 1) : "STAMP AT THE START";
       ui.shapeLabel.textContent = "2 CORNERS · " + stampExample();
+    } else {
+      ui.shapeLabel.textContent = "2 CORNERS";
     }
     for (const b of ui.themes.children) { const on = b.dataset.theme === design.theme; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     ui.themeBlurb.textContent = TrackThemes.get(design.theme).blurb || "";
@@ -1512,13 +1523,41 @@ const TrackDesigner = (function () {
     g.strokeStyle = color; g.lineWidth = 5; g.stroke();
     g.fillStyle = DesignerCanvas.COL.start; g.beginPath(); g.arc(ox + px[0] * sc, oz + pz[0] * sc, 6, 0, Math.PI * 2); g.fill();
   }
-  /** Greedy character wrap (a URL has no spaces to break on) to lines ≤ w px. */
-  function wrapChars(g, s, w) {
-    const width = (t) => { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; };
-    const lines = []; let cur = "";
-    for (const ch of s) { if (cur && width(cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
-    if (cur) lines.push(cur);
-    return lines;
+  /** Measure text width (mono fallback when the VM's canvas has no metrics). */
+  function textW(g, t) { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; }
+  /** Wrap a share URL for the 640×360 card: keep `#track=` intact (never
+   *  `…#trac` / `k=…`), put the host on its own line when the path is long,
+   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars. */
+  function wrapUrl(g, url, w) {
+    const at = url.indexOf("#track=");
+    if (at < 0) {
+      const lines = []; let cur = "";
+      for (const ch of url) { if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
+      if (cur) lines.push(cur);
+      return lines.slice(0, 3);
+    }
+    let head = url.slice(0, at);
+    const code = url.slice(at + 7);                       // after "#track="
+    if (textW(g, head) > w) {
+      const origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [head])[0];
+      head = origin + "…";
+    }
+    const lines = [head];
+    // Prefer a single `#track=<code>` line; if that is too long, break only
+    // after `=` or in the opaque code (never inside the "#track" token).
+    const marker = "#track=";
+    if (textW(g, marker + code) <= w) {
+      lines.push(marker + code);
+    } else {
+      lines.push(marker);
+      let cur = "";
+      for (const ch of code) {
+        if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; }
+        cur += ch;
+      }
+      if (cur) lines.push(cur);
+    }
+    return lines.slice(0, 3);
   }
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
@@ -1544,35 +1583,38 @@ const TrackDesigner = (function () {
     g.fillText((T && T.label) || design.theme, X, 102, W);
     g.fillStyle = COL.sel; g.font = "bold 12px system-ui, sans-serif"; g.fillText("APEX 26 · TRACK DESIGNER", X, 140, W);
     g.fillStyle = COL.text; g.font = "11px ui-monospace, monospace";
-    let lines = wrapChars(g, url, W);
-    if (lines.length > 3) {
-      const at = url.indexOf("#track="), origin = (url.match(/^[a-z]+:\/\/[^/#?]+/i) || [""])[0];
-      lines = wrapChars(g, origin + "…#track=" + url.slice(at + 7, at + 27), W).slice(0, 3);
-    }
+    const lines = wrapUrl(g, url, W);
     lines.forEach((l, k) => g.fillText(l, X, CARD_H - 24 - (lines.length - k) * 15));
     return { canvas: c, url, name: fileStem() + "-card.png" };
   }
   /** CARD: the OS share sheet with the PNG and the full link where the browser
    *  can share files (canShare({files})), else the file is saved. A dismissed
-   *  sheet (AbortError) is the player's choice — no fallback, no message. */
+   *  sheet (AbortError) is the player's choice — no fallback, no message.
+   *  Re-entry while a draw/share is in flight is refused (double-click used to
+   *  fire two downloads). */
+  let cardBusy = false;
   async function shareCard() {
-    const card = await cardCanvas();
-    if (!card) return false;
-    let blob = null;
-    try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
-    const nav = typeof navigator !== "undefined" ? navigator : null;
-    const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
-    if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
-      try {
-        await nav.share({ files: [file], title: design.name, text: card.url });
-        message("Card shared"); Log.info("track", "designer card shared");
-        return true;
-      } catch (e) {
-        if (e && e.name === "AbortError") return false;
-        Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
+    if (cardBusy) return false;
+    cardBusy = true;
+    try {
+      const card = await cardCanvas();
+      if (!card) return false;
+      let blob = null;
+      try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
+      if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: design.name, text: card.url });
+          message("Card shared"); Log.info("track", "designer card shared");
+          return true;
+        } catch (e) {
+          if (e && e.name === "AbortError") return false;
+          Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
+        }
       }
-    }
-    try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
+      try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
+    } finally { cardBusy = false; }
   }
   /** Arc s (m) of the preview build's node nearest control point i, or -1. */
   function builtS(i) {
