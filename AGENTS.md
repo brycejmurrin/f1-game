@@ -163,8 +163,7 @@ Cloud agent stall abort, handoff fields, and merge-not-rebase: full text in
 - Model (Grok desks → cloud): launch with model id `default` only — never invent other model ids.
 - Apex cloud: using-superpowers / brainstorming hard-gates are optional references, not blockers; Apex AGENTS.md + skills win.
 - Specialty bots and cloud agents never arm auto-merge themselves; Merge Desk owns merge-when-green (MERGE commit only). Disable any armed MERGE/REBASE auto-merge and tell Merge Desk + CI Watch + Grok Bot.
-- Cloud MCP namespaces on Apex VMs: `cursor`, `cursor-cloud`, `cursor-subscriptions` only — do not probe Adapter / Github / chrome-devtools / Playwright desk namespaces.
-- After opening or refreshing a PR (and after every push): call `subscribe_github_ci` + `subscribe_github_pr`; watch until green or closed; on red triage/fix. Never write the fake name `subscribe_pr_activity`.
+- Cloud MCP on Apex VMs: namespaces `cursor`, `cursor-cloud`, `cursor-subscriptions` only (do not probe Adapter / Github / chrome-devtools / Playwright desk namespaces); after every PR open/refresh/push call `subscribe_github_ci` + `subscribe_github_pr`, watch until green or closed, on red triage/fix — never invent `subscribe_pr_activity`.
 - Pages: one green tip → one train; do not dual-dispatch Pages.
 - Browser MCP on cloud VMs: prefer isolated Playwright + chrome-devtools from `.cursor/mcp.json` / the environment allowlist; do not expect reliable hits on live github.io from the VM — serve locally (`npx serve` / `http.server`) for verification when possible.
 - Acceptance: every cloud PR body must name an exact verify command or measured check.
