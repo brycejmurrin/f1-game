@@ -11,6 +11,12 @@ function create(G) {
 
   let draft = null;
   let draftFrom = null;   // the live slot before an EMPTY slot was opened; restored if the draft is abandoned
+  // Where CAREER MODES was opened from. Esc/BACK must return to the title when
+  // the title opened the picker (openSlots from title-flow), and only climb to
+  // the CAREER hub when the hub's own CAREER MODES door opened it. Without this,
+  // an active save made title → CAREER MODES → Esc land on CAREER 2026 / GO RACING.
+  let slotsOrigin = "title";   // "title" | "hub"
+  let draftFieldErr = null;    // { name?, code?, num? } inline errors for NEW CAREER
 
   function head(text, id) {
     const n = el("h3", "sel-label", text);
@@ -322,7 +328,7 @@ function create(G) {
         left.appendChild(head("BACKUP"));
         left.appendChild(el("div", "cr-note",
           "Save or restore every career slot as one JSON file. Settings and "
-          + "garage builds are not included — use SETTINGS › FILES and GARAGE › TEAM for those."));
+          + "garage builds are not included — use SETTINGS › BACKUP & RESTORE and GARAGE › TEAM for those."));
         left.appendChild(row);
       }
     }
@@ -767,7 +773,8 @@ function create(G) {
 
     right.appendChild(head(draft.flavour === "myteam" ? "TEAM PRINCIPAL" : "YOUR DRIVER"));
     const form = el("div", "cr-form");
-    const addField = (label, value, maxlen, onInput, type) => {
+    const err = draftFieldErr || {};
+    const addField = (label, value, maxlen, onInput, type, errKey) => {
       const wrap = el("label", "cr-field");
       wrap.appendChild(el("span", "cr-field-lbl", label));
       const input = document.createElement("input");
@@ -775,15 +782,27 @@ function create(G) {
       input.value = value;
       if (maxlen) input.maxLength = maxlen;
       input.className = "cr-input";
+      const msg = errKey && err[errKey];
+      if (msg) input.setAttribute("aria-invalid", "true");
       input.oninput = () => onInput(input.value);
       wrap.appendChild(input);
       form.appendChild(wrap);
+      if (msg) {
+        const note = el("div", "cr-note", msg);
+        note.setAttribute("role", "alert");
+        form.appendChild(note);
+      }
       return input;
     };
-    addField("NAME", draft.name, 22, (v) => { draft.name = v; });
-    addField("CODE", draft.code, 3, (v) => { draft.code = v.toUpperCase(); });
-    const numIn = addField("NUMBER", String(draft.num), 2, (v) => { draft.num = parseInt(v, 10) || 99; }, "number");
-    numIn.min = "2"; numIn.max = "99";
+    addField("NAME", draft.name, 22, (v) => { draft.name = v; }, "text", "name");
+    addField("CODE", draft.code, 3, (v) => { draft.code = v.toUpperCase(); }, "text", "code");
+    const numIn = addField("NUMBER", draft.num == null || Number.isNaN(draft.num) ? "" : String(draft.num), 2, (v) => {
+      const t = String(v).trim();
+      if (!t) { draft.num = null; return; }
+      const n = parseInt(t, 10);
+      draft.num = Number.isFinite(n) ? n : null;
+    }, "number", "num");
+    numIn.min = "1"; numIn.max = "99";
     right.appendChild(form);
 
     if (draft.flavour === "driver") {
@@ -1017,7 +1036,7 @@ function create(G) {
         + (Career.slot().i + 1) + " of " + Career.SLOTS
         + " · " + used + (used === 1 ? " career saved" : " careers saved")),
       el("span", "cr-record-cta", "CAREER MODES"));
-    slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots(); };
+    slotBtn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openSlots("hub"); };
     left.appendChild(slotBtn);
 
     // A disabled door says WHY. A greyed upgrade card with no reason on it is
@@ -1463,27 +1482,32 @@ function create(G) {
       else if (draft) buildSetupPanes();
       else buildSlotPanes();
     });
-    // The foot button must say where it GOES: from the slot picker over an
-    // active career it returns to the HUB, and a button labelled MAIN MENU
-    // that lands you back in the career was the one lying label in the app.
+    // The foot button must say where it GOES: from the hub's CAREER MODES door
+    // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
+    // then opening CAREER 2026 was the lying label Esc also followed (data-esc-close).
     const back = $("cr-back");
-    if (back) back.textContent = (picking && Career.active()) ? "BACK" : "MAIN MENU";
+    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? "BACK" : "MAIN MENU";
     ScrollFade.refresh();
   }
 
   function openHub() {
     Log.info("ui", "CareerUI.openHub");
     picking = false;
+    slotsOrigin = "hub";
     armedDelete = "";
     armedImport = ""; pendingImport = null;
+    draftFieldErr = null;
     build();
     $("career").hidden = false;
   }
-  function openSlots() {
+  // origin: "title" (default — title-flow openCareerSlots) or "hub" (hub CAREER MODES).
+  function openSlots(origin) {
     Log.info("ui", "CareerUI.openSlots");
     picking = true;
+    slotsOrigin = origin === "hub" ? "hub" : "title";
     armedDelete = "";
     armedImport = ""; pendingImport = null;
+    draftFieldErr = null;
     build();
     $("career").hidden = false;
   }
@@ -1499,14 +1523,30 @@ function create(G) {
     $("career").hidden = true;
     draft = null; draftFrom = null; armedDelete = "";
     armedImport = ""; pendingImport = null;
+    draftFieldErr = null;
+    slotsOrigin = "title";
+  }
+
+  // NEW CAREER field gate — empty name, non-3-letter code, number outside 1–99
+  // must not write a save. Career.start() would otherwise fill defaults.
+  function draftErrors(d) {
+    const out = {};
+    if (!d || !String(d.name || "").trim()) out.name = "Enter a name";
+    const code = String(d && d.code || "").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(code)) out.code = "Code must be 3 letters";
+    const n = d && d.num;
+    if (!Number.isInteger(n) || n < 1 || n > 99) out.num = "Number must be 1–99";
+    return out;
   }
 
   $("cr-back").onclick = () => {
-    // Back to the hub through openCareer(), not a bare rebuild: if the live
-    // career was just DELETED, Career.load() re-homed to another save, and
+    // Hub-opened picker only: climb back to the hub through openCareer(). If the
+    // live career was just DELETED, Career.load() re-homed to another save, and
     // G.season / trackIdx / teamIdx still pointed at the deleted one — the
     // next GO RACING raced it and settled against the wrong round.
-    if (picking && Career.active()) {
+    // Title-opened picker (and Esc with SLOT1 EXPORT focused — same #cr-back
+    // door via data-esc-close) always leaves to the title, never CAREER 2026.
+    if (picking && slotsOrigin === "hub" && Career.active()) {
       picking = false; armedDelete = ""; armedImport = ""; pendingImport = null;
       G.openCareer(); return;
     }
@@ -1533,11 +1573,18 @@ function create(G) {
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
+      const errs = draftErrors(draft);
+      if (Object.keys(errs).length) {
+        draftFieldErr = errs;
+        buildSetupPanes();
+        return;
+      }
+      draftFieldErr = null;
       // start() REFUSES (null) when the chosen mode's slots are all used and
       // no slot was named — it will not pick one to overwrite. Send the
       // player to the picker so the replacement is their call, and leave
       // draftFrom alone so BACK still works.
-      if (!Career.start(draft)) { openSlots(); return; }   // draft.slot, when the picker set one
+      if (!Career.start(draft)) { openSlots(slotsOrigin); return; }   // draft.slot, when the picker set one
       draftFrom = null;             // committed: the new slot IS the live one now
       G.openCareer();          // re-enters the hub with the save in place
       return;

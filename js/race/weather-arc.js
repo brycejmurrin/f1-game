@@ -79,8 +79,20 @@ const WeatherArc = (function () {
       return setWeatherLive(w);
     }
 
+    /** Cap a derived MIXED walk so a 3–5 lap race still reaches `to` before the
+     *  flag. The seed still draws 2–7 minutes; a host-supplied wxArc.dur is
+     *  never recapped (the lobby already agreed those seconds). ~48 m/s is a
+     *  conservative race-average so a street circuit is not over-cut. */
+    function capPlanDur(dur) {
+      dur = Math.max(1, dur | 0);
+      const laps = (G.lapsTarget | 0) || (G.raceLaps | 0);
+      const len = G.track && G.track.total;
+      if (!(laps > 0) || !(len > 0)) return dur;
+      const cap = Math.max(90, Math.floor(laps * (len / 48) * 0.72));
+      return Math.min(dur, cap);
+    }
     /** The CHANGEABLE plan derived from (sim seed, race counter): 2–7 minutes
-     *  to a target that is never the weather we start on. */
+     *  to a target that is never the weather we start on, then capPlanDur. */
     function planFor() {
       const r = (k) => {
         const seed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer() && Career.seasonSeed)
@@ -91,7 +103,7 @@ const WeatherArc = (function () {
       };
       const opts = TARGETS.filter((w) => w !== G.raceWeather);
       const to = opts[Math.floor(r("to") * opts.length)] || "wet";
-      const dur = 120 + Math.floor(r("dur") * 300);   // 2–7 minutes of transition
+      const dur = capPlanDur(120 + Math.floor(r("dur") * 300));
       return { to, dur };
     }
     function startChangeable() {

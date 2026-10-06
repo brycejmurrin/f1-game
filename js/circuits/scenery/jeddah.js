@@ -10,7 +10,7 @@
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
-        lampPost, seat } = api;
+        lampPost, seat, along } = api;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
       const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
@@ -96,6 +96,49 @@
         [0.00, 0.16, GREEN], [0.16, 0.31, GOLD], [0.31, 0.47, GREEN],
         [0.53, 0.68, GOLD], [0.68, 0.84, GREEN], [0.84, 0.997, GOLD],
       ];
+      // Seat canyon feet: on banked / seaward stretches the shared canyon slabs
+      // hang 1–2.5 m above terrain (ground-audit unsupported ≈11). A thin
+      // filler column from terrain→wall-base grounds the BFS chain — only when
+      // the gap is clear (raw foundation() buried hundreds of prims where
+      // terrain sat above the wall base). Do not edit identity.js.
+      const terrainYAt = api.terrainYAt;
+      const seatCanyonFeet = (s0, s1, side, gap) => {
+        if (typeof along !== "function") return;
+        // Sparse footings (every 2nd slab ≈ 11 m): adjacent canyon AABBs touch,
+        // so BFS grounds the run. Every-slab footings made flatCoplanar spots;
+        // every-4th left 9 unsupported islands.
+        let fi = 0;
+        // Tag continues the lattice across SAUDI_BLOCKS: without it along()
+        // emits the shared end node twice (byte-identical boxes, 0.0 mm, 2.2 m²
+        // — the two extra coplanar spots vs baseline 4).
+        along(s0, s1, 5.5, (k, spacing) => {
+          if ((fi++ % 2) !== 0) return;
+          const p = anchor(k, side, gap);
+          const b = [p.r, p.u, p.t];
+          let lo = Infinity;
+          if (terrainYAt) {
+            for (const ox of [-0.25, 0, 0.25]) {
+              const x = p.c[0] + p.r[0] * ox + p.t[0] * ox * 0.5;
+              const z = p.c[2] + p.r[2] * ox + p.t[2] * ox * 0.5;
+              const y = terrainYAt(x, z);
+              if (y != null && y < lo) lo = y;
+            }
+          }
+          if (Number.isFinite(lo)) {
+            const gapM = p.c[1] - lo;
+            if (gapM < 0.22 || gapM > 3.5) return;
+            const h = gapM + 0.15;
+            addBox(out, [p.c[0], lo + h * 0.5, p.c[2]],
+              [0.65, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
+          } else {
+            // Off-mesh (water/void): deep footing reaches the audit surface.
+            // Jitter height so neighbouring footing tops are not coplanar.
+            const h = 3.05 + (fi % 3) * 0.12;
+            addBox(out, vadd(p.c, p.u, -h * 0.5 + 0.08),
+              [0.70, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
+          }
+        }, `jeddah-canyon-feet:${side}:${gap.toFixed(2)}`);
+      };
       for (const side of [-1, 1]) {
         for (const [b0, b1, accent] of SAUDI_BLOCKS) {
           // The -1 (pit side) canyon stops at the pit complex's window
@@ -114,12 +157,14 @@
             h: (b0 < 0.5 ? 1.35 : 1.40) + (side > 0 ? 0.06 : 0.08),
             stripeCol: accent, stripeEvery: 5,
           });
+          seatCanyonFeet(a0, a1, side, 4.35);
         }
         // The T13 banked sector keeps its own wider, taller wall.
         canyon(0.47, 0.53, side, 5.05, {
           h: 1.40 + (side > 0 ? 0.08 : 0.00),
           stripeCol: GOLD, stripeEvery: 2,
         });
+        seatCanyonFeet(0.47, 0.53, side, 5.05);
       }
 
       let poleI = 0;
@@ -166,6 +211,56 @@
         palmLit(K(s), -1, 11.5, 8.4 + (i % 2) * 0.5, PALMFROND);
         if (i % 3 === 0) palmLit(K(s + 0.007), -1, 17.5, 7.6, [0.09, 0.38, 0.16]);
       }
+      // Corniche palm promenade densify — seaward (R) Red Sea corridor + marina
+      // lagoon: a second staggered row so the waterfront reads as planted, not
+      // bare plate between the canyon and the water (survey sheet-03).
+      for (let i = 0; i < 18; i++) {
+        const s = 0.08 + i * 0.016;
+        palmLit(K(s), 1, 9.5 + (i % 3) * 2.2, 7.2 + hash(i * 19) * 2.4, PALMFROND);
+        if (i % 2 === 0)
+          palmLit(K(s + 0.008), 1, 15.5 + (i % 2) * 2, 6.4 + hash(i * 23) * 2, [0.10, 0.40, 0.18]);
+      }
+      for (let i = 0; i < 12; i++) {
+        palmLit(K(0.44 + i * 0.014), 1, 10 + (i % 2) * 3.5,
+          6.8 + hash(i * 29) * 2.2, (i % 2) ? PALMFROND : [0.14, 0.48, 0.20]);
+      }
+      // Low Corniche sea wall / promenade rail on the seaward edge (outside the
+      // canyon): pale stone coping + teal accent posts so the Red Sea lip reads
+      // from SF and overview cameras. Seat with a short footing only when the
+      // terrain drops clear of the rail base (no buried foundation slabs).
+      if (typeof along === "function") {
+        const SEA_WALL = [0.78, 0.76, 0.70];
+        const SEA_CAP  = [0.88, 0.86, 0.80];
+        const seatRail = (k, side, dist, spacing, b, a) => {
+          if (!terrainYAt) return;
+          let lo = Infinity;
+          for (const ox of [-0.2, 0, 0.2]) {
+            const x = a.c[0] + a.r[0] * ox, z = a.c[2] + a.r[2] * ox;
+            const y = terrainYAt(x, z);
+            if (y != null && y < lo) lo = y;
+          }
+          if (!Number.isFinite(lo)) return;
+          const gapM = a.c[1] - lo;
+          if (gapM < 0.22 || gapM > 2.5) return;
+          const h = gapM + 0.1;
+          addBox(out, [a.c[0], lo + h * 0.5, a.c[2]],
+            [0.50, h, spacing * 0.88], [0.62, 0.60, 0.55], b);
+        };
+        along(0.07, 0.36, 7.0, (k, spacing) => {
+          const a = anchor(k, 1, 7.2), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2.5)) return;
+          addBox(out, vadd(a.c, a.u, 0.55), [0.45, 1.1, spacing * 0.92], SEA_WALL, b);
+          addBox(out, vadd(a.c, a.u, 1.15), [0.55, 0.18, spacing * 0.92], SEA_CAP, b);
+          seatRail(k, 1, 7.2, spacing, b, a);
+        });
+        along(0.44, 0.62, 8.0, (k, spacing) => {
+          const a = anchor(k, 1, 8.0), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2.5)) return;
+          addBox(out, vadd(a.c, a.u, 0.50), [0.40, 1.0, spacing * 0.90], SEA_WALL, b);
+          addBox(out, vadd(a.c, a.u, 1.05), [0.50, 0.16, spacing * 0.90], WINTEAL, b);
+          seatRail(k, 1, 8.0, spacing, b, a);
+        });
+      }
 
       // ── Marshal posts ─────────────────────────────────────────────────────
       for (const [s, side] of [[0.06, -1], [0.13, 1], [0.34, -1], [0.49, 1],
@@ -187,20 +282,31 @@
       }
 
       // ── King Fahd's Fountain — offshore landmark ──────────────────────────
+      // Survey sheet-03: plume under-reads from overview. Brought closer
+      // (gap 260, was 380) and thickened so it registers at overview cameras;
+      // mid-shaft LED rings + base flood ring for dusk/night.
       {
-        const a = anchor(K(0.20), 1, 380);
+        const a = anchor(K(0.20), 1, 260);
         const b = [a.r, a.u, a.t];
         modelGroup("jeddah-fountain", {
-          center: [a.c[0], pyMin + 154, a.c[2]], size: [16, 312, 16], basis: b,
+          center: [a.c[0], pyMin + 175, a.c[2]], size: [40, 360, 40], basis: b,
         }, (stage) => {
-          // Cone base must sit at the jet cylinder's top (base -0.8 + height 255
-          // = 254.2), not at a bare +255 — that 0.8m gap read as unsupported and
-          // the cone floated the full 256m down to the sea (float-audit cause:
-          // mis-derived height, not base/centroid — both prims are already
-          // correctly base-anchored). Small overlap avoids an exact flush seam.
-          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 0.9, 255, LED, 6, b);
-          addCone(stage, [a.c[0], pyMin + 254.1, a.c[2]], 7, 55, [0.94, 0.97, 1.0], 6, b);
-          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 5, 2, [0.16, 0.18, 0.22], 6, b);
+          const PLUME = [0.96, 0.98, 1.20];
+          const SPRAY = [0.92, 0.96, 1.25];
+          addCyl(stage, [a.c[0], pyMin - 0.8, a.c[2]], 2.4, 280, PLUME, 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 3.6, 55, [0.90, 0.94, 1.15], 8, b);
+          addCone(stage, [a.c[0], pyMin + 278.5, a.c[2]], 16, 78, SPRAY, 8, b);
+          addCone(stage, [a.c[0], pyMin + 310, a.c[2]], 9, 40, [0.98, 0.99, 1.25], 8, b);
+          addCyl(stage, [a.c[0], pyMin - 0.4, a.c[2]], 12, 3.0, [0.16, 0.18, 0.22], 8, b);
+          addCyl(stage, [a.c[0], pyMin + 2.2, a.c[2]], 13.5, 0.7, LED, 10, b);
+          for (let r = 0; r < 8; r++) {
+            const ang = (r / 8) * Math.PI * 2;
+            const ox = Math.cos(ang) * 10.5, oz = Math.sin(ang) * 10.5;
+            addBox(stage, [a.c[0] + ox, pyMin + 3.0, a.c[2] + oz], [1.8, 0.9, 1.8], SPANGLE, b);
+          }
+          for (const yh of [50, 100, 150, 200, 245]) {
+            addCyl(stage, [a.c[0], pyMin + yh, a.c[2]], 3.0, 1.6, LED, 8, b);
+          }
         }, { required: true });
       }
 
@@ -279,6 +385,57 @@
         palette: WALL_INL, lit: true,
         step: 70, floor: 3,
       });
+
+      // ── CLOSED STREET MASSES on the S/F canyon ─────────────────────────────
+      // Survey sheet-03 SF: generic neonTower day-path reads as open skeleton
+      // frames (shared city.js open-face bug — not edited here). neonTower front
+      // row centres at gap 13–25 (w up to ~18 → inner face ~4) and back at
+      // 40–70, so ANY deep mass in 4–82 clips. Fix: (1) thin closed fascia
+      // skins at gap 5.6 (1.0 m deep, inside the canyon pocket, small overlap
+      // volume) and (2) tall closed cores at gap ≥105 (clear of the back row).
+      {
+        const NEON_ROW = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, WINCOOL];
+        const closedMass = (frac, side, dist, w, h, d, wallCol, neonCol) => {
+          const a = anchor(K(frac), side, dist), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.35)) return;
+          const box = (seat && seat.box) ? seat.box.bind(seat) : null;
+          const put = (c, sz, col) => {
+            if (box) box(out, c, sz, col, b);
+            else addBox(out, vadd(c, a.u, sz[1] * 0.5), sz, col, b);
+          };
+          put(a.c, [w, h, d], wallCol);
+          put(vadd(a.c, a.r, -side * (w * 0.5 + 0.06)), [0.14, h * 0.70, d * 0.70], neonCol);
+          put(vadd(a.c, a.u, h), [w * 1.02, 0.9, d * 1.02], neonCol);
+        };
+        // Closed fascia — 1.5 m radial depth at gap 5.9 (canyon at 4.35;
+        // neonTower centres ≥13). SF pocket only: the T1 wrap (s≈0.00–0.07)
+        // clipped the generic street retail place() at gap 9 (severe 1.5 m).
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.875 + i * 0.0085;
+          const hv = hash(i * 41 + 3);
+          closedMass(sf, -1, 5.9,
+            1.5, 12 + hv * 8, 8.5 + hv * 2.5,
+            WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
+          closedMass(sf + 0.004, 1, 6.0,
+            1.5, 11 + hv * 7, 8 + hv * 2.5,
+            WALL_INL[(i + 2) % WALL_INL.length], NEON_ROW[(i + 2) % NEON_ROW.length]);
+        }
+        // Tall closed skyline well behind neonTower back row (gap ≥105).
+        for (let i = 0; i < 7; i++) {
+          const sf = 0.90 + i * 0.013;
+          const hv = hash(i * 67 + 11);
+          closedMass(sf, -1, 108 + (i % 3) * 6,
+            12 + hv * 5, 40 + hv * 36, 12 + hv * 5,
+            WALL_INL[i % WALL_INL.length], NEON_ROW[i % NEON_ROW.length]);
+        }
+        for (let i = 0; i < 3; i++) {
+          const sf = 0.012 + i * 0.016;
+          const hv = hash(i * 71 + 13);
+          closedMass(sf, -1, 110 + i * 5,
+            11 + hv * 4, 42 + hv * 32, 11 + hv * 4,
+            WALL_INL[(i + 1) % WALL_INL.length], NEON_ROW[(i + 2) % NEON_ROW.length]);
+        }
+      }
 
       // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
       cityFront(0.04, 0.24, -1, 22, {
@@ -466,6 +623,60 @@
       billboard(K(0.70), -1, 13, 10, 11, GREEN);   // 13 = midpoint of the 26 m strip to the parallel 0.275 leg; at 26 a panel end was on that road
       billboard(K(0.69), -1, 20, 9,  11, MAGENTA);
       billboard(K(0.73), -1, 24, 9,  10, WINTEAL);
+
+      // ── NIGHT CANYON NEON + billboards (street-night identity) ────────────
+      // Signature dusk/night shots were bare dark boxes. Add mid-canyon neon
+      // strips, LED fascia bands and denser boards so the Corniche reads as a
+      // night street race without touching city.js neonTower.
+      {
+        const NEON_COLS = [MAGENTA, WINTEAL, GOLD, GREEN, SPANGLE, [0.20, 0.75, 1.15], [1.10, 0.35, 0.55]];
+        // Neon fascia strips seated ON the canyon top (~1.35 m), not floating
+        // at 2.4 m (ground-audit unsupported). Brighter / taller for night read.
+        for (let i = 0; i < 20; i++) {
+          const s = i / 20;
+          const col = NEON_COLS[i % NEON_COLS.length];
+          const side = (i % 2) ? 1 : -1;
+          const a = anchor(K(s), side, 4.55), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 2)) continue;
+          addBox(out, vadd(a.c, a.u, 1.35), [0.28, 0.55, 7.0], col, b);
+          addBox(out, vadd(a.c, a.u, 1.00), [0.18, 0.35, 7.0], LED, b);
+          // Vertical neon blade every other strip — canyon night identity.
+          if (i % 2 === 0) {
+            addBox(out, vadd(vadd(a.c, a.r, -side * 0.35), a.u, 3.2),
+              [0.22, 4.5, 0.55], col, b);
+          }
+        }
+        // Extra night-race boards on SF, T13 approach, technical sector, DRS.
+        const boards = [
+          [0.98, -1, 18, 12, 10, MAGENTA],
+          [0.99,  1, 20, 11,  9, WINTEAL],
+          [0.015,-1, 16, 10,  9, GOLD],
+          [0.04,  1, 15,  9,  8, GREEN],
+          [0.48, -1, 14, 10,  9, MAGENTA],
+          [0.52,  1, 16, 11, 10, WINTEAL],
+          [0.80, -1, 14,  9,  8, SPANGLE],
+          [0.83,  1, 15, 10,  9, [0.20, 0.75, 1.15]],
+          [0.91, -1, 18, 11, 10, MAGENTA],
+          [0.94,  1, 19, 10,  9, GOLD],
+          [0.25, -1, 16,  9,  8, WINTEAL],
+          [0.33, -1, 15,  8,  8, GREEN],
+        ];
+        for (const [s, side, gap, w, h, col] of boards) {
+          billboard(K(s), side, gap, w, h, col);
+        }
+        // Storefront neon cubes tucked behind the canyon (gap 9–11) — cheap
+        // instanced night colour without open-face towers.
+        for (let i = 0; i < 16; i++) {
+          const s = 0.06 + i * 0.055;
+          const side = (i % 2) ? -1 : 1;
+          const col = NEON_COLS[i % NEON_COLS.length];
+          const a = anchor(K(s), side, 9.5 + (i % 3) * 1.2), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 3)) continue;
+          addBox(out, vadd(a.c, a.u, 1.6), [2.4, 3.2, 4.5], [0.12, 0.12, 0.15], b);
+          addBox(out, vadd(a.c, a.u, 3.4), [2.5, 0.55, 4.6], col, b);
+          addBox(out, vadd(vadd(a.c, a.r, -side * 1.25), a.u, 2.0), [0.12, 2.2, 3.8], col, b);
+        }
+      }
 
       // ── TIGHT TECHNICAL SECTOR — s 0.78–0.84 ─────────────────────────────
       for (const side of [-1, 1]) {

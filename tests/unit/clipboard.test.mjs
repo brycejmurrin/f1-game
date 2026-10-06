@@ -79,3 +79,52 @@ test("clipboard.js is on the shell roster", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.match(html, /src="js\/core\/clipboard\.js\?v=/);
 });
+
+for (const step of ["focus", "select", "setSelectionRange"]) {
+  test(`fallback removes its textarea and restores focus when ${step} throws`, async () => {
+    const h = boot({ noClipboard: true, execOk: true });
+    const button = h.dom.document.createElement("button");
+    h.dom.document.body.appendChild(button);
+    button.focus();
+    const create = h.dom.document.createElement;
+    let textarea;
+    h.dom.document.createElement = (tag) => {
+      const el = create(tag);
+      if (tag === "textarea") {
+        textarea = el;
+        const original = el[step];
+        el[step] = (...args) => {
+          original(...args);
+          throw new Error("selection unavailable");
+        };
+      }
+      return el;
+    };
+    assert.equal(await h.ApexClipboard.write("private payload"), false);
+    assert.equal(textarea.parentNode, null, "failed fallback must not retain copied text in the DOM");
+    assert.equal(h.dom.document.activeElement, button);
+    assert.deepEqual(h.order, [], "copy must not run after selection fails");
+  });
+}
+
+test("a focus-restoration error cannot report an already successful copy as failed", async () => {
+  const h = boot({ noClipboard: true, execOk: true });
+  const button = h.dom.document.createElement("button");
+  h.dom.document.body.appendChild(button);
+  button.focus();
+  button.focus = () => { throw new Error("button no longer focusable"); };
+  assert.equal(await h.ApexClipboard.write("copied"), true);
+  assert.deepEqual(h.order, ["execCommand:copy"]);
+  assert.equal(h.dom.document.body.querySelector("textarea"), null);
+});
+
+test("failed execCommand still removes its textarea and restores focus", async () => {
+  const h = boot({ noClipboard: true });
+  const button = h.dom.document.createElement("button");
+  h.dom.document.body.appendChild(button);
+  button.focus();
+  h.dom.document.execCommand = () => { throw new Error("copy denied"); };
+  assert.equal(await h.ApexClipboard.write("not copied"), false);
+  assert.equal(h.dom.document.body.querySelector("textarea"), null);
+  assert.equal(h.dom.document.activeElement, button);
+});

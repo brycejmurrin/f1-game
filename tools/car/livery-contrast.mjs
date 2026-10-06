@@ -47,7 +47,7 @@ export function loadAtlas() {
     document: { querySelector: () => null,
       createElement: () => { const c = new RecCtx(); made.push(c);
         return { getContext: () => c, set width(v) {}, set height(v) {},
-                 get width() { return 1024; }, get height() { return 1280; } }; } },
+                 get width() { return 2048; }, get height() { return 2560; } }; } },
   };
   sb.globalThis = sb;
   vm.createContext(sb);
@@ -56,7 +56,8 @@ export function loadAtlas() {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const grab = (n) => vm.runInContext(n, sb);
   return { LT: grab("LiveryTex"), Teams: grab("Teams"), Liveries: grab("Liveries"),
-           paint: (id, colors) => { made = []; grab("LiveryTex").buildAtlas(id, colors, 16, true); return made[0].ops; } };
+           // hiRes=true: authored canvas only (made[0]); preview downscale is made[1].
+           paint: (id, colors) => { made = []; grab("LiveryTex").buildAtlas(id, colors, 16, true, true); return made[0].ops; } };
 }
 
 const lum = (css) => {

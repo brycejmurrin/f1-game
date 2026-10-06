@@ -280,7 +280,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover, #fb-shots .lt-tab:hover { color: var(--text); }
 }
 #lt-tabs .lt-tab:active, #ct-modes .lt-tab:active, #fb-shots .lt-tab:active { color: var(--text); }
@@ -534,7 +534,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   letter-spacing: var(--ls-2);
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #audioset .as-sec > summary:hover {
     color: var(--text);
     background-color: transparent;
@@ -583,7 +583,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border-color: rgba(255,255,255,0.28);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
@@ -1155,7 +1155,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
 }
 .adv-more-btn::-webkit-details-marker { display: none; }
 .adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .adv-more-btn:hover { background: var(--plate-press); }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
@@ -1187,7 +1187,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
   font-size: var(--fs-micro); line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .music-del:hover { opacity: 1; border-color: var(--red); color: var(--red); }
 }
 .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
