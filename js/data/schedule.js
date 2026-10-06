@@ -40,6 +40,7 @@ const DataSchedule = (function () {
   function bindOverflowTitle(node, text) {
     if (!node || !node.addEventListener) return;
     node.addEventListener("mouseenter", function () {
+      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
       if (node.scrollWidth > node.clientWidth + 1) node.title = text;
       else if (node.removeAttribute) node.removeAttribute("title");
     });

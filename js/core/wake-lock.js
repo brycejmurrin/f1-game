@@ -2,6 +2,13 @@
    A late grant must release after quit/hide; old release events cannot erase replacements. */
 const RaceWakeLock = (function () {
 "use strict";
+function releaseLock(lock, message) {
+  try {
+    // release() returns a promise: synchronous try/catch alone leaves a
+    // rejected release unhandled, including grants arriving after quit.
+    Promise.resolve(lock.release()).catch(() => { Log.info("game", message); });
+  } catch (e) { Log.info("game", message); }
+}
 function create() {
 // SCREEN WAKE LOCK for a race; browsers release it whenever the page hides.
 let raceWake = null;
@@ -16,7 +23,7 @@ function hold() {
     pending.then((lock) => {
       if (raceWakePending === pending) raceWakePending = null;
       if (!raceWakeWanted || document.hidden) {
-        try { lock.release(); } catch (e) { Log.info("game", "late wake-lock release failed"); }
+        releaseLock(lock, "late wake-lock release failed");
         return;
       }
       raceWake = lock;
@@ -29,7 +36,7 @@ function drop() {
   raceWakeWanted = false;
   const held = raceWake;
   raceWake = null;
-  try { if (held) held.release(); } catch (e) { Log.info("game", "wake lock was already released"); }
+  if (held) releaseLock(held, "wake lock was already released");
 }
 
 return { hold, drop, wanted: () => raceWakeWanted };

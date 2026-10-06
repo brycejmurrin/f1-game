@@ -37,6 +37,8 @@ function boot() {
     Float32Array, Uint8Array, Array, Object, Number, JSON, WeakMap, Error });
   ctx.window = ctx;
   seedLog(ctx);
+  // hash("dur") = 0.99 draws the raw 7-minute MIXED walk so the cap is visible.
+  ctx.Career = { inCareer: () => false, hash: (_s, _r, _k, n) => n === "dur" ? 0.99 : 0.1 };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   const P = ctx.Particles, TM = ctx.TyreModel;
@@ -47,7 +49,8 @@ function boot() {
   let wa = null;
   const wetness = () => TM.wetness(G.raceWeather, wa && wa.arc);
   const G = {
-    raceWeather: "dry", soundOn: true, track: null, announce() {},
+    raceWeather: "dry", soundOn: true, track: null, announce() {}, applyRaceSettings() {},
+    simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3,
     isWetRoad: () => wetness() >= WET,
     isRaining: () => wetness() >= STORM,
     initRainDrops: () => P.rainSeed(G.isWetRoad() && !G.isRaining()),
@@ -121,4 +124,26 @@ test("source guard: the VM's predicates and drizzle seed are game.js's, and the 
   assert.match(game, /function trackWetness\(\) \{ return TyreModel\.wetness\(raceWeather, wxArc && wxArc\.arc\); \}/);
   assert.match(game, /Particles\.rainSeed\(isWetRoad\(\) && !isRaining\(\)\);/);
   assert.match(game, /if \(isWetRoad\(\) && Particles\.rainActive\(\)\) Particles\.rainUpdate\(dt, camEye, isRaining\(\)\);/);
+});
+
+test("MIXED plan duration finishes inside a short race; a host plan is not recapped", () => {
+  const { G, wa } = boot();
+  G.track = { total: 3300 };   // street-length 3-lap (~3.5 min at 48 m/s)
+  const p = wa.planFor();
+  const raw = 120 + Math.floor(0.99 * 300);   // 417 — the uncapped seed draw
+  assert.equal(raw, 417);
+  assert.ok(p.dur < raw, "3-lap MIXED must not keep a ~7 min walk, got " + p.dur);
+  assert.ok(p.dur >= 90 && p.dur <= Math.floor(3 * (3300 / 48) * 0.72),
+    "cap is 72 % of estimated race time, got " + p.dur);
+  wa.changeable = true;
+  wa.plan = { to: "rain", dur: 400 };
+  const armed = wa.startChangeable();
+  assert.equal(armed.dur, 400, "lobby/host seconds stay as agreed");
+});
+
+test("source guard: MIXED plans go through capPlanDur; host wxArc.dur does not", () => {
+  const src = read("js/race/weather-arc.js");
+  assert.match(src, /function capPlanDur\(dur\)/);
+  assert.match(src, /const dur = capPlanDur\(120 \+ Math\.floor\(r\("dur"\) \* 300\)\);/);
+  assert.match(src, /never recapped/);
 });

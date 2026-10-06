@@ -280,7 +280,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover, #fb-shots .lt-tab:hover { color: var(--text); }
 }
 #lt-tabs .lt-tab:active, #ct-modes .lt-tab:active, #fb-shots .lt-tab:active { color: var(--text); }
@@ -493,16 +493,29 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    Five closed folds, same disclosure language as DISPLAY. ON/OFF lives in
    the fold body so a summary tap only opens. */
 .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+/* The rule lives on the fold, not the summary: a summary border is
+   inset by padding-inline, and --grad-rule faded out ~150px short of
+   the sheet edge. .as-sec is a block in #audioset-inner (grid-column
+   1 / -1 on the wide 2-col .pm-group). */
+#pmsettings-inner #audioset-inner,
+#pmsettings-inner #audioset .as-sec,
+#pmsettings-inner #audioset .as-sec > summary {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#pmsettings-inner #audioset .as-sec {
+  border-bottom: 1px solid var(--card-line);
+}
 #pmsettings-inner #audioset .as-sec > summary,
 #pmsettings-inner #audioset .as-sec > summary:active {
-  color: var(--steel);
+  /* --text + no fading --grad-rule: steel italic on --surf-1 was
+     unreadable, and the gradient stopped ~70% across the sheet. */
+  color: var(--text);
   font-style: italic;
   opacity: 1;
   background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
+  background-image: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -521,14 +534,11 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   letter-spacing: var(--ls-2);
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #audioset .as-sec > summary:hover {
     color: var(--text);
     background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+    background-image: none;
     border: none;
     box-shadow: none;
   }
@@ -573,7 +583,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border-color: rgba(255,255,255,0.28);
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
 }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
@@ -1145,7 +1155,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
 }
 .adv-more-btn::-webkit-details-marker { display: none; }
 .adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .adv-more-btn:hover { background: var(--plate-press); }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
@@ -1177,7 +1187,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
   font-size: var(--fs-micro); line-height: 1; border-radius: var(--r-sm);
 }
 .music-del { opacity: 0.7; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .music-del:hover { opacity: 1; border-color: var(--red); color: var(--red); }
 }
 .music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }

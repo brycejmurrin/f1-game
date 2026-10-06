@@ -123,7 +123,17 @@ function fakeSession() {
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
     stats: () => ({}),
-    close() { this.closed++; handlers.clear(); closeHandlers.length = 0; return true; },
+    // Mirror real NetSession.close(): flip alive, then fire onClose("local")
+    // synchronously. A stub that only cleared handlers hid stop()→close()→
+    // onClose("local") re-entering stop while inactive (BYE / local quit).
+    close() {
+      this.closed++;
+      const fns = closeHandlers.slice();
+      handlers.clear();
+      closeHandlers.length = 0;
+      for (const fn of fns) fn("local");
+      return true;
+    },
     disconnect(why = "transport") {
       for (const fn of [...closeHandlers]) fn(why);
     },
@@ -969,6 +979,53 @@ test("a stale disconnect reason does not outlive the race: stop() on an inactive
   assert.equal(net.status().reason, "transport", "during THIS race the pause menu may say so");
   assert.equal(net.stop("local"), false, "nothing to stop…");
   assert.equal(net.status().reason, null, "…but the next solo race must not read 'Disconnected'");
+});
+
+// stop() closes sockets after active=false. Real NetSession.close() fires
+// onClose("local") synchronously; that used to re-enter stop("local") while
+// inactive, clear lastReason, and fire onStop — so a mid-race BYE restored
+// the guest's lobby rules (restoreOwnRules) and erased the disconnect reason.
+// Transport drops delete the session before stop() and never hit this path;
+// the old fakeSession.close() also never fired onClose, so the suite missed it.
+test("a mid-race BYE keeps lastReason and does not fire onStop (race continues offline)", () => {
+  for (const role of ["guest", "host"]) {
+    const G = stubG();
+    const net = NetPlay.create(G);
+    const s = fakeSession();
+    let onStopCalls = 0;
+    assert.equal(net.start({ role, session: s, onStop: () => { onStopCalls++; } }).ok, true);
+    s.deliver("bye", {});
+    assert.equal(net.active(), false, `${role}: network session ends`);
+    assert.equal(net.status().reason, "bye", `${role}: the clean leave reason must survive stop()→close()`);
+    assert.equal(onStopCalls, 0, `${role}: onStop is local-quit only; a peer BYE keeps racing with AI`);
+    assert.equal(G.cars[1].human, false, `${role}: the rival returns to AI`);
+  }
+  // Host with another guest still racing: close() reports "local", but the
+  // leave was clean — reason must stay "bye" while active remains true.
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sA = fakeSession(), sB = fakeSession();
+  let onStopCalls = 0;
+  assert.equal(net.start({
+    role: "host", session: sA, onStop: () => { onStopCalls++; },
+    sessions: [{ id: "a", session: sA }, { id: "b", session: sB }],
+  }).ok, true);
+  sA.deliver("bye", {});
+  assert.equal(net.active(), true, "one of two guests leaving does not end the race");
+  assert.equal(net.status().reason, "bye");
+  assert.equal(onStopCalls, 0);
+  assert.equal(sB.sent.some((m) => m.t === "left"), true);
+});
+
+test("a local stop fires onStop once and keeps reason local through socket teardown", () => {
+  const G = stubG();
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  let onStopCalls = 0;
+  assert.equal(net.start({ role: "guest", session: s, onStop: () => { onStopCalls++; } }).ok, true);
+  assert.equal(net.stop("local"), true);
+  assert.equal(onStopCalls, 1, "restoreOwnRules runs once for a deliberate local quit");
+  assert.equal(net.status().reason, "local", "close()'s onClose(local) must not clear the stop reason");
 });
 
 // ---- the own-car snapshot is stamped when its POSE is, not when the frame is ----

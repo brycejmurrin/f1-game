@@ -348,6 +348,8 @@ test("small-part primitives are closed solids that face out: strut, bent pipe, r
     "vertical strut": (o) => CarShade.strut(o, [0.1, 0.09, 2.46], [0.1, 0.29, 2.46], 0.17, 0.055, C, o.tri, null, { n: 10 }),
     "strut along z": (o) => CarShade.strut(o, [0, 0.4, -2.17], [0, 0.4, -2.20], 0.05, 0.05, C, o.tri),
     "headrest (a U: its ends side by side)": (o) => CarShade.headrest(o, C, o.tri),
+    "headrest raised (style 1)": (o) => CarShade.headrest(o, C, o.tri, null, 1),
+    "headrest winged (style 2)": (o) => CarShade.headrest(o, C, o.tri, null, 2),
     "rounded block": (o) => CarShade.block(o, [[0.24, 0.42, 0.14], [0.40, 0.42, 0.14], [0.40, 0.60, 0.10], [0.24, 0.58, 0.10],
       [0.24, 0.44, -0.42], [0.40, 0.44, -0.42], [0.40, 0.62, -0.44], [0.24, 0.60, -0.44]], C, o.tri, null, { r: [0, 0.03, 0.07, 0.02] }),
     "round box": (o) => CarShade.box(o, 0, 0.4, -2.185, 0.05, 0.05, 0.03, C, o.tri),
@@ -438,6 +440,32 @@ test("the rounded car keeps what is placed against its small parts: endplate boa
     // Headrest (part "cockpit") wraps the helmet (centre (0, 0.715, -0.075), r 0.145) without cutting it.
     for (const p of part("cockpit")) assert.ok(Math.hypot(p[0], p[1] - 0.715, p[2] + 0.075) > 0.15, `${teamId}: the headrest cuts the helmet`);
   }
+});
+
+// Recipe headrest 1/2 used to stack flat addBox pads on the rounded coaming
+// hoop. The rounded build now draws them as CarShade pipes — denser than style
+// 0, still clear of the helmet, and capped so track LOD stays cheap.
+test("rounded recipe headrest pads (styles 1–2) are denser pipes that still clear the helmet", () => {
+  const { Car3D: Round } = load(true);
+  const padVerts = (style) => {
+    const m = Round.build([0.9, 0.5, 0.1], [0.1, 0.1, 0.1], {
+      teamId: "cadillac", smooth: true, measure: true, noWheels: true,
+      parts: { cockpit: 1, _visual: { cockpit: { headrest: style } } },
+    });
+    const i = m.parts.findIndex((q) => q.name === "cockpit");
+    assert.ok(i >= 0, "cockpit part");
+    const from = m.parts.slice(0, i).reduce((n, q) => n + q.vertices, 0);
+    const n = m.parts[i].vertices;
+    for (let v = from; v < from + n; v++) {
+      const d = Math.hypot(m.pos[v * 3], m.pos[v * 3 + 1] - 0.715, m.pos[v * 3 + 2] + 0.075);
+      assert.ok(d > 0.15, `style ${style}: pad vertex cuts helmet (d=${d.toFixed(3)})`);
+    }
+    return n;
+  };
+  const v0 = padVerts(0), v1 = padVerts(1), v2 = padVerts(2);
+  assert.ok(v1 > v0, `style 1 denser than 0 (${v1} vs ${v0})`);
+  assert.ok(v2 > v1, `style 2 denser than 1 (${v2} vs ${v1})`);
+  assert.ok(v2 < v0 * 4.5, `style 2 stays under 4.5× style 0 (${v2} vs ${v0})`);
 });
 
 // ---- Coke bottle + downwash ramp (2026-10-03): bodyAnchors(.., round) ----

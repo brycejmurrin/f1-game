@@ -23,7 +23,7 @@ async function loadMonza(page) {
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
   // AWAIT THE RACE — same thenable contract as camera-hooks / monaco-foundation.
-  // A 3 s sleep is not a build; GarageDefaults' full-grid kits outrun it.
+  // A 3 s sleep is not a track build; dolly/camTune then see G.track null.
   await page.evaluate(async () => {
     await __apex.race("monza");
     __apex.go();

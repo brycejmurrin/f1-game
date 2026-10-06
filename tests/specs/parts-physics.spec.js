@@ -865,23 +865,22 @@ test.describe("Parts module — visual recipes", () => {
         const FW_SPAN = 0.715;
         const span = level <= 0 ? 0.74 : level === 1 ? 0.88 : 1;
         const endplateX = FW_SPAN * span + 0.03;
-        // Zero-thickness trailing edge, as above: the tip vertex is on the
-        // chord line at yTrail plus the tip rise.
-        const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12);
-        const expectedZ = element[2] - style.frontSweep * (0.75 + planformIndex * 0.10);
-        // buildComplete, not build: the wing's top elements are ACTIVE AERO and are
-        // drawn separately so they can rotate, so the render mesh no longer holds
-        // them. buildComplete merges them back at their CLOSED pose, which is
-        // vertex-for-vertex the wing this test was written against.
+        const rise = style.frontRise * (0.65 + planformIndex * 0.12);
+        const sweep = style.frontSweep * (0.75 + planformIndex * 0.10);
+        const y0 = element[3] + rise, z0 = element[2] - sweep;
+        // Twist / teCurve / chordTaper move the tip off the recipe chord.
+        const yLo = y0 - 0.10, yHi = y0 + 0.22, zLo = z0 - 0.18, zHi = z0 + 0.14;
         const mesh = Car3D.buildComplete([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
           noWheels: true,
           parts: { aero: 1, _visual: { aero: style } },
         });
         let maxX = 0;
         for (let i = 0; i < mesh.pos.length; i += 3) {
-          if (Math.abs(mesh.pos[i + 1] - expectedY) > 1e-5
-            || Math.abs(mesh.pos[i + 2] - expectedZ) > 1e-5) continue;
-          maxX = Math.max(maxX, Math.abs(mesh.pos[i]));
+          const y = mesh.pos[i + 1], z = mesh.pos[i + 2];
+          if (y < yLo || y > yHi || z < zLo || z > zHi) continue;
+          const ax = Math.abs(mesh.pos[i]);
+          if (ax < endplateX - 0.008) continue;
+          maxX = Math.max(maxX, ax);
         }
         return maxX >= endplateX - 0.005 ? [] : [`${option.id}:${maxX.toFixed(3)}`];
       });

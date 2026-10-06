@@ -299,6 +299,7 @@ const FULL = [
   "js/ui/flags.js",
   "js/ui/select-screen.js",
   "js/ui/loading-screen.js",
+  "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
   "js/ui/sheet-shape.js",
