@@ -348,6 +348,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | Tool | Does | Paired skill |
 |---|---|---|
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
+| **env/ensure-mcp-ready.sh** | Post-install MCP bootstrap: Playwright chrome channel symlink + apex-tools smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | check-changes |
 

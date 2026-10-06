@@ -68,6 +68,11 @@ surface without hand-wiring:
 **MCP empty in this session?** CLI fallbacks work without attachment:
 `bash tools/mcp/apex-tools-mcp.sh call …`, `bash tools/mcp/playwright-mcp.sh run`,
 `python3 tools/mcp/probe-mcp.py chrome-start` (see Fallback column below).
+`tools/env/cloud-agent-install.sh` runs `tools/env/ensure-mcp-ready.sh` at the
+end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
+VM, not host MCP attachment. If `environment-info` shows an allowlist without
+**`name`** on each row, re-**Save** the environment from git’s
+`.cursor/environment.json`.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
