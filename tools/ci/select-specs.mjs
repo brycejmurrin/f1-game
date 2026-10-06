@@ -646,6 +646,20 @@ export const TRACKED = [
 // other circuits' foundation specs are not candidates, and the plan carries
 // the ids so per-circuit loops (APEX_CIRCUITS) test only what moved.
 export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
+// Def vs scenery: both name the circuit for APEX_CIRCUITS / own foundation, but
+// only a DEF edit changes geometry that other specs race (T2 / #878 Bahrain
+// startFrac → steering.spec). A scenery-only Monza PR matching CIRCUIT_FILE
+// still ran specsRacing(["monza"]) — monza is the fixtures' default — and
+// billed ~120 unrelated specs; CI then DROPPED 11 and packed assets-api until
+// a 45 s waitForFunction timed out (PR #1015 run 37446466249).
+export const CIRCUIT_DEF = /^js\/circuits\/([a-z0-9_]+)\.js$/;
+// Per-circuit Must-landmark registry and that circuit's foundation spec.
+// tests/data/landmarks/<id>.json matches TRACKED (`^tests/data/`) otherwise,
+// so a new registry file made the selected gate "not circuit-only" and dropped
+// fleet specs it could not afford (PR #1015: props-over-road, tracks-walls,
+// parts-physics). Filename IS the circuit id, same as CIRCUIT_FILE.
+export const CIRCUIT_LANDMARK = /^tests\/data\/landmarks\/([a-z0-9_]+)\.json$/;
+export const CIRCUIT_FOUNDATION = /^tests\/specs\/([a-z0-9-]+)-foundation\.spec\.js$/;
 // Data files keyed `{ <category>: { <circuit id>: … } }`: a change here is
 // scoped to the ids whose rows differ. Reading them needs the base, so a
 // base git cannot show leaves the file TRACKED, exactly as before.
@@ -653,6 +667,8 @@ export const CIRCUIT_FILE = /^js\/circuits\/(?:scenery\/)?([a-z0-9_]+)\.js$/;
 export const PER_CIRCUIT_DATA = new Set([
   "tests/data/scenery-audit-baseline.json",
   "tools/track/props-tris-baseline.json",
+  "tools/track/clip-baseline.json",
+  "tools/track/coplanar-baseline.json",
 ]);
 // Tests that read APEX_CIRCUITS to narrow their per-circuit loop. Editing one
 // of THESE is not circuit-scoped: the edit is to the loop, so it runs whole.
@@ -683,7 +699,13 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
 // they do not break a circuit scope: prose, and node unit files other than
 // the filtered ones (the node gate runs every one of them regardless).
 const scopeNeutral = (f) => DOCS_ONLY.some((re) => re.test(f))
-  || (/^tests\/unit\//.test(f) && !CIRCUIT_FILTERED_TESTS.has(f));
+  || (/^tests\/unit\//.test(f) && !CIRCUIT_FILTERED_TESTS.has(f))
+  // The selector itself does not change what a circuit spec sees. Without this,
+  // CIRCUIT_LANDMARK cannot land on the PR that needs it: adding the classifier
+  // made the diff "not circuit-only" and dropped the fleet specs the classifier
+  // was meant to keep affordable (PR #1015: props-over-road, tracks-walls,
+  // parts-physics).
+  || f === "tools/ci/select-specs.mjs";
 export const foundationSpec = (id) => `tests/specs/${id.replace(/_/g, "-")}-foundation.spec.js`;
 const FOUNDATION = /^tests\/specs\/(.+)-foundation\.spec\.js$/;
 
@@ -746,13 +768,20 @@ export function specsRacing(ids, root = ROOT) {
 }
 
 /** Circuit ids a per-circuit data file's rows changed for, or null when the
- *  diff cannot be read (then the file stays infra). */
+ *  diff cannot be read (then the file stays infra unless the rest of the diff
+ *  already named a circuit — see circuitsTouched). */
 export function dataCircuits(file, ref, root = ROOT) {
   const read = (txt) => { try { return JSON.parse(txt); } catch { return null; } };
   let before, after;
+  // A blob:none CI checkout (ci.yml select job) has HEAD blobs from checkout
+  // but not the base version of a *changed* file. `git show ref:file` then
+  // exits non-zero (persist-credentials: false cannot lazy-fetch). Returning
+  // {} here used to mark every circuit as moved. Returning null lets
+  // circuitsTouched pin the file to circuits the rest of the diff already
+  // named (PR #1015 run 37425354715: scoped=false, DROPPED 8).
   try { before = read(execFileSync("git", ["show", `${ref}:${file}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })); }
-  catch { before = {}; }
-  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { after = {}; }
+  catch { return null; }
+  try { after = read(fs.readFileSync(path.join(root, file), "utf8")); } catch { return null; }
   if (!before || !after) return null;
   const ids = new Set();
   const flat = [before, after].every((o) => Object.entries(o)
@@ -778,17 +807,43 @@ export function dataCircuits(file, ref, root = ROOT) {
 export function circuitsTouched(changed, ref, root = ROOT) {
   const ids = new Set(), dataResolved = [];
   let scoped = changed.length > 0;
+  const unresolvedData = [];
   for (const f of changed) {
     const m = CIRCUIT_FILE.exec(f);
     if (m) { ids.add(m[1]); continue; }
+    const lm = CIRCUIT_LANDMARK.exec(f);
+    if (lm) { ids.add(lm[1]); dataResolved.push(f); continue; }
+    const fd = CIRCUIT_FOUNDATION.exec(f);
+    if (fd) { ids.add(fd[1].replace(/-/g, "_")); continue; }
     if (PER_CIRCUIT_DATA.has(f)) {
       const d = ref ? dataCircuits(f, ref, root) : null;
       if (d) { d.forEach((id) => ids.add(id)); dataResolved.push(f); continue; }
+      unresolvedData.push(f);
+      continue;
     }
     if (scopeNeutral(f)) continue;
     scoped = false;
   }
+  // Two-pass: a baseline the base git cannot show (blob:none) does not break
+  // scope when the rest of the diff already named the circuit. Alone, it
+  // stays infra. Order of `git diff --name-only` is not a contract.
+  for (const f of unresolvedData) {
+    if (ids.size) { dataResolved.push(f); continue; }
+    scoped = false;
+  }
   return { ids: [...ids].sort(), scoped: scoped && ids.size > 0, dataResolved };
+}
+
+/** Circuit ids whose DEF file (`js/circuits/<id>.js`, not scenery/) is in the
+ *  diff — the only ids specsRacing should see. Scenery / landmarks /
+ *  foundation / baseline rows still fill circuitsTouched().ids. */
+export function racingCircuitIds(changed) {
+  const ids = new Set();
+  for (const f of changed) {
+    const m = CIRCUIT_DEF.exec(f);
+    if (m) ids.add(m[1]);
+  }
+  return [...ids].sort();
 }
 
 // DOCS-ONLY IS "NOTHING TO SELECT", NOT "UNMATCHED". ci.yml's own push trigger
@@ -945,7 +1000,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
     return circ.scoped && m && !ownFoundations.includes(f) && !changedSpecs.includes(f);
   };
   // Specs that race a touched circuit (specsRacing, T2): routed, budgeted.
-  const racing = specsRacing(circ.ids);
+  const racing = specsRacing(racingCircuitIds(changed));
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);

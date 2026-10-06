@@ -206,7 +206,9 @@ const STRIP = {
   // → towers yield to trees / round footprints 340821/313906 (2026-10-05:
   //   city.js neonTower registers a round kind's true footprint and yields
   //   to a planted tree — one fewer unit emitted, −18 / −16)
-  monza: { before: 340821, after: 313906 },
+  // → signature scenery + Parabolica camp/pines 336984/303329 (2026-10-06:
+  //   tribuna/podium/canopy + Rank-C stonePine at Parabolica; camp grounded)
+  monza: { before: 336984, after: 303329 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
