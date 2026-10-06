@@ -218,6 +218,8 @@
     "// a grip drag sets height (8 % cap) / place / Shift length and commits once,",
     "// long-press and Delete remove, data-arrows own/pass, the hill's aria-label.",
     "tests/unit/designer-profile.test.mjs",
+    "// TrackDesignerProps (js/editor/props.js): capped place/remove scenery props; sanitize, caps, place/remove, CustomTracks id, APXT1/APXT2 codec. ~0.3 s.",
+    "tests/unit/designer-props.test.mjs",
     "tests/unit/desktop-app-protocol.test.mjs",
     "tests/unit/desktop-builder-config.test.mjs",
     "tests/unit/desktop-native.test.mjs",

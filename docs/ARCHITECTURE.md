@@ -305,6 +305,7 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `track-themes.js` | `TrackThemes` | tag | TrackThemes: the custom track designer's THEME PRESETS. |
+| `props.js` | `TrackDesignerProps` | tag | TrackDesignerProps: capped place/remove scenery props for custom tracks (slice H). |
 | `custom-tracks.js` | `CustomTracks` | tag | CustomTracks: the registry of the player's OWN circuits. |
 | `shape.js` | `TrackShape` | LAZY_EDITOR | TrackShape: the track designer's 2D geometry kit. |
 | `stamps.js` | `TrackStamps` | LAZY_EDITOR | TrackStamps: the designer's STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND tools. |
