@@ -1,0 +1,1 @@
+1791247772	Cursor Agent	net-peer-drop: mid-race peer silence/close/timeout — OWNED session.js netplay.js snapshot.js + net-* units; FORBIDDEN lobby/transport/handshake/nostr/rendezvous/phone-pad + HUD chrome  [cursor/net-peer-drop-604a; session 6c3d261346b683e8b6ef6d78]
