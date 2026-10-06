@@ -1,1 +1,1 @@
-1791300775	Cursor Agent	Bug hunt: gfx/track loading. OWNED js/render/** js/lighting/** js/circuits/*.js (data only) track loader; FORBIDDEN js/physics js/input js/net js/data UI/CSS js/car models workflows scenery art. Do not enable auto-merge or merge.  [cursor/gfx-track-bug-hunt-db6f; session f473ea968da289b5868295d9]
+1791303108	Cursor Agent	PR #1110: infra re-run of cancelled oversize-tlx-probes-1of3 (tests passed); watching CI; OWNED js/render glx/tlx; no auto-merge/merge  [cursor/gfx-track-bug-hunt-db6f; session f473ea968da289b5868295d9]
