@@ -101,7 +101,7 @@ test("pinFreePlay writes an empty factory sheet instead of deleting the parts ke
   assert.equal(pin.includes("removeItem"), false, "null parts must not miss into GarageDefaults");
   const budget = fs.readFileSync(path.join(ROOT, "tests/specs/parts-budget.spec.js"), "utf8");
   assert.match(budget, /pinFreePlay\(page, \{ team: "mclaren"/);
-  for (const spec of ["understeer-cue", "ui-resize"]) {
+  for (const spec of ["understeer-cue", "ui-resize", "assets-api"]) {
     const src = fs.readFileSync(path.join(ROOT, `tests/specs/${spec}.spec.js`), "utf8");
     assert.ok(src.includes("pinFactorySeat"), spec + " must pin factory McLaren before goto");
   }

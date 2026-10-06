@@ -12,9 +12,13 @@
 // Run: npx playwright test tests/specs/assets-api.spec.js   (npm run test:assets)
 
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, pinFactorySeat } from "../helpers/fixtures.js";
 
 test.beforeEach(async ({ page }) => {
+  // Factory McLaren, empty sheet — GarageDefaults outfits every constructor,
+  // and a 22-car kit blocked this page's 45 s __apex wait while Bahrain
+  // built (CI run 37445579432 packed-1, matTexMix knob case).
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
