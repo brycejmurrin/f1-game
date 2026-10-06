@@ -1,1 +1,1 @@
-1791280592	Cursor Agent	PR #1075 red: career-1of5 cancelled at 6min cap (37 tests --shard=1/5); publish unpublished fatUi 2-worker no-shard; no auto-merge/merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
+1791283135	Cursor Agent	PR #1075 red: oversize-career 27/37 cancelled at 9min cap; career-season 15/36 at 6min; fatUi floor 40s/test + 16min cap; no auto-merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
