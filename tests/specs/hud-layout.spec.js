@@ -32,10 +32,11 @@ const CTRL = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero",
 // a column that grew out of the top of the phone) had nothing above it to
 // collide with in this spec. The rejected alternative fix for A17 would have
 // landed the cluster on `.hud-gaps` at 852x393 and this file would still have
-// gone green. `.hud-top`/`.hud-gaps` are checked as CONTAINERS — each has
-// padding and a background in css/hud.css, so it always has a box even if a
-// gap indicator's text is momentarily empty (nobody directly ahead/behind);
-// checking the two leaf spans instead would silently skip that case.
+// gone green. `.hud-top`/`.hud-gaps` are checked as CONTAINERS (padding +
+// background). Empty gap lines now collapse the plate
+// (`.hud-gaps:not(:has(> div:not(:empty)))` in css/hud.css) — a solo-race
+// fixture with both lines "" has no gaps box; seed text before asserting the
+// plate survives COMPACT (metrics layout below).
 const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // LANDSCAPE ONLY. Added `.hud-top`/`.hud-gaps`/`#minimap`/`#hud-sectors` here
 // first and every PORTRAIT case failed on the same pair: `.hud-top` (the
@@ -425,6 +426,11 @@ test.describe("metrics layout", () => {
     const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
     await race(page, "buttons", false, v, { layout: "compact" });
     const r = await page.evaluate(() => {
+      // Solo fixture: both gap lines are "". Empty-collapse (css/hud.css) hides
+      // the plate on purpose — seed one line so COMPACT is judged against a
+      // plate that should stay visible, not against the junk-chip hide.
+      const ahead = document.getElementById("hud-gap-ahead");
+      if (ahead) ahead.textContent = "▲ RIV 0.5s";
       const w = (sel) => {
         const el = document.querySelector(sel);
         return el ? el.getBoundingClientRect().width : -1;
