@@ -14,6 +14,7 @@
 - [Presets are starting points](#presets-are-starting-points)
 - [Fast iteration](#fast-iteration)
 - [Multi-team](#multi-team)
+- [BEFORE pack — fetch, do not recapture](#before-pack--fetch-do-not-recapture)
 - [Before you run](#before-you-run)
 - [When NOT to use](#when-not-to-use)
 - [Offline preflight](#offline-preflight)
@@ -29,6 +30,7 @@ answered placement and you need **lit, foreshortened** proof.
 - Presets are starting points
 - Fast iteration
 - Multi-team
+- BEFORE pack — fetch, do not recapture
 - Before you run
 - When NOT to use
 - Offline preflight
@@ -137,6 +139,13 @@ tuning one.
 | `rearWing` | rear wing / wingCarbon | wingRear · az 0.72π · el 0.30 · 2.8 m · at [0, 1.0, -2.4] |
 | `wallCrest` | the wall lightbox mark | front · az 0.32π · el 0.28 · 9.4 m · at wall · lamp off |
 | `floorNose` | the floor-level nose recipe above | wingFront · az 0 · el 0.04 · 3.5 m · at [0, -0.15, 2.2] |
+| `fwLow` / `fwSide` / `noseTip` | front-wing / nose close-ups (`--preset=closeup`) | wingFront · unique az · ~2 m · clamp off |
+| `rwRear` / `rwSide` / `rwTop` | rear-wing gap / top | wingRear · unique az · ~2 m · clamp off |
+| `podInlet` / `podFloor` | sidepod inlet + floor edge | side · unique az · ~2.4 m · clamp off |
+| `wheelF` / `wheelR` | front / rear wheel (cover, rim) | side · unique az · 1.7 m · clamp off |
+| `haloBehind` / `mirror` / `cover` | halo+headrest, mirror, engine-cover mark | rear/front · unique az · ~2 m · clamp off |
+
+**`--preset=closeup`** shoots the fourteen stations above (plus `endplate`) with no shared `--az` product. Multi-team runs also write `<team>-sheet.png`.
 
 **A design walk with no camera flag shoots its own stations.** `FIELD_STATIONS`
 maps every `Liveries.FIELDS` key to the station(s) that show it (`spineLogo →
@@ -312,6 +321,19 @@ or with a higher `--view-settle`.
 per-team rollup contact sheet of `--rollup-view` (default `side`);
 `--full-views` shoots every camera for every team. `--resume` skips teams that
 already have their first frame in `--out`; `--reset` clears it.
+
+## BEFORE pack — fetch, do not recapture
+
+For a car/garage change, download the ship pack instead of shooting the
+11-team grid here:
+
+```sh
+node tools/garage-angles-fetch.mjs --out artifacts/garage-before
+```
+
+`Garage before` (`.github/workflows/garage-before.yml`) captures
+`--team` shards × `--views=hero,front,side,rear,top,wingFront,wingRear`
+on macos-latest. Recapture only the AFTER angles you changed.
 
 ## Before you run
 

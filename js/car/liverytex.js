@@ -1,68 +1,77 @@
 "use strict";
 const LiveryTex = (function () {
-  const SIZE = 1024;
-  // The atlas is SIZE wide and SIZE_H tall: the extra rows below y 1024 hold
+  // Authored at 2048×2560 (was 1024×1280): garage / 3/4 boards need ~2×
+  // texels so SKYSTRIKE / NITROX edges stay cut-vinyl crisp. UV fractions are
+  // unchanged — REGIONS scale with SIZE. MEMORY (exact mip chain):
+  //   one full atlas  ~26.7 MB  (was 6.67 MB)
+  //   desktop grid    ~61.7 MB  player full + 21 AI at 512×640 (was ~41.7 MB)
+  // AI and mobile KEEP the same absolute upload sizes as before via atlasDiv
+  // (divisors doubled with SIZE), so race-distance rivals do not pay 4×.
+  const SIZE = 2048;
+  // The atlas is SIZE wide and SIZE_H tall: the extra rows below y SIZE hold
   // the LEFT flank, authored separately from the right (an asymmetric graphic
   // — a bull facing forward — cannot be one texture mirrored across the car,
   // and text cannot be one texture NOT mirrored; each side gets its own).
   // UVs are fractions, so v divides by SIZE_H wherever u divides by SIZE.
-  const SIZE_H = 1280;
-  // Mobile tier: upload atlases at half size — 22 cars × 1024² RGBA + mips was
-  // ~117 MB of GPU memory, the biggest consumer on iOS web apps, whose jetsam
-  // budget counts GPU allocations. This READS glx.js's answer rather than
-  // copying its sniff (a "must match glx.js" comment is not a mechanism): the
-  // same "phone AND not GRAPHICS: HIGH" tier IS_MOBILE means here. glx.js is
-  // tagged ahead of this file in both index.html and the CARVIEW subset, so
-  // the value exists at eval; the
+  const SIZE_H = 2560;
+  // Mobile tier: upload atlases at a jetsam-safe absolute size — 22 cars ×
+  // full RGBA + mips was the biggest GPU consumer on iOS web apps. This READS
+  // glx.js's answer rather than copying its sniff (a "must match glx.js"
+  // comment is not a mechanism): the same "phone AND not GRAPHICS: HIGH" tier
+  // IS_MOBILE means here. glx.js is tagged ahead of this file in both
+  // index.html and the CARVIEW subset, so the value exists at eval; the
   // typeof guard is the standalone-harness fallback (full-size atlas), never a
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
 
-  // How much to shrink an atlas before upload. 1 = the authored 1024x1280.
+  // How much to shrink an atlas before upload. 1 = the authored 2048×2560.
   //
   // The livery atlases are the biggest thing on the GPU, and that is MEASURED
   // rather than assumed: __apex.texCensus() on a full montreal grid reported
   // 146.67 MB of them against 11.33 MB of baked material arrays and 13.8 MB for
   // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v).
-  // Ten times the geometry. One atlas with its mip chain is 6.99 MB.
+  // Ten times the geometry. One authored atlas with its mip chain is ~26.7 MB.
   //
-  //   tier            player   AI     a full grid
-  //   mobile             2      4        ~37 MB     (unchanged — tighter jetsam budget)
-  //   desktop            1      2        ~44 MB     (was 147: every car at full)
+  //   tier                 player   AI     upload px        notes
+  //   mobile                  4      8     512 / 256        unchanged absolutes
+  //   desktop preview         2      4     1024 / 512       boot + garage-open
+  //   desktop hi-res          1      —     2048             deferred (car-draw)
   //
-  // AI at half is the change. At racing distance an AI car is a few hundred
-  // pixels and 512x640 is ample; what a fixed downshift would cost is the
-  // CLOSE-UP, so photo mode asks for the full tier for every car it draws
-  // (js/car/car-draw.js decalTextureFor). That upgrade is lazy and bounded: the
-  // tier is part of the decal cache key, at most one full atlas is built per
-  // frame (the uncached car nearest the photo camera), at most PHOTO_ATLAS_MAX
-  // are held, and they are freed when the mode closes — so entering photo mode
-  // on a grid is not twenty-one atlas builds in one frame.
+  // The 26.7 MB hi-res player atlas must NOT upload on boot or garage open —
+  // car-draw paints the 1024 preview first, then requestIdleCallback-upgrades
+  // to 2048 (mipmapped). AI stays at 512×640. Photo-mode rivals may mint the
+  // player-tier PREVIEW (1024); only the real player car defers to 2048.
   //
   // Pure on purpose: rasterising a livery needs a browser (see the boundary
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
   // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
-  function atlasDiv(isPlayer, mobile) {
-    if (mobile) return isPlayer ? 2 : 4;
-    return isPlayer ? 1 : 2;
+  // hiRes: desktop player only; ignored for AI and mobile (no larger upload).
+  function atlasDiv(isPlayer, mobile, hiRes) {
+    if (mobile) return isPlayer ? 4 : 8;
+    if (!isPlayer) return 4;
+    return hiRes ? 1 : 2;
+  }
+  // True when a desktop player preview can be upgraded to a larger atlas.
+  function playerHiResDeferred(mobile) {
+    return atlasDiv(true, !!mobile, false) > atlasDiv(true, !!mobile, true);
   }
 
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
-  // maps panel UVs to these rects. Do NOT change these numbers — the geometry
-  // depends on them.
+  // maps panel UVs to these rects. Fractions of SIZE / SIZE_H are frozen —
+  // scale every rect with SIZE, never move them independently.
   const REGIONS = {
-    crest:  { x: 40,  y: 40,  w: 430, h: 430 },  // team crest/logo (engine-cover top; badge copy on the fin via finBadge)
-    titleA: { x: 500, y: 40,  w: 484, h: 170 },  // primary sponsor wordmark
-    titleB: { x: 500, y: 240, w: 484, h: 130 },  // secondary sponsor
-    wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
-    num:    { x: 700, y: 420, w: 284, h: 284 },  // nose + both rear endplates: lockup over the driver number
-    strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
-    fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
-    finBadge: { x: 500, y: 856, w: 160, h: 160 },
-    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // the WHOLE engine-cover flank, the car's RIGHT side (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
-    spineSideL: { x: 40, y: 1040, w: 304, h: 160 },  // the same for the LEFT flank, authored in its own outside-view frame
-    fwEnd: { x: 380, y: 1040, w: 340, h: 140 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
-    tail: { x: 500, y: 420, w: 180, h: 80 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
+    crest:  { x: 80,  y: 80,  w: 860, h: 860 },  // team crest/logo (engine-cover top; badge copy on the fin via finBadge)
+    titleA: { x: 1000, y: 80,  w: 968, h: 340 },  // primary sponsor wordmark
+    titleB: { x: 1000, y: 480, w: 968, h: 260 },  // secondary sponsor
+    wing:   { x: 80,  y: 1040, w: 1240, h: 300 },  // rear-wing sponsor band
+    num:    { x: 1400, y: 840, w: 568, h: 568 },  // nose + both rear endplates: lockup over the driver number
+    strip:  { x: 80,  y: 1440, w: 1888, h: 260 },  // long thin sponsor strip (sidepod lower)
+    fin:    { x: 80,  y: 1712, w: 860, h: 320 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
+    finBadge: { x: 1000, y: 1712, w: 320, h: 320 },
+    spineSide: { x: 1360, y: 1712, w: 608, h: 320 },   // the WHOLE engine-cover flank, the car's RIGHT side (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
+    spineSideL: { x: 80, y: 2080, w: 608, h: 320 },  // the same for the LEFT flank, authored in its own outside-view frame
+    fwEnd: { x: 760, y: 2080, w: 680, h: 280 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
+    tail: { x: 1000, y: 840, w: 360, h: 160 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
   };
 
   // Primary driver number per team.
@@ -156,6 +165,18 @@ const LiveryTex = (function () {
   }
   function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }
 
+  // Opaque underfill for a sponsor region. Glyph AA and generateMipmap both
+  // average into whatever sits under the ink: a transparent surround smears a
+  // soft dark fringe into every board letter (createTexture already documents
+  // the same trap for crests). Filling the region with the PANEL / plate /
+  // band colour the mesh already paints underneath keeps the mip blend on
+  // paint, and makes the whole decal quad opaque so its rim stays hard.
+  function fillRegion(ctx, R, colour) {
+    if (!R || !colour) return;
+    ctx.fillStyle = css(colour);
+    ctx.fillRect(R.x, R.y, R.w, R.h);
+  }
+
   function drawWordmark(ctx, text, R, ink, opts = {}) {
     const pad = opts.pad != null ? opts.pad : 14;
     const spacing = opts.spacing != null ? opts.spacing : 0.06; // of font size
@@ -175,7 +196,10 @@ const LiveryTex = (function () {
     let refW = 0;
     for (let i = 0; i < text.length; i++) refW += ctx.measureText(text[i]).width;
     const perPx = refW / REF + spacing * Math.max(0, text.length - 1);
-    let size = Math.max(8, Math.min(Math.min(maxH, 160), Math.floor(maxW / (perPx || 1))));
+    // Cap tracks SIZE (~0.16·SIZE was the old 160 at 1024) so a 2048 atlas
+    // actually paints larger glyphs into the doubled board regions.
+    const fontCap = Math.min(maxH, Math.round(SIZE * 0.16));
+    let size = Math.max(8, Math.min(fontCap, Math.floor(maxW / (perPx || 1))));
     const fitsAt = (px) => {
       ctx.font = "900 " + px + "px Arial, sans-serif";
       let w = 0;
@@ -186,7 +210,7 @@ const LiveryTex = (function () {
       return w <= maxW;
     };
     while (size > 8 && !fitsAt(size)) size--;
-    while (size < Math.min(maxH, 160) && fitsAt(size + 1)) size++;
+    while (size < fontCap && fitsAt(size + 1)) size++;
     ctx.font = "900 " + size + "px Arial, sans-serif";
 
     // Measure final width for alignment.
@@ -207,10 +231,17 @@ const LiveryTex = (function () {
     clipToRegion(ctx, R);
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
+    // geometricPrecision keeps glyph outlines resolution-true; the default
+    // "auto" hinting softens boards at garage / 3/4 distance.
+    try { ctx.textRendering = "geometricPrecision"; } catch (_) { /* older canvas */ }
     if (opts.halo) {
+      // Legibility outline only — keep it thin and mitred. A round 0.13·size
+      // stroke read as a soft cloud around every letter on the pale sidepod
+      // board (SKYSTRIKE / NITROX BEFORE shots).
       ctx.strokeStyle = css(opts.halo);
-      ctx.lineWidth = Math.max(2, size * 0.13);
-      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(1.25, size * 0.07);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
       let hx = x;
       for (let i = 0; i < text.length; i++) {
         ctx.strokeText(text[i], hx, y);
@@ -221,6 +252,23 @@ const LiveryTex = (function () {
     for (let i = 0; i < text.length; i++) {
       ctx.fillText(text[i], x, y);
       x += widths[i] + size * spacing;
+    }
+    // Hairline same-ink stroke after the fill hardens the canvas AA fringe so
+    // letters stay cut-vinyl crisp once the atlas is mipmapped and sampled at
+    // a grazing garage angle. Skip when a contrast halo already outlined them
+    // (that stroke is the rim; a second pass would fatten the glyph).
+    if (!opts.halo) {
+      ctx.strokeStyle = css(ink);
+      ctx.lineWidth = Math.max(0.75, size * 0.035);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
+      let sx = R.x + pad;
+      if (align === "center") sx = R.x + (R.w - total) / 2;
+      else if (align === "right") sx = R.x + R.w - pad - total;
+      for (let i = 0; i < text.length; i++) {
+        ctx.strokeText(text[i], sx, y);
+        sx += widths[i] + size * spacing;
+      }
     }
     ctx.restore();
   }
@@ -1623,6 +1671,9 @@ const LiveryTex = (function () {
     // keyline on the rake is what sells the edge at garage distance. `acc` is
     // the resolved saddle fill (pick or derived) — never re-pick here; a pick
     // must reach the atlas as chosen.
+    // A 1px diagonal fill aliased into a stair-step under cover UVs (Ferrari
+    // podFloor). Same-colour round strokes along the rake anti-alias the cut
+    // without shrinking the solid (lettering still sits on the saddle).
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
@@ -1632,8 +1683,20 @@ const LiveryTex = (function () {
       ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.64), Sf.y);                 // along the crease
       ctx.lineTo(F.fx(0.38), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
       ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = cssA(INK_DARK, 0.35);
-      ctx.lineWidth = Math.max(2, Sf.h * 0.018);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = cssA(acc, 0.55);
+      ctx.lineWidth = Math.max(4, Sf.h * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(acc, 0.97);
+      ctx.lineWidth = Math.max(2, Sf.h * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(INK_DARK, 0.28);
+      ctx.lineWidth = Math.max(1.5, Sf.h * 0.014);
       ctx.beginPath();
       ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
       ctx.stroke();
@@ -1777,25 +1840,12 @@ const LiveryTex = (function () {
     const cy = R.y + R.h / 2 - ((e.v0 + e.v1) / 2 - 0.5) * s;
     return { x: cx - side / 2, y: cy - side / 2, w: side, h: side };
   }
-  // ONE scratch canvas for the whole grid, on phones only.
-  //
-  // The mobile tier below shrinks what is UPLOADED and never touched what is
-  // PAINTED: every atlas was authored on its own fresh 1024x1024 canvas — 4 MB
-  // of backing store — downscaled, and thrown away. warmCarAssets() in
-  // js/game.js builds all 22 before the first frame, synchronously, with no
-  // yield point, so the peak was ~88 MB of transient canvas in one burst at
-  // race start. WebKit frees a canvas backing store when the element is
-  // collected, and a synchronous loop gives the collector no opening; Safari's
-  // canvas accounting is process-wide and is an input to jetsam. That is the
-  // same 88 MB the comment below claims to have saved — it was saved on the GPU
-  // and left in place on the CPU.
-  //
-  // Reused rather than shrunk because the whole atlas is authored in SIZE units
-  // (the comment below says so, and buildAtlas reads canvas.width nowhere but
-  // its own two assignments), so painting small would mean rescaling every
-  // coordinate. Setting .width RESETS a canvas per spec — even to the same
-  // value — so the assignments already clear it between cars for free.
-  // DESKTOP IS UNCHANGED: it returns this very canvas, so it must own it.
+  // ONE scratch canvas for the whole grid, on phones only. Setting .width
+  // RESETS a canvas per spec — even to the same value — so the assignments
+  // already clear it between cars. Preview / AI / mobile paint AT upload size
+  // (SIZE/div) with setTransform(1/div) so REGIONS stay in SIZE space; only
+  // the deferred desktop-player hi-res kick authors 2048×2560. A 2048 paint
+  // then bilinear downscale on the boot path was the 26.7 MB CPU spike.
   let scratchCanvas = null;
   function scratchAtlas() {
     if (!scratchCanvas) scratchCanvas = document.createElement("canvas");
@@ -1803,13 +1853,19 @@ const LiveryTex = (function () {
   }
 
   // ── main ─────────────────────────────────────────────────────────────────
-  function buildAtlas(teamId, colors = {}, numberOverride, isPlayer) {
+  // hiRes: desktop player full 2048 upload. Callers that must stay off the
+  // boot / garage-open path pass false (or omit) and let car-draw defer true.
+  // Preview / AI / mobile author the canvas at the upload size.
+  function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
+    const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
     const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
-    canvas.width = SIZE;
-    canvas.height = SIZE_H;
+    canvas.width = SIZE / div;
+    canvas.height = SIZE_H / div;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
+    try { ctx.imageSmoothingQuality = "high"; } catch (_) { /* Safari <15 */ }
+    if (div !== 1) ctx.setTransform(1 / div, 0, 0, 1 / div, 0, 0);
 
     colors = Object.assign({}, colors || {});
     if (typeof Liveries !== "undefined" && Liveries.migratePaint) Liveries.migratePaint(colors);
@@ -2566,13 +2622,14 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "starfield") {
-      // Micro dot field on the flank panel — not finStyle "stars". Density
-      // floor keeps cover-legibility's 1.5 % flank area readable.
+      // Ordered halftone on the flank — not finStyle "stars". Same recipe as
+      // crown `fade`: regular grid, radius ramps front→rear, no hash-skip
+      // clumps. The previous 0.28 density skip read as broken-text clusters
+      // at garage close-up (Mercedes cover, 1024/2048 atlas).
       // sideTint owns starfield ink; never crestInk (that row is gone from the
       // sheet and was never a flank graphic colour).
       const dotInk = colors.sideTint
         || pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
-      const density = 0.28;
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); clipToRegion(ctx, Sf);
@@ -2581,15 +2638,24 @@ const LiveryTex = (function () {
         const x0 = su(F, u0), x1 = su(F, uEnd);
         const y0 = Sf.y + Sf.h * 0.06, y1 = Sf.y + Sf.h * 0.58;
         const w = Math.abs(x1 - x0), h = y1 - y0;
-        const step = Math.max(3, w * 0.045);
-        for (let py = y0; py < y1 - step * 0.5; py += step) {
-          for (let px = Math.min(x0, x1); px < Math.min(x0, x1) + w - step * 0.5; px += step) {
-            const hsh = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
-            if (hsh / 1000 > density) continue;
-            const r = step * 0.32;
-            ctx.fillStyle = cssA(dotInk, 0.97);
+        const cols = Math.max(8, Math.round(w / Math.max(4, w * 0.032)));
+        const rows = Math.max(6, Math.round(h / Math.max(4, w * 0.032)));
+        const cellW = w / cols, cellH = h / rows;
+        const rMax = Math.min(cellW, cellH) * 0.38;
+        const xMin = Math.min(x0, x1);
+        const xFront = F.fx(u0), xRear = F.fx(uEnd);
+        const span = xRear - xFront;
+        ctx.fillStyle = cssA(dotInk, 0.97);
+        for (let j = 0; j < rows; j++) {
+          const cy = y0 + (j + 0.5) * cellH;
+          for (let i = 0; i < cols; i++) {
+            const cx = xMin + (i + 0.5) * cellW;
+            const along = span !== 0 ? (cx - xFront) / span : 0; // 0 front, 1 rear
+            const t = 1 - Math.max(0, Math.min(1, along));
+            const r = rMax * (0.38 + 0.62 * t * t);
+            if (r < 0.4) continue;
             ctx.beginPath();
-            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -2621,6 +2687,15 @@ const LiveryTex = (function () {
 
     // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
+      // Opaque substrates UNDER every board wordmark. The mesh already paints
+      // these panels; baking the same colour into the atlas stops mip/AA soft
+      // fringes on SKYSTRIKE / NITROX / wing / strip letters at garage distance.
+      // titleB stays unfilled: it drapes over curved nose paint, and a flat
+      // patch would read as a sticker rectangle on the monocoque.
+      fillRegion(ctx, REGIONS.titleA, board);
+      fillRegion(ctx, REGIONS.fwEnd, c2);
+      fillRegion(ctx, REGIONS.wing, colors.wing || c2);
+      fillRegion(ctx, REGIONS.strip, c2);
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });
       // titleB rides the NOSE, not the sidepod board: car-mesh drapes it over
@@ -2652,17 +2727,7 @@ const LiveryTex = (function () {
                     markHalo(LOGOS[teamId], c1, ink), emblemRim);
     } else drawCrest(ctx, teamId, numBadge, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
 
-    // Upload at a fraction of the authored size. All layout stays authored at
-    // SIZE (UVs are FRACTIONS of the atlas — resolution-independent); only the
-    // uploaded texture shrinks. See atlasDiv for the tiers and the measurement
-    // behind them.
-    const div = atlasDiv(!!isPlayer, IS_MOBILE);
-    if (div > 1) {
-      const small = document.createElement("canvas");
-      small.width = SIZE / div; small.height = SIZE_H / div;
-      small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
-      return small;
-    }
+    // Painted in SIZE space via setTransform(1/div); the canvas IS the upload.
     return canvas;
   }
 
@@ -2726,7 +2791,7 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, SIZE_H, atlasDiv, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,

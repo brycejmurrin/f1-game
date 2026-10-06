@@ -327,10 +327,17 @@ const DesignerProfile = (function () {
         g.fillStyle = on ? COL.sel : COL.handle; g.fill();
         g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
       }
-      // heights: the lap's top and bottom, and the selected hill's numbers
-      g.font = LABEL_FONT; g.textBaseline = "top"; g.fillStyle = COL.text; g.textAlign = "right";
-      g.fillText(Math.round(fr.max) + " m", W - 4, 2);
-      g.textBaseline = "bottom"; g.fillText(Math.round(fr.min) + " m", W - 4, H - 2);
+      // heights: the lap's top and bottom (one label when they round equal —
+      // a flat circuit used to paint dual colliding "0 m"s). Selected hill next.
+      g.font = LABEL_FONT; g.fillStyle = COL.text; g.textAlign = "right";
+      const hiM = Math.round(fr.max) + " m", loM = Math.round(fr.min) + " m";
+      if (hiM === loM) {
+        g.textBaseline = "middle";
+        g.fillText(hiM, W - 4, H / 2);
+      } else {
+        g.textBaseline = "top"; g.fillText(hiM, W - 4, 2);
+        g.textBaseline = "bottom"; g.fillText(loM, W - 4, H - 2);
+      }
       g.textAlign = "left"; g.textBaseline = "top";
       if (sel >= 0 && sel < bumps.length) {
         const b = shown(sel), sM = b.s * tr.total, v = speed && speed.length === tr.n ? speed[((Math.round(sM / tr.total * tr.n) % tr.n) + tr.n) % tr.n] : 0;

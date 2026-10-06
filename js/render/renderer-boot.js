@@ -20,21 +20,36 @@ function preloadThreeVendor() {
     document.head.appendChild(el);
   }
 }
-function backendPreference() {
+function storedBackendPreference() {
   try {
     if (typeof ApexXR !== "undefined" && ApexXR.bootPick) {
       const xrPick = ApexXR.bootPick();
-      if (xrPick) return xrPick; // VR arm: non-persisted; never writes gfxBackend
+      if (xrPick) return { pref: xrPick, unset: false }; // VR arm: non-persisted; never writes gfxBackend
     }
   } catch (_) { /* plan advisory */ }
   try {
     const pref = localStorage.getItem("apex26.gfxBackend");
-    const normalized = pref == null ? "three" : pref;
-    if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
+    if (pref == null) return { pref: "three", unset: true };
+    if (pref === "webgl2" || pref === "three" || pref === "webgpu") return { pref, unset: false };
     localStorage.setItem("apex26.gfxBackend", "webgl2");
-    return "webgl2";
+    return { pref: "webgl2", unset: false };
   } catch (_) {
-    return "three";
+    return { pref: "three", unset: true };
+  }
+}
+function backendPreference() {
+  return storedBackendPreference().pref;
+}
+// Title boot must not fetch three.webgpu (+ three.core) when requestAdapter()
+// is null: TLX would only forceWebGL inside that ~1.1 MB island, and GLX already
+// owns the WebGL2 path. Explicit apex26.gfxBackend=three still loads TLX.
+async function gpuAdapterAvailable() {
+  try {
+    if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) return false;
+    const ad = await navigator.gpu.requestAdapter();
+    return !!ad;
+  } catch (_) {
+    return false;
   }
 }
 function showGraphicsUnavailable() {
@@ -53,9 +68,15 @@ try {
   if (typeof ApexXR !== "undefined" && ApexXR.detect) {
     try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
   }
-  let pref = backendPreference();
-  // Unset means THREE on every device; the boot canary below protects the
-  // default as well as stored THREE/WEBGPU picks.
+  const stored = storedBackendPreference();
+  let pref = stored.pref;
+  // Unset default is THREE when a GPU adapter resolves; with no adapter, stay
+  // on GLX so title never modulepreloads three.webgpu/core (~1.1 MB encoded).
+  // Explicit three/webgpu picks are unchanged. The boot canary below still
+  // protects stored THREE/WEBGPU picks after a jetsam.
+  if (stored.unset && pref === "three") {
+    if (!(await gpuAdapterAvailable())) pref = "webgl2";
+  }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
   // while WGX/TLX still refuse, and writing webgl2 bounced the RENDERER
@@ -97,24 +118,26 @@ try {
       } else localStorage.setItem(STRIKE_KEY, String(strikes));
     } catch (_) { /* the in-memory revert above still holds for this load */ }
   }
-  // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
-  // self-falls-back to WebGL2 inside three so no capability gate here).
-  // A pick can only be honoured while its DEFERRED group still exists: without
-  // this guard, an absent group threw on `files.map` in loadBackendScripts
-  // after the probe had already armed, and the next boot warned about a
-  // backend that had never even been fetched.
+  // "webgpu" -> WGX (needs a resolved adapter); "three" -> TLX (three.js/TSL,
+  // self-falls-back to WebGL2 inside three when an adapter exists but WebGPU
+  // cannot bind). A pick can only be honoured while its DEFERRED group still
+  // exists: without this guard, an absent group threw on `files.map` in
+  // loadBackendScripts after the probe had already armed, and the next boot
+  // warned about a backend that had never even been fetched.
   const group = pref === "three" ? BACKEND_FILES.three
               : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
-  const optIn = !skipClaim && !!(group && group.length) &&
-    (pref === "three" || (pref === "webgpu" && navigator.gpu));
+  let optIn = !skipClaim && !!(group && group.length) &&
+    (pref === "three" || pref === "webgpu");
+  // WGX with navigator.gpu but a null adapter used to fetch the webgpu roster
+  // then refuse — skip the fetch when no adapter resolves.
+  if (optIn && pref === "webgpu" && !(await gpuAdapterAvailable())) optIn = false;
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
     // FETCH THE BACKEND ONLY NOW: neither alternate has a <script> tag, so the
-    // ~550 KB is fetched only for the resolved deferred pick — `optIn` resolves
-    // synchronously from localStorage. The list is DEFERRED in
-    // tools/manifest.cjs (load-order.test.mjs
-    // asserts loader/manifest/sw.js precache agree); eval-time edges
+    // ~550 KB is fetched only for the resolved deferred pick. The list is
+    // DEFERRED in tools/manifest.cjs (load-order.test.mjs asserts
+    // loader/manifest/sw.js precache agree); eval-time edges
     // (BACKEND_EDGES === DEFERRED_EDGES) are the only waits. No error path is
     // needed beyond this: a failed fetch leaves the backend global absent,
     // which Gfx.create treats as unavailable and falls through to GLX.
@@ -204,7 +227,7 @@ function proved() {
   try { localStorage.removeItem(STRIKE_KEY); } catch (_) { /* blocked storage */ }
   return true;
 }
-return { start, backendPreference, proved };
+return { start, backendPreference, storedBackendPreference, gpuAdapterAvailable, proved };
 }
   return { create };
 })();

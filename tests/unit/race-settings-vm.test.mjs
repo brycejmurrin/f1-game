@@ -413,12 +413,12 @@ test("a MIXED race arms a weather arc at the start and walks it; the plan is the
   assert.ok(arc, "an arc is armed");
   assert.equal(arc.from, "dry");
   assert.notEqual(arc.to, "dry");
-  assert.ok(arc.dur >= 120 && arc.dur <= 420, "2–7 minutes: " + arc.dur);
+  assert.ok(arc.dur >= 90 && arc.dur <= 420, "seeded 2–7 min then race-length cap: " + arc.dur);
   // The derived plan is a function of (seed, race counter): read twice, same answer.
   g.G.wxArcPlan = null;
   const p1 = JSON.parse(JSON.stringify(g.G.wxArcPlan)), p2 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
   assert.deepEqual(p1, p2, "same seed and counter, same plan");
-  assert.ok(p1 && p1.to !== "dry" && p1.dur >= 120, JSON.stringify(p1));
+  assert.ok(p1 && p1.to !== "dry" && p1.dur >= 90, JSON.stringify(p1));
   // A host-supplied plan wins over the derived one.
   g.G.wxArcPlan = { to: "fog", dur: 200 };
   await g.race("monza", "day", "dry");
