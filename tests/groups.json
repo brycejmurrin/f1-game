@@ -1032,6 +1032,7 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-contrast.test.mjs",
+        "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/parts-locked-equivalent.test.mjs",
