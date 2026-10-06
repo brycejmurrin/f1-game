@@ -133,7 +133,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
 | Batch screenshots | skill **playwright-probe** (`shot.mjs` / `apex-capture`) | Chrome MCP while Playwright runs |
-| Multi-angle car / garage (ONE Chromium) | `render-car.mjs --preset=spine` / `--shot=` · `garage-angles.mjs` | N× `carshot` relaunches; `page.screenshot` under SwiftShader |
+| Multi-angle car / garage (ONE Chromium) | `garage-angles-fetch.mjs` (BEFORE pack) · `render-car.mjs --preset=spine` / `--shot=` · `garage-angles.mjs` AFTER only | N× recapturing the 11-team garage grid; Car shot / `carview.html` |
 | Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |

@@ -459,6 +459,21 @@ const F1API = (function () {
     });
   }
 
+  // OpenF1 meeting.country_name follows the GP title, not always the venue
+  // (2026 Bahrain Grand Prix: circuit_short_name "Kuala Lumpur"). Display
+  // mapping only — trackIdFor still resolves by country (Tracks handoff).
+  const VENUE_COUNTRY = Object.freeze({
+    "kuala lumpur": "Malaysia",
+    "sepang": "Malaysia"
+  });
+  function placeLabel(circuit, country, sep) {
+    const venue = str(circuit) || "";
+    const nation = str(country) || "";
+    const mapped = VENUE_COUNTRY[venue.toLowerCase()];
+    const shown = mapped && nation && mapped.toLowerCase() !== nation.toLowerCase() ? mapped : nation;
+    return [venue, shown].filter(Boolean).join(sep || ", ");
+  }
+
   return {
     cancelAll,
     // The raw queued/timed/retried GET, JSON-parsed: `request(url, 0, { cache: false })`
@@ -484,6 +499,7 @@ const F1API = (function () {
     locationData,
     stints,
     pits,
+    placeLabel,
     cacheEntryT
   };
 })();
