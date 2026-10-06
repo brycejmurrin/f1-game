@@ -403,8 +403,27 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
     "floor uplights keep a small glareW, not the old 0.5");
   assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
     "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
-  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.1[0-4]/,
-    "floor reflection is a contact sheen, not a 0.26 ghost");
+  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
+    "floor reflection resolves opaque so depth write self-occludes the car");
+  assert.match(scene, /depthBias: MIRROR_BIAS/,
+    "mirror resolve uses depthBias to clear the floor without noDepthTest");
+  assert.doesNotMatch(scene, /noDepthTest:\s*true/,
+    "noDepthTest ghosted helmet/wheels/wings through each other on close-ups");
+  assert.match(scene, /const MIRROR_SHEEN_PEAK = 0\.1[0-6]/,
+    "bay fade restores a contact sheen, not a 0.26 wash");
+});
+
+test("floor reflection depth-resolves then fades; room is drawn first", () => {
+  const { GarageScene, draws } = harness();
+  const car = { car: true };
+  GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, null, car);
+  const carAt = draws.findIndex((d) => d.mesh === car);
+  assert.ok(carAt >= 0, "mirrored car is drawn");
+  // Shell/props must precede the resolve so their depth clips it.
+  assert.ok(carAt > 1, `reflection at draw ${carAt} should follow floor + room`);
+  const scene = read("js/garage/scene.js");
+  assert.match(scene, /function mirrorSheen\(/, "sheen falls off with distance from the car");
+  assert.match(scene, /ensureMirrorFade\(/, "bay fade quad composites the contact sheen");
 });
 
 test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {
