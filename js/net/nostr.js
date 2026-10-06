@@ -2,7 +2,10 @@
 "use strict";
 
 const NetNostr = (function () {
-  const JOIN_TIMEOUT_MS = 120000;
+  // Guest join of a fake/missing code must fail in the lobby in ~8–15 s, not
+  // sit on "Looking for that room…" for two minutes. Hosts that need longer
+  // mint a fresh code (INVITE ANOTHER); this is not a relay event TTL.
+  const JOIN_TIMEOUT_MS = 12000;
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
   const MAX_HANDSHAKE_CHARS = 512 * 1024;
@@ -340,9 +343,11 @@ const NetNostr = (function () {
 
       later(() => finish({ ok: false, error: "expired",
         // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
-        // differ, so the two never meet — say what fixes that too.
-        message: "Nobody joined that code. Codes only last a couple of minutes —"
-               + " if it keeps happening, both reload the game and try a new code." }),
+        // differ, so the two never meet — say what fixes that too. Lobby
+        // codeJoin already surfaces why.message; keep this actionable.
+        message: "Nobody answered that code. Check the six characters, or ask "
+               + "your friend for a fresh one — if it keeps happening, both "
+               + "reload the game and try a new code." }),
         JOIN_TIMEOUT_MS);
 
       let opened = 0;

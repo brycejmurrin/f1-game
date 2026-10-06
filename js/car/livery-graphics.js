@@ -233,10 +233,13 @@ const LiveryGraphics = (function () {
         ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
         drawNumber(ctx, num, { x: -W * 0.34, y: -W * 0.34, w: W * 0.68, h: W * 0.68 }, ink, acc, null, numFont, 0);
       } else if (id === "cap") {
-        // Solid block airbox → mid-cover with a hard rear cut. Shoulders follow
+        // Solid block airbox → mid-cover with a soft rear cut. Shoulders follow
         // coverBind: saddleWrap fills the whole crown in the saddle zone, spineOnly
         // keeps shoulders on the cover paint, independent paints the block in the
         // band colour alone. Flank spill is saddleFlanks at the call site.
+        // The cut used to be a hard fillRect edge; under cover UVs that read as a
+        // stair-stepped band (Ferrari podFloor / cover close-ups). A short
+        // alpha ramp (~3 % of H) keeps the silhouette while killing the jaggies.
         const liv = colors || {};
         const bind = coverBindOf(liv);
         // Explicit saddleTint under wrap is a pick — paint it. Otherwise the
@@ -244,41 +247,65 @@ const LiveryGraphics = (function () {
         const fill = bind === "saddleWrap" ? (saddleFill(liv, acc, c1) || acc) : acc;
         const cutY = Y + H * 0.38;
         const bh = Y + H - cutY;
+        const feather = Math.max(2, H * 0.03);
+        const paintCap = (px, pw) => {
+          const solidY = cutY + feather;
+          const solidH = Math.max(0, Y + H - solidY);
+          if (solidH > 0) {
+            ctx.fillStyle = cssA(fill, 0.97);
+            ctx.fillRect(px, solidY, pw, solidH);
+          }
+          const g = ctx.createLinearGradient(0, cutY, 0, solidY);
+          g.addColorStop(0, cssA(fill, 0));
+          g.addColorStop(1, cssA(fill, 0.97));
+          ctx.fillStyle = g;
+          ctx.fillRect(px, cutY, pw, feather);
+          ctx.fillStyle = cssA(ink, 0.28);
+          ctx.fillRect(px, cutY + feather * 0.55, pw, Math.max(1.5, H * 0.008));
+        };
         if (bind === "spineOnly") {
-          const px = X + W * 0.28, pw = W * 0.44;
-          ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(px, cutY, pw, bh);
-          ctx.fillStyle = cssA(ink, 0.45); ctx.fillRect(px, cutY, pw, Math.max(2, H * 0.012));
+          paintCap(X + W * 0.28, W * 0.44);
         } else {
-          ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(X, cutY, W, bh);
-          ctx.fillStyle = cssA(ink, 0.35); ctx.fillRect(X, cutY, W, Math.max(2, H * 0.012));
+          paintCap(X, W);
           if (bind === "independent") {
-            ctx.fillRect(X, cutY, W * 0.012, bh); ctx.fillRect(X + W * 0.988, cutY, W * 0.012, bh);
+            ctx.fillStyle = cssA(ink, 0.35);
+            ctx.fillRect(X, cutY + feather, W * 0.012, Math.max(0, bh - feather));
+            ctx.fillRect(X + W * 0.988, cutY + feather, W * 0.012, Math.max(0, bh - feather));
           }
         }
         if (liv.spineTint) {
           const ridgeC = ridgeFill(liv, acc, c1), rw = W * 0.018;
           ctx.fillStyle = cssA(ridgeC, 0.9);
-          ctx.fillRect(X + W * 0.5 - rw / 2, cutY, rw, bh);
+          ctx.fillRect(X + W * 0.5 - rw / 2, cutY + feather * 0.5, rw, Math.max(0, bh - feather * 0.5));
         }
       } else if (id === "ridge") {
         drawCoverBand(ctx, id, R, acc, ink, colors, c1, T);
       } else if (id === "fade") {
-        // Micro-field density dying aft (canvas top = rear). Ground is the cover;
-        // An authored BAND is this graphic's colour (the sheet promises the pick
-        // is used as-is); only a DERIVED band is re-picked to clear the cover.
+        // Ordered halftone on the crown: regular grid, radius ramps nose→tail
+        // (canvas top = rear). Ground is the cover. An authored BAND is this
+        // graphic's colour (the sheet promises the pick is used as-is); only a
+        // DERIVED band is re-picked to clear the cover.
+        // The previous hash-skip field clumped into a noisy "broken text"
+        // dot-matrix at garage close-up (Mercedes cover, 1024/2048 atlas).
         const dotInk = (colors && colors.spineTint)
           || pickOn([acc, ink, INK_LIGHT, INK_DARK].filter(Boolean), c1, SUN_FLOOR);
-        const step = Math.max(3, W * 0.032);
-        for (let py = Y; py < Y + H - step * 0.5; py += step) {
-          for (let px = X; px < X + W - step * 0.5; px += step) {
-            const t = (py - Y) / H;
-            const density = 0.18 + 0.82 * t;
-            const h = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
-            if (h / 1000 > density) continue;
-            const r = step * 0.34;
-            ctx.fillStyle = cssA(dotInk, 0.97);
+        // Cell size tracks atlas width so 1024 and 2048 stay crisp (≈32/64 cols).
+        const cols = Math.max(12, Math.round(W / Math.max(4, W * 0.028)));
+        const rows = Math.max(16, Math.round(H / Math.max(4, W * 0.028)));
+        const cellW = W / cols, cellH = H / rows;
+        const rMax = Math.min(cellW, cellH) * 0.46;
+        ctx.fillStyle = cssA(dotInk, 0.97);
+        for (let j = 0; j < rows; j++) {
+          // t = 0 at rear (sparse / tiny), 1 at airbox (full dots).
+          const t = (j + 0.5) / rows;
+          const amp = t * t;                         // ease-in: clean empty tail
+          const r = rMax * amp;
+          if (r < 0.4) continue;                     // sub-pixel: leave bare
+          const cy = Y + (j + 0.5) * cellH;
+          for (let i = 0; i < cols; i++) {
+            const cx = X + (i + 0.5) * cellW;
             ctx.beginPath();
-            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.fill();
           }
         }

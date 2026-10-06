@@ -64,7 +64,16 @@ function fakeSession() {
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
     stats: () => ({}),
-    close() { this.closed++; handlers.clear(); return true; },
+    // Mirror real NetSession.close(): fire onClose("local") so stop() teardown
+    // cannot hide a re-entrant onClose the way a silent stub did.
+    close() {
+      this.closed++;
+      const fn = onClose;
+      handlers.clear();
+      onClose = null;
+      if (fn) fn("local");
+      return true;
+    },
     deliver(type, data) { for (const fn of handlers.get(type) || []) fn(data); },
     drop(why) { if (onClose) onClose(why); },
   };

@@ -4,6 +4,10 @@
    Door index, then one page. Tabs hid MORE and spent a sticky row the
    phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
    .pm-doors already balances the home list; pages reuse .pm-group. */
+/* 760 left a maximised desktop with a postcard of DISPLAY and a native
+   white gutter. Career hub is 1020; match that cap and hide the native
+   bar so only the themed .sf-scroll thumb (ScrollFade) remains. */
+#pmsettings { --sheet-w: min(1020px, calc(100 * var(--vwz) - var(--pad) * 2)); }
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
@@ -14,7 +18,11 @@
   grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   align-items: start;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
 }
+#pm-settings-body::-webkit-scrollbar { display: none; }
 #pm-settings-index[hidden],
 .pm-groups > [role="region"][hidden] { display: none !important; }
 .pm-groups { min-width: 0; }
@@ -102,6 +110,12 @@
   grid-column: 1 / -1;
   min-width: 0;
 }
+/* small-phone @ UI SIZE 200%: sheet fit-cap paints zoom ~1.81, pane content
+   ~89 CSS px. The ‹ select › cluster min-content is 4rem + two --tap-min
+   chevrons + gaps (~120px), so #pm-coach-next sat 28px past the pane
+   (time-trial Driving zoom matrix). Wrap the cluster; do not lower the 4rem
+   value floor (that clips MANUAL / DEFAULT on other pages). */
+#pm-panel-driving .set-row > div { flex-wrap: wrap; }
 #pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
 #pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
   font-size: var(--fs-micro);
@@ -401,5 +415,21 @@ body[data-width="narrow"] #pm-panel-appearance .pm-accent-preview { grid-templat
   min-height: var(--slider);
   margin: 0;
   box-sizing: border-box;
+}
+/* LIGHT sheet footers must live in @layer components (same layer as
+   .sheet-foot in css/components.css). A base-layer override loses the
+   cascade regardless of specificity (tokens.css documents this trap for
+   focus rings). Under Sunlight / LIGHT the foot follows the surface ladder. */
+:root[data-ui-theme="light"] .sheet-foot {
+  background: linear-gradient(180deg in oklab,
+    color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+    var(--surf-3) 70%);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-ui-theme="system"] .sheet-foot {
+    background: linear-gradient(180deg in oklab,
+      color-mix(in oklab, var(--red) 5%, var(--surf-1)),
+      var(--surf-3) 70%);
+  }
 }
 } /* @layer components */

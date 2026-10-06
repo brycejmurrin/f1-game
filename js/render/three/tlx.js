@@ -922,7 +922,7 @@ const TLX = (function () {
       } catch (_) { spatialUpscale = false; }
       function setSpatialUpscale(on) {
         spatialUpscale = !!on;
-        resize();
+        resizeNow();
         return spatialUpscale;
       }
       function getSpatialUpscale() { return spatialUpscale; }
@@ -2651,11 +2651,11 @@ const TLX = (function () {
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
       let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
-      function resize() {
-        // Window/settings callbacks also reach here while the frame loop waits
-        // for compilation. Keep its targets alive; the next frame applies the
-        // latest CSS size and settings once the warm task releases ownership.
-        if (_warmPending) { cssSizeCache.markDirty(); return; }
+      // Window resize (game.js) and settings can fire many times per drag frame.
+      // Coalesce those to one target realloc per animation frame; begin() and
+      // setRenderScale force an immediate apply so the draw sees the new size.
+      let _resizeRaf = 0, _resizeNow = false;
+      function applyResize() {
         // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
         if (_xrActive) return;
         // CSS size only — NEVER fall back to the backing store. Hidden canvases
@@ -2722,6 +2722,34 @@ const TLX = (function () {
           }
           if (post) post.resize(rw, rh);
         }
+      }
+      function resize() {
+        // Window/settings callbacks also reach here while the frame loop waits
+        // for compilation. Keep its targets alive; the next frame applies the
+        // latest CSS size and settings once the warm task releases ownership.
+        if (_warmPending) { cssSizeCache.markDirty(); return; }
+        if (_resizeNow) { applyResize(); return; }
+        if (_resizeRaf) return;
+        const schedule = typeof requestAnimationFrame === "function"
+          ? requestAnimationFrame
+          : (fn) => setTimeout(fn, 0);
+        _resizeRaf = schedule(() => {
+          _resizeRaf = 0;
+          if (_warmPending) { cssSizeCache.markDirty(); return; }
+          applyResize();
+        });
+      }
+      function resizeNow() {
+        _resizeNow = true;
+        try {
+          if (_resizeRaf) {
+            try {
+              if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(_resizeRaf);
+            } catch (_) { /* harness */ }
+            _resizeRaf = 0;
+          }
+          resize();
+        } finally { _resizeNow = false; }
       }
 
       const noopMesh = () => ({ __tlx: true, count: 0 });
@@ -2905,7 +2933,7 @@ const TLX = (function () {
         setRenderScale(s) {
           const v = Math.min(1, Math.max(0.5, +s || 0));
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
-          renderScale = v; resize(); return true;
+          renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
         setSpatialUpscale, getSpatialUpscale,
@@ -3544,19 +3572,29 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
+            // readPixels is a synchronous GPU→CPU stall. The Promise executor
+            // used to run it on the caller's turn — Settings › Appearance's
+            // MutationObserver → previewScene paid 10–15 s under ForceGL /
+            // llvmpipe before the first await, freezing the tab (profiled
+            // 2026-10-05). Yield one macrotask so menu UI can paint; every
+            // consumer already awaits the Promise.
             return new Promise((resolve, reject) => {
-              try {
-                const w = W, h = H;
-                if (!(w > 0 && h > 0)) throw new Error("no frame size");
-                const raw = new Uint8Array(w * h * 4);
-                gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-                const data = new Uint8ClampedArray(w * h * 4);
-                for (let y = 0; y < h; y++) {
-                  const src = (h - 1 - y) * w * 4;
-                  data.set(raw.subarray(src, src + w * 4), y * w * 4);
-                }
-                resolve({ width: w, height: h, data });
-              } catch (e) { reject(e); }
+              const run = () => {
+                try {
+                  const w = W, h = H;
+                  if (!(w > 0 && h > 0)) throw new Error("no frame size");
+                  const raw = new Uint8Array(w * h * 4);
+                  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+                  const data = new Uint8ClampedArray(w * h * 4);
+                  for (let y = 0; y < h; y++) {
+                    const src = (h - 1 - y) * w * 4;
+                    data.set(raw.subarray(src, src + w * 4), y * w * 4);
+                  }
+                  resolve({ width: w, height: h, data });
+                } catch (e) { reject(e); }
+              };
+              if (typeof setTimeout === "function") setTimeout(run, 0);
+              else run();
             });
           }
           const rt = _captureRT();
@@ -3739,7 +3777,7 @@ const TLX = (function () {
         },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
-          resize();
+          resizeNow();
           _instAlive.clear();
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
