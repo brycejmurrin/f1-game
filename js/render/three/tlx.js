@@ -1101,7 +1101,7 @@ const TLX = (function () {
       }
 
       const ENV_SIZE = 64;
-      const ENV_CULL_M = 300;
+      const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
       // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
       // shape with a 2-D target: mirrorBegin (before begin(), like a probe
@@ -3312,15 +3312,12 @@ const TLX = (function () {
             return;
           }
           const faceCam = envCubeCam.children[face & 7];
-          const faceVP = _envVPArr;
-          const faceCull = (_envFrame && _envFrame.cullDist) || 0;
-          const faceEye = (_envFrame && _envFrame.eye) || null;
           // Software GL: six world presents into a 64px cube miss the 360 s
           // test budget even after skipping city+sky (measured 2026-08-17:
           // M9 timed out at 424 s with park() done and ready still false —
           // each waitForFunction poll sat behind a SwiftShader frame).
           // Clear the face and count it; the main present still paints the
-          // canvas. Real GPUs keep the full world capture.
+          // canvas. Hardware skips chunked/city on this path too (below).
           if (softContent("env")) {
             try {
               renderer.setRenderTarget(envRT, face & 7);
@@ -3345,19 +3342,12 @@ const TLX = (function () {
           _instAlive.clear();
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
-            if (rec.instanced) {
-              _showInstanced(rec, i);
-              continue;
-            }
+            if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
             if (rec.chunked) {
-              // A 64px blurred cube cannot resolve the city. On software GL
-              // the chunked cull+draw is the fill that made M9 miss 360 s
-              // (measured 2026-08-17: six full Monza presents into the cube
-              // after M5 had already left the GPU process at 387%).
+              // A 64px blurred cube cannot resolve the city. Hardware now
+              // skips chunked/city on probe faces the way software already
+              // did (survey 2026-10-06: 312 k indices/cube on vegas at 300 m).
               if (softContent("chunked") || !chunkedSys) continue;
-              const n = chunkedSys.cull(rec.chunked, faceVP, faceEye, faceCull, frameCullFog);
-              const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
               continue;
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
