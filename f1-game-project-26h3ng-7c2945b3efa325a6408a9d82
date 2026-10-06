@@ -1,1 +1,0 @@
-1791224135	Cursor Agent	settings shipped defaults from apex26-settings-v1 export; OWNED js/data/settings-defaults.js js/ui/settings-export.js SPEC defs tools/gen/settings-defaults.mjs tests/unit/settings-defaults* call-site literals; NOT garage-defaults/career/circuits/css  [claude/f1-game-project-26h3ng; session 7c2945b3efa325a6408a9d82]
