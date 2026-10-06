@@ -338,7 +338,7 @@ export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTime
   // 1of2: 5/5 passed in 379 s after 113 s Mesa; the 8 min cap (workMin 5 +
   // setup 3) killed the job during artifact upload. PR #1113 tlx-probes 1of3
   // billed 6 tests / 6 min then mega-peel dropped --shard and ran all 17.
-  const wrapMin = 2;
+  const wrapMin = 2; // selected wrap-up headroom (PR #1109/#1113/#1114)
   const workMin = Math.ceil(Math.max(0, expectedSec) / 60);
   return Math.min(maxMin, Math.max(6, workMin + setupMin + wrapMin));
 };

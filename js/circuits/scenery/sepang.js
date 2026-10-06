@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
         sponsorHoarding, cameraTower, seat, terrainYAt, indexSolid,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, circuitKit } = api;
 
       const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
@@ -196,21 +196,27 @@
             stage._mat = 0;
           }, { required: true });
         }
-        const a = anchor(K(0.010), 1, 14);
+        // Behind the engine pit complex (gap 14 sat inside the pit footprint and
+        // was superseded). Tall glazed fin still reads from S/F as race control.
+        const a = anchor(K(0.006), 1, 58);
         const b = [a.r, a.u, a.t];
         modelGroup("sepang-race-control", {
-          center: vadd(a.c, a.u, 20), size: [12, 46, 14], basis: b,
+          center: vadd(a.c, a.u, 20), size: [10, 44, 12], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 15), [3.6, 30, 11], WHITE, b);
+          // Shaft 0–30 m. Hood/cap AABB-overlap the top so ground-audit BFS
+          // stays connected (the old 30.6 / 31.2 slabs sat 0.3 m clear).
+          addBox(stage, vadd(a.c, a.u, 15), [4.0, 30, 10], WHITE, b);
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 16), [0.6, 26, 9], [0.16, 0.28, 0.30], b);
-          addBox(stage, vadd(vadd(a.c, a.r, -2.2), a.u, 27), [0.3, 5.0, 8.2], [0.90, 0.86, 0.60], b);
+          for (const yh of [9.2, 15.4, 21.6]) {
+            addBox(stage, vadd(vadd(a.c, a.r, -1.85), a.u, yh),
+              [0.45, 3.6, 7.2], [0.16, 0.28, 0.30], b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, -1.85), a.u, 26.4),
+            [0.35, 3.2, 6.4], [0.90, 0.86, 0.60], b);
           stage._mat = MAT.METAL;
-          for (let l = 0; l < 4; l++)
-            addBox(stage, vadd(vadd(a.c, a.r, -3.4), a.u, 22 + l * 2.6), [3.4, 0.25, 10], WHITE, b);
-          addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, 30.6), [9, 0.6, 13], WHITE, b);
-          addBox(stage, vadd(a.c, a.u, 31.2), [4.0, 0.8, 11], TEAL, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -1.1), a.u, 30.2), [7.0, 0.85, 12], WHITE, b);
+          addBox(stage, vadd(a.c, a.u, 30.75), [4.4, 0.55, 9.2], TEAL, b);
           stage._mat = 0;
         }, { required: true });
       }
@@ -232,7 +238,45 @@
           { wall: [0.66 + hash(K(s) * 71) * 0.24, 0.66, 0.68] });
       }
       broadcastCompound(K(0.892), 1, 58, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.97, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.50, 0.30]);
+      if (circuitKit) {
+        circuitKit.hospitality({
+          id: "kit:sepang:paddock-hospitality", frac: 0.978, side: 1, gap: 72,
+          size: [16, 8, 36], modules: 4,
+        });
+        circuitKit.hospitality({
+          id: "kit:sepang:paddock-hospitality-b", frac: 0.018, side: 1, gap: 74,
+          size: [14, 7, 28], modules: 3,
+        });
+        circuitKit.hospitality({
+          id: "kit:sepang:paddock-hospitality-c", frac: 0.996, side: 1, gap: 108,
+          size: [18, 9, 40], modules: 4,
+        });
+        circuitKit.serviceCompound({
+          id: "kit:sepang:paddock-yard", frac: 0.962, side: 1, gap: 98,
+          size: [22, 6, 32], vehicles: 6,
+        });
+      }
+      const ASPHALT = [0.30, 0.31, 0.32], SVC = [0.36, 0.36, 0.34];
+      groundPatch(K(0.972), 1, 88, [26, 0.14, 38], ASPHALT,
+        { id: "sepang-paddock-carpark-a", samples: 6 });
+      groundPatch(K(0.012), 1, 90, [24, 0.14, 34], ASPHALT,
+        { id: "sepang-paddock-carpark-b", samples: 6 });
+      groundPatch(K(0.992), 1, 64, [5.2, 0.12, 44], SVC,
+        { id: "sepang-paddock-service", samples: 4 });
+      groundPatch(K(0.988), 1, 122, [32, 0.14, 42], ASPHALT,
+        { id: "sepang-paddock-carpark-c", samples: 6 });
+      const ADS = [
+        [0.20, 0.50, 0.30], [0.94, 0.72, 0.12], [0.86, 0.16, 0.14],
+        [0.12, 0.42, 0.72], [0.92, 0.92, 0.90], [0.10, 0.52, 0.32],
+        [0.18, 0.18, 0.20],
+      ];
+      [
+        [0.97, -1, 8], [0.01, -1, 8], [0.03, -1, 8],
+        [0.940, -1, 9], [0.952, 1, 10], [0.048, -1, 9],
+        [0.762, -1, 9], [0.792, 1, 9], [0.828, -1, 9], [0.858, 1, 10],
+      ].forEach(([s, side, gap], i) => {
+        billboard(K(s), side, gap, 12, 4.5, ADS[i % ADS.length]);
+      });
 
       const TENT_ROOF = [0.94, 0.94, 0.92], TENT_FASCIA = [0.14, 0.42, 0.36];
       const shelter = (s, side, gap, len, opts) =>
@@ -326,9 +370,12 @@
       }
 
       // Mid-lap and T15 covered stands (existing positions).
-      shelter(0.340, -1, 34, 80, { livery: "teal", endWalls: true });
-      shelter(0.580, 1, 30, 76, { livery: "navy", endWalls: true });
-      shelter(0.885, -1, 26, 92, { livery: "concrete", tiers: 2, roof: "cantilever", endWalls: true });
+      shelter(0.340, -1, 34, 80, { livery: "teal", roof: "cantilever", endWalls: true });
+      shelter(0.580, 1, 30, 76, { livery: "navy", roof: "cantilever", endWalls: true });
+      shelter(0.885, -1, 26, 92, {
+        livery: "alu", tiers: 2, roof: "cantilever", endWalls: true,
+        fasciaCol: [0.14, 0.42, 0.36],
+      });
       // Wider step to avoid coplanar risers on the grass bank.
       spectatorHill(0.62, 0.70, -1, 22, { rows: 3, rise: 1.15, depth: 2.0, density: 0.32, step: 14 });
 
@@ -437,6 +484,10 @@
 
       sponsorHoarding(0.955, 0.075, -1, 8, {
         h: 1.3, step: 11,
+        palette: [[0.10, 0.52, 0.32], [0.94, 0.93, 0.90], [0.88, 0.16, 0.14], [0.96, 0.80, 0.10]],
+      });
+      sponsorHoarding(0.748, 0.858, -1, 8, {
+        h: 1.35, step: 12, style: "led",
         palette: [[0.10, 0.52, 0.32], [0.94, 0.93, 0.90], [0.88, 0.16, 0.14], [0.96, 0.80, 0.10]],
       });
       cameraTower(K(0.055), -1, 12, { h: 16 });

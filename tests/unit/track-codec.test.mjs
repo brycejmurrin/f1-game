@@ -252,3 +252,38 @@ test("scenery options (FLAG.look): one byte only when off default, round-trips, 
   assert.equal(C.sanitize(Object.assign({}, base, { look: { time: "noon", trees: 7 } })).look, undefined);
   assert.deepEqual(plain(C.sanitize(Object.assign({}, base, { look: { crowd: "packed", time: "x" } })).look), { time: "auto", trees: "normal", crowd: "packed" });
 });
+
+test("surface opts (kerb + berms): trailing byte only when off default; round-trips; moves the id; bad byte refused", async () => {
+  const { CD, C } = bootEditor();
+  const base = design({ theme: "parkland", seed: 42 });
+  const plainBytes = CD.encodeBytes(C.sanitize(base), false);
+  // Defaults: flat kerbs + berms on → no trailing byte (older codes hold).
+  assert.equal(CD.surfaceByte(C.sanitize(base)), 0);
+  assert.equal(C.sanitize(Object.assign({}, base, { kerbStyle: "flat", berms: true })).id, C.sanitize(base).id);
+  const sausage = C.sanitize(Object.assign({}, base, { kerbStyle: "sausage" }));
+  assert.notEqual(sausage.id, C.sanitize(base).id, "sausage kerbs are a different circuit");
+  assert.equal(sausage.kerbStyle, "sausage");
+  const bytes = CD.encodeBytes(sausage, false);
+  assert.equal(bytes.length, plainBytes.length + 1, "one trailing surface byte");
+  const back = await CD.decode(await CD.encode(Object.assign({}, base, { kerbStyle: "sausage" })));
+  assert.equal(back.ok, true, back.reason);
+  assert.equal(back.design.kerbStyle, "sausage");
+  assert.equal(back.id, sausage.id);
+  // Rumble + berms off.
+  const both = C.sanitize(Object.assign({}, base, { kerbStyle: "rumble", berms: false }));
+  assert.equal(both.berms, false);
+  const r2 = await CD.decode(await CD.encode(Object.assign({}, base, { kerbStyle: "rumble", berms: false })));
+  assert.equal(r2.ok, true, r2.reason);
+  assert.equal(r2.design.kerbStyle, "rumble");
+  assert.equal(r2.design.berms, false);
+  assert.equal(r2.id, both.id);
+  // Bad surface nibble refused.
+  const reCheck = (b) => { const f = new Uint8Array(b); const c = CD.fnv16(f, f.length - 2); f[f.length - 2] = c & 0xff; f[f.length - 1] = c >> 8; return f; };
+  const bad = new Uint8Array(bytes); bad[bad.length - 3] = 3; // kerb index 3 invalid
+  assert.equal(CD.decodeBytes(reCheck(bad)).reason, "bounds");
+  // toRaw carries kerbStyle and berms when banking exists.
+  const banked = C.sanitize(Object.assign({}, base, { kerbStyle: "sausage", bankZones: [{ frac: 0.3, angleDeg: 12, widthM: 100 }] }));
+  const raw = C.toRaw(banked);
+  assert.equal(raw.kerbStyle, "sausage");
+  assert.equal(raw.berms, true);
+});

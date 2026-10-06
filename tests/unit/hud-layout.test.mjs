@@ -206,6 +206,16 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
 });
 
+// Empty .hud-gaps collapses (css/hud.css). The COMPACT metrics test must seed
+// a gap line before asserting width > 0, or it measures the intentional hide.
+test("COMPACT metrics layout seeds a gap line before asserting .hud-gaps survives", () => {
+  const spec = fs.readFileSync(path.join(ROOT, "tests/specs/hud-layout.spec.js"), "utf8");
+  const block = spec.match(/COMPACT drops both metric halves and leaves MAP and GAPS alone[\s\S]*?^\}\);/m);
+  assert.ok(block, "COMPACT metrics test exists");
+  assert.match(block[0], /hud-gap-ahead[\s\S]*textContent\s*=/, "seed ahead text before width probe");
+  assert.match(CSS, /\.hud-gaps:not\(:has\(>\s*div:not\(:empty\)\)\)\s*\{[^}]*display:\s*none/);
+});
+
 const plain = (o) => JSON.parse(JSON.stringify(o));
 const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
 

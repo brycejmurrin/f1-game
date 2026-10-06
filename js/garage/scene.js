@@ -593,33 +593,15 @@ function mk(out, tx, ty, tz, ay, az) {
   out[12] = tx;      out[13] = ty;      out[14] = tz;      out[15] = 1;
   return out;
 }
-let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null, mirrorFadeMesh = null;
+let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null;
 const _mFan = new Float32Array(16), _mLamp = new Float32Array(16), _mPass = new Float32Array(16);
 const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-// Floor reflection used to draw with noDepthTest + alpha 0.10: every car triangle
-// blended, so close-ups (fwLow, podFloor) showed helmet/wheels/wings through each
-// other. Resolve opaque with depth test+write (bias pulls the under-floor mesh
-// past the floor), then fade with a bay quad — only nearest surfaces remain.
-const MIRROR_BIAS = [-2, -120];
-const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, depthBias: MIRROR_BIAS };
-const MIRROR_SHEEN_PEAK = 0.14;
-const _mirrorFadeOpts = { alpha: 0.86, roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
-function mirrorSheen(eye, carMat) {
-  const cx = carMat ? carMat[12] : 0, cz = carMat ? carMat[14] : 0;
-  const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 1.6, ez = eye ? eye[2] : 5;
-  const d = Math.hypot(ex - cx, ez - cz);
-  // Close contact views keep a readable sheen; pull-back / TOP fade it out.
-  const lateral = 1 / (1 + Math.max(0, d - 2.2) * 0.18);
-  const height = 1 / (1 + Math.max(0, ey - 2.5) * 0.25);
-  return MIRROR_SHEEN_PEAK * lateral * height;
-}
-function ensureMirrorFade() {
-  if (mirrorFadeMesh || !_gfx) return;
-  const out = acc();
-  // Bay box only — apron / pit lane stay opaque so a fade pass cannot open them.
-  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, [0.115, 0.118, 0.126], 0.002, MAT.ASPHALT);
-  mirrorFadeMesh = _gfx.createMesh(out);
-}
+// Planar floor ghost: the car again, faint, with no depth test, straight after
+// the floor. #1025 swapped this for an opaque+depthBias resolve + fade quad so
+// close-ups would self-occlude, but polygon offset cannot pull a mesh metres
+// below y=0 in front of the slab — the contact sheen vanished on the live bay.
+// The ghost (helmet/wheels through each other on fwLow) is the accepted look.
+const MIRROR_OPTS = { alpha: 0.26, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, noDepthTest: true };
 function ensureDynamic() {
   if (fanMesh) return;
   // Fan blades in the XY plane about the origin, turned about Z per frame.
@@ -1529,86 +1511,76 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   const studio = !!(ctx && ctx.studio);
-  // Room first so its depth is in the buffer: the reflection then depth-tests
-  // against props/shell (they win) and only needs bias to clear the floor.
-  const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
-  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true, shutter: ez < Z_DOOR, barrier: ez < Z_DOOR && !arrival };
-  if (!studio) {
-    _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
-    // TOP looks down through the ceiling: hide the truss and the ceiling LED
-    // housings so their beams do not stripe the car. Other presets restore them.
-    const hideRoof = spotName === "top";
-    if (trussMesh && !hideRoof) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
-    // Each wall's furniture AND its lighting, only while the eye is inside that
-    // wall — the same decision back-face culling makes for the wall itself. A
-    // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
-    // always, so this test fires constantly and is what keeps the cutaway clean.
-    // Collapse the slats upward into the roller housing, anchored at the lintel.
-    shutterMat[5] = arrival ? (4.77 * (1 - arrival.door) + 0.06) / 2.86 : 1;
-    shutterMat[13] = arrival ? 4.77 * (1 - shutterMat[5]) : 0;
-    for (let i = 0; i < SIDES.length; i++) {
-      if (!inside[SIDES[i]]) continue;
-      if (propMesh[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, SHELL_OPTS);
-      if (ledMesh[SIDES[i]] && !(hideRoof && SIDES[i] === "mid")) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
-    }
-    // Dress LAST of the environment: drawDecal depth-tests but does not depth
-    // write, so every opaque surface it sits on has to be down first.
-    if (dressTex)
-      for (let i = 0; i < SIDES.length; i++)
-        if (inside[SIDES[i]] && dressMesh[SIDES[i]])
-          _gfx.drawDecal(dressMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, dressTex, DRESS_OPTS);
-    // The moving props. Fan on the back wall (its housing is in propMesh.back);
-    // the lamp wherever the preset put it; the pit-lane pass every half minute.
-    if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
-    if (lampMesh) {
-      mk(_mLamp, lampAim[0], 0, lampAim[1], lampAim[2], 0);
-      _gfx.draw(lampMesh, _mLamp, SHELL_OPTS);
-      if (lampAim[3]) _gfx.draw(lampFace, _mLamp, LED_OPTS);
-    }
-    {
-      const cyc = (now / 1000) % 34;
-      if ((!ctx || ctx.ambient !== false) && cyc < 6.5 && passMesh)
-        _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, PIT_FAST_Z, Math.PI / 2, 0), SHELL_OPTS);
-    }
-    // The engineers' traces tick over every 1.5 s: repaint one region of the
-    // live atlas and re-upload it (1 MB, a quarter of the dress).
-    // Three strikes, as the dress: the atlas stays up with its last traces. A
-    // Keep the last working handle until the replacement uploads successfully:
-    // a transient upload failure can then retry without losing the live atlas.
-    if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
-      lastTrace = now;
-      try {
-        paintTrace(liveCanvas, liv, now);
-        const nextTex = _gfx.createTexture(liveCanvas);
-        if (!nextTex || nextTex._phase === 4) throw new Error("trace texture upload returned no handle");
-        if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
-        liveTex = nextTex;
-        traceFail = 0;
-      } catch (e) {
-        traceFail++;
-        Log.warn("game", `GarageScene live trace failed: ${e && e.message}`);
-      }
-    }
-  }
-  // THE FLOOR REFLECTION: car again through MAT_MIRROR (X as the preview's
-  // MAT_REFLECT_X, Y for the floor; det +1, no cull flip). Opaque resolve with
-  // depthBias so under-floor fragments clear the floor and self-occlude; bay
-  // fade quad restores a contact sheen. Drawn AFTER the room so props/shell
-  // already own depth and keep clipping it without noDepthTest.
+  // THE FLOOR REFLECTION: the car again, mirrored in y = 0, drawn faint and
+  // without a depth test straight after the floor. It writes no depth, so the
+  // shell, the props and the real car all paint over it wherever they pass
+  // against the floor's depth — which is exactly the clip a planar reflection
+  // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
+  // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
   if (carMesh) {
     if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
     else arrivalMirror.set(MAT_MIRROR);
-    const sheen = mirrorSheen(eye, carMat);
-    if (sheen > 0.02) {
-      _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
-      ensureMirrorFade();
-      if (mirrorFadeMesh) {
-        _mirrorFadeOpts.alpha = 1 - sheen;
-        _gfx.draw(mirrorFadeMesh, MAT_I, _mirrorFadeOpts);
-      }
+    _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
+  }
+  if (studio) return;   // car studio: floor + ghost, no room dressing
+  // Room after the ghost so props/shell depth-write over it.
+  const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
+  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true, shutter: ez < Z_DOOR, barrier: ez < Z_DOOR && !arrival };
+  _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
+  // TOP looks down through the ceiling: hide the truss and the ceiling LED
+  // housings so their beams do not stripe the car. Other presets restore them.
+  const hideRoof = spotName === "top";
+  if (trussMesh && !hideRoof) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
+  // Each wall's furniture AND its lighting, only while the eye is inside that
+  // wall — the same decision back-face culling makes for the wall itself. A
+  // camera at SP_DIST_MAX (15 m) is outside the bay on at least one axis nearly
+  // always, so this test fires constantly and is what keeps the cutaway clean.
+  // Collapse the slats upward into the roller housing, anchored at the lintel.
+  shutterMat[5] = arrival ? (4.77 * (1 - arrival.door) + 0.06) / 2.86 : 1;
+  shutterMat[13] = arrival ? 4.77 * (1 - shutterMat[5]) : 0;
+  for (let i = 0; i < SIDES.length; i++) {
+    if (!inside[SIDES[i]]) continue;
+    if (propMesh[SIDES[i]]) _gfx.draw(propMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, SHELL_OPTS);
+    if (ledMesh[SIDES[i]] && !(hideRoof && SIDES[i] === "mid")) _gfx.draw(ledMesh[SIDES[i]], MAT_I, LED_OPTS);
+  }
+  // Dress LAST of the environment: drawDecal depth-tests but does not depth
+  // write, so every opaque surface it sits on has to be down first.
+  if (dressTex)
+    for (let i = 0; i < SIDES.length; i++)
+      if (inside[SIDES[i]] && dressMesh[SIDES[i]])
+        _gfx.drawDecal(dressMesh[SIDES[i]], SIDES[i] === "shutter" ? shutterMat : MAT_I, dressTex, DRESS_OPTS);
+  // The moving props. Fan on the back wall (its housing is in propMesh.back);
+  // the lamp wherever the preset put it; the pit-lane pass every half minute.
+  if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
+  if (lampMesh) {
+    mk(_mLamp, lampAim[0], 0, lampAim[1], lampAim[2], 0);
+    _gfx.draw(lampMesh, _mLamp, SHELL_OPTS);
+    if (lampAim[3]) _gfx.draw(lampFace, _mLamp, LED_OPTS);
+  }
+  {
+    const cyc = (now / 1000) % 34;
+    if ((!ctx || ctx.ambient !== false) && cyc < 6.5 && passMesh)
+      _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, PIT_FAST_Z, Math.PI / 2, 0), SHELL_OPTS);
+  }
+  // The engineers' traces tick over every 1.5 s: repaint one region of the
+  // live atlas and re-upload it (1 MB, a quarter of the dress).
+  // Three strikes, as the dress: the atlas stays up with its last traces. A
+  // Keep the last working handle until the replacement uploads successfully:
+  // a transient upload failure can then retry without losing the live atlas.
+  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
+    lastTrace = now;
+    try {
+      paintTrace(liveCanvas, liv, now);
+      const nextTex = _gfx.createTexture(liveCanvas);
+      if (!nextTex || nextTex._phase === 4) throw new Error("trace texture upload returned no handle");
+      if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
+      liveTex = nextTex;
+      traceFail = 0;
+    } catch (e) {
+      traceFail++;
+      Log.warn("game", `GarageScene live trace failed: ${e && e.message}`);
     }
   }
-  if (studio) return;   // car studio: floor + resolved reflection, no room dressing
   if (liveTex) {
     if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
     for (const k of ["mid", "nx", "px", "door"])
@@ -1797,7 +1769,6 @@ function release() {
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh);
-  mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);
   for (const ent of previewMeshes.values()) fm(ent.mesh);
   previewMeshes.clear(); previewHulls.clear();

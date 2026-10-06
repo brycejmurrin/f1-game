@@ -81,10 +81,14 @@
 /* PRESETS: eight chips (FULL…REVERSE). Content-sized .chip-row left REVERSE
    alone on a trailing line at ~half of the 1020 sheet. `.balanced-row` grows
    each chip from a quarter-row basis so wraps stay 4+4 / 3+3+2 / 2×4 — never
-   a one-chip orphan. */
+   a one-chip orphan. Cap each chip at a quarter so a long label (2026 REAL)
+   cannot steal a third of the row and leave SHUFFLE+REVERSE as a 2-chip tail. */
 #ss-presets {
-  --balance-basis: calc(25% - var(--gap) * 0.5);
-  --balance-min: 4.5rem;
+  --balance-basis: calc(25% - var(--gap) * 0.75);
+  --balance-min: 3.75rem;
+}
+#ss-presets > .sel-chip {
+  max-width: calc(25% - var(--gap) * 0.75);
 }
 /* Both columns are .pane, so the scrolling, the overscroll containment and the
    reserved gutter come with the primitive — nothing to restate here.
@@ -259,6 +263,11 @@
   margin: 0;
 }
 #rs-presets > .preset-btn { min-height: var(--chip-h); }
+/* CUSTOM is a display-only sentinel (no data-rs-preset): it lights when the
+   live draft matches no named preset (default 3-lap open). Same selected
+   plate as QUICK / WEEKEND / ENDURANCE; not a fourth writable choice. */
+#rs-preset-custom { cursor: default; }
+#rs-preset-custom:focus-visible { outline-offset: 2px; }
 .session-summary {
   margin: 0; min-width: 0; max-width: 100%;
   color: var(--dim); font-size: var(--fs-micro); font-variant-numeric: tabular-nums;

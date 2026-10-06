@@ -19,6 +19,23 @@ async function enterTT(page, trackId = "monza") {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// park() paints the HUD and calls lowerWaitPlate(), but #loading is a .screen:
+// while it is still up, css/hud.css sets .hud-top / .hud-gaps to
+// visibility:hidden, and Playwright's locator.innerText() then reads "" even
+// though textContent is already "TT" / "REC —" (Pages selected-specs flake on
+// tip 2ee6edb1, run 37494908224 — a11y snapshot had "TT", assertion got "").
+// Wait for the docks to be *readable*, not a fixed 100 ms under CI load.
+async function parkUntilHudReadable(page) {
+  await page.evaluate(() => window.__apex.park(0));
+  await page.waitForFunction(() => {
+    const loading = document.getElementById("loading");
+    if (loading && !loading.hidden) return false;
+    const top = document.querySelector(".hud-top");
+    if (!top) return false;
+    return getComputedStyle(top).visibility !== "hidden";
+  }, null, { polling: 100, timeout: BOOT_MS });
+}
+
 // ── Mode flags ────────────────────────────────────────────────────────────────
 
 test.describe("Time Trial — mode flags", () => {
@@ -33,10 +50,8 @@ test.describe("Time Trial — mode flags", () => {
 
   test("HUD shows TT position label", async ({ page }) => {
     await enterTT(page);
-    await page.evaluate(() => window.__apex.park(0));
-    await page.waitForTimeout(100);
-    const posText = await page.locator("#hud-pos").innerText();
-    expect(posText).toBe("TT");
+    await parkUntilHudReadable(page);
+    await expect(page.locator("#hud-pos")).toHaveText("TT");
   });
 });
 
@@ -85,11 +100,9 @@ test.describe("Time Trial — ghost delta HUD", () => {
 
   test("gap-behind shows REC placeholder when no record exists yet", async ({ page }) => {
     await enterTT(page);
-    await page.evaluate(() => window.__apex.park(0));
-    await page.waitForTimeout(100);
-    const gapB = await page.locator("#hud-gap-behind").innerText();
-    // Should show "REC —" when no time set yet
-    expect(gapB).toMatch(/REC/);
+    await parkUntilHudReadable(page);
+    // Same .screen / visibility:hidden trap as the TT POS label (hud-gaps).
+    await expect(page.locator("#hud-gap-behind")).toContainText(/REC/);
   });
 
 // WAIT FOR THE GHOST TO BE WRITTEN. Ghost.finishLap() does not save — it calls

@@ -1,5 +1,5 @@
 /* Apex 26 — the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets, copy-from / apply-to-all, and JSON / APXC1 import. */
-const CamTunerPanel = (function () {
+const CamTunerEditor = (function () {
   "use strict";
 
 let _refresh = null;
@@ -440,4 +440,4 @@ return { buildCamTunePanel, refreshCamTunePanel, openCamTuner, closeCamTuner, is
 
 return { create, refresh: () => { if (_refresh) _refresh(); } };
 })();
-Object.freeze(CamTunerPanel);
+Object.freeze(CamTunerEditor);

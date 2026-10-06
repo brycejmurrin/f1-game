@@ -115,13 +115,32 @@ const TrackSurface = (function () {
           }
         }
         if (dist >= outerW) return floorY;
+        // BERMS ON BANKED CORNERS (designer / def.berms). A catch-fence mound
+        // on the OUTER (high) side only — rise peaks ~6–10 m past the edge and
+        // fades by ~22 m. Street / flatTerrain circuits skip berms; shipped
+        // defs without berms:true are unchanged.
+        const bermLift = () => {
+          if (!def.berms || flat || street || !bp) return 0;
+          const lift = bp.lift[i] || 0;
+          if (!(lift > 0.15)) return 0;
+          const outer = bp.bsign[i] || 0;
+          if (!outer || !side || side !== outer) return 0;
+          // Peak just past the verge; hold to ~10 m, ease out by ~22 m.
+          if (dist < 2.0 || dist > 22) return 0;
+          const peak = Math.min(2.4, 0.55 + lift * 0.35);
+          let w = 1;
+          if (dist < 6) w = clamp01((dist - 2.0) / 4);
+          else if (dist > 10) w = 1 - clamp01((dist - 10) / 12);
+          const e = w * w * (3 - 2 * w);
+          return peak * e;
+        };
         if (flat || street) {
           const shelf = base - 0.12 - dist * 0.004;
           const edgeStart = outerW * 0.72;
-          if (dist <= edgeStart) return shelf;
+          if (dist <= edgeStart) return shelf + bermLift();
           const t = clamp01((dist - edgeStart) / Math.max(0.01, outerW - edgeStart));
           const ease = t * t * (3 - 2 * t);
-          return lerp(shelf, floorY, ease);
+          return lerp(shelf, floorY, ease) + bermLift();
         }
         const t = clamp01(dist / outerW);
         const ease = t * t * (3 - 2 * t);
@@ -138,6 +157,7 @@ const TrackSurface = (function () {
           const u = clamp01((dist - SHELF_END) / (SHELF_BLEND - SHELF_END));
           slope = lerp(shelf, slope, u * u * (3 - 2 * u));
         }
+        slope += bermLift();
         // High-relief opt-in: distribute the outer drop over the remaining
         // ribbon, preserving the road shelf, rails and bank attenuation.
         // Both the visible mesh and grounding fallback use this profile.

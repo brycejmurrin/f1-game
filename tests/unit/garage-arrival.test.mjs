@@ -71,14 +71,19 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
 });
 
 // ── THE STUDIO DRIVE-OUT: every RACE! opens on it (js/game.js studioOpen) ──
-test('studio drive-out (poseOut): shutter up, parked a beat, then nose first out of the door and clear of it', () => {
+test('studio drive-out (poseOut): shutter opens first, then parked beat, then nose first out', () => {
   for (const angle of ['cut', 'left', 'right']) {
     const cfg = Arrival.settings({ angle, fov: 58 });
     const p0 = Arrival.poseOut(0, cfg);
     assert.equal(p0.z, 0, 'parked where the arrival parks it');
-    assert.equal(p0.door, 1, 'the shutter is already up');
+    assert.equal(p0.door, 0, 'the shutter starts closed');
+    assert.equal(p0.label, 'OPENING GARAGE');
     assert.equal(p0.fov, 58);
-    assert.equal(Arrival.poseOut(1.0, cfg).z, 0, 'a held beat before it moves');
+    assert.ok(Arrival.poseOut(0.9, cfg).door > 0 && Arrival.poseOut(0.9, cfg).door < 1, 'door easing mid-open');
+    assert.equal(Arrival.poseOut(1.8, cfg).door, 1, 'shutter clear at DOOR_S');
+    assert.equal(Arrival.poseOut(1.8, cfg).z, 0, 'still parked while the door finishes');
+    assert.equal(Arrival.poseOut(2.5, cfg).z, 0, 'held beat after the door before it moves');
+    assert.ok(Arrival.poseOut(3.0, cfg).z > 0, 'then rolls out');
     let prior = -1;
     for (let t = 0; t <= Arrival.OUT_DURATION + 0.5; t += 0.02) {
       const p = Arrival.poseOut(t, cfg);

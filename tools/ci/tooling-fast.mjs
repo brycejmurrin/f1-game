@@ -159,6 +159,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/career-settle.test.mjs",
+  "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
@@ -559,6 +560,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  // Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus
+  // Season SETUP scroll/chip pins (layer on #1082 chrome).
+  "tests/unit/race-setup-sheets.test.mjs",
   // Field-step pose snapshots: traffic scans read last tick's prog/x/speed so
   // a car updated earlier in the same tick cannot look like a pass. Source
   // pin of game.js's snap loop + red-flag first-gear restart + coast estimate.
@@ -698,6 +702,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // failure mode is a STALE key, which returns the wrong material and shows
   // up only on screen. Fuzzes the real lifted source over every field.
   "tests/unit/tlx-mat-key-memo.test.mjs",
+  // TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).
+  "tests/unit/tlx-post-fixed-mats.test.mjs",
   // TLX drops a createTexture() source canvas once three has uploaded it,
   // and freeTexture retires the decal materials bound to it (lifted source
   // against three r186's real Texture). The pit-crew mesh cache is capped.

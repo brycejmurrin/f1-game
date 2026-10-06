@@ -15,10 +15,11 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
 - Pre-push → check-changes (spawns verify-agent). Red ci/pages → ci-red-triage
   then steward overrides only (draft/ready dedupe; sync-pr.mjs not hand merge;
   who-is-on-it before shared red; live = Pages + version.json).
-- After every push: ci-watch.mjs --sha <sha> [--pages]; no sleep / gh run view loops.
+- After every push: subscribe_github_ci + subscribe_github_pr; at most one
+  ci-watch --once (no shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=43b8d99f check-changes=a5e8d0b5 pr-template=b3157d7c
+HASHES: steward=7af43ce7 check-changes=a5e8d0b5 pr-template=b3157d7c
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per
@@ -57,8 +58,8 @@ tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
 no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
 the normal train once green.
 
-Only CI Watch arms squash auto-merge, on PRs once marked ready; specialty bots
-and cloud agents never arm auto-merge or merge/squash. Disable any armed
-MERGE/REBASE auto-merge and tell CI Watch + Grok Bot. Sync by merging
+Specialty bots and cloud agents never arm auto-merge themselves; Merge Desk
+owns merge-when-green (MERGE commit only). Disable any armed MERGE/REBASE
+auto-merge and tell Merge Desk + CI Watch + Grok Bot. Sync by merging
 origin/ship; never rebase or force-push. Launch prompts carry
-`Do not enable auto-merge or merge.`
+`Do not arm auto-merge yourself; Merge Desk owns merge-when-green (MERGE commit only).`

@@ -91,7 +91,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
-    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
+    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, !!frame.mirrorFreezeInstanced, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
     drawCar: (c, m) => gfx.draw("mesh:" + c.team, m),   // CarDraw.drawMirrorCar in the game (the real one: the test below)
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
@@ -264,6 +264,24 @@ test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a
   assert.equal(min.calls.filter((c) => c[0] === "begin").length, 3);
 });
 
+test("full quality freezes instanced packs every other drawn frame (audit #8)", () => {
+  const h = boot({ mode: "on", tier: 0 });
+  assert.equal(h.mp.state().instEvery, 2, "desktop full defaults to instEvery 2");
+  for (let i = 0; i < 4; i++) h.render();
+  const worlds = h.calls.filter((c) => c[0] === "world");
+  assert.equal(worlds.length, 4, "pass still runs every frame (cars update)");
+  // drawn 0 refresh, 1 freeze, 2 refresh, 3 freeze — flag is set before _drawn++.
+  assert.deepEqual(worlds.map((c) => c[3]), [false, true, false, true]);
+  assert.equal(h.frame.mirrorFreezeInstanced, undefined, "flag restored after pass");
+  const st = h.mp.state();
+  assert.equal(st.instFreezeSkips, 2);
+  assert.equal(st.instRefresh, 2);
+  // lite never freezes (no instanced packs to reuse).
+  const lite = boot({ mode: "on", mobile: true });
+  for (let i = 0; i < 3; i++) lite.render();
+  assert.ok(lite.calls.filter((c) => c[0] === "world").every((c) => c[3] === false));
+});
+
 test("a tap collapses the mirror to a chip for the session; a tap on the chip brings it back", () => {
   const h = boot({ mode: "on", mobile: true });
   h.render();
@@ -407,7 +425,8 @@ test("the sun's view-dependent terms stay out of the mirror, and the main frame 
   const h = boot({ mode: "on" });
   const own = h.frame.tune;
   h.render();
-  const seen = h.calls.find((c) => c[0] === "world")[3];
+  // world = [tag, viewProj, mirrorLite, freezeInstanced, tune]
+  const seen = h.calls.find((c) => c[0] === "world")[4];
   // Glint, sparkle, window flash and cast shadows alias / sweep in a small
   // un-antialiased target — a phone report of a "flashy" mirror in the sun.
   assert.deepEqual([seen.carSunGlint, seen.carSparkle, seen.windowSunFlash, seen.shadowStr], [0, 0, 0, 0]);
@@ -417,7 +436,7 @@ test("the sun's view-dependent terms stay out of the mirror, and the main frame 
   // The tuner edits its object in place; the next mirror pass follows it.
   own.keyMul = 0.9;
   h.render();
-  assert.equal(h.calls.filter((c) => c[0] === "world").pop()[3].keyMul, 0.9);
+  assert.equal(h.calls.filter((c) => c[0] === "world").pop()[4].keyMul, 0.9);
 });
 
 test("standDown (the GARAGE preview frame) hides the mirror and clears the composite rect; the race brings it back", () => {
