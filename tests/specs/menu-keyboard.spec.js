@@ -373,7 +373,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       // Live SwiftShader race starves a 5 s waitForFunction: CI selected-1
       // (run 37414897932) logged TopModal open #standings then timed out
       // while the material pack was still on the main thread (~9 s later).
-      // headlessMode only skips render() (js/game.js).
+      // headlessMode only skips render() (js/game.js) — same stall stop as
+      // the Escape sibling below.
       window.__apex.headless(true);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
@@ -382,12 +383,18 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
        (TopModal's MutationObserver); a :modal standings used to lose
        activeLayer() to #pausemenu with no modalOrder stamp, or when Chromium
-       dropped the 0×0 box. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
+       dropped the 0×0 box — UiLayers ranks :modal even at 0×0. Blocking
+       components.css (#1101) also owns dialog.screen 100% box + [open] grid
+       so print→all dialog-platform cannot leave a 0×0 :modal; wait for that
+       painted box too. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
        waitForFunction (CI selected-1 run 37414897932). polling: 100 — park()
        stops the rAF loop. */
     await page.waitForFunction(() => {
-      const el = document.getElementById("standings");
-      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+      const s = document.getElementById("standings");
+      if (!s || !s.matches(":modal")) return false;
+      const r = s.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return false;
+      return (window.MenuNav.activeLayer() || {}).id === "standings";
     }, null, { polling: 100, timeout: BOOT_MS });
 
     const seen = await page.evaluate(() => ({
