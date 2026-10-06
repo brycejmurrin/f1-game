@@ -135,6 +135,31 @@ function ensureNet() {
   return netLoad;
 }
 
+// LAZY_AUDIO (tools/manifest.cjs) — ~449 KB WebAudio engine + panel/voice.
+// Title boots the stub; real modules reinject via top-level `var` and
+// onAudioReady recreates panel/voice/announcer instances.
+const AUDIO_FILES = ApexRoster.LAZY_AUDIO || [];
+const AUDIO_EDGES = ApexRoster.LAZY_AUDIO_EDGES || [];
+let audioLoad = null;
+function ensureAudio() {
+  if (audioLoad) return audioLoad;
+  if (!AUDIO_FILES.length) return Promise.resolve(false);
+  if (typeof GameAudio !== "undefined" && GameAudio && !GameAudio._stub) {
+    audioLoad = Promise.resolve(true);
+    return audioLoad;
+  }
+  audioLoad = loadBackendScripts(AUDIO_FILES, AUDIO_EDGES).then(() => {
+    if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
+      Log.warn("audio", "the audio bundle did not load — sound stays silent");
+      audioLoad = null;
+      return false;
+    }
+    if (typeof deps.onAudioReady === "function") deps.onAudioReady();
+    return true;
+  });
+  return audioLoad;
+}
+
 function wantAgentSurface() {
   if (typeof window !== "undefined" && window.__TEST_MODE) return true;
   try { if (localStorage.getItem("apex26.devApi") === "1") return true; } catch (_) { /* blocked */ }
@@ -185,12 +210,16 @@ async function raceAssets() {
   // fallback would build, so fetch its scenery up front rather than making the
   // first GO wait for it.
   ensureScenery(deps.getContext().trackIdx);
+  // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
+  // networkidle wall. First pointerdown / SOUND click / Settings /
+  // MUSIC & SOUND / startRace pulls it (startRace awaits ensureAudio
+  // before startEngine; openSettings and the audio door also call it).
   if (window.LightPresets) return;
   await loadBackendScripts(RACE_FILES, []);
   if (window.LightPresets) deps.applyLightTuneIfReady();
 }
 
-return { SCENERY_DIR, sceneryResident, raceAssets, ensureScenery, ensureDataHub, ensureNet, wantAgentSurface, loadAgentSurface, bootAgentSurface };
+return { SCENERY_DIR, sceneryResident, raceAssets, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface };
 }
   return { create };
 })();

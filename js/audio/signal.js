@@ -1,7 +1,7 @@
 /* GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the context-bound noise cache. */
 "use strict";
 
-const GameAudioSignal = (function () {
+var GameAudioSignal = (function () {
   // Dominant period of the loop region, by autocorrelation. Bounded on BOTH
   // axes so this stays a ~10 ms main-thread cost paid once: an 8192-sample
   // window (the loop is steady, so more buys nothing) and lags spanning

@@ -21,6 +21,14 @@ async function bootWithStore(page, entries) {
   }, Object.entries(entries));
   await page.reload();
   await waitApex(page);
+  // LAZY_AUDIO: title boots a stub; pull the real engine before volumes()/debug().
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => typeof GameAudio !== "undefined" && !GameAudio._stub && typeof GameAudio.volumes === "function",
+    null, { polling: 100, timeout: BOOT_MS }
+  );
 }
 
 test("GameAudio initialises without console errors", async ({ page, pageErrors, consoleLines }) => {

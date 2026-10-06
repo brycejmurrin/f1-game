@@ -242,6 +242,15 @@ test.describe("Menu traversal — keyboard and controller", () => {
           null, { polling: 100, timeout: BOOT_MS });
         await click(page, door);
         await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
+        // LAZY_AUDIO: #pm-audio may reveal async after ensureAudio; wait for the
+        // wired panel so MenuNav.items does not include static ‹ › chevrons.
+        if (door === "#pm-audio") {
+          await page.waitForFunction(
+            () => !document.getElementById("audioset")?.hidden
+              && typeof GameAudio !== "undefined" && !GameAudio._stub,
+            null, { polling: 100, timeout: BOOT_MS }
+          );
+        }
         await openFolds(page);
       };
       await open();

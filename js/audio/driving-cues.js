@@ -3,7 +3,7 @@
    only when the slider is ON — never the race-radio / coach text queue.
    Distinct timbre from GameAudio.brakeCue; ducks while BrakeCue is already
    pulsing. Product #9: docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md. */
-const DrivingCues = (function () {
+var DrivingCues = (function () {
   "use strict";
 
   const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;

@@ -159,6 +159,69 @@
     "js/lighting/presets.js"
   ],
     SCENERY_DIR: "js/circuits/scenery",
+    LAZY_AUDIO: [
+    "js/audio/signal.js",
+    "js/audio/soundtrack.js",
+    "js/audio/radio-fx.js",
+    "js/audio/tone-model.js",
+    "js/audio/engine.js",
+    "js/audio/music-lib.js",
+    "js/audio/spotify.js",
+    "js/audio/rivals.js",
+    "js/audio/car-sfx.js",
+    "js/audio/voice-pack.js",
+    "js/audio/radio-voice.js",
+    "js/audio/announcer-recorded.js",
+    "js/audio/announcer.js",
+    "js/audio/panel.js",
+    "js/audio/driving-cues.js"
+  ],
+    LAZY_AUDIO_EDGES: [
+    [
+      "js/audio/signal.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/soundtrack.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/radio-fx.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/tone-model.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/engine.js",
+      "js/audio/music-lib.js"
+    ],
+    [
+      "js/audio/voice-pack.js",
+      "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/radio-voice.js",
+      "js/audio/announcer.js"
+    ],
+    [
+      "js/audio/announcer-recorded.js",
+      "js/audio/announcer.js"
+    ],
+    [
+      "js/audio/engine.js",
+      "js/audio/panel.js"
+    ],
+    [
+      "js/audio/radio-voice.js",
+      "js/audio/panel.js"
+    ],
+    [
+      "js/audio/announcer.js",
+      "js/audio/panel.js"
+    ]
+  ],
     LAZY_DATA: [
     "js/data/tab-utils.js",
     "js/data/api-transport.js",

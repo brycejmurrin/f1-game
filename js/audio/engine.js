@@ -1,7 +1,7 @@
 /* GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user gestur… */
 "use strict";
 
-const GameAudio = (function () {
+var GameAudio = (function () {
   let ctx = null;
   let master = null;
   let sfxBus = null;

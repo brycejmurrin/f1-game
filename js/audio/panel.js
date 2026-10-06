@@ -12,7 +12,7 @@
    { init } — game.js calls init() at the boot-restore position, AFTER
    the saved settings are loaded but before the first frame. setSound at
    create time would run ~2800 lines early, ahead of CamModes/DataHub. */
-const AudioPanel = (() => {
+var AudioPanel = (() => {
   function create(G) {
     Log.info("audio", "AudioPanel.create");
     const { $, els, store } = G;
@@ -837,11 +837,15 @@ const AudioPanel = (() => {
       // leave the STORED preference alone so it still means something the next
       // time the player connects.
       if (musicSrc === "spotify" && !spotifyReady()) musicSrc = GameAudio.musicSource();
-      if (musicSrc && musicSrc !== "spotify") {
-        const applySrc = () => { musicSrc = GameAudio.setMusicSource(musicSrc); syncMusicSrcRow(); };
-        if (typeof MusicLib !== "undefined" && MusicLib.init) MusicLib.init().then(applySrc, applySrc);
-        else applySrc();
-      }
+      // Always rehydrate IndexedDB → playlist once LAZY_AUDIO is resident. The
+      // title wall boots without MusicLib; openSettings/ensureAudio is the first
+      // chance to restore user:<n> entries (music-library reload poll).
+      const applySrc = () => {
+        if (musicSrc && musicSrc !== "spotify") musicSrc = GameAudio.setMusicSource(musicSrc);
+        syncMusicSrcRow();
+      };
+      if (typeof MusicLib !== "undefined" && MusicLib.init) MusicLib.init().then(applySrc, applySrc);
+      else applySrc();
     }
 
     return { init };

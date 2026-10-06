@@ -16,7 +16,7 @@
  * when they were side by side. Now a voice is reassigned only when a car
  * leaves the nearest SLOTS and another takes its place.
  */
-const RivalAudio = (() => {
+var RivalAudio = (() => {
   const SLOTS = 4;
   // Never TIGHTER than engine.js's RIVAL_RANGE, or a car winks off at the
   // collector's edge instead of fading out. Kept equal to it.
