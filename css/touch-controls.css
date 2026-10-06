@@ -25,7 +25,11 @@
    screen during a race at all. */
 :root {
   --btn: 76px;                                        /* action button diameter */
-  --btn-gap: 8px;
+  /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
+     merged column on the fixed portrait ladder and on desktop survey stubs
+     (Bryce cockpit + hud-survey density, 2026-10-05). --btn-pitch re-spaces
+     the whole stack. */
+  --btn-gap: 12px;
   --btn-pitch: calc(var(--btn) + var(--btn-gap));      /* one slot up the column */
   --steer: 84px;                                       /* steering arrow diameter */
   /* ONE TRANSPARENCY FOR THE FIVE ACTION BUTTONS. See the ladder note above
@@ -410,7 +414,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     gap: var(--gap);
     pointer-events: none;          /* the middle must pass drags to the canvas */
   }
-  body:not(.desktop) .dock {
+  /* Touch always; desktop only when a stub (SurveyHud) or future pad lights
+     buttons inside the dock. Empty desktop docks stay inert — :has fails — so
+     a normal desktop race is unchanged. Without this, body.desktop kept the
+     fixed ladder over the cluster and ranked aero×shift-up / OT×OVERTAKE
+     (hud-survey desktop+tablet, 2026-10-05). */
+  body:not(.desktop) .dock,
+  body.desktop .dock:has(.touchbtn:not([hidden])) {
     display: flex; gap: calc(var(--gap) * 2 / 3);
     /* wrap-reverse so an overflowing dock grows UPWARD into empty sky rather
        than pushing the bottom row off the screen. */
@@ -422,7 +432,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     align-items: flex-start;
     pointer-events: auto;
   }
-  body:not(.desktop) #dock-right { justify-content: flex-end; }
+  body:not(.desktop) #dock-right,
+  body.desktop #dock-right:has(.touchbtn:not([hidden])) { justify-content: flex-end; }
   /* ---- GROUPS, NOT LOOSE BUTTONS ----
      A dock is a wrapping flex row, so a dock holding five loose buttons breaks
      them apart wherever the width runs out — which is how a DN button ended up
@@ -431,14 +442,19 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      Pedals and shifts are COLUMNS because that is where those controls are in
      a real car and where a thumb expects them: brake above gas, up above down.
      Steer and the three taps are ROWS. */
-  body:not(.desktop) .dock-grp { display: flex; gap: calc(var(--gap) * 2 / 3); pointer-events: auto; }
-  body:not(.desktop) .dock-grp.col { flex-direction: column; align-items: center; }
-  body:not(.desktop) .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  body:not(.desktop) .dock-grp,
+  body.desktop .dock .dock-grp { display: flex; gap: calc(var(--gap) * 2 / 3); pointer-events: auto; }
+  body:not(.desktop) .dock-grp.col,
+  body.desktop .dock .dock-grp.col { flex-direction: column; align-items: center; }
+  body:not(.desktop) .dock-grp.row,
+  body.desktop .dock .dock-grp.row { flex-direction: row; align-items: flex-end; }
   /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
      empty group left visible still holds the dock's gap open. */
-  body:not(.desktop) .dock-grp[hidden] { display: none; }
+  body:not(.desktop) .dock-grp[hidden],
+  body.desktop .dock .dock-grp[hidden] { display: none; }
   /* Buttons live in the flow now, not at fixed coordinates. */
-  body:not(.desktop) .dock .touchbtn {
+  body:not(.desktop) .dock .touchbtn,
+  body.desktop .dock .touchbtn {
     position: static; inset: auto; margin: 0;
   }
   /* SIZE IS HIERARCHY, and it is the other half of why this reads as a control
@@ -468,7 +484,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      literals below never paint under 44px (WCAG 2.5.5) from a setting. Only
      fitHud's --hud-z-dock cap may still go under 1, because a dock that does
      not fit the screen loses BRAKE off the edge, which is worse. */
-  body:not(.desktop) .dock {
+  body:not(.desktop) .dock,
+  body.desktop .dock:has(.touchbtn:not([hidden])) {
     --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
     --hold: max(72px, calc(24px / max(1, var(--hud-btn-scale))));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
@@ -478,11 +495,16 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
        player's setting fits. */
     zoom: var(--hud-z-dock, max(1, var(--hud-btn-scale)));
   }
-  body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
+  body:not(.desktop) .dock .touchbtn,
+  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
-  body:not(.desktop) .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-micro); }
-  body:not(.desktop) .dock .shiftbtn { font-size: 15px; }
+  body:not(.desktop) .dock .shiftbtn,
+  body.desktop .dock .pedal,
+  body.desktop .dock .steerbtn,
+  body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-micro); }
+  body:not(.desktop) .dock .shiftbtn,
+  body.desktop .dock .shiftbtn { font-size: 15px; }
   /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
      and the steering arrows are what a thumb rests on for a whole lap, so they
      sit a little up from the screen edge where the thumb actually lands; the
@@ -493,34 +515,49 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      pass introduced — with the taps stacked vertically rather than in a row,
      the eye reads the two groups as separate columns and no longer looks for a
      shared row. */
-  body:not(.desktop) #grp-taps { padding-bottom: 0; }
+  body:not(.desktop) #grp-taps,
+  body.desktop .dock #grp-taps { padding-bottom: 0; }
   body:not(.desktop) #grp-pedals,
   body:not(.desktop) #grp-shifts,
-  body:not(.desktop) #grp-steer { padding-bottom: calc(var(--gap) * 7 / 6); }
+  body:not(.desktop) #grp-steer,
+  body.desktop .dock #grp-pedals,
+  body.desktop .dock #grp-shifts,
+  body.desktop .dock #grp-steer { padding-bottom: calc(var(--gap) * 7 / 6); }
   /* BUTTONS mode: BOOST / OT / AERO are thumb targets every bit as much as GAS,
      BRAKE and the steer arrows — same diameter and the same lift from the edge. */
-  body.steer-buttons:not(.desktop) #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
-  body.steer-buttons:not(.desktop) #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
+  body.steer-buttons:not(.desktop) #grp-taps .touchbtn,
+  body.desktop.steer-buttons .dock #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
+  body.steer-buttons:not(.desktop) #grp-taps,
+  body.desktop.steer-buttons .dock #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
   /* OT sits BESIDE BRAKE in this mode (taps column | pedals column). The shared
      dock gap of --gap*2/3 left only ~6–7 painted px between two hold-sized
      circles at 130–150% BUTTON SIZE — translucent fills then read as one merged
      control (player cockpit shots, 2026-10-05). Widen the RIGHT dock's column
-     gap only; row gap and the left dock keep the tighter shared spacing. */
-  body.steer-buttons:not(.desktop) #dock-right {
+     gap only; row gap and the left dock keep the tighter shared spacing.
+     Manual (shifts | taps) needs the same column floor so UP/DN never sit on
+     BOOST / OT / AERO. */
+  body.steer-buttons:not(.desktop) #dock-right,
+  body.manual:not(.desktop) #dock-right,
+  body.desktop #dock-right:has(#grp-shifts .touchbtn:not([hidden])) {
     column-gap: max(var(--r-lg), var(--gap));
     row-gap: calc(var(--gap) * 2 / 3);
   }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
-    body:not(.desktop) .dock {
+    body:not(.desktop) .dock,
+    body.desktop .dock:has(.touchbtn:not([hidden])) {
       --tap: max(48px, calc(24px / max(1, var(--hud-btn-scale))));
       --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
     }
-    body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
+    body:not(.desktop) .dock .touchbtn,
+    body.desktop .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
-    body:not(.desktop) .dock .shiftbtn { font-size: var(--fs-micro); }
+    body:not(.desktop) .dock .shiftbtn,
+    body.desktop .dock .pedal,
+    body.desktop .dock .steerbtn,
+    body.desktop .dock .shiftbtn { font-size: var(--fs-micro); }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
