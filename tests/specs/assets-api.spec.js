@@ -11,8 +11,7 @@
 //
 // Run: npx playwright test tests/specs/assets-api.spec.js   (npm run test:assets)
 
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
