@@ -54,7 +54,10 @@ const PlayerForces = (function () {
     const modsCornering = ctx.modsCornering;
     const af = ctx.af, ar = ctx.ar;
     let delta = 0;   // filled after muF — GripSteer then + assist/line
-    const driverDelta = ctx.driverDelta;
+    // A NaN driverDelta (or dt) from an upstream spike must not poison
+    // vLat / yawRate / head for the rest of the session — clamp() passes NaN.
+    const driverDelta = Number.isFinite(ctx.driverDelta) ? ctx.driverDelta : 0;
+    if (!(Number.isFinite(dt) && dt > 0)) return;
     const assistDelta = ctx.assistDelta || 0;
     const lineDelta = ctx.lineDelta || 0;
     const sp = ctx.sp;

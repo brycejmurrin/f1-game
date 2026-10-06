@@ -442,9 +442,11 @@ const TyreModel = (function () {
     const cool = coolFor(life) * (1 + COOL_V * v) * (ts - sink);
     const ns = ts + (heat - cool - EXCH * (ts - tb)) * dt;
     const nb = tb + (EXCH * (ts - tb) - COOL_B * (tb - amb)) * dt;
-    // Clamped well outside anything the model produces, purely so a pathological
-    // dt can never NaN a car's grip.
-    out[0] = clamp(ns, -40, 400); out[1] = clamp(nb, -40, 400);
+    // Finite guard: M4.clamp passes NaN through (comparisons are false), so a
+    // pathological dt (or NaN heat term) would poison tyreTs/tyreTb forever
+    // and take grip with it. Fall closed to the previous finite state / 0.
+    out[0] = Number.isFinite(ns) ? clamp(ns, -40, 400) : (Number.isFinite(ts) ? ts : 0);
+    out[1] = Number.isFinite(nb) ? clamp(nb, -40, 400) : (Number.isFinite(tb) ? tb : 0);
     return out;
   }
 
