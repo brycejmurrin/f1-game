@@ -869,7 +869,7 @@ function updateTrackPreview() {
     ["CIRCUIT LENGTH", km ? km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi" : "—"],
     ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],
     ["ELEVATION", elev > 2 ? "+" + elev + " m" : "Flat"],
-    ["DRS ZONES", dz && dz.length ? String(dz.length) : "None"],
+    ["AERO ZONES", dz && dz.length ? String(dz.length) : "None"],
   ];
   if (crns.length) {
     const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
@@ -950,7 +950,7 @@ function openTrackDetail() {
     crns.length + " turns",
     dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "",
     elev > 2 ? "+" + elev + " m elev" : "",
-    dz && dz.length ? dz.length + " DRS" : ""
+    dz && dz.length ? dz.length + (dz.length === 1 ? " aero zone" : " aero zones") : ""
   ].filter(Boolean).join("  ·  ");
   document.getElementById("track-detail-meta").textContent = meta;
 
@@ -990,7 +990,7 @@ function openTrackDetail() {
   drawElevProfile(document.getElementById("track-detail-elev"), t,
                   document.getElementById("track-detail-elev-wrap"));
 
-  // DRS zones with metre positions
+  // Active-aero (straight-mode) zones with metre positions — the 2026 rules have no DRS
   const drsWrap = document.getElementById("track-detail-drs-wrap");
   const drsList = document.getElementById("track-detail-drs-list");
   if (drsWrap && drsList) {

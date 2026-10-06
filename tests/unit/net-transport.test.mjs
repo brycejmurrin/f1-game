@@ -707,6 +707,48 @@ test("a fetched ICE entry that makes the constructor throw is dropped and rtc() 
       "the retry gathers with STUN only");
     assert.ok(!fresh.iceServers({}).some((e) => e.urls === "garbage"),
       "the fetched list is forgotten, so the next prefetch is a fresh answer");
+    // The STUN-only retry must stamp stats().turn false — hasRelay() after a
+    // later good prefetch must not flip the already-built PC's failure copy.
+    assert.equal(ep.stats().turn, false, "STUN-only retry stamps turn:false");
+  } finally {
+    delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
+  }
+});
+
+// ── stats().turn is the iceServers THIS PC was built with ───────────────────
+// Lobby failureMsg branches on st.turn: "a relay was offered and did not carry
+// it" vs "no relay is configured". hasRelay() is the LIVE module list — a
+// credentials fetch that lands after new RTCPeerConnection (or expires while
+// the PC still has TURN) made the copy lie. Stamp at construction.
+test("stats().turn follows the PC's iceServers, not a later hasRelay() flip", async () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    createDataChannel(label) { return { label, readyState: "connecting", close() {} }; }
+    close() {}
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    assert.equal(fresh.hasRelay(), false, "control: no relay yet");
+    const ep = fresh.rtc({ role: "host" });
+    assert.ok(ep && ep.pc);
+    assert.equal(ep.stats().turn, false, "STUN-only PC reports turn:false");
+
+    const turnServer = { urls: ["turn:relay.example:443"], username: "u", credential: "c" };
+    global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+    await fresh.prefetchIce();
+    assert.equal(fresh.hasRelay(), true, "module list now has TURN");
+    assert.equal(ep.stats().turn, false,
+      "the already-built PC must not claim a relay it never gathered with");
+
+    const withTurn = fresh.rtc({ role: "host" });
+    assert.equal(withTurn.stats().turn, true, "a PC built after prefetch stamps turn:true");
+    assert.equal(fresh.hasRelay(), true);
   } finally {
     delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
   }
@@ -780,6 +822,72 @@ test("a handler that closes the endpoint mid-pump stops the rest of that batch",
 // A used to be accepted onto a newer pending invite B and spin "Connecting…"
 // for 60 s. The answer now carries `o` = hash of the offer's ufrag +
 // fingerprint, and acceptAnswer refuses a mismatch as wrong_offer.
+// ── waitForIce: completion between the pre-check and the listener must not hang ──
+// Without a re-check after addEventListener, ICE can finish in that gap and the
+// waiter sits until gatherTimeoutMs — room-code answers then race a dying courier.
+test("waitForIce re-checks after listening and honors a null icecandidate end", async () => {
+  class RacePC extends EventTarget {
+    constructor() { super(); this.iceGatheringState = "gathering"; }
+    addEventListener(type, fn, opts) {
+      super.addEventListener(type, fn, opts);
+      // Race: complete AFTER the initial === "complete" check, BEFORE any event.
+      if (type === "icegatheringstatechange") this.iceGatheringState = "complete";
+    }
+  }
+  const raced = new RacePC();
+  const t0 = Date.now();
+  assert.equal(await NetHandshake.waitForIce(raced, 4000), true,
+    "must resolve from the post-listen re-check, not the 4 s timeout");
+  assert.ok(Date.now() - t0 < 500, "must not wait out the gather timeout");
+
+  class NullEndPC extends EventTarget {
+    constructor() { super(); this.iceGatheringState = "gathering"; }
+  }
+  const nullEnd = new NullEndPC();
+  const p = NetHandshake.waitForIce(nullEnd, 4000);
+  nullEnd.dispatchEvent(Object.assign(new Event("icecandidate"), { candidate: null }));
+  assert.equal(await p, true, "a null candidate ends gathering even if state lags");
+});
+
+// ── prefetchIce: keep last-good TURN while a TTL refresh is in flight ──────────
+// Nulling fetchedIce before the replacement fetch lands forced iceServers() to
+// STUN-only mid-refresh — a PC built in that window lost the relay it still had.
+test("prefetchIce retains last-good TURN while a TTL refresh is in flight", async () => {
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const turn1 = { urls: ["turn:relay.example:443"], username: "u1", credential: "c1" };
+  const turn2 = { urls: ["turn:relay.example:443"], username: "u2", credential: "c2" };
+  let now = 1_000_000;
+  const realNow = Date.now.bind(Date);
+  Date.now = () => now;
+  let fetchN = 0;
+  let resolveSecond;
+  global.localStorage = { getItem: () => null };
+  global.fetch = () => {
+    fetchN++;
+    if (fetchN === 1) {
+      return Promise.resolve({ json: async () => ({ iceServers: [turn1] }) });
+    }
+    return new Promise((r) => { resolveSecond = r; });
+  };
+  try {
+    await fresh.prefetchIce();
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u1"), "first fetch lands");
+    now += 56 * 60 * 1000; // past ICE_CRED_TTL_MS (55 min)
+    const refresh = fresh.prefetchIce();
+    assert.equal(fetchN, 2, "TTL expiry starts a refresh");
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u1"),
+      "mid-refresh must still offer last-good TURN, not STUN-only");
+    assert.equal(fresh.hasRelay(), true, "hasRelay stays true while refresh hangs");
+    resolveSecond({ json: async () => ({ iceServers: [turn2] }) });
+    await refresh;
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u2"), "replacement lands");
+  } finally {
+    Date.now = realNow;
+    delete global.fetch;
+    delete global.localStorage;
+  }
+});
+
 test("acceptAnswer refuses an answer built for an older offer, and still takes an id-less one", async () => {
   const fp = (n) => Array.from({ length: 32 }, (_, i) => ((i * n + 1) & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
   const sdp = (ufrag, f, setup) => ["v=0", "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",

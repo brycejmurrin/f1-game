@@ -122,6 +122,13 @@ test("buttons-mode modifier taps ride the hold rung like pedals and steer", () =
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "width"), "var(--hold)");
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "height"), "var(--hold)");
   assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps", "padding-bottom"), "calc(var(--gap) * 7 / 6)");
+  // OT | BRAKE share a row in buttons mode — the right dock needs a wider
+  // column gap than the shared --gap*2/3 or the translucent circles merge.
+  const right = ruleFor(ov, "body.steer-buttons:not(.desktop) #dock-right", "column-gap");
+  assert.equal(right.decls.get("column-gap"), "max(var(--r-lg), var(--gap))",
+    "buttons-mode right dock keeps ≥--r-lg (14px) between the taps and pedals columns");
+  assert.equal(right.decls.get("row-gap"), "calc(var(--gap) * 2 / 3)",
+    "buttons-mode right dock keeps the shared row gap when groups wrap");
 });
 
 /* ── the dock at 390px tall ──────────────────────────────────────────────── */

@@ -69,13 +69,18 @@
 }
 .td-stats { display: flex; flex-wrap: wrap; gap: var(--gap); text-transform: uppercase; letter-spacing: var(--ls-3); font-variant-numeric: tabular-nums; }
 .td-rail {
-  min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+  min-height: 0; min-width: 0;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   display: flex; flex-direction: column; gap: var(--gap);
   padding-right: calc(var(--gap) / 4);
 }
-.td-tabs, .td-chips { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); }
-.td-tab { flex: 1 1 auto; }
-.td-pane { display: flex; flex-direction: column; gap: var(--gap); }
+/* Equal-width tabs: flex-basis auto sized each chip to its label, so DESIGN /
+   MY CIRCUITS / HOW TO jumped width when the selected border changed. */
+.td-tabs { display: flex; flex-wrap: nowrap; gap: calc(var(--gap) / 2); }
+.td-chips { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2); min-width: 0; }
+.td-tab { flex: 1 1 0; min-width: 0; justify-content: center; text-align: center; }
+.td-pane { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-label {
   font-size: var(--label); font-weight: 700; font-style: italic;
@@ -84,10 +89,12 @@
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
 .td-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3.5em, auto) var(--tap-sm);
+  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3em, 4em) var(--tap-sm);
   align-items: center;
   gap: calc(var(--gap) / 2);
+  width: 100%; max-width: 100%; min-width: 0;
   font-size: var(--fs-micro);
+  box-sizing: border-box;
 }
 .td-row .sel-chip { min-height: var(--tap-sm); padding: 0; justify-content: center; }
 .td-num { text-align: center; font-variant-numeric: tabular-nums; }
@@ -130,7 +137,7 @@
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
 }
-.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); min-width: 0; }
 .td-grid[aria-busy="true"] { opacity: 0.5; }
 .td-card {
   display: flex; flex-direction: column; gap: calc(var(--gap) / 2);
@@ -138,9 +145,24 @@
   background: var(--plate);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
+  min-width: 0;
 }
 .td-card canvas { width: 100%; aspect-ratio: 16 / 11; background: var(--surf-1); border-radius: var(--r-sm); }
-.td-empty { font-size: var(--fs-micro); color: var(--dim); }
+/* Empty MY CIRCUITS lives inside .td-grid: without a full-row span it sat in
+   one auto-fill track (~150px) and read as a narrow column. */
+.td-empty {
+  grid-column: 1 / -1;
+  min-width: 0;
+  font-size: var(--fs-micro); color: var(--dim);
+  overflow-wrap: anywhere;
+}
+/* LOOK option rows reuse .td-row (a 4-col stepper grid) with a label + chips —
+   that overflowed the rail and spawned the horizontal scrollbar. */
+.td-row:has([data-look]) {
+  display: flex; flex-wrap: wrap;
+  grid-template-columns: none;
+  min-width: 0;
+}
 .td-foot {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--gap);
@@ -173,5 +195,20 @@
   .td-stage { gap: calc(var(--gap) / 4); }
   .td-stage > canvas[data-role="profile"] { display: none; }   /* the elevation strip: the canvas keeps the height */
   .td-foot { padding-top: calc(var(--pad) * 0.2); padding-bottom: calc(var(--pad) * 0.25); }
+}
+/* Narrow + short LANDSCAPE only (734×343 measured 2026-10-05): the
+   portrait/narrow rule stacks the body with minmax(200px,1fr) AND turns the
+   foot into a 3-up grid. On a short landscape that foot eats ~200px, body is
+   left ~61px, the stage overflows into the head (~165px past td-body top) and
+   the rail collapses to 0 → ~140 clipped. Drop the stage floor so both rows
+   share the track, and put the foot back to one flex row (width is enough).
+   Do NOT restack wide short (852×344 safari): its 2-column body already fits
+   (0 clipped); stacking it regressed to 146. */
+@media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
+  /* Stage gets the larger share: equal 1fr/42% left the main canvas ~20px
+     (under WCAG 24) once .td-stats claimed the column. */
+  .td-body { grid-template-rows: minmax(0, 62%) minmax(0, 1fr); }
+  .td-foot { display: flex; flex-wrap: wrap; }
+  .td-stage > canvas:not([data-role]) { min-height: 72px; }
 }
 }

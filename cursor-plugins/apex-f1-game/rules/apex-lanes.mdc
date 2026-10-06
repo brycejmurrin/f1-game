@@ -1,0 +1,14 @@
+---
+description: Apex specialty lane boundaries for f1-game work
+alwaysApply: false
+globs:
+  - "**/*"
+---
+# Apex lanes
+- UI Survey: menus/HUD chrome/garage sheets — not meshes or GarageDefaults
+- Cars: meshes/liveries/presentation — not UI chrome
+- Tracks: scenery/audits — one open PR per circuit
+- Perf: boot/particles/probes — not weather design
+- CI Watch: sole merge pacer
+- Audio / Net / Docs / Insights: stay in named lanes
+Prefer Auto cloud agents; draft PRs; attach evidence.

@@ -156,6 +156,18 @@ const LiveryTex = (function () {
   }
   function haloFor(ink) { return lum(ink) < 0.5 ? INK_LIGHT : INK_DARK; }
 
+  // Opaque underfill for a sponsor region. Glyph AA and generateMipmap both
+  // average into whatever sits under the ink: a transparent surround smears a
+  // soft dark fringe into every board letter (createTexture already documents
+  // the same trap for crests). Filling the region with the PANEL / plate /
+  // band colour the mesh already paints underneath keeps the mip blend on
+  // paint, and makes the whole decal quad opaque so its rim stays hard.
+  function fillRegion(ctx, R, colour) {
+    if (!R || !colour) return;
+    ctx.fillStyle = css(colour);
+    ctx.fillRect(R.x, R.y, R.w, R.h);
+  }
+
   function drawWordmark(ctx, text, R, ink, opts = {}) {
     const pad = opts.pad != null ? opts.pad : 14;
     const spacing = opts.spacing != null ? opts.spacing : 0.06; // of font size
@@ -207,10 +219,17 @@ const LiveryTex = (function () {
     clipToRegion(ctx, R);
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
+    // geometricPrecision keeps glyph outlines resolution-true; the default
+    // "auto" hinting softens boards at garage / 3/4 distance.
+    try { ctx.textRendering = "geometricPrecision"; } catch (_) { /* older canvas */ }
     if (opts.halo) {
+      // Legibility outline only — keep it thin and mitred. A round 0.13·size
+      // stroke read as a soft cloud around every letter on the pale sidepod
+      // board (SKYSTRIKE / NITROX BEFORE shots).
       ctx.strokeStyle = css(opts.halo);
-      ctx.lineWidth = Math.max(2, size * 0.13);
-      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(1.25, size * 0.07);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
       let hx = x;
       for (let i = 0; i < text.length; i++) {
         ctx.strokeText(text[i], hx, y);
@@ -221,6 +240,23 @@ const LiveryTex = (function () {
     for (let i = 0; i < text.length; i++) {
       ctx.fillText(text[i], x, y);
       x += widths[i] + size * spacing;
+    }
+    // Hairline same-ink stroke after the fill hardens the canvas AA fringe so
+    // letters stay cut-vinyl crisp once the atlas is mipmapped and sampled at
+    // a grazing garage angle. Skip when a contrast halo already outlined them
+    // (that stroke is the rim; a second pass would fatten the glyph).
+    if (!opts.halo) {
+      ctx.strokeStyle = css(ink);
+      ctx.lineWidth = Math.max(0.75, size * 0.035);
+      ctx.lineJoin = "miter";
+      ctx.miterLimit = 2;
+      let sx = R.x + pad;
+      if (align === "center") sx = R.x + (R.w - total) / 2;
+      else if (align === "right") sx = R.x + R.w - pad - total;
+      for (let i = 0; i < text.length; i++) {
+        ctx.strokeText(text[i], sx, y);
+        sx += widths[i] + size * spacing;
+      }
     }
     ctx.restore();
   }
@@ -2621,6 +2657,15 @@ const LiveryTex = (function () {
 
     // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
+      // Opaque substrates UNDER every board wordmark. The mesh already paints
+      // these panels; baking the same colour into the atlas stops mip/AA soft
+      // fringes on SKYSTRIKE / NITROX / wing / strip letters at garage distance.
+      // titleB stays unfilled: it drapes over curved nose paint, and a flat
+      // patch would read as a sticker rectangle on the monocoque.
+      fillRegion(ctx, REGIONS.titleA, board);
+      fillRegion(ctx, REGIONS.fwEnd, c2);
+      fillRegion(ctx, REGIONS.wing, colors.wing || c2);
+      fillRegion(ctx, REGIONS.strip, c2);
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });
       // titleB rides the NOSE, not the sidepod board: car-mesh drapes it over
@@ -2660,7 +2705,12 @@ const LiveryTex = (function () {
     if (div > 1) {
       const small = document.createElement("canvas");
       small.width = SIZE / div; small.height = SIZE_H / div;
-      small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
+      // High-quality downscale: the authored glyphs are already hard-edged;
+      // bilinear shrink is what keeps AI boards readable at racing distance.
+      const sctx = small.getContext("2d");
+      sctx.imageSmoothingEnabled = true;
+      try { sctx.imageSmoothingQuality = "high"; } catch (_) { /* Safari <15 */ }
+      sctx.drawImage(canvas, 0, 0, small.width, small.height);
       return small;
     }
     return canvas;

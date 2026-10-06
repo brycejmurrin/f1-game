@@ -218,7 +218,7 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   assert.ok(iSurvey < iGame, "SurveyHud loads before game.js");
   assert.ok(iSurvey < iPicker, "SurveyHud loads before renderer-picker (showUnavailable)");
   const game = read("js/game.js");
-  // One-line call site only — body lives in SurveyHud.boot (codeLines ratchet).
+  // Same line as ship hashchange boot — extra game.js line would over ship ceilings.
   assert.match(game, /SurveyHud\.boot\(\{ \$, els, document, loadingScreen, canvas \}\)/);
   assert.doesNotMatch(game, /SurveyHud\.apply\(/);
   assert.doesNotMatch(game, /SurveyHud\.holdChrome\(/);

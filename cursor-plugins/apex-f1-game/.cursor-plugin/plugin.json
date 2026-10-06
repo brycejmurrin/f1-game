@@ -1,0 +1,8 @@
+{
+  "name": "apex-f1-game",
+  "version": "0.1.0",
+  "description": "Apex 26 (f1-game) team skills: cloud-agent launch, specialty handoffs, PR/CI matrix, UI screenshots, garage collision guard, Insights digests.",
+  "author": { "name": "Bryce Murrin" },
+  "license": "MIT",
+  "keywords": ["apex", "f1-game", "cursor", "grok-bots", "ci"]
+}
