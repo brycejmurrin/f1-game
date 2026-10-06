@@ -356,34 +356,79 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
   h.GLX.drawSkidBatch(new Float32Array(64), 4, true);
   h.GLX.drawGlow([0, 0, 0, 1, 1, 1, 5], 0.2);
   h.GLX.drawParticles(new Float32Array(16), 16, false);
+  // Shadow passes run BEFORE begin() in the live frame — they must fail closed
+  // too, or INVALID_OPERATION spam continues after CONTEXT_LOST_WEBGL.
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  h.GLX.shadowBegin(lightVP);
   h.GLX.castShadow(mesh, model);
   h.GLX.castShadowChunked(chunked, model);
+  h.GLX.castShadowInstanced(batch);
+  h.GLX.shadowEnd();
+  h.GLX.carShadowBegin(lightVP, 1);
+  h.GLX.castShadow(mesh, model);
+  h.GLX.carShadowEnd();
+  h.GLX.lampShadowBegin(lightVP, 0);
+  h.GLX.castShadowInstanced(batch, 1);
+  h.GLX.lampShadowEnd();
   h.GLX.present({});
   assert.deepEqual(h.calls.map((c) => c[0]), [], "no entry point touches a lost context");
   assert.equal(h.GLX.updateInstances(batch, new Float32Array(32), 1), 0, "updateInstances reports nothing resident");
+  assert.equal(h.GLX.backendState().ctxLost, true, "backendState names the loss for race-start fail-fast");
 });
 
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
   // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
   // no exception, so the error overlay never painted. TLX reports the same
-  // cap through __apexReportError; GLX now matches it.
+  // cap through __apexReportError; GLX now matches it. Past the budget also
+  // opens the Graphics unavailable panel (RETRY / USE WEBGL2).
   for (const prior of ["0", "2"]) {
     const h = bootGlx();
     const reports = [];
+    const panels = [];
     h.sandbox.__apexReportError = (where, err) => reports.push([where, err && err.message]);
+    h.sandbox.RendererPicker = { showUnavailable: (opts) => panels.push(opts && opts.panel && opts.panel.id) };
+    h.sandbox.document.getElementById = (id) => ({ id });
     h.sandbox.sessionStorage.setItem("apex26.ctxLostReloads", prior);
     h.sandbox.__timers.length = 0;
     h.loseContext();
     if (prior === "0") {
       assert.equal(reports.length, 0, "a first loss is a quiet counted reload");
       assert.equal(h.sandbox.__timers.length, 1, "the self-heal reload timer");
+      assert.equal(panels.length, 0, "under the budget: no unavailable panel yet");
     } else {
       assert.equal(h.sandbox.__timers.length, 0, "past the cap: no reload loop");
       assert.equal(reports.length, 1, "past the cap the player is told");
       assert.equal(reports[0][0], "gfx");
       assert.match(reports[0][1], /keeps getting lost \(3 times\)/);
+      assert.deepEqual(panels, ["nogl"], "past the cap: Graphics unavailable panel");
     }
   }
+});
+
+test("TLX aborts program warm on device loss so race-start cannot hang on warming()", () => {
+  // compileAsync after a loss often never settles; warming() stuck true made
+  // game.js skip present/afterPresent forever (HUD survey hang).
+  const src = code("js/render/three/tlx.js");
+  assert.match(src, /let _deviceLost = false/);
+  assert.match(src, /renderer\.onDeviceLost = function[\s\S]{0,400}?_deviceLost = true/);
+  assert.match(src, /_warmRequested = false;\s*_warmPending = null;\s*_warmDone = true/);
+  assert.match(src, /warming\(\)\s*\{\s*return !_deviceLost && !!_warmPending/);
+  assert.match(src, /ctxLost:\s*!!_deviceLost/);
+  assert.match(src, /RendererPicker\.showUnavailable/);
+});
+
+test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () => {
+  const src = code("js/game.js");
+  assert.match(src, /function gfxContextLost\(\)/);
+  assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
+  assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
+  const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
+  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !gfxContextLost\(\)\)/,
+    "#976 paced load aborts mid-step when the context is already lost");
+  assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
+    "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
+  assert.match(body, /if \(player !== entryPlayer \|\| \(state !== "count" && state !== "race"\)\) return false/,
+    "#1085 lights-out during paced entry still counts as reached grid");
 });
 
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
