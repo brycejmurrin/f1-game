@@ -827,7 +827,7 @@ test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110
   assert.equal(isMegaSweepSpec(tlx), true, "tlx-probes still peels when packed with siblings");
   const alone = ["--timeout=180000", "--shard=1/3", "--workers=1", tlx];
   const soloPart = partitionMegaSweepArgs(alone);
-  assert.equal(soloPart.peeled, false, "lone oversize job keeps native --shard in argv");
+  assert.equal(soloPart.peeled, false, "lone oversize job keeps native --shard in argv (PR #1113/#1109)");
   assert.deepEqual(soloPart.rest, alone);
   assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
   // Packed with a sibling: peel stays the packed-group path (megaShardPlan).

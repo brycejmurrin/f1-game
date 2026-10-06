@@ -9,6 +9,12 @@
  * needed job that failed or was cancelled fails the aggregator. Advisory jobs
  * (continue-on-error) never fail it.
  *
+ * `selected` defers to `selected-verdict` when that job succeeded: a matrix
+ * shard can report `cancelled` (job-cap kill after a clean pass — run
+ * 37493213168) while selected-verdict marks infra-retry from clean junit.
+ * Without the deferral, CI would stay red even after the gate's own verdict
+ * passed. When selected-verdict failed, that row already fails the aggregator.
+ *
  *   node tools/ci/ci-verdict.mjs                 # reads NEEDS env (toJSON(needs))
  *   node tools/ci/ci-verdict.mjs --json          # print {ok,bad} instead of exit
  */
@@ -17,13 +23,17 @@ import { fileURLToPath } from "node:url";
 
 export const ADVISORY = new Set(["baseline-trial"]);
 
+/** Jobs whose red/cancel is owned by another needed job when that owner is green. */
+export const DEFER_TO = Object.freeze({ selected: "selected-verdict" });
+
 /**
  * @param {Record<string, { result?: string }>} needs
- * @param {{ advisory?: Iterable<string> }} [opts]
+ * @param {{ advisory?: Iterable<string>, deferTo?: Record<string, string> }} [opts]
  * @returns {{ ok: boolean, bad: string[], skipped: string[], passed: string[] }}
  */
 export function verdict(needs, opts = {}) {
   const advisory = new Set(opts.advisory || ADVISORY);
+  const deferTo = opts.deferTo || DEFER_TO;
   const bad = [];
   const skipped = [];
   const passed = [];
@@ -32,6 +42,14 @@ export function verdict(needs, opts = {}) {
   }
   for (const [name, row] of Object.entries(needs)) {
     const result = row && typeof row === "object" ? String(row.result || "") : "";
+    const owner = deferTo[name];
+    if (owner && needs[owner] && String(needs[owner].result || "") === "success"
+        && (result === "failure" || result === "cancelled")) {
+      // selected-verdict already judged the change-aware gate (incl. cancel +
+      // clean junit → infra-retry). Do not double-fail CI on the matrix rollup.
+      skipped.push(`${name}: deferred to ${owner} (${result})`);
+      continue;
+    }
     if (advisory.has(name)) {
       if (result === "success" || result === "skipped" || result === "failure") {
         skipped.push(`${name}: advisory (${result || "empty"})`);

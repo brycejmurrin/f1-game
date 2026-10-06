@@ -127,6 +127,10 @@ const CustomTracks = (function () {
     if (it.heights && !heightsFlat(it.heights)) parts.push("h:" + it.heights.join(","));
     // The scenery options rebuild the circuit too; absent at their defaults, so older ids hold.
     if (it.look) parts.push("look:" + it.look.time + "," + it.look.trees + "," + it.look.crowd);
+    // Authored props (slice H) rebuild scenery; absent when empty so older ids hold.
+    if (it.props && it.props.length) {
+      parts.push("props:" + it.props.map((p) => p.kind + "@" + p.s + ":" + p.side + ":" + p.gap).join(","));
+    }
     return parts.join("|");
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
@@ -175,6 +179,11 @@ const CustomTracks = (function () {
     if (look) it.look = look;
     const country = sanitizeCountry(raw.country);
     if (country) it.country = country;
+    // Authored scenery props (TrackDesignerProps): absent when empty / all invalid.
+    if (typeof TrackDesignerProps !== "undefined" && TrackDesignerProps.sanitize) {
+      const props = TrackDesignerProps.sanitize(raw.props);
+      if (props) it.props = props;
+    }
     if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
