@@ -1338,6 +1338,7 @@ what it covers.
 | `f1-track-accuracy.spec.js` | each def's `path` OSM trace vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-retained-state.test.mjs` | Production releases scenery graph ownership after batch creation; diagnostics retain it and late-upload source attributes remain exact |
 | `kerb-stripes.test.mjs` | every kerb triangle is one stripe colour (a ring on every 1.6 m boundary, emitted twice, no zero-area quad between the pair) and the asphalt's rubber band darkens the racing line's side of the road, not a fixed centre band (`test:sweeps`) |
+| `kerb-berm-surface.test.mjs` | designer kerb styles (`flat` / `sausage` / `rumble`) change the kerb ribbon height profile on a shipped circuit override, and `def.berms` lifts the outer terrain on a banked custom corner; shipped defs without those fields keep engine defaults (`test:sweeps`) |
 | `track-centerline-seam.test.mjs` | The resampled centerline interpolates the explicit closing chord; full track builds reject a missing mesh factory |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |

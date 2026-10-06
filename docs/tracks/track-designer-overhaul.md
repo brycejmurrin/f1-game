@@ -40,8 +40,8 @@ Why not keep cosine-only: Bryce asked for per-node height; the control spline al
 | Slice | Goal | Notes |
 |---|---|---|
 | **D** | Theme previews + LOOK polish | Swatches from existing 20 `ORDER` ids; no reorder |
-| **E+F** | Banking UI + kerb styles | Reuse `bankZones`; kerbs (**flat / sausage / rumble**) ship **with** the banking slice — not a separate early PR |
-| **G** | Berms on banked corners | After E+F; mesh + surface |
+| **E+F** | Banking UI + kerb styles | Reuse `bankZones`; kerbs (**flat / sausage / rumble**) ship **with** the banking slice — not a separate early PR — **this PR** |
+| **G** | Berms on banked corners | After E+F; mesh + surface — **this PR** (same branch when the diff stays small) |
 | **H** | Scenery: theme-first + small props palette | Themes stay primary; palette = capped place/remove (stand, gantry, trees, water, flood, billboard) |
 | **I** | Optional new themes | Append-only if Bryce still wants more after D |
 | **J** | Quick in-editor test lap | Later follow-up (after modes land): short drive/flyby without a full race boot if Perf allows; else clearer RACE/TT CTA |

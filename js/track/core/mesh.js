@@ -341,7 +341,13 @@ const TrackMesh = (function () {
     const markKerb = (k0, k1, side) => {
       for (let i = 0; i <= k1 - k0; i++) { const k = (k0 + i + n) % n; if (side > 0) track.kerbR[k] = 1; else track.kerbL[k] = 1; }
     };
-    const KW = 0.9, KH = 0.06;
+    // Kerb STYLE (designer / optional def.kerbStyle). Peak height stays ≤ ~9 cm
+    // so physics onKerb (binary ride detect) is unchanged; the mesh carries the
+    // look. flat = historic ribbon; sausage = taller crowned block; rumble =
+    // corrugated along the lap (sawtooth period ~0.8 m).
+    const style = track.def && track.def.kerbStyle;
+    const KW = style === "sausage" ? 1.05 : 0.9;
+    const KH0 = style === "sausage" ? 0.09 : style === "rumble" ? 0.07 : 0.06;
     // Real kerb stripes are ~1.6 m. A `Math.round(1.6/ds)` node count
     // COLLAPSES to 1 at the ~4 m node grid, so a 1.6 m stripe would render
     // at one node ≈ 4 m (an 8 m red/white period). Colour is per-vertex, so the
@@ -351,6 +357,19 @@ const TrackMesh = (function () {
     // lerping its own two rings), so where the ribbon meets terrain is identical
     // — the coplanar/float audits do not move.
     const STRIPE_M = 1.6;
+    const kerbH = (arc, latT) => {
+      let h = KH0;
+      if (style === "sausage") {
+        // Two-rail sausage: road-edge lip lower, outer rail the tall block
+        // (latT 0 at road edge → 1 outer). A mid crown needs ≥3 rails.
+        h = KH0 * (0.70 + 0.30 * latT);
+      } else if (style === "rumble") {
+        // Longitudinal corrugation — hard steps every ~0.8 m of arc.
+        const step = ((Math.floor(arc / 0.8) % 2) + 2) % 2;
+        h = KH0 * (step ? 1.0 : 0.45);
+      }
+      return h;
+    };
     // (SUB evenly spaced sub-rings, each coloured by its own arc, was the first
     // cut: ~1.33 m apart against a 1.6 m stripe, so with per-vertex colour
     // interpolating between rings most segments were red<->white RAMPS with an
@@ -373,21 +392,33 @@ const TrackMesh = (function () {
         // two rails; push the smaller offset first so winding matches the road
         const oA = side > 0 ? w + 0.05 : -(w + 0.05 + KW);
         const oB = side > 0 ? w + 0.05 + KW : -(w + 0.05);
-        const hA = KH + bankOffsetAt(track, k, oA), hB = KH + bankOffsetAt(track, k, oB);
+        const arc = k0 * ds + i * ds;   // monotone along the strip (ds-spaced nodes)
+        // latT: 0 at the road-edge rail, 1 at the outer rail (crown / profile).
+        const hA = kerbH(arc, side > 0 ? 0 : 1) + bankOffsetAt(track, k, oA);
+        const hB = kerbH(arc, side > 0 ? 1 : 0) + bankOffsetAt(track, k, oB);
         // this node's two rail vertices, in world space
         const cur = [px[k] + r[0]*oA + u[0]*hA, py[k] + r[1]*oA + u[1]*hA + 0.03, pz[k] + r[2]*oA + u[2]*hA,
                      px[k] + r[0]*oB + u[0]*hB, py[k] + r[1]*oB + u[1]*hB + 0.03, pz[k] + r[2]*oB + u[2]*hB];
-        const arc = k0 * ds + i * ds;   // monotone along the strip (ds-spaced nodes)
         // A ring at t in [0,1] along this node span (lerped between the previous
         // and this node's rails, so node endpoints never move), coloured by
         // stripe PARITY, not by its own arc.
         const emitRing = (t, parity, coincident) => {
           const rA = prev ? [prev[0] + (cur[0]-prev[0])*t, prev[1] + (cur[1]-prev[1])*t, prev[2] + (cur[2]-prev[2])*t] : [cur[0],cur[1],cur[2]];
           const rB = prev ? [prev[3] + (cur[3]-prev[3])*t, prev[4] + (cur[4]-prev[4])*t, prev[5] + (cur[5]-prev[5])*t] : [cur[3],cur[4],cur[5]];
+          const a = prevArc + (arc - prevArc) * t;
+          // Rumble (and any arc-keyed profile) must land on THIS ring's arc —
+          // lerping node endpoints alone would smooth the corrugation away.
+          if (style === "rumble" && prev) {
+            const hA0 = kerbH(prevArc, side > 0 ? 0 : 1), hA1 = kerbH(arc, side > 0 ? 0 : 1);
+            const hB0 = kerbH(prevArc, side > 0 ? 1 : 0), hB1 = kerbH(arc, side > 0 ? 1 : 0);
+            const hAL = hA0 + (hA1 - hA0) * t, hBL = hB0 + (hB1 - hB0) * t;
+            const hA = kerbH(a, side > 0 ? 0 : 1), hB = kerbH(a, side > 0 ? 1 : 0);
+            rA[0] += u[0] * (hA - hAL); rA[1] += u[1] * (hA - hAL); rA[2] += u[2] * (hA - hAL);
+            rB[0] += u[0] * (hB - hBL); rB[1] += u[1] * (hB - hBL); rB[2] += u[2] * (hB - hBL);
+          }
           const ai = out.pos.length / 3;
           out.pos.push(rA[0], rA[1], rA[2]); out.nrm.push(u[0], u[1], u[2]);
           out.pos.push(rB[0], rB[1], rB[2]); out.nrm.push(u[0], u[1], u[2]);
-          const a = prevArc + (arc - prevArc) * t;
           const c = parity === 0 ? ka : kb;
           out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
           if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
