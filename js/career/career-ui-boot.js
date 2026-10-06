@@ -38,11 +38,51 @@ function create(G) {
       return real;
     });
   }
-  function show() { const n = $("career"); if (n) n.hidden = false; }
+  // Kick the fetch at boot (not on the title paint path — create is sync). A
+  // harness that __apex.career()s then taps #cr-garage in the same turn used
+  // to no-op: CareerScreen.create wires the sheet buttons, and until LAZY
+  // landed those nodes had no onclick (CI oversize-career #carsetup hidden).
+  ensureScreen();
+  // Defer the sheet controls the stub shares with CareerScreen.create so a
+  // click during the fetch is queued on ensure() rather than dropped. create()
+  // rebinds these once the real screen mounts.
+  function defer(fn) {
+    return () => { ensure().then((r) => { if (r) fn(r); }); };
+  }
+  if ($("cr-garage")) $("cr-garage").onclick = defer((r) => {
+    if (r.close) r.close();
+    G.openGarage("career");
+  });
+  if ($("cr-back")) $("cr-back").onclick = defer((r) => {
+    // CareerScreen.create overwrites this with the full MAIN MENU path; until
+    // then a tap just closes the empty shell so Esc cannot stick on a blank
+    // #career that show()-ed before the bundle landed.
+    if (r.close) r.close();
+    if (G.els && G.els.overlay) G.els.overlay.hidden = false;
+  });
+  if ($("cr-go")) $("cr-go").onclick = defer((r) => {
+    // Re-fire on the real binding CareerScreen.create installs.
+    const n = $("cr-go");
+    if (n && n.onclick) n.onclick();
+  });
+
   return {
     build: () => ensure().then((r) => { if (r && r.build) r.build(); }),
-    openHub: () => { show(); return ensure().then((r) => { if (r) r.openHub(); }); },
-    openSlots: (origin) => { show(); return ensure().then((r) => { if (r) r.openSlots(origin); }); },
+    // Do not reveal #career until CareerScreen has built — a premature show()
+    // made the shell visible with no slots/title while the fetch was in flight.
+    openHub: () => ensure().then((r) => {
+      if (!r) return;
+      // A racy #cr-garage tap may already have opened the garage; do not cover it.
+      const cs = $("carsetup");
+      if (cs && !cs.hidden) return;
+      r.openHub();
+    }),
+    openSlots: (origin) => ensure().then((r) => {
+      if (!r) return;
+      const cs = $("carsetup");
+      if (cs && !cs.hidden) return;
+      r.openSlots(origin);
+    }),
     close: () => { if (real) real.close(); else { const n = $("career"); if (n) n.hidden = true; } },
     openOffers: () => ensure().then((r) => { if (r && r.openOffers) r.openOffers(); }),
     closeOffers: () => { if (real && real.closeOffers) real.closeOffers(); },

@@ -6,7 +6,7 @@ const STARTER_TIER_MIN = 3;
 const teamById = (id) => Teams.LIST.find((t) => t.id === id);
 
 function create(G) {
-  Log.info("ui", "CareerUI.create");
+  Log.info("ui", "CareerScreen.create");
   const { $, els } = G;
 
   let draft = null;
