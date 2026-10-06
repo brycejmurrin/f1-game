@@ -300,6 +300,30 @@ test("BROADCAST tower: the grid at lights out, the leader and gaps at the last l
   } finally { g.close(); }
 });
 
+test("BROADCAST towerAt: pools rows and skips rebuild when the timing-line sample is unchanged", async () => {
+  const g = await createGame({ track: "baku" });
+  try {
+    const { script } = scriptIn(g);
+    const B = vm.runInContext("Broadcast", g.ctx);
+    const lead = script.drivers.find((d) => d.pos === 1);
+    const T0 = lead.lapStart[31] + 1;
+    const T1 = T0 + 0.2; // still between timing lines at 4 Hz tower tick
+    const a = B.towerAt(script, T0);
+    const snap = host(a);
+    const b = B.towerAt(script, T1);
+    assert.equal(b, a, "same pooled array when the discrete sample is unchanged");
+    assert.equal(B.towerSample(script, T0), B.towerSample(script, T1), "sample key stable between crossings");
+    assert.deepEqual(host(b), snap, "pooled rows keep the same tower content across a skipped rebuild");
+    // Advance past the next leader crossing: sample and content must move.
+    const T2 = lead.lapStart[32] + 1;
+    assert.notEqual(B.towerSample(script, T0), B.towerSample(script, T2), "a new timing line changes the sample");
+    const c = B.towerAt(script, T2);
+    assert.equal(c, a, "still the module pool");
+    assert.equal(c[0].lap, 32, "leader lap advances after the next crossing");
+    assert.notDeepEqual(host(c).map((r) => r.lap), snap.map((r) => r.lap), "row content updates on a new sample");
+  } finally { g.close(); }
+});
+
 test("BROADCAST director rules: the tightest battle up the order first, the next event by weight, never the same shot twice", async () => {
   const g = await createGame({ track: "baku" });
   try {
