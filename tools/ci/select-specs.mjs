@@ -162,7 +162,14 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // Raised to 9 (2026-10-06, PR #1077): a wide UI diff (Home resize + layers
 // :modal ranking) packed 21 overflow specs and dropped hud-layout.spec.js
 // (32 tests, ~182 s measured) with dropped=1 on run 37438922786.
-export const MAX_OVERFLOW_SHARDS = 9;
+// Raised to 11 (2026-10-06, PR #1021): after taking js/game.js and the
+// fixtures.js re-export out of the garage-defaults diff (GarageDefaults still
+// supplies Mercedes on a miss), bot/spec-timings still billed hud-layout at
+// 829 s — over one TARGET_SHARD_SEC job, so overflow refused it at 9 even
+// with leftover room. 10 shards still dropped dev-tools (129 s) after
+// hud-layout took the leftover; 11 carries both. A sibling 9→12 raise on
+// 7cf57c60d is superseded: routing shrink makes 12 unnecessary.
+export const MAX_OVERFLOW_SHARDS = 11;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -512,10 +519,32 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       // A solo-class declaration never packs as overflow: it goes to the
       // over-budget pool below, whose jobs shards() gives it alone.
       if (own >= SOLO_OWN_TIMEOUT_SEC) { overBudgetPool.push(r); continue; }
-      if (sec <= TARGET_SHARD_SEC && sec <= room) { overflow.push(r); room -= sec; } else left.push(r);
+      // A leftover billed over TARGET_SHARD_SEC still runs as overflow while
+      // room lasts (PR #1021: hud-layout 829 s). shards() splits it the same
+      // way the over-budget pool does. Solo-class stays diverted above.
+      if (sec <= room) { overflow.push(r); room -= sec; } else left.push(r);
     }
     skipped.length = 0;
     skipped.push(...left);
+  }
+  // TOO BIG FOR ONE OVERFLOW JOB (2026-10-06, PR #1021). Overflow only packs
+  // specs that fit TARGET_SHARD_SEC. A leftover billed over that — hud-layout
+  // at 829 s on bot/spec-timings, Selected-specs verdict dropped=21 then
+  // dropped=1 on run 37472255445 — cannot ride there even with spare overflow
+  // seconds. Promote it to oversize while a slot remains: shards() already
+  // splits oversize items across --shard=i/n. Solo-class declarations stay
+  // in skipped for the over-budget pool below.
+  {
+    const keep = [];
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      const own = r.ownTimeoutSec || 0;
+      if (own >= SOLO_OWN_TIMEOUT_SEC) { keep.push(r); continue; }
+      if (sec > TARGET_SHARD_SEC && oversizeRun.length < MAX_OVERSIZE_SHARDS) oversizeRun.push(r);
+      else keep.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...keep);
   }
   // THE OVER-BUDGET POOL: up to `overBudgetShards` jobs' worth of expected
   // seconds, in the same order as the budgeted cut. A spec whose own expected

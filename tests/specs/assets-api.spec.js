@@ -20,6 +20,7 @@
 // already assumed. First-load mix stays on freshTest.
 
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 test.beforeEach(async ({ page }) => {
   // Shallow shared-page reset does not rewind the BAKED MATERIALS knob or pack.
   await page.evaluate(async () => {
@@ -69,6 +70,11 @@ freshTest("the baked materials are ON by default", async ({ page }) => {
   // (The shipped layers are PROCEDURAL — see assets/pack/CREDITS.md; webbake.js
   // can swap in Poly Haven CC0 scans, but that bake is opt-in and has never
   // been the committed pack.)
+  // Factory McLaren, empty sheet — GarageDefaults outfits every constructor,
+  // and a 22-car kit blocked a 45 s __apex wait while Bahrain built
+  // (CI run 37445579432 packed-1). sharedTest's worker boot is 60 s; this
+  // first-load goto still uses BOOT_MS, so pin before navigation.
+  await pinFactorySeat(page);
   await page.goto("/");
   await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   const r = await page.evaluate(async () => {

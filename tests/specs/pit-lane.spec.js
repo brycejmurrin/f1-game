@@ -26,8 +26,15 @@
 // COST: one track build, then ~20 s of stepping. headless(true) throughout —
 // nothing here looks at a pixel.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 async function armedAt(page, { track = "monza", solo = false, rivals = false } = {}) {
+  // Pin the pre-GarageDefaults seat (McLaren, empty sheet) BEFORE boot.
+  // js/data/garage-defaults.js makes the miss-path car Mercedes with a
+  // signature parts kit; that kit changes the stopping envelope and the car
+  // never latches the box under the same scripted approach. This file
+  // measures the pit lane, not the garage.
+  await pinFactorySeat(page);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(({ track, solo }) => solo

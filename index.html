@@ -205,6 +205,11 @@
         });
         sw.addEventListener("controllerchange", function () { swl("info", "controllerchange: a new worker controls this page"); });
         sw.register("sw.js" + (loaded ? "?v=" + loaded : "")).then(function (r) {
+          // Playwright serviceWorkers:"block" (and some private modes) resolve
+          // with undefined instead of rejecting. Reading r.scope then throws,
+          // and the unhandled-rejection overlay covers identity goldens
+          // (CI 37463034163).
+          if (!r) { swl("warn", "register returned no registration"); return; }
           swl("info", "registered, scope " + r.scope);
           r.addEventListener("updatefound", function () {
             var nw = r.installing;
@@ -3473,6 +3478,7 @@
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/settings-defaults.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>

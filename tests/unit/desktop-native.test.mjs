@@ -23,6 +23,19 @@ test("index.html skips service-worker registration when __APEX_NATIVE__.desktop"
   assert.match(HTML, /nativeDesktop/);
   assert.match(HTML, /nativeCap/);
   assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
+  // Playwright serviceWorkers:"block" resolves register() with undefined.
+  assert.match(HTML, /if \(!r\) \{ swl\("warn", "register returned no registration"\); return; \}/);
+});
+
+test("menu-baseline waits for the controlling worker, never blocks registration", () => {
+  // ready ≠ claimed (CI 37466745467). Blocking register() overlays r.scope
+  // (CI 37463034163). Pin both so a settle rewrite cannot drop either.
+  const spec = readFileSync(join(ROOT, "tests/specs/menu-baseline.spec.js"), "utf8");
+  const code = spec.replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(code, /serviceWorkers:\s*["']block["']/);
+  assert.match(code, /navigator\.serviceWorker\.controller/);
+  assert.match(code, /polling:\s*100/);
+  assert.match(code, /getElementById\("mb-garage"\)/);
 });
 
 test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () => {

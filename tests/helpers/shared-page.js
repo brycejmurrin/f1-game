@@ -126,11 +126,12 @@ export async function forgetStored(page, keys) {
 }
 
 /**
- * Make the LIVE game's free-play selection what a fresh boot on empty storage
- * gives — McLaren (Teams.LIST[2]), seat 0, no fitted parts — or the team/parts
- * a test names. `team` is an id or a Teams.LIST index; `parts` null forgets the
- * team's fitted parts, an object becomes them (written through the store, so
- * the cache agrees). Pass `race: [id, tod, wx]` to start the race in the SAME
+ * Make the LIVE game's free-play selection the factory envelope tests expect —
+ * McLaren (Teams.LIST[2]), seat 0, empty `parts.<id>` sheet — or the team/parts
+ * a test names. `team` is an id or a Teams.LIST index; `parts` null/`{}` writes
+ * an empty sheet (a HIT, so GarageDefaults cannot fill the miss with the shipped
+ * signature kit); an object becomes the fitted parts (through the store, so the
+ * cache agrees). Pass `race: [id, tod, wx]` to start the race in the SAME
  * evaluate: #mb-race schedules the menu flyby build 120 ms out and a race
  * started before that fires skips it, exactly as pressing START does.
  *
@@ -148,9 +149,7 @@ export async function pinFreePlay(page, { team = "mclaren", driver = 0, parts = 
     if (idx < 0) throw new Error("pinFreePlay: unknown team " + teamRef);
     const id = Teams.LIST[idx].id;
     S.set("team", idx); S.set("driver", d);
-    const key = "apex26.parts." + id;
-    if (p) S.set("parts." + id, p);
-    else { localStorage.removeItem(key); S.onForeignWrite({ key }); }
+    S.set("parts." + id, p || {});
     if (c) {
       document.getElementById("mb-race").click();
       document.getElementById("sel-back").click();

@@ -22,7 +22,6 @@
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
-import { waitMenuFonts } from "../helpers/menu-fonts.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -36,22 +35,18 @@ const SCREENS = [
   }],
   ["select", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-race").click());
-    await page.waitForFunction(() => !document.getElementById("select").hidden);
+    await page.waitForFunction(() => !document.getElementById("select").hidden,
+      null, { polling: 100, timeout: BOOT_MS });
     await page.waitForFunction(
-      () => document.querySelectorAll("#sel-tracks .track-row").length > 5);
+      () => document.querySelectorAll("#sel-tracks .track-row").length > 5,
+      null, { polling: 100, timeout: BOOT_MS });
   }],
   ["garage", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    // #carsetup unhides before buildSetup paints tabs. ENGINE click before
-    // aria-busy clears leaves TEAM selected (CI 37452342027, 0.03 ratio).
+    // #carsetup unhides before buildSetup fills tabs (openSetup two-rAF
+    // yield, #1024). Click ENGINE after the identity settle — hiding
+    // #game on desktop remounts the pair sheet back to TEAM.
     await waitGarageSheet(page);
-    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
-    await page.waitForFunction(() => {
-      const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
-      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
-      return [...document.querySelectorAll("#cs-options .cs-opt")]
-        .some((o) => /torque curve/i.test(o.textContent || ""));
-    }, null, { polling: 100, timeout: 15000 });
   }],
 ];
 
@@ -97,11 +92,109 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // fonts.load('700 16px Titillium') can succeed from the 600 face while
-        // fonts-hud 700-normal is still swap (CI 37459018234 desktop 0.09/0.04/0.03).
-        // FontFace-load those woff2s and gate on status + measureText vs Arial.
-        await waitMenuFonts(page, BOOT_MS);
+        // `ready` is not enough: it resolves when a worker is active for the
+        // registration, before clients.claim(). CI 37466745467 logged
+        // controllerchange at 9855ms during the 12.1s phone title shot —
+        // the claim restyled CSS/fonts after ready, FOUT widened .bigbtn
+        // min-content, and RACE A FRIEND wrapped onto its own row (GARAGE
+        // clipped). Wait until this page is controlled, then two rAFs,
+        // then fonts. Do NOT set serviceWorkers:"block": Playwright
+        // resolves register() with undefined and the shell overlayed
+        // r.scope (CI 37463034163).
+        await page.waitForFunction(() => {
+          if (!navigator.serviceWorker) return true;
+          return !!navigator.serviceWorker.controller;
+        }, null, { polling: 100, timeout: 15_000 }).catch(() => {});
+        await page.evaluate(() => new Promise((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        // Wait for IDENTITY chrome + Titillium before shooting.
+        // css/fonts-hud.css and select/carsetup are print→all (#1101).
+        // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
+        // already ships italic 700 (synth-bolds 800). A used-face gate on
+        // NORMAL 700 can pass from fonts-hud while doors still paint
+        // system-ui (wider min-content → 2×2 wrap, GARAGE clipped).
+        // getComputedStyle().fontFamily is the specified stack, not the
+        // used face. Flip print sheets to all, FontFace-load the three
+        // title faces, then measure italic 800 vs Arial.
+        await page.evaluate(() => {
+          for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+            if (link.media === "print") link.media = "all";
+          }
+        });
+        await page.waitForFunction(() => {
+          const need = ["fonts-hud.css", "select.css", "carsetup.css"];
+          const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
+          return need.every((frag) => {
+            const l = links.find((x) => (x.getAttribute("href") || "").includes(frag));
+            return !!(l && l.media === "all" && l.sheet);
+          });
+        }, null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(async () => {
+          const specs = [
+            ["normal", "600", "titillium-web-latin-600-normal.woff2"],
+            ["italic", "700", "titillium-web-latin-700-italic.woff2"],
+            ["normal", "700", "titillium-web-latin-700-normal.woff2"],
+          ];
+          for (const [style, weight, file] of specs) {
+            const face = new FontFace(
+              "Titillium Web",
+              `url("assets/fonts/${file}")`,
+              { style, weight, display: "swap" },
+            );
+            document.fonts.add(await face.load());
+          }
+        });
+        await page.waitForFunction(() => {
+          if (!document.fonts) return true;
+          const faces = [...document.fonts];
+          const loaded = (style, weight) => faces.some((f) => {
+            const fam = String(f.family).replace(/["']/g, "");
+            return fam === "Titillium Web"
+              && String(f.weight) === String(weight)
+              && f.style === style
+              && f.status === "loaded";
+          });
+          if (!loaded("italic", 700) || !loaded("normal", 600) || !loaded("normal", 700)) {
+            return false;
+          }
+          // Used-face gate: fontFamily is always the stack. Measure the
+          // face .bigbtn actually requests (italic 800), not 700-normal.
+          const ctx = document.createElement("canvas").getContext("2d");
+          if (!ctx) return true;
+          const sample = "HOW TO PLAY RACE";
+          ctx.font = 'italic 800 48px "Titillium Web"';
+          const tit = ctx.measureText(sample).width;
+          ctx.font = "italic 800 48px Arial, sans-serif";
+          const fb = ctx.measureText(sample).width;
+          return Math.abs(tit - fb) > 2;
+        }, null, { polling: 100, timeout: BOOT_MS });
         await page.waitForTimeout(600);   // let the sheet settle and measure
+        if (screenName === "title") {
+          // FOUT reflow is done when GARAGE sits fully on-screen. The
+          // wrapped phone actual (227059, CI 37466745467) clipped it
+          // under DATA HUB / TRACK DESIGNER — do not bless that frame.
+          await page.waitForFunction(() => {
+            const garage = document.getElementById("mb-garage");
+            if (!garage || garage.hidden) return false;
+            const g = garage.getBoundingClientRect();
+            return g.height > 8 && g.width > 40
+              && g.top >= -1 && g.bottom <= window.innerHeight + 1;
+          }, null, { polling: 100, timeout: 15_000 });
+        }
+        if (screenName === "garage") {
+          await page.evaluate(() => {
+            const el = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+            if (!el) throw new Error("menu-baseline: no ENGINE tab after settle");
+            el.click();
+          });
+          await page.waitForFunction(() => {
+            const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+            const opts = document.getElementById("cs-options");
+            return !!(tab && tab.getAttribute("aria-selected") === "true"
+              && opts && /INSPECT ENGINE/i.test(opts.textContent || ""));
+          }, null, { polling: 100, timeout: 15_000 });
+        }
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,
           animations: "disabled",

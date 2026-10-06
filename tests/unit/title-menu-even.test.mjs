@@ -227,6 +227,11 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   );
   assert.match(
     menus,
+    /@media \(max-width:\s*899px\) and \(min-height:\s*370px\) \{[\s\S]*?min-width:\s*0/,
+    "844×390 compact-wide keeps 2-up shrinkable so GARAGE stays on-screen (CI 37469163266)",
+  );
+  assert.match(
+    menus,
     /@media \(max-width:\s*899px\) \{[^}]*body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
     "mid-wide title keeps --tap air under the utility row; 1440 desktop does not",
   );

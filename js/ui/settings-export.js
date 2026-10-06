@@ -507,6 +507,30 @@ function applyGarage(file) {
   }
   return { ok: true, applied, skipped, failed, reason: null };
 }
+// RESET TO THE SHIPPED GARAGE. Fresh installs never need this — GameStore.get
+// already answers from GarageDefaults on a miss — but a player who diverged
+// and wants the factory look back does. Clear every garage-shaped key first
+// so extras the shipped file does not name (an invented team, a one-off
+// setup.*) cannot linger, then apply GarageDefaults.file() through the same
+// loader a hand-picked export uses. Career / season / settings stay out.
+function resetGarage() {
+  if (typeof GarageDefaults === "undefined" || !GarageDefaults.file) {
+    return { ok: false, reason: "no shipped garage defaults", applied: 0, skipped: 0 };
+  }
+  const doomed = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const full = localStorage.key(i);
+      if (!full || full.indexOf("apex26.") !== 0) continue;
+      const k = full.slice(7);
+      if (isGarageKey(k)) doomed.push(k);
+    }
+  } catch (_) { /* storage blocked: apply what we can */ }
+  for (const k of doomed) {
+    try { GameStore.store.set(k, undefined); } catch (_) { /* keep clearing */ }
+  }
+  return applyGarage(GarageDefaults.file());
+}
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same
 // allowlist discipline as the garage — only career.<flavour>.<i> and
@@ -781,13 +805,43 @@ function create(G) {
     const wrap = document.createElement("div");
     wrap.id = "cs-garage-file";
     wrap.className = "sel-edit-row";
+    // Same two-tap arm as LOAD, but no file picker — the second tap clears
+    // garage-shaped keys and re-applies js/data/garage-defaults.js.
+    const resetLabel = "RESET GARAGE TO DEFAULTS";
+    const resetBtn = document.createElement("button");
+    resetBtn.id = "cs-garage-reset";
+    resetBtn.type = "button";
+    resetBtn.textContent = resetLabel;
+    resetBtn.title = "Clear parts, liveries, setups and team/driver back to the shipped garage. Career and settings are never touched.";
+    resetBtn.onclick = () => {
+      if (reloading) return;
+      if (!armed || armed.el !== resetBtn) {
+        disarm(); unflash(resetBtn);
+        armed = { el: resetBtn, label: resetLabel, snapshot: null };
+        resetBtn.textContent = `${resetLabel} — OVERWRITE THE GARAGE WITH DEFAULTS?`;
+        armT = setTimeout(disarm, ARM_MS);
+        tick();
+        return;
+      }
+      disarm();
+      const r = resetGarage();
+      if (!r.ok) { flash(resetBtn, resetLabel, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+      Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
+      if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
+      if (!r.applied) { flash(resetBtn, resetLabel, "NOTHING TO RESET", 2200); return; }
+      resetBtn.textContent = `${resetLabel} — ${r.applied} APPLIED, RELOADING…`;
+      reloading = true; resetBtn.disabled = true;
+      setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      tick();
+    };
     wrap.append(
       saveBtn("cs-garage-save", "SAVE GARAGE FILE",
         "Parts, liveries, setup sheets and your own team, for every team. Career money, results and lap records are never in it.",
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       loadBtn("cs-garage-load", "LOAD GARAGE FILE",
         "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
-        applyGarage, "THE GARAGE"));
+        applyGarage, "THE GARAGE"),
+      resetBtn);
     return wrap;
   }
   // CAREER MODES mounts this the same way GARAGE mounts garageRow: fresh
@@ -846,7 +900,7 @@ function create(G) {
   else mount();
   Log.info("ui", "SettingsExport.create");
   _ui = { collect: (mode) => collect(mode, G), collectGarage, collectCareer,
-          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer,
+          applySettings: (o) => applySettings(o, G), applyGarage, applyCareer, resetGarage,
           garageRow, careerRow, mount };
   return _ui;
 }
@@ -857,7 +911,7 @@ function create(G) {
 function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
 
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
-         applySettings, applyGarage, applyCareer, isGarageKey, isCareerKey, garageValue, create,
+         applySettings, applyGarage, applyCareer, resetGarage, isGarageKey, isCareerKey, garageValue, create,
          ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
