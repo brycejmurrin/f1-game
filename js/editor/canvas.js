@@ -557,12 +557,13 @@ const DesignerCanvas = (function () {
     // its middle. { text, x, y } in css px, or null.
     function chip() {
       const pts = work || base, N = pts.length;
-      if (mode === "drag" && work && dragI >= 0 && N >= 3) {
-        const R = S.menger(pts[(dragI - 1 + N) % N], pts[dragI], pts[(dragI + 1) % N]);
-        const at = last || { x: toSX(pts[dragI][0]), y: toSY(pts[dragI][1]) };
+      const chipI = mode === "drag" && work && dragI >= 0 ? dragI : (mode === "press" && press ? press.i : -1);
+      if (chipI >= 0 && N >= 3) {
+        const R = S.menger(pts[(chipI - 1 + N) % N], pts[chipI], pts[(chipI + 1) % N]);
+        const at = last || { x: toSX(pts[chipI][0]), y: toSY(pts[chipI][1]) };
         return { text: Number.isFinite(R) && R < STRAIGHT_R ? "R " + Math.round(R) + " m" : "STRAIGHT", x: at.x + 18, y: at.y - 26 };
       }
-      if (mode === "drag" || sel < 0 || span < 0 || sel === span || sel >= N || span >= N) return null;
+      if (mode === "drag" || mode === "press" || sel < 0 || span < 0 || sel === span || sel >= N || span >= N) return null;
       const seg = [];
       let L = 0;
       for (let i = sel, n = 0; n < N && i !== span; n++) { const j = (i + 1) % N, d = Math.hypot(pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]); seg.push([i, j, d]); L += d; i = j; }
