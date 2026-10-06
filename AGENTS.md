@@ -152,6 +152,9 @@ WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change,
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line (also after a compaction); `protect-files.sh` blocks generated-file edits and source edits during a live browser run, from Write/Edit and from Bash writes (`sed -i`, redirects, `tee`, `cp`); `bash-guard.sh` runs the guards on the STAGED commit before any form of `git … commit`, blocks `pkill -f` and PID kills of a test-bg run, and blocks a browser run inside a subagent (`mcp-browser-guard.sh` does the same for the MCP browser tools); `post-edit.sh` (PostToolUse, advisory) says at once when a `js/` edit does not parse, staled a generated file or broke a circuit build;
 `stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py` is the one "live in this checkout?" test); `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts every edit rule except the live-run one. Never duplicate skills or agents under `.cursor/`.
 
+Cloud agent stall abort, handoff fields, and merge-not-rebase: full text in
+`docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md` (Insights fixes 3+5).
+
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s servers); Cursor enters via
 `.cursor/rules/apex-shared.mdc`, Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks
