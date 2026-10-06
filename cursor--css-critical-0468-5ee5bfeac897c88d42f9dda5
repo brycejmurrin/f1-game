@@ -1,1 +1,1 @@
-1791267854	Cursor Agent	CSS critical path: OWNED manifest CSS/CSS_PRELOAD/CSS_DEFERRED, index.html CSS blocks, css/tokens/components/title/menus/responsive, fonts-hud.css, deferred receivers, tests. FORBIDDEN FULL/LAZY, @gen-shell:scripts, sw.js, js/**, ratchets, auto-merge  [cursor/css-critical-0468; session 5ee5bfeac897c88d42f9dda5]
+1791268606	Cursor Agent	css-critical-path: CSS_PRELOAD title-only + fonts-hud  [cursor/css-critical-0468; session 5ee5bfeac897c88d42f9dda5]
