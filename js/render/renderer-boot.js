@@ -10,15 +10,26 @@ const BACKEND_FILES = ApexRoster.DEFERRED;
 const STRIKE_KEY = "apex26.gfxProbeStrikes";
 let _backendBound = false;
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
-// waiting on a cold module fetch after the roster injects it.
+// waiting on a cold module fetch after the roster injects it. Idle-scheduled so the
+// ~735 KB modulepreload hints do not fight the last FULL scripts / title CSS for
+// bandwidth on the same turn as start().
 function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
-    const el = document.createElement("link");
-    el.rel = "modulepreload";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
-  }
+  const kick = () => {
+    try {
+      for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
+        // querySelector is absent in some VM harnesses — skip the dedupe then.
+        if (document.querySelector && document.querySelector('link[rel="modulepreload"][href="' + href + '"]')) continue;
+        const el = document.createElement("link");
+        el.rel = "modulepreload";
+        el.href = href;
+        el.crossOrigin = "anonymous";
+        document.head.appendChild(el);
+      }
+    } catch (_) { /* preload is best-effort; TLX still fetches on inject */ }
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 800 });
+  else if (typeof setTimeout === "function") setTimeout(kick, 0);
+  else kick();
 }
 function storedBackendPreference() {
   try {
@@ -46,7 +57,16 @@ function backendPreference() {
 async function gpuAdapterAvailable() {
   try {
     if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) return false;
-    const ad = await navigator.gpu.requestAdapter();
+    const adapterP = navigator.gpu.requestAdapter();
+    // Cap the probe: a stuck requestAdapter() on broken WebGPU stacks delays
+    // the entire title boot (unset default waits here before choosing GLX).
+    // 250 ms is enough for a real adapter to resolve; null/timeout → GLX.
+    // No setTimeout (some VM harnesses): await the adapter alone.
+    if (typeof setTimeout !== "function") return !!(await adapterP);
+    const ad = await Promise.race([
+      adapterP,
+      new Promise((resolve) => { setTimeout(() => resolve(null), 250); }),
+    ]);
     return !!ad;
   } catch (_) {
     return false;

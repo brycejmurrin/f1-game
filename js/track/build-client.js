@@ -63,6 +63,17 @@ const TrackBuildClient = (function () {
     Log.warn("track", "build worker off: " + why);
   }
 
+  // Idle warm: parse TRACK_VM in the worker while the title is quiet so the
+  // first RACE! does not pay importScripts on the critical path. No-op when
+  // the opt-in flag is off. LazyBundles.raceAssets() calls this after boot.
+  function idleWarm() {
+    if (!enabled()) return null;
+    const kick = () => { try { spawn(); } catch (_) { /* best-effort */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 3000 });
+    else setTimeout(kick, 500);
+    return _ready;
+  }
+
   // Idempotent. Resolves true once every build module has loaded in the worker.
   function spawn() {
     if (_ready) return _ready;
@@ -240,6 +251,6 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, set, spawn, build, replay, busy, KEY };
+  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;
