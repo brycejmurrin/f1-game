@@ -51,10 +51,7 @@ function runFile(relPath) {
 
 for (const entry of MANIFEST.TRACK_VM) {
   if (entry === "@circuits") {
-    for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
-                      .filter((f) => f.endsWith(".js")).sort()) {
-      runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
-    }
+    for (const id of MANIFEST.CIRCUITS) runFile(MANIFEST.circuitPath(id));
   } else {
     runFile(entry);
   }

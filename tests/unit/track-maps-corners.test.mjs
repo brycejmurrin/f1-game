@@ -33,10 +33,7 @@ function loadTrackMaps() {
   };
   for (const entry of MANIFEST.TRACK_VM) {
     if (entry === "@circuits") {
-      for (const file of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
-        .filter((name) => name.endsWith(".js")).sort()) {
-        runFile(path.join(MANIFEST.CIRCUITS_DIR, file));
-      }
+      for (const id of MANIFEST.CIRCUITS) runFile(MANIFEST.circuitPath(id));
       // …and the split-out scenery closures (LAZY_SCENERY). The .js filter above
       // only sees the top level, so without this every circuit builds BARE —
       // road and terrain, no dressing — and the numbers look plausible enough

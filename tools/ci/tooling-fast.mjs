@@ -173,6 +173,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-corner-anchors.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
+  "tests/unit/circuit-meta.test.mjs",
   "tests/unit/circuit-scope.test.mjs",
   // ...and the same question one level down: a def may name a tree species or
   // a grandstand livery the engine has no entry for, and every lookup has a

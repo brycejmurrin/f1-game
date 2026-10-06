@@ -109,6 +109,7 @@ export function rosterOf() {
   for (const [k, v] of Object.entries(MANIFEST.DEFERRED)) add(v, `DEFERRED:${k}`);
   add(MANIFEST.LAZY_AGENT, "LAZY_AGENT");
   add(MANIFEST.LAZY_RACE, "LAZY_RACE");
+  add(MANIFEST.LAZY_CIRCUIT || [], "LAZY_CIRCUIT");
   add(MANIFEST.LAZY_SCENERY, "LAZY_SCENERY");
   add(MANIFEST.LAZY_DATA, "LAZY_DATA");
   add(MANIFEST.LAZY_NET, "LAZY_NET");
@@ -134,7 +135,7 @@ export function collect() {
       collapsed.add(dir);
       const n = circuits.has(rel) ? circuits.size : scenery.size;
       const purpose = circuits.has(rel)
-        ? `${n} circuit definitions (data only), one file per id in \`Tracks.LIST\` order — see the "js/circuits/<id>.js" section`
+        ? `${n} full circuit definitions (LAZY_CIRCUIT); title boots \`js/track/circuit-meta.js\` and hydrates path/payload on pick — see the "js/circuits/<id>.js" section`
         : `${n} bespoke \`scenery(api)\` closures, one per circuit, fetched when that circuit is built`;
       push(dir, { file: `<id>.js × ${n}`, global: circuits.has(rel) ? "TrackDefs" : "TrackScenery", roster: loaded, purpose });
       continue;

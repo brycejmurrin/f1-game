@@ -34,6 +34,7 @@ def block(msg, root, hatch=True):
 
 GENERATED = {
     "version.json": "the deploy stamps it (pages.yml)",
+    "js/track/circuit-meta.js": "node tools/gen/gen-circuit-meta.mjs writes it from js/circuits/<id>.js",
     "js/roster.js": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/carview.html": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/README.md": "node tools/gen/gen-tools-readme.mjs writes it from the tools' @doc headers",

@@ -78,7 +78,7 @@ const lazyBundles = LazyBundles.create({
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
   bindAgent: () => { if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G); },
 });
-const { SCENERY_DIR, sceneryResident, ensureScenery, ensureDataHub, ensureNet, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
 const { backendPreference } = rendererBoot;
 const backendBoot = await rendererBoot.start();
@@ -3315,6 +3315,7 @@ const G = {
   get aiPace() { return AiBand.mode(); },
   set aiPace(v) { store.set("aiPace", AiBand.setMode(v)); },
   store, tickUi, scheduleFlybyTrack,
+  ensureCircuit: (idx) => ensureCircuit(idx),
   // Same deferred-arrow trick for the garage <-> select plumbing: js/garage/setup-sheet.js is
   // created before js/ui/select-screen.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.

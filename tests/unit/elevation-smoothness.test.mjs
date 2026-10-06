@@ -56,10 +56,7 @@ function buildTracks() {
   }
   for (const entry of manifest.TRACK_VM) {
     if (entry === "@circuits") {
-      for (const f of fs.readdirSync(path.join(ROOT, manifest.CIRCUITS_DIR))
-        .filter((f) => f.endsWith(".js")).sort()) {
-        runFile(path.join(manifest.CIRCUITS_DIR, f));
-      }
+      for (const id of manifest.CIRCUITS) runFile(manifest.circuitPath(id));
       for (const f of manifest.LAZY_SCENERY) runFile(f);
     } else runFile(entry);
   }

@@ -272,7 +272,7 @@ export function listFiles() {
   // and game.js read. Leaving a lazy roster out of the scan does not make the
   // read safe, it makes it invisible.
   const lazy = [...(manifest.LAZY_AGENT || []), ...(manifest.LAZY_RACE || []),
-    ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
+    ...(manifest.LAZY_CIRCUIT || []), ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
     ...(manifest.LAZY_NET || []), ...(manifest.LAZY_EDITOR || [])];
   return {
     full: manifest.FULL.slice(),

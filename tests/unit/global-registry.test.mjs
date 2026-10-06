@@ -72,9 +72,12 @@ const SHARED_GLOBALS = {
 // circuit (`new-track` is a sanctioned routine flow); per-file discipline is
 // already covered by the one-global rule above (each circuit file assigns
 // exactly TrackDefs), so the only thing to pin is that nothing OUTSIDE
-// js/circuits/ ever writes it.
+// js/circuits/ (plus the GENERATED title meta roster) ever writes it.
 const GROWABLE_GLOBALS = {
-  TrackDefs: homeOf(MANIFEST.CIRCUITS_DIR),
+  TrackDefs: new RegExp(
+    "^(?:" + MANIFEST.CIRCUITS_DIR.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "/[^/]+\\.js"
+    + "|" + String(MANIFEST.CIRCUIT_META).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")
+    + ")$"),
   // Same idiom, same reason, one directory deeper: each circuit's bespoke
   // scenery closure was split out of its def file so the 1,083 KB of closures
   // stops riding the boot script wall for a session that builds ONE circuit.

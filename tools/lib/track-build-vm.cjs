@@ -137,10 +137,9 @@ function buildContext(opts) {
     };
   }
   ctx.__prims = prims;
-  for (const f of fs.readdirSync(path.join(ROOT, MANIFEST.CIRCUITS_DIR))
-                    .filter((f) => f.endsWith(".js")).sort()) {
-    runFile(path.join(MANIFEST.CIRCUITS_DIR, f));
-  }
+  // CIRCUITS order (not readdir): skip GENERATED meta.js which would push
+  // picker stubs alongside the full authored defs.
+  for (const id of MANIFEST.CIRCUITS) runFile(MANIFEST.circuitPath(id));
   // The scenery closures live in a SUBDIRECTORY now, which the .js filter above
   // skips — without this the harness builds every circuit bare and every
   // baseline quietly drops its props. Order is free: tracks.js reads

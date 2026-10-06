@@ -12,9 +12,9 @@
       "lines": 3573
     },
     "js/game.js": {
-      "codeLines": 4850,
-      "gMembers": 287,
-      "lines": 9002,
+      "codeLines": 4851,
+      "gMembers": 288,
+      "lines": 9003,
       "topLets": 147
     },
     "js/lighting/presets.js": {
@@ -27,10 +27,10 @@
       "lines": 2857
     },
     "js/track/tracks.js": {
-      "lines": 702
+      "lines": 734
     },
     "tools/ci/pick-tests.mjs": {
-      "blanketOnlyRoutes": 1
+      "blanketOnlyRoutes": 2
     }
   },
   "tree": {
@@ -76,7 +76,7 @@
     },
     "waitForTimeout": 92,
     "waitNoPolling": {
-      "ceiling": 56,
+      "ceiling": 57,
       "slack": 39
     },
     "zeroRefModules": {

@@ -140,9 +140,22 @@ const TrackMaps = (function () {
     return { n: n, x: mp[0], y: mp[1], f: mes.fPeak, v: mes.v, r: mes.r, ang: mes.ang, cls: mes.cls };
   }
 
+  // Drop a cached outline after LAZY_CIRCUIT hydrate (meta stubs have no path).
+  function invalidate(id) {
+    if (id == null) {
+      for (const k of Object.keys(cache)) delete cache[k];
+      return;
+    }
+    delete cache[id];
+  }
+
   // Build the outline + corner list once from the spline engine, then cache.
   function compute(def) {
+    if (!def || !def.id) return null;
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
+    // Title boots meta-only stubs — do not cache a null miss; ensureCircuit
+    // hydrates path and the next paint recomputes.
+    if (def._metaOnly || !(def.path && def.path.pts && def.path.pts.length)) return null;
     Log.info("track", `maps compute ${def.id}`);
     // A custom circuit's id is its content hash (custom-tracks.js idOf): every saved
     // revision the picker drew stayed here for the page. Keep only what Tracks.LIST
@@ -656,7 +669,7 @@ const TrackMaps = (function () {
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
     SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses,
-    cachedIds: () => Object.keys(cache),
+    invalidate, cachedIds: () => Object.keys(cache),
   };
 })();
 Object.freeze(TrackMaps);

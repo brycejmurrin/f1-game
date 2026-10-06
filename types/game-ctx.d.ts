@@ -594,6 +594,8 @@ interface GameCtx {
   readonly store: StoreApi;
   readonly tickUi: () => void;
   readonly scheduleFlybyTrack: (settle?: boolean) => void;
+  /** Hydrate LAZY_CIRCUIT full def (path/payload) before build / TrackMaps. */
+  readonly ensureCircuit: (idx: number) => Promise<void>;
   readonly buildSetup: () => void;
   readonly setTeamPicker: (open: boolean, host?: HTMLElement) => void;
   readonly teamSwatch: (t: TeamDef) => HTMLElement;

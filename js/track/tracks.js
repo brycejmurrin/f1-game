@@ -564,11 +564,43 @@ const Tracks = (function () {
   // Raw def → LIST entry: js/track/core/def.js (fromRaw copies every authored
   // field the engine reads off the BUILT def; its lazy `points` getter runs
   // realPoints + the startFrac/hwZones remaps on first touch, bit-identical).
-  const LIST = DEFS.map(fromRaw);
+  const LIST = DEFS.map((d) => {
+    const def = fromRaw(d);
+    if (d && d._metaOnly) def._metaOnly = true;
+    return def;
+  });
 
   // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
   function ensurePoints(def) {
     return def.points;
+  }
+
+  // Title boots with LAZY meta stubs (_metaOnly); full js/circuits/<id>.js
+  // hydrates the SAME LIST object in place so SEASON / saved indexes stay valid.
+  function circuitPayloadResident(def) {
+    return !!(def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly);
+  }
+  function hydrate(raw) {
+    if (!raw || !raw.id) return false;
+    const idx = LIST.findIndex((t) => t && t.id === raw.id);
+    if (idx < 0) return false;
+    if (circuitPayloadResident(LIST[idx])) return true;
+    const next = fromRaw(raw);
+    const cur = LIST[idx];
+    for (const k of Object.keys(next)) {
+      if (k === "points") continue;
+      cur[k] = next[k];
+    }
+    delete cur._metaOnly;
+    const desc = Object.getOwnPropertyDescriptor(next, "points");
+    if (desc) Object.defineProperty(cur, "points", desc);
+    // Keep TrackDefs aligned for any reader that still walks the raw list.
+    const TD = (typeof window !== "undefined" && window.TrackDefs) || [];
+    for (let i = 0; i < TD.length; i++) {
+      if (TD[i] && TD[i].id === raw.id) TD[i] = raw;
+    }
+    if (typeof TrackMaps !== "undefined" && TrackMaps.invalidate) TrackMaps.invalidate(raw.id);
+    return true;
   }
 
   const SEASON = LIST.filter((t) => !t.classic);
@@ -697,5 +729,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
 })();

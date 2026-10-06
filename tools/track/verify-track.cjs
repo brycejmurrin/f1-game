@@ -178,10 +178,7 @@ function buildContext(rootOverride, opts) {
   // tracks.js reads that list at load time, so they must run BEFORE it.
   for (const entry of manifest.TRACK_VM) {
     if (entry === "@circuits") {
-      for (const f of fs.readdirSync(path.join(root, manifest.CIRCUITS_DIR))
-                        .filter((f) => f.endsWith(".js")).sort()) {
-        runFile(path.join(manifest.CIRCUITS_DIR, f));
-      }
+      for (const id of manifest.CIRCUITS) runFile(manifest.circuitPath(id));
       // …and the split-out scenery closures, which the .js filter above skips
       // because they sit in js/circuits/scenery/. Miss them and the circuit
       // still builds — just bare, which is the failure this tool exists to see.

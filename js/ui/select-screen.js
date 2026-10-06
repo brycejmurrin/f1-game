@@ -868,6 +868,15 @@ function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
+  // Meta stubs have no path — hydrate LAZY_CIRCUIT then redraw (caption paints now).
+  if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
+    if (G.ensureCircuit) {
+      const idx = G.trackIdx;
+      G.ensureCircuit(idx).then(() => {
+        if (G.trackIdx === idx) updateTrackPreview();
+      });
+    }
+  }
   const crns = TrackMaps.corners(t);
   const turns = crns.length;
   const dir = TrackMaps.direction(t);

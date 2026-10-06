@@ -254,11 +254,14 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `venue.js` | `SceneryVenue` | tag | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
-**`js/circuits/`**
+**`js/track/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 52` | `TrackDefs` | tag | 52 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+| `circuit-meta.js` | `TrackDefs` | tag | GENERATED circuit meta (tools/gen/gen-circuit-meta.mjs): picker TrackDefs for the title/menu wall; full defs hydrate via LAZY_CIRCUIT. |
+| `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
+| `tracks.js` | `Tracks` | tag | track engine shell: LIST / build() / centerline / pit helpers / terrainY. |
+| `build-client.js` | `TrackBuildClient` | tag | the page side of the track build Worker (js/track/build-worker.js). |
 
 **`js/race/`**
 
@@ -291,14 +294,6 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
 | `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
-
-**`js/track/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
-| `tracks.js` | `Tracks` | tag | track engine shell: LIST / build() / centerline / pit helpers / terrainY. |
-| `build-client.js` | `TrackBuildClient` | tag | the page side of the track build Worker (js/track/build-worker.js). |
 
 **`js/editor/`**
 
@@ -537,6 +532,12 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
+
+**`js/circuits/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `<id>.js × 52` | `TrackDefs` | LAZY_CIRCUIT | 52 full circuit definitions (LAZY_CIRCUIT); title boots `js/track/circuit-meta.js` and hydrates path/payload on pick — see the "js/circuits/<id>.js" section |
 
 **`js/circuits/scenery/`**
 

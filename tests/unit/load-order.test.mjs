@@ -195,7 +195,7 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
 }
 
@@ -239,7 +239,8 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // circuit builds BARE — road and terrain, no dressing — with no exception to
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
-  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
+  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_CIRCUIT || []),
+                   ...(MANIFEST.LAZY_SCENERY || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])]) {
     assert.ok(seeded.has(f),
@@ -259,7 +260,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   // source text: the question is which paths actually get the ?v= suffix.
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
-    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
+    ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
@@ -283,15 +284,16 @@ test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
   }
 });
 
-// EVERY CIRCUIT LOADER MUST ALSO LOAD THE SCENERY DIRECTORY. Circuits are read
-// with readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js")), which does not
-// descend into js/circuits/scenery/ — so a loader that misses the roster builds
-// every circuit BARE (road and terrain, no dressing) and still produces
-// confident, plausible numbers. Measured while doing the split: tools/
-// float-audit.cjs reported cota at 3,988 prop cells instead of 32,897 and the
-// grounding baseline "grew" a floater, which reads as a scenery regression
-// rather than as a missing include. Five loaders existed; four had to be found
-// by chasing red tests. This is so the sixth cannot be.
+// EVERY CIRCUIT LOADER MUST ALSO LOAD THE SCENERY DIRECTORY. Authored defs are
+// CIRCUITS.map(circuitPath) (not a raw readdir — that would also pick up
+// GENERATED meta.js). readdir of CIRCUITS_DIR does not descend into
+// js/circuits/scenery/, so a loader that misses the roster builds every
+// circuit BARE (road and terrain, no dressing) and still produces confident,
+// plausible numbers. Measured while doing the split: tools/track/float-audit.cjs
+// reported cota at 3,988 prop cells instead of 32,897 and the grounding
+// baseline "grew" a floater, which reads as a scenery regression rather than
+// as a missing include. Five loaders existed; four had to be found by chasing
+// red tests. This is so the sixth cannot be.
 test("every circuit loader also loads the split scenery roster", () => {
   // RECURSIVE over both trees, not a flat readdir of two fixed directories: the
   // test tree is about to be re-homed by topic (tests/guards, tests/node, …)
@@ -395,12 +397,16 @@ test("HARD_EDGES are ordered in FULL", () => {
   }
 });
 
-test("all circuit defs load before the tracks engine; game.js loads last", () => {
+test("circuit meta loads before the tracks engine; full defs are LAZY_CIRCUIT; game.js loads last", () => {
   const idx = new Map(MANIFEST.FULL.map((f, i) => [f, i]));
   const tracksAt = idx.get(MANIFEST.PATHS.TRACKS_ENGINE);
+  const metaAt = idx.get(MANIFEST.CIRCUIT_META);
+  assert.ok(metaAt !== undefined && metaAt < tracksAt, `${MANIFEST.CIRCUIT_META} must precede js/track/tracks.js`);
+  const lazy = new Set(MANIFEST.LAZY_CIRCUIT || []);
   for (const id of MANIFEST.CIRCUITS) {
-    const at = idx.get(`${MANIFEST.CIRCUITS_DIR}/${id}.js`);
-    assert.ok(at !== undefined && at < tracksAt, `${id} circuit def must precede js/track/tracks.js`);
+    const full = `${MANIFEST.CIRCUITS_DIR}/${id}.js`;
+    assert.ok(lazy.has(full), `${full} must be in LAZY_CIRCUIT`);
+    assert.equal(idx.get(full), undefined, `${full} must not be a FULL script tag`);
   }
   assert.equal(MANIFEST.FULL[MANIFEST.FULL.length - 1], "js/game.js");
 });
