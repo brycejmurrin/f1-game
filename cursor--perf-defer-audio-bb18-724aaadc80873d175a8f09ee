@@ -1,1 +1,1 @@
-1791307609	Cursor Agent	Perf PR2: defer audio/engine until gesture/race. OWNED js/audio/** tools/manifest.cjs lazy-bundles stubs. FORBIDDEN circuits/updateCar/tlx-post/mirror/soft-blit. UNARMED. Do not enable auto-merge or merge.  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
+1791307698	Cursor Agent	PR2 defer audio/engine until gesture/race  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
