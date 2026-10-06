@@ -1,0 +1,1 @@
+1791271973	Cursor Agent	PR #1095 native-download isolation steward; OWNED js/core/native-download.js tests/unit/mobile-native-download.test.mjs; FORBIDDEN ratchets .github/workflows callers SettingsExport; draft stay; PUSH HOLD local-only until queue < 10; no auto-merge/merge  [cursor/native-download-isolation-6a26; session 9cdf7034ec63e644d085c428]
