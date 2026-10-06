@@ -60,8 +60,14 @@ async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  // LAZY_AUDIO: title boots js/audio/stub.js; MusicLib / SpotifyMusic / the real
+  // GameAudio land only after ensureAudio() (first pointerdown / SOUND / race).
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  });
   await page.waitForFunction(
-    () => typeof MusicLib !== "undefined" && typeof GameAudio !== "undefined",
+    () => typeof MusicLib !== "undefined" && typeof SpotifyMusic !== "undefined"
+      && typeof GameAudio !== "undefined" && !GameAudio._stub,
     null, { polling: 100, timeout: BOOT_MS }
   );
 }
