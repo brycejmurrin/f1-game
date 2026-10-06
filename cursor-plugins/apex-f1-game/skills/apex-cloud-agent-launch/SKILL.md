@@ -17,10 +17,21 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Cap: max **6 launches / 10 min**. If `/workspace/apex-status/queue-depth.json` says `hold`, or >15 runs queued, do not launch (and launched agents commit locally only).
 - Ship-checkpoint freeze: no sync **pushes** or **merges** while freeze is on.
 
+## Existing PR (steward attach)
+When the job is an **open PR**, do not start from ship and fork a new topic head:
+- Pass `cloud_base_branch` = the PR's current head ref.
+- Prompt: stay on that branch; `git checkout <head>`; do **not** create a new
+  `cursor/<topic>-<hash>`; do **not** open a second PR.
+- The **parent coordinator** holds `subscribe_github_pr` + `subscribe_github_ci`.
+  Task children cannot receive those events — do not ask the child to subscribe.
+- Stall abort: 0 tools after 5–10 min **and** no push to that PR SHA. A cloud
+  listing with `branchName: null` is **not** stalled if the PR got a
+  `synchronize` or the child reported the PR head SHA.
+
 ## Prompt template (fill gaps)
 1. **Goal** — outcome, not line edits.
 2. **Context** — symptoms, PR number/URL, attached files/images.
-3. **Constraints** — include `OWNED:` / `FORBIDDEN:` globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` Draft PR unless asked. Stay in lane (UI/cars/tracks/perf/audio/net). Sync = merge `origin/claude/f1-game-project-26h3ng`; never rebase or force-push. Pre-push = `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle. No CI poll loops (`ci-watch.mjs` / CI Watch, not `sleep` / `gh run view`).
+3. **Constraints** — include `OWNED:` / `FORBIDDEN:` globs, done-when, shot/test caps, and the exact lines `Do not merge.` `Do not disable squash auto-merge if it is already armed.` Draft PR unless asked. Stay in lane (UI/cars/tracks/perf/audio/net). Sync = merge `origin/claude/f1-game-project-26h3ng`; never rebase or force-push. Pre-push = `npm run test:tooling-fast` plus pick-tests Structural guards. Push once per green local cycle. No CI poll loops (`ci-watch.mjs` / CI Watch, not `sleep` / `gh run view`).
 4. **Success** — PR link or clear “no PR”; tests run / named not-run. Mark ready **within 15 min of tip-green** (CI Watch flips otherwise). Close-out must pass the stall/handoff gate in `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 5. Invite the agent to verify its own diagnosis.
 

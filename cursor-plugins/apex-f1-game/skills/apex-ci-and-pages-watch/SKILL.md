@@ -9,7 +9,7 @@ description: >-
 
 Repo: `brycejmurrin/f1-game`. Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
-**Merge pacing:** only CI Watch arms **squash** auto-merge, and only on PRs already **marked ready**. Specialty bots and cloud agents never arm auto-merge or merge/squash. Disable any armed MERGE/REBASE auto-merge and tell CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
+**Merge pacing:** only CI Watch / the PR coordinator arms **squash** auto-merge, and only on PRs already **marked ready**. Specialty bots and cloud children never arm auto-merge or merge/squash, and **must not disable squash AM that is already armed** (`--disable-auto` on squash is a bug). Disable any armed **MERGE/REBASE** auto-merge and tell CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
 
 ## What to watch (do not conflate)
 

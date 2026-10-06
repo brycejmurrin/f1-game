@@ -156,3 +156,19 @@ and poll `ci-watch --sha <sha> --once` at checkpoints. Record missing subscripti
 and reminder capabilities as unverified; do not claim an automation was armed.
 Check the active tool catalog with `doctor.mjs --catalog <file>`; upstream
 connector availability cannot be fixed by inventing tool results.
+
+## 8. Auto-merge and who watches (do not fight the coordinator)
+
+Task / cloud **children cannot receive** `subscribe_github_pr` / `subscribe_github_ci`
+notifications. Do not try to arm those from a child; say the parent already
+watches, push the fix, and stop. The coordinator holds PR+CI subscriptions
+until merge, plus a DIRTY scan after ship merges. No `sleep` / `gh run view`
+poll loops.
+
+**Do not merge.** **Do not disable squash auto-merge if it is already armed.**
+`gh pr merge N --disable-auto` on a squash AM is a bug: the user or CI Watch
+armed it on purpose. Disable **MERGE/REBASE** auto-merge only, then tell
+CI Watch. Only the coordinator / CI Watch arms squash AM on ready PRs.
+
+Attach to an **existing** PR: stay on that head ref. Do not open a second PR
+and do not create a new `cursor/<topic>-<hash>` for a steward of PR `#N`.
