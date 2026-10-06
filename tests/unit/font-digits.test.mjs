@@ -44,6 +44,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const ledger = JSON.parse(read("tests/data/font-digits.json"));
 const tokens = read("css/tokens.css");
+const facesCss = fs.readdirSync(path.join(ROOT, "css"))
+  .filter((f) => f.endsWith(".css"))
+  .map((f) => read("css/" + f)).join("\n");
 
 /** A face's digits as they actually render with `tabular-nums` applied. */
 const effective = (f) => (f.tnumAdvances ? f.tnumAdvances : f.digitAdvances);
@@ -111,8 +114,8 @@ test("the size-adjust that matches cap height is pinned to its derivation", () =
   // at a shared font-size it renders 8.9% taller and every HUD box measured
   // against the old face is wrong. The number is 0.643/0.700, and the browser
   // agrees: "H" at 700/34px measures 21px in both faces.
-  const block = tokens.match(/@font-face\s*\{[^}]*Barlow Condensed[^}]*\}/);
-  assert.ok(block, "the Barlow Condensed @font-face blocks must be in css/tokens.css");
+  const block = facesCss.match(/@font-face\s*\{[^}]*Barlow Condensed[^}]*\}/);
+  assert.ok(block, "the Barlow Condensed @font-face blocks must live in css/");
   const adj = block[0].match(/size-adjust:\s*([\d.]+)%/);
   assert.ok(adj, "the Barlow faces must carry size-adjust — without it the HUD grows 8.9%");
   const want = (0.643 / 0.700) * 100;
@@ -143,7 +146,7 @@ test("#hud-speed's fixed slot is three TABULAR advances, not three `ch`", () => 
   assert.ok(face, `no ${slug}-*-700-* face in the ledger to derive the slot from`);
   const adv = effective(face[1])[0] / face[1].unitsPerEm;
 
-  const block = tokens.match(/@font-face\s*\{[^}]*Barlow Condensed[^}]*\}/);
+  const block = facesCss.match(/@font-face\s*\{[^}]*Barlow Condensed[^}]*\}/);
   const adj = block ? +(block[0].match(/size-adjust:\s*([\d.]+)%/) || [0, 100])[1] / 100 : 1;
 
   const want = 3 * adv * adj;

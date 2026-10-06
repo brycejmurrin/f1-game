@@ -258,7 +258,9 @@ test("the idle control edge is exempt, and this test says why out loud", () => {
 const ACCENT_DECOR = {
   "css/components.css": [
     "the scroll-fade nub — a 3px bar that repeats the scrollbar's own message",
-    "`.sel-label::before` — a skewed tick giving section labels a shared left edge",
+  ],
+  "css/overlays.css": [
+    "`.sel-label::before` — a skewed tick giving section labels a shared left edge (moved with classification off the title-critical sheet)",
   ],
   "css/settings.css": [
     "`.pm-accent-preview-hud` — Appearance's live HUD sample plate; the number is `--accent-ink`, the plate is ornament mirroring the radio card",

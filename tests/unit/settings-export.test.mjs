@@ -124,6 +124,19 @@ test("backup controls mount once in their own settings page, outside renderer op
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
 });
 
+test("ensureMounted remounts after the files panel was emptied", () => {
+  const b = bootImportUI();
+  assert.ok(b.dom.byId("pm-settings-load"));
+  const host = b.dom.byId("pm-panel-files");
+  while (host.firstChild) host.removeChild(host.firstChild);
+  assert.equal(host.children.length, 0);
+  assert.equal(typeof b.SettingsExport.ensureMounted, "function");
+  b.SettingsExport.ensureMounted();
+  for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
+    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+  }
+});
+
 for (const fail of [false, true]) test(`native backup waits for sharing and reports ${fail ? "failure" : "success"}`, async () => {
   let finish, calls = 0, saved;
   const held = new Promise((resolve, reject) => { finish = () => fail ? reject(new Error("disk full")) : resolve(); });

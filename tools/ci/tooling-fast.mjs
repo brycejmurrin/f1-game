@@ -207,6 +207,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
   "tests/unit/css-comments.test.mjs",
+  "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
@@ -290,6 +291,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // racecraft harder than pace, and asLegend hands over the legend's OWN
   // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
   "tests/unit/duel.test.mjs",
+  // ElevPresets (js/editor/elev-presets.js): Flat / Rolling / Hilly → per-node
+  // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
+  "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
@@ -734,6 +738,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-randomise.test.mjs",
   "tests/unit/track-retained-state.test.mjs",
   "tests/unit/trackside.test.mjs",
+  // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
+  // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
+  "tests/unit/traffic-arc-buckets.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
   // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
