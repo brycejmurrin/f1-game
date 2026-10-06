@@ -58,6 +58,7 @@ const DataHub = (function () {
   );
 
   function blockingLayer() {
+    if (typeof document.querySelectorAll !== "function") return null;
     const nodes = document.querySelectorAll(BLOCKING_SEL);
     for (let i = 0; i < nodes.length; i++) {
       if (nodes[i] && !nodes[i].hidden) return nodes[i];
