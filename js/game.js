@@ -6598,7 +6598,8 @@ function armBackendProbe() {
 }
 function render(dt) {
   // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
-  if (headlessMode) { mirrorPass.cancelPreparation(); if (loadingScreen.phase() === "handoff") loadingScreen.stop(); return; }
+  if (headlessMode) { mirrorPass.cancelPreparation(); loadingScreen.lowerWaitPlate(); return; }
+  if (state === "race") loadingScreen.lowerWaitPlate();   // busy/handoff must not hide HUD docks after lights-out (hud-layout / hud-audit)
   if (gfx.warming && gfx.warming()) return;
   if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
   if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();

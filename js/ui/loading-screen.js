@@ -790,6 +790,15 @@ const LoadingScreen = (function () {
      * canvas goes black (setupPreviewOn dropped, Home still compiling) and
      * nothing says the tap landed. Reuses #loading / #ld-card — no new layer.
      * Already covering? Keep that phase; do not reset a flyby or build. */
+    /* GREEN FLAG. startRace() now raises busy/build for every path, including
+     * __apex.race(), so the wait plate would outlive lights-out whenever
+     * present() never runs (software warming, jump()/go() before the first
+     * frame). #loading is a .screen: css/hud.css then keeps the docks at
+     * visibility:hidden. Call this when state is already "race". */
+    function lowerWaitPlate() {
+      if (phase === "handoff" || phase === "busy" || phase === "build" || phase === "garage") stop();
+    }
+
     function busy(label) {
       if (phase === "run" || phase === "card" || phase === "build" || phase === "handoff"
         || phase === "garage" || phase === "busy") return true;
@@ -809,7 +818,7 @@ const LoadingScreen = (function () {
     }
 
     return {
-      run, stop, hold, building, garage, handoff, busy,
+      run, stop, hold, building, garage, handoff, busy, lowerWaitPlate,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. Pass
        *  warmReady=false to keep FLY_MS while the backend is still compiling. */

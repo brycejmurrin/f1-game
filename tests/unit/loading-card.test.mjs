@@ -306,6 +306,14 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   assert.equal(h.races.length, 0, "nothing to skip to and no timer");
   h.screen.stop();
   assert.equal(h.els.loading.hidden, true);
+  assert.equal(h.screen.busy("Starting race"), true);
+  h.screen.lowerWaitPlate();
+  assert.equal(h.els.loading.hidden, true, "lowerWaitPlate drops busy once the race owns the screen");
+  assert.equal(h.screen.phase(), "");
+  h.run();
+  h.screen.lowerWaitPlate();
+  assert.equal(h.screen.phase(), "run", "a live flyby is not a wait plate");
+  h.screen.stop();
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="busy"\] #ld-card/, "the busy phase shows the card");
   const game = read("js/game.js");
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
@@ -363,6 +371,14 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   assert.match(body, /clearMenuScreens\(\); garagePre\.release\(\);[^\n]*\n\s*if \(handoff\) RaceEntryProfile\.raiseHandoff\(loadingScreen\);/,
     "startRaceBody raises the handoff card right after the sweep (and garage GPU release), only when the screen was up");
   const render = game.slice(game.indexOf("function render(dt) {"));
+  assert.match(render, /if \(headlessMode\) \{ mirrorPass\.cancelPreparation\(\); loadingScreen\.lowerWaitPlate\(\); return; \}/,
+    "headless lowers busy/build/handoff — present never runs");
+  assert.match(render, /if \(state === "race"\) loadingScreen\.lowerWaitPlate\(\);/,
+    "lights-out drops the wait plate before gfx.warming() can stall it over the HUD");
+  assert.match(read("js/agent/apex.js"), /G\.state = "race"; G\.raceT = Math\.max\(G\.raceT, 0\.5\);\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
+    "__apex.go() drops the plate before jump() refreshHud");
+  assert.match(read("js/agent/apex.js"), /G\.state = "race"; G\.raceT = Math\.max\(G\.raceT, 1\);\s*if \(G\.loadingScreen && G\.loadingScreen\.lowerWaitPlate\) G\.loadingScreen\.lowerWaitPlate\(\);/,
+    "__apex.park() drops the plate for hud-audit");
   assert.match(render, /gfx\.present\(po\);[\s\S]{0,200}?RaceEntryProfile\.afterPresent\(loadingScreen, gfx, mirrorPass\.preparing\(\)\);/,
     "render() lowers it via afterPresent after a present that painted");
   assert.match(read("js/perf/race-entry-profile.js"), /function raiseHandoff\(screen\) \{[\s\S]*?screen\.handoff\(\);/,
