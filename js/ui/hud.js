@@ -477,9 +477,9 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // and left fell back to 50% with transform none — card left-edge at centre,
 // hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
 // that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// so it ends the strip too; the map and the gaps chip start it, so a lane
-// that begins at --sal does not sit on them (hud-layout: .hud-gaps+#announce).
+// so it ends the strip too; the map and the gaps chip start it even when they
+// still sit in the tower's row (r.bottom <= tower.bottom), because a dropped
+// or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
 // They do not count as a dock, so empty docks (desktop) still unpublish the
 // lane. TILT's tap column lives on the bottom edge, so the band is the rest
 // of the viewport.
@@ -496,18 +496,19 @@ function announceLane(root) {
     } catch (_) { /* mini-dom / detached root */ }
   }
   let left = sal, right = W - sar, any = false;
-  const clip = (r, counts) => {
-    if (!r || !r.width || !r.height || r.top >= H || r.bottom <= y0) return;
+  const clip = (r, counts, always) => {
+    if (!r || !r.width || !r.height) return;
+    if (!always && (r.top >= H || r.bottom <= y0)) return;
     if (counts) any = true;
     if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
     else left = Math.max(left, r.right);
   };
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
   const sec = els.hudSectors;
-  clip(sec && !sec.hidden ? sec.getBoundingClientRect() : null, false);
-  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false);
+  clip(sec && !sec.hidden ? sec.getBoundingClientRect() : null, false, true);
+  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false, true);
   const gaps = document.querySelector(".hud-gaps");
-  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
+  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false, true);
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
   hStyle(root, "--announce-lane-x", on ? x.toFixed(1) + "px" : "");

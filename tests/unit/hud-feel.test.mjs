@@ -1006,6 +1006,11 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.els.minimap._rect = { left: 10, top: 8, right: 220, bottom: 148, width: 210, height: 140 };
   h.refit();
   assert.equal(laneLeft(), "228.0px", "the map starts the lane when it hangs under the tower");
+  const gapBox = h.dom.document.createElement("div"); gapBox.className = "hud-gaps";
+  h.dom.body.appendChild(gapBox);
+  gapBox._rect = { left: 160, top: 8, right: 250, bottom: 30, width: 90, height: 22 }; // above tower.bottom=62
+  h.refit();
+  assert.equal(laneLeft(), "258.0px", "gaps in the tower row still start the hanging lane");
   for (const g of [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();
   assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");
