@@ -66,15 +66,26 @@ test("SessionStart reuses a discovered browser and routes missing-browser instal
 test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.json", () => {
   const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  const allowedCmds = new Set((env.mcpServerAllowlist || []).map((row) => row.command));
-  const allowedNames = new Set((env.mcpServerAllowlist || []).map((row) => row.name));
+  const allowByName = new Map((env.mcpServerAllowlist || []).map((row) => [row.name, row.command]));
+  // Live Build bld-20261006-83ec36f4 listed playwright-official as npx while
+  // .mcp.json launches it via bash tools/mcp/playwright-mcp.sh — set membership
+  // alone would not catch that per-name mismatch.
   for (const [name, row] of Object.entries(cfg.mcpServers)) {
-    assert.ok(allowedCmds.has(row.command), `${name} command ${row.command} must be allowlisted`);
-    assert.ok(allowedNames.has(name), `${name} must appear in mcpServerAllowlist by name`);
+    assert.ok(allowByName.has(name), `${name} must appear in mcpServerAllowlist by name`);
+    assert.equal(
+      allowByName.get(name),
+      row.command,
+      `${name} allowlist command must match .mcp.json (got ${allowByName.get(name)}, want ${row.command})`,
+    );
+    assert.equal(row.command, "bash", `${name} catalog command must be bash (script wrappers)`);
   }
   // No orphans: every allowlist name is a catalog server (dashboard aliases
   // belong in Cursor Integrations & MCP, not this file).
-  for (const name of allowedNames) {
+  for (const name of allowByName.keys()) {
     assert.ok(cfg.mcpServers[name], `allowlist name ${name} is not in .mcp.json`);
   }
+  assert.deepEqual(
+    [...allowByName.keys()].sort(),
+    ["apex-tools", "chrome-devtools", "playwright-official"],
+  );
 });

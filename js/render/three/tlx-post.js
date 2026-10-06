@@ -192,10 +192,37 @@
     let godrayRT = null, godrayBlurRT = null, grW = 1, grH = 1;
     let _grLite = true;   // G1 — see the godray blur loop in present()
     try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
+    // P2 / audit #6: fixed per-pair post materials (no .tex.value ping-pong).
+    // apex26.tlxPostFixedMats=0 restores the shared-material swaps.
+    let _fixedMats = true;
+    try { _fixedMats = localStorage.getItem("apex26.tlxPostFixedMats") !== "0"; } catch (_) { /* on */ }
     const BLOOM_DIV = 2, BLOOM_LEVELS_MAX = 5;
     let bloomLv = null;    // [{rt,w,h}] x5, sized by layoutBloom
     let nLv = 0;
 
+    function bindFixedAO() {
+      if (!_fixedMats || !P.blurAOH || !ssaoRT) return;
+      P.blurAOH.tex.value = ssaoRT.texture;
+      P.blurAOV.tex.value = ssaoBlurRT.texture;
+    }
+    function bindFixedGR() {
+      if (!_fixedMats || !P.blurGRH || !godrayRT) return;
+      P.blurGRH.tex.value = godrayRT.texture;
+      P.blurGRV.tex.value = godrayBlurRT.texture;
+    }
+    function bindFixedBloom() {
+      if (!_fixedMats || !bloomLv || !P.downFixed) return;
+      for (let i = 0; i < P.downFixed.length; i++) {
+        if (bloomLv[i]) P.downFixed[i].tex.value = bloomLv[i].rt.texture;
+      }
+      if (P.upFinalFixed && bloomLv[1]) P.upFinalFixed.tex.value = bloomLv[1].rt.texture;
+      if (P.upAddFixed) {
+        for (let i = 0; i < P.upAddFixed.length; i++) {
+          const src = i + 2;
+          if (bloomLv[src]) P.upAddFixed[i].tex.value = bloomLv[src].rt.texture;
+        }
+      }
+    }
     function ensureAO() {
       if (!ssaoRT) {
         // R8 would match GLX byte-for-byte but r8unorm isn't a guaranteed
@@ -204,6 +231,7 @@
         ssaoRT = makeRT(1, 1, THREE.UnsignedByteType);
         ssaoBlurRT = makeRT(1, 1, THREE.UnsignedByteType);
         layoutHalf();
+        bindFixedAO();
       }
       return true;
     }
@@ -212,6 +240,7 @@
         godrayRT = makeRT(1, 1, hdrType);
         godrayBlurRT = makeRT(1, 1, hdrType);
         layoutHalf();
+        bindFixedGR();
       }
       return true;
     }
@@ -220,6 +249,7 @@
         bloomLv = [];
         for (let i = 0; i < BLOOM_LEVELS_MAX; i++) bloomLv.push({ rt: makeRT(1, 1, hdrType), w: 1, h: 1 });
         layoutBloom();
+        bindFixedBloom();
       }
       return nLv > 0;
     }
@@ -398,12 +428,19 @@
         U.contact.value = csOn ? contactStr : 0;
         runPass(P.ssao.mat, ssaoRT);
         // Blur H (ssao -> blur) then V (blur -> ssao). Half res.
-        P.blurAO.tex.value = ssaoRT.texture;
-        P.blurAO.U.dir.value.set(1 / aoW, 0);
-        runPass(P.blurAO.mat, ssaoBlurRT);
-        P.blurAO.tex.value = ssaoBlurRT.texture;
-        P.blurAO.U.dir.value.set(0, 1 / aoH);
-        runPass(P.blurAO.mat, ssaoRT);
+        if (_fixedMats && P.blurAOH) {
+          P.blurAOH.U.dir.value.set(1 / aoW, 0);
+          runPass(P.blurAOH.mat, ssaoBlurRT);
+          P.blurAOV.U.dir.value.set(0, 1 / aoH);
+          runPass(P.blurAOV.mat, ssaoRT);
+        } else {
+          P.blurAO.tex.value = ssaoRT.texture;
+          P.blurAO.U.dir.value.set(1 / aoW, 0);
+          runPass(P.blurAO.mat, ssaoBlurRT);
+          P.blurAO.tex.value = ssaoBlurRT.texture;
+          P.blurAO.U.dir.value.set(0, 1 / aoH);
+          runPass(P.blurAO.mat, ssaoRT);
+        }
       }
 
       // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
@@ -468,12 +505,20 @@
         // apex26.grLite=0 restores two pairs (same knob as GLX).
         const grPairs = (!sunGR && _grLite) ? 1 : 2;
         for (let bp = 0; bp < grPairs; bp++) {
-          P.blurGR.tex.value = godrayRT.texture;
-          P.blurGR.U.dir.value.set((1 + bp) / grW, 0);
-          runPass(P.blurGR.mat, godrayBlurRT);
-          P.blurGR.tex.value = godrayBlurRT.texture;
-          P.blurGR.U.dir.value.set(0, (1 + bp) / grH);
-          runPass(P.blurGR.mat, godrayRT);
+          if (_fixedMats && P.blurGRH) {
+            // H/V materials stay bound to godrayRT / godrayBlurRT (bindFixedGR).
+            P.blurGRH.U.dir.value.set((1 + bp) / grW, 0);
+            runPass(P.blurGRH.mat, godrayBlurRT);
+            P.blurGRV.U.dir.value.set(0, (1 + bp) / grH);
+            runPass(P.blurGRV.mat, godrayRT);
+          } else {
+            P.blurGR.tex.value = godrayRT.texture;
+            P.blurGR.U.dir.value.set((1 + bp) / grW, 0);
+            runPass(P.blurGR.mat, godrayBlurRT);
+            P.blurGR.tex.value = godrayBlurRT.texture;
+            P.blurGR.U.dir.value.set(0, (1 + bp) / grH);
+            runPass(P.blurGR.mat, godrayRT);
+          }
         }
       }
 
@@ -484,17 +529,31 @@
         P.bright.U.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;   // threshold is in exposed units
         runPass(P.bright.mat, bloomLv[0].rt);
         for (let i = 1; i < nLv; i++) {
-          P.down.tex.value = bloomLv[i - 1].rt.texture;
-          P.down.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
-          P.down.U.karis.value = i === 1 ? 1 : 0;   // firefly fix on the first mip only
-          runPass(P.down.mat, bloomLv[i].rt);
+          if (_fixedMats && P.downFixed && P.downFixed[i - 1]) {
+            const d = P.downFixed[i - 1];
+            d.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+            d.U.karis.value = i === 1 ? 1 : 0;
+            runPass(d.mat, bloomLv[i].rt);
+          } else {
+            P.down.tex.value = bloomLv[i - 1].rt.texture;
+            P.down.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+            P.down.U.karis.value = i === 1 ? 1 : 0;   // firefly fix on the first mip only
+            runPass(P.down.mat, bloomLv[i].rt);
+          }
         }
         P.spread.value = gk("bloomSpread");           // BLOOM SPREAD knob
         for (let i = nLv - 1; i >= 1; i--) {
           // Intermediates accumulate (ONE,ONE); the FINAL into level 0
           // OVERWRITES — level 0 still holds the sharp bright pass.
-          const up = i === 1 ? P.upFinal : P.upAdd;
-          up.tex.value = bloomLv[i].rt.texture;
+          let up;
+          if (_fixedMats && i === 1 && P.upFinalFixed) {
+            up = P.upFinalFixed;
+          } else if (_fixedMats && P.upAddFixed && P.upAddFixed[i - 2]) {
+            up = P.upAddFixed[i - 2];
+          } else {
+            up = i === 1 ? P.upFinal : P.upAdd;
+            up.tex.value = bloomLv[i].rt.texture;
+          }
           up.U.texel.value.set(1 / bloomLv[i].w, 1 / bloomLv[i].h);
           runPass(up.mat, bloomLv[i - 1].rt);
         }

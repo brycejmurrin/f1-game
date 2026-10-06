@@ -1,8 +1,10 @@
 {
-  "why": "Wave 6 — Sepang hibiscus main canopy + K1/F corner stands",
+  "why": "Sepang DETAIL 2026-10-06 — hibiscus canopy, K1/F stands, reseated race-control fin, KLIA skyline",
   "ids": [
     "sepang-main-grandstand-canopy",
     "sepang-t1-grandstand",
-    "sepang-t7-grandstand"
+    "sepang-t7-grandstand",
+    "sepang-race-control",
+    "sepang-klia-skyline"
   ]
 }

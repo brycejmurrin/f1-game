@@ -17,4 +17,4 @@ Already under `~/.cursor/plugins/local/apex-f1-game/` for local discovery. To sh
 ## Ship defaults
 Repo `https://github.com/brycejmurrin/f1-game`. Deploy / ship branch `claude/f1-game-project-26h3ng`. Topic work: `cursor/<topic>-<hash>` draft PRs into ship. Model `default` (Auto) only.
 
-Launch/handoff/CI rules follow repo `AGENTS.md` plus `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md` and `docs/notes/APEX-STEWARD-CARD-2026-10-05.md`. Only CI Watch arms squash auto-merge on ready PRs; agents never merge/arm.
+Launch/handoff/CI rules follow repo `AGENTS.md` plus `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md` and `docs/notes/APEX-STEWARD-CARD-2026-10-05.md`. Specialty bots never arm auto-merge themselves; Merge Desk owns merge-when-green (MERGE commit only).

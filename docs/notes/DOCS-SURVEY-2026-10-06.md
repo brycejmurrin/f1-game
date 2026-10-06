@@ -16,7 +16,7 @@ pinned set resolved on disk / `git ls-files` (see S4).
 
 | Rule (2026-10-06 launch) | Where it lives | Verdict |
 |---|---|---|
-| Only CI Watch arms **squash** auto-merge, ready PRs only | `AGENTS.md:165`, `:190`; steward card `:60–64` | **In AGENTS.** Contradicted by older notes + `deploy.mjs --pr` (merge-commit auto-merge). Plugin CI-watch skill never states squash/ready-only. |
+| Specialty bots never arm auto-merge; Merge Desk owns merge-when-green (MERGE commit only) | `AGENTS.md:165`, `:184`, `:190`; steward card `:60–64` | **In AGENTS** (reworded 2026-10-06). Launch prompts must not paste a body veto that blocks Merge Desk. |
 | Ready PRs only (draft until tip-green; ready ≤15 min) | `AGENTS.md:184` | **In AGENTS.** Stale “mark ready only when final” in `TESTING.md` §Merge train and `CONCURRENT-PRS-CI-HYGIENE`. |
 | Sync = merge origin/ship; no rebase/force | stall note §3; `AGENTS.md:175`, `:190` | **Split.** Stall: `sync-pr.mjs` **or** `git merge`. AGENTS same paragraph: merge ship **and** “never a hand merge”. Steward skill still “never a hand merge”. |
 | Pre-push = `test:tooling-fast` + pick-tests Structural guards | `AGENTS.md:49` (last sentence) | **In AGENTS.** Contradicted by loop step 6 (`AGENTS.md:18`), ladder sentence (`:48`), `check-changes` SKILL, steward §6, steward card. Those still name `deploy.mjs --gate-only` as *the* pre-push. |
@@ -111,7 +111,7 @@ Severity: **S1** agents will ship the wrong merge/push/ready behaviour;
 
 7. **`cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md:10–23`**
    - **Issue:** Model `default` (Auto) is correct. Missing from the template:
-     `OWNED:` / `FORBIDDEN:`, `Do not enable auto-merge or merge.`, stall
+     `OWNED:` / `FORBIDDEN:`, `Do not arm auto-merge yourself; Merge Desk owns merge-when-green (MERGE commit only).`, stall
      abort, handoff gate, merge-not-rebase, queue hold, 6 launches / 10 min,
      ready-within-15, tooling-fast + Structural guards, ship-checkpoint
      freeze.
