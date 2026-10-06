@@ -57,8 +57,8 @@ tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
 no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
 the normal train once green.
 
-Specialty bots and cloud agents never enable GitHub auto-merge or merge/squash
-(#986: app/cursor auto-merged a MERGE commit). An armed `autoMergeRequest` is
-disabled and reported to CI Watch. CI Watch is the sole merge pacer and the
-only one who squash-merges when ready. Launch prompts carry the exact line
+Only CI Watch arms squash auto-merge, on PRs once marked ready; specialty bots
+and cloud agents never arm auto-merge or merge/squash. Disable any armed
+MERGE/REBASE auto-merge and tell CI Watch + Grok Bot. Sync by merging
+origin/ship; never rebase or force-push. Launch prompts carry
 `Do not enable auto-merge or merge.`
