@@ -1,7 +1,11 @@
 {
+  "why": "Foro Sol stadium portals + Peraltada stand + scoreboard; DETAIL 2026-10-05 closed backs / midfield plaza / pit suites",
   "ids": [
     "mexico-foro-sol-entry",
+    "mexico-foro-sol-exit",
     "mexico-peraltada-stand",
-    "foro-scoreboard"
+    "foro-scoreboard",
+    "mexico-paddock-suite-0",
+    "mexico-palacio-deportes"
   ]
 }

@@ -11,6 +11,9 @@
    density (--compact-at) and fit (--fit-at) through js/ui/sheet-shape.js. */
 #select {
   z-index: 25;
+  /* Native <select> lists and overlay scrollbars follow color-scheme. Without
+     this they stay OS-light on the dark picker (Practice Goal, stats column). */
+  color-scheme: dark;
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
     var(--scrim);
@@ -42,6 +45,7 @@
   background: var(--scroll-thumb);
   border-radius: var(--r-sm);
 }
+:root[data-ui-theme="light"] #select { color-scheme: light; }
 @media (prefers-reduced-transparency: reduce) {
   #select { background: var(--scrim-heavy); }
 }
@@ -266,7 +270,7 @@
   pointer-events: none;
   box-shadow: var(--edge);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #sel-tracks[data-mode="season"] .track-row[data-tip]:hover::before {
     content: attr(data-tip);
     position: absolute;
@@ -401,6 +405,14 @@
     min-height: 0;
     overflow-y: auto; overscroll-behavior-y: contain;
     padding-right: calc(var(--gap) * 0.4);
+    color-scheme: dark;
+    scrollbar-width: thin;
+    scrollbar-color: var(--plate-line) transparent;
+  }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar { width: 8px; }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar-track { background: transparent; }
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar-thumb {
+    background: var(--plate-line); border-radius: var(--r-md);
   }
   /* The door spans its column so that ArrowDown from a flag tile above the
      numbers lands on it (MenuNav scores a candidate whose box spans your
@@ -561,7 +573,7 @@
    between. The map button keeps its own box (it is absolutely inset over the
    still), so a tap on the still opens CIRCUIT DETAIL either way. */
 #sel-preview-map:not([data-drawn]) { visibility: hidden; width: 0; height: 0; }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
 }
 /* Caption ON the still — flag, name, grand prix — top-left; the type badges
@@ -791,7 +803,7 @@
   border: 1px solid var(--red); background: var(--plate-on); border-radius: var(--r-sm);
   transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
 }
 .sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }
