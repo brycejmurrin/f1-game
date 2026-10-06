@@ -12,7 +12,7 @@ Use before launching or steering any garage-related cloud agent or UI/Cars work 
 - **UI Survey** — garage sheet chrome, tabs layout, dismiss/scroll (not part ids)
 - **Cars** — meshes, wings, liveries presentation, garage lighting presentation
 - **Defaults agent / Grok Bot** — shipping `GarageDefaults` / apex26-garage-v1 export (#1021 lane)
-- **CI Watch** — CI/Pages watcher; agents never arm auto-merge; Merge Desk owns merge-when-green (MERGE commit only)
+- **CI Watch** — CI/Pages watcher; agents never arm auto-merge; only CI Watch arms SQUASH on ready PRs
 
 ## Before launch
 1. List open PRs whose titles/branches mention garage, livery, headrest, chrome, defaults.
