@@ -418,6 +418,11 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /function gfxContextLost\(\)/);
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
+  const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
+  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !gfxContextLost\(\)\)/,
+    "#976 paced load aborts mid-step when the context is already lost");
+  assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
+    "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
 });
 
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {

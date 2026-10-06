@@ -1180,3 +1180,16 @@ test("the last guest leaving the ROOM seals the reopened code and restores every
     assert.equal(rooms.length, 2, "nothing reopens the room afterwards");
   } finally { h.lobby.cancel(); }
 });
+
+// Room-code / phone-pad acceptInvite used to pass gatherTimeoutMs: 2500 as a
+// workaround for courier peer loss during a long gather. readyIce already races
+// the credentials prefetch at ICE_WAIT_MS=2500; the short gather cap is leftover
+// and must stay gone (handshake waitForIce honors null-candidate / re-check).
+test("codeJoin and phone-pad acceptInvite do not pass gatherTimeoutMs: 2500", async () => {
+  assert.match(SOURCE, /const ICE_WAIT_MS = 2500/, "readyIce prefetch race stays at 2500 ms");
+  assert.ok(!/gatherTimeoutMs:\s*2500/.test(SOURCE),
+    "lobby room-code acceptInvite must not force gatherTimeoutMs: 2500");
+  const phone = await readFile(new URL("../../js/input/phone-pad.js", import.meta.url), "utf8");
+  assert.ok(!/gatherTimeoutMs:\s*2500/.test(phone),
+    "phone-pad acceptInvite must not force gatherTimeoutMs: 2500");
+});
