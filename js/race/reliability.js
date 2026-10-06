@@ -67,10 +67,15 @@ const Reliability = (function () {
     const seed = opts.seed >>> 0, round = opts.round | 0;
     Log.info("game", "Reliability.arm scale=" + scale + " n=" + (cars && cars.length));
     let planned = 0;
-    for (const c of cars) {
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
       c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null;
       if (!scale) continue;
-      const who = c.driverId || c.code || "";
+      // Index fallback: an empty who collapsed every anonymous car onto one
+      // hash key, so a stub field shared a single DNF plan (same at / why).
+      // Prefer a letter-prefixed index — a bare "#" pathologically hashes cold
+      // under FNV-1a for this seed family.
+      const who = c.driverId || c.code || ("i" + i);
       if (draw(seed, "dnf", round, who) >= riskFor(c, scale, opts.build, opts.networked)) continue;
       c.dnfAt = AT_LO + draw(seed, "dnfAt", round, who) * (AT_HI - AT_LO);
       c.dnfWhy = REASONS[Math.min(REASONS.length - 1,

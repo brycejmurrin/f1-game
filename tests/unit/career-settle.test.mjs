@@ -1012,6 +1012,23 @@ test("each kind resolves against the season it was written for", () => {
     "no team-mate on the board is not a failure to beat one");
 });
 
+test("goalNow / goalOnTrack resolve champPos against live standings (team id, not object)", () => {
+  // driverStandings() rows carry team as the Teams.LIST object; career.team is
+  // the string id. Comparing object === string always missed, so the hub's
+  // "Where you stand" row never appeared for champPos / beatMate / beatRival.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 0, seed: 1 });
+  Career.engage(true);
+  const c = Career.data();
+  c.deal.goal = { type: "champPos", value: 5 };
+  c.season.pts["haas:0"] = 40;
+  const row = Career.driverStandings().find((r) => r.id === "haas:0");
+  assert.ok(row, "player seat is on the board");
+  assert.equal(typeof row.team, "object", "standings row team is the team object");
+  assert.equal(Career.goalNow(c.deal.goal), "P" + row.pos);
+  assert.equal(Career.goalOnTrack(c.deal.goal), row.pos <= 5);
+});
+
 test("the kind is drawn from the seed and the year, so it cannot be rerolled", () => {
   const a = loadDriver(); a.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
   a.engage(true);

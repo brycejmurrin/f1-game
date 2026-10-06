@@ -67,6 +67,7 @@ const OvertakeMode = (function () {
   function reset(c) {
     c.otE = 0; c.otOn = false; c.otEarned = false; c.otArmed = false; c.otT = 0;
     c._otS = null; c._otLap = null;   // re-seeded from the car on its next tick
+    c._otHold = false;               // grace: keep a fresh grant across one Activation
   }
 
   // Once per car per tick, BEFORE arming: the two lines. `gapAhead` is seconds
@@ -83,12 +84,26 @@ const OvertakeMode = (function () {
     // The Activation Line. Highest lap seen, so a car shoved back over the line
     // and re-crossing (RaceControl.lineTransition's recross) is not re-granted
     // — nor stripped of what it was given the first time.
+    //
+    // RaceControl.otEnabled stays false until the LEADER starts lap 2, so a
+    // detection on lap 0 that grants at the first S/F (lap → 1) would otherwise
+    // expire unused at the next Activation — the moment the gate opens. Hold
+    // ONLY that opening-lap grant across one Activation; later grants still
+    // lapse after one unused lap (B7.2.3(c)).
     if ((c.lap | 0) > c._otLap) {
       c._otLap = c.lap | 0;
       const left = c.otE;
-      c.otE = c.otEarned ? energy() : 0;   // unused allowance expires at the line
-      if (c.otE > 0) note(c, "granted mj=" + mj(c).toFixed(2));
-      else if (left > 0) note(c, "lapsed unused=" + (left * (consts().ES_MJ || 4)).toFixed(2) + "MJ");
+      if (c.otEarned) {
+        c.otE = energy();
+        c._otHold = (c.lap | 0) === 1;
+      } else if (c._otHold && left > 0) {
+        c._otHold = false;   // kept through the gate-closed Activation
+      } else {
+        c.otE = 0;
+        c._otHold = false;
+      }
+      if (c.otE > 0 && c.otEarned) note(c, "granted mj=" + mj(c).toFixed(2));
+      else if (left > 0 && !(c.otE > 0)) note(c, "lapsed unused=" + (left * (consts().ES_MJ || 4)).toFixed(2) + "MJ");
       c.otEarned = false; c.otOn = false;
     }
   }
