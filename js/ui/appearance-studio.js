@@ -222,13 +222,39 @@ const AppearanceStudio = (function () {
     if (store.subscribe) store.subscribe((change) => { if (!muted && VISUAL_KEYS.includes(change.key)) { clearTimeout(pending); pending = setTimeout(() => { remember(last); last = snapshot(); render(); if (["homeScene", "homeCamera", "backgroundMotion", "motion"].includes(change.key)) sceneChanged(); }, 80); } });
     if (typeof MutationObserver !== "undefined") {
       const settings = document.getElementById("pmsettings");
-      const visible = () => { if (panel.hidden) { if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek(); } else if (settings && !settings.hidden) { render(); sceneChanged(true); } };
+      let openGen = 0;
+      // Defer render + garage preview off the click stack: sceneChanged →
+      // previewScene used to call stopHome/beginHome synchronously and freeze
+      // the tab before the Appearance sheet could paint.
+      const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 0);
+      const visible = () => {
+        if (panel.hidden) {
+          openGen++;
+          panel.removeAttribute("aria-busy");
+          if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek();
+          return;
+        }
+        if (!settings || settings.hidden) return;
+        const gen = ++openGen;
+        panel.setAttribute("aria-busy", "true");
+        raf(() => raf(() => {
+          if (gen !== openGen || panel.hidden || settings.hidden) return;
+          try { render(); sceneChanged(true); }
+          finally { if (gen === openGen) panel.removeAttribute("aria-busy"); }
+        }));
+      };
       const observer = new MutationObserver(visible); observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
       if (settings) observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
     }
     render();
   }
-  if (typeof document !== "undefined") { if (document.readyState === "complete") initUI(); else document.addEventListener("DOMContentLoaded", initUI, { once: true }); }
+  // Same readyState rule as SettingsExport.mount: deferred scripts run at
+  // "interactive", after DOMContentLoaded would already have missed a late listen.
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else initUI();
+  }
   return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
     applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
 })();

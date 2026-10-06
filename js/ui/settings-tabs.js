@@ -105,6 +105,11 @@ const SettingsNav = (function () {
         if (!panel) continue;
         panel.hidden = id !== key;
       }
+      // BACKUP & RESTORE is built by SettingsExport.mount into an empty
+      // <section>; if boot missed the mount, refill when the page opens.
+      if (id === "files" && typeof SettingsExport !== "undefined" && SettingsExport.ensureMounted) {
+        SettingsExport.ensureMounted();
+      }
       Log.info("game", `SettingsNav.show ${id}`);
       // A callback may disable/reflow controls (KeyBinds and audio do this),
       // so run it before resolving the page's focus target.

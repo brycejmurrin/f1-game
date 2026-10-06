@@ -366,14 +366,14 @@ test("the POS box flashes on a position change and the gap chips carry the neigh
 });
 
 test("timing columns use the bundled condensed numerals with tabular figures", () => {
-  const comp = cssRules(readCssSource("css/components.css"));
+  const comp = cssRules(readCssSource("css/overlays.css"));
   for (const sel of [".res-pos", ".res-pts"]) {
     assert.equal(decl(comp, sel, "font-family"), "var(--font-hud)", sel + " reads the HUD face");
     assert.equal(decl(comp, sel, "font-variant-numeric"), "tabular-nums", sel + " keeps digits from reflowing");
   }
   const hud = cssRules(read("css/hud.css"));
   assert.match(decl(hud, '#hud-pos[data-delta="up"]', "color") || "", /--faster/);
-  const results = readCssSource("css/components.css");
+  const results = readCssSource("css/overlays.css");
   assert.match(results, /prefers-reduced-motion: no-preference\)[^}]*#results-table \.res-row \{ animation: row-in/s,
     "the results stagger lives inside the no-preference query");
 });

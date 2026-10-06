@@ -12,6 +12,9 @@
    dim itself; in the top layer that job belongs to `::backdrop`, which covers
    the whole viewport including anything the element's own box does not. The dim
    value is the same one `.screen.dim` uses, so nothing changes on screen. */
+/* Blocking twin of this UA-reset + closed/open display lives in
+   css/components.css — print→all of this file is too late for the
+   hidden→showModal seam (selected-1 menu-keyboard 0-box :modal). */
 dialog.screen {
   margin: 0;
   border: 0;

@@ -21,13 +21,15 @@ test("the field step snapshots every car before updateCar", () => {
 });
 
 test("sibling prog, x and speed in the step are the snapshot", () => {
-  const scan = src.slice(src.indexOf("FULL FIELD"), src.indexOf("electric deploy"));
+  const collide = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "js/physics/collide.js"), "utf8");
+  const scan = collide.slice(collide.indexOf("function _onTrafO"), collide.indexOf("function scanTraffic"));
   assert.match(scan, /o\._snapProg - c\.prog/);
   assert.match(scan, /o\._snapX - c\.x/);
   assert.doesNotMatch(scan, /o\.prog - c\.prog/);
-  assert.match(src, /o\._snapProg - c\.prog, adp/);
-  assert.match(src, /o\._snapX - c\.x\) < TOW_HALF_W/);
-  assert.match(src, /po\._snapProg - c\.prog/);
+  const ot = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
+  assert.match(ot, /o\._snapProg - c\.prog/);
+  const tow = collide.slice(collide.indexOf("function _onTowO"), collide.indexOf("function scanTow"));
+  assert.match(tow, /o\._snapX - c\.x/);
   assert.match(src, /chaser\._snapSpeed/);
   assert.match(src, /chaser\._snapProg - c\.prog/);
   assert.match(src, /towCar\._snapSpeed/);

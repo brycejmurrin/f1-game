@@ -116,3 +116,121 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
     if ((r.calls[n] || 0) >= 2) expect(r.mismatch[n], n).toBeUndefined();
   }
 });
+
+test("arc-bucket traffic scan matches full-field on a seeded 22-car pack", async ({ loadTrack, page }) => {
+  test.setTimeout(300_000);
+  await loadTrack("monza", "day", "dry", { headless: true });
+  // Collide is a script-level `const` (js/physics/collide.js), same as AiDrive:
+  // page.evaluate cannot read it off window. Bind through a classic <script>.
+  await page.addScriptTag({
+    content: "window.__Collide = Collide;",
+  });
+  const r = await page.evaluate(() => {
+    const C = window.__Collide;
+    if (!C || typeof C.fillArcBuckets !== "function" || typeof C.forArcNear !== "function") {
+      return { ok: false, reason: "Collide.fillArcBuckets/forArcNear missing" };
+    }
+    const L = 6200, BACK = 72, MIN_GAP = 2.8, BW = 2.2, TW = 4, W = 34;
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    const rnd = mulberry32(20261006);
+    const ranked = [];
+    for (let i = 0; i < 22; i++) {
+      const prog = rnd() * L, x = (rnd() - 0.5) * 14;
+      ranked.push({ id: i, prog, _snapProg: prog, x, _snapX: x, speed: 55, finished: false, retired: false, passFailOf: null, passFailT: 0 });
+    }
+    ranked[0].prog = ranked[0]._snapProg = 2; ranked[0].x = ranked[0]._snapX = 0;
+    ranked[1].prog = ranked[1]._snapProg = L - 3; ranked[1].x = ranked[1]._snapX = 0.4;
+    ranked[2].prog = ranked[2]._snapProg = 2 + L; ranked[2].x = ranked[2]._snapX = -1.1;
+    ranked[3].prog = ranked[3]._snapProg = 2 - 70; ranked[3].x = ranked[3]._snapX = 0.15;
+    ranked[4].finished = true;
+    for (let i = 5; i < 22; i++) {
+      const p = 400 + i * 200;
+      ranked[i].prog = ranked[i]._snapProg = p;
+      ranked[i].x = ranked[i]._snapX = (i % 3) - 1;
+    }
+    ranked[6].prog = ranked[6]._snapProg = ranked[5].prog + 20;
+    function fullScan(c) {
+      const REJ = Math.max(34.1, BACK + 0.1);
+      let roomL = 12 + c.x, roomR = 12 - c.x, nearbyN = 0, sep = 0;
+      let blocker = null, blockerGap = Infinity, towCar = null, towGap = Infinity, chaser = null, chaserGap = Infinity;
+      for (let i = 0; i < ranked.length; i++) {
+        const o = ranked[i];
+        if (o === c || o.finished) continue;
+        let dprog = o._snapProg - c.prog;
+        if (!Number.isFinite(dprog)) continue;
+        const ad = dprog < 0 ? -dprog : dprog;
+        if (ad > REJ && ad < L - REJ) continue;
+        dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+        if (dprog < -BACK || dprog > 34) continue;
+        const dx = o._snapX - c.x, adp = dprog < 0 ? -dprog : dprog;
+        if (adp < 5.5) {
+          if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
+          else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+        }
+        if (adp < 6.5) {
+          nearbyN++;
+          const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
+          if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
+        }
+        if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < BW) { blocker = o; blockerGap = dprog; }
+        if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TW) { towCar = o; towGap = dprog; }
+        if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }
+      }
+      return { roomL: Math.max(0, roomL), roomR: Math.max(0, roomR), nearbyN, sep, blocker, towCar, chaser };
+    }
+    function bucketScan(c) {
+      const REJ = Math.max(34.1, BACK + 0.1);
+      let roomL = 12 + c.x, roomR = 12 - c.x, nearbyN = 0, sep = 0;
+      let blocker = null, blockerGap = Infinity, towCar = null, towGap = Infinity, chaser = null, chaserGap = Infinity;
+      C.forArcNear(c, L, REJ, function (o) {
+        if (o.finished) return;
+        let dprog = o._snapProg - c.prog;
+        if (!Number.isFinite(dprog)) return;
+        const ad = dprog < 0 ? -dprog : dprog;
+        if (ad > REJ && ad < L - REJ) return;
+        dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+        if (dprog < -BACK || dprog > 34) return;
+        const dx = o._snapX - c.x, adp = dprog < 0 ? -dprog : dprog;
+        if (adp < 5.5) {
+          if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
+          else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+        }
+        if (adp < 6.5) {
+          nearbyN++;
+          const deficit = MIN_GAP - (dx < 0 ? -dx : dx);
+          if (deficit > 0) sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
+        }
+        if (dprog > 0.5 && dprog < blockerGap && Math.abs(dx) < BW) { blocker = o; blockerGap = dprog; }
+        if (dprog > 0.5 && dprog < towGap && Math.abs(dx) < TW) { towCar = o; towGap = dprog; }
+        if (dprog < -0.5 && -dprog < chaserGap && Math.abs(dx) < 3) { chaser = o; chaserGap = -dprog; }
+      }, function (car) { return car.prog; });
+      return { roomL: Math.max(0, roomL), roomR: Math.max(0, roomR), nearbyN, sep, blocker, towCar, chaser };
+    }
+    C.fillArcBuckets(ranked, L, W, function (c) { return c._snapProg; });
+    const mismatches = [];
+    for (const c of ranked) {
+      if (c.finished) continue;
+      const a = fullScan(c), b = bucketScan(c);
+      for (const k of ["roomL", "roomR", "nearbyN", "sep", "blocker", "towCar", "chaser"]) {
+        if (a[k] !== b[k] && !(typeof a[k] === "number" && Math.abs(a[k] - b[k]) < 1e-9)) mismatches.push(c.id + "." + k);
+      }
+    }
+    const ego = bucketScan(ranked[0]);
+    return {
+      ok: true, mismatches, nCars: ranked.length,
+      wrapAlong: ego.nearbyN >= 2, wrapChaser: ego.chaser === ranked[1],
+    };
+  });
+  expect(r.ok, r.reason || "eval failed").toBe(true);
+  expect(r.mismatches).toEqual([]);
+  expect(r.nCars).toBe(22);
+  expect(r.wrapAlong).toBe(true);
+  expect(r.wrapChaser).toBe(true);
+});
