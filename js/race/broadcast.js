@@ -187,17 +187,27 @@ const Broadcast = (function () {
     }
     return best;
   }
+  // Pooled fight rows: Director + ExtraRigs + WATCH PiP call battles() every
+  // cut/tick; a fresh array + objects each time was steady-state GC in a race.
+  const _fights = [];
   /** The closest battle among running cars ordered by progress: [{chaser, gapS}] best first — tighter and
-   *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending. */
+   *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending.
+   *  Returns a module-owned pooled array (mutated on the next call). */
   function battles(cars) {
-    const out = [];
+    let n = 0;
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
       const v = Math.max(b.speed || 0, 20);
       const g = (a.prog - b.prog) / v;
-      if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
+      if (g < 0 || g >= BATTLE_S) continue;
+      let f = _fights[n];
+      if (!f) { f = { key: null, ahead: null, gapS: 0, score: 0 }; _fights[n] = f; }
+      f.key = b.key; f.ahead = a.key; f.gapS = g; f.score = g + i * 0.08;
+      n++;
     }
-    return out.sort((x, y) => x.score - y.score);
+    _fights.length = n;
+    _fights.sort((x, y) => x.score - y.score);
+    return _fights;
   }
   /** The PiP's car (pure): the followed car's battle partner — the car BEHIND when
    *  it is sandwiched, the threat — on an onboard shot; else the car in the next
