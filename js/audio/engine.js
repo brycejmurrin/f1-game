@@ -6,7 +6,9 @@ var GameAudio = (function () {
   let master = null;
   let sfxBus = null;
   let limiter = null;              // DynamicsCompressor between master and the destination
-  // 0..1 mixer levels, restored by the caller from storage on boot.
+  // 0..1 mixer levels. Defaults until applyPersistedMixer() (below) or the
+  // panel's create() re-applies store values — LAZY_AUDIO can expose this
+  // object before AudioPanel.create runs, so bind-time hydrate is required.
   let sfxVol = 1;
   let sfxEnabled = true;      // the SOUND EFFECTS switch — music is unaffected
   let isEnabled = true;
@@ -2145,7 +2147,11 @@ var GameAudio = (function () {
      rain, UI) and the music gain. Both take 0..1 and apply at once (a ~60 ms
      glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
-    sfxVol = clamp01(typeof v === "number" ? v : 1);
+    // Number() accepts a JSON-parsed store value and a raw localStorage string
+    // ("40") the same way — typeof==="number" alone left the engine at 1 when
+    // a string slipped through before the panel clamped.
+    const n = typeof v === "number" ? v : (typeof v === "string" && v.trim() !== "" ? +v : NaN);
+    sfxVol = clamp01(Number.isFinite(n) ? n : 1);
     if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
     return sfxVol;
   }
@@ -2169,6 +2175,20 @@ var GameAudio = (function () {
   let _onInterrupted = null;
   /** fn() when the platform interrupts the audio session (an iOS call, Siri). */
   function onInterrupted(fn) { _onInterrupted = typeof fn === "function" ? fn : null; }
+
+  // LAZY_AUDIO: this `var GameAudio` replaces the stub as soon as engine.js
+  // evaluates — several scripts (and onAudioReady → AudioPanel.create) still
+  // follow. Apply persisted mixer levels HERE so a reader that only waits on
+  // !GameAudio._stub never observes the 0.5/1 defaults (audio-smoke tip red
+  // on 91d0e7ab: Expected music:1/sfx:0, Received music:0.5/sfx:1).
+  try {
+    const s = typeof GameStore !== "undefined" && GameStore && GameStore.store;
+    if (s && typeof s.get === "function") {
+      setMusicVolume(s.get("volMusic", 0.6));
+      setSfxVolume(s.get("volSfx", 0.2));
+    }
+  } catch (e) { /* store unavailable: keep engine defaults until the panel runs */ }
+
   return {
     onInterrupted,
     init,

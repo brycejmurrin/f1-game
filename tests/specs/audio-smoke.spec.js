@@ -22,11 +22,17 @@ async function bootWithStore(page, entries) {
   await page.reload();
   await waitApex(page);
   // LAZY_AUDIO: title boots a stub; pull the real engine before volumes()/debug().
-  await page.evaluate(() => {
+  // Await AudioPanel._ensure (ensureAudio) — !GameAudio._stub alone is true as
+  // soon as engine.js evaluates, before onAudioReady / AudioPanel.create.
+  await page.evaluate(async () => {
     window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    const ensure = typeof AudioPanel !== "undefined" && AudioPanel._ensure;
+    if (typeof ensure === "function") await ensure();
   });
   await page.waitForFunction(
-    () => typeof GameAudio !== "undefined" && !GameAudio._stub && typeof GameAudio.volumes === "function",
+    () => typeof GameAudio !== "undefined" && !GameAudio._stub
+      && typeof GameAudio.volumes === "function"
+      && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function",
     null, { polling: 100, timeout: BOOT_MS }
   );
 }

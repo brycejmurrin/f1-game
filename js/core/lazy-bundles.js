@@ -201,6 +201,9 @@ function ensureAudio() {
       return false;
     }
     if (typeof deps.onAudioReady === "function") deps.onAudioReady();
+    // panel.js reassigns `var AudioPanel`, dropping the stub's _ensure hook.
+    // Re-attach so a later SOUND click / test can still await the same loader.
+    if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
     return true;
   });
   return audioLoad;

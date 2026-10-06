@@ -39,6 +39,7 @@ function boot(opts = {}) {
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
   if (opts.Audio) sb.Audio = opts.Audio;
   if (opts.perf) sb.performance = opts.perf;
+  if (opts.GameStore) sb.GameStore = opts.GameStore;
   sb.window = sb;
   if (opts.clock) sb.Date = { now: opts.clock };
   const v = vm.createContext(sb);
@@ -369,4 +370,32 @@ test("the SOUND toggle restarts rain from the live weather, not the grid's raceW
   assert.match(block, /if \(G\.isRaining\(\)\) GameAudio\.startRain\(\);/);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /\bisRaining: \(\) => isRaining\(\),/, "G.isRaining is exported to the panel");
+});
+
+// LAZY_AUDIO: engine.js replaces the stub before AudioPanel.create. Without a
+// bind-time store hydrate, volumes() returns the 0.5/1 defaults until the
+// panel runs (CI tip 91d0e7ab audio-smoke Received music:0.5/sfx:1).
+// Field asserts (not deepEqual): volumes() is born in the vm context, so a
+// host-realm expected object fails deepStrictEqual on prototype identity.
+test("GameAudio bind applies out-of-range store volumes before AudioPanel.create", () => {
+  const disk = new Map([["apex26.volMusic", "40"], ["apex26.volSfx", "-3"]]);
+  const store = {
+    get(k, d) {
+      const raw = disk.get("apex26." + k);
+      if (raw == null) return d;
+      return JSON.parse(raw);
+    },
+  };
+  const { A } = boot({ GameStore: { store } });
+  const v = A.volumes();
+  assert.equal(v.music, 1);
+  assert.equal(v.sfx, 0);
+});
+
+test("setMusicVolume/setSfxVolume clamp numeric strings the store may hand them", () => {
+  const { A } = boot();
+  assert.equal(A.setMusicVolume("40"), 1);
+  assert.equal(A.setSfxVolume("-3"), 0);
+  assert.equal(A.volumes().music, 1);
+  assert.equal(A.volumes().sfx, 0);
 });

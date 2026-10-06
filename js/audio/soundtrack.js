@@ -333,7 +333,10 @@ var GameAudioSoundtrack = (function () {
     }
 
     function setMusicVolume(v) {
-      musicVol = host.clamp01(typeof v === "number" ? v : 0.5);
+      // Match engine setSfxVolume: accept a number or a numeric string so a
+      // raw localStorage write ("40") clamps instead of falling to 0.5.
+      const n = typeof v === "number" ? v : (typeof v === "string" && v.trim() !== "" ? +v : NaN);
+      musicVol = host.clamp01(Number.isFinite(n) ? n : 0.5);
       // A glide, not a `.value =` step (a click on every slider move): the same
       // tau-0.02 s setTargetAtTime engine.js glideLevel uses. Re-aiming here
       // still invalidates the duck cache, so the next setEngine re-ducks.
