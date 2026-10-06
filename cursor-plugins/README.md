@@ -33,5 +33,9 @@ plugin does not appear after reload, use the copy.
 Marketplace publish is optional later. Until then, teammates install from this
 tree.
 
+Plugin skills must stay aligned with repo `AGENTS.md` (ship rules in
+`docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`). Do not fork process
+rules here.
+
 See [Cursor plugin docs](https://cursor.com/docs/plugins) for the local
 discovery path and marketplace flow.

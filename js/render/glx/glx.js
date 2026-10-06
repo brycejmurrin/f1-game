@@ -143,8 +143,8 @@ const GLXBackend = (function () {
   const ENV_SIZE = 64;
   // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
   // tools/gfx/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
-  // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
-  const ENV_CULL_M = 300;
+  // so a 20 m building subtends ~5.4 px at 150 m and 0.9 px at the 900 m far plane.
+  const ENV_CULL_M = 150;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
   let _envDisabled = false;   // envInit() found the probe FBO incomplete: analytic reflections only
   let envFacesMask = 0, envReady = false, _envActive = false;
@@ -1581,8 +1581,7 @@ const GLXBackend = (function () {
     // probe inherits the MAIN camera's cullDist, which game.js sets to 0 —
     // no radial cull at all — below PerfGov tier 3. A 64x64 reflection
     // target would otherwise re-draw the city through the 900 m frustum.
-    // Counted with tools/gfx/chunk-reach.cjs: 238.3 chunks / 1,256,344 indices
-    // per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
+    // Probe faces skip chunked/city; leftover geometry caps at ENV_CULL_M 150.
     //
     // MIN, never an override: where the main camera is already culling tighter
     // (the tier-3 far-plane cap), the probe keeps that tighter value. A cullDist of
@@ -2705,7 +2704,7 @@ const GLXBackend = (function () {
     freeChunkedMesh: (mesh) => CHK.freeChunkedMesh(mesh),
     begin,
     draw,
-    drawChunked: (mesh, modelMat, opts) => CHK.drawChunked(mesh, modelMat, opts),
+    drawChunked: (mesh, modelMat, opts) => { if (_envActive) return; CHK.drawChunked(mesh, modelMat, opts); },
     castShadowChunked: (mesh, model) => CHK.castShadowChunked(mesh, model),
     // Cull-test helpers, so a caller outside the draw path (the agent world
     // view's visible()) runs the same frustum maths the GPU path runs.

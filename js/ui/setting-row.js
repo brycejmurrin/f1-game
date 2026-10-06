@@ -85,6 +85,7 @@ window.SettingRow = (function () {
     if (!p || !p.sel) return;
     if (values) fill(p.sel, values);
     p.sel.value = S(value);
+    paintEnds(p);
   }
 
   /* Disable — never hide — the whole row: hiding reflowed the settings grid
@@ -93,6 +94,7 @@ window.SettingRow = (function () {
     const p = parts(h);
     if (!p) return;
     for (const x of [p.sel, p.prev, p.next]) if (x) x.disabled = !!off;
+    if (!off) paintEnds(p);
   }
 
   function optionDisabled(h, value, off) {
@@ -106,11 +108,27 @@ window.SettingRow = (function () {
     return p && p.sel ? p.sel.value : "";
   }
 
+  function wraps(p) {
+    return !(p && p.sel && p.sel._srLive && p.sel._srLive.wrap === false);
+  }
+
+  /* LAPS (and any wrap:false row): dim the chevron that would leave the list
+     instead of jumping 3 → FULL. paint() and disable() both land here so a
+     later option-list rebuild keeps the ends honest. */
+  function paintEnds(p) {
+    if (!p || wraps(p) || !p.sel || p.sel.disabled) return;
+    const live = options(p.sel).filter((o) => !o.disabled).map((o) => o.value);
+    const i = live.indexOf(S(p.sel.value));
+    if (p.prev) p.prev.disabled = i <= 0;
+    if (p.next) p.next.disabled = i < 0 || i >= live.length - 1;
+  }
+
   /* Walk the FULL list from the current option, skipping disabled ones. The
      old walk indexed the enabled-only list, where a disabled current value
      (the trailing CUSTOM sentinel of STEERING FEEL / DRIVING LINE / SOUND
      PROFILE) is -1, coerced to 0 — so › from CUSTOM skipped OFF and landed on
-     the second option. hud-layout.js's stepper walks the same way. */
+     the second option. hud-layout.js's stepper walks the same way.
+     wrap:false (LAPS) stops at the ends instead of 3 ↔ FULL. */
   function step(p, dir, read, write) {
     const all = options(p.sel);
     const n = all.length;
@@ -118,8 +136,11 @@ window.SettingRow = (function () {
     const cur = S(read());
     let i = all.findIndex((o) => o.value === cur);
     if (i < 0) i = dir > 0 ? -1 : 0;   // an unlisted value: › the first, ‹ the last
+    const wrap = wraps(p);
     for (let k = 1; k <= n; k++) {
-      const o = all[((i + dir * k) % n + n) % n];
+      const j = i + dir * k;
+      if (!wrap && (j < 0 || j >= n)) break;
+      const o = all[wrap ? ((j % n) + n) % n : j];
       if (o.disabled) continue;
       if (o.value !== cur) write(o.value);
       break;
@@ -138,7 +159,7 @@ window.SettingRow = (function () {
     const read = opts.read;
     const write = opts.write;
     const fresh = !p.sel._srLive;
-    p.sel._srLive = { read, write };
+    p.sel._srLive = { read, write, wrap: opts.wrap !== false };
     if (fresh) p.sel.addEventListener("change", (e) => {
       if (e && e.stopPropagation) e.stopPropagation();
       const cur = p.sel._srLive;

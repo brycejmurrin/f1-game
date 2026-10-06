@@ -1,6 +1,7 @@
 {
-  "why": "Wave 6 — Portimão / Algarve: six independent paddock blocks (Dimeconsult A–F) + Grandstand Norte at the T1 downhill; race-control + moinho kept.",
+  "why": "DETAIL 2026-10-05 — Algarve main tribuna (four dilatation bays + local seat/roof shell) opposite the paddock; six pit blocks A–F; Grandstand Norte at T1; race-control + moinho kept.",
   "ids": [
+    "portimao-main-stand",
     "portimao-pit-blocks",
     "portimao-t1-stands",
     "portimao-race-control",

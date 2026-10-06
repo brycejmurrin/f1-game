@@ -115,18 +115,28 @@ function reach(id, radii, stations) {
   return { id, totalChunks: chunks.length, tris: (geo.idx.length / 3) | 0, rows, stations: Math.ceil(n / step) };
 }
 
+// Hardware probe faces skip chunked city (game.js envProbe + backends). The
+// radius table is the cull-only counterfactual; skip-city is 0 submitted.
+function probeCity(rows) {
+  return rows.map((row) => ({ ...row, chunks: 0, indices: 0, skipCity: true }));
+}
+
 if (require.main === module) {
   const id = process.argv[2] || "vegas";
   const radii = (process.argv[3] || "900,400,300,200,150").split(",").map(Number);
   const r = reach(id, radii, 12);
   console.log(`${r.id} — ${r.totalChunks} chunks, ${r.tris} tris, ${r.stations} stations`);
-  console.log("  far(m)   chunks/cube   indices/cube    vs 900m");
+  console.log("  far(m)   chunks/cube   indices/cube   indices/face    vs 900m");
   const base = r.rows[0];
-  for (const row of r.rows) {
-    const pct = base ? ((1 - row.indices / base.indices) * 100).toFixed(0) + "%" : "";
-    console.log(String(row.R).padStart(8), row.chunks.toFixed(1).padStart(13),
-                String(row.indices).padStart(14), pct.padStart(10));
-  }
+  const print = (row, label) => {
+    const pct = base && !row.skipCity ? ((1 - row.indices / base.indices) * 100).toFixed(0) + "%" : (row.skipCity ? "skip-city" : "");
+    const face = Math.round(row.indices / 6);
+    console.log((label || String(row.R)).padStart(8), row.chunks.toFixed(1).padStart(13),
+                String(row.indices).padStart(14), String(face).padStart(14), pct.padStart(10));
+  };
+  for (const row of r.rows) print(row);
+  console.log("  probe skip-city (hardware cube faces):");
+  print({ R: "skip", chunks: 0, indices: 0, skipCity: true }, "skip");
 }
 
-module.exports = { reach, binChunks, aabbDist2, CELL };
+module.exports = { reach, probeCity, binChunks, aabbDist2, CELL };
