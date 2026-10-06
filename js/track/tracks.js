@@ -561,22 +561,16 @@ const Tracks = (function () {
     }
   }
 
-  // Raw def → LIST entry: js/track/core/def.js (fromRaw copies every authored
-  // field the engine reads off the BUILT def; its lazy `points` getter runs
-  // realPoints + the startFrac/hwZones remaps on first touch, bit-identical).
+  // fromRaw (def.js): authored fields + lazy points (realPoints / startFrac / hwZones).
   const LIST = DEFS.map((d) => {
     const def = fromRaw(d);
     if (d && d._metaOnly) def._metaOnly = true;
     return def;
   });
 
-  // Touch-forces LIST points (and the coupled elevation/bridge/hwZones remaps).
-  function ensurePoints(def) {
-    return def.points;
-  }
+  function ensurePoints(def) { return def.points; }
 
-  // Title boots with LAZY meta stubs (_metaOnly); full js/circuits/<id>.js
-  // hydrates the SAME LIST object in place so SEASON / saved indexes stay valid.
+  // LAZY_CIRCUIT: title meta stubs; hydrate in place so SEASON / saved indexes hold.
   function circuitPayloadResident(def) {
     return !!(def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly);
   }
@@ -586,25 +580,13 @@ const Tracks = (function () {
     if (idx < 0) return false;
     if (circuitPayloadResident(LIST[idx])) return true;
     const next = fromRaw(raw);
-    // Materialize on `next` first so elevations/bridges get fmap'd, then copy
-    // onto the stable LIST entry. Transferring the points getter alone closes
-    // over `next`, so materialize would mutate the throwaway while
-    // buildCenterline still reads unmapped elev on `cur` (Shanghai crest /
-    // Singapore low.frac / Suzuka required-model CI reds).
-    const pts = next.points;
-    const cur = LIST[idx];
-    for (const k of Object.keys(next)) {
-      if (k === "points") continue;
-      cur[k] = next[k];
-    }
+    // Force points on `next` first (elev/bridge fmap), then copy onto LIST[idx].
+    // Moving the getter alone closes over `next` → Shanghai/Singapore/Suzuka CI reds.
+    const pts = next.points, cur = LIST[idx];
+    for (const k of Object.keys(next)) if (k !== "points") cur[k] = next[k];
     delete cur._metaOnly;
-    Object.defineProperty(cur, "points", {
-      value: pts, writable: true, configurable: true, enumerable: true
-    });
-    // Keep TrackDefs aligned for any reader that still walks the raw list.
-    // Mutate matching entries IN PLACE: foundation specs capture
-    // `TrackDefs.find(id)` before race(), and a slot replace left that
-    // reference forever meta-only (dressingExclusions / kit undefined).
+    Object.defineProperty(cur, "points", { value: pts, writable: true, configurable: true, enumerable: true });
+    // Mutate TrackDefs in place — foundation holds find() refs across race().
     const TD = (typeof window !== "undefined" && window.TrackDefs) || [];
     for (let i = 0; i < TD.length; i++) {
       if (!TD[i] || TD[i].id !== raw.id) continue;
