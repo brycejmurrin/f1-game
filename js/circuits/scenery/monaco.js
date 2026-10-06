@@ -518,9 +518,10 @@
           if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.45 + 2)) return;
           const b = [a.r, a.u, a.t];
           const face = -w * 0.51; // toward the road
-          modelGroup(`monaco-fairmont-${raceFrac === HP ? "main" : (raceFrac < HP ? "west" : "east")}`, {
+          const bounds = {
             center: vadd(a.c, a.u, h * 0.5), size: [w + 2.4, h + 2, d + 2], basis: b,
-          }, (stage) => {
+          };
+          const build = (stage) => {
             stage._mat = MAT.STONE;
             addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, d], wall, b);
             const floors = Math.max(4, Math.floor(h / 6));
@@ -551,7 +552,14 @@
             stage._mat = MAT.ROOF;
             addBox(stage, vadd(a.c, a.u, h + 0.5), [w * 1.04, 1.0, d * 1.04], [0.82, 0.78, 0.70], b);
             stage._mat = 0;
-          }, { required: raceFrac === HP });
+          };
+          // Literal id on the required group — scenery-api-contract scans source
+          // for modelGroup("monaco-fairmont-main" { required: true }.
+          if (raceFrac === HP) {
+            modelGroup("monaco-fairmont-main", bounds, build, { required: true });
+          } else {
+            modelGroup(`monaco-fairmont-${raceFrac < HP ? "west" : "east"}`, bounds, build);
+          }
         };
         emitFairmont(HP, 11, 20, 50, 22, FAIRMONT);
         emitFairmont(HP - 0.022, 12, 16, 40, 14, CREAM);
