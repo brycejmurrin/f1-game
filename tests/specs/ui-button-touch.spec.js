@@ -11,6 +11,22 @@ import { galleryPath } from "../helpers/output-paths.js";
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
+// Shipped TEXT SIZE large / HOME SCENE photo change the select strip's tile
+// width, so tablet 768px can leave row 8's snap target at 0 (CI Expected >0,
+// Received 0). Pin the previous look so this file stays a touch-scroll
+// contract, not a type-scale test.
+const PIN_PREVIOUS_LOOK = () => {
+  try {
+    localStorage.setItem("apex26.textSize", '"normal"');
+    localStorage.setItem("apex26.uiContrast", '"off"');
+    localStorage.setItem("apex26.homeScene", '"garage"');
+  } catch (_) {}
+};
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(PIN_PREVIOUS_LOOK);
+});
+
 // A sheet enters with `sheet-in` (0.19s, translateY(10px) scale(0.985) — see
 // css/components.css), so a sheet measured or photographed mid-flight is
 // genuinely 0.985x its final size and 10px low. Read as layout, that is a

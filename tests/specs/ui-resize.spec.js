@@ -147,6 +147,18 @@ const readState = (page) => page.evaluate(() => {
 });
 
 test.describe("Live resize — the garage re-answers its own layout questions", () => {
+  test.beforeEach(async ({ page }) => {
+    // Garage DONE-on-screen was written against the previous look. Shipped
+    // TEXT SIZE is large, HIGH CONTRAST is on — pin the old look so this
+    // spec stays a resize/staleness test, not a type-scale test.
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("apex26.textSize", '"normal"');
+        localStorage.setItem("apex26.uiContrast", '"off"');
+        localStorage.setItem("apex26.homeScene", '"garage"');
+      } catch (_) {}
+    });
+  });
   test("resizing into a size matches loading fresh at that size", async ({ page }) => {
     // The oracle: what each size looks like when it is the FIRST size.
     /** @type {Record<string, any>} */

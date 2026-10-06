@@ -29,6 +29,9 @@ select_all() {
 case "$EVENT" in
   push) BEFORE="$PUSH_BEFORE" ;;
   pull_request) BEFORE="$PR_BASE" ;;
+  # Merge queue: the proposed merge's base (ci.yml passes merge_group.base_sha
+  # as PR_BASE). Keep this event working; enabling the queue is a repo setting.
+  merge_group) BEFORE="$PR_BASE" ;;
   # THE NIGHTLY'S CHANGE-AWARE LANE: everything the last day of merges routed.
   # A per-change selection can only afford 15 minutes, so a routed spec that
   # loses the packing (menu-traversal, ui-redesign, 2026-09-29) otherwise waits

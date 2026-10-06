@@ -59,9 +59,16 @@ test("declaredTests expands statically resolvable for-of loops (per-circuit spec
   const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
     .filter((f) => f.endsWith(".js")).length;
   assert.ok(circuits >= 40, `expected a full circuit fleet, got ${circuits}`);
-  // 1 list-match + N boundary + 5 street + 1 wrap + 4 edge-ram = N + 11
-  assert.equal(declaredTests("tests/specs/tracks-walls.spec.js"), circuits + 11,
-    "tracks-walls must bill one test per circuit, not one CallExpression per loop");
+  // Identity file: 1 list-match + STREET import (billed 1; 5 street ids live
+  // in the helper) + 1 wrap + 4 edge-ram = 7. Fleet halves live in
+  // tracks-walls-a/b (readdirSync + slice).
+  assert.equal(declaredTests("tests/specs/tracks-walls.spec.js"), 7,
+    "tracks-walls identity file bills list/street/wrap/edge, not the fleet walk");
+  const half = Math.ceil(circuits / 2);
+  assert.equal(declaredTests("tests/specs/tracks-walls-a.spec.js"), half,
+    "fleet A bills one test per circuit in the first half");
+  assert.equal(declaredTests("tests/specs/tracks-walls-b.spec.js"), circuits - half,
+    "fleet B bills one test per circuit in the second half");
   // scenery-kits: 1 static + 5 theme rows
   assert.equal(declaredTests("tests/specs/scenery-kits.spec.js"), 6);
   // abudhabi-foundation: day + night

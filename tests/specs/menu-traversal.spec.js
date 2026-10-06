@@ -126,6 +126,16 @@ const WALKER = `
 
 async function boot(page) {
   await page.addInitScript(PAD_SETUP);
+  // DISPLAY D-pad walk was written against the previous look. Shipped TEXT
+  // SIZE is large, HIGH CONTRAST is on, HOME SCENE is photo — pin the old
+  // look so this spec stays a MenuNav reachability test.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.textSize", '"normal"');
+      localStorage.setItem("apex26.uiContrast", '"off"');
+      localStorage.setItem("apex26.homeScene", '"garage"');
+    } catch (_) {}
+  });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex && window.__apex.race && window.MenuNav && window.UiLayers, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(WALKER);

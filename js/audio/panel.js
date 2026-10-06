@@ -78,7 +78,7 @@ const AudioPanel = (() => {
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
-    const spotNow = () => (store.get("spotter", true) !== false ? "on" : "off");
+    const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);

@@ -651,7 +651,7 @@ const RaceRadio = (function () {
        *  as the results screen took over (2.2 s after the flag) and radio-voice,
        *  which speaks only in a race, dropped it unheard. */
       callsResult: () => live && lvl() >= 1,
-      spotter: () => !!(store && store.get && store.get("spotter", true) !== false),
+      spotter: () => !!(store && store.get && store.get("spotter", false) !== false),
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
       trafficBusy: () => !!(spotter && spotter.occupied()),
       spotterDebug: () => (spotter ? spotter.debug() : null),

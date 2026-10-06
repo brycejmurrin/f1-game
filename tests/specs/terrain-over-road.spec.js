@@ -171,13 +171,13 @@ test("Madrid terrain drops away from the road instead of forming a raised floor"
   expect(terrain.drop40).toBeGreaterThan(5);
 });
 
-test("no terrain/road faces over the racing line (all circuits)", async ({ page }) => {
-  test.setTimeout(1500000);
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+for (const trk of TRACKS) {
+  test(`${trk}: no terrain/road faces over the racing line`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
 
-  const offenders = [];
-  for (const trk of TRACKS) {
+    const offenders = [];
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.waitForTimeout(1500);
@@ -298,25 +298,18 @@ test("no terrain/road faces over the racing line (all circuits)", async ({ page 
       return { road: scan("road"), terr: scan("terrain") };
     }, CROSSOVER_TRACKS.has(trk));
     console.log(`over-road ${trk}: road=${r.road?.max ?? "?"} terr=${r.terr?.max ?? "?"}${r.err ? " ERR:" + r.err : ""}`);
-    if (r.err) { offenders.push(`${trk}: ${r.err}`); continue; }
-    // Terrain over the racing line is always a bug (the green-wedge / mound class).
-    if (r.terr.max > TOL) offenders.push(
-      `${trk} TERRAIN ${r.terr.max}m over road @${JSON.stringify(r.terr.fr)} worst=${JSON.stringify(r.terr.worst)}`
-    );
-    // Road mesh: small overs are the verge-shoulder chord bug everywhere.
-    // Overs >=1.5 m are exempt ONLY on the known crossover tracks (Suzuka
-    // figure-8, Madrid, Zandvoort — the same CROSSOVER_TRACKS set the in-page
-    // frac-distance filter uses), where the road legitimately bridges over a
-    // lower section; on any other track a big face over the line is simply a
-    // bigger defect, not a crossover.
-    if (r.road.max > TOL && (r.road.max < 1.5 || !CROSSOVER_TRACKS.has(trk))) offenders.push(
-      `${trk} ROAD ${r.road.max}m over road @${JSON.stringify(r.road.fr)} worst=${JSON.stringify(r.road.worst)}`
-    );
-  }
-  expect(offenders, `circuits with geometry over the racing line:\n${offenders.join("\n")}`).toEqual([]);
-  // Same quiet-down as props-over-road: the all-circuits walk must not leave a
-  // hot renderer for the next packed test (SOLO_OWN_TIMEOUT_SEC / mega peel).
-  await page.evaluate(() => {
-    try { window.__apex.headless(true); } catch (_) {}
+    if (r.err) offenders.push(`${trk}: ${r.err}`);
+    else {
+      if (r.terr.max > TOL) offenders.push(
+        `${trk} TERRAIN ${r.terr.max}m over road @${JSON.stringify(r.terr.fr)} worst=${JSON.stringify(r.terr.worst)}`
+      );
+      if (r.road.max > TOL && (r.road.max < 1.5 || !CROSSOVER_TRACKS.has(trk))) offenders.push(
+        `${trk} ROAD ${r.road.max}m over road @${JSON.stringify(r.road.fr)} worst=${JSON.stringify(r.road.worst)}`
+      );
+    }
+    expect(offenders, `circuits with geometry over the racing line:\n${offenders.join("\n")}`).toEqual([]);
+    await page.evaluate(() => {
+      try { window.__apex.headless(true); } catch (_) {}
+    });
   });
-});
+}

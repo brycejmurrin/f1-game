@@ -5,16 +5,16 @@
       "lines": 2557
     },
     "js/agent/apex.js": {
-      "codeLines": 2317,
-      "lines": 3289
+      "codeLines": 2327,
+      "lines": 3301
     },
     "js/car/car3d.js": {
-      "lines": 3570
+      "lines": 3573
     },
     "js/game.js": {
-      "codeLines": 4870,
+      "codeLines": 4849,
       "gMembers": 287,
-      "lines": 9028,
+      "lines": 8998,
       "topLets": 147
     },
     "js/lighting/presets.js": {

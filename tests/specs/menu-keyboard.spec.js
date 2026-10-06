@@ -370,21 +370,25 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
-      // Live SwiftShader race starves a 5 s waitForFunction: selected-1
-      // logged TopModal open #standings then timed out while the material
-      // pack still owned the main thread. headlessMode only skips render()
-      // (js/game.js) — same stall stop as the Escape sibling below.
+      // Live SwiftShader race starves a 5 s waitForFunction: CI selected-1
+      // (run 37414897932) logged TopModal open #standings then timed out
+      // while the material pack was still on the main thread (~9 s later).
+      // headlessMode only skips render() (js/game.js) — same stall stop as
+      // the Escape sibling below.
       window.__apex.headless(true);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    /* Blocking components.css now owns dialog.screen 100% box + [open] grid
-       so print→all dialog-platform cannot leave a 0×0 :modal. Wait for :modal
-       AND a non-zero box so UiLayers.top names #standings, not #pausemenu.
-       BOOT_MS, not 5 s: the material pack can still own the main thread
-       after unhide (this box: TopModal open at 29 s, pack loaded at 46 s).
-       polling: 100 — park() stops the rAF loop (see track-detail below). */
+    /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
+       (TopModal's MutationObserver); a :modal standings used to lose
+       activeLayer() to #pausemenu with no modalOrder stamp, or when Chromium
+       dropped the 0×0 box — UiLayers ranks :modal even at 0×0. Blocking
+       components.css (#1101) also owns dialog.screen 100% box + [open] grid
+       so print→all dialog-platform cannot leave a 0×0 :modal; wait for that
+       painted box too. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
+       waitForFunction (CI selected-1 run 37414897932). polling: 100 — park()
+       stops the rAF loop. */
     await page.waitForFunction(() => {
       const s = document.getElementById("standings");
       if (!s || !s.matches(":modal")) return false;
@@ -488,11 +492,12 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
+      window.__apex.headless(true);   // live-canvas stall — same as the standings twin
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
     });
     await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "pausemenu",
-      null, { polling: 100, timeout: 5_000 });
+      null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBe("pausemenu");
 
     await page.keyboard.down("ArrowLeft");

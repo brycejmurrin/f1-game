@@ -57,6 +57,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
   "tests/unit/a11y-pwa-pass.test.mjs",
+  "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
@@ -160,6 +161,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  "tests/unit/change-kind.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -1046,11 +1048,21 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
+
+/** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
+export function applyFileShard(files, spec) {
+  if (!spec) return files;
+  const m = /^(\d+)\/(\d+)$/.exec(String(spec));
+  if (!m) throw new Error(`bad --shard=${spec} (want i/n)`);
+  const i = Number(m[1]), n = Number(m[2]);
+  if (n < 1 || i < 1 || i > n) throw new Error(`bad --shard=${spec}`);
+  return files.filter((_, idx) => idx % n === i - 1);
+}
 
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
 export function parseToolingFastArgv(argv) {
@@ -1076,6 +1088,7 @@ export function parseToolingFastArgv(argv) {
     jobs: val("jobs") ? Number(val("jobs")) : 1,
     order: val("order"),
     record: argv.includes("--record"),
+    shard: val("shard"),
     testTimeoutMs: val("test-timeout") ? Number(val("test-timeout")) * 1000 : undefined,
     fileTimeoutMs: val("file-timeout") ? Number(val("file-timeout")) * 1000 : undefined,
   };
@@ -1094,7 +1107,8 @@ if (isMain) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
   }
-  const files = parsed.files || [...TOOLING_FAST_FILES];
+  const files0 = parsed.files || [...TOOLING_FAST_FILES];
+  const files = applyFileShard(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
     order: parsed.order,

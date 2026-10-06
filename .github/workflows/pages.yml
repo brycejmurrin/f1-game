@@ -86,6 +86,7 @@ jobs:
       source: ${{ steps.v.outputs.source }}
       run: ${{ steps.v.outputs.run }}
       fast_run: ${{ steps.v.outputs.fast_run }}
+      ship_only: ${{ steps.v.outputs.ship_only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -149,7 +150,10 @@ jobs:
   # Skipped when nothing is new, or when rule 3 found the same tree gated.
   ci:
     needs: verdict
-    if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
+    # Full gate when nothing is reusable. When verdict.reuse && ship_only, the
+    # deploy-branch push already passed the fast tier on THIS sha: one smoke
+    # shard, no 28-job re-gate. Tree-equal parent full gates skip ci entirely.
+    if: needs.verdict.outputs.nothing_new != 'true' && (needs.verdict.outputs.reuse != 'true' || needs.verdict.outputs.ship_only == 'true')
     # A CALLED workflow may not request more than its caller passes, and the
     # check happens at startup for every job, skipped or not. ci.yml's
     # `poke-train` job asks for actions:write (it never runs on a Pages call,
@@ -173,8 +177,10 @@ jobs:
       # The deploy push's fast tier already passed the tree-only jobs on this
       # exact tree (verdict looked it up): the gate runs smoke + sweeps +
       # selection + the parts census (base-diffed, not tree-only) and reuses
-      # the rest — see ci.yml's `fast_tier_run` input.
-      fast_tier_run: ${{ needs.verdict.outputs.fast_run }}
+      # the rest — see ci.yml's `fast_tier_run` input. ship_only is the
+      # exact-SHA ship-green path: skip those jobs entirely and run smoke only.
+      fast_tier_run: ${{ needs.verdict.outputs.ship_only == 'true' && '' || needs.verdict.outputs.fast_run }}
+      smoke_only: ${{ needs.verdict.outputs.ship_only == 'true' }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the
     # waiting one. A dispatch shares the group and queues the same way.

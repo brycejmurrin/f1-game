@@ -186,22 +186,23 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // so an event test alone would skip the plan on every deploy.
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
-  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != '' \}\}/);
+  assert.match(selectJob, /if: \$\{\{ inputs\.smoke_only != true && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'merge_group' \|\| inputs\.concurrency_key != ''\) \}\}/);
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
-  assert.match(selectedJob, /needs: select/);
+  assert.match(selectedJob, /needs: \[select, guards\]/);
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
-  assert.match(selectedJob, /if: \$\{\{ needs\.select\.outputs\.any == 'true' \}\}/,
-    "a plan with nothing to run must skip the runner, not fail it");
+  assert.match(selectedJob, /APEX_WORKERS: \$\{\{ matrix\.workers \|\| 1 \}\}/,
+    "career oversize jobs pass workers: 2; others stay 1");
+  assert.match(selectedJob, /needs\.select\.outputs\.any == 'true'/);
 });
 
 test("selection resolves the event-specific base and fails closed when it cannot", () => {
   // A direct push still resolves against the push's before; a Pages call
   // substitutes the train's live commit (asserted in the Pages-call test).
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/);
-  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}/);
   // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
   assert.match(selectJob, /ci-select-specs-step\.sh/);
   assert.match(selectStep, /ci-resolve-before\.sh/);
@@ -248,6 +249,7 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
     assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: "" }).stdout, first, "CALLED unset is not a Pages call");
     assert.notEqual(resolve({ EVENT: "push", PUSH_BEFORE: bogus }).status, 0);
     assert.equal(resolve({ EVENT: "pull_request", PR_BASE: first }).stdout, first);
+    assert.equal(resolve({ EVENT: "merge_group", PR_BASE: first }).stdout, first);
     // The empty tree is a base the selector can diff against: every tracked file changed.
     assert.equal(g("diff", "--name-only", EMPTY_TREE), "a");
   } finally {
@@ -364,7 +366,7 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   assert.match(plan, /any_node:/);
   assert.match(plan, /driving:/);
   const node = (ciWorkflow.split("\n  node-suites:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(node, /needs: unit-plan/);
+  assert.match(node, /needs: \[unit-plan, reuse-draft\]/);
   // The six "Pure-node unit suites (<slice>)" names are REQUIRED checks: a
   // job-level skip on any_node=false never expands the matrix, so they never
   // report and the PR sits BLOCKED green (#522). The job always runs; an
@@ -378,7 +380,7 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(driving, /needs: unit-plan/);
+  assert.match(driving, /needs: \[unit-plan, reuse-draft\]/);
   assert.match(driving, /needs\.unit-plan\.outputs\.driving == 'true'/);
 });
 
@@ -564,7 +566,7 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
   assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
   assert.match(ciJob, /needs: verdict/);
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'/, "the gate runs unless nothing is new or the verdict found the same tree already gated");
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && \(needs\.verdict\.outputs\.reuse != 'true' \|\| needs\.verdict\.outputs\.ship_only == 'true'\)/, "the gate runs unless nothing is new, or ship_only reuses the exact-SHA fast tier with smoke");
   assert.match(preflight, /needs: \[verdict, ci\]/);
   assert.match(preflight, /needs\.ci\.result == 'success' \|\| \(needs\.ci\.result == 'skipped' && needs\.verdict\.outputs\.reuse == 'true'\)/,
     "a skipped gate is acceptable only when the verdict reused an earlier pass; failed or cancelled must still stop the run");
@@ -608,24 +610,26 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
-  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
+  assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "true", "a merge_group run is a full gate");
   // A DRAFT PR's run is the fast tier (sweeps and smoke skipped) and concludes
   // success all the same: never a gate, and a real gate after it still counts.
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
-  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
     "…the ready run beside it is");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
   // before the parent's real run is even looked at.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
-    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7" },
+    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7", ship_only: "false" },
     "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
   const fastOnly = verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] });
-  assert.equal(fastOnly.reuse, "false", "a fast-tier run alone never reuses");
-  assert.equal(fastOnly.fast_run, "7", "…but the gate is told which fast-tier run already passed the tree-only jobs");
+  assert.equal(fastOnly.reuse, "true", "exact-SHA ship fast-tier reuses as Pages smoke-only");
+  assert.equal(fastOnly.ship_only, "true");
+  assert.equal(fastOnly.fast_run, "7", "…and names the fast-tier run");
   assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy", conclusion: "failure" })] }).fast_run, "",
     "a red fast tier is not reused");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",
@@ -638,7 +642,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
   assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
     "both parents green but the merge tree is new: the gate runs");
-  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
@@ -990,7 +994,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   // dispatch remain. The `!inputs.concurrency_key` term is what
   // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
   // it has to stay first.
-  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
+  assert.match(rendererFilter, /if: \$\{\{ inputs\.smoke_only != true && !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
   assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
@@ -1138,13 +1142,13 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // Only the deploy branch pushes start a run; a topic branch runs through its PR.
   assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  // BOUNDED AT ship-filter, which sits between these two since 2026-09-22 —
-  // an unbounded slice to `smoke:` would read that job as part of the sweeps.
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
   const shipFilterJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  ship-filter:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
-  for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob], ["ship-filter", shipFilterJob]]) {
+  for (const [name, job] of [["smoke", smokeJob], ["ship-filter", shipFilterJob]]) {
     assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
   }
+  assert.ok(sweepsJob.includes(fastTier) && sweepsJob.includes("inputs.smoke_only != true"),
+    "sweeps sit out the fast tier and Pages ship-reuse smoke_only");
   for (const name of ["guards", "unit-plan", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
@@ -1231,7 +1235,7 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   assert.ok(verdict.indexOf("Refuse to run off the deploy branch") < verdict.indexOf("What is live"));
 
   const ciJob = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'/);
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && \(needs\.verdict\.outputs\.reuse != 'true' \|\| needs\.verdict\.outputs\.ship_only == 'true'\)/);
   assert.match(ciJob, /before_sha: \$\{\{ needs\.verdict\.outputs\.since \}\}/, "the gate diffs against what is live, never against a push's before");
   assert.doesNotMatch(pagesWorkflow, /github\.event\.before/, "there is no push event to read a before from");
   const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
@@ -1421,16 +1425,15 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
   assert.ok(job.length > 0, "the selected-verdict job is gone");
   assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
-  assert.match(job, /^    needs: \[select, selected\]$/m);
-  assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
-    "!cancelled(): a skipped `selected` must still be judged, but a cancelled run (a draft's run superseded by ready_for_review, #510) has no verdict; the events are select's own");
+  assert.match(job, /^    needs: \[select, selected, guards\]$/m);
+  assert.match(job, /inputs\.smoke_only != true/, "Pages ship-reuse skips the verdict with the legs");
+  assert.match(job, /github\.event_name == 'merge_group'/, "merge queue keeps the required name");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes or is skipped; and (since
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
   // `selected` ran — the dropped-count used to be read only on a skip.
-  assert.match(job, /SELECT: \$\{\{ needs\.select\.result \}\}/);
-  assert.match(job, /SELECTED: \$\{\{ needs\.selected\.result \}\}/);
-  assert.match(job, /DROPPED: \$\{\{ needs\.select\.outputs\.dropped \}\}/);
+  assert.match(job, /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
+  assert.match(job, /Structural guards \$GUARDS/, "a guard red is a red selected verdict");
   assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
   assert.match(job, /if \[ "\$CALLED" = "true" \]; then\n\s+echo "::warning::/, "on the train an unaffordable plan warns");
   assert.match(job, /echo "::error::the plan dropped \$\{DROPPED\} routed spec\(s\)[^\n]*\n\s+exit 1/,

@@ -1,8 +1,7 @@
 // @ts-check
-// Track boundary consistency: every track must keep the car inside a sane,
-// finite driving boundary (derived from where solid barriers/grandstands sit),
-// so you can't clip into models or drive off forever — and you can always
-// recover. Street circuits should be tight; open circuits keep some runoff.
+// Track boundary consistency: list identity, street tightness, wrap, edge-ram.
+// Per-circuit fleet walks live in tracks-walls-a/b.spec.js so select-specs
+// bills ~11 + ~26 + ~26 instead of one 63-test overflow drop.
 /* ONE TEST PER CIRCUIT, NOT ONE SWEEP OVER FORTY.
    The boundary check used to build all ~40 circuits inside a single test. That
    test never once completed here: it timed out at 151 s and 155 s against the
@@ -28,76 +27,22 @@
    40 tests on the default fixture would have paid 40 page boots to undo exactly
    that; on the shared page the split costs a build per circuit and nothing
    more. */
+// Honours process.env.APEX_CIRCUITS via inScope() in tests/helpers/tracks-walls-roster.js.
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { allCircuitIds, inScope, STREET_IDS } from "../helpers/tracks-walls-roster.js";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-// DERIVED, NOT WRITTEN DOWN. Playwright decides the test list at module load,
-// before any page exists, so the ids cannot come from Tracks.LIST in the page —
-// they come from the definition files that Tracks.LIST is built from. Same
-// reasoning as tests/manual/circuits.js: a hardcoded list means adding a
-// circuit silently leaves it unswept, and nothing would ever say so.
-const ALL = fs.readdirSync(path.join(ROOT, "js/circuits"))
-  .filter((f) => f.endsWith(".js"))
-  .map((f) => f.replace(/\.js$/, ""))
-  .sort();
-
-const ONLY_TRACK = process.env.TRACK;
-// APEX_CIRCUITS: CI's circuit lane (tools/ci/select-specs.mjs) sets it to the
-// circuits a circuit-only diff touched, so the per-circuit tests below run for
-// those and skip the other ~50. Unset = every circuit; the list-matches-game
-// test always checks the whole fleet.
-const SCOPE = (process.env.APEX_CIRCUITS || "").split(",").map((s) => s.trim()).filter(Boolean);
-const inScope = (id) => (!ONLY_TRACK || id === ONLY_TRACK) && (!SCOPE.length || SCOPE.includes(id));
-const IDS = ALL.filter(inScope);
-const STREET = ["monaco", "singapore", "vegas", "baku", "jeddah"].filter(inScope);
+const ALL = allCircuitIds();
+const STREET = STREET_IDS.filter((id) => inScope(id));
 
 test.describe("Apex 26 — track boundaries", () => {
   test("the swept circuit list matches what the game actually loads", async ({ page }) => {
-    // Replaces the old sweep's `expect(ids.length).toBeGreaterThan(10)`, and is
-    // strictly stronger: that only said "the list is not empty". This says the
-    // list read off disk IS the list the game builds — so a circuit whose
-    // definition file exists but never reaches Tracks.LIST (or the reverse)
-    // fails here, by name, instead of quietly going untested for months.
     const live = await page.evaluate(() => Tracks.LIST.map((t) => t.id).sort());
     expect(live.length).toBeGreaterThan(30);
-    if (!ONLY_TRACK) expect(ALL).toEqual(live);
-    else expect(live).toContain(ONLY_TRACK);
+    if (!process.env.TRACK) expect(ALL).toEqual(live);
+    else expect(live).toContain(process.env.TRACK);
   });
 
-  for (const id of IDS) {
-    test(`${id}: finite, sane driving boundary on both sides`, async ({ page }) => {
-      const s = await page.evaluate(async (tid) => {
-        // AWAIT the race: startRace() awaits the circuit's lazily-split scenery
-        // before Tracks.build runs, so reading on the next line reports the
-        // PREVIOUS track (see the settled() note in js/agent/apex.js).
-        await window.__apex.race(tid, "day", "dry");
-        return window.__apex.wallStats();
-      }, id);
-      expect(s, `${id} built`).not.toBeNull();
-      expect(s.anyNaN, `${id} no NaN boundary`).toBe(false);
-      expect(s.minB, `${id} keeps some track`).toBeGreaterThan(1);     // never collapses
-      expect(s.maxB, `${id} bounded`).toBeLessThan(60);               // never runs away
-      // The pit side is EXCLUDED from maxB (TrackPit.openBoundary legitimately
-      // opens it to the garage line), so it needs its own bound or the complex
-      // could grow unwatched — which is exactly how it reached 22.5 m before
-      // being trimmed to 20.1. Measured across all 52 circuits: 14.70-21.10 m.
-      // 24 leaves headroom for a wider paddock without letting a real runaway
-      // hide behind the exemption.
-      if (s.maxPitB != null) {
-        expect(s.maxPitB, `${id} pit complex bounded`).toBeLessThan(24);
-        expect(s.maxPitB, `${id} pit complex reaches past the road`).toBeGreaterThan(s.minB);
-      }
-      // a barrier never sits absurdly far inside the tarmac edge
-      expect(s.minOverHw, `${id} boundary not deep inside edge`).toBeGreaterThan(-1.5);
-    });
-  }
-
   for (const id of STREET) {
-    // Street circuits: the WIDEST boundary still hugs the edge (no big runoff).
     test(`${id}: walled tight, as a street circuit`, async ({ page }) => {
       const r = await page.evaluate(async (tid) => {
         const ok = await window.__apex.race(tid, "day", "dry");
@@ -112,7 +57,6 @@ test.describe("Apex 26 — track boundaries", () => {
   }
 
   test("full-lap visual barriers register collision boundaries across the wrap", async ({ page }) => {
-    // Read-only: race() then wallStats(). Safe on the shared page.
     const stats = await page.evaluate(async () => {
       await window.__apex.race("montreal", "day", "dry");
       return window.__apex.wallStats();
@@ -127,33 +71,17 @@ test.describe("Apex 26 — track boundaries", () => {
      drift would leak into every later test on the same worker and quietly
      change what "bounded" means for them. A virgin page costs one boot and
      removes the whole question. */
-  /* ONE PER SAMPLED CIRCUIT, for the reason at the top of this file.
-     This was the last sweep left here: four circuits — four full builds and
-     3200 physics steps — inside ONE test against the 180 s budget. It fit on a
-     quiet box (120.8 s measured locally, 2026-09-15) and did not on a shared
-     runner: CI run 3716 spent 68.0 + 64.1 + 39.3 s in three of the four
-     page.evaluate legs and timed out with nothing asserted false. That is the
-     same failure the header describes, with the same wrong obvious fix waiting
-     (a bigger budget), and the same right one: split it. Each circuit is a
-     boot plus one build, well inside the DEFAULT budget; a failure names the
-     circuit; the four run across workers instead of serialising; and a timeout
-     can no longer silently skip the circuits behind it.
-     Still freshTest per circuit, not sharedTest: the setPhysics({ drift })
-     leak argued below is per-page, so sharing one page across the four would
-     reintroduce exactly what the fresh page exists to prevent. */
   for (const circuitId of ["monaco", "monza", "baku", "spa"]) {
-  freshTest(`${circuitId}: driving hard into either edge stops bounded and recovers`, async ({ page }) => {
-    await page.goto("/");
-    // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    for (const id of [circuitId]) {
+    if (!inScope(circuitId)) continue;
+    freshTest(`${circuitId}: driving hard into either edge stops bounded and recovers`, async ({ page }) => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       const r = await page.evaluate(async (tid) => {
         const ok = await window.__apex.race(tid, "day", "dry");
         if (!ok) return { skip: true, reason: `race("${tid}") returned ${String(ok)}` };
         window.__apex.go();
         window.__apex.setPhysics({ drift: 0.3 });
         let finite = true, maxAbsX = 0;
-        // ram both edges at a few points around the lap
         for (const frac of [0.1, 0.35, 0.6, 0.85]) {
           for (const dir of [1, -1]) {
             window.__apex.jump(frac, 45, 0);
@@ -168,13 +96,11 @@ test.describe("Apex 26 — track boundaries", () => {
         }
         window.__apex.clearInput();
         return { finite, maxAbsX };
-      }, id);
-      // A track whose race() failed must not silently vanish from the sweep.
-      expect(r.skip, `${id}: ${r.reason || "race() failed"} — the edge-ram sweep never ran`)
+      }, circuitId);
+      expect(r.skip, `${circuitId}: ${r.reason || "race() failed"} — the edge-ram sweep never ran`)
         .toBeFalsy();
-      expect(r.finite, `${id} finite`).toBe(true);
-      expect(r.maxAbsX, `${id} bounded`).toBeLessThan(60);
-    }
-  });
+      expect(r.finite, `${circuitId} finite`).toBe(true);
+      expect(r.maxAbsX, `${circuitId} bounded`).toBeLessThan(60);
+    });
   }
 });
