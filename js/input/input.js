@@ -78,6 +78,8 @@ const Input = (function () {
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
+  let padDpadSeq = 0, padDpadLeftSeq = 0, padDpadRightSeq = 0;
+  let padDpadLeftHeld = false, padDpadRightHeld = false;
   /* THE DRIVING DEAD ZONE IS A PLAYER KNOB WITH A SMALL DEFAULT, and the two
      halves of that sentence are both corrections.
      It was a fixed 0.14, which is between 3x and 7x what racing games ship:
@@ -115,6 +117,9 @@ const Input = (function () {
   let btnSteerRightVal = 0;
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
   let btnSteerT = 0;       // last ramp timestamp, ms
+  // Press order for on-screen arrows — same last-press-wins contract as
+  // keyboardSteer (a left→right thumb roll-over must not cancel to centre).
+  let btnSteerSeq = 0, btnSteerLeftSeq = 0, btnSteerRightSeq = 0;
 
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
@@ -722,7 +727,15 @@ const Input = (function () {
     const t = nowMs();
     const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
     padDpadT = t;
-    const target = (btnDown(pad, 15) ? 1 : 0) - (btnDown(pad, 14) ? 1 : 0);
+    // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
+    // Worn pads and some maps briefly report both left+right; right−left
+    // cancelled to centre and the ramp unwound mid-corner.
+    const left = btnDown(pad, 14), right = btnDown(pad, 15);
+    if (left && !padDpadLeftHeld) padDpadLeftSeq = ++padDpadSeq;
+    if (right && !padDpadRightHeld) padDpadRightSeq = ++padDpadSeq;
+    padDpadLeftHeld = left; padDpadRightHeld = right;
+    const target = left && right ? (padDpadRightSeq > padDpadLeftSeq ? 1 : -1)
+      : (right ? 1 : 0) - (left ? 1 : 0);
     padDpadVal = digitalStep(padDpadVal, target, dt);
     return padDpadVal;
   }
@@ -1021,7 +1034,12 @@ const Input = (function () {
     btnSteerT = t;
     const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
     const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
-    const target = right - left;
+    // LAST PRESS WINS — mirrors keyboardSteer. right − left centred the wheel
+    // whenever both arrows were down, which is every capacitive left→right
+    // roll-over in a chicane (RIGHT down before LEFT comes up).
+    const target = btnSteerLeft && btnSteerRight
+      ? (btnSteerRightSeq > btnSteerLeftSeq ? right : -left)
+      : right - left;
     btnSteerVal = digitalStep(btnSteerVal, target, dt);
     return btnSteerVal;
   }
@@ -1211,6 +1229,8 @@ const Input = (function () {
       padSteerAnalog = false; padLookBack = false;
       lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
+      padDpadLeftHeld = padDpadRightHeld = false;
+      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
@@ -1581,6 +1601,7 @@ const Input = (function () {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
       btnSteerLeftVal = btnSteerRightVal = 0;
       btnSteerVal = 0; btnSteerT = 0;
+      btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
     if (steerMode !== "touch") {
       touches.clear();
@@ -1831,10 +1852,14 @@ const Input = (function () {
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
-    wireHold("btn-steer-left", function (v) { btnSteerLeft = v; if (!v) btnSteerLeftVal = 0; },
-      function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
-    wireHold("btn-steer-right", function (v) { btnSteerRight = v; if (!v) btnSteerRightVal = 0; },
-      function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
+    wireHold("btn-steer-left", function (v) {
+      if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
+      btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
+    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
+    wireHold("btn-steer-right", function (v) {
+      if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
+      btnSteerRight = v; if (!v) btnSteerRightVal = 0;
+    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
@@ -1890,6 +1915,8 @@ const Input = (function () {
       padThrottleVal = padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
       padDpadVal = 0; padDpadT = 0;
+      padDpadLeftHeld = padDpadRightHeld = false;
+      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padPrevButtons.length = 0;
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
       padMenu.reset();
@@ -1920,6 +1947,7 @@ const Input = (function () {
     btnSteerLeft = btnSteerRight = false;
     btnSteerLeftVal = btnSteerRightVal = 0;
     btnSteerVal = 0; btnSteerT = 0;
+    btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     speedStdOverride = null;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;
@@ -1942,6 +1970,8 @@ const Input = (function () {
     padLookBack = false;
     padDpadVal = 0;
     padDpadT = 0;
+    padDpadLeftHeld = padDpadRightHeld = false;
+    padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
     keyLookBack = false;
     lookStickX = 0; lookStickY = 0;
     lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;

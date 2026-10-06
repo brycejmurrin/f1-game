@@ -238,6 +238,110 @@ test("last key wins: RIGHT pressed while LEFT is still held steers right", () =>
   assert.equal(Input.steer(1 / 60), -1, "releasing it hands back to the still-held LEFT");
 });
 
+/* ON-SCREEN ARROWS (2026-10-06). Same last-press-wins contract as keyboard —
+ * capacitive left→right roll-over keeps both thumbs down briefly; right−left
+ * cancelled to centre until this fix. Boot keeps element stubs BY ID so the
+ * hold listeners fire (throttle-latch.test.mjs pattern). */
+function bootButtons() {
+  const listeners = {};
+  const els = new Map();
+  const clock = { t: 0 };
+  function el(id) {
+    if (id && els.has(id)) return els.get(id);
+    const on = {};
+    const e = {
+      id, cls: new Set(), attrs: {},
+      addEventListener: (t, f) => { (on[t] ||= []).push(f); }, removeEventListener() {},
+      fire(t, ev) {
+        (on[t] || []).forEach((f) => f({
+          pointerId: (ev && ev.pointerId) || 1, clientX: 0, clientY: 0,
+          preventDefault() {}, ...ev,
+        }));
+      },
+      style: {}, dataset: {}, children: [],
+      classList: {
+        add(c) { e.cls.add(c); }, remove(c) { e.cls.delete(c); },
+        toggle(c, on2) { if (on2) e.cls.add(c); else e.cls.delete(c); },
+        contains: (c) => e.cls.has(c),
+      },
+      setAttribute(k, v) { e.attrs[k] = v; }, getAttribute: (k) => (k in e.attrs ? e.attrs[k] : null),
+      removeAttribute(k) { delete e.attrs[k]; },
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }),
+      setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false,
+    };
+    if (id) els.set(id, e);
+    return e;
+  }
+  const sb = {
+    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date,
+    performance: { now: () => clock.t }, DeviceOrientationEvent: function DeviceOrientationEvent() {},
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+    removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
+    navigator: {}, screen: {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    document: {
+      addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {},
+      getElementById: el, querySelector: () => el(), querySelectorAll: () => [], hidden: false,
+      body: { classList: { add() {}, remove() {}, toggle() {} } },
+    },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const Input = vm.runInContext("Input", ctx);
+  Input.init(el());
+  return {
+    Input, clock, els,
+    left: () => els.get("btn-steer-left"),
+    right: () => els.get("btn-steer-right"),
+  };
+}
+
+test("last on-screen arrow wins: RIGHT pressed while LEFT is still held steers right", () => {
+  const { Input, clock, left, right } = bootButtons();
+  Input.reset();
+  Input.setSteerMode("buttons");
+  Input.setAdaptiveButtons(0);
+  Input.setSpeedStd(0);
+  clock.t = 1000;
+  left().fire("pointerdown", { pointerId: 1 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "full left from the on-screen arrow");
+  right().fire("pointerdown", { pointerId: 2 });   // roll-over: LEFT thumb still down
+  for (let i = 0; i < 40; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 1,
+    "the newer arrow owns the wheel (both held used to cancel to centre)");
+  right().fire("pointerup", { pointerId: 2 });
+  for (let i = 0; i < 40; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "releasing RIGHT hands back to still-held LEFT");
+});
+
+test("last d-pad wins: RIGHT pressed while LEFT is still held steers right", () => {
+  const { Input, pad, clock } = (() => {
+    const r = padRig();
+    r.clock.t = 1000;
+    return r;
+  })();
+  Input.reset();
+  Input.setAdaptiveButtons(0);
+  Input.setSpeedStd(0);
+  Input.setSteerMode("touch");   // stick at rest; d-pad is the only digital source
+  pad.axes[0] = 0;
+  // Standard mapping: button 14 = D-pad Left, 15 = D-pad Right.
+  pad.buttons[14] = { pressed: true, value: 1 };
+  for (let i = 0; i < 20; i++) { clock.t += STEP; Input.poll(); Input.steer(1 / 60); }
+  assert.equal(Input.steer(1 / 60), -1, "full left from the d-pad");
+  pad.buttons[15] = { pressed: true, value: 1 };   // both sides down
+  for (let i = 0; i < 40; i++) { clock.t += STEP; Input.poll(); Input.steer(1 / 60); }
+  assert.equal(Input.steer(1 / 60), 1,
+    "the newer d-pad side owns the wheel (both held used to cancel to centre)");
+  pad.buttons[15] = { pressed: false, value: 0 };
+  for (let i = 0; i < 40; i++) { clock.t += STEP; Input.poll(); Input.steer(1 / 60); }
+  assert.equal(Input.steer(1 / 60), -1, "releasing RIGHT hands back to still-held LEFT");
+});
+
 test("coalesced pointer samples move the finger only when they ARE the finger", () => {
   const { Input, onCanvas } = boot();
   Input.setSteerMode("touch");
