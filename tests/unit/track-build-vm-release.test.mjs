@@ -182,7 +182,9 @@ const STRIP = {
   //   0.2 m wider + yacht glow band; then landmark re-key on this PR.
   // → post-rekey hairpin cityFront removed + Fairmont thinned (CI sweeps):
   //   273417/254782 (2026-10-05)
-  monaco: { before: 273417, after: 254782 },
+  // → city.js day-section early-return: monaco STRIP unchanged on that row.
+  // → DETAIL pass (quay/Fairmont rails/paddock/banners) #1062: 279741/258567
+  monaco: { before: 279741, after: 258567 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -204,7 +206,9 @@ const STRIP = {
   // → towers yield to trees / round footprints 340821/313906 (2026-10-05:
   //   city.js neonTower registers a round kind's true footprint and yields
   //   to a planted tree — one fewer unit emitted, −18 / −16)
-  monza: { before: 340821, after: 313906 },
+  // → signature scenery + Parabolica camp/pines 336984/303329 (2026-10-06:
+  //   tribuna/podium/canopy + Rank-C stonePine at Parabolica; camp grounded)
+  monza: { before: 336984, after: 303329 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

@@ -544,6 +544,12 @@ function buildSetup() {
     if (badges.length) {
       const tg = document.createElement("span");
       tg.className = "cs-opt-tag";
+      const band = opt.wetTread && opt.visual && opt.visual.band;
+      if (band && band.length >= 3) {
+        const r = Math.round(band[0] * 255), g = Math.round(band[1] * 255), b = Math.round(band[2] * 255);
+        tg.style.color = "rgb(" + r + "," + g + "," + b + ")";
+        tg.style.background = "rgba(" + r + "," + g + "," + b + ",0.18)";
+      }
       tg.textContent = badges.join(" · ");
       nameRow.appendChild(tg);
     }
@@ -1215,12 +1221,25 @@ function endLivPreview(team) {
 
 function openSetup() {
   Log.info("ui", "SetupUI.openSetup");
-  buildSetup();
+  // Show the garage sheet first, then build its DOM off the click stack.
+  // Change Car used to call buildSetup() before unhiding #carsetup, so the
+  // select/season screen froze with no sheet (and Back stopped responding).
   els.select.hidden = true;
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;
-  $("carsetup").hidden = false;
+  const cs = $("carsetup");
+  cs.hidden = false;
   G.setupPreviewOn = true;
+  cs.setAttribute("aria-busy", "true");
+  const finish = () => {
+    try { buildSetup(); }
+    finally { cs.removeAttribute("aria-busy"); }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+  } else {
+    finish();
+  }
 }
 
 // THE PAINT EDITOR DOES NOT OUTLIVE THE GARAGE. Only CANCEL and SAVE & FIT

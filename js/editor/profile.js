@@ -1,81 +1,56 @@
-/* Apex 26 — DesignerProfile: the track designer's elevation strip, under the
-   main canvas. Draws the ENGINE-built height profile of the lap (the py the
-   preview built, so the hills are the ones the car will meet) and the design's
-   cosine bumps (`elevations {s, halfM, rise}`, tracks.js buildCenterline) as
-   grips on it, and turns pointer and keyboard input into the few callbacks the
-   screen (TrackDesigner) owns: add a hill, reshape one, remove one, pick one.
-   A drag previews analytically — the moved bump's cosine is swapped into the
-   built heights, no rebuild — and hands ONE change back on release, already on
-   the stored lattice (hill()), so what the strip shows is what is saved.
-   Touches no store and no engine: TrackShape at eval, DesignerCanvas (its
-   palette, hit radii, hold time) at create. LAZY_EDITOR, after canvas.js. */
+/* Apex 26 — DesignerProfile: the track designer's elevation strip under the
+   main canvas. Draws the ENGINE-built height profile and one grip per control
+   point (per-node heights[]). Drag a grip up/down to set that node's height
+   (0.25 m lattice, ±CustomTracks.LIMITS.rise). Touch hits ≥44 css px. Keyboard:
+   [ ] pick, Up/Down height (Shift ×5), Delete / Enter flatten the node, Escape
+   clears selection. Touches no store and no engine. LAZY_EDITOR, after
+   elev-presets.js / canvas.js. */
 const DesignerProfile = (function () {
   "use strict";
   const S = TrackShape;
-  const PAD = 3;                        // css px above the highest point and below the lowest (select-screen's sparkline)
-  const MIN_SPAN = 8;                   // m: a flat loop's ±0.3 m ripple is not drawn as a mountain range
-  const DRAG_PX = 3, HOLD_PX = 6;       // moved this far: a drag; and no longer a long-press
-  const ADD = Object.freeze({ halfM: 160, rise: 6 });
-  const KEY = Object.freeze({ rise: 1, riseBig: 5, sM: 10, halfM: 20 });
-  // CustomTracks' BUMP: halfM 20..2000, |rise| ≤ 60 and ≤ halfM / 19.6 (the
-  // cosine's steepest grade, π·rise / 2·halfM, under 8 %). Read at call time.
-  const GRADE = 19.6;
-  const lim = () => (typeof CustomTracks !== "undefined" && CustomTracks.LIMITS) || { halfM: 2000, rise: 60 };
+  const PAD = 3;
+  const MIN_SPAN = 8;
+  // Select-without-move: below these thresholds a press only selects (height unchanged).
+  const DRAG_MOUSE = 6, DRAG_TOUCH = 10, TOUCH_ARM_MS = 140;
+  const KEY = Object.freeze({ rise: 1, riseBig: 5 });
+  const HIT_PX = 28, HIT_TOUCH = 44;   // ≥44 px under a finger (WCAG / Bryce mobile)
+  const GRIP_R = 7, GRIP_R_TOUCH = 12;
   const LABEL_FONT = "11px system-ui, sans-serif";
-  const wrap01 = (f) => ((f % 1) + 1) % 1;
-  const q = (v) => Math.round(v * 4) / 4;
-
-  /** A hill on the stored lattice inside the registry's limits — exactly what
-   *  CustomTracks.sanitize keeps: s on 1/65535 of a lap, halfM whole metres
-   *  20..2000, rise on 0.25 m within ±min(60, halfM / 19.6). The rise cap is
-   *  floored to the lattice, so a rise at the cap is never shaved again on save. */
-  function hill(b) {
-    b = b || {};
-    const L = lim();
-    const halfM = Math.round(Math.min(L.halfM, Math.max(20, Number.isFinite(+b.halfM) ? +b.halfM : ADD.halfM)));
-    const cap = Math.min(L.rise, Math.floor(halfM / GRADE * 4) / 4);
-    const r = Number.isFinite(+b.rise) ? +b.rise : 0;
-    const s = Number.isFinite(+b.s) ? (Math.round(wrap01(+b.s) * 65535) % 65535) / 65535 : 0;
-    return { s, halfM, rise: q(Math.min(cap, Math.max(-cap, r))) || 0 };
-  }
-  /** tracks.js buildCenterline's cosine bump: its height d metres from the centre. */
-  const bumpAt = (b, d) => (b && d < b.halfM ? b.rise * 0.5 * (1 + Math.cos(Math.PI * d / b.halfM)) : 0);
-  const same = (a, b) => a.s === b.s && a.halfM === b.halfM && a.rise === b.rise;
+  const lim = () => (typeof CustomTracks !== "undefined" && CustomTracks.LIMITS) || { rise: 60 };
+  const clampH = (h) => {
+    if (typeof ElevPresets !== "undefined" && ElevPresets.clampH) return ElevPresets.clampH(h);
+    const cap = lim().rise, v = Number.isFinite(+h) ? +h : 0;
+    return Math.round(Math.min(cap, Math.max(-cap, v)) * 4) / 4 || 0;
+  };
   const fmtRise = (r) => (r < 0 ? "−" : "+") + String(Math.abs(r));
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
 
-  /** Mount on a <canvas>. hooks: onAdd(sM) (metres along the built lap),
-   *  onChange(i, {s, halfM, rise}, live) (the hill as it would be stored: s a
-   *  lap fraction; live while a drag is in flight, then ONE live=false on
-   *  release), onRemove(i), onSelect(i) (-1: none). Returns the api. */
+  /** Mount on a <canvas>. hooks: onChange(i, height, live), onSelect(i) (-1 none). */
   function create(canvas, hooks) {
     hooks = hooks || {};
-    // The main canvas's ink, hit radii and hold time (its own defaults when a harness stubs it).
-    const dc = (k, d) => (typeof DesignerCanvas !== "undefined" && DesignerCanvas[k] != null ? DesignerCanvas[k] : d);
-    const DC = { COL: dc("COL", {}), HIT_PX: dc("HIT_PX", 24), HIT_TOUCH: dc("HIT_TOUCH", 30), HOLD_MS: dc("HOLD_MS", 500) }, COL = DC.COL;
+    const COL = (typeof DesignerCanvas !== "undefined" && DesignerCanvas.COL) || {};
     const g = canvas.getContext("2d");
-    canvas.tabIndex = 0;                        // no role: a focusable role=img fails the menu audit; the label says it all
-    let W = Math.max(1, canvas.width || 300), H = Math.max(1, canvas.height || 60), ratio = 1;
-    let tr = null, speed = null, ticks = [];    // the built lap, its point-mass speeds, control-point arcs (m)
-    let bumps = [], issues = [], cursor = null;
+    canvas.tabIndex = 0;
+    let W = Math.max(1, canvas.width || 300), H = Math.max(1, canvas.height || 72), ratio = 1;
+    let tr = null, speed = null, ticks = [];   // built lap, speeds, control arcs (m)
+    let nodeH = [];                             // per-node heights (metres)
+    let issues = [], cursor = null;
     let sel = -1, ptype = "mouse";
-    let drag = null;                            // { id, i, x0, y0, b0, cur, axis, moved, mpp, frame }
-    let tap = null;                             // a press on empty strip { id, x0, y0 }
-    let held = -1;                              // the pointer whose long-press removed a hill: its release ends it
-    let hold = null;                            // a long-press in flight { id, timer }
-    let pend = [];                              // edits handed back, drawn until the rebuild that carries them lands
+    // Drag arms only after a deliberate vertical threshold (and on touch, a
+    // prior selection or short hold). Horizontal motion is ignored.
+    let drag = null;                            // { id, i, y0, h0, cur, moved, mpp, frame, wasSel, t0, touch }
+    let liveH = null;                           // heights overlay while dragging
 
-    // ── heights ─────────────────────────────────────────────────────────────
-    /** The built py with every pending edit (and the live drag) swapped in:
-     *  minus the bump as built, plus the bump as it will be. */
-    function heights() {
-      const n = tr.n, ds = tr.total / n, h = Float64Array.from(tr.py);
-      const deltas = drag && drag.moved ? pend.concat([{ old: drag.b0, nu: drag.cur }]) : pend;
-      for (const { old, nu } of deltas) {
-        for (const [b, sg] of [[old, -1], [nu, 1]]) {
-          if (!b) continue;
-          const cs = b.s * tr.total;
-          for (let k = 0; k < n; k++) { let d = Math.abs(k * ds - cs); d = Math.min(d, tr.total - d); if (d < b.halfM) h[k] += sg * bumpAt(b, d); }
+    function heightsShown() {
+      if (!tr) return null;
+      const h = Float64Array.from(tr.py);
+      // Live drag: lift the profile near the control tick by (cur - h0).
+      if (drag && drag.moved && ticks[drag.i] != null) {
+        const cs = ticks[drag.i], half = Math.max(40, (tr.total || 1) / Math.max(8, ticks.length));
+        const dy = drag.cur - drag.h0, ds = tr.total / tr.n;
+        for (let k = 0; k < tr.n; k++) {
+          let d = Math.abs(k * ds - cs); d = Math.min(d, tr.total - d);
+          if (d < half) h[k] += dy * 0.5 * (1 + Math.cos(Math.PI * d / half));
         }
       }
       return h;
@@ -86,21 +61,17 @@ const DesignerProfile = (function () {
       const span = Math.max(MIN_SPAN, hi - lo);
       return { lo: (lo + hi) / 2 - span / 2, span, min: lo, max: hi };
     }
-    let hs = null, fr = null;                   // this render's heights and vertical frame
+    let hs = null, fr = null;
     const X = (sM) => (tr ? sM / tr.total * W : 0);
     const Y = (h) => H - PAD - (h - fr.lo) / fr.span * (H - 2 * PAD);
     const hAt = (sM) => { const n = tr.n; return hs[((Math.round(sM / tr.total * n) % n) + n) % n]; };
-    /** The hill as drawn: the drag's copy while it moves, else the list's. */
-    const shown = (i) => (drag && drag.i === i && drag.moved ? drag.cur : bumps[i]);
-    function grip(i) { const b = shown(i), sM = b.s * tr.total; return { x: X(sM), y: Y(hAt(sM)) }; }
-    /** Hill indices in driving order (what [ ] walk and the label counts). */
-    const order = () => bumps.map((b, i) => i).sort((a, b) => bumps[a].s - bumps[b].s || a - b);
+    function grip(i) {
+      const sM = ticks[i] != null ? ticks[i] : 0;
+      const base = hAt(sM);
+      const shown = (liveH && liveH[i] != null) ? base + (liveH[i] - (nodeH[i] || 0)) : base;
+      return { x: X(sM), y: Y(shown) };
+    }
 
-    // ── size ────────────────────────────────────────────────────────────────
-    // select-screen.js drawElevProfile's recipe: the buffer is the measured box
-    // times the effective zoom × dpr (capped at 3), drawing in css px through
-    // the transform. A hidden strip (a short landscape phone) measures 0: keep
-    // the last box until the observer sees it again.
     function resize() {
       const bw = canvas.clientWidth, bh = canvas.clientHeight;
       if (bw > 0 && bh > 0) { W = bw; H = bh; }
@@ -113,149 +84,109 @@ const DesignerProfile = (function () {
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
     if (ro) ro.observe(canvas);
 
-    // ── input ───────────────────────────────────────────────────────────────
     function local(ev) { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
     function hit(x, y) {
-      if (!tr || !hs) return -1;
-      const r = ptype === "touch" ? DC.HIT_TOUCH : DC.HIT_PX;
+      if (!tr || !hs || !ticks.length) return -1;
+      const r = ptype === "touch" ? HIT_TOUCH : HIT_PX;
       let best = -1, bd = r * r;
-      for (let i = 0; i < bumps.length; i++) { const p = grip(i), d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y); if (d < bd) { bd = d; best = i; } }
+      for (let i = 0; i < ticks.length; i++) {
+        const p = grip(i), d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+        if (d < bd) { bd = d; best = i; }
+      }
       return best;
     }
     function choose(i) {
-      i = Number.isInteger(i) && i >= 0 && i < bumps.length ? i : -1;
+      i = Number.isInteger(i) && i >= 0 && i < ticks.length ? i : -1;
       if (i === sel) return;
       sel = i;
       if (hooks.onSelect) hooks.onSelect(sel);
     }
-    /** Hand an edit back: drawn at once (pend), committed by the screen. */
-    function hand(i, b0, nu) {
-      if (same(b0, nu)) return false;
-      pend.push({ old: b0, nu });
-      bumps = bumps.slice(); bumps[i] = nu;
-      if (hooks.onChange) hooks.onChange(i, Object.assign({}, nu), false);
+    function hand(i, h0, nu) {
+      if (clampH(h0) === clampH(nu)) return false;
+      nodeH = nodeH.slice(); nodeH[i] = clampH(nu);
+      liveH = null;
+      if (hooks.onChange) hooks.onChange(i, nodeH[i], false);
       return true;
     }
-    function remove(i) {
-      if (!(i >= 0 && i < bumps.length)) return;
-      pend.push({ old: bumps[i], nu: null });
-      bumps = bumps.filter((b, j) => j !== i);
-      sel = -1;
-      if (hooks.onRemove) hooks.onRemove(i);
-      if (hooks.onSelect) hooks.onSelect(-1);
-    }
-    function cancelHold() {
-      if (!hold) return;
-      try { globalThis.clearTimeout(hold.timer); } catch (_) { /* no timers here */ }
-      hold = null;
-    }
-    function armHold(id, i) {
-      cancelHold();
-      if (typeof globalThis.setTimeout !== "function") return;
-      const me = { id, timer: null };
-      me.timer = globalThis.setTimeout(() => {
-        if (hold !== me || !drag || drag.id !== id || drag.i !== i || drag.moved) return;
-        hold = null; drag = null; held = id;
-        remove(i);
-        render();
-      }, DC.HOLD_MS);
-      hold = me;
-    }
+
     function onDown(ev) {
       if (ev.button != null && ev.button > 0) return;
       if (ev.pointerType) ptype = ev.pointerType;
       if (ev.preventDefault) ev.preventDefault();
       try { canvas.focus({ preventScroll: true }); } catch (_) { canvas.focus(); }
-      if (drag || tap) return;                  // one finger at a time: a second is ignored
-      try { canvas.setPointerCapture(ev.pointerId); } catch (_) { /* a synthetic event */ }
+      if (drag) return;
+      try { canvas.setPointerCapture(ev.pointerId); } catch (_) { /* synthetic */ }
       const p = local(ev), i = hit(p.x, p.y);
-      if (i >= 0) {
-        choose(i);
-        // The vertical scale freezes for the drag: the grip stays under the finger.
-        const f = fr || { lo: 0, span: MIN_SPAN };
-        drag = { id: ev.pointerId, i, x0: p.x, y0: p.y, b0: bumps[i], cur: bumps[i], axis: null, moved: false, shift: !!ev.shiftKey, mpp: f.span / Math.max(1, H - 2 * PAD), frame: f };
-        armHold(ev.pointerId, i);
-        render();
-        return;
-      }
-      tap = { id: ev.pointerId, x0: p.x, y0: p.y };
+      if (i < 0) return;
+      // Select on press — height stays until a deliberate vertical drag arms.
+      const wasSel = sel === i;
+      choose(i);
+      const f = fr || { lo: 0, span: MIN_SPAN };
+      drag = {
+        id: ev.pointerId, i, y0: p.y, h0: nodeH[i] || 0, cur: nodeH[i] || 0,
+        moved: false, mpp: f.span / Math.max(1, H - 2 * PAD), frame: f,
+        wasSel, t0: Date.now(), touch: ptype === "touch",
+      };
+      render();
     }
     function onMove(ev) {
       if (ev.pointerType) ptype = ev.pointerType;
       if (!drag || drag.id !== ev.pointerId || !tr) return;
-      const p = local(ev), dx = p.x - drag.x0, dy = p.y - drag.y0, far = Math.hypot(dx, dy);
-      if (far > HOLD_PX) cancelHold();
+      const p = local(ev), dy = p.y - drag.y0;   // vertical only — ignore dx
       if (!drag.moved) {
-        if (far <= DRAG_PX) return;
-        // One axis per drag: up/down is the height, sideways the place —
-        // or, with Shift held at the start, the length.
+        const thresh = (drag.touch || ptype === "touch") ? DRAG_TOUCH : DRAG_MOUSE;
+        if (Math.abs(dy) <= thresh) return;
+        const held = (Date.now() - drag.t0) >= TOUCH_ARM_MS;
+        // Mouse: threshold alone. Touch: already selected, or short hold, then threshold.
+        if (!(drag.wasSel || ptype === "mouse" || held)) return;
         drag.moved = true;
-        drag.axis = Math.abs(dy) > Math.abs(dx) ? "rise" : drag.shift || ev.shiftKey ? "halfM" : "s";
       }
-      const b0 = drag.b0;
-      const next = drag.axis === "rise" ? hill(Object.assign({}, b0, { rise: b0.rise - dy * drag.mpp }))
-        : drag.axis === "halfM" ? hill(Object.assign({}, b0, { halfM: b0.halfM + dx * tr.total / W }))
-          : hill(Object.assign({}, b0, { s: b0.s + dx / W }));
-      if (!same(next, drag.cur)) { drag.cur = next; if (hooks.onChange) hooks.onChange(drag.i, Object.assign({}, next), true); }
+      const next = clampH(drag.h0 - dy * drag.mpp);
+      if (next !== drag.cur) {
+        drag.cur = next;
+        liveH = nodeH.slice(); liveH[drag.i] = next;
+        if (hooks.onChange) hooks.onChange(drag.i, next, true);
+      }
       render();
     }
     function onUp(ev) {
-      if (held === ev.pointerId || (drag && drag.id === ev.pointerId) || (tap && tap.id === ev.pointerId)) {
-        try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
-      }
-      if (held === ev.pointerId) { held = -1; return; }
       if (drag && drag.id === ev.pointerId) {
-        cancelHold();
+        try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* */ }
         const d = drag; drag = null;
-        if (d.moved) hand(d.i, d.b0, d.cur);
+        // Tap / below-threshold jitter: selection only — height unchanged.
+        if (d.moved) hand(d.i, d.h0, d.cur);
+        else liveH = null;
         render();
-        return;
-      }
-      if (tap && tap.id === ev.pointerId) {
-        const t = tap; tap = null;
-        const p = local(ev);
-        if (tr && Math.hypot(p.x - t.x0, p.y - t.y0) <= HOLD_PX && hooks.onAdd) hooks.onAdd(Math.min(1, Math.max(0, p.x / W)) * tr.total);
       }
     }
-    // pointercancel AND lostpointercapture (a dialog hidden mid-drag): the edit in flight is dropped.
     function onCancel(ev) {
-      if (held === ev.pointerId) held = -1;
-      if (drag && drag.id === ev.pointerId) { cancelHold(); drag = null; render(); }
-      if (tap && tap.id === ev.pointerId) tap = null;
+      if (drag && drag.id === ev.pointerId) { drag = null; liveH = null; render(); }
     }
-    // Keyboard and pad: the strip owns the arrows only while a hill is
-    // selected (data-arrows, js/ui/menu-nav.js), so with none the d-pad walks
-    // on. [ ] pick, Up/Down height (1 m, Shift 5), Left/Right move 10 m
-    // (Shift: length ±20 m), Enter adds a hill at the cursor, Delete removes, Escape lets go.
     function onKey(ev) {
-      const k = ev.key;
-      if (k === "[" || k === "]") {
-        if (!bumps.length) return;
+      const k = ev.key, n = ticks.length;
+      if (k === "[" || k === "]" || k === "Tab") {
+        if (!n) return;
         ev.preventDefault();
-        const o = order(), at = o.indexOf(sel);
-        choose(o[at < 0 ? (k === "]" ? 0 : o.length - 1) : (at + (k === "]" ? 1 : -1) + o.length) % o.length]);
+        const dir = (k === "[" || (k === "Tab" && ev.shiftKey)) ? -1 : 1;
+        const at = sel < 0 ? (dir > 0 ? -1 : 0) : sel;
+        choose(((at + dir) % n + n) % n);
         render();
         return;
       }
-      if (k === "Enter") {
-        if (!tr || !hooks.onAdd) return;
+      if (sel < 0 || sel >= n) return;
+      if (k === "Escape") { ev.preventDefault(); choose(-1); render(); return; }
+      if (k === "Delete" || k === "Backspace" || k === "Enter") {
         ev.preventDefault();
-        hooks.onAdd(cursor != null ? cursor : sel >= 0 ? bumps[sel].s * tr.total : tr.total / 2);
+        hand(sel, nodeH[sel] || 0, 0);
+        render();
         return;
       }
-      if (sel < 0 || sel >= bumps.length) return;   // nothing selected: the key is not ours
-      if (k === "Escape") { ev.preventDefault(); choose(-1); render(); return; }
-      if (k === "Delete" || k === "Backspace") { ev.preventDefault(); remove(sel); render(); return; }
-      const b = bumps[sel], big = !!ev.shiftKey;
-      let nu = null;
-      if (k === "ArrowUp" || k === "ArrowDown") nu = hill(Object.assign({}, b, { rise: b.rise + (k === "ArrowUp" ? 1 : -1) * (big ? KEY.riseBig : KEY.rise) }));
-      else if (k === "ArrowLeft" || k === "ArrowRight") {
-        const dir = k === "ArrowRight" ? 1 : -1;
-        nu = big ? hill(Object.assign({}, b, { halfM: b.halfM + dir * KEY.halfM })) : tr ? hill(Object.assign({}, b, { s: b.s + dir * KEY.sM / tr.total })) : b;
-      } else return;
-      ev.preventDefault();
-      hand(sel, b, nu);
-      render();
+      if (k === "ArrowUp" || k === "ArrowDown") {
+        const step = (k === "ArrowUp" ? 1 : -1) * (ev.shiftKey ? KEY.riseBig : KEY.rise);
+        ev.preventDefault();
+        hand(sel, nodeH[sel] || 0, (nodeH[sel] || 0) + step);
+        render();
+      }
     }
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
@@ -264,16 +195,14 @@ const DesignerProfile = (function () {
     canvas.addEventListener("lostpointercapture", onCancel);
     canvas.addEventListener("keydown", onKey);
 
-    // ── render ──────────────────────────────────────────────────────────────
-    const KEYS = "[ ] pick, Up/Down height, Left/Right move, Shift+Left/Right length, Enter adds at the selected point, Delete removes";
-    /** The accessible name says which hill is selected and what it is. */
+    const KEYS = "[ ] pick a point · Up/Down set height (Shift ×5) · Delete or Enter flattens · Escape clears";
     function label() {
-      const N = bumps.length;
-      if (sel >= 0 && sel < N) {
-        const b = shown(sel);
-        return "Elevation profile. Hill " + (order().indexOf(sel) + 1) + " of " + N + ": " + fmtRise(b.rise) + " m over " + (2 * b.halfM) + " m" + (tr ? " at " + fmtKm(b.s * tr.total) : "") + ". " + KEYS;
+      const n = ticks.length;
+      if (sel >= 0 && sel < n) {
+        const h = (liveH && liveH[sel] != null) ? liveH[sel] : (nodeH[sel] || 0);
+        return "Elevation profile. Point " + (sel + 1) + " of " + n + ": " + fmtRise(h) + " m" + (tr && ticks[sel] != null ? " at " + fmtKm(ticks[sel]) : "") + ". " + KEYS;
       }
-      return "Elevation profile. " + (N ? N + (N === 1 ? " hill" : " hills") : "No hills") + ". " + KEYS;
+      return "Elevation profile. " + n + " control points. Tap to select, then drag vertically to set height. " + KEYS;
     }
     function trace() {
       const n = tr.n;
@@ -281,8 +210,6 @@ const DesignerProfile = (function () {
       for (let k = 0; k <= n; k++) { const x = k / n * W, y = Y(hs[k % n]); k ? g.lineTo(x, y) : g.moveTo(x, y); }
     }
     function render() {
-      // MenuNav (js/ui/menu-nav.js) reads this: a focused canvas owns the
-      // arrows only while they move something.
       const arrows = sel >= 0 ? "own" : "pass";
       if (canvas.dataset && canvas.dataset.arrows !== arrows) canvas.dataset.arrows = arrows;
       const name = label();
@@ -290,46 +217,44 @@ const DesignerProfile = (function () {
       g.setTransform(ratio, 0, 0, ratio, 0, 0);
       g.clearRect(0, 0, W, H);
       if (!tr || !tr.py || !(tr.n > 2)) { hs = null; fr = null; return; }
-      hs = heights();
-      fr = drag && drag.moved && drag.axis === "rise" ? drag.frame : frameOf(hs);
-      // fill to the baseline, then the open stroke (no closing verticals)
+      hs = heightsShown();
+      fr = drag && drag.moved ? drag.frame : frameOf(hs);
       trace(); g.lineTo(W, H); g.lineTo(0, H); g.closePath();
-      g.fillStyle = COL.road; g.fill();
-      trace(); g.strokeStyle = COL.info; g.lineWidth = 1.5; g.stroke();
-      // Control-point ticks: each point's share of the control polygon, scaled
-      // to the built lap — an approximation of where it lands on the built arc
-      // (the engine's smoothing moves it a little), good enough to find a point.
-      g.strokeStyle = COL.ctrl; g.lineWidth = 1;
+      g.fillStyle = COL.road || "rgba(40,44,52,0.9)"; g.fill();
+      trace(); g.strokeStyle = COL.info || "#7eb8ff"; g.lineWidth = 1.5; g.stroke();
+      g.strokeStyle = COL.ctrl || "rgba(154,154,168,0.75)"; g.lineWidth = 1;
       for (const t of ticks) { const x = X(t); g.beginPath(); g.moveTo(x, H - 5); g.lineTo(x, H); g.stroke(); }
-      // the start / finish line
-      g.strokeStyle = COL.start; g.lineWidth = 2;
+      g.strokeStyle = COL.start || "#e10600"; g.lineWidth = 2;
       g.beginPath(); g.moveTo(1, 0); g.lineTo(1, H); g.stroke();
-      // the main canvas's selected point
-      if (cursor != null && Number.isFinite(cursor)) { const x = X(cursor); g.strokeStyle = COL.sel; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
-      // the selected hill's footprint along the floor
-      if (sel >= 0 && sel < bumps.length) {
-        const b = shown(sel), x0 = X(b.s * tr.total - b.halfM), x1 = X(b.s * tr.total + b.halfM);
-        g.strokeStyle = COL.span; g.lineWidth = 4;
-        g.beginPath(); g.moveTo(Math.max(0, x0), H - 2); g.lineTo(Math.min(W, x1), H - 2); g.stroke();
-        if (x0 < 0) { g.beginPath(); g.moveTo(W + x0, H - 2); g.lineTo(W, H - 2); g.stroke(); }
-        if (x1 > W) { g.beginPath(); g.moveTo(0, H - 2); g.lineTo(x1 - W, H - 2); g.stroke(); }
+      if (cursor != null && Number.isFinite(cursor)) {
+        const x = X(cursor); g.strokeStyle = COL.sel || "#ffd166"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
       }
-      // grade / crest / dip issues
       for (const it of issues) {
         const x = X(it.s), y = Y(hAt(it.s));
         g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2);
-        g.fillStyle = it.level === "red" ? COL.red : COL.amber; g.fill();
+        g.fillStyle = it.level === "red" ? (COL.red || "#ff4d4d") : (COL.amber || "#ffb020"); g.fill();
       }
-      // the hills' grips
-      for (let i = 0; i < bumps.length; i++) {
-        const p = grip(i), on = i === sel, r = (on ? 6 : 4.5) * (ptype === "touch" ? 1.5 : 1);
+      const touch = ptype === "touch";
+      for (let i = 0; i < ticks.length; i++) {
+        const p = grip(i), on = i === sel;
+        const r = (on ? GRIP_R + 2 : GRIP_R) * (touch ? GRIP_R_TOUCH / GRIP_R : 1);
+        // Soft hit halo so touch targets read as ≥44 px.
+        if (touch || on) {
+          g.beginPath(); g.arc(p.x, p.y, (touch ? HIT_TOUCH : HIT_PX) / 2, 0, Math.PI * 2);
+          g.fillStyle = on ? "rgba(225,6,0,0.14)" : "rgba(246,246,249,0.06)"; g.fill();
+        }
+        if (on) {
+          g.beginPath(); g.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
+          g.strokeStyle = COL.sel || "#e10600"; g.lineWidth = 2.5; g.stroke();
+        }
         g.beginPath(); g.arc(p.x, p.y, r, 0, Math.PI * 2);
-        g.fillStyle = on ? COL.sel : COL.handle; g.fill();
+        g.fillStyle = on ? (COL.sel || "#e10600") : (COL.handle || "#f6f6f9"); g.fill();
         g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
       }
       // heights: the lap's top and bottom (one label when they round equal —
-      // a flat circuit used to paint dual colliding "0 m"s). Selected hill next.
-      g.font = LABEL_FONT; g.fillStyle = COL.text; g.textAlign = "right";
+      // a flat circuit used to paint dual colliding "0 m"s). Selected point next.
+      g.font = LABEL_FONT; g.fillStyle = COL.text || "#c8c8d0"; g.textAlign = "right";
       const hiM = Math.round(fr.max) + " m", loM = Math.round(fr.min) + " m";
       if (hiM === loM) {
         g.textBaseline = "middle";
@@ -339,61 +264,64 @@ const DesignerProfile = (function () {
         g.textBaseline = "bottom"; g.fillText(loM, W - 4, H - 2);
       }
       g.textAlign = "left"; g.textBaseline = "top";
-      if (sel >= 0 && sel < bumps.length) {
-        const b = shown(sel), sM = b.s * tr.total, v = speed && speed.length === tr.n ? speed[((Math.round(sM / tr.total * tr.n) % tr.n) + tr.n) % tr.n] : 0;
-        // The cosine's peak curvature rise·π²/(2·halfM²) at the point-mass speed: the g a crest takes off (a dip adds).
-        const gs = v ? Math.abs(b.rise) * Math.PI * Math.PI / (2 * b.halfM * b.halfM) * v * v / 9.81 : 0;
-        const text = fmtRise(b.rise) + " m · " + (2 * b.halfM) + " m" + (gs ? " · " + gs.toFixed(1) + " g" : "");
-        g.fillStyle = COL.chipText; g.fillText(text, 6, 2);
+      if (sel >= 0 && sel < ticks.length) {
+        const h = (liveH && liveH[sel] != null) ? liveH[sel] : (nodeH[sel] || 0);
+        g.fillStyle = COL.chipText || "#f6f6f9";
+        g.fillText("PT " + (sel + 1) + " · " + fmtRise(h) + " m", 6, 2);
       }
       g.textAlign = "start";
     }
 
-    // ── api ─────────────────────────────────────────────────────────────────
-    function reset() {
-      cancelHold();
-      drag = null; tap = null; held = -1;
-      render();
-    }
+    function reset() { drag = null; liveH = null; render(); }
     const api = {
-      /** The preview's built lap, its point-mass speeds (m/s per node) and the
-       *  control loop it was built from (the tick marks). A new build carries
-       *  every edit handed back, so the pending overlay ends here. */
       setBuilt(t, v, pts) {
         tr = t && t.n > 2 && t.py ? t : null;
         speed = v && tr && v.length === tr.n ? v : null;
-        pend = [];
         ticks = [];
         if (tr && Array.isArray(pts) && pts.length >= 2) {
           const L = S.polyLen(pts);
           let c = 0;
-          for (let i = 0; i < pts.length && L > 0; i++) { ticks.push(c / L * tr.total); const a = pts[i], b = pts[(i + 1) % pts.length]; c += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+          for (let i = 0; i < pts.length && L > 0; i++) {
+            ticks.push(c / L * tr.total);
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            c += Math.hypot(b[0] - a[0], b[1] - a[1]);
+          }
+          if (nodeH.length !== pts.length) {
+            const next = new Array(pts.length);
+            for (let i = 0; i < pts.length; i++) next[i] = i < nodeH.length ? clampH(nodeH[i]) : 0;
+            nodeH = next;
+            if (sel >= nodeH.length) sel = -1;
+          }
         }
         render();
       },
-      /** The design's elevations, as stored. A selection past the end is dropped. */
-      setBumps(list) {
-        bumps = Array.isArray(list) ? list.map((b) => hill(b)) : [];
-        if (sel >= bumps.length) sel = -1;
-        if (drag && drag.i >= bumps.length) drag = null;
+      /** Per-node heights (metres). Length should match the control loop. */
+      setHeights(list) {
+        nodeH = Array.isArray(list) ? list.map(clampH) : [];
+        if (sel >= nodeH.length) sel = -1;
+        if (drag && drag.i >= nodeH.length) drag = null;
+        liveH = null;
         render();
       },
-      /** The main canvas's selected point, metres along the built lap (null: none). */
+      /** @deprecated cosine hills — ignored; kept so older harnesses do not throw. */
+      setBumps() { /* no-op: elevation is per-node heights */ },
       setCursor(sM) { cursor = Number.isFinite(sM) ? sM : null; render(); },
-      /** The verdict's issues: the grade / crest / dip ones (with a finite s) are dotted on the strip. */
-      setIssues(list) { issues = (Array.isArray(list) ? list : []).filter((it) => it && Number.isFinite(it.s) && /^(grade|fia-grade|fia-crest|fia-sag)$/.test(it.code)); render(); },
+      setIssues(list) {
+        issues = (Array.isArray(list) ? list : []).filter((it) => it && Number.isFinite(it.s) && /^(grade|fia-grade|fia-crest|fia-sag)$/.test(it.code));
+        render();
+      },
       selected() { return sel; },
-      /** Select hill i (-1: none) without telling onSelect — the screen is the caller. */
-      select(i) { sel = Number.isInteger(i) && i >= 0 && i < bumps.length ? i : -1; render(); },
-      resize,
-      render,
-      reset,
+      // Same path as a grip tap: update sel and tell the screen (POINT m stepper).
+      select(i) { choose(i); render(); },
+      resize, render, reset,
       destroy() { if (ro) ro.disconnect(); reset(); },
     };
     resize();
     return api;
   }
 
-  return { create, hill, ADD, KEY };
+  // hill / ADD kept as no-op shims for older unit harnesses that import them.
+  const hill = (b) => (typeof ElevPresets !== "undefined" ? { s: 0, halfM: 160, rise: ElevPresets.clampH(b && b.rise) } : { s: 0, halfM: 160, rise: 0 });
+  return { create, hill, ADD: Object.freeze({ halfM: 160, rise: 6 }), KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
 })();
 Object.freeze(DesignerProfile);

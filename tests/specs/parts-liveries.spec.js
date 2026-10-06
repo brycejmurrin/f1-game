@@ -34,6 +34,14 @@ async function openSetup(page) {
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 
+// Creator tests need an empty custom list. forgetStored alone is a miss, so
+// GarageDefaults refills the shipped McLaren custom (CI selected-6: length 2).
+async function pinEmptyCustoms(page) {
+  const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
+  await forgetStored(page, [key]);
+  await page.evaluate((k) => GameStore.store.set(k, []), key);
+}
+
 test.describe("Liveries — catalog", () => {
   test("every livery has well-formed colours and a known finish", async ({ page }) => {
     await load(page);
@@ -367,7 +375,7 @@ test.describe("Liveries — creator", () => {
 
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
     await load(page);
-    await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
+    await pinEmptyCustoms(page);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
@@ -410,7 +418,7 @@ test.describe("Liveries — creator", () => {
 
   test("a gloss draft stores no finish field at all", async ({ page }) => {
     await load(page);
-    await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
+    await pinEmptyCustoms(page);
     await openSetup(page);
 
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();

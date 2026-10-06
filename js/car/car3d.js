@@ -307,26 +307,23 @@ const Car3D = (function () {
   // buried flap 2's trailing edge 15 mm inside flap 3. The cascade's own drawn
   // attitude already IS the downforce pose; the front's travel comes from
   // flattening it, not from over-rotating it first.
-  const Z_BITE = { front: 0, rear: 0.34 };
+  // Front travel used to be ZERO bite + a TE-near hinge (0.80). That opens a
+  // slot the cascade hides, so the garage silhouette did not change at all
+  // between CORNER and STRAIGHT. Mid-chord hinge + a little bite makes the
+  // trailing edge drop in X-mode — the cascade reads as two steps, not one
+  // plank. Rear bite is the DRS-style slot; a bit more of it so the crown
+  // line is obvious from wingRear.
+  const Z_BITE = { front: 0.12, rear: 0.55 };
   // Where each element pivots, as a fraction of its own chord: 0 = leading edge,
   // 1 = trailing edge.
-  // This is the thing that makes an opening wing read as opening. Rotating about
-  // the LEADING edge (which is what this did) changes incidence but leaves the
-  // hinge line — the point nearest the element ahead — exactly where it was, so
-  // the SLOT never opens and the whole gesture reads as a plank tilting. A real
-  // DRS/X-mode flap pivots near its TRAILING edge: the leading edge swings up and
-  // away from the element in front of it and daylight appears through the wing,
-  // which is both the mechanism and the visual.
-  // The rear goes almost fully trailing-edge-pivoted, as the real actuator does.
-  // The front stays near its LEADING edge, which is both what the real hardware
-  // does (a front flap pivots on the slot-gap brackets at its nose, not on an
-  // endplate actuator) and what the packaging allows: the cascade elements are
-  // stacked ~12 mm apart and live under the nose overhang, so a leading edge
-  // that swings has nowhere to swing to — it clashes with the element in front
-  // of it going one way and the bodywork going the other. The front's opening
-  // therefore reads mostly as the trailing edge dropping, which is correct.
-  const HINGE = { front: 0.80, rear: 0.86 };
-  const OPEN_FRAC = { front: 1, rear: 1 };
+  // wingRear looks at the TRAILING edge. A TE-near hinge (0.80) left that edge
+  // still, so CORNER vs STRAIGHT read as the same black slab plus a telltale
+  // strip. Mid-chord on BOTH wings drops the TE in X-mode (the flap goes
+  // flatter) and lifts the LE off the mainplane (the DRS slot). The front
+  // stays mid-chord for the same reason — a LE-near hinge hid the cascade
+  // under the nose.
+  const HINGE = { front: 0.52, rear: 0.45 };
+  const OPEN_FRAC = { front: 2.2, rear: 2.6 };
   // Underside of the NOSE where it overhangs the front wing, as (z, y) samples
   // measured off the built body. This is a hard ceiling: at max downforce the
   // baked top flap already passes within ~12 mm of it, so an unconditional bite
@@ -3088,15 +3085,20 @@ const Car3D = (function () {
           { z: _ep.front.z, x: s*0.50, y: _ep.front.cy, w: 0.040, h: _ep.front.sy, t: 0.58 },
           { z: _ep.rear.z, x: s*0.50, y: _ep.rear.cy, w: 0.040, h: _ep.rear.sy, t: 0.72 },
           0.012, DARK);
-        // Louvre detail: a stack of thin recessed slots near the top-rear corner.
-        // Four flat slots. A louvre is a RAKED cut — outboard and high at the
-        // front, inboard and low at the back — and `addSpan` gives that for the
-        // same 12 triangles a box costs, so the stack finally catches light
-        // across its length instead of reading as four painted lines.
-        for (let i = 0; i < 4; i++) {
-          const ly = epCY + epSY * 0.5 - 0.07 - i * 0.06;
-          addSpan(out, { z: -2.21, x: s * 0.519, y: ly + 0.010, w: 0.018, h: 0.016, t: 0.85 },
-                       { z: -2.39, x: s * 0.509, y: ly - 0.010, w: 0.015, h: 0.013, t: 0.70 },
+        // Endplate WINDOWS + louvres. The old 18 mm flush slots sat inside the
+        // plate thickness and read as a blank black slab from wingRear. Proud
+        // raked cuts catch the bay light; two larger recesses read as DRS
+        // cut-outs (void, not painted lines).
+        for (let i = 0; i < 2; i++) {
+          const wy = epCY + epSY * 0.12 - i * 0.11;
+          addSpan(out, { z: -2.18, x: s * 0.538, y: wy + 0.028, w: 0.028, h: 0.055, t: 0.78 },
+                       { z: -2.46, x: s * 0.522, y: wy - 0.012, w: 0.022, h: 0.042, t: 0.62 },
+                  INTAKE, null, SURFACES.carbon);
+        }
+        for (let i = 0; i < 5; i++) {
+          const ly = epCY + epSY * 0.42 - i * 0.048;
+          addSpan(out, { z: -2.20, x: s * 0.536, y: ly + 0.014, w: 0.022, h: 0.022, t: 0.82 },
+                       { z: -2.42, x: s * 0.524, y: ly - 0.012, w: 0.018, h: 0.018, t: 0.64 },
                   INTAKE, null, SURFACES.carbon);
         }
         if (!_round) addBeveledSpan(out,
@@ -3151,24 +3153,25 @@ const Car3D = (function () {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
         rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, rearC, 1.15);
       }
-      const drsSX = aLvl >= 3 ? 0.13 : 0.10;
-      // DRS actuator pod. A plain box sat on the wing crown at the top of the
-    // chase frame; `addSpan` costs the identical 12 triangles and buys a raked,
-    // tapered fairing — `t` narrows the top, so the section is a trapezoid and
-    // the pod reads as a moulded housing rather than a brick.
-    addSpan(out, { z: -2.43, x: 0, y: epCY + 0.258, w: drsSX, h: 0.052, t: 0.72 },
-                 { z: -2.61, x: 0, y: epCY + 0.276, w: drsSX * 0.78, h: 0.040, t: 0.55 },
+      const drsSX = aLvl >= 3 ? 0.16 : 0.13;
+      // DRS actuator pod + the slot-gap rail it sits on. The pod used to be a
+      // 5 cm brick lost on the crown; a taller raked housing and a carbon
+      // strip under the top flap make the mechanism (and the open slot) read
+      // from wingRear.
+    addSpan(out, { z: -2.40, x: 0, y: epCY + 0.268, w: drsSX, h: 0.070, t: 0.70 },
+                 { z: -2.62, x: 0, y: epCY + 0.292, w: drsSX * 0.72, h: 0.048, t: 0.50 },
             DARK);
+    addBox(out, 0, epCY + 0.236, -2.50, 0.42, 0.010, 0.20, CARBON, SURFACES.carbon);
 
       // Lamp above tip centreline so stock/megaphone mouth rim stays visible.
       const tipR = exhTipRForLamp, lampY = 0.545;
       const lampW = Math.min(0.042, tipR * 0.70), lampH = Math.min(0.052, tipR * 0.85);
       addSpan(out, { z: -2.47, x: 0, y: lampY, w: 0.14, h: 0.16, t: 0.78 },
                    { z: -2.57, x: 0, y: lampY, w: 0.115, h: 0.13, t: 0.62 }, DARK);
-      addBox(out, 0, lampY, -2.585, lampW, lampH, 0.03,
-             [2.6, 0.08, 0.06], SURFACES.emissive);
-      addBox(out, 0, lampY, -2.60, lampW * 0.45, lampH * 0.42, 0.02,
-             [3.4, 0.12, 0.05], SURFACES.emissive);   // brake-light core
+      addBox(out, 0, lampY, -2.585, lampW * 1.15, lampH * 1.10, 0.034,
+             [1.55, 0.16, 0.11], SURFACES.emissive);
+      addBox(out, 0, lampY, -2.60, lampW * 0.38, lampH * 0.36, 0.016,
+             [1.85, 0.18, 0.10], SURFACES.emissive);   // rain-light core (bloom-capped)
 
       const diffW  = (0.72 + aLvl * 0.145) * Math.max(0.78, Math.min(1.3, aeroStyle.floorEdge));
       const diffH1 = (0.40 + aLvl * 0.325) *

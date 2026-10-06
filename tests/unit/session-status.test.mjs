@@ -41,6 +41,7 @@ test("toMarkdown flags unpushed commits, dirt and a live run", () => {
   assert.match(md, /1 commit\(s\) NOT pushed/);
   assert.match(md, /1 uncommitted: `js\/game\.js`/);
   assert.match(md, /verdict is NOT read yet/);
+  assert.match(md, /Ready gate.*ready-gate\.mjs/);
   assert.match(md, /session_abc/);
   assert.match(md, /`abc1234` fix/);
 });

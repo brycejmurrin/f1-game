@@ -421,6 +421,7 @@ test("garage: the paint editor and its live-preview override die with the screen
   assert.deepEqual([...mo.opts.attributeFilter], ["hidden"]);   // spread: the VM's Array is another realm's
 
   ui.openSetup();
+  assert.equal($("carsetup").hidden, false, "sheet is shown before / while building");
   $("cs-options").querySelector(".cs-liv-create").onclick();          // + Create livery
   assert.ok($("cs-options").querySelector(".cs-liv-editor"), "editor open");
   assert.ok(G.livDraftOverride && G.livDraftOverride.teamId === "haas", "live preview override set");
@@ -433,6 +434,48 @@ test("garage: the paint editor and its live-preview override die with the screen
   ui.buildSetup();
   assert.equal($("cs-options").querySelector(".cs-liv-editor"), null, "next visit opens the swatch grid, not the editor");
   assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup work", () => {
+  const rafQueue = [];
+  const dom = makeDom();
+  const g = {
+    $: (id) => dom.byId(id), els: { select: dom.byId("select"), overlay: dom.byId("overlay") },
+    cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? "livery" : d), set() {} },
+    arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => "default", saveLiveryId() {},
+    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
+    teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
+    peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
+    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+  };
+  const sb = sandbox(dom, {
+    requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
+    MutationObserver: class { constructor(cb) { this.cb = cb; } observe(t, o) { this.target = t; this.opts = o; } },
+    Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
+             getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
+    Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+    SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
+    LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+    PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
+  });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  const deferred = sb.SetupUI.create(g);
+  dom.byId("select").hidden = false;
+  deferred.openSetup();
+  assert.equal(dom.byId("carsetup").hidden, false);
+  assert.equal(dom.byId("select").hidden, true);
+  assert.equal(dom.byId("carsetup").getAttribute("aria-busy"), "true");
+  assert.equal(g.setupPreviewOn, true);
+  assert.equal(dom.byId("cs-options").querySelector(".cs-liv-create"), null, "buildSetup has not run yet");
+  assert.ok(rafQueue.length >= 1);
+  const wave1 = rafQueue.splice(0, rafQueue.length); for (const fn of wave1) fn();
+  assert.ok(rafQueue.length >= 1);
+  const wave2 = rafQueue.splice(0, rafQueue.length); for (const fn of wave2) fn();
+  assert.equal(dom.byId("carsetup").getAttribute("aria-busy"), null);
+  assert.ok(dom.byId("cs-options").querySelector(".cs-liv-create"), "tabs built after the sheet painted");
 });
 
 test("garage: hiding the screen with no editor open is a no-op", () => {

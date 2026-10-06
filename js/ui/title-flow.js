@@ -9,6 +9,8 @@ $("mb-race").onclick = () => {
   G.flow = "gp"; G.session = "race";
   restoreFreePlaySelection();
   G.buildSelect();
+  // Root VT: old title snapshot fades out before the select sheet fades in
+  // (css/tokens.css ::view-transition-old/new(root)); do not overlap them.
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (G.soundOn) GameAudio.uiSelect();
   G.scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
@@ -91,7 +93,7 @@ $("mb-season").onclick = () => {
 function openCareer() {
   G.flow = "career"; G.session = "race";
   deps.selectCareer();
-  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
+  // vt: the same staggered root fade RACE / SEASON / GARAGE take off the title.
   vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
   if (G.soundOn) GameAudio.uiSelect();
   G.scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it

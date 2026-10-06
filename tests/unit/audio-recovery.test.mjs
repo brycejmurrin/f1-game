@@ -247,6 +247,8 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   const body = g.slice(g.indexOf("async function startRaceBody()"), g.indexOf("const sessionEntry = SessionEntry.create();"));
   assert.match(body, /if \(document\.hidden\) setPaused\(true, "hidden-tab"\);\n\}\s*$/, "the hidden check is the LAST thing, after the audio starts it stops");
   const sp = g.slice(g.indexOf("function setPaused(p, why) {"), g.indexOf("els.pausebtn.onclick = () => setPaused(true);"));
+  assert.match(sp, /if \(p\) \{ GameAudio\.stopEngine\(\); GameAudio\.setSkid\(0\); GameAudio\.stopRain\(\); radioVoice\.halt\(\);/,
+    "pause stops rain with the engine — rain rides the SFX bus and must not hiss over a frozen race");
   assert.match(sp, /else if \(soundOn\) \{[^\n]*GameAudio\.startEngine\(\); GameAudio\.startMusic\(trackIdx\); if \(isRaining\(\)\) GameAudio\.startRain\(\); \}/,
     "SOUND turned on under the pause card (js/audio/panel.js defers) gets music and rain back on RESUME");
   assert.match(g, /go\.addEventListener\("animationend", qGoShakeEnd, \{ once: true \}\)/, "one named handler, not a closure per rejected press");

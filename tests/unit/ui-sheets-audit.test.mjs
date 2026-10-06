@@ -671,7 +671,7 @@ test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podiu
   // the rows scrolling under a sticky row showed through it. A small cascade
   // over the sheet's own rules: compound class selectors (with :not), outside
   // any @media, ranked by specificity then source order, as the browser does.
-  const rules = cssRules(readCssSource("css/components.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
+  const rules = cssRules(readCssSource("css/overlays.css")).filter((r) => !r.context.some((c) => c.startsWith("@media")));
   const COMPOUND = /^((?:\.[\w-]+)+)((?::not\(\.[\w-]+\))*)$/;
   const winner = (classes, prop, descendant) => {
     let best = null;
@@ -733,4 +733,34 @@ test("the TIME TRIAL sheet prints YOUR BEST and the board to the thousandth", ()
   h.api.buildTTResults();
   const pts = h.els.resultsTable.children.flatMap((r) => r.children || []).filter((c) => c.classList.contains("res-pts")).map((c) => c.textContent);
   assert.deepEqual(pts, ["1:21.163", "1:21.163", "1:21.167"], "two laps 0.004 s apart must not print alike");
+});
+
+test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
+  const dom = makeDom();
+  const sb = { document: dom.document };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: "js/ui/setting-row.js" });
+  const SettingRow = vm.runInContext("SettingRow", ctx);
+  const built = SettingRow.build("rs-laps", "LAPS");
+  dom.body.appendChild(built.row);
+  let laps = 3;
+  SettingRow.wire(built.row, {
+    values: [[3, "3"], [5, "5"], [57, "57 (FULL)"]],
+    read: () => laps,
+    write: (v) => { laps = +v; },
+    wrap: false,
+  });
+  assert.equal(built.prev.disabled, true, "down from 3 does not wrap to FULL");
+  built.prev.click();
+  assert.equal(laps, 3);
+  built.next.click();
+  assert.equal(laps, 5);
+  built.next.click();
+  assert.equal(laps, 57);
+  assert.equal(built.next.disabled, true, "up from FULL does not wrap to 3");
+  built.next.click();
+  assert.equal(laps, 57);
+  built.prev.click();
+  assert.equal(laps, 5);
 });

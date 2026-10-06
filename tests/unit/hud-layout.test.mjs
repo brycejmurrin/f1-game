@@ -20,7 +20,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
@@ -37,7 +37,7 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   });
   const run=vm.runInContext("("+helper[0].replace(/\n\nconst measure$/,"")+")",ctx);
   const invoke=(fn,arg)=>vm.runInContext("("+fn.toString()+")",ctx)(arg);
-  const page={goto:async()=>{},reload:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
+  const page={goto:async()=>{},reload:async()=>{},addInitScript:async()=>{},addStyleTag:async()=>{},evaluate:async(fn,arg)=>invoke(fn,arg),
     waitForFunction:async(fn,arg)=>assert.equal(await invoke(fn,arg),true,"no background HUD tick runs during the warm-up"),
     waitForTimeout:async()=>{throw new Error("broadcast helper must use readiness, not a sleep");}};
   await run(page,"buttons",false,{sal:59,sar:59,sat:0,sab:21},{profile:"broadcast",cam:"heli"});
@@ -186,6 +186,24 @@ test("no HUD position, size or MOVE & SIZE offset is measured in the large viewp
   assert.deepEqual(hits, [], "css/hud.css must use svh, not vh");
   const m = CSS.match(/\[data-hl\]\s*\{([^}]*)\}/);
   assert.match(m[1], /--hl-y, 0\) \* 1svh/, "the MOVE & SIZE vertical offset is a share of the small viewport");
+});
+
+// Phone-portrait survey 390×844 ranked tower × map: the centred POS row sits
+// on the top-left minimap. Park map+gaps under --hud-top-h only in that
+// shape; landscape / tablet / desktop keep the shipped top-left cluster.
+test("phone portrait parks the minimap under the timing tower; other shapes keep the corner", () => {
+  const src = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const q = /@media \(orientation: portrait\) and \(max-width: 500px\)\s*\{([^}]+)\}/;
+  const m = src.match(q);
+  assert.ok(m, "a portrait-and-narrow query owns the tower/map stack");
+  assert.match(m[1], /#minimap/);
+  assert.match(m[1], /\.hud-gaps/);
+  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 8px\)/);
+  const baseMap = src.match(/(?:^|\n)#minimap \{\s*position: absolute;([\s\S]*?)\n\}/);
+  assert.ok(baseMap, "shipped #minimap rule");
+  assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
+  assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
 });
 
 const plain = (o) => JSON.parse(JSON.stringify(o));

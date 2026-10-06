@@ -89,6 +89,7 @@ export function toMarkdown(s) {
   out.push(`- **Pushed** ${s.upstream == null ? pushHint : s.unpushed ? `${s.unpushed} commit(s) NOT pushed` : "yes"}`);
   out.push(`- **Working tree** ${s.dirty.length ? `${s.dirty.length} uncommitted: ${s.dirty.slice(0, 8).map((d) => "`" + d.slice(3) + "`").join(", ")}${s.dirty.length > 8 ? ", …" : ""}` : "clean"}`);
   out.push(`- **Live browser run** ${s.live ? "`" + s.live + "` — its verdict is NOT read yet" : "none"}`);
+  out.push(`- **Ready gate** before draft→ready: \`node tools/ci/ready-gate.mjs\` must exit 0 (tooling-fast / Structural guards on tip; #1111)`);
   out.push(`- **Sessions** ${s.sessions.length ? s.sessions.join(", ") : "none recorded (no Claude-Session trailers)"}`);
   out.push("");
   out.push(`**Commits** (${s.commits.length})`);

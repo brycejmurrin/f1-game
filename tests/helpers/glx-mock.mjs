@@ -149,6 +149,11 @@ export function bootGlx(opts = {}) {
       contextLost = true;
       if (canvasListeners.webglcontextlost) canvasListeners.webglcontextlost({ preventDefault: noop });
     },
+    /** Simulate `webglcontextrestored` after a loss (browser may never fire this). */
+    restoreContext: () => {
+      contextLost = false;
+      if (canvasListeners.webglcontextrestored) canvasListeners.webglcontextrestored({});
+    },
     /** A complete world frame; override any field. */
     frame: (over = {}) => Object.assign({
       viewProj: new Float32Array(16), invViewProj: new Float32Array(16), invProj: new Float32Array(16),

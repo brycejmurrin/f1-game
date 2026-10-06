@@ -151,10 +151,12 @@ test.describe("garage active aero", () => {
     // ALONG it, where the sweep projects to almost nothing. Pressing the button
     // has to put the player somewhere they can see it work.
     expect(after.spin, "aiming stops the turntable").toBe(false);
-    // Close enough that the travel is actually legible. At the whole-car
-    // framing the rear wing's 135 mm projects to ~10 px on a landscape phone,
-    // which is why this had to move at all.
-    expect(after.dist, "and moves in close").toBeLessThan(3.2);
+    // REAR-WING is 4.6 m / el 0.50 so both endplates and the beam wing fit.
+    // Whole-car is ~8.5 m, where the same 135 mm travel is ~10 px on a
+    // landscape phone — the aim still has to leave that framing.
+    expect(after.az, "rear-wing three-quarter").toBeCloseTo(Math.PI * 0.72, 5);
+    expect(after.el, "slightly above the wing").toBeCloseTo(0.50, 5);
+    expect(after.dist, "and frames the whole rear wing").toBeCloseTo(4.6, 5);
   });
 
   test("it also aims when a WHOLE-CAR preset is showing, not just the turntable", async ({ page }) => {
@@ -165,7 +167,9 @@ test.describe("garage active aero", () => {
     expect(wide.spin).toBe(false);
     expect(wide.dist).toBeGreaterThan(5);
     await clickId(page, "cs-aero");
-    expect((await page.evaluate(() => window.__apex.garageCam())).dist).toBeLessThan(3.2);
+    const aimed = await page.evaluate(() => window.__apex.garageCam());
+    expect(aimed.az, "rear-wing three-quarter").toBeCloseTo(Math.PI * 0.72, 5);
+    expect(aimed.dist, "and frames the whole rear wing").toBeCloseTo(4.6, 5);
   });
 
   test("a player who has aimed the camera keeps their angle", async ({ page }) => {
@@ -179,5 +183,25 @@ test.describe("garage active aero", () => {
     const after = await page.evaluate(() => window.__apex.garageCam());
     expect(after.az).toBeCloseTo(chosen.az, 5);
     expect(after.dist).toBeCloseTo(chosen.dist, 5);
+  });
+
+  // Screen sun-shafts from the bay sky fill washed liveries white/sky-blue after
+  // team switch + orbit (live garage sheet 2026-10-06). presentOpts must keep
+  // shafts at 0 even when the Home track's LT.sunShaftMul is hot — a pixel
+  // washout gate would need soft-present + luminance, which this suite cannot
+  // afford; the live knob is the same contract and is assertable in one evaluate.
+  test("presentOpts keeps screen sun-shafts off after team switches", async ({ page }) => {
+    await openGarage(page);
+    const teams = ["mercedes", "ferrari", "redbull", "astonmartin"];
+    for (const id of teams) {
+      const shaft = await page.evaluate((tid) => {
+        const r = window.__apex.garageTeam(tid);
+        if (!r || !r.ok) throw new Error("garageTeam " + tid + ": " + JSON.stringify(r));
+        window.__apex.garageFrame("hero", { az: 1.1, el: 0.35 });
+        window.__apex.garageStep(1 / 30, 24);
+        return SetupCamera.presentOpts().tune.sunShaftMul;
+      }, id);
+      expect(shaft, `${id} sunShaftMul`).toBe(0);
+    }
   });
 });

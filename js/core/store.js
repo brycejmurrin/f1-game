@@ -27,11 +27,17 @@ const GameStore = (function () {
     broken: null,
     // `d` is the CALL-SITE default; js/data/settings-defaults.js outranks it when
     // it names this key, so a shipped default lives in one file instead of in
-    // whichever module happened to read the key first. Opt-in per key, and
+    // whichever module happened to read the key first. Garage keys
+    // (parts./livery./setup./team/driver/…) fall through to
+    // js/data/garage-defaults.js the same way — a player's stored value still
+    // wins; only a miss reads the shipped garage. Opt-in per key, and
     // guarded on typeof so store.js still loads alone in a unit test.
     _def(k, d) {
-      return (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
-        ? SettingsDefaults.get(k) : d;
+      if (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
+        return SettingsDefaults.get(k);
+      if (typeof GarageDefaults !== "undefined" && GarageDefaults.has(k))
+        return GarageDefaults.get(k);
+      return d;
     },
     get(k, d) {
       const key = "apex26." + k;

@@ -87,13 +87,13 @@ test.describe("Monza track-owned foundation migration", () => {
     expect(hard).toEqual([]);
 
     const emitted = new Map(result.models.emitted.map((entry) => [entry.id, entry]));
-    // The hand-placed pit canopy stands over the REAL pit lane since the
-    // bogus sceneryStartFrac went (2026-09-23), so the engine's pit complex
-    // supersedes it, as it does every hand-placed pit block (portimao,
-    // silverstone's Wing). Pinned by id and reason, like new-hooks.spec.
-    const canopy = result.models.suppressed.find((entry) => entry.id === "monza-pit-canopy");
-    expect(canopy?.reason, "monza-pit-canopy should be superseded by the pit complex").toMatch(/superseded by the pit complex/);
+    // Signature heroes reseated clear of onTrack / pit-complex supersede
+    // (2026-10-05): Tribuna Centrale L@gap22, podium tower R@gap36, pit canopy
+    // terrace behind the garages at 0.975/gap26 (was superseded at 0.99/18).
     for (const id of [
+      "monza-tribuna-centrale",
+      "monza-podium-tower",
+      "monza-pit-canopy",
       "monza-villa-lake",
       "monza-west-park-lake",
       "monza-sopraelevata-flyover",

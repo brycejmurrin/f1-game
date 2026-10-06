@@ -388,6 +388,93 @@ test("arrival moves the reflected car and shutter without rebuilding geometry", 
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
 });
 
+test("garage glare and fixture energy stay under the bloom knee at default knobs", () => {
+  const scene = read("js/garage/scene.js");
+  const glare = /const GLARE_STR = ([0-9.]+);/.exec(scene);
+  assert.ok(glare, "GLARE_STR must stay a named constant");
+  assert.ok(Number(glare[1]) <= 0.10,
+    `GLARE_STR ${glare[1]} is a showroom halo, not the old 0.18 wash`);
+  const keys = [...scene.matchAll(/KEY_TINT, 15\.0, 11, 0, -1, 0,\s+0\.72, 0\.28, 0\.10, ([0-9.]+), 1\]/g)];
+  assert.equal(keys.length, 2, "both key fixtures must still be in the table");
+  for (const m of keys) {
+    assert.ok(Number(m[1]) <= 0.55, `key glareW ${m[1]} must not sit at the old 1.1`);
+  }
+  assert.match(scene, /-s \* 0\.26, 0\.97, 0, 0\.90, 0\.55, 0\.05, 0, 0\.1[0-5]\);/,
+    "floor uplights keep a small glareW, not the old 0.5");
+  assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
+    "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
+  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
+    "floor reflection resolves opaque so depth write self-occludes the car");
+  assert.match(scene, /depthBias: MIRROR_BIAS/,
+    "mirror resolve uses depthBias to clear the floor without noDepthTest");
+  assert.doesNotMatch(scene, /noDepthTest:\s*true/,
+    "noDepthTest ghosted helmet/wheels/wings through each other on close-ups");
+  assert.match(scene, /const MIRROR_SHEEN_PEAK = 0\.1[0-6]/,
+    "bay fade restores a contact sheen, not a 0.26 wash");
+});
+
+test("floor reflection depth-resolves then fades; room is drawn first", () => {
+  const { GarageScene, draws } = harness();
+  const car = { car: true };
+  GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, null, car);
+  const carAt = draws.findIndex((d) => d.mesh === car);
+  assert.ok(carAt >= 0, "mirrored car is drawn");
+  // Shell/props must precede the resolve so their depth clips it.
+  assert.ok(carAt > 1, `reflection at draw ${carAt} should follow floor + room`);
+  const scene = read("js/garage/scene.js");
+  assert.match(scene, /function mirrorSheen\(/, "sheen falls off with distance from the car");
+  assert.match(scene, /ensureMirrorFade\(/, "bay fade quad composites the contact sheen");
+});
+
+test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {
+  const { GarageScene, draws } = harness();
+  const eye = [0, 11, 0];
+  const countAt = (name) => {
+    draws.length = 0;
+    GarageScene.spot(name);
+    GarageScene.draw(TEAM, LIV, eye, null, 0);
+    return draws.length;
+  };
+  const hero = countAt("hero");
+  const top = countAt("top");
+  const rear = countAt("rear");
+  assert.equal(top, hero - 2, `TOP should skip truss + ceiling LEDs (hero ${hero}, top ${top})`);
+  assert.equal(rear, hero, "leaving TOP must restore the roof meshes");
+  GarageScene.spot("top");
+  const rig = GarageScene.live(LIV, 0, { spin: false });
+  assert.equal(rig[14], 0, "TOP must drop the first fixture's glare with its housing");
+  GarageScene.spot("hero");
+  const restored = GarageScene.live(LIV, 0, { spin: false });
+  assert.ok(restored[14] > 0, "leaving TOP must restore fixture glare");
+});
+
+test("buildStatic still emits the roof truss for the trackside pit row", () => {
+  // SceneryPits places GarageScene.buildStatic({props:"lite"}) once per team.
+  // Extracting buildTruss from buildShell for the TOP hide must not drop those
+  // beams from the baked bay — 84 tris × 12 teams = the 1008 monaco/monza
+  // STRIP shortfall on tip 63f209fc4.
+  const { GarageScene } = harness();
+  const bay = GarageScene.buildStatic(LIV, { props: "lite" });
+  assert.equal(bay.idx.length, 12318,
+    "lite bay keeps the 7-block roof truss (252 idx) that buildShell used to carry");
+});
+
+test("pit kit stays off the FRONT and REAR sight lines", () => {
+  const eq = read("js/garage/scene-equipment.js");
+  assert.doesNotMatch(eq, /\[-0\.18, 0\.40, -2\.72\]/,
+    "starter umbilical must not run into the gearbox across the REAR preset");
+  assert.doesNotMatch(eq, /block\(g\.mid, 1\.45, 0\.13, -3\.35/,
+    "rear jack must leave the REAR corridor");
+  const guns = /const gx = sd \* ([0-9.]+);/.exec(eq);
+  assert.ok(guns, "wheel guns still have a shared lateral");
+  assert.ok(Number(guns[1]) >= 2.45, `guns at |x|=${guns[1]} still sit in the FRONT/REAR corridor`);
+  const props = read("js/garage/scene.js");
+  assert.match(props, /block\(g\.mid, 2\.85, 0\.12, 4\.55/,
+    "full-bay front jack sits outboard of the FRONT corridor");
+  assert.match(props, /block\(g\.mid, 1\.55, 0\.12, 4\.35, 0\.55, 0\.05, 0\.12, scale\(STEEL, 0\.8\)\);   \/\/ the front jack, beside the nose/,
+    "trackside lite bay keeps its own front jack (pit-complex vertex pin)");
+});
+
 test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
   // The Legends row keeps team id "legends" across all twelve legends, and two
   // tribute liveries can share every colour (Schumacher's and Senna's reds):

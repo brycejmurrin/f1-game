@@ -968,7 +968,8 @@ test("a WATCH has no spotter: no 'car left' round a puppet, and a live race stil
     // The followed car (G.player in a WATCH: RealReplay.setFollow) with a rival on its left.
     const me = car("PLY", 340, 60, { isPlayer: true, local: true, s: 340, x: 0 });
     const cars = [car("AAA", 1400, 60, { s: 1400, x: 0 }), car("BBB", 341, 60, { s: 341, x: -2.5 }), me];
-    const store = new Map();
+    // Shipped spotter is OFF; the live-race control still needs a live call.
+    const store = new Map([["spotter", true]]);
     const G = { state: "race", soundOn: true, raceT: 0, cars, player: me, track: { total: LAP }, lapsTarget: 20,
       timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
       announceBusy: false, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,

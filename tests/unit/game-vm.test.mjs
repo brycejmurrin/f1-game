@@ -204,6 +204,13 @@ test("the default seed pins tyre wear OFF (recorded AI numbers assume it)", () =
     "a car accumulated wear with the model off");
 });
 
+test("the default seed pins McLaren + empty sheet (characterization, not GarageDefaults)", () => {
+  assert.equal(g.G.teamIdx, 2, "default VM seat must stay McLaren, not shipped Mercedes");
+  const parts = g.G.store.get("parts.mclaren", { engine: "sentinel" });
+  // JSON, not deepEqual: the value is a VM-realm object and is not === a host {}.
+  assert.equal(JSON.stringify(parts), "{}", "empty sheet so signature McLaren parts cannot move physics");
+});
+
 test("the sim seed: pinned to 1 here, fresh per page load for a player, ?seed=N wins", async () => {
   // At a fixed 1 the first race after every page load was the same race. A
   // player's session boots from a fresh seed (js/game.js bootSeed); this

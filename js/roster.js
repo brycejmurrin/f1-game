@@ -360,6 +360,7 @@
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/designer.js"
   ],
@@ -422,6 +423,10 @@
     ],
     [
       "js/editor/canvas.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/elev-presets.js",
       "js/editor/designer.js"
     ],
     [

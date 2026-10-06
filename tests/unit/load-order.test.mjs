@@ -356,14 +356,15 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
 });
 
 // stamps / randomise / validate / canvas / designer destructure TrackShape at
-// EVAL (js/editor/*); the codec stands alone; the SCREEN (designer.js) reads
-// every other editor module at init, so it is last and every module points at
-// it. Derived like the data hub's, asserted the same way.
+// EVAL (js/editor/*); the codec and elev-presets stand alone (no TrackShape
+// bind); the SCREEN (designer.js) reads every other editor module at init, so
+// it is last and every module points at it. Derived like the data hub's.
 test("the track-designer DAG orders shape.js before every module that destructures it, and the screen last", () => {
-  const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", SCREEN = "js/editor/designer.js";
+  const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", ELEV = "js/editor/elev-presets.js", SCREEN = "js/editor/designer.js";
+  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN]);
   assert.equal(MANIFEST.LAZY_EDITOR[0], SHAPE, "shape.js evaluates first");
   assert.equal(MANIFEST.LAZY_EDITOR[MANIFEST.LAZY_EDITOR.length - 1], SCREEN, "the screen evaluates last");
-  const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => f !== SHAPE && f !== CODEC && f !== SCREEN).map((f) => [SHAPE, f]);
+  const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => !pure.has(f)).map((f) => [SHAPE, f]);
   const screenEdges = MANIFEST.LAZY_EDITOR.filter((f) => f !== SCREEN).map((f) => [f, SCREEN]);
   assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, shapeEdges.concat(screenEdges));
   for (const f of MANIFEST.LAZY_EDITOR) {
@@ -433,8 +434,11 @@ test("LAZY_XR is tagless and FULL keeps only the XR boot façade", () => {
 });
 
 test("FULL editor files are the picker boot half only (LAZY_EDITOR already lifted the rest)", () => {
+  // props.js is FULL so CustomTracks.sync()/share see TrackDesignerProps without
+  // opening the designer (ship #1129 scenery props palette).
   assert.deepEqual(MANIFEST.FULL.filter((f) => f.startsWith("js/editor/")), [
     "js/editor/track-themes.js",
+    "js/editor/props.js",
     "js/editor/custom-tracks.js",
   ]);
   for (const f of MANIFEST.LAZY_EDITOR) {

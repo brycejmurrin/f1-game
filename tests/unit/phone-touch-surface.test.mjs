@@ -71,7 +71,7 @@ const rung = (v, what) => { const m = /^max\((\d+(?:\.\d+)?)px,/.exec(String(v).
 /* ── tap targets ─────────────────────────────────────────────────────────── */
 
 test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG floor", () => {
-  const rules = css("css/responsive.css");
+  const rules = css("css/overlays.css");
   const sel = /^#rotate-race, #rotate-controls, #rotate-exit$/;
   assert.equal(decl(rules, sel, "min-height"), "var(--tap)",
     "#rotate-* min-height must be --tap: --tap-min is the 24px floor, and this layer only ever shows on a phone");
@@ -358,13 +358,22 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   // The portrait ladder (RACE IN PORTRAIT) anchors on the same insets.
   assert.match(decl(ov, "#btn-throttle", "left"), /var\(--sal\)/); assert.match(decl(ov, "#btn-throttle", "bottom"), /var\(--sab\)/);
   assert.match(decl(ov, "#btn-boost", "right"), /var\(--sar\)/);
-  const blocker = decl(css("css/responsive.css"), "#rotate-device", "padding");
+  const blocker = decl(css("css/overlays.css"), "#rotate-device", "padding");
   for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) assert.ok(blocker.includes(`var(${t})`), `#rotate-device padding uses ${t}`);
   // The insets themselves are env() reads with a 0px fallback, declared once.
   const tk = css("css/tokens.css");
   for (const [t, side] of [["--sat", "top"], ["--sar", "right"], ["--sab", "bottom"], ["--sal", "left"]]) {
     assert.equal(decl(tk, ":root", t), `env(safe-area-inset-${side}, 0px)`);
   }
+  // Title landscape: a centred 30rem #ios-install sat over RACE A FRIEND /
+  // SEASON (layout-audit ios-iphone-landscape, 2026-10-06). Park it under
+  // the brand column on compact-wide.
+  const src = read("css/touch-controls.css");
+  assert.match(
+    src,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
+    "compact-wide title parks #ios-install under the brand column, not over the doors",
+  );
 });
 
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */

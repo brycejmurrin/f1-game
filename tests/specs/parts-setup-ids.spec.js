@@ -27,7 +27,8 @@ const LANDSCAPE = { width: 844, height: 390 };
 async function openSetup(page, opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
-  // The default car, its parts forgotten; #mb-race re-reads the store.
+  // Factory McLaren empty sheet; #mb-race re-reads the store. A miss would
+  // let GarageDefaults fill the signature kit and mark Standard over-budget.
   await pinFreePlay(page, { click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });

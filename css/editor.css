@@ -60,8 +60,18 @@
 }
 .td-stage canvas:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
 /* The elevation strip (js/editor/profile.js) under the main canvas: a fixed
-   band, sized off the chip token; the main canvas keeps the rest. */
-.td-stage > canvas[data-role="profile"] { flex: none; height: calc(var(--chip-h) * 1.8); }
+   band tall enough for ≥44 px grips; the main canvas keeps the rest. */
+.td-stage > canvas[data-role="profile"] {
+  flex: none;
+  height: max(56px, calc(var(--chip-h) * 2.2));
+  min-height: 56px;
+  touch-action: none;
+}
+/* UNDO / REDO / FIT sit on the stage so they are not buried under DETAILS. */
+.td-stage > .td-chips[data-role="toolbar"] {
+  flex: none;
+  justify-content: flex-start;
+}
 .td-stats, .td-hint, .td-card-meta, .td-msg {
   font-size: var(--fs-micro);
   color: var(--dim);
@@ -163,6 +173,20 @@
   grid-template-columns: none;
   min-width: 0;
 }
+/* Slice H: scenery props palette under 3 LOOK — kind chips + place/remove. */
+#trackdesigner .td-chips[data-role="props"],
+#trackdesigner .td-chips[data-role="prop-actions"] {
+  display: flex; flex-wrap: wrap;
+  gap: calc(var(--gap) / 2);
+  min-width: 0;
+}
+#trackdesigner .td-chips[data-role="props"] > .sel-chip {
+  font-variant-numeric: tabular-nums;
+}
+#trackdesigner .td-hint[data-role="props-hint"] {
+  line-height: 1.35;
+  min-height: 1.35em;
+}
 .td-foot {
   display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--gap);
@@ -193,8 +217,18 @@
 @media (max-height: 500px) {
   .td-stage .td-hint { display: none; }
   .td-stage { gap: calc(var(--gap) / 4); }
-  .td-stage > canvas[data-role="profile"] { display: none; }   /* the elevation strip: the canvas keeps the height */
+  /* Keep the elevation strip on short phones (Bryce mobile pain); shrink, don't hide. */
+  .td-stage > canvas[data-role="profile"] {
+    display: block;
+    height: max(48px, calc(var(--chip-h) * 1.6));
+    min-height: 48px;
+  }
   .td-foot { padding-top: calc(var(--pad) * 0.2); padding-bottom: calc(var(--pad) * 0.25); }
+}
+/* Elevation mode: give the strip more of the stage on phones. */
+#trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] {
+  height: max(72px, calc(var(--chip-h) * 2.8));
+  min-height: 72px;
 }
 /* Narrow + short LANDSCAPE only (734×343 measured 2026-10-05): the
    portrait/narrow rule stacks the body with minmax(200px,1fr) AND turns the

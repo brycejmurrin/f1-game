@@ -58,7 +58,7 @@ test("the switch is APEX_FAIL_ON_FLAKY=1 and nothing else", () => {
 
 test("ci.yml arms the policy on every browser job that retries", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  const workers = (yml.match(/^\s*APEX_WORKERS: 1$/gm) || []).length;
+  const workers = (yml.match(/^\s*APEX_WORKERS: (?:1|\$\{\{ matrix\.workers \|\| 1 \}\})$/gm) || []).length;
   const armedJobs = (yml.match(/^\s*APEX_FAIL_ON_FLAKY: 1$/gm) || []).length;
   assert.ok(workers > 0, "no browser job env block found");
   assert.equal(armedJobs, workers, "every APEX_WORKERS: 1 env block must also set APEX_FAIL_ON_FLAKY: 1");

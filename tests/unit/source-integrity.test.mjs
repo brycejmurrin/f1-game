@@ -301,7 +301,7 @@ test("portrait race blocker is an actionable accessible dialog", () => {
     "the opt-in must set the class the blocker rule reads");
   assert.match(game, /localStorage\.setItem\("apex26\.portraitOk"/,
     "the choice must survive a reload, or the blocker asks again every race");
-  const css = fs.readFileSync(path.join(ROOT, "css/responsive.css"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
   assert.match(css, /body\.in-race:not\(\.rotate-ok\) #rotate-device \{ display: flex; \}/,
     "the blocker must still appear by default — opt-in, not opt-out");
 });

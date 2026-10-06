@@ -75,12 +75,12 @@ const AppearanceOpts = (function () {
   }
 
   let theme = oneOf(store.get(K_THEME, "dark"), THEMES, "dark");
-  let menuAccent = oneOf(store.get(K_MENU, "brand"), ACCENTS, "brand");
+  let menuAccent = oneOf(store.get(K_MENU, "ember"), ACCENTS, "ember");
   let hudAccent = oneOf(store.get(K_HUD, "team"), ACCENTS, "team");
   let menuHex = normHex(store.get(K_MENU_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
   let hudHex = normHex(store.get(K_HUD_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
-  let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
-  let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
+  let textSize = oneOf(store.get(K_TEXT, "large"), TEXT_SIZES, "large");
+  let contrast = oneOf(store.get(K_CONTRAST, "high"), CONTRASTS, "high");
   let cvdMode = oneOf(store.get(K_CVD, "off"), CVD_MODES, "off");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
   let help = oneOf(store.get(K_HELP, "on"), HELPS, "on");
@@ -345,7 +345,7 @@ const AppearanceOpts = (function () {
     return theme;
   }
   function setMenuAccent(v) {
-    menuAccent = oneOf(v, ACCENTS, "brand");
+    menuAccent = oneOf(v, ACCENTS, "ember");
     store.set(K_MENU, menuAccent);
     applyAll();
     paintRow("pm-menuaccent", menuAccent);
@@ -382,14 +382,14 @@ const AppearanceOpts = (function () {
   }
 
   function setTextSize(v) {
-    textSize = oneOf(v, TEXT_SIZES, "normal");
+    textSize = oneOf(v, TEXT_SIZES, "large");
     store.set(K_TEXT, textSize);
     applyAll();
     paintRow("pm-textsize", textSize);
     return textSize;
   }
   function setContrast(v) {
-    contrast = oneOf(v, CONTRASTS, "off");
+    contrast = oneOf(v, CONTRASTS, "high");
     store.set(K_CONTRAST, contrast);
     applyAll();
     paintRow("pm-contrast", contrast);
@@ -445,12 +445,12 @@ const AppearanceOpts = (function () {
   function restore(values) {
     const v = values || {};
     theme = oneOf(v.uiTheme, THEMES, "dark");
-    menuAccent = oneOf(v.menuAccent, ACCENTS, "brand");
+    menuAccent = oneOf(v.menuAccent, ACCENTS, "ember");
     hudAccent = oneOf(v.hudAccent, ACCENTS, "team");
     menuHex = normHex(v.menuAccentHex, PRESET_HEX.brand);
     hudHex = normHex(v.hudAccentHex, PRESET_HEX.brand);
-    textSize = oneOf(v.textSize, TEXT_SIZES, "normal");
-    contrast = oneOf(v.uiContrast, CONTRASTS, "off");
+    textSize = oneOf(v.textSize, TEXT_SIZES, "large");
+    contrast = oneOf(v.uiContrast, CONTRASTS, "high");
     cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");

@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
-  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail }
+  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard }
   from "../../tools/ci/tooling-fast.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
@@ -200,4 +200,9 @@ test("CLI: --help and unknown flags never start the suite", () => {
   assert.equal(ok.jobs, 3);
   assert.equal(ok.record, true);
   assert.deepEqual(ok.files, ["tests/unit/behind-ship.test.mjs"]);
+  const sh = parseToolingFastArgv(["--shard=1/2", "--jobs=4"]);
+  assert.equal(sh.shard, "1/2");
+  assert.deepEqual(applyFileShard(["a", "b", "c", "d"], "1/2"), ["a", "c"]);
+  assert.deepEqual(applyFileShard(["a", "b", "c", "d"], "2/2"), ["b", "d"]);
+  assert.throws(() => applyFileShard(["a"], "3/2"), /bad --shard/);
 });

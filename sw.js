@@ -396,6 +396,7 @@ async function precacheAssetLists() {
     "js/editor/fixes.js",
     "js/editor/codec.js",
     "js/editor/canvas.js",
+    "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR

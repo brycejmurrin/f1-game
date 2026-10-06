@@ -388,7 +388,7 @@ test("the spotter speaks only from the pack, and not over the engineer", () => {
   const said = [];
   const ids = [];
   const pack = { ensure() {}, busy: () => false, speak: (id, t) => { ids.push(id); said.push(t); return true; } };
-  const store = new Map();
+  const store = new Map([["spotter", true]]);
   const me = { s: 500, x: 0, speed: 60 };
   const G = { state: "race", soundOn: true, player: me, cars: [me, { s: 501, x: -2.5 }], track: { total: 5000 },
     vTop: () => 90, radio: { pack, recordedVoice: () => "michael", volume: () => 1 }, store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) } };
@@ -436,7 +436,7 @@ test("the spotter is silent while paused and once the player has taken the flag"
   const pack = { ensure() {}, busy: () => false, speak: (id, t) => { said.push(t); return true; } };
   const me = { s: 500, x: 0, speed: 60 };
   const G = { state: "race", soundOn: true, paused: true, player: me, cars: [me, { s: 501, x: -2.5 }], track: { total: 5000 },
-    vTop: () => 90, radio: { pack, volume: () => 1, busy: () => false }, store: { get: (k, d) => d, set() {} } };
+    vTop: () => 90, radio: { pack, volume: () => 1, busy: () => false }, store: { get: (k, d) => (k === "spotter" ? true : d), set() {} } };
   const s = Spotter.create(G);
   for (let i = 0; i < 30; i++) s.update(1 / 60);
   G.paused = false; me.finished = true;
@@ -584,7 +584,7 @@ test("spotter interrupts routine speech only with a ready clip, retains awarenes
   const pack = { ensure() {}, plan: () => ready, busy: ch => ch ? false : busy,
     stop() { stopped++; }, speak(id, text, opt) { said.push(text); valid = opt.valid; return true; } };
   const G = { state: 'race', soundOn: true, player: me, cars: [me, { s: 100, x: -2 }], track: { total: 1000 },
-    vTop: () => 100, store: { get: (k, d) => d }, radio: { pack, busy: () => busy, volume: () => 1,
+    vTop: () => 100, store: { get: (k, d) => (k === "spotter" ? true : d) }, radio: { pack, busy: () => busy, volume: () => 1,
       yieldToSpotter() { yielded++; busy = false; } } };
   const s = Spotter.create(G);
   for (let i = 0; i < 10; i++) s.update(.05);
@@ -745,4 +745,9 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   assert.doesNotMatch(body, /setPaused\(/, "precondition: the garage pauses without the card (so the observer cannot help)");
   assert.ok(body.indexOf("radioVoice.halt();") > 0 && body.indexOf("radioVoice.halt();") < body.indexOf('openGarage("pit")'),
     "openPitWork halts the radio before the garage opens");
+  assert.match(body, /GameAudio\.stopRain\(\)/,
+    "openPitWork stops rain with the engine — the garage is a pause without the card");
+  const close = game.slice(game.indexOf("function closePitWork() {"), game.indexOf("function leaveGarage() {"));
+  assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
+    "leaving the pit garage restarts rain the way RESUME does");
 });

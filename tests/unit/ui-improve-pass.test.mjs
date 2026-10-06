@@ -122,6 +122,7 @@ test("select track filter persists via store", () => {
   assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
   assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
   assert.match(js, /filter === "fav"\) return \(favs \|\| favList\(\)\)\.includes\(t\.id\)/);
+  assert.match(js, /snapTrackToFilter/);
   assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
   assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
     "only a favourited tile is positioned — the shipped strip paints unchanged");
@@ -149,6 +150,13 @@ function bootMenus(disk = {}, o = {}) {
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  if (o.practicePick || o.practicePickApi) {
+    const api = o.practicePickApi || {};
+    sb.UiExperience = {
+      isPracticePick: api.isPracticePick || (() => true),
+      leavePracticePick: api.leavePracticePick || (() => {}),
+    };
+  }
   const $ = (id) => dom.byId(id);
   const selTracks = $("sel-tracks");
   // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
@@ -168,6 +176,91 @@ function bootMenus(disk = {}, o = {}) {
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
   return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
+
+test("select titles and CTAs name Practice, Time Trial, and Race", () => {
+  const race = bootMenus();
+  assert.equal(race.G.els.selTitle.textContent, "GRAND PRIX");
+  assert.equal(race.G.els.selGo.textContent, "RACE SETUP");
+  const tt = bootMenus({}, { timeTrial: true });
+  assert.equal(tt.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(tt.G.els.selGo.textContent, "SESSION SETUP");
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true });
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+  assert.equal(practice.G.els.selGo.textContent, "PRACTICE SETUP");
+});
+
+function fakeDaily(extra = {}) {
+  let armed = extra.armed || null;
+  return {
+    plan: () => ({ day: "2026-10-05", trackName: "Montreal", weather: "dry", tod: "default", trackId: "monza" }),
+    today: () => null,
+    current: () => armed,
+    isActive: () => !!armed,
+    select() { armed = { day: "2026-10-05", class: "standard", trackId: "monza" }; },
+    stop() { armed = null; },
+  };
+}
+
+test("Practice pick hides Time Trial Daily chrome", () => {
+  const tt = bootMenus({}, { timeTrial: true, daily: fakeDaily() });
+  assert.ok(tt.dom.has("sel-daily"), "Time Trial keeps Today's Challenge");
+  assert.ok(tt.chips().includes("daily-open"));
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true, daily: fakeDaily() });
+  assert.ok(!practice.dom.has("sel-daily"), "Practice does not wear the Daily chip");
+  assert.ok(!practice.chips().includes("daily-open"));
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+});
+
+test("leaving the Practice pick rebuilds Time Trial chrome", () => {
+  let pick = true;
+  const h = bootMenus({}, {
+    timeTrial: true,
+    daily: fakeDaily(),
+    practicePickApi: {
+      isPracticePick: () => pick,
+      leavePracticePick: () => { pick = false; },
+    },
+  });
+  assert.equal(h.G.els.selTitle.textContent, "PRACTICE");
+  assert.ok(!h.dom.has("sel-daily"));
+  pick = false;
+  h.menus.buildSelect();
+  assert.equal(h.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(h.G.els.selGo.textContent, "SESSION SETUP");
+  assert.ok(h.dom.has("sel-daily"));
+  assert.match(code("js/ui/select-screen.js"), /leavePracticePick\(\)/);
+});
+
+test("CLASSICS filter snaps the preview off a season circuit that is not in the list", () => {
+  const h = bootMenus({}, { trackIdx: 1 });
+  assert.equal(h.G.trackIdx, 1, "starts on Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic").onclick({ stopPropagation() {} });
+  assert.equal(h.G.trackIdx, 2, "Imola is the only classic in the stub list");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"]);
+  assert.equal(JSON.parse(h.data.get("trackId")), "imola");
+});
+
+test("select preview uses a dark token scrollbar and a readable GP subtitle", () => {
+  const rules = css("css/select.css");
+  assert.equal(decl(rules, "#sel-preview-gp", "color"), "var(--text)");
+  assert.equal(decl(rules, "#select", "color-scheme"), "dark");
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "scrollbar-color"),
+    "var(--plate-line) transparent",
+  );
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "color-scheme"),
+    "dark",
+  );
+});
+
+test("Practice Goal native select follows Apex dark chrome", () => {
+  const rules = css("css/experience.css");
+  assert.equal(decl(rules, "#practice-brief", "color-scheme"), "dark");
+  assert.equal(decl(rules, "#practice-brief select", "background"), "var(--plate)");
+  assert.equal(decl(rules, "#practice-brief select", "color"), "var(--text)");
+  assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
+});
 
 test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
   const h = bootMenus();
@@ -878,9 +971,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
       ? /<section id="htp-controls"/
       : new RegExp(`<dt id="htp-${id}">`));
   }
-  const components = css("css/components.css");
-  assert.equal(decl(components, /#htp-contents/, "overflow-x"), "auto");
-  assert.equal(decl(components, /#htp-contents a/, "min-height"), "var(--chip-h)");
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "overflow-x"), "auto");
+  assert.equal(decl(components, /^#htp-contents a, #cg-contents a, #ch-contents a$/, "min-height"), "var(--chip-h)");
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-shape="wide"\] > #htp-contents/));
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
@@ -967,9 +1060,9 @@ test("variable control clusters use one content-driven balanced-row primitive", 
 
 test("overflowing Help navigation keeps its first landmark reachable", () => {
   const overlays = css("css/overlays.css");
-  const components = css("css/components.css");
-  assert.equal(decl(components, /#htp-contents/, "justify-content"), "flex-start");
-  assert.equal(decl(components, /#htp-contents > :first-child/, "margin-inline-start"), "auto");
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "justify-content"), "flex-start");
+  assert.equal(decl(components, /^#htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child$/, "margin-inline-start"), "auto");
 });
 
 /* ── Input (gamepad menu nav) in a VM ───────────────────────────────────── */
@@ -1317,6 +1410,9 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   // indices quali.spec.js selects.
   assert.match(raceSettings, /SettingRow\.disable\("rs-quali", !!qForced\)/);
   assert.match(raceSettings, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
+  assert.match(raceSettings, /PRACTICE SETTINGS/, "Practice setup is not titled RACE SETTINGS");
+  assert.match(raceSettings, /START TIME TRIAL/, "Time Trial GO is not START RACE");
+  assert.match(raceSettings, /wrap:\s*false/, "LAPS chevrons stop at the ends");
   assert.match(raceSettings, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
   const menus = css("css/menus.css");
   // The race-settings body is a plain one-or-two column grid of rows now: the
@@ -1596,7 +1692,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
   assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
-  assert.match(read("css/responsive.css"), /body\.desktop #pm-calib-help/,
+  assert.match(read("css/settings-controls.css"), /body\.desktop #pm-calib-help/,
     "desktop hides the TILT help with RECALIBRATE TILT");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
     "disabled TILT help keeps its slot so steer-mode changes do not reflow");
@@ -1850,6 +1946,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
   assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
+  assert.match(shell, /id="practice-goal"/);
+  assert.match(code("js/ui/experience.js"), /SettingRow\.build\("practice-goal-row", "GOAL"\)/,
+    "Practice Goal becomes a setting row at runtime so the shell node count does not grow");
   assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
     "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
@@ -1901,12 +2000,12 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
   assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
-  assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
+  assert.equal(decl(css("css/overlays.css"), ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
   assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
-  assert.equal(decl(components, /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
     "term-rail selected uses the one chip look (plate-on + red ring, no glow)");
-  assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
   // Flyby had --compact-at / #fb-rail but no compact rules (layout-audit 2026-10-05:
@@ -2079,6 +2178,37 @@ test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
     assert.match(r.stderr, /LightEdits/, "…and say why by name");
     assert.match(r.stderr, /merge-proposals\.mjs/, "…and point at the tool that does take one");
   } finally { fs.rmSync(tmp, { force: true }); }
+});
+
+test("root view-transition fades the old snapshot out before the new fades in", () => {
+  // Simultaneous plus-lighter crossfade of ::view-transition-old/new(root)
+  // printed title tiles over the Grand Prix list and the Career sheet.
+  const tokens = css("css/tokens.css");
+  const parseMs = (v) => {
+    const s = String(v || "").trim();
+    const n = parseFloat(s);
+    if (!Number.isFinite(n)) return NaN;
+    return /ms$/i.test(s) ? n : n * 1000;
+  };
+  const oldDur = parseMs(decl(tokens, "::view-transition-old(root)", "animation-duration"));
+  const newDelay = parseMs(decl(tokens, "::view-transition-new(root)", "animation-delay"));
+  const newDur = parseMs(decl(tokens, "::view-transition-new(root)", "animation-duration"));
+  assert.ok(oldDur > 0 && oldDur <= 120, `old fade must be short, got ${oldDur}ms`);
+  assert.ok(newDelay >= oldDur, `new must wait until old is gone (${newDelay}ms delay vs ${oldDur}ms old)`);
+  assert.ok(newDur > 0, "new still fades in after the delay");
+  assert.equal(decl(tokens, "::view-transition-old(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "animation-fill-mode"), "both");
+  assert.equal(decl(tokens, "::view-transition", "background-color"), "var(--bg)");
+  assert.match(decl(tokens, "::view-transition-old(root)", "animation-name") || "", /apex-vt-fade-out/);
+  assert.match(decl(tokens, "::view-transition-new(root)", "animation-name") || "", /apex-vt-fade-in/);
+  // Reduced-motion still cancels the UA snapshots (prefers-reduced-motion + MOTION: REDUCED).
+  assert.ok(declares(tokens, /::view-transition-old\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /::view-transition-new\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-old\(\*\)/, "animation", /none/));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-new\(\*\)/, "animation", /none/));
 });
 
 test("a locked part plays ONE blip, not one for the unlock and one for the fit", () => {

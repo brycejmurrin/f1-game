@@ -77,11 +77,13 @@ const Badges = (function () {
   }
 
   // PURE: which badges a classified race earns. `r` is the player's result:
-  //   { pos, retired, finished, cuts, penalty, trackId, fastest }
-  // A retired car earns nothing; a race win at a 2026 venue is that venue.
+  //   { pos, retired, dsq, finished, cuts, penalty, trackId, fastest }
+  // A retired or DSQ car earns nothing; a race win at a 2026 venue is that venue.
+  // DSQ is checked here even though results-sheet maps it onto retired — same
+  // contract as Career.objectiveMet("clean") / cleanRun (no false CLEAN SHEET).
   function forRace(r) {
     const out = [];
-    if (!r || r.retired || !(r.pos >= 1)) return out;
+    if (!r || r.retired || r.dsq || !(r.pos >= 1)) return out;
     if (r.pos === 1) out.push("first_win");
     if (r.pos <= 3) out.push("podium");
     if (r.finished && r.fastest) out.push("fastest_lap");

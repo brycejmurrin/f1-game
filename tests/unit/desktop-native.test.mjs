@@ -23,6 +23,19 @@ test("index.html skips service-worker registration when __APEX_NATIVE__.desktop"
   assert.match(HTML, /nativeDesktop/);
   assert.match(HTML, /nativeCap/);
   assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
+  // Playwright serviceWorkers:"block" resolves register() with undefined.
+  assert.match(HTML, /if \(!r\) \{ swl\("warn", "register returned no registration"\); return; \}/);
+});
+
+test("menu-baseline waits for the controlling worker, never blocks registration", () => {
+  // ready ≠ claimed (CI 37466745467). Blocking register() overlays r.scope
+  // (CI 37463034163). Pin both so a settle rewrite cannot drop either.
+  const spec = readFileSync(join(ROOT, "tests/specs/menu-baseline.spec.js"), "utf8");
+  const code = spec.replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(code, /serviceWorkers:\s*["']block["']/);
+  assert.match(code, /navigator\.serviceWorker\.controller/);
+  assert.match(code, /polling:\s*100/);
+  assert.match(code, /getElementById\("mb-garage"\)/);
 });
 
 test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () => {
@@ -132,13 +145,22 @@ test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch 
   assert.doesNotMatch(yml, /group:\s*pages\b/);
 });
 
-test("desktop workflow's pull_request paths cover every name stage-files.mjs packages", async () => {
+test("desktop workflow's pull_request paths are packaging-only (not the staged game tree)", async () => {
   const { stagedNames } = await import("../../tools/desktop/stage-files.mjs");
   const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
   const block = yml.split(/\n  pull_request:\n/)[1].split(/\n  [a-z_]+:\n/)[0];
   const paths = [...block.matchAll(/^\s+- "([^"]+)"/gm)].map((m) => m[1]);
-  const missing = [...stagedNames()].filter((n) => !paths.includes(n) && !paths.includes(`${n}/**`));
-  assert.deepEqual(missing, [], "a staged file changes the package, so a PR touching it must run pack-smoke");
+  assert.deepEqual(paths.sort(), [
+    ".github/workflows/desktop.yml",
+    "desktop/**",
+    "tools/desktop/**",
+  ], "pack-smoke runs when the Electron shell or stager changes, not on every js/css PR");
+  const staged = [...stagedNames()];
+  const leaked = paths.filter((p) => {
+    const name = p.replace(/\/\*\*$/, "");
+    return staged.includes(name);
+  });
+  assert.deepEqual(leaked, [], "a staged game/shell path in desktop.yml restarts Pack smoke on ordinary PRs");
 });
 
 function loadSpotify(opts = {}) {
