@@ -28,6 +28,9 @@ const CustomTracks = (function () {
     // shorter than this (validate.js's lap floor is 2.5 km on the BUILT road).
     spacing: 8, loopMin: 1000,
   });
+  // Road-edge styles the designer authors (mesh.js buildKerbs). Default flat
+  // matches the engine's historic ribbon so older saves keep their look + id.
+  const KERB_STYLES = Object.freeze(["flat", "sausage", "rumble"]);
   // ONE LATTICE for storage and the share code (js/editor/codec.js): points on
   // 0.25 m, lap fractions on 1/65535, widths and ease on 0.1 / 0.001, angles and
   // rises on 0.25, lengths on 1 m — so a design's content id is the same on
@@ -120,6 +123,14 @@ const CustomTracks = (function () {
   /** The content id: everything that shapes the built circuit, nothing that
    *  only labels it. The theme is in it on purpose — game.js skips a rebuild
    *  when builtTrackId matches, and a theme change must rebuild. */
+  function sanitizeKerbStyle(v) {
+    return KERB_STYLES.includes(v) ? v : "flat";
+  }
+  function sanitizeBerms(v) {
+    // Default ON: berms dress banked corners (surface.js). Explicit false opts out.
+    return v === false ? false : true;
+  }
+
   function canonical(it) {
     const parts = [it.theme, it.baseHW, it.seed, it.pts.map((p) => p[0] + "," + p[1]).join(";"),
       JSON.stringify([it.hwZones, it.bankZones, it.elevations, it.bridges])];
@@ -127,6 +138,10 @@ const CustomTracks = (function () {
     if (it.heights && !heightsFlat(it.heights)) parts.push("h:" + it.heights.join(","));
     // The scenery options rebuild the circuit too; absent at their defaults, so older ids hold.
     if (it.look) parts.push("look:" + it.look.time + "," + it.look.trees + "," + it.look.crowd);
+    // Kerb / berm surface opts rebuild the mesh; omitted at defaults so older ids hold.
+    const kerb = sanitizeKerbStyle(it.kerbStyle);
+    if (kerb !== "flat") parts.push("kerb:" + kerb);
+    if (it.berms === false) parts.push("berms:0");
     return parts.join("|");
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
@@ -175,6 +190,9 @@ const CustomTracks = (function () {
     if (look) it.look = look;
     const country = sanitizeCountry(raw.country);
     if (country) it.country = country;
+    const kerb = sanitizeKerbStyle(raw.kerbStyle);
+    if (kerb !== "flat") it.kerbStyle = kerb;
+    if (sanitizeBerms(raw.berms) === false) it.berms = false;
     if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
@@ -238,6 +256,12 @@ const CustomTracks = (function () {
     // designer authors arc fractions, so map each end through the polygon's
     // cumulative length rather than assume equal spacing.
     if (it.hwZones) raw.hwZones = it.hwZones.map((z) => Object.assign({}, z, { s0: arcToIndexFrac(it.pts, z.s0), s1: arcToIndexFrac(it.pts, z.s1) }));
+    const kerb = sanitizeKerbStyle(it.kerbStyle);
+    if (kerb !== "flat") raw.kerbStyle = kerb;
+    // Berms dress banked corners; explicit false opts out. Default ON when any
+    // bankZones exist so a banked custom circuit gets the catch-fence mound.
+    if (it.berms === false) raw.berms = false;
+    else if (it.bankZones && it.bankZones.length) raw.berms = true;
     raw.scenery = TrackThemes.sceneryFor(it);
     return raw;
   }
@@ -393,6 +417,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();
 Object.freeze(CustomTracks);

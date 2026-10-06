@@ -149,6 +149,10 @@ const TrackDef = (function () {
       classic: !!d.classic, custom: !!d.custom,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
       street: !!d.street, banked: !!d.banked, bankZones: d.bankZones || null, bridges: d.bridges || null,
+      // Designer / optional circuit surface: kerb ribbon profile + berms on
+      // banked corners. Absent → engine defaults (flat kerbs, no forced berms).
+      ...(d.kerbStyle === "sausage" || d.kerbStyle === "rumble" || d.kerbStyle === "flat" ? { kerbStyle: d.kerbStyle } : {}),
+      ...(d.berms === true || d.berms === false ? { berms: !!d.berms } : {}),
       barrierGap: d.barrierGap || null,
       terrainOuter: d.terrainOuter,
       // Opt-in gradual outer terrain descent; absent/invalid preserves the

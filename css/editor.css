@@ -216,6 +216,10 @@
   height: max(72px, calc(var(--chip-h) * 2.8));
   min-height: 72px;
 }
+/* Banking & kerbs group (elevation mode): keep chip rows from crowding. */
+#trackdesigner[data-mode="elevation"] .td-group[data-role="bank-kerbs"] .td-chips {
+  margin-top: calc(var(--gap) / 4);
+}
 /* Narrow + short LANDSCAPE only (734×343 measured 2026-10-05): the
    portrait/narrow rule stacks the body with minmax(200px,1fr) AND turns the
    foot into a 3-up grid. On a short landscape that foot eats ~200px, body is

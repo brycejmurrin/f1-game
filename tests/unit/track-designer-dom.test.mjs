@@ -823,9 +823,9 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   }
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
-  // MODE + numbered groups; ELEVATION / LOOK stay in the DOM (mode toggles visibility).
+  // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
   // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 6), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "3 LOOK", "4 DETAILS"]);
+  assert.deepEqual(labels().slice(0, 7), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "3 LOOK", "4 DETAILS"]);
   assert.ok(labels().includes("5 CHECKS"));
   const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
   assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
@@ -1551,4 +1551,47 @@ test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TR
   assert.notEqual(b.C.sanitize(b.D.state().design).id, idLook);
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.look), { time: "auto", trees: "normal", crowd: "packed" }, "UNDO restores the previous look");
+});
+
+// ── Banking UI + kerb styles + berms (overhaul E+F+G) ──────────────────────
+test("ELEVATION mode exposes BANKING & KERBS: FLAT/SAUSAGE/RUMBLE + BERMS ON/OFF; undo restores", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const bank = b.root.querySelector('[data-role="bank-kerbs"]');
+  assert.ok(bank, "bank-kerbs group is built");
+  assert.equal(bank.hidden, true, "hidden outside elevation");
+  b.D.setMode("elevation");
+  assert.equal(bank.hidden, false, "shown in elevation");
+  const kerbs = bank.querySelector('[data-role="kerb-style"]');
+  assert.deepEqual([...kerbs.children].map((c) => c.textContent), ["FLAT", "SAUSAGE", "RUMBLE"]);
+  assert.equal(kerbs.children[0].getAttribute("aria-pressed"), "true", "flat is default");
+  const u0 = b.D.state().undo;
+  kerbs.children[1].click();
+  assert.equal(b.D.state().design.kerbStyle, "sausage");
+  assert.equal(b.D.state().undo, u0 + 1);
+  assert.equal(kerbs.children[1].getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.setKerbStyle("sausage"), false, "same style is no edit");
+  assert.equal(b.D.setKerbStyle("rumble"), true);
+  assert.equal(b.D.state().design.kerbStyle, "rumble");
+  const berms = bank.querySelector('[data-role="berms"]');
+  assert.deepEqual([...berms.children].map((c) => c.textContent), ["BERMS ON", "BERMS OFF"]);
+  assert.equal(berms.children[0].getAttribute("aria-pressed"), "true", "berms on by default");
+  assert.equal(b.D.setBerms(false), true);
+  assert.equal(b.D.state().design.berms, false);
+  assert.equal(berms.children[1].getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.setBerms(false), false);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.berms, undefined, "undo restores default (absent = ON)");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.kerbStyle, "sausage");
+});
+
+test("HOWTO elevation step names bank, kerb styles and berms", () => {
+  const b = bootScreen();
+  const elev = b.D.HOWTO.STEPS.find((s) => s.title === "Elevation");
+  assert.ok(elev, "Elevation step exists");
+  assert.match(elev.text, /BANK/i);
+  assert.match(elev.text, /sausage/i);
+  assert.match(elev.text, /rumble/i);
+  assert.match(elev.text, /BERMS/i);
 });
