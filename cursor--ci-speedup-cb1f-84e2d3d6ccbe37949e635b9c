@@ -1,1 +1,1 @@
-1791283135	Cursor Agent	PR #1075 red: oversize-career 27/37 cancelled at 9min cap; career-season 15/36 at 6min; fatUi floor 40s/test + 16min cap; no auto-merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
+1791285346	Cursor Agent	PR #1075 red: career garage locked-row waitForFunction 45s (selectPartCategory tabs not ready under 2 workers); fix helper; no auto-merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
