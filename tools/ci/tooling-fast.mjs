@@ -568,6 +568,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the
   // director lays it over a stub field — grid, plans, the pace loop, the
   // flag windows. Pure rules in a VM, ~0.3 s together.
+  "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
@@ -1023,6 +1024,22 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  // Full-suite green → stamp HEAD for ready-gate.mjs (draft→ready must not
+  // flip without tooling-fast evidence; #1111 designer-canvas). Subset / shard
+  // runs and failures leave any prior stamp alone so a partial re-run cannot
+  // bless a tip that never passed the full suite. Compare as a set: longest-
+  // first reorders `files` before this point.
+  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
+  const ran = new Set(files.map(rel));
+  const fullSuite = ran.size === TOOLING_FAST_FILES.length
+    && TOOLING_FAST_FILES.every((f) => ran.has(f));
+  if (ok && fullSuite) {
+    try {
+      const { stampReadySha } = await import("./ready-gate.mjs");
+      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
+      if (head.status === 0) stampReadySha(head.stdout.trim());
+    } catch (_) { /* stamp is advisory for ready-gate; never fail the suite */ }
+  }
   // Every run teaches the next one: the passing files' durations go to the
   // local table (a timed-out or failed file's duration says nothing about its
   // normal cost). --record also rewrites the committed table CI reads.

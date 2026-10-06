@@ -524,6 +524,7 @@
     "// (tests/fixtures/openf1-baku-2026-race.json) becomes a race script, and the",
     "// director lays it over a stub field — grid, plans, the pace loop, the",
     "// flag windows. Pure rules in a VM, ~0.3 s together.",
+    "tests/unit/ready-gate.test.mjs",
     "tests/unit/real-race-script.test.mjs",
     "tests/unit/real-race.test.mjs",
     "// ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the",
