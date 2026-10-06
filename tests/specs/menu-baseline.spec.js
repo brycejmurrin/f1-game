@@ -21,6 +21,8 @@
 // will not match. Regenerate with `npm run test:baseline -- --update-snapshots`
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
+import { waitMenuFonts } from "../helpers/menu-fonts.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -40,11 +42,16 @@ const SCREENS = [
   }],
   ["garage", async (/** @type {any} */ page) => {
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden);
-    await page.evaluate(() => {
-      const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
-      (t.find((e) => /ENGINE/i.test(e.textContent || "")) || t[1] || t[0])?.click();
-    });
+    // #carsetup unhides before buildSetup paints tabs. ENGINE click before
+    // aria-busy clears leaves TEAM selected (CI 37452342027, 0.03 ratio).
+    await waitGarageSheet(page);
+    await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
+    await page.waitForFunction(() => {
+      const tab = document.querySelector('#cs-tabs [data-cs-cat="engine"]');
+      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
+      return [...document.querySelectorAll("#cs-options .cs-opt")]
+        .some((o) => /torque curve/i.test(o.textContent || ""));
+    }, null, { polling: 100, timeout: 15000 });
   }],
 ];
 
@@ -90,17 +97,10 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // Wait for the webfonts before shooting. css/tokens.css loads Titillium
-        // Web and Rajdhani with `font-display: swap`, so the system fallback
-        // paints first and the real faces swap in later with DIFFERENT metrics,
-        // which would relay out every line. This is PRECAUTIONARY, not a
-        // diagnosis: the 2026-09-10 re-bless was needed because the garage
-        // CONTENT had moved (budget 600 -> 780, new Torque Curve option, stat
-        // chips gained percentages), not because of a font race — the runner
-        // and a dev container agreed to within 1-17 px on the stale images.
-        // The wait costs nothing and removes the one timing variable a
-        // screenshot suite should never carry.
-        await page.evaluate(() => document.fonts && document.fonts.ready);
+        // fonts.load('700 16px Titillium') can succeed from the 600 face while
+        // fonts-hud 700-normal is still swap (CI 37459018234 desktop 0.09/0.04/0.03).
+        // FontFace-load those woff2s and gate on status + measureText vs Arial.
+        await waitMenuFonts(page, BOOT_MS);
         await page.waitForTimeout(600);   // let the sheet settle and measure
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,

@@ -26,6 +26,19 @@ const UiExperience = (function () {
     return { title: t.name || t.id, detail: parts.join(" · ") };
   }
 
+  /* textContent on #mb-photo used to wipe the .mb-sub ("CAPTURE & BACKGROUNDS")
+     and leave PHOTO STUDIO as a one-line leftover tile next to Garage. */
+  function setDoorLabel(el, text) {
+    const sub = el && el.querySelector(".mb-sub");
+    const host = sub && sub.parentNode;
+    // game-vm stubs querySelector() as a detached div (parentNode null). Keep
+    // the subtitle in a real tree; fall back to textContent anywhere else.
+    if (!host || !host.firstChild) { if (el) el.textContent = text; return; }
+    while (host.firstChild && host.firstChild !== sub) host.removeChild(host.firstChild);
+    if (host.firstChild !== sub) { el.textContent = text; return; }
+    host.insertBefore(document.createTextNode(text + " "), sub);
+  }
+
   function homeVariation(store) {
     const shots = ["hero", "front", "side", "rear"], environments = ["garage", "track", "night", "pitlane", "studio"];
     let visiting = false, index = 0;
@@ -216,7 +229,7 @@ const UiExperience = (function () {
       overlay.dataset.homeScene = s.mode;
       overlay.dataset.homeShot = s.shot;
       const photoButton = $("mb-photo"), waiting = ["track", "pitlane"].includes(s.mode) && !deps.trackReady();
-      if (photoButton) { photoButton.disabled = waiting; photoButton.textContent = waiting ? "SCENE LOADING…" : "PHOTO STUDIO"; }
+      if (photoButton) { photoButton.disabled = waiting; setDoorLabel(photoButton, waiting ? "SCENE LOADING…" : "PHOTO STUDIO"); }
       const photo = typeof PhotoStudio !== "undefined" && PhotoStudio.background ? PhotoStudio.background() : null;
       overlay.style.setProperty("--home-scene-image", s.mode === "photo" && photo ? 'url("' + photo + '")' : "none");
       if (toggle) {
@@ -450,7 +463,7 @@ const UiExperience = (function () {
     }
     return { renderHome, stopHome, refreshPause, previewScene, photoView, photoSubject, wantsTrack: world.wantsTrack, trackActive: world.active,
       trackCamera: world.camera, didRenderTrack: () => { if (!world.didRender()) return; overlay.dataset.homeReady = "1";
-        const photoButton = $("mb-photo"); if (photoButton) { photoButton.disabled = false; photoButton.textContent = "PHOTO STUDIO"; }
+        const photoButton = $("mb-photo"); if (photoButton) { photoButton.disabled = false; setDoorLabel(photoButton, "PHOTO STUDIO"); }
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },
       state: () => ({ home, painted, failure, scene: scene(), world: world.state() }) };
   }

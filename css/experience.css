@@ -47,19 +47,50 @@
   /* Disabled still hits-tests: Playwright (and a finger) land on this chip
      instead of HOW TO PLAY when it overlaps the door column. */
   #home-motion:disabled { pointer-events: none; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--carbon) 20%, transparent) 40%, var(--carbon) 66%); }
+  /* Live Home used to fade the left wash to transparent so the garage kept
+     reading. Ferrari white (and any bright livery) then blew out Sound, the
+     disclaimer, and the pit boards, and the SIDE shot stacked two identical
+     D_WORD banners in that clear band. Start the wash on --carbon/--scrim so
+     brand chrome stays readable; the ::before veil covers only the upper-left
+     wordmark strip so the second badge does not double. */
+  #overlay[data-home-scene]:not([data-home-scene="static"]) {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), color-mix(in oklab, var(--carbon) 28%, var(--scrim)) 38%, var(--carbon) 66%);
+  }
+  #overlay[data-home-scene]:not([data-home-scene="static"])::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      linear-gradient(180deg in oklab, var(--scrim-heavy) 0%, var(--scrim) 22%, transparent 42%),
+      linear-gradient(90deg in oklab, color-mix(in oklab, var(--carbon) 70%, var(--scrim-heavy)) 0%, transparent 46%);
+  }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #title-car { opacity: 0; }
-  #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, transparent, var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
+  #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; padding: var(--gap); font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap); }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-secondary .bigbtn { transform: none; font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #mb-daily { justify-content: flex-start; text-align: start; font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { align-self: end; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
+    align-self: end;
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+    overflow: hidden;
+    padding: var(--gap);
+    border-radius: var(--r-md);
+    background: var(--scrim-heavy);
+  }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#soundbtn, #disclaimer) {
+    background: var(--carbon);
+    color: var(--text);
+  }
   body.photo-studio-open #overlay > :not(#title-car) { visibility: hidden; }
   body.photo-studio-open #overlay[data-home-scene] { background: transparent; pointer-events: none; }
+  body.photo-studio-open #overlay[data-home-scene]::before { content: none; }
   /* A wide scene owns the left half; menu surfaces retain their own solid ink.
      ONE grid row. The brand used to sit in a row of its own ABOVE the buttons
      (column 2, centred), so on a short wide window the 210 px wordmark row
@@ -71,7 +102,9 @@
      right column: centred when they fit, scrolling only when the window is
      shorter than the column. */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-content: stretch; align-items: start; gap: var(--gap); }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand { grid-column: 1; grid-row: 1; align-self: start; padding: 0; text-align: start; align-items: flex-start; }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
+    grid-column: 1; grid-row: 1; align-self: start; text-align: start; align-items: flex-start;
+  }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #title { font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4)); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; min-height: 0; }
   /* Just above the compact threshold (body --compact-at 600px) the full column
@@ -88,8 +121,10 @@
      chip on 1440 (menu-baseline 6%, CI 37371854254). */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, transparent); grid-template-rows: auto minmax(0, 1fr); }
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
+  /* INSTALL APP lift lives in css/overlays.css, scoped to tall / compact-wide
+     / live-scene wide so desktop Classic (title-desktop golden) is untouched. */
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim)); grid-template-rows: auto minmax(0, 1fr); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
   /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
      above), but menus.css still places it in grid row 3, an implicit ~235 px

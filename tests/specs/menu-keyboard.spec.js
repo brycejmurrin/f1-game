@@ -15,6 +15,7 @@
 // wheel helper hangs in this app when the point under the cursor has no scrollable
 // ancestor at all, which is exactly the case under test.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 760 };
 
@@ -216,20 +217,16 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.uiScale(200));
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    // BOOT_MS, not 8 s. These two waits are the only ones in this file that sit
-    // on GPU work — the garage builds a 3D car preview, at 200% UI size, under
-    // SwiftShader — and 8 s was not a budget anyone measured. What it costs:
-    // this test failed 1 run in 3 here, at line 192 in one sample and line 196
-    // in the next, which is the shape of a budget running out rather than of a
-    // defect. Driven directly on an idle box the garage unhides in 180 ms, so
-    // the typical case has 44x headroom and the loaded case has none.
-    // The ASSERTIONS below are untouched; only the wait for the machine moves,
-    // the same way every race-fixture wait in this suite already reads BOOT_MS.
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => {
-      [...document.querySelectorAll("#cs-tabs .cs-tab")].find((e) => /LIVERY/i.test(e.textContent))?.click();
-    });
-    await page.waitForFunction(() => document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20, null, { polling: 100, timeout: BOOT_MS });
+    // #carsetup unhides before tabs paint; LIVERY click then never sticks
+    // (CI 37462241753: TEAM stayed selected, waitForFunction on .cs-liv > 20
+    // hit BOOT_MS). Same wait as menu-baseline ENGINE.
+    await waitGarageSheet(page, BOOT_MS);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.waitForFunction(() => {
+      const tab = document.querySelector('#cs-tabs [data-cs-cat="livery"]');
+      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
+      return document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20;
+    }, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const opts = document.getElementById("cs-options");
       opts.scrollTop = 0;
@@ -329,11 +326,24 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+    // CI 37466125556 keyboard-2of3: live SwiftShader starved the 8 s wait
+    // (go()+jump evaluate 4.6 s, then waitForFunction 8000 ms). physState()
+    // throw also swallowed the track===monza OR. headlessMode skips render()
+    // only — inputState() under test is unchanged. BOOT_MS, same as the
+    // pause/standings twins in this file.
+    await page.evaluate(() => {
+      window.__apex.headless(true);
+      window.__apex.go();
+      window.__apex.jump(0.2, 40);
+    });
     await page.waitForFunction(() => {
-      try { return window.__apex.physState?.().s > 0 || window.__apex.info().track === "monza"; }
+      try {
+        const p = window.__apex.physState && window.__apex.physState();
+        if (p && p.s > 0) return true;
+      } catch (_) {}
+      try { return window.__apex.info().track === "monza"; }
       catch (_) { return false; }
-    }, null, { polling: 100, timeout: 8_000 });
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     // No menu layer is open, so MenuNav must be entirely out of the way.
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBeFalsy();
@@ -371,8 +381,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => {
       window.__apex.park(0.1);
       // Live SwiftShader race starves a 5 s waitForFunction: CI selected-1
-      // (run 37414897932) logged TopModal open #standings then timed out
-      // while the material pack was still on the main thread (~9 s later).
+      // (runs 37439242991 / 37414897932) logged TopModal open #standings then
+      // timed out while the material pack was still on the main thread.
       // headlessMode only skips render() (js/game.js) — same stall stop as
       // the Escape sibling below.
       window.__apex.headless(true);
@@ -387,8 +397,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
        components.css (#1101) also owns dialog.screen 100% box + [open] grid
        so print→all dialog-platform cannot leave a 0×0 :modal; wait for that
        painted box too. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
-       waitForFunction (CI selected-1 run 37414897932). polling: 100 — park()
-       stops the rAF loop. */
+       waitForFunction (CI selected-1 runs 37414897932 / 37439242991).
+       polling: 100 — park() stops the rAF loop. Then evaluate (frame-free). */
     await page.waitForFunction(() => {
       const s = document.getElementById("standings");
       if (!s || !s.matches(":modal")) return false;
@@ -396,7 +406,6 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       if (r.width < 1 || r.height < 1) return false;
       return (window.MenuNav.activeLayer() || {}).id === "standings";
     }, null, { polling: 100, timeout: BOOT_MS });
-
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
       modal: document.getElementById("standings").matches(":modal"),
