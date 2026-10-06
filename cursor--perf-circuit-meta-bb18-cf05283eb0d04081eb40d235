@@ -1,1 +1,1 @@
-1791310648	Cursor Agent	PR #1134 sync DIRTY after #1113+#1114: merge ship, keep circuit-meta/LAZY_CIRCUIT; no AM/merge  [cursor/perf-circuit-meta-bb18; session cf05283eb0d04081eb40d235]
+1791311584	Cursor Agent	PR #1134 FROZEN: no ship-sync push. Local hydrate-fix commit only. Wait CI Watch/Bryce batch release after checkpoint. No AM/merge. After #1139 for arm.  [cursor/perf-circuit-meta-bb18; session cf05283eb0d04081eb40d235]
