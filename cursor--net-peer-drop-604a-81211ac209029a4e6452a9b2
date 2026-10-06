@@ -1,0 +1,1 @@
+1791248024	Cursor Agent	mid-race peer drop: stop→close→onClose(local) clears lastReason and fires onStop on BYE  [cursor/net-peer-drop-604a; session 81211ac209029a4e6452a9b2]
