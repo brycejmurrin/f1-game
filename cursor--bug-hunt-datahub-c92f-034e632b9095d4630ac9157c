@@ -1,1 +1,0 @@
-1791300859	Cursor Agent	Bug hunt: title DAILY ink + ios-install overlap; datahub exclusive-open; badges DSQ; lobby open skip. OWNED css/experience.css css/touch-controls.css js/data/hub.js js/career/badges.js js/net/lobby.js + matching unit tests. FORBIDDEN js/game.js. Do not enable auto-merge or merge.  [cursor/bug-hunt-datahub-c92f; session 034e632b9095d4630ac9157c]
