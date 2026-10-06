@@ -493,7 +493,9 @@ function bootAudio({ soundOn, musicEnabled }) {
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
   const store = stubStore();
   store.set("musicSource", "builtin");
-  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0 };
+  // isRaining — SOUND ON mid-race restarts rain from live weather (panel.js),
+  // not raceWeather. The stub must expose the same hook game.js puts on G.
+  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, isRaining: () => false };
   const api = vm.runInContext("AudioPanel", ctx).create(G);
   return { dom, G, api, calls };
 }
