@@ -22,8 +22,13 @@ async function loadTrack(page, track = "monza") {
   // once: on a loaded box a 40-circuit build can exceed 3 s and the test then
   // races a half-built track, and on a quiet box it burns most of 3 s per call
   // for nothing. waitForFunction polls, so it costs what the build costs.
-  await page.evaluate((t) => { __apex.race(t); }, track);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  // Await the thenable. Fire-and-forget + info().track != null can still
+  // see the PREVIOUS circuit while monaco rebuilds — G.track goes null and
+  // checkRetirements reads track.total (camera-hooks.spec.js, CI 37455295205
+  // cinematic returns eye/target/fov/az/k). GarageDefaults' 22-car kit
+  // widened that window; do not touch game.js.
+  await page.evaluate(async (t) => { await __apex.race(t); }, track);
+  await page.waitForFunction((id) => window.__apex.info().track === id, track, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     __apex.headless(true);
     __apex.reset(0.1, 30);

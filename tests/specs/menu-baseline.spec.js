@@ -92,17 +92,29 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // Wait for the webfonts before shooting. css/tokens.css loads Titillium
-        // Web and Rajdhani with `font-display: swap`, so the system fallback
-        // paints first and the real faces swap in later with DIFFERENT metrics,
-        // which would relay out every line. This is PRECAUTIONARY, not a
-        // diagnosis: the 2026-09-10 re-bless was needed because the garage
-        // CONTENT had moved (budget 600 -> 780, new Torque Curve option, stat
-        // chips gained percentages), not because of a font race — the runner
-        // and a dev container agreed to within 1-17 px on the stale images.
-        // The wait costs nothing and removes the one timing variable a
-        // screenshot suite should never carry.
-        await page.evaluate(() => document.fonts && document.fonts.ready);
+        // Wait for the webfonts before shooting. css/fonts-hud.css is
+        // print→all deferred (#1101): Titillium 400/700-normal live there,
+        // and a screenshot before onload uses system-ui (wider) — CI
+        // oversize-menu-baseline 37455295205 wrapped every phone title
+        // button (24951 px / 0.08) while desktop (more width) stayed green.
+        await page.evaluate(async () => {
+          const link = document.querySelector('link[href*="fonts-hud.css"]');
+          if (link && link.media === "print") {
+            await new Promise((res) => {
+              const done = () => res();
+              link.addEventListener("load", done, { once: true });
+              link.addEventListener("error", done, { once: true });
+              setTimeout(done, 5000);
+            });
+            link.media = "all";
+          }
+          if (document.fonts) {
+            await document.fonts.ready;
+            await document.fonts.load('400 16px "Titillium Web"');
+            await document.fonts.load('600 16px "Titillium Web"');
+            await document.fonts.load('700 16px "Titillium Web"');
+          }
+        });
         await page.waitForTimeout(600);   // let the sheet settle and measure
         if (screenName === "garage") {
           await page.evaluate(() => {
