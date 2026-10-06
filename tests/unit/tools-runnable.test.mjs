@@ -266,6 +266,8 @@ test("the MCP-facing entry points answer without touching a browser or a network
     { cmd: "python3", args: [tool("cdmcp-cli.py"), "--help"], want: /list-tools/ },
     { cmd: process.execPath, args: [tool("report-server.mjs"), "--help"], want: /--port/ },
     { cmd: process.execPath, args: [tool("garage-angles.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("garage-before.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("garage-angles-fetch.mjs"), "--help"], want: /nearest ancestor/ },
     { cmd: process.execPath, args: [tool("loading-probe.mjs"), "--help"], want: /PHASE ORDER|loading-probe/ },
     { cmd: process.execPath, args: [tool("garage-frame.mjs"), "--help"], want: /garage-frame/ },
     { cmd: process.execPath, args: [tool("flyby.mjs"), "--help"], want: /flyby/ },

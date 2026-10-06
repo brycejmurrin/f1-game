@@ -9,6 +9,8 @@ $("mb-race").onclick = () => {
   G.flow = "gp"; G.session = "race";
   restoreFreePlaySelection();
   G.buildSelect();
+  // Root VT: old title snapshot fades out before the select sheet fades in
+  // (css/tokens.css ::view-transition-old/new(root)); do not overlap them.
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (G.soundOn) GameAudio.uiSelect();
   G.scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
@@ -59,6 +61,17 @@ async function consumeGhostHash() {
 }
 consumeGhostHash();
 window.addEventListener("hashchange", consumeGhostHash);
+// HTP section links write #htp-*; CLOSE (and Esc via data-esc-close) must drop
+// a stale hash so reopen does not jump mid-pane. Keep this off game.js: that
+// file's pick-tests blast radius is circuits/physics and overflows the selected gate.
+const htpClose = $("htp-close");
+if (htpClose) {
+  htpClose.addEventListener("click", () => {
+    if (/^#htp-/.test(location.hash || "")) {
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* file:/opaque */ }
+    }
+  });
+}
 $("mb-season").onclick = () => {
   G.flow = "season"; G.session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
@@ -80,7 +93,7 @@ $("mb-season").onclick = () => {
 function openCareer() {
   G.flow = "career"; G.session = "race";
   deps.selectCareer();
-  // vt: the same crossfade RACE / SEASON / GARAGE already take off the title.
+  // vt: the same staggered root fade RACE / SEASON / GARAGE take off the title.
   vt(() => { careerUi.openHub(); els.overlay.hidden = true; });
   if (G.soundOn) GameAudio.uiSelect();
   G.scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
@@ -88,8 +101,9 @@ function openCareer() {
 // The same entry, stopping at the slot picker. Deliberately does NOT engage the
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
 // the picker's own handler calls openCareer() once a slot is taken.
+// Pass "title" so Esc/BACK returns here, never to the CAREER hub (U01).
 function openCareerSlots() {
-  vt(() => { careerUi.openSlots(); els.overlay.hidden = true; });
+  vt(() => { careerUi.openSlots("title"); els.overlay.hidden = true; });
   if (G.soundOn) GameAudio.uiSelect();
 }
 function refreshCareerButton() {

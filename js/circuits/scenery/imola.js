@@ -8,7 +8,7 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
-              groundYAt, terrainYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
+              groundYAt, terrainYAt, groundUnder, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
               along, mountain, tree, pine, hedge, bush,
               cypress, stonePine, plane, tieredBowl, terrace,
@@ -100,15 +100,18 @@
         }
       }
 
-      forestEdge(0.88, 1.00, -1, 12, { density: 0.42, hMin: 10, hMax: 16,
+      // Stop the parkland belt short of the pit/Partenza envelope (gap 12
+      // walked trees through the S/F roof and the crimson Partenza rake).
+      forestEdge(0.88, 0.90, -1, 16, { density: 0.42, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.25 });
-      forestEdge(0.88, 1.00,  1, 12, { density: 0.48, hMin: 10, hMax: 16,
+      forestEdge(0.88, 0.90,  1, 28, { density: 0.40, hMin: 10, hMax: 16,
         col: [0.14, 0.36, 0.16], col2: [0.20, 0.44, 0.20], pineFrac: 0.05 });
 
-      // Tamburello chicane through Villeneuve — riverside deciduous hug continues +1
-      forestEdge(0.00, 0.14, -1, 12, { density: 0.42, hMin: 10, hMax: 16,
+      // Tamburello chicane through Villeneuve — sit behind Partenza / pit
+      // keep-out so trunks no longer punch the S/F roof.
+      forestEdge(0.04, 0.14, -1, 28, { density: 0.42, hMin: 10, hMax: 16,
         col: [0.08, 0.24, 0.12], col2: [0.16, 0.40, 0.18], pineFrac: 0.20 });
-      forestEdge(0.00, 0.14,  1, 12, { density: 0.50, hMin: 10, hMax: 16,
+      forestEdge(0.06, 0.14,  1, 36, { density: 0.44, hMin: 10, hMax: 16,
         col: [0.12, 0.34, 0.15], col2: [0.18, 0.42, 0.19], pineFrac: 0.05 });
 
       // Villeneuve to Tosa — river fades; still mostly broadleaf
@@ -231,7 +234,13 @@
         building(K(sl(0.9825 + i * 0.0070)), -1, 20, 16, 11, 20,
                  { kind: "slab", wall: [0.58, 0.60, 0.63], window: WIN_LIT, floor: 5, lit: true });
       }
-      prop(K(sl(0.01)), -1, 7, [2.5, 1.6, 120], RED);
+      // Short crimson/white pit-wall banners — the old 120×1.6 m red bar
+      // read as a placeholder slab along the whole pit face.
+      for (let i = 0; i < 4; i++) {
+        const a = anchor(K(sl(0.988 + i * 0.007)), -1, 8.2);
+        if (onTrack(a.c[0], a.c[2], 3)) continue;
+        addBox(out, vadd(a.c, a.u, 1.05), [0.16, 1.5, 7.5], i % 2 ? RED : WHITE, [a.r, a.u, a.t]);
+      }
       // Pit-side stands (Tilke 2006–07 complex). Rows rise away from the track
       // via grandstandEx; legacy grandstand() already delegated, but the opts
       // keep crimson / concrete liveries on the Ferrari-home palette.
@@ -239,39 +248,38 @@
       // WEC 2024 grandstand map (Partenza opposite the pits).
       grandstandEx(sl(0.965), -1, 34, 90, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(sl(0.93), -1, 34, 70, null, null,
+      grandstandEx(sl(0.93), -1, 36, 64, null, null,
         { livery: "concrete", roof: "flat" });
       // Partenza rank — opposite the pit building (+1). Long covered main stand
       // plus a shorter neighbour toward Tamburello.
-      grandstandEx(sl(0.02),  1, 22, 80, null, null,
-        { livery: "crimson", roof: "cantilever" });
-      grandstandEx(sl(0.05),  1, 20, 70, null, null,
-        { livery: "sandstone", roof: "cantilever" });
+      grandstandEx(sl(0.02),  1, 24, 72, null, null,
+        { livery: "crimson", roof: "cantilever", endWalls: true, pylons: true });
+      grandstandEx(sl(0.048),  1, 24, 58, null, null,
+        { livery: "sandstone", roof: "cantilever", endWalls: true });
       // Wave-6 hero: Partenza fascia marker facing the Tilke pit building.
       // Compact identity only — live seating is grandstandEx above.
       {
-        const a = anchor(K(sl(0.025)), 1, 28);
-        if (!onTrack(a.c[0], a.c[2], 10)) {
+        const a = anchor(K(sl(0.025)), 1, 40);
+        if (!onTrack(a.c[0], a.c[2], 14)) {
           const b = [a.r, a.u, a.t];
           const SHELL = [0.54, 0.56, 0.60];
           const gy = terrainYAt(a.c[0], a.c[2]);
           const base = [a.c[0], Number.isFinite(gy) ? gy : a.c[1], a.c[2]];
           modelGroup("imola-partenza-stands", {
-            center: vadd(base, a.u, 8), size: [6, 12, 36], basis: b,
+            center: vadd(base, a.u, 7), size: [8, 14, 28], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            seat.box(stage, [base[0], base[1] - 0.3, base[2]], [4, 0.7, 32], SHELL, b);
-            addBox(stage, vadd(vadd(base, a.r, 3.0), a.u, 6.5), [4, 7, 30], SHELL, b);
+            seat.box(stage, [base[0], base[1] - 0.3, base[2]], [5, 0.8, 24], SHELL, b);
+            addBox(stage, vadd(vadd(base, a.r, 3.6), a.u, 4.1), [3.2, 8.2, 22], SHELL, b);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(base, a.r, -2.2), a.u, 9.5),
-                   [0.25, 0.7, 28], RED, b);
+            addBox(stage, vadd(vadd(base, a.r, -1.6), a.u, 9.0),
+                   [0.22, 0.55, 20], RED, b);
             stage._mat = 0;
           }, { required: true });
         }
       }
 
       terrainPatch("tamburello-lawn", 0.05, -1, 12, [18, 20], BANK);
-      place(K(0.05), -1, 14, [2, 3.2, 2], [0.45, 0.40, 0.30]);
       place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
       place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
       {
@@ -287,9 +295,9 @@
 
       // Tosa hairpin stands + Prato grass bank (outside the left-hander).
       // Source: autodromoimola.it WEC 2024 map — Tosa T1–2 + PRATO lawn.
-      grandstandEx(0.28, -1, 12, 60, null, null,
+      grandstandEx(0.28, -1, 14, 56, null, null,
         { livery: "crimson", roof: "cantilever" });
-      grandstandEx(0.31, -1, 14, 50, null, null,
+      grandstandEx(0.31, -1, 16, 46, null, null,
         { livery: "sandstone", roof: "flat" });
       terrainPatch("tosa-gravel", 0.28, -1, 6, [34, 40], GRAVEL);
       // Prato Tosa: the tieredBowl at 0.279–0.291 (below) is the built Tosa
@@ -308,7 +316,7 @@
       bush(K(0.64), -1, 8, [0.14, 0.32, 0.15]);
       bush(K(0.68),  1, 9, [0.15, 0.34, 0.16]);
 
-      grandstandEx(0.80, -1, 14, 55, null, null,
+      grandstandEx(0.80, -1, 16, 52, null, null,
         { livery: "crimson", roof: "cantilever" });
       terrainPatch("rivazza-gravel-0", 0.79, -1, 6, [32, 55], GRAVEL);
       terrainPatch("rivazza-gravel-1", 0.81, -1, 7, [34, 58], GRAVEL);
@@ -318,15 +326,36 @@
       // Prato Rivazza already has spectatorHill(0.788…) / (0.830…) below —
       // do not stack another bank on the same verge (clip + coplanar).
 
+      const emiliaCasale = (s, side, gap, w, h, d, wall) => {
+        const a = anchor(K(s), side, gap);
+        if (onTrack(a.c[0], a.c[2], 18)) return false;
+        const b = [a.r, a.u, a.t];
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const gu = groundUnder(a.c[0], a.c[2]);
+        const y = Math.max(
+          Number.isFinite(gy) ? gy : -1e9,
+          Number.isFinite(gu) ? gu : -1e9,
+          a.c[1]
+        );
+        if (!Number.isFinite(y)) return false;
+        const base = [a.c[0], y, a.c[2]];
+        seat.box(out, [base[0], y - 0.22, base[2]], [w + 1.3, 0.65, d + 1.3], STONE, b);
+        addBox(out, vadd(base, a.u, h / 2), [w, h, d], wall, b);
+        seat.prism(out, vadd(base, a.u, h), [w + 0.8, 2.2, d + 0.4], TERRA, b);
+        addBox(out, vadd(vadd(base, a.r, -w / 2 - 0.09), a.u, h * 0.55),
+               [0.14, Math.min(2.2, h * 0.32), d * 0.28], WIN_LIT, b);
+        return true;
+      };
+
       const TOWN_POS = [
-        [0.60, -1, 85,  14, 18, 12, "flat",    STONE3],
-        [0.63, -1, 92,  12, 22, 20, "setback", TERRA2],
-        [0.66, -1, 100, 16, 15, 22, "flat",    CONC],
-        [0.70, -1, 88,  13, 25, 10, "taper",   STONE2],
-        [0.74, -1, 95,  15, 20, 17, "setback", TERRA2],
+        [0.60, -1, 88,  12, 8, 14, STONE3],
+        [0.63, -1, 96,  11, 9, 16, TERRA2],
+        [0.66, -1, 104, 13, 8, 15, STONE2],
+        [0.70, -1, 92,  12, 10, 13, STONE3],
+        [0.74, -1, 98,  13, 8, 16, TERRA2],
       ];
-      for (const [s, side, dist, bw, bh, bd, arch, wall] of TOWN_POS) {
-        building(K(s), side, dist, bw, bh, bd, { wall, window: WIN_LIT, floor: 3, lit: true, arch });
+      for (const [s, side, dist, bw, bh, bd, wall] of TOWN_POS) {
+        emiliaCasale(s, side, dist, bw, bh, bd, wall);
       }
 
       place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);
@@ -336,10 +365,8 @@
         marshalPost(k, hash(k * 37) < 0.5 ? -1 : 1, 5);
       });
 
-      {
-        const a = anchor(K(sl(0.00)), -1, 12);
-        addBox(out, vadd(a.c, a.u, 12), [18, 0.7, 120], [0.66, 0.68, 0.70], [a.r, a.u, a.t]);
-      }
+      // Pit-lane canopy lives on the garage blocks (wordmark below). A 120 m
+      // slab at gap 12 / y=12 floated with sky gaps and ate the S/F trees.
 
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
@@ -409,48 +436,55 @@
         const gy = terrainYAt(a.c[0], a.c[2]);
         const baseY = Number.isFinite(gy) ? gy : a.c[1];
         const base = [a.c[0], baseY, a.c[2]];
-        const floors = 7, floorH = 3.7, shaftH = floors * floorH; // ~26 m
-        const w = 9, d = 9;
-        modelGroup("imola-racetrack-tower", {
-          center: vadd(base, a.u, shaftH * 0.5 + 2), size: [14, shaftH + 12, 14], basis: b,
-        }, (stage) => {
-          // Foundation pad — sinks into grade so the stack is grounded.
+        const floors = 8, floorH = 3.8, shaftH = floors * floorH; // ~30 m
+        const w = 8.4, d = 10.5;
+        const emitTower = (stage) => {
           stage._mat = MAT.CONCRETE;
-          seat.box(stage, [base[0], baseY - 0.4, base[2]], [w + 2.4, 1.0, d + 2.4],
+          seat.box(stage, [base[0], baseY - 0.4, base[2]], [w + 2.6, 1.0, d + 2.6],
                    [0.62, 0.64, 0.68], b);
-          // Continuous shaft (no inter-floor air gap — ground-audit BFS).
-          // No flush overlay bands — those shared faces with the shaft and
-          // raised coplanar spots (baseline 3 → 6).
           addBox(stage, vadd(base, a.u, shaftH / 2), [w, shaftH, d],
-                 [0.68, 0.70, 0.74], b);
-          // Track-facing glass — every other floor only (tris budget).
+                 [0.70, 0.72, 0.76], b);
+          for (let f = 1; f < floors; f += 2) {
+            const y0 = f * floorH;
+            stage._mat = MAT.GLASS;
+            for (const sg of [-1, 1]) {
+              addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.52), a.t, sg * (d / 2 + 0.03)),
+                     [w * 0.55, floorH * 0.62, 0.14],
+                     [0.28, 0.40, 0.52], b);
+            }
+            stage._mat = MAT.CONCRETE;
+          }
           for (let f = 0; f < floors; f += 2) {
             const y0 = f * floorH;
             stage._mat = MAT.GLASS;
-            addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.55), a.r, rcSide * (w / 2 - 0.06)),
-                   [0.22, floorH * 0.9, d * 0.78],
+            addBox(stage, vadd(vadd(base, a.u, y0 + floorH * 0.55), a.r, rcSide * (w / 2 + 0.03)),
+                   [0.14, floorH * 0.68, d * 0.55],
                    [0.32, 0.42, 0.54], b);
             stage._mat = MAT.CONCRETE;
           }
-          // Terrace + cabin (compact).
           const terraceY = shaftH;
-          addBox(stage, vadd(base, a.u, terraceY + 0.3),
-                 [w + 1.2, 0.6, d + 1.2], [0.70, 0.72, 0.75], b);
-          stage._mat = MAT.CONCRETE;
-          const cabH = 2.8;
-          addBox(stage, vadd(base, a.u, terraceY + 0.6 + cabH / 2),
-                 [5.2, cabH, 5.2], [0.78, 0.80, 0.82], b);
+          addBox(stage, vadd(base, a.u, terraceY + 0.28),
+                 [w + 2.0, 0.55, d + 2.0], [0.72, 0.74, 0.77], b);
+          const cabH = 3.4;
+          addBox(stage, vadd(base, a.u, terraceY + 0.55 + cabH / 2),
+                 [6.4, cabH, 7.2], [0.80, 0.82, 0.84], b);
           stage._mat = MAT.GLASS;
-          addBox(stage, vadd(vadd(base, a.u, terraceY + 0.6 + cabH * 0.5), a.r, rcSide * 2.5),
-                 [0.14, cabH * 0.45, 4.6], [0.30, 0.38, 0.50], b);
+          addBox(stage, vadd(vadd(base, a.u, terraceY + 0.55 + cabH * 0.52), a.r, rcSide * 3.22),
+                 [0.12, cabH * 0.48, 4.8], [0.30, 0.38, 0.50], b);
+          for (const sg of [-1, 1]) {
+            addBox(stage, vadd(vadd(base, a.u, terraceY + 0.55 + cabH * 0.52), a.t, sg * 3.62),
+                   [4.2, cabH * 0.42, 0.12], [0.30, 0.38, 0.50], b);
+          }
           stage._mat = MAT.METAL;
-          addCyl(stage, vadd(base, a.u, terraceY + 0.6 + cabH - 0.15),
-                 0.14, 5.0, [0.30, 0.30, 0.32], 4, b);
-          // Single crimson façade panel (Ferrari-home cue).
-          addBox(stage, vadd(vadd(base, a.u, 12), a.r, rcSide * (w / 2 - 0.05)),
-                 [0.14, 1.6, 2.4], RED, b);
+          addCyl(stage, vadd(base, a.u, terraceY + 0.55 + cabH),
+                 0.16, 6.5, [0.28, 0.28, 0.30], 5, b);
+          addBox(stage, vadd(vadd(base, a.u, 12), a.r, rcSide * (w / 2 + 0.04)),
+                 [0.12, 1.8, 2.2], RED, b);
           stage._mat = 0;
-        }, { required: true });
+        };
+        modelGroup("imola-racetrack-tower", {
+          center: vadd(base, a.u, shaftH * 0.5 + 3), size: [16, shaftH + 16, 16], basis: b,
+        }, emitTower, { required: true });
       })();
       wall(sl(0.95), sl(0.06), -1, 2, 1.0, PITWALL, 0.5);
 
@@ -515,12 +549,10 @@
         }
       }
 
-      grandstandEx(0.99, -1, 12, 60, null, null,
-        { livery: "concrete", roof: "cantilever" });
-      grandstandEx(0.07, -1, 16, 56, null, null,
+      grandstandEx(0.07, -1, 18, 50, null, null,
         { livery: "crimson", roof: "flat" });
       // Villeneuve outside stand (WEC map V).
-      grandstandEx(0.27,  1, 18, 44, null, null,
+      grandstandEx(0.27,  1, 20, 40, null, null,
         { livery: "sandstone", roof: "cantilever" });
       // Acque Minerali: prior grandstand(0.51, +1, 16) was fully suppressed
       // (onTrack fold). Restored as a grass Prato-style bank at gap 32 — a
@@ -528,7 +560,7 @@
       // Lettered AM1–5 sides remain UNCERTAIN.
       spectatorHill(0.530, 0.555, 1, 32, { rows: 4, rise: 1.2, depth: 2.0,
         density: 0.4, step: 16, grass: BANK, crowd: [CROWD_A, RED, CROWD_C, WHITE] });
-      grandstandEx(0.82, -1, 14, 64, null, null,
+      grandstandEx(0.82, -1, 16, 58, null, null,
         { livery: "crimson", roof: "cantilever" });
 
       fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
@@ -551,6 +583,9 @@
       billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);
       billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
       billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
+      // Canopy that used to brace a board face after the S/F forestEdge keep-out.
+      tree(K(0.05), 1, 22, 11, WOODS);
+      tree(K(0.95), 1, 20, 11, WOODS2);
 
       // Keep original hospitality gaps — pushing them out buried city detail
       // worse than the motorhomes themselves. Mild bury (~0.7 m) stays ≤ baseline.
@@ -760,19 +795,42 @@
       })();
 
       const PIRATELLA_VILLAS = [
-        [0.325, -1, 58, 13, 9, 14],
-        [0.347, -1, 66, 15, 11, 16],
-        [0.369, -1, 62, 12, 8, 13],
-        [0.392, -1, 72, 16, 12, 17],
-        [0.414, -1, 64, 13, 9, 15],
+        [0.325, -1, 62, 11, 7, 13],
+        [0.347, -1, 70, 12, 8, 14],
+        [0.369, -1, 66, 10, 6.5, 12],
+        [0.392, -1, 76, 13, 8, 15],
+        [0.414, -1, 68, 11, 7, 13],
       ];
       PIRATELLA_VILLAS.forEach(([s, side, gap, w, h, d], i) => {
-        building(K(s), side, gap, w, h, d, {
-          wall: i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2),
-          window: WIN_LIT, floor: 3, roof: true, lit: true,
-        });
-        cyp(K(s + 0.005), side, gap + w + 5, 12 + (i % 3) * 2);
+        emiliaCasale(s, side, gap, w, h, d, i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2));
+        cyp(K(s + 0.006), side, gap + 22, 12 + (i % 3) * 2);
       });
+      (function hillsideVillas() {
+        const s = 0.355, side = -1, gap = 84, w = 12, h = 7.5, d = 14;
+        const a = anchor(K(s), side, gap);
+        if (onTrack(a.c[0], a.c[2], 20)) return;
+        const b = [a.r, a.u, a.t];
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const gu = groundUnder(a.c[0], a.c[2]);
+        const y = Math.max(
+          Number.isFinite(gy) ? gy : -1e9,
+          Number.isFinite(gu) ? gu : -1e9,
+          a.c[1]
+        );
+        if (!Number.isFinite(y)) return;
+        const base = [a.c[0], y, a.c[2]];
+        modelGroup("imola-hill-villas", {
+          center: vadd(base, a.u, h * 0.5), size: [w + 6, h + 8, d + 6], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          seat.box(stage, [base[0], y - 0.22, base[2]], [w + 1.3, 0.65, d + 1.3], STONE, b);
+          addBox(stage, vadd(base, a.u, h / 2), [w, h, d], TERRA2, b);
+          seat.prism(stage, vadd(base, a.u, h), [w + 0.8, 2.2, d + 0.4], TERRA, b);
+          addBox(stage, vadd(vadd(base, a.r, -w / 2 - 0.04), a.u, h * 0.55),
+                 [0.14, 2.0, d * 0.28], WIN_LIT, b);
+          stage._mat = 0;
+        }, { required: true });
+      })();
 
       (function tamburelloTributeWall() {
         const a = anchor(K(0.082), -1, 32);

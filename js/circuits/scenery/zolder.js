@@ -146,8 +146,12 @@
       // Lap windows where a named block below lays its own sand, barriers and
       // buildings. The global passes keep out: two sand traps fighting over the
       // same metre of ground is how a prop gets refused.
+      // Windows where named blocks dress barriers / buildings / stands.
+      // Global pine/scrub MUST keep out — 0b used to ignore this and grew
+      // crowns through the pit offices, S/F stand, Sterrenwacht and Rindt
+      // paddock (clip-audit severe addCone×building / place×pine).
       const OWNED = [
-        [0.930, 0.075],   // pit straight, start line and the Earste chicane
+        [0.900, 0.075],   // Rindt paddock + pit straight + Earste chicane
         [0.160, 0.225],   // Sterrenwacht + Kanaalbocht
         [0.250, 0.285],   // motorhome park apron
         [0.325, 0.372],   // Lucien Bianchi
@@ -155,10 +159,33 @@
         [0.472, 0.540],   // infield service area
         [0.542, 0.598],   // Kleine chicane
         [0.686, 0.748],   // Bolderberg hairpin
-        [0.838, 0.900],   // Terlamenbocht
+        [0.838, 0.910],   // Terlamenbocht (+ exit scrub keep-out)
       ];
       const owned = (f) => OWNED.some(([a, b]) =>
         a <= b ? (f >= a && f <= b) : (f >= a || f <= b));
+
+      // Frame helper early: pit/S/F props use sl(); also needed so keep-outs
+      // below register BEFORE the global forest pass (fold clips: Kleine
+      // forestEdge crowns through the pit shed in world XZ).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      if (typeof indexSolid === "function") {
+        // Pit offices + garage row + scrutineering shed (racing-seam via sl).
+        indexSolid(sl(0.955), sl(0.065), 1, 10, 28);
+        indexSolid(sl(0.995), sl(0.050), 1, 24, 20);
+        indexSolid(sl(0.010), sl(0.040), 1, 78, 28);
+        // Permanent S/F tribune + museum corridor (outside).
+        indexSolid(sl(0.985), sl(0.040), -1, 14, 24);
+        indexSolid(sl(0.008), sl(0.030), -1, 48, 22);
+        // Sterrenwacht clubhouse (frame debt → racing pit fold; behind offices),
+        // service sheds, Rindt paddock.
+        indexSolid(0.172, 0.190, 1, 60, 22);
+        indexSolid(0.482, 0.520, 1, 48, 22);
+        indexSolid(0.900, 0.948, 1, 16, 20);
+        // Hairpin outside marshal corridor — pines were swallowing the post.
+        indexSolid(0.696, 0.734, -1, 12, 10);
+        indexSolid(0.696, 0.734, 1, 18, 12);
+      }
 
       // === 0. GLOBAL: the heath ==========================================
       // 0a. Pale sand verge patches scattered the whole way round. The run-off
@@ -191,6 +218,10 @@
       every(13, (k) => {
         const h = hash(k * 29 + 7);
         const h2 = hash(k * 53 + 11);
+        const f = k / n;
+        // Keep the plantation out of named stand/building envelopes — direct
+        // pine() does not consult indexSolid/barrierClear.
+        if (owned(f)) return;
         for (const side of [-1, 1]) {
           const ranks = side < 0 ? 4 : 3;
           for (let r = 0; r < ranks; r++) {
@@ -222,6 +253,7 @@
         const h = hash(k * 97 + 5);
         if (h < 0.70) return;
         const f = k / n;
+        if (owned(f)) return;
         // Keep scrub off the densest forestEdge windows.
         if ((f > 0.52 && f < 0.62) || (f > 0.74 && f < 0.84)) return;
         for (const side of [-1, 1]) {
@@ -244,7 +276,9 @@
       forestEdge(0.905, 0.950, -1, 30, { spacing: 13 });
       // Infield pine: the paddock and service areas are cut out of the same
       // plantation, so the +1 side is screened too wherever nothing is built.
-      forestEdge(0.100, 0.168, 1, 30, { spacing: 13 });
+      // NOTE: do NOT forestEdge(0.100–0.168, +1) — with _sceneryShift≈0.84 that
+      // window lands on the racing pit straight and grew crowns through the
+      // team offices (clip-audit 2.55 m addCone×building @ frac ~0.028).
       forestEdge(0.206, 0.330, 1, 28, { spacing: 13 });
       forestEdge(0.580, 0.690, 1, 28, { spacing: 13 });
       forestEdge(0.760, 0.850, 1, 30, { spacing: 13 });
@@ -259,7 +293,7 @@
       forestEdge(0.602, 0.698, -1, 56, { spacing: 18 });
       forestEdge(0.732, 0.848, -1, 58, { spacing: 18 });
       forestEdge(0.906, 0.948, -1, 62, { spacing: 18 });
-      forestEdge(0.102, 0.166, 1, 62, { spacing: 18 });
+      // +1 second canopy: skip the 0.10–0.17 band (same pit-fold as above).
       forestEdge(0.208, 0.328, 1, 60, { spacing: 18 });
       forestEdge(0.582, 0.688, 1, 60, { spacing: 18 });
       forestEdge(0.762, 0.848, 1, 62, { spacing: 18 });
@@ -272,7 +306,9 @@
       fence(0.40, 0.62, -1, 15, 3.2, [0.58, 0.60, 0.60]);
 
       // 0h. Marshal posts on the half-lap gaps the named rows do not cover.
-      for (const s of [0.075, 0.145, 0.235, 0.300, 0.395, 0.470, 0.640, 0.780, 0.820]) {
+      //     Skip 0.780 — Terlamen/hairpin name their own posts; a global post
+      //     at gap 13 sat inside the sweeper pine near-rank (1.22 m clip).
+      for (const s of [0.075, 0.145, 0.235, 0.300, 0.395, 0.470, 0.640, 0.820]) {
         marshalPost(K(s), s < 0.5 ? -1 : 1, 13);
       }
 
@@ -283,32 +319,39 @@
       //     instanced, so these ranks are free in the prop-vert budget — the
       //     only thing that limits them is taste. Height climbs and contrast
       //     falls with distance; the gaps are real clearings, not noise.
+      //
+      //     +1 (infield) depth ranks removed: at 96–160 m they fold through the
+      //     pit offices / scrutineering shed / Rindt marshals in world XZ
+      //     (clip-audit 2.55 / 2.12 / 1.22 m — A/B by disabling this pass).
+      //     Outer ring (-1) keeps the Bosbergen wall; OWNED windows still skip.
       every(8, (k) => {
-        for (const side of [-1, 1]) {
-          const deep = side < 0 ? 7 : 5;
-          for (let r = 0; r < deep; r++) {
-            const j = hash(k * 13 + r * 197 + (side < 0 ? 0 : 733));
-            if (j < 0.20) continue;               // clearings and rides
-            const dist = (side < 0 ? 96 : 104) + r * 17 + j * 12;
-            const a = anchor(k, side, dist);
-            if (!a || onTrack(a.c[0], a.c[2], 11)) continue;
-            pine(k, side, dist, 16 + r * 0.7 + j * 9,
-              r < 2 ? pineCol(j) : farCol(j));
-          }
+        const f = k / n;
+        if (owned(f)) return;
+        const side = -1;
+        const deep = 7;
+        for (let r = 0; r < deep; r++) {
+          const j = hash(k * 13 + r * 197);
+          if (j < 0.20) continue;               // clearings and rides
+          const dist = 96 + r * 17 + j * 12;
+          const a = anchor(k, side, dist);
+          if (!a || onTrack(a.c[0], a.c[2], 11)) continue;
+          pine(k, side, dist, 16 + r * 0.7 + j * 9,
+            r < 2 ? pineCol(j) : farCol(j));
         }
       });
       // The far skyline: a last, taller stand at the limit of sight, thinned
       // right out so it reads as canopy rather than as individual trunks.
       every(13, (k) => {
-        for (const side of [-1, 1]) {
-          for (let r = 0; r < 4; r++) {
-            const j = hash(k * 19 + r * 311 + (side < 0 ? 57 : 907));
-            if (j < 0.42) continue;
-            const dist = 228 + r * 26 + j * 18;
-            const a = anchor(k, side, dist);
-            if (!a || onTrack(a.c[0], a.c[2], 12)) continue;
-            pine(k, side, dist, 19 + j * 10, farCol(j));
-          }
+        const f = k / n;
+        if (owned(f)) return;
+        const side = -1;
+        for (let r = 0; r < 4; r++) {
+          const j = hash(k * 19 + r * 311 + 57);
+          if (j < 0.42) continue;
+          const dist = 228 + r * 26 + j * 18;
+          const a = anchor(k, side, dist);
+          if (!a || onTrack(a.c[0], a.c[2], 12)) continue;
+          pine(k, side, dist, 19 + j * 10, farCol(j));
         }
       });
 
@@ -363,18 +406,13 @@
         if (t && !onTrack(t.c[0], t.c[2], 10)) tree(k, side, 78, 9 + hash(k * 3) * 5, BIRCH);
       }
 
-      // RE-KEYED THROUGH sl(). The start line sits on a straight (def
+      // RE-KEYED THROUGH sl() — SL/sl defined above (before the global forest
+      // so pit keep-outs land first). The start line sits on a straight (def
       // startFrac; v0 is in a 176 m corner), and
       // sceneryStartFrac holds the rest of this file on its real corners — the
       // chicanes, the Villeneuve memorial and the pine sections must not travel
       // with the line. The pit block and main stand belong AT the line, so
       // these two blocks alone are shifted.
-      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
-      // the 4 dp the props were placed against (the unrounded value flips a few
-      // K() nodes, so rounding keeps the geometry while a retuned startFrac still
-      // moves the props).
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
 
       // === 1. s 0.005 +1 14 — PIT LANE AND GARAGES =======================
       // A long low run of flat-roofed boxes. Plain white/grey. Functional.
@@ -394,6 +432,10 @@
       // Team offices over the middle of the pit block — set further back.
       building(K(sl(0.008)), 1, 32, 12, 7.5, 10, { wall: WHITE });
       building(K(sl(0.038)), 1, 34, 11, 6.0, 10, { wall: GREY });
+      if (typeof indexSolid === "function") {
+        indexSolid(sl(0.995), sl(0.020), 1, 24, 16);
+        indexSolid(sl(0.028), sl(0.050), 1, 26, 16);
+      }
       // Continuous sponsor band along the pit wall.
       sponsorHoarding(sl(0.955), sl(0.060), 1, 11.5);
       // Pit exit marshal.
@@ -410,11 +452,16 @@
           { wall: j < 0.5 ? [0.88, 0.88, 0.87] : [0.83, 0.84, 0.85] });
       }
       // Scrutineering / race-control shed at the back of the yard.
-      building(K(sl(0.024)), 1, 66, 14, 5.4, 18, { wall: GREY });
+      // Gap 90: frame debt sits Sterrenwacht on this fold at gap 72 — a shed
+      // at 66 shared volume with the clubhouse (building×modelGroup @ ~0.60).
+      building(K(sl(0.024)), 1, 90, 14, 5.4, 18, { wall: GREY });
+      // Solid keep-out so deferred roadside firs and any late pine skip the shed.
+      if (typeof indexSolid === "function")
+        indexSolid(sl(0.010), sl(0.040), 1, 78, 28);
       // Pine well behind the yard — was clipping addCone into offices/motorhomes.
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 157 + 13);
-        pine(K(sl(0.952 + i * 0.0086)), 1, 92 + j * 14, 15 + j * 9, pineCol(j));
+        pine(K(sl(0.952 + i * 0.0086)), 1, 100 + j * 14, 15 + j * 9, pineCol(j));
       }
 
       // === 1b. REQUIRED — permanent S/F grandstand (circuit-zolder.be museum
@@ -432,30 +479,33 @@
             basis: [a0.r, a0.u, a0.t],
           }, (stage) => {
             emitOpenStand(stage, a0, -1, { depth, h, len, tiers: 5, shell: CONCRETE });
+            // Wide keep-out: shell + roof + camera-tower corridor. ownPitStraight
+            // already kills the generic 7-box; this keeps foliage / billboards out.
             if (typeof indexSolid === "function")
-              indexSolid(sl(0.995), sl(0.028), -1, 16, 14);
+              indexSolid(sl(0.985), sl(0.040), -1, 14, 22);
           }, { required: true });
         }
       }
       cameraTower(K(sl(0.0)), -1, 22);
       // Billboards spaced and set back — panels 11 m apart at frac 0.02 are
-      // a 6 m severe place×place clip.
+      // a 6 m severe place×place clip. Sit them BETWEEN stand (gap≤32) and
+      // museum (gap≥48), not through either envelope.
       for (let i = 0; i < 4; i++) {
-        billboard(K(sl(0.965 + i * 0.014)), -1, 52, 10, 3.8,
+        billboard(K(sl(0.965 + i * 0.014)), -1, 40, 10, 3.8,
           i % 2 ? [0.82, 0.24, 0.20] : [0.16, 0.28, 0.55]);
       }
-      // Dark pine closes the gap above the roofline.
+      // Dark pine closes the gap above the roofline — past the museum hall.
       for (let i = 0; i < 14; i++) {
         const s = sl(0.950 + i * 0.0075);
         const j = hash(i * 61 + 13);
-        pine(K(s), -1, 58 + j * 10, 17 + j * 7, pineCol(j));
+        pine(K(s), -1, 78 + j * 12, 17 + j * 7, pineCol(j));
       }
 
       // === 1c. REQUIRED — Circuit Zolder Museum (official: behind the
       //     permanent grandstand at start/finish). Low club archive hall.
       //     https://www.circuit-zolder.be/en/about-us/museum/
       {
-        const a = anchor(K(sl(0.018)), -1, 56);
+        const a = anchor(K(sl(0.018)), -1, 58);
         if (a && !onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
@@ -478,6 +528,8 @@
               [4.5, 3.0, 3.0], CONCRETE, b);
             stage._mat = 0;
           }, { required: true });
+          if (typeof indexSolid === "function")
+            indexSolid(sl(0.008), sl(0.030), -1, 48, 20);
         }
       }
 
@@ -548,13 +600,15 @@
       for (let i = 0; i < 9; i++) {
         const s = 0.024 + i * 0.0034;
         const j = hash(i * 23 + 31);
-        tree(K(s), -1, 40 + j * 9, 8 + j * 5, j > 0.6 ? BIRCH : PINE_C);
+        // Past the spectatorHill (gap ~27, rows out to ~35) so trunks do not
+        // pierce the bank (clip-audit 1.61 m pine×hill @ racing frac ~0.88).
+        tree(K(s), -1, 46 + j * 9, 8 + j * 5, j > 0.6 ? BIRCH : PINE_C);
       }
       // The wood picks straight back up behind the bank — set past tyre/building
       // reach so addCone does not swallow the T1 boxes (clip-audit frac ~0.03).
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 127 + 91);
-        pine(K(0.020 + i * 0.0024), -1, 58 + j * 20, 16 + j * 9, pineCol(j));
+        pine(K(0.020 + i * 0.0024), -1, 64 + j * 18, 16 + j * 9, pineCol(j));
       }
 
       // === 4. s 0.042 +1 16 — CHICANE EXIT, INFIELD ======================
@@ -566,14 +620,16 @@
       marshalPost(K(0.044), 1, 15);
       guardrail(0.036, 0.052, 1, 16, RAIL);
       fence(0.034, 0.056, 1, 19, 3.2, [0.58, 0.60, 0.60]);
-      // First rank of pine screening the paddock beyond.
+      // First rank of pine screening the paddock beyond — past the pit-office
+      // envelope (gap 32–34) and the yard shed (gap 66). Early ranks at gap 24
+      // were the 2.55 m addCone×office clip @ frac ~0.028.
       for (let i = 0; i < 10; i++) {
         const j = hash(i * 71 + 17);
-        pine(K(0.034 + i * 0.0028), 1, 24 + j * 6, 14 + j * 6, pineCol(j));
+        pine(K(0.048 + i * 0.0028), 1, 72 + j * 8, 14 + j * 6, pineCol(j));
       }
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 137 + 59);
-        const kk = K(0.030 + i * 0.0030), d = 36 + j * 20;
+        const kk = K(0.045 + i * 0.0030), d = 88 + j * 18;
         const a = anchor(kk, 1, d);
         if (!a || onTrack(a.c[0], a.c[2], 9)) continue;   // the pit road is in here
         pine(kk, 1, d, 15 + j * 9, pineCol(j));
@@ -607,7 +663,7 @@
       marshalPost(K(0.1802), 1, 16);
       groundPatch(K(0.1802), 1, 19.0, [12, 0.15, 30], SAND_PALE);
       {
-        const a = anchor(K(0.1802), 1, 30);
+        const a = anchor(K(0.1802), 1, 72);
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
@@ -631,11 +687,16 @@
             addCyl(stage, vadd(a.c, a.u, dy + 7.95), 0.14, 1.6, [0.55, 0.56, 0.58], 5, b);
             stage._mat = 0;
           }, { required: true });
+          // Frame debt puts authored 0.18 on the racing pit fold — sit behind
+          // the team offices (gap 32–34), not through them.
+          if (typeof indexSolid === "function")
+            indexSolid(0.172, 0.190, 1, 60, 22);
         }
       }
+      // Pine screen behind the clubhouse — past the 9 m box (+ crown).
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 83 + 29);
-        pine(K(0.166 + i * 0.0036), 1, 48 + j * 12, 15 + j * 8, pineCol(j));
+        pine(K(0.166 + i * 0.0036), 1, 92 + j * 12, 15 + j * 8, pineCol(j));
       }
 
       // === 7. s 0.194 -1 20 — KANAALBOCHT (T3) ===========================
@@ -728,9 +789,11 @@
       motorhome(K(0.518), 1, 41, 11, 7.0, 15, { wall: [0.84, 0.85, 0.86] });
       building(K(0.505), 1, 56, 18, 5.0, 12, { wall: GREY });
       building(K(0.488), 1, 57, 12, 4.2, 9, { wall: WHITE });
+      if (typeof indexSolid === "function")
+        indexSolid(0.482, 0.520, 1, 48, 22);
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 79 + 23);
-        pine(K(0.480 + i * 0.0040), 1, 66 + j * 14, 15 + j * 8, pineCol(j));
+        pine(K(0.480 + i * 0.0040), 1, 78 + j * 14, 15 + j * 8, pineCol(j));
       }
       if (clear(K(0.505), 1, 74, 30, 12, 11)) {
         groundPatch(K(0.505), 1, 74, [30, 0.13, 12], SAND_DUSK);
@@ -742,7 +805,10 @@
       // come from the barrier itself — armco, tyres, a marshal each side, and
       // a wood that is two ranks deep (third rank was forestEdge-self clips).
       guardrail(0.556, 0.580, -1, 14, RAIL);
-      tyreWall(0.558, 0.578, -1, 13.4, TYRE_CAP2);
+      // No tyreWall on this tight chord — along() stacks self-clipped at
+      // 1.16 m (structures tyre cyl×cyl @ racing frac ~0.56). Armco + fence
+      // still read the barrier; tyres return on the hairpin / Terlamen.
+      // tyreWall removed (was 0.558–0.578).
       guardrail(0.554, 0.582, 1, 13, RAIL);
       marshalPost(K(0.5667), -1, 16);
       marshalPost(K(0.5600), 1, 15);
@@ -768,7 +834,10 @@
       // (6 spots at line 586). The grandstandEx already reads as the bank.
       grandstandEx(0.7153, 1, 30, 48, null, null);
       guardrail(0.700, 0.734, 1, 22, RAIL);
-      tyreWall(0.702, 0.732, 1, 21.2, TYRE_CAP);
+      // Short tyre bank on the inside only — full-span + facing outside bank
+      // self-clipped on the hairpin chord (1.16 m cyl×cyl @ racing ~0.56,
+      // where authored 0.70 + shift lands).
+      tyreWall(0.708, 0.722, 1, 21.2, TYRE_CAP);
       marshalPost(K(0.730), 1, 24);
       marshalPost(K(0.700), -1, 16);
       billboard(K(0.694), 1, 24, 12, 4.5, [0.80, 0.26, 0.18]);
@@ -778,10 +847,12 @@
       groundPatch(K(0.7153), -1, 12.0, [17, 0.15, 34], SAND_PALE);
       groundPatch(K(0.7080), -1, 12.0, [13, 0.14, 26], SAND);
       guardrail(0.698, 0.736, -1, 16, RAIL);
-      tyreWall(0.704, 0.728, -1, 15.4, TYRE_CAP2);
+      // Outside: armco only (tyreWall removed — was the other half of the
+      // 1.16 m hairpin stack pair).
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 43 + 47);
-        pine(K(0.690 + i * 0.0042), -1, 24 + j * 14, 16 + j * 8, pineCol(j));
+        // Past the outside marshal (gap 16) — was 1.22 m pine×post @ ~0.781.
+        pine(K(0.690 + i * 0.0042), -1, 34 + j * 14, 16 + j * 8, pineCol(j));
       }
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 181 + 29);
@@ -809,13 +880,14 @@
       }
       groundPatch(K(0.8792), -1, 14.0, [10, 0.14, 34], SAND_PALE);
       forestEdge(0.850, 0.910, -1, 38, { spacing: 13 });
+      // Past marshal (gap 18–24) and tyre stacks so pine trunks miss posts.
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 73 + 53);
-        pine(K(0.848 + i * 0.0044), -1, 40 + j * 14, 16 + j * 8, pineCol(j));
+        pine(K(0.848 + i * 0.0044), -1, 48 + j * 14, 16 + j * 8, pineCol(j));
       }
       for (let i = 0; i < 16; i++) {
         const j = hash(i * 191 + 11);
-        pine(K(0.846 + i * 0.0042), -1, 58 + j * 26, 17 + j * 9, farCol(j));
+        pine(K(0.846 + i * 0.0042), -1, 66 + j * 26, 17 + j * 9, farCol(j));
       }
 
       // === 16. s 0.924 +1 16 — JOCHEN RINDT BOCHT (T10) ==================
@@ -827,9 +899,11 @@
         building(K(0.906 + i * 0.0086), 1, 22 + j * 6, 12, 5.2, 11,
           { wall: j < 0.5 ? GREY : WHITE });
       }
+      if (typeof indexSolid === "function")
+        indexSolid(0.900, 0.948, 1, 16, 20);
       for (let i = 0; i < 6; i++) {
         const j = hash(i * 113 + 7);
-        seatMotorhome(K(0.908 + i * 0.0072), 1, 44, 10, 6.4 + j * 1.4, 14,
+        seatMotorhome(K(0.908 + i * 0.0072), 1, 48, 10, 6.4 + j * 1.4, 14,
           { wall: j < 0.5 ? [0.89, 0.89, 0.88] : [0.80, 0.81, 0.83] });
       }
       groundPatch(K(0.9237), 1, 30, [30, 0.14, 70], CONCRETE);
@@ -839,6 +913,8 @@
       // Between the Kleine chicane and the hairpin, and again out of Terlamen,
       // the circuit is a road through a plantation. Thinned vs the prior every-
       // station pass — bush×conifer clips at 0.75–0.81 were the #2 call-site.
+      // Near-rank pushed out: authored 0.75 + shift folds onto the pit shed in
+      // world XZ (clip-audit 2.12 m pine×shed @ racing frac ~0.597).
       for (const [s0, s1] of [[0.602, 0.688], [0.748, 0.836]]) {
         const steps = Math.round((s1 - s0) * 220);
         for (let i = 0; i < steps; i++) {
@@ -847,20 +923,22 @@
           const j2 = hash(i * 223 + 41);
           for (const side of [-1, 1]) {
             if (j < 0.28) continue;
-            const near = (side < 0 ? 18 : 19) + j * 7;
+            // +1 near-rank at 18–26 folded into the pit scrutineering shed;
+            // keep the wall but start past the shed envelope (~gap 66 + crown).
+            const near = (side < 0 ? 22 : 48) + j * 8;
             const a = anchor(K(s), side, near);
             if (a && !onTrack(a.c[0], a.c[2], 8)) {
               pine(K(s), side, near, 15 + j2 * 9, pineCol(j2));
             }
             if (j2 > 0.62) {
-              const mid = 34 + j2 * 14;
+              const mid = 40 + j2 * 16;
               const b = anchor(K(s), side, mid);
               if (b && !onTrack(b.c[0], b.c[2], 9)) {
                 pine(K(s), side, mid, 17 + j * 8, pineCol(1 - j));
               }
             }
           }
-          if (j > 0.93) bush(K(s), -1, 16 + j2 * 4, SCRUB);
+          if (j > 0.93) bush(K(s), -1, 18 + j2 * 4, SCRUB);
         }
       }
       forestEdge(0.604, 0.686, 1, 46, { spacing: 15 });

@@ -110,8 +110,8 @@ never hand-edit those (see `AGENTS.md` rule 11).
 | `node tools/ci/deploy.mjs --gate-only` | Full pre-push gate (no push) |
 
 Ship branch: `claude/f1-game-project-26h3ng` → `ci.yml` then `pages.yml` →
-https://brycejmurrin.github.io/f1-game/. Feature work: `claude/<topic>` or
-`cursor/<topic>` branches; sync with `node tools/ci/sync-pr.mjs`, not hand merges.
+https://brycejmurrin.github.io/f1-game/. Feature work: `cursor/<topic>-<hash>`
+branches; sync with `node tools/ci/sync-pr.mjs`, not hand merges.
 
 Verification scales to the change — one browser group is expensive on
 SwiftShader. Details: [TESTING.md](TESTING.md).

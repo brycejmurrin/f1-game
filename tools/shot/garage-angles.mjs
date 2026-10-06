@@ -11,7 +11,7 @@
 //     [--station=spineTop,spineSide,finBadge,…] [--pair=spineLogo:wrap|saddle] [--flat]
 //     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--path=@keyframes.json] [--path-steps=6]
 //     [--serve] [--watch[=js/car/liverytex.js,…]]
-//     [--preset=wall|fin|flank|mark|quick|sweep|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
+//     [--preset=wall|fin|flank|mark|quick|sweep|closeup|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
 //     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
@@ -109,6 +109,7 @@
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, watch as fsWatch } from "node:fs";
 import readline from "node:readline";
 import { execFileSync } from "node:child_process";
@@ -175,6 +176,11 @@ const PRESETS = {
   // Wall crest AND saddle flank mark in one frame, at the team's own mark
   // colours — every key here is a plain flag, `bayFront` a named camera.
   saddleWall: { views: "bayFront", spineLogo: "saddle", spineSide: "logo", logos: "default" },
+  // Part-fill close-ups — each station carries its OWN az (no shared --az product).
+  // No preset-forced --fast: soft-blit needs settle; pass --fast only when iterating.
+  closeup: {
+    station: "fwLow,fwSide,noseTip,endplate,rwRear,rwSide,rwTop,podInlet,podFloor,wheelF,wheelR,haloBehind,mirror,cover",
+  },
 };
 const presetRaw = flag("--preset", "").trim();
 if (presetRaw === "list") {
@@ -326,6 +332,20 @@ const STATIONS = {
   wallCrest: { view: "front",     az: 0.32 * Math.PI, el: 0.28, dist: 9.4, target: "wall",  lamp: "off" },
   // the floor-level nose framing measured 2026-09-10 (eye 9 cm off the floor)
   floorNose: { view: "wingFront", az: 0,              el: 0.04, dist: 3.5, target: [0, -0.15, 2.2] },
+  // CLOSE-UPS (--preset=closeup): part fills most of the frame; unique az each.
+  fwLow:      { view: "wingFront", az: 8 * Math.PI / 180,   el: 0.04, dist: 2.0, target: [0, -0.05, 2.05], lamp: "front", clamp: false },
+  fwSide:     { view: "wingFront", az: 85 * Math.PI / 180,  el: 0.08, dist: 2.1, target: [0.55, 0.12, 2.0], lamp: "wingFront", clamp: false },
+  noseTip:    { view: "wingFront", az: 28 * Math.PI / 180,  el: 0.14, dist: 1.9, target: [0, 0.28, 2.2], lamp: "front", clamp: false },
+  rwRear:     { view: "wingRear",  az: 175 * Math.PI / 180, el: 0.22, dist: 1.9, target: [0, 1.0, -2.4], lamp: "wingRear", clamp: false },
+  rwSide:     { view: "wingRear",  az: 105 * Math.PI / 180, el: 0.20, dist: 2.0, target: [0.35, 1.0, -2.35], lamp: "wingRear", clamp: false },
+  rwTop:      { view: "wingRear",  az: 155 * Math.PI / 180, el: 0.85, dist: 2.2, target: [0, 1.05, -2.35], lamp: "off", clamp: false },
+  podInlet:   { view: "side",      az: 42 * Math.PI / 180,  el: 0.16, dist: 2.5, target: [0.7, 0.5, 0.55], lamp: "side", clamp: false },
+  podFloor:   { view: "side",      az: 98 * Math.PI / 180,  el: 0.04, dist: 2.3, target: [0.75, 0.12, 0.0], lamp: "side", clamp: false },
+  wheelF:     { view: "side",      az: 68 * Math.PI / 180,  el: 0.10, dist: 1.7, target: [0.9, 0.32, 1.15], lamp: "front", clamp: false },
+  wheelR:     { view: "side",      az: 118 * Math.PI / 180, el: 0.10, dist: 1.7, target: [0.9, 0.32, -1.05], lamp: "rear", clamp: false },
+  haloBehind: { view: "rear",      az: 205 * Math.PI / 180, el: 0.55, dist: 2.2, target: [0, 0.95, -0.15], lamp: "off", clamp: false },
+  mirror:     { view: "front",     az: 48 * Math.PI / 180,  el: 0.28, dist: 1.9, target: [0.55, 0.78, 0.45], lamp: "front", clamp: false },
+  cover:      { view: "rear",      az: 138 * Math.PI / 180, el: 0.42, dist: 2.6, target: [0, 0.88, -0.75], lamp: "off", clamp: false },
 };
 // Which station SHOWS a field. A crown design is invisible from `side` and a
 // flank fill from `rear`; a run that names a design and no camera used to
@@ -376,7 +396,8 @@ const camParts = listOf(flag("--cam", ""), ";").flatMap((part) => {
 });
 // `--station=spineTop,finBadge` is the same list by another name; a name that
 // is not a station is an error here, where `--cam` would try to parse numbers.
-const stationNames = listOf(flag("--station", ""));
+// Preset `closeup` feeds this via pflag so `--preset=closeup` needs no --station.
+const stationNames = listOf(pflag("--station", "station", ""));
 for (const n of stationNames) if (!STATIONS[n]) { console.error(`--station "${n}" is not one of ${Object.keys(STATIONS).join(", ")}`); process.exit(1); }
 const camAliasNames = [...camParts.filter(isAlias), ...stationNames];
 const camSpecs = camParts.filter((c) => !isAlias(c)).map(parseCam);
@@ -608,19 +629,21 @@ const GROUPS = {
 };
 // A PRESET that names views beats the multi-team rollup default: the preset
 // asked for those views explicitly, and a rollup silently shooting one of them
-// is the "I asked for three angles and got one" surprise.
+// is the "I asked for three angles and got one" surprise. A station-only
+// preset (closeup) leaves views empty — the stations ARE the cameras.
 const viewsDefault = (() => {
-  if (preset && !argvHas("--views")) return preset.views;
+  if (preset && preset.views != null && !argvHas("--views")) return preset.views;
+  if (preset && preset.station && !argvHas("--views") && !argvHas("--cam") && !argvHas("--station")) return "";
   if (rollupOnly && !argvHas("--views")) return rollupViewFlag || "side";
   return "spine";
 })();
-const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
+const rawViews = String(flag("--views", viewsDefault) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 // A named camera given as a view is lifted into --cam, so `--views=bay` and
 // `--cam=bay` mean the same thing and neither needs a game preset.
 const viewAliases = rawViews.filter(isAlias);
 // Naming cameras and NOT naming views means the cameras are the run: the
 // default view group would otherwise silently double every such matrix.
-const camsNamed = argvHas("--cam") || argvHas("--station") || viewAliases.length > 0 || autoStations.length > 0
+const camsNamed = argvHas("--cam") || stationNames.length > 0 || viewAliases.length > 0 || autoStations.length > 0
   || argvHas("--path") || argvHas("--eye");
 // `plainViews` drive the camera PRODUCT; an alias contributes exactly one
 // camera (its own bundle), so naming one does not also shoot its base view.
@@ -1263,12 +1286,16 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     : shotName({ team: teamId, tag, cam: cam.key, view, vp: vpTag, i: capOpts.index ?? 0, dpr: capOpts.dpr || 1,
       az: cam.az != null ? degs(cam.az) : "", el: cam.el != null ? degs(cam.el) : "", dist: cam.dist ?? "" }));
   let gate = null, capMs = 0, gateMs = 0, tries = 0;
-  for (let attempt = 0; attempt < gateRetries; attempt++) {
+  // Soft #game-soft can lag garageFrame by a frame (measured: identical PNGs across
+  // distinct az/el/dist under --fast + skipAwait). Await present every try, and if
+  // the bytes match the previous shot in this team walk, settle and retry.
+  const maxTries = Math.max(gateRetries, capOpts.prevHash ? 4 : gateRetries);
+  for (let attempt = 0; attempt < maxTries; attempt++) {
     tries++;
-    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle - 2), awaitMs: viewAwait });
+    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle), awaitMs: viewAwait });
     const tCap = Date.now();
     const shot = await screenshotGameCanvas(page, png, {
-      skipAwait: true,
+      skipAwait: false,
       skipVisible: !!capOpts.gameVisible,
     });
     capMs += ms(tCap);
@@ -1276,6 +1303,11 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     gate = await bayRendered(png, vpCur[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
+      const hash = createHash("md5").update(readFileSync(png)).digest("hex");
+      if (capOpts.prevHash && hash === capOpts.prevHash && attempt < maxTries - 1) {
+        console.warn(`stale soft blit ${teamId}/${tag}/${cam.key} (hash=${hash.slice(0, 8)}) — retry ${attempt + 1}`);
+        continue;
+      }
       // `--crop` beats a station's own crop: the user named the region.
       await cropPng(png, cropOff ? null : (crop || cam.crop || null));
       // READ THE CAMERA BACK AFTER THE SETTLE, never the value garageFrame
@@ -1298,7 +1330,7 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
         view, cam: cam.key, tag, png, vp: vpTag, spread: gate.spread, via: shot.via || "page-clip",
         occl: occl == null ? undefined : +(occl * 100).toFixed(1),
         baselineDiff: baselineDiff == null ? undefined : baselineDiff,
-        dpr: capOpts.dpr || 1,
+        dpr: capOpts.dpr || 1, hash,
         az: +c.az.toFixed(3), el: +c.el.toFixed(3), dist: +(c.dist ?? c.effDist).toFixed(3),
         pan: c.pan ? c.pan.map((n) => +n.toFixed(3)) : null,
         ms: { settle: settleMs, capture: capMs, gate: gateMs, tries },
@@ -1549,6 +1581,7 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
           for (const cam of cams) {
             const s = await frame(page, teamId, tag, cam, dir, {
               gameVisible, vp: v, index: shots.length, design: it.design || null, dpr: opts.dpr || 1,
+              prevHash: tagShots.length ? tagShots[tagShots.length - 1].hash : null,
             });
             gameVisible = true;
             s.team = teamId;
@@ -1799,6 +1832,16 @@ async function finishRun(A, B, ctx) {
       `garage — ${teams.join(",")} · ${views.join(",")}${againstRef ? " (working tree)" : ""}`,
       sheetCols || undefined);
     if (f) sheets.push(f);
+    // One contact sheet per team (closeup packs / multi-team runs).
+    for (const tid of teams) {
+      const teamShots = A.shots.filter((s) => s.team === tid);
+      if (!teamShots.length) continue;
+      const tf = await writeSheet(teamShots.map((s) => ({ png: s.png, title: titleOf(s), sub: subOf(s) })),
+        join(outDir, `${tid}-sheet.png`),
+        `garage — ${tid}${againstRef ? " (working tree)" : ""}`,
+        sheetCols || undefined);
+      if (tf) sheets.push(tf);
+    }
     const mx = await writeMatrixSheet(A.shots, join(outDir, "matrix.png"));
     if (mx) sheets.push(mx);
     if (pathFrames.length) {

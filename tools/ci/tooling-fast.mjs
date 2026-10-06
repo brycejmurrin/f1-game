@@ -87,6 +87,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
+  // Sunlight/Broadcast Appearance chrome: preset label wrap, selected ring,
+  // theme-stable art, light --gold, light .sheet-foot (css pins).
+  "tests/unit/appearance-sunlight-chrome.test.mjs",
   // Every AUTHORED activation-zone turn table resolves against the BUILT
   // centreline. One unresolvable pair discards a circuit's whole table and
   // falls through to ZONE_COUNT — silently, which is how monza shipped a
@@ -122,6 +125,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and the branch audit it deletes by: ancestry, the merge-tree dry merge
   // and line presence, pinned against real git in a throwaway repo. ~1 s.
   "tests/unit/branch-audit.test.mjs",
+  // Phone browser MCP over streamable HTTP (token gate + tools/list) and the
+  // reuse/start decision for its public tunnel. Pure Node, no Chromium.
+  "tests/unit/browser-http-mcp.test.mjs",
+  "tests/unit/browser-http-up.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
@@ -154,6 +161,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
+  // resolveChromium finds Playwright's headless shell when the full archive
+  // was never unpacked — the cloud-agent / MCP bootstrap path.
+  "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
@@ -348,6 +358,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // driving-model gate runs here in seconds rather than in a browser job.
   "tests/unit/game-vm.test.mjs",
   "tests/unit/garage-arrival.test.mjs",
+  // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
+  // not Car shot. Pure + spawn, no network / Chromium.
+  "tests/unit/garage-before.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
@@ -452,6 +465,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
+  // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
+  "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
@@ -584,6 +600,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
+  // foot clearance — css/race-setup.css + season-ui.js only.
+  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/session-contracts.test.mjs",
@@ -638,9 +657,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
+  // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
+  "tests/unit/survey-hud.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/team-livery.test.mjs",
+  "tests/unit/team-style-relief.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
