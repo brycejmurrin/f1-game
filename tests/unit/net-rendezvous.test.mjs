@@ -81,7 +81,7 @@ function relay(opts = {}) {
 
     if (req.method === "GET") {
       // flakyGets: answer the first N polls with a 429 — the transient hiccup
-      // waitFor() must ride out rather than abort the two-minute wait on.
+      // waitFor() must ride out rather than abort the poll wait on.
       if (opts.flakyGets > 0) { opts.flakyGets--; return send(429, { error: "rate_limited" }); }
       if (!room[slot]) return send(404, { error: "not_found" });
       return send(200, { payload: room[slot].payload });
@@ -649,4 +649,37 @@ test("QR relay configuration is validated and scoped to the controller document"
     NetRendezvous.setSessionUrl(undefined);
     assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test");
   } finally { NetRendezvous.setSessionUrl(undefined); NetRendezvous.setUrl(null); }
+});
+
+// ── room-code join honesty: fail a missing code in ~8–15 s, not 120 s ────────
+test("POLL_TIMEOUT_MS is the ~8–15 s lobby join target, not a two-minute hang", () => {
+  assert.ok(NetRendezvous.POLL_TIMEOUT_MS >= 8000, "enough headroom for a few polls + fetch");
+  assert.ok(NetRendezvous.POLL_TIMEOUT_MS <= 15000, "fake/missing codes must not sit on Looking for…");
+});
+
+test("waitFor expired copy is actionable (no false 'couple of minutes' claim)", async () => {
+  // Advance wall time past POLL_TIMEOUT without sleeping the full window: each
+  // poll still hits a real 404 from the stand-in, but Date.now jumps so the
+  // next loop iteration sees expiry.
+  const r = await relay();
+  const realNow = Date.now;
+  let skew = 0;
+  try {
+    Date.now = () => realNow() + skew;
+    const code = NetRendezvous.makeCode();
+    // First poll at t=0 (not_found), then claim we are past the timeout.
+    const pending = NetRendezvous.waitFor(code, "offer", null, () => {
+      skew = NetRendezvous.POLL_TIMEOUT_MS + 1;
+    });
+    const got = await pending;
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "expired");
+    assert.match(got.message, /double-check it/i);
+    assert.match(got.message, /fresh one/i);
+    assert.doesNotMatch(got.message, /couple of minutes/i);
+    assert.doesNotMatch(got.message, /six characters/i);
+  } finally {
+    Date.now = realNow;
+    await r.close();
+  }
 });

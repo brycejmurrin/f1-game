@@ -57,9 +57,16 @@ build_mcp_args() {
   # WebGPU flags MUST match tools/lib/webgpu-chrome-args.cjs (harness / wgx-shot).
   # --use-angle=swiftshader alone leaves requestAdapter() null in headless Chrome;
   # the Vulkan/SwiftShader pins are what make navigator.gpu return an adapter.
+  # A file, not a process substitution. This container has no /dev/fd, and
+  # bash reports that as "line 48: /dev/fd/63: No such file" before the server
+  # can start.
+  local _wgpu_file
+  _wgpu_file="$(mktemp)"
+  node "$ROOT/tools/lib/webgpu-chrome-args.cjs" mcp > "$_wgpu_file"
   while IFS= read -r _wgpu_flag; do
-    MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
-  done < <(node "$ROOT/tools/lib/webgpu-chrome-args.cjs" mcp)
+    [[ -n "$_wgpu_flag" ]] && MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
+  done < "$_wgpu_file"
+  rm -f "$_wgpu_file"
   # Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
   # Lavapipe WebGPU (three.js e2e): APEX_CHROME_ARGS="--enable-unsafe-webgpu
   #   --enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE --use-angle=vulkan
