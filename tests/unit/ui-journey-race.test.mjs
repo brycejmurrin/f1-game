@@ -59,7 +59,9 @@ function zoomsFor(css, needle) {
 
 test("HUD clusters zoom with --hud-z, never --ui-scale on #lights / .hud-bottom", () => {
   const hud = read("css/hud.css");
-  assert.match(hud, /#lights, #announce \{ --hud-z: var\(--hud-z-top, var\(--hud-scale\)\); zoom: var\(--hud-z\); \}/);
+  // Top-band group includes #hud-damage: its top/right divide by --hud-z, and
+  // without membership the calcs went invalid and the chip fell over the map.
+  assert.match(hud, /#hud-limits, #hud-damage, #hud-mirror[\s\S]*?\{ --hud-z: var\(--hud-z-top, var\(--hud-scale\)\); zoom: var\(--hud-z\); \}/);
   assert.match(hud, /\.hud-bottom \{ --hud-z: var\(--hud-z-bot, var\(--hud-scale\)\); zoom: var\(--hud-z\); \}/);
   for (const sel of ["#lights", ".hud-bottom"]) {
     const zooms = zoomsFor(hud, sel);

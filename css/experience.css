@@ -99,7 +99,10 @@
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
   }
-  /* The brand is top-left now, where this button used to dock: bottom-left for every wide scene, not only compact. */
+  /* Live wide docks ANIMATE bottom-left. Classic/static stays top-left
+     on desktop (title-desktop golden). Compact-wide and tall Classic
+     have their own docks; an unscoped wide Classic rule moved the
+     chip on 1440 (menu-baseline 6%, CI 37371854254). */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
@@ -119,7 +122,9 @@
      shapes do, and ends the column above it so it covers no button. */
   :where(body[data-shape="tall"]) #overlay[data-home-scene][data-home-ready="1"]:not([data-home-scene="static"], [data-home-scene="photo"]) #title-car { display: none; }
   :where(body[data-shape="tall"]) #overlay[data-home-scene="photo"][style*="data:image"] #title-car { display: none; }
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  /* Same dock on tall Classic: :not(static) hid INSTALL/ANIMATE under
+     APEX 26 on a ~500px portrait (survey apex6). */
+  :where(body[data-shape="tall"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * 0.5); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }

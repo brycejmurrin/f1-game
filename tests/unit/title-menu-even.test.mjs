@@ -136,6 +136,152 @@ test("title scrollers never paint a ScrollFade thumb", () => {
     "both title scrollers hide the thumb; fades still say there is more");
 });
 
+test("narrow title column hides the native bar and reserves a tap under the last door", () => {
+  // Live survey ~500px: #menu-buttons is the leftover-row scroller. A light
+  // native thumb sat on the doors, and HOW TO PLAY / GARAGE died under
+  // ANIMATE BACKGROUND + INSTALL APP with no scroll padding.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*scrollbar-width:\s*none/,
+    "tall leftover column hides the native bar; ScrollFade fades still say more",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*scroll-padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "scroll-padding keeps the last utility on the --tap floor above bottom chrome",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "padding-bottom lets HOW TO PLAY scroll fully into the leftover row",
+  );
+  assert.match(
+    menus,
+    /has\(#home-motion:not\(\[hidden\]\)\):has\(#install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
+    "two bottom chips share one :has so INSTALL cannot cover the last door",
+  );
+  assert.match(
+    menus,
+    /padding-bottom:\s*calc\(\(var\(--tap\) \+ var\(--gap\)\) \* 2\)/,
+    "two chips reserve a second --tap under the leftover column",
+  );
+});
+
+test("CONTINUE + Daily stack the save line under the label, not beside it", () => {
+  // A Driver Career save unhides CONTINUE next to Daily. The pair used a
+  // row flex + nowrap ellipsis, so a ~1280 returning save painted
+  // "2026 · ROU…" / "MONTREA…". Compact-wide already stacked. An
+  // unscoped column flex also moved 1440 title-desktop.png (6%,
+  // CI 37371854254) — keep the stack under 1366px only.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /@media \(max-width:\s*1366px\) \{/,
+    "retention stack is capped at 1366px so 1440 title-desktop.png stays row+ellipsis",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.bigbtn \{[^}]*flex-direction:\s*column/,
+    "retention chips stack label over sub under that cap",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.mb-sub \{[^}]*white-space:\s*normal/,
+    "the save line wraps ROUND + circuit instead of ellipsising to ROU…",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.mb-sub \{[^}]*max-width:\s*100%/,
+    "the save line gets the chip's full width so ROUND / Montreal are not squeezed beside the label",
+  );
+  assert.match(
+    menus,
+    /#menu-retention \.bigbtn > span \{[^}]*max-width:\s*100%/,
+    "the visible label also cannot spill the cell",
+  );
+  assert.doesNotMatch(
+    menus,
+    /#menu-retention \.bigbtn \{\s*display:\s*flex;\s*flex-direction:\s*column/,
+    "desktop base retention stays row+ellipsis so title-desktop.png is unchanged",
+  );
+});
+
+test("mid-wide title rooms keep one-line labels and air under the utility row", () => {
+  // apex9 ~752–768px: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
+  // onto two lines while DATA HUB stayed one; WATCH REAL RACES wrapped
+  // inside its tile; the row sat flush on the viewport floor.
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus,
+    /#menu-buttons :is\(#menu-primary, #menu-explore\)\.balanced-row > \.bigbtn,[\s\S]*?#mb-phonepad \{ min-width: min-content/,
+    "desktop explore/primary keep ship min-content; rooms stay shrinkable so PHOTO STUDIO stays 3-up",
+  );
+  assert.match(
+    menus,
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-primary, #menu-explore, #menu-secondary\)\.balanced-row > \.bigbtn \{ min-width: min-content/,
+    "rooms wrap the leftover door, not the label, once TRACK DESIGNER no longer fits — mid-wide only",
+  );
+  assert.match(
+    menus,
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
+    "WATCH REAL RACES / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
+  );
+  assert.match(
+    menus,
+    /@media \(max-width:\s*899px\) \{[^}]*body\[data-shape="wide"\]\) #overlay #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "mid-wide title keeps --tap air under the utility row; 1440 desktop does not",
+  );
+});
+
+test("tall Classic docks ANIMATE BACKGROUND to the bottom, not under the wordmark", () => {
+  // Live-scene rules used :not([data-home-scene="static"]), so Classic
+  // left #home-motion at top-left under APEX 26. Narrow Classic then
+  // hid INSTALL/ANIMATE entirely (survey apex6, ~500px).
+  const experience = readCssSource("css/experience.css");
+  assert.match(
+    experience,
+    /body\[data-shape="tall"\]\) #home-motion \{[^}]*bottom:\s*var\(--safe-b\)/,
+    "tall title docks the motion chip to the safe bottom even on Classic/static",
+  );
+  assert.doesNotMatch(
+    experience,
+    /body\[data-shape="tall"\]\) #overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #home-motion/,
+    "must not still require a live scene before the chip leaves the wordmark",
+  );
+  assert.match(
+    experience,
+    /body\[data-shape="wide"\]\) #overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #home-motion/,
+    "wide Classic keeps ANIMATE top-left so title-desktop.png does not move",
+  );
+  assert.doesNotMatch(
+    experience,
+    /body\[data-shape="wide"\]\) #home-motion \{/,
+    "must not dock every wide title including Classic/static",
+  );
+});
+
+test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
+  const overlays = readCssSource("css/overlays.css");
+  assert.match(
+    overlays,
+    /body\[data-shape="tall"\]:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
+    "tall title lifts INSTALL when ANIMATE is showing (both chips share the bottom)",
+  );
+  assert.doesNotMatch(
+    overlays,
+    /^body:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{/m,
+    "must not lift INSTALL on desktop Classic where ANIMATE stays top-left",
+  );
+  // experience.css's live-scene padding shorthand is @layer overlays; a
+  // components-layer inset loses. The restore has to live in this sheet.
+  assert.match(
+    overlays,
+    /#overlay\[data-home-scene\]:not\(\[data-home-scene="static"\]\) #menu-buttons \{[^}]*padding-bottom:\s*calc\(var\(--tap\) \+ var\(--gap\)\)/,
+    "live-scene leftover column keeps --tap padding in the overlays layer",
+  );
+});
+
 // WCAG 2.5.3 (label in name). Lighthouse's label-content-name-mismatch failed all
 // six title doors (2026-10-05): "DAILY TIME TRIAL" was named "Daily challenge —",
 // "2–4" was named "2 to 4", and the label and its sub-line abutted with no space

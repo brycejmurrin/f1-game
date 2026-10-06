@@ -1,12 +1,12 @@
 /* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and
    persistence half of the lighting tuner. js/lighting/knobs.js owns the
    registry (TUNE_DEFS + the live LT object); this file layers shipped
-   LightPresets (global then per-condition), a quality-gated conditional
-   layer, and the player's own overrides (global then per-condition) over
-   each knob's default into LT, and persists only the deltas from default to
-   localStorage (apex26.lightTune). js/lighting/tuner-panel.js and
-   __apex.lightTune / lightCopy are the only callers of set() /
-   copyToTracks() / restore(). */
+   LightPresets (global, shared condition, then per-track), a quality-gated
+   conditional layer, and the player's own overrides (global then
+   per-condition) over each knob's default into LT, and persists only the
+   deltas from default to localStorage (apex26.lightTune).
+   js/lighting/tuner-panel.js and __apex.lightTune / lightCopy are the only
+   callers of set() / copyToTracks() / restore(). */
 "use strict";
 const LightStore = (() => {
   function create(G) {
@@ -109,9 +109,19 @@ const LightStore = (() => {
       return c;
     }
 
+    // Shared condition stamp: LightPresets["*|<tod>|<wx>"] (e.g. "*|dawn|dry").
+    // Sits between the global "*" baseline and the per-track key so one fleet
+    // look can land without 52 identical pins — a track profile still wins.
+    function sharedCond(F, k) {
+      if (!F || !k) return null;
+      const i = k.indexOf("|");
+      if (i < 0) return null;
+      return F["*" + k.slice(i)] || null;
+    }
+
     function layers(k) {
       const F = window.LightPresets || null;
-      return [F && F["*"], F && k && F[k], condLayer(F), profiles["*"], k && profiles[k]];
+      return [F && F["*"], sharedCond(F, k), F && k && F[k], condLayer(F), profiles["*"], k && profiles[k]];
     }
 
     function base(k, d) {
@@ -119,6 +129,8 @@ const LightStore = (() => {
       let v = d.def;
       const F = window.LightPresets || null;
       if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
+      const shared = sharedCond(F, k);
+      if (shared && typeof shared[d.id] === "number") v = shared[d.id];
       if (F && k && F[k] && typeof F[k][d.id] === "number") v = F[k][d.id];
       const c = condLayer(F);
       if (c && typeof c[d.id] === "number") v = c[d.id];

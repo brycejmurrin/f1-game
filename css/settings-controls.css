@@ -141,6 +141,17 @@
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
+/* Pair TILT help with RECALIBRATE (aria-describedby). Disabled (BUTTONS /
+   TOUCH) must keep the slot so STEER / GEARS / AERO do not jump — the
+   pause-settings stable-layout spec. Hide the copy, not the box.
+   [hidden] drops the plate entirely, so the described-by goes with it.
+   body.desktop still CSS-hides both (css/responsive.css). */
+#pm-calib:disabled + #pm-calib-help { visibility: hidden; }
+#pm-calib[hidden] + #pm-calib-help { display: none; }
+/* RESET KEYS is the last reachable control when CONTROLLER is hidden.
+   Sheet-body padding alone left the plate flush against .sheet-foot
+   and the bottom of the button clipped at max scroll. */
+#pm-panel-controls { padding-bottom: var(--tap); }
 /* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
    greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
 #pm-hudlayout .tune-row:has(input:disabled),
@@ -195,6 +206,23 @@
   margin: 0;
 }
 #pm-settings-index { --balance-basis: max(12rem, calc(50% - var(--gap) * 0.25)); }
+/* Seven doors: a 50% flex-basis still lets the odd last tile (BACKUP) grow
+   into a full-width orphan, and a wrapping APPEARANCE blurb makes that row
+   taller than DISPLAY beside it. From 24rem (two --balance-basis) the index
+   is a 2-col grid: the seventh sits half-width, and stretch evens a pair. */
+@container sheet (min-width: 24rem) {
+  #pm-settings-index {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  #pmsettings-inner #pm-settings-index > button {
+    min-width: 0;
+    width: auto;
+    height: 100%;
+    align-self: stretch;
+  }
+}
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
    Each option button shrinks from full-sheet width (~717px) to half-width
@@ -324,7 +352,7 @@
 #pmsettings-inner #pm-metrics-details > [role="group"] > button:last-child {
   border-bottom: none;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #pm-metrics-details > [role="group"] > button:hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     box-shadow: none;
@@ -372,32 +400,36 @@
 #pm-display-adv-body > :is(.set-row, .adv-help, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
-/* Fold summaries are disclosures, not plates: steel + rule + left chevron
-   (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
-   HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
+/* Fold summaries are disclosures, not plates: readable ink + rule + left
+   chevron (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate
+   made HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
+/* Rule on the fold, not a fading --grad-rule on the summary: DISPLAY
+   (and the same disclosure family) stopped ~150px short of the sheet. */
+:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details {
+  width: 100%;
+  border-bottom: 1px solid var(--card-line);
+}
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
 :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
-  color: var(--steel);
+  /* --text, not --steel: steel italic on --surf-1 is the low-contrast
+     accordion complaint. ON/OFF readout chips keep gold/red below. */
+  color: var(--text);
   font-style: italic;
   opacity: 1;
   background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
+  background-image: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+    background-image: none;
     border: none;
     box-shadow: none;
   }
@@ -450,7 +482,7 @@ button:has(> [data-fold]) {
 }
 #pmsettings-inner details > summary [data-fold] { white-space: nowrap; }
 #pmsettings-inner details > summary [data-fold="k"] {
-  color: var(--steel);
+  color: var(--text);
   font-style: italic;
   font-weight: 700;
 }
@@ -470,7 +502,7 @@ button:has(> [data-fold]) {
   font-weight: 700;
 }
 #pmsettings-inner details > summary [data-fold="sep"] {
-  color: color-mix(in oklab, var(--steel) 55%, transparent);
+  color: var(--dim);
   font-weight: 400;
 }
 #pmsettings-inner #pm-uiscale-h {
@@ -507,7 +539,7 @@ button:has(> [data-fold]) {
   color: var(--steel);
   font-weight: 600;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     color: var(--text);

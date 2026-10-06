@@ -39,6 +39,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* CONTINUE + Daily: row+ellipsis is the desktop title (1440
+   title-desktop golden). Stack only under 1366px so a ~500px / 1280
+   returning save can show ROUND + circuit (CI 37371854254 leaked
+   column flex into the 1440 golden — 6%). Compact-wide already stacks. */
+@media (max-width: 1366px) {
+  #menu-retention .bigbtn {
+    flex-direction: column;
+    gap: 0.15em;
+  }
+  #menu-retention .bigbtn > span { max-width: 100%; }
+  #menu-retention .mb-sub {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+}
 /* Shared gap / stretch. Column count lives on each row: primary is a
    forced 2x2, explore and secondary wrap from local space. */
 #menu-primary, #menu-explore, #menu-secondary {
@@ -132,6 +150,15 @@
    min-width: 0 — their labels already fit the cell they get. */
 #menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
 #menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
+/* apex9 ~752–768: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
+   onto two lines; WATCH REAL RACES wrapped inside its tile. nowrap +
+   min-content on every room is mid-wide only — on 1440 it forced
+   PHOTO STUDIO onto a leftover banner and dropped SETTINGS (6%
+   title-desktop, CI 37371854254). */
+@media (max-width: 899px) {
+  #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
+  #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
+}
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
@@ -199,7 +226,7 @@
   opacity: 0;
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
 }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
@@ -218,7 +245,7 @@
   opacity: 0;
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #mb-career:hover { background: var(--grad-primary); }
   #mb-career:hover::before { opacity: 1; }
 }
@@ -328,6 +355,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   align-content: center;
   align-content: safe center;
   /* .bigbtn skewX(-6deg) hangs past the column AABB. overflow-x:hidden then
@@ -370,9 +398,39 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Native thumb is light-on-dark and sits on the doors. ScrollFade fades
+     already say "more below"; hide the OS bar the way .dh-tabs does. */
+  scrollbar-width: none;
   align-content: center;
   align-content: safe center;
   padding-inline: var(--gap);
+  /* HOW TO PLAY / GARAGE sat under ANIMATE BACKGROUND at ~500px: the
+     leftover row clipped the last utility with no scroll padding. One
+     --tap clears the live-scene toggle; two chips get a second tap below. */
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
+:where(body[data-shape="tall"]) #menu-buttons::-webkit-scrollbar { display: none; }
+/* experience.css's live-scene `padding: var(--gap)` is a shorthand that
+   would wipe the inset above. These two beat it (extra attrs / :has) so
+   HOW TO PLAY still scrolls clear of ANIMATE / INSTALL. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+/* Mid-wide (~752–768) 5-across rooms sat flush on the viewport floor
+   (apex9). Same --tap air the tall leftover-row already keeps. Cap
+   at 899 so 1440 title-desktop does not grow a leftover inset. */
+@media (max-width: 899px) {
+  :where(body[data-shape="wide"]) #overlay #menu-buttons {
+    padding-bottom: calc(var(--tap) + var(--gap));
+    scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  }
 }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */

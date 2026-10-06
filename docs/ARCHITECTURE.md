@@ -171,12 +171,13 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
+| `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock). |
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing, as player settings under SETTINGS › APPEARANCE. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
 | `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
+| `survey-hud.js` | `SurveyHud` | tag | APEX_SURVEY_HUD survey fixture. |
 | `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
 | `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
 | `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |

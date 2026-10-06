@@ -841,6 +841,69 @@ test("the pause card and a hidden tab cut the SPOTTER channel too, not only the 
   assert.ok(packStops.includes("*"), "hiding the tab stops every pack channel");
 });
 
+// ROTATE-BLOCK PAUSE HIDES THE CARD IN THE SAME TASK. setPaused(true) shows
+// #pausemenu; syncRotateBlocker then sets hidden again because the blocker
+// owns the screen. MutationObserver callbacks run AFTER that task, so they
+// see the card already hidden and the `if (!pause.hidden) halt()` gate
+// never fires — the engineer / spotter line, hiss bed and squelch tail
+// keep talking over a frozen race. Photo mode does the same hide. The pit
+// garage (#988) already calls halt() at the pause entry; this is that
+// contract for every setPaused(true), including the ones that leave the
+// card hidden.
+test("a rotate-block pause that re-hides the card in the same task still halts radio", () => {
+  const packStops = [], stingStops = [], ducks = [], queued = [], observers = [];
+  const pause = { _hidden: true };
+  Object.defineProperty(pause, "hidden", {
+    get() { return this._hidden; },
+    set(v) {
+      this._hidden = !!v;
+      for (const o of observers) if (o.el === pause) queued.push(o.fn);
+    },
+  });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck: (b) => ducks.push(b), radioStingStop: () => stingStops.push("stop") };
+  ctx.VoicePack = { create: () => ({
+    stop: (ch) => packStops.push(ch == null ? "*" : ch), remaining: () => 0, ensure() {},
+    speak() { return true; }, ready: () => true,
+  }) };
+  ctx.document = {
+    hidden: false,
+    getElementById: (id) => (id === "pausemenu" ? pause : null),
+    addEventListener() {},
+  };
+  ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : k === "radioPack" ? true : d), set() {} } };
+  const v = vm.runInContext("RadioVoice", ctx).create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info", 0.5), true);
+  assert.equal(v.busy(), true, "precondition: a line is on air");
+  assert.equal(ducks.at(-1), true, "precondition: the music is ducked under it");
+  packStops.length = 0; stingStops.length = 0;
+
+  // setPaused(true, "rotate-block") then syncRotateBlocker(false), one task:
+  pause.hidden = false;
+  const audio = fnSource(read("js/game.js"), "function setPaused(p, why) {")
+    .match(/if \(p\) \{ GameAudio\.stopEngine\(\);[^}]+\}/);
+  assert.ok(audio, "setPaused still has a pause-audio line");
+  vm.runInNewContext(audio[0], {
+    p: true, radioVoice: v,
+    GameAudio: { stopEngine() {}, setSkid() {} },
+    $: () => ({ disabled: false }),
+    netPlay: { active: () => false },
+    qualiNet: { hasArmed: () => false },
+  });
+  pause.hidden = true;                                          // the blocker took the screen
+  assert.equal(pause.hidden, true, "the card is gone by the end of the task");
+  while (queued.length) queued.shift()();                       // observers run now, seeing hidden
+  assert.equal(v.busy(), false, "the line is gone — the observer never saw the card");
+  assert.ok(stingStops.length, "the hiss bed and squelch tail stop with the line");
+  assert.ok(packStops.includes("*"), "every pack channel (the spotter's too) is cut");
+  assert.equal(ducks.at(-1), false, "the music comes back up");
+  assert.equal(v.busy(), false, "resume must not restart a stale line");
+});
+
 test('every message channel uses the same speaker for its HUD label and its voice', () => {
   const f = vm.runInNewContext('(' + fnSource(read('js/game.js'), 'function radioWho(kind)') + ')',
     { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
