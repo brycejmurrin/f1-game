@@ -1664,23 +1664,10 @@ const NetLobby = (function () {
         reply: async (inviteCode) => {
           if (!operationCurrent(gen) || transport !== pending) return null;
           say("Found it — answering…");
-          // ANSWER FAST, because the channel carrying it is dying.
-          //
-          // The default gather waits up to GATHER_TIMEOUT_MS (8 s) for
-          // stragglers. On the invite path that costs nothing — a human
-          // carries the code and will wait. Here the answer goes back over
-          // Trystero, and eight seconds is long enough for that peer to
-          // disappear: measured on real hardware, every retry came back
-          // "Trystero: no peer with id … found", targeted AND untargeted, so
-          // by then the room was empty. The host sat on "Waiting for them to
-          // join…" for its full two minutes.
-          //
-          // Relay and srflx candidates land in well under a second; what the
-          // extra seven buy is stragglers we do not need, at the price of the
-          // only route the answer has. So the room-code path gathers briefly
-          // and posts while somebody is still listening.
-          const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile(),
-            { gatherTimeoutMs: 2500 });
+          // Default gather (waitForIce re-check + null-candidate end). A short
+          // per-answer gather cap here was a leftover workaround; readyIce
+          // already races the credentials prefetch at ICE_WAIT_MS.
+          const res = await NetHandshake.acceptInvite(pending, inviteCode, localProfile());
           if (!operationCurrent(gen) || transport !== pending) return null;
           if (!res.ok) { answered = res; return null; }
           if (res.peer) _peers.set(PEER_ONE, res.peer);
