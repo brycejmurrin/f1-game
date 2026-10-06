@@ -1,1 +1,1 @@
-1791308802	Cursor Agent	HUD Desk #1131: fix hud-layout COMPACT gaps assert vs empty-collapse CSS  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
+1791309185	Cursor Agent	HUD Desk #1131: pushed COMPACT seed fix 230cbb5; AM disabled again (Bryce re-armed); watching CI  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
