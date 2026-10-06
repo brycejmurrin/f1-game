@@ -64,7 +64,14 @@ const DataExport = (function () {
                     log("✓ " + key + "  pts=" + trace.length + " (" + (d.code || ("#" + d.num)) + ")");
                     return true;
                   });
-                }).catch(function (e) { if (e && e.cancelled) throw e; return false; });
+                }).catch(function (e) {
+                  if (e && e.cancelled) throw e;
+                  // A 429 here is the rate-limit path the outer catch waits 90 s
+                  // for — swallowing it as "this driver failed" skipped the wait
+                  // and only retried after the 2 min missed-circuits pass.
+                  if (e && (e.status === 429 || /429/.test(String(e.message || "")))) throw e;
+                  return false;
+                });
               });
             });
             return dc.then(function (done) { if (!done) log("· no lap/loc: " + key); return done; });
@@ -73,7 +80,7 @@ const DataExport = (function () {
           if (e && e.cancelled) throw e;
           const msg = e && e.message || String(e);
           // On 429 wait 90 s then retry once — longer than OpenF1's sliding window
-          if (!retrying && /429/.test(msg)) {
+          if (!retrying && (e.status === 429 || /429/.test(msg))) {
             log("· rate limited for " + key + " — waiting 90 s…");
             return sleepCk(90000).then(function () { return tryMeeting(m, true); });
           }
@@ -294,7 +301,9 @@ const DataExport = (function () {
       return Promise.resolve(wrap);
     }
 
-    return { loadExport };
+    // gatherStartLines is exposed so unit tests can drive the OpenF1 gather
+    // path with a mocked F1API (no real network, no DOM Gather click).
+    return { loadExport, gatherStartLines };
   }
 
   return { create };
