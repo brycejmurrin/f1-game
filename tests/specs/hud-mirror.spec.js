@@ -98,11 +98,12 @@ async function mirrorRace(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry", { laps: 3 }));
   await awaitTrackBuild(page);
+  // Freeze after AUTO->ON in mirrorCase: TLX on software never composites a
+  // pass that is enabled only after freeze has already stopped the loop.
   await page.evaluate(() => {
     const a = window.__apex;
     if (typeof a.renderScale === "function") a.renderScale(0.5);
     a.go();
-    a.freeze(true);   // a still scene: the on/off frames differ only by the mirror
     a.camera("cockpit");
   });
 }
@@ -117,6 +118,7 @@ async function mirrorCase(page, { requirePixels = false } = {}) {
     const m = window.__apex.mirror();
     return m.shown && m.backend && m.backend.renders >= 1 && m.backend.composites >= 1;
   }, null, { polling: 100, timeout: FRAME_MS });
+  await page.evaluate(() => window.__apex.freeze(true));
   const on = await page.evaluate(() => ({
     m: window.__apex.mirror(),
     cls: document.body.classList.contains("hud-mirror-on"),
