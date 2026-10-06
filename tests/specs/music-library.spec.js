@@ -60,14 +60,10 @@ async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  // LAZY_AUDIO: title boots js/audio/stub.js; MusicLib / SpotifyMusic / the real
-  // GameAudio land only after ensureAudio() (first pointerdown / SOUND / race).
-  await page.evaluate(() => {
-    window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-  });
+  // Title boots the GameAudio stub; MusicLib / SpotifyMusic arrive with LAZY_AUDIO
+  // when openSettings() → ensureAudio() runs (openAudioPanel waits for them).
   await page.waitForFunction(
-    () => typeof MusicLib !== "undefined" && typeof SpotifyMusic !== "undefined"
-      && typeof GameAudio !== "undefined" && !GameAudio._stub,
+    () => typeof GameAudio !== "undefined",
     null, { polling: 100, timeout: BOOT_MS }
   );
 }
@@ -85,6 +81,8 @@ async function openAudioPanel(page) {
   // which is how every test in this file failed the moment the `ui` group was
   // dispatched (2026-09-08; the group has no blocking coverage on a push, so it
   // had been red unseen). Same route menu-survey.spec.js takes.
+  // openSettings() / the audio door kick ensureAudio — element.click() does
+  // not fire the title pointerdown prefetch, so the gate must live there.
   await page.evaluate(() => {
     const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
     document.getElementById("pausemenu").hidden = false;
@@ -93,6 +91,11 @@ async function openAudioPanel(page) {
   await page.waitForFunction(() => !document.getElementById("pmsettings").hidden,
     null, { polling: 100, timeout: 8000 });
   await page.locator("#pm-audio").evaluate((el) => el.click());
+  await page.waitForFunction(
+    () => typeof MusicLib !== "undefined" && typeof SpotifyMusic !== "undefined"
+      && typeof GameAudio !== "undefined" && !GameAudio._stub,
+    null, { polling: 100, timeout: BOOT_MS }
+  );
   await expect(page.locator("#audioset")).toBeVisible();
   await page.evaluate(() => {
     document.getElementById("as-tracks-details").open = true;
@@ -165,7 +168,17 @@ test("an uploaded track survives a page reload (IndexedDB, not memory)", async (
   await page.reload();
   await boot(page);
 
-  // Rehydrated straight from IndexedDB on boot — no panel interaction needed.
+  // LAZY_AUDIO: MusicLib is not on the cold title wall. Opening Settings
+  // (ensureAudio) lets MusicLib.init rehydrate IndexedDB → playlist; the
+  // audio page is only needed to paint the rows.
+  await page.evaluate(() => {
+    document.getElementById("pausemenu").hidden = false;
+    document.getElementById("pm-settings").click();
+  });
+  await page.waitForFunction(
+    () => typeof MusicLib !== "undefined" && !GameAudio._stub,
+    null, { polling: 100, timeout: BOOT_MS }
+  );
   await expect
     .poll(() => userTracks(page), { timeout: 10000 })
     .toEqual([{ id: before.id, name: "Persisted Track", builtin: false }]);

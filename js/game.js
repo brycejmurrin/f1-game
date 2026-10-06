@@ -8414,7 +8414,7 @@ function syncSettingsAvailability() {
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
   // AUTO is FULL" is written after the first HUD tick, not only at boot.
-  paintHudDetailsSummary();
+  ensureAudio(); paintHudDetailsSummary(); // LAZY_AUDIO / MusicLib (pm-settings skips pointerdown)
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }

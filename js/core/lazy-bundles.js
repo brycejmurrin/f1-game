@@ -211,8 +211,9 @@ async function raceAssets() {
   // first GO wait for it.
   ensureScenery(deps.getContext().trackIdx);
   // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
-  // networkidle wall. First pointerdown / SOUND click / startRace pulls it
-  // (startRace awaits ensureAudio before startEngine).
+  // networkidle wall. First pointerdown / SOUND click / Settings /
+  // MUSIC & SOUND / startRace pulls it (startRace awaits ensureAudio
+  // before startEngine; openSettings and the audio door also call it).
   if (window.LightPresets) return;
   await loadBackendScripts(RACE_FILES, []);
   if (window.LightPresets) deps.applyLightTuneIfReady();
