@@ -2061,6 +2061,37 @@ test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
   } finally { fs.rmSync(tmp, { force: true }); }
 });
 
+test("root view-transition fades the old snapshot out before the new fades in", () => {
+  // Simultaneous plus-lighter crossfade of ::view-transition-old/new(root)
+  // printed title tiles over the Grand Prix list and the Career sheet.
+  const tokens = css("css/tokens.css");
+  const parseMs = (v) => {
+    const s = String(v || "").trim();
+    const n = parseFloat(s);
+    if (!Number.isFinite(n)) return NaN;
+    return /ms$/i.test(s) ? n : n * 1000;
+  };
+  const oldDur = parseMs(decl(tokens, "::view-transition-old(root)", "animation-duration"));
+  const newDelay = parseMs(decl(tokens, "::view-transition-new(root)", "animation-delay"));
+  const newDur = parseMs(decl(tokens, "::view-transition-new(root)", "animation-duration"));
+  assert.ok(oldDur > 0 && oldDur <= 120, `old fade must be short, got ${oldDur}ms`);
+  assert.ok(newDelay >= oldDur, `new must wait until old is gone (${newDelay}ms delay vs ${oldDur}ms old)`);
+  assert.ok(newDur > 0, "new still fades in after the delay");
+  assert.equal(decl(tokens, "::view-transition-old(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "animation-fill-mode"), "both");
+  assert.equal(decl(tokens, "::view-transition", "background-color"), "var(--bg)");
+  assert.match(decl(tokens, "::view-transition-old(root)", "animation-name") || "", /apex-vt-fade-out/);
+  assert.match(decl(tokens, "::view-transition-new(root)", "animation-name") || "", /apex-vt-fade-in/);
+  // Reduced-motion still cancels the UA snapshots (prefers-reduced-motion + MOTION: REDUCED).
+  assert.ok(declares(tokens, /::view-transition-old\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /::view-transition-new\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-old\(\*\)/, "animation", /none/));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-new\(\*\)/, "animation", /none/));
+});
+
 test("a locked part plays ONE blip, not one for the unlock and one for the fit", () => {
   // Reported 2026-09-10: every locked row in the part selector double-blipped.
   // Researching a part and fitting it are two steps of ONE click, and both
