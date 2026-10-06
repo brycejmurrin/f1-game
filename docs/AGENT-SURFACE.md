@@ -50,11 +50,24 @@ surface without hand-wiring:
 
 **One-time Dashboard (not inventable from git):**
 
-1. Save / Build the environment from this repo’s `.cursor/environment.json`.
-2. Mirror the three servers under **Integrations & MCP** (same names/commands;
-   prefer HTTP when a server can be remote; stdio needs the install script).
-3. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
-4. Per-user OAuth for any remote MCP that needs it.
+1. Link this repo to environment **Apex 26** ([819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025)). **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
+2. When starting a Cloud Agent, pick that environment — not a generic default. After boot, `cursor-cloud environment-info` should show `source: "Repository"`, `build.resolution: "resolved"`, and a `buildId`; run `npm run test:guards` without `npm install` first.
+3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` in Cloud):** the host
+   does **not** attach project `.mcp.json` by itself. In [Cloud Agents → Integrations & MCP](https://cursor.com/agents)
+   register all three stdio servers with the **same names and `bash` wrappers** as
+   root `.mcp.json` (`tools/mcp/*-mcp.sh`). Do **not** register `playwright-official`
+   as bare `npx @playwright/mcp` — the allowlist must say `command: bash` for that
+   name (`tests/unit/environment-json.test.mjs`). After editing ship
+   `.cursor/environment.json`, **Save** the environment so the dashboard allowlist
+   matches git (a stale save shows `npx` for the third slot and blocks the wrapper).
+   **Enable chrome-devtools** in the launch MCP dropdown; the catalog often ships
+   only two until all three are toggled on (measured 2026-09-03).
+4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
+5. Per-user OAuth for any remote MCP that needs it.
+
+**MCP empty in this session?** CLI fallbacks work without attachment:
+`bash tools/mcp/apex-tools-mcp.sh call …`, `bash tools/mcp/playwright-mcp.sh run`,
+`python3 tools/mcp/probe-mcp.py chrome-start` (see Fallback column below).
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
