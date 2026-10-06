@@ -23,12 +23,6 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
-// Identity goldens are SwiftShader captures (ci.yml keeps APEX_GL off for
-// this spec). An installing worker (controllerchange apex26-1695) restyles
-// CSS/fonts mid-shot; fallback system-ui is wider, so min-content doors
-// wrap off the 2×2 and clip GARAGE (CI 37459850548 title 0.08).
-test.use({ serviceWorkers: "block" });
-
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
   ["desktop", { width: 1440, height: 900 }],
@@ -98,6 +92,19 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
+        // Let the first worker finish installing so controllerchange cannot
+        // restyle CSS/fonts mid-shot (CI 37459850548). Do NOT set
+        // serviceWorkers:"block": Playwright resolves register() with
+        // undefined and the shell overlayed r.scope (CI 37463034163).
+        await page.evaluate(async () => {
+          if (!navigator.serviceWorker) return;
+          try {
+            await Promise.race([
+              navigator.serviceWorker.ready,
+              new Promise((resolve) => setTimeout(resolve, 8000)),
+            ]);
+          } catch (_) { /* blocked or unsupported */ }
+        });
         // Wait for IDENTITY chrome + Titillium before shooting.
         // css/fonts-hud.css and select/carsetup are print→all (#1101).
         // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
@@ -160,18 +167,6 @@ for (const [shapeName, viewport] of SHAPES) {
           return Math.abs(tit - fb) > 2;
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.waitForTimeout(600);   // let the sheet settle and measure
-        if (screenName === "title") {
-          // Fallback wrap pushes RACE A FRIEND onto its own row and clips
-          // GARAGE/SETTINGS. Wait until the shipped 2×2 actually fits.
-          await page.waitForFunction(() => {
-            const g = document.getElementById("mb-garage");
-            if (!g) return false;
-            const r = g.getBoundingClientRect();
-            return r.width > 0 && r.height > 0
-              && r.top >= 0 && r.bottom <= window.innerHeight
-              && r.left >= 0 && r.right <= window.innerWidth;
-          }, null, { polling: 100, timeout: BOOT_MS });
-        }
         if (screenName === "garage") {
           await page.evaluate(() => {
             const el = document.querySelector('#cs-tabs [data-cs-cat="engine"]');

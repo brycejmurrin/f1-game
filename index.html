@@ -205,6 +205,11 @@
         });
         sw.addEventListener("controllerchange", function () { swl("info", "controllerchange: a new worker controls this page"); });
         sw.register("sw.js" + (loaded ? "?v=" + loaded : "")).then(function (r) {
+          // Playwright serviceWorkers:"block" (and some private modes) resolve
+          // with undefined instead of rejecting. Reading r.scope then throws,
+          // and the unhandled-rejection overlay covers identity goldens
+          // (CI 37463034163).
+          if (!r) { swl("warn", "register returned no registration"); return; }
           swl("info", "registered, scope " + r.scope);
           r.addEventListener("updatefound", function () {
             var nw = r.installing;

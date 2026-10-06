@@ -909,9 +909,6 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
   // branch moves it to llvmpipe, so the carve-out lands with the swap.
   assert.match(selectedJob, /APEX_GL: \$\{\{ \(inputs\.gl != 'swiftshader' && !contains\(matrix\.specs, 'menu-baseline'\)\) && 'llvmpipe' \|\| '' \}\}/,
     "a selected shard carrying menu-baseline must stay on SwiftShader (its goldens are SwiftShader captures)");
-  const menuBaseline = fs.readFileSync(new URL("../specs/menu-baseline.spec.js", import.meta.url), "utf8");
-  assert.match(menuBaseline, /serviceWorkers:\s*["']block["']/,
-    "menu-baseline must block the service worker so an install cannot restyle identity goldens mid-shot");
   // driving-model is the parity anchor for the VM twins (physics-baseline.json):
   // a rasteriser swap under it is a separate, separately measured change.
   assert.doesNotMatch(drivingJob, /APEX_GL|llvmpipe/,

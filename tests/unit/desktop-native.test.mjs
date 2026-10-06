@@ -23,6 +23,8 @@ test("index.html skips service-worker registration when __APEX_NATIVE__.desktop"
   assert.match(HTML, /nativeDesktop/);
   assert.match(HTML, /nativeCap/);
   assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
+  // Playwright serviceWorkers:"block" resolves register() with undefined.
+  assert.match(HTML, /if \(!r\) \{ swl\("warn", "register returned no registration"\); return; \}/);
 });
 
 test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () => {
