@@ -1,1 +1,1 @@
-1791254690	Cursor Agent	PR #1012 push: merge ship + pre-push gate then one push; OWNED loading-screen + startRace wait plate; FORBIDDEN #976  [cursor/garage-race-busy-ec61; session 81cd5516022671b65cbcbe7c]
+1791260826	Cursor Agent	PR #1012 sync wave 1: merge ship + keep lowerWaitPlate; OWNED loading-screen/startRace wait plate; FORBIDDEN merge/auto-merge  [cursor/garage-race-busy-ec61; session 81cd5516022671b65cbcbe7c]
