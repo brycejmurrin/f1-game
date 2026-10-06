@@ -464,6 +464,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  // loadTrack sentinel is race/count only; window resize is rAF-coalesced;
+  // menuKey has no pane rect (survey-A findings 5–6). VM, no browser.
+  "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
@@ -596,6 +599,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/screen-looks.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
+  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
+  // foot clearance — css/race-setup.css + season-ui.js only.
+  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/session-contracts.test.mjs",
