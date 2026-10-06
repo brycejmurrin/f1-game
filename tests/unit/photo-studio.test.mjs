@@ -40,7 +40,7 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || (() => 0), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
@@ -177,6 +177,30 @@ test("pre-existing photo mode keeps its pose on normal exit", () => {
   const b = boot({ priorPhoto: true }); b.api.open(); b.G.photoCam.pos[0] = 99; b.api.close(true);
   assert.equal(b.G.photoMode, true); assert.deepEqual(b.G.photoCam.pos, [1, 2, 3]);
 });
+test("DONE paints a busy/disabled state before restoring the scene", () => {
+  const frames = [], events = [];
+  const b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
+  b.api.open({ source: "garage", back: () => {
+    events.push(b.dom.document.body.classList.contains("photo-studio-open") ? "class-on" : "class-off");
+    events.push(b.dom.byId("photo-studio").hidden ? "hidden" : "visible");
+    events.push("restored");
+  } });
+  b.api.close(true);
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.dom.byId("ps-close").disabled, true);
+  assert.equal(b.dom.byId("ps-close").textContent, "CLOSING…");
+  assert.equal(b.dom.byId("ps-panel").getAttribute("aria-busy"), "true");
+  assert.equal(b.dom.byId("photo-studio").hidden, false, "studio stays up so CLOSING… can paint");
+  assert.ok(b.dom.document.body.classList.contains("photo-studio-open"));
+  assert.deepEqual(events, []);
+  assert.equal(b.order.includes("restore"), false);
+  frames.shift()();
+  assert.equal(b.order.includes("restore"), true);
+  assert.deepEqual(events, ["class-off", "hidden", "restored"], "portrait rotate-device can read display after photo-studio-open is gone");
+  assert.equal(b.dom.byId("photo-studio").hidden, true);
+  assert.equal(b.api.state().busy, false);
+  assert.equal(b.dom.byId("ps-close").textContent, "DONE");
+});
 test("DONE waits until after the caller's first restored paint before focusing", async () => {
   const frames = [], events = [], b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
   const overlay = b.dom.byId("overlay"), opener = b.dom.document.createElement("button"); overlay.appendChild(opener);
@@ -184,7 +208,10 @@ test("DONE waits until after the caller's first restored paint before focusing",
   opener.focus = () => { events.push(overlay.inert || !visible ? "blocked" : "focused"); if (!overlay.inert && visible) nativeFocus(); };
   opener.focus(); events.length = 0;
   b.api.open({ source: "home", back: () => queueMicrotask(() => { overlay.inert = false; events.push("isolated"); }) });
-  overlay.inert = true; visible = false; b.api.close(true); await Promise.resolve();
+  overlay.inert = true; visible = false; b.api.close(true);
+  assert.equal(b.dom.byId("ps-close").textContent, "CLOSING…");
+  frames.shift()();
+  await Promise.resolve();
   assert.deepEqual(events, ["isolated"], "the microtask settles isolation while visibility still prevents focus");
   assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true);
   frames.shift()();
@@ -196,14 +223,14 @@ test("DONE waits until after the caller's first restored paint before focusing",
 test("queued opener focus cannot steal focus from a reopened Studio or a detached caller", () => {
   const frames = [], b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
   const opener = b.dom.document.createElement("button"); b.dom.document.body.appendChild(opener); opener.focus();
-  b.api.open({ source: "home" }); b.api.close(true); frames.shift()(); b.api.open({ source: "garage" });
+  b.api.open({ source: "home" }); b.api.close(true); frames.shift()(); frames.shift()(); b.api.open({ source: "garage" });
   while (frames.length) frames.shift()();
   assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true, "reopening between frames cancels opener focus");
-  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true);
+  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true); frames.shift()();
   b.api.open({ source: "garage" }); b.api.close(false); b.dom.byId("overlay").focus();
   while (frames.length) frames.shift()();
   assert.equal(b.dom.document.activeElement === b.dom.byId("overlay"), true, "a new generation invalidates focus even after it closes");
-  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true); opener.remove();
+  b.api.close(false); opener.focus(); b.api.open({ source: "home" }); b.api.close(true); frames.shift()(); opener.remove();
   while (frames.length) frames.shift()();
   assert.equal(b.dom.document.activeElement === b.dom.byId("ps-close"), true, "a detached opener is no longer a focus target");
 });

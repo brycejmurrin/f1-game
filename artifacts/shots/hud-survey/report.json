@@ -1,0 +1,2398 @@
+{
+  "meta": {
+    "when": "2026-10-05T21:27:17.126Z",
+    "live": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1",
+    "bypass": "/workspace/.worktrees/survey-hud-bypass",
+    "shots": [
+      {
+        "file": "01-live-boot-title.png",
+        "note": "live boot (https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1)",
+        "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "02-live-after-race-nav.png",
+        "note": "nav clicks: #mb-race",
+        "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "03-live-loading-or-entry.png",
+        "note": "post-start wait",
+        "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "04-live-final-state.png",
+        "note": "timeout / hang after start",
+        "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "05-phone-hud-default.png",
+        "note": "phone-landscape-844x390",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "06-phone-hud-cockpit.png",
+        "note": "phone-landscape-844x390 cockpit-cam",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "07-phone-hud-helmet.png",
+        "note": "phone-landscape-844x390 helmet-cam",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "08-phone-pause.png",
+        "note": "phone-landscape-844x390 pause",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "09-desktop-hud-default.png",
+        "note": "desktop-1280",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "10-desktop-hud-cockpit.png",
+        "note": "desktop-1280 cockpit-cam",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "11-desktop-pause.png",
+        "note": "desktop-1280 pause",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "12-phone-short-hud.png",
+        "note": "phone-640x360 cockpit-cam",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "13-tablet-hud.png",
+        "note": "tablet-1180x820",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      },
+      {
+        "file": "14-phone-portrait-hud.png",
+        "note": "phone-portrait-390x844",
+        "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+      }
+    ],
+    "overlaps": [
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-ot",
+        "b": "pausebtn",
+        "area": 228,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-ot",
+        "b": "btn-cam",
+        "area": 204,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-aero",
+        "b": "pausebtn",
+        "area": 1140,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "btn-aero",
+        "b": "btn-cam",
+        "area": 1020,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "sectors",
+        "b": "btn-ot",
+        "area": 54,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 340.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1260,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "ot",
+        "b": "shift-up",
+        "area": 2086.1160278320312,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "aero",
+        "b": "shift-down",
+        "area": 2082.3995361328125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1444.767578125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-default",
+        "a": "map",
+        "b": "damage",
+        "area": 409.59912109375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-ot",
+        "b": "pausebtn",
+        "area": 228,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-ot",
+        "b": "btn-cam",
+        "area": 204,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-aero",
+        "b": "pausebtn",
+        "area": 1140,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "btn-aero",
+        "b": "btn-cam",
+        "area": 1020,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "sectors",
+        "b": "btn-ot",
+        "area": 54,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 340.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1260,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "ot",
+        "b": "shift-up",
+        "area": 2086.1160278320312,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "aero",
+        "b": "shift-down",
+        "area": 2082.3995361328125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1444.767578125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-cockpit",
+        "a": "map",
+        "b": "damage",
+        "area": 409.59912109375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-ot",
+        "b": "pausebtn",
+        "area": 228,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-ot",
+        "b": "btn-cam",
+        "area": 204,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-aero",
+        "b": "pausebtn",
+        "area": 1140,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "btn-aero",
+        "b": "btn-cam",
+        "area": 1020,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "sectors",
+        "b": "btn-ot",
+        "area": 54,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 220.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 340.4999542236328,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1260,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "ot",
+        "b": "shift-up",
+        "area": 2086.1160278320312,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "aero",
+        "b": "shift-down",
+        "area": 2082.3995361328125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1444.767578125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-hud-helmet",
+        "a": "map",
+        "b": "damage",
+        "area": 409.59912109375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-pause",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-pause",
+        "a": "map",
+        "b": "damage",
+        "area": 409.59912109375,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 135.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 135.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 279.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1512,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "aero",
+        "b": "shift-up",
+        "area": 3116,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1500.4404602050781,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-default",
+        "a": "map",
+        "b": "damage",
+        "area": 547.4619140625,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 135.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 135.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 279.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1512,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "aero",
+        "b": "shift-up",
+        "area": 3116,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1500.4404602050781,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-hud-cockpit",
+        "a": "map",
+        "b": "damage",
+        "area": 547.4619140625,
+        "kind": "hud"
+      },
+      {
+        "cell": "desktop-pause",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "desktop-pause",
+        "a": "map",
+        "b": "damage",
+        "area": 547.4619140625,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "btn-ot",
+        "b": "pausebtn",
+        "area": 1368,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "btn-ot",
+        "b": "btn-cam",
+        "area": 1224,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "sectors",
+        "b": "btn-ot",
+        "area": 54,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 832.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 832.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 952.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 907.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "ot",
+        "b": "shift-up",
+        "area": 1750.03125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "aero",
+        "b": "shift-down",
+        "area": 2091.031653881073,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "bb",
+        "b": "btn-throttle",
+        "area": 1034.9890818595886,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "bb",
+        "b": "btn-brake",
+        "area": 1034.9890818595886,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "bb",
+        "b": "btn-steer-left",
+        "area": 1240.2390818595886,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-short-hud",
+        "a": "map",
+        "b": "damage",
+        "area": 409.59912109375,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5472,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "energy",
+        "b": "btn-throttle",
+        "area": 495.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "energy",
+        "b": "btn-brake",
+        "area": 495.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "energy",
+        "b": "btn-steer-left",
+        "area": 639.28125,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "energy",
+        "b": "btn-steer-right",
+        "area": 1512,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "aero",
+        "b": "shift-up",
+        "area": 2798.25,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1568.2782897949219,
+        "kind": "hud"
+      },
+      {
+        "cell": "tablet-hud",
+        "a": "map",
+        "b": "damage",
+        "area": 547.4619140625,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "area": 5776,
+        "kind": "ctrl"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "tower",
+        "b": "pausebtn",
+        "area": 1006.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "best",
+        "b": "pausebtn",
+        "area": 1006.5,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "ot",
+        "b": "btn-boost",
+        "area": 1799.015625,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "aero",
+        "b": "btn-boost",
+        "area": 1093.3273124694824,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "aero",
+        "b": "shift-up",
+        "area": 598.0789375305176,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "bb",
+        "b": "btn-steer-left",
+        "area": 138.6468048095703,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "bb",
+        "b": "btn-steer-right",
+        "area": 1095.4469451904297,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "tower",
+        "b": "map",
+        "area": 4797.685546875,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "tower",
+        "b": "gaps",
+        "area": 316.6875,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "tower",
+        "b": "gapAhead",
+        "area": 62.375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "tower",
+        "b": "damage",
+        "area": 226.6259765625,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "pos",
+        "b": "map",
+        "area": 2986.62939453125,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "pos",
+        "b": "damage",
+        "area": 226.6259765625,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "lap",
+        "b": "map",
+        "area": 1362.14990234375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "lap",
+        "b": "gaps",
+        "area": 316.6875,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "lap",
+        "b": "gapAhead",
+        "area": 62.375,
+        "kind": "hud"
+      },
+      {
+        "cell": "phone-portrait-hud",
+        "a": "map",
+        "b": "damage",
+        "area": 547.4619140625,
+        "kind": "hud"
+      }
+    ],
+    "liveHasSurveyHud": false,
+    "liveOutcome": "graphics-unavailable-after-loading",
+    "localUrl": "http://127.0.0.1:34599/",
+    "topOverlaps": [
+      {
+        "pair": "btn-brake|btn-throttle",
+        "a": "btn-throttle",
+        "b": "btn-brake",
+        "cells": [
+          "phone-hud-default",
+          "phone-hud-cockpit",
+          "phone-hud-helmet",
+          "phone-pause",
+          "desktop-hud-default",
+          "desktop-hud-cockpit",
+          "desktop-pause",
+          "phone-short-hud",
+          "tablet-hud",
+          "phone-portrait-hud"
+        ],
+        "area": 5776
+      },
+      {
+        "pair": "btn-steer-left|btn-throttle",
+        "a": "btn-throttle",
+        "b": "btn-steer-left",
+        "cells": [
+          "phone-hud-default",
+          "phone-hud-cockpit",
+          "phone-hud-helmet",
+          "desktop-hud-default",
+          "desktop-hud-cockpit",
+          "phone-short-hud",
+          "tablet-hud",
+          "phone-portrait-hud"
+        ],
+        "area": 5776
+      },
+      {
+        "pair": "btn-brake|btn-steer-left",
+        "a": "btn-brake",
+        "b": "btn-steer-left",
+        "cells": [
+          "phone-hud-default",
+          "phone-hud-cockpit",
+          "phone-hud-helmet",
+          "desktop-hud-default",
+          "desktop-hud-cockpit",
+          "phone-short-hud",
+          "tablet-hud",
+          "phone-portrait-hud"
+        ],
+        "area": 5776
+      },
+      {
+        "pair": "map|tower",
+        "a": "tower",
+        "b": "map",
+        "cells": [
+          "phone-portrait-hud"
+        ],
+        "area": 4797.685546875
+      },
+      {
+        "pair": "aero|shift-up",
+        "a": "aero",
+        "b": "shift-up",
+        "cells": [
+          "desktop-hud-default",
+          "desktop-hud-cockpit",
+          "tablet-hud",
+          "phone-portrait-hud"
+        ],
+        "area": 3116
+      }
+    ],
+    "shotCount": 21,
+    "files": [
+      "01-live-boot-title.png",
+      "02-live-after-race-nav.png",
+      "03-live-loading-or-entry.png",
+      "04-live-final-state.png",
+      "05-phone-hud-default.png",
+      "06-phone-hud-cockpit.png",
+      "07-phone-hud-helmet.png",
+      "08-phone-pause.png",
+      "09-desktop-hud-default.png",
+      "10-desktop-hud-cockpit.png",
+      "11-desktop-pause.png",
+      "12-phone-short-hud.png",
+      "13-tablet-hud.png",
+      "14-phone-portrait-hud.png",
+      "15-live-race-settings-or-setup.png",
+      "16-live-select-inspect.png",
+      "17-live-race-settings.png",
+      "18-live-race-settings.png",
+      "19-live-loading.png",
+      "20-live-graphics-unavailable.png",
+      "21-phone-hud-strat-forced.png"
+    ]
+  },
+  "findings": [
+    {
+      "label": "phone-hud-default",
+      "device": "phone-landscape-844x390",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "speed",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "map",
+        "sectors",
+        "ot",
+        "aero",
+        "damage"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "pausebtn",
+          "area": 228,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "btn-cam",
+          "area": 204,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "pausebtn",
+          "area": 1140,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "btn-cam",
+          "area": 1020,
+          "kind": "ctrl"
+        },
+        {
+          "a": "sectors",
+          "b": "btn-ot",
+          "area": 54,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 340.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1260,
+          "kind": "hud"
+        },
+        {
+          "a": "ot",
+          "b": "shift-up",
+          "area": 2086.1160278320312,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-down",
+          "area": 2082.3995361328125,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1444.767578125,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 409.59912109375,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "phone-hud-cockpit",
+      "device": "phone-landscape-844x390",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "speed",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "map",
+        "sectors",
+        "ot",
+        "aero",
+        "damage"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "pausebtn",
+          "area": 228,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "btn-cam",
+          "area": 204,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "pausebtn",
+          "area": 1140,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "btn-cam",
+          "area": 1020,
+          "kind": "ctrl"
+        },
+        {
+          "a": "sectors",
+          "b": "btn-ot",
+          "area": 54,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 340.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1260,
+          "kind": "hud"
+        },
+        {
+          "a": "ot",
+          "b": "shift-up",
+          "area": 2086.1160278320312,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-down",
+          "area": 2082.3995361328125,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1444.767578125,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 409.59912109375,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "phone-hud-helmet",
+      "device": "phone-landscape-844x390",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "speed",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "map",
+        "sectors",
+        "ot",
+        "aero",
+        "damage"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "pausebtn",
+          "area": 228,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "btn-cam",
+          "area": 204,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "pausebtn",
+          "area": 1140,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-aero",
+          "b": "btn-cam",
+          "area": 1020,
+          "kind": "ctrl"
+        },
+        {
+          "a": "sectors",
+          "b": "btn-ot",
+          "area": 54,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 220.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 340.4999542236328,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1260,
+          "kind": "hud"
+        },
+        {
+          "a": "ot",
+          "b": "shift-up",
+          "area": 2086.1160278320312,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-down",
+          "area": 2082.3995361328125,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1444.767578125,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 409.59912109375,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "phone-pause",
+      "device": "phone-landscape-844x390",
+      "visible": [
+        "map",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero"
+      ],
+      "hidden": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "delta",
+        "gaps",
+        "gapAhead",
+        "gapBehind",
+        "sectors",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "speed",
+        "energy",
+        "tyre",
+        "ot",
+        "aero",
+        "bb",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "map",
+        "damage"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 409.59912109375,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "desktop-hud-default",
+      "device": "desktop-1280",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "speed",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "aero"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 135.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 135.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 279.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1512,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-up",
+          "area": 3116,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1500.4404602050781,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 547.4619140625,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "desktop-hud-cockpit",
+      "device": "desktop-1280",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "speed",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "aero"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 135.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 135.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 279.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1512,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-up",
+          "area": 3116,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1500.4404602050781,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 547.4619140625,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "desktop-pause",
+      "device": "desktop-1280",
+      "visible": [
+        "map",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero"
+      ],
+      "hidden": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "delta",
+        "gaps",
+        "gapAhead",
+        "gapBehind",
+        "sectors",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "speed",
+        "energy",
+        "tyre",
+        "ot",
+        "aero",
+        "bb",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 547.4619140625,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "phone-short-hud",
+      "device": "phone-640x360",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "speed",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-aero",
+        "ot",
+        "aero"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "pausebtn",
+          "area": 1368,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-ot",
+          "b": "btn-cam",
+          "area": 1224,
+          "kind": "ctrl"
+        },
+        {
+          "a": "sectors",
+          "b": "btn-ot",
+          "area": 54,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 832.5,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 832.5,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 952.5,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 907.5,
+          "kind": "hud"
+        },
+        {
+          "a": "ot",
+          "b": "shift-up",
+          "area": 1750.03125,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-down",
+          "area": 2091.031653881073,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-throttle",
+          "area": 1034.9890818595886,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-brake",
+          "area": 1034.9890818595886,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-left",
+          "area": 1240.2390818595886,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 409.59912109375,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "tablet-hud",
+      "device": "tablet-1180x820",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "speed",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "aero",
+        "bb"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5472,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "energy",
+          "b": "btn-throttle",
+          "area": 495.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-brake",
+          "area": 495.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-left",
+          "area": 639.28125,
+          "kind": "hud"
+        },
+        {
+          "a": "energy",
+          "b": "btn-steer-right",
+          "area": 1512,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-up",
+          "area": 2798.25,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1568.2782897949219,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 547.4619140625,
+          "kind": "hud"
+        }
+      ]
+    },
+    {
+      "label": "phone-portrait-hud",
+      "device": "phone-portrait-390x844",
+      "visible": [
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "sectors",
+        "speed",
+        "energy",
+        "ot",
+        "aero",
+        "bb",
+        "damage",
+        "btn-throttle",
+        "btn-brake",
+        "btn-boost",
+        "btn-ot",
+        "btn-aero",
+        "shift-up",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "btn-cam"
+      ],
+      "hidden": [
+        "delta",
+        "gapBehind",
+        "limits",
+        "flag",
+        "mirror",
+        "announce",
+        "gearbox",
+        "tyre",
+        "pit",
+        "bcTower",
+        "rel",
+        "strat",
+        "inputs",
+        "hud-mirror-chip",
+        "rotateDevice"
+      ],
+      "unsafe": [
+        "btn-throttle",
+        "btn-brake",
+        "shift-down",
+        "btn-steer-left",
+        "btn-steer-right",
+        "pausebtn",
+        "tower",
+        "pos",
+        "lap",
+        "time",
+        "best",
+        "map",
+        "gaps",
+        "gapAhead",
+        "bb",
+        "damage"
+      ],
+      "clashes": [
+        {
+          "a": "btn-throttle",
+          "b": "btn-brake",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-throttle",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "btn-brake",
+          "b": "btn-steer-left",
+          "area": 5776,
+          "kind": "ctrl"
+        },
+        {
+          "a": "tower",
+          "b": "pausebtn",
+          "area": 1006.5,
+          "kind": "hud"
+        },
+        {
+          "a": "best",
+          "b": "pausebtn",
+          "area": 1006.5,
+          "kind": "hud"
+        },
+        {
+          "a": "ot",
+          "b": "btn-boost",
+          "area": 1799.015625,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "btn-boost",
+          "area": 1093.3273124694824,
+          "kind": "hud"
+        },
+        {
+          "a": "aero",
+          "b": "shift-up",
+          "area": 598.0789375305176,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-left",
+          "area": 138.6468048095703,
+          "kind": "hud"
+        },
+        {
+          "a": "bb",
+          "b": "btn-steer-right",
+          "area": 1095.4469451904297,
+          "kind": "hud"
+        },
+        {
+          "a": "tower",
+          "b": "map",
+          "area": 4797.685546875,
+          "kind": "hud"
+        },
+        {
+          "a": "tower",
+          "b": "gaps",
+          "area": 316.6875,
+          "kind": "hud"
+        },
+        {
+          "a": "tower",
+          "b": "gapAhead",
+          "area": 62.375,
+          "kind": "hud"
+        },
+        {
+          "a": "tower",
+          "b": "damage",
+          "area": 226.6259765625,
+          "kind": "hud"
+        },
+        {
+          "a": "pos",
+          "b": "map",
+          "area": 2986.62939453125,
+          "kind": "hud"
+        },
+        {
+          "a": "pos",
+          "b": "damage",
+          "area": 226.6259765625,
+          "kind": "hud"
+        },
+        {
+          "a": "lap",
+          "b": "map",
+          "area": 1362.14990234375,
+          "kind": "hud"
+        },
+        {
+          "a": "lap",
+          "b": "gaps",
+          "area": 316.6875,
+          "kind": "hud"
+        },
+        {
+          "a": "lap",
+          "b": "gapAhead",
+          "area": 62.375,
+          "kind": "hud"
+        },
+        {
+          "a": "map",
+          "b": "damage",
+          "area": 547.4619140625,
+          "kind": "hud"
+        }
+      ]
+    }
+  ],
+  "shots": [
+    {
+      "file": "01-live-boot-title.png",
+      "note": "live boot (https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1)",
+      "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "02-live-after-race-nav.png",
+      "note": "nav clicks: #mb-race",
+      "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "03-live-loading-or-entry.png",
+      "note": "post-start wait",
+      "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "04-live-final-state.png",
+      "note": "timeout / hang after start",
+      "url": "https://brycejmurrin.github.io/f1-game/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "05-phone-hud-default.png",
+      "note": "phone-landscape-844x390",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "06-phone-hud-cockpit.png",
+      "note": "phone-landscape-844x390 cockpit-cam",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "07-phone-hud-helmet.png",
+      "note": "phone-landscape-844x390 helmet-cam",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "08-phone-pause.png",
+      "note": "phone-landscape-844x390 pause",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "09-desktop-hud-default.png",
+      "note": "desktop-1280",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "10-desktop-hud-cockpit.png",
+      "note": "desktop-1280 cockpit-cam",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "11-desktop-pause.png",
+      "note": "desktop-1280 pause",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "12-phone-short-hud.png",
+      "note": "phone-640x360 cockpit-cam",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "13-tablet-hud.png",
+      "note": "tablet-1180x820",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    },
+    {
+      "file": "14-phone-portrait-hud.png",
+      "note": "phone-portrait-390x844",
+      "url": "http://127.0.0.1:34599/?APEX_SURVEY_HUD=1"
+    }
+  ]
+}

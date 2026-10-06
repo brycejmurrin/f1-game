@@ -48,6 +48,42 @@ const HudReadouts = (function () {
     return "BB " + (r % 1 ? r.toFixed(1) : r.toFixed(0)) + "%";
   }
 
+  // ONE SPD PLATE. The wheel LCD (car-mesh getWheelStatus) and the floating
+  // #hud-speed (phone cockpit brings it back under 900×600) both show speed.
+  // AppearanceOpts.unitLabel() spells "KM/H" for settings copy; the wheel
+  // fascia uses "KPH". Showing both at once read as dual conflicting plates
+  // (cockpit shots 2026-10-05: MPH on the LCD + KM/H on the float, or SPD
+  // stacked on KPH). Race plates share one short unit: MPH or KPH.
+  const KPH_PER_MPH = 1.609344;
+  /** "mph" | "kmh" — AppearanceOpts when present, else kmh. */
+  function spdUnits() {
+    if (typeof AppearanceOpts !== "undefined" && AppearanceOpts && typeof AppearanceOpts.units === "function") {
+      return AppearanceOpts.units() === "mph" ? "mph" : "kmh";
+    }
+    return "kmh";
+  }
+  /** Plate spelling for the wheel/cluster/HUD: "MPH" | "KPH" (never "KM/H"). */
+  function spdUnit(units) {
+    return (units || spdUnits()) === "mph" ? "MPH" : "KPH";
+  }
+  /**
+   * One SPD readout from dash km/h: `{ n, unit }`.
+   * `n` follows AppearanceOpts.speed when available (same rounding as settings);
+   * `unit` is always the short plate form so the float cannot disagree with
+   * the LCD. Pass `units` ("mph"|"kmh") to pin without reading AppearanceOpts.
+   */
+  function spdPlate(kph, units) {
+    const u = units || spdUnits();
+    const v = Number(kph);
+    let n;
+    if (units == null && typeof AppearanceOpts !== "undefined" && AppearanceOpts && typeof AppearanceOpts.speed === "function") {
+      n = AppearanceOpts.speed(v);
+    } else {
+      n = Math.round((Number.isFinite(v) ? v : 0) / (u === "mph" ? KPH_PER_MPH : 1));
+    }
+    return { n: Number.isFinite(n) ? n : 0, unit: spdUnit(u) };
+  }
+
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a
   // HALF LAP or more up in progress inside 9 m; the flag marshal shows it a
   // little earlier, at about a second. Same lapping test, a time window.
@@ -166,6 +202,7 @@ const HudReadouts = (function () {
     return { tick, reset };
   }
 
-  return { lapsApart, lapGapText, ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S };
+  return { lapsApart, lapGapText, ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
+    spdUnits, spdUnit, spdPlate, KPH_PER_MPH };
 })();
 Object.freeze(HudReadouts);
