@@ -771,6 +771,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   // MODE + numbered groups; ELEVATION / LOOK stay in the DOM (mode toggles visibility).
+  // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
   assert.deepEqual(labels().slice(0, 6), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "3 LOOK", "4 DETAILS"]);
   assert.ok(labels().includes("5 CHECKS"));
   const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");

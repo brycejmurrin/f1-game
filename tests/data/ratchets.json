@@ -9,19 +9,19 @@
       "lines": 3289
     },
     "js/car/car3d.js": {
-      "lines": 3490
+      "lines": 3534
     },
     "js/game.js": {
-      "codeLines": 4841,
+      "codeLines": 4844,
       "gMembers": 287,
-      "lines": 9019,
+      "lines": 9026,
       "topLets": 148
     },
     "js/lighting/presets.js": {
-      "lines": 13874
+      "lines": 13807
     },
     "js/net/lobby.js": {
-      "lines": 2026
+      "lines": 2013
     },
     "js/render/glx/glx.js": {
       "lines": 2832
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 342,
+      "ceiling": 338,
       "slack": 0
     },
     "rawColorDistinct": {
@@ -59,7 +59,7 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 310,
+      "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {
@@ -76,7 +76,7 @@
     },
     "waitForTimeout": 92,
     "waitNoPolling": {
-      "ceiling": 57,
+      "ceiling": 56,
       "slack": 39
     },
     "zeroRefModules": {

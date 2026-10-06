@@ -913,10 +913,10 @@ const TrackDesigner = (function () {
     const kind = TrackStamps.KINDS[tool];
     const showElev = mode === "elevation";
     if (ui.toolsGroup) ui.toolsGroup.hidden = !(mode === "edit" || mode === "draw");
+    // #1039: keep 2 CORNERS in the rail so numbering never skips 1 → 3; hide only stamp controls (and only outside EDIT).
     if (ui.shape) ui.shape.hidden = mode !== "edit";
     if (ui.elevGroup) ui.elevGroup.hidden = !showElev;
     if (ui.themeGroup) ui.themeGroup.hidden = !(mode === "scenery");
-    // Keep the group visible so the 1…5 numbering never skips under EDIT; hide only the stamp controls.
     if (ui.shapeHint) ui.shapeHint.hidden = !!kind || mode !== "edit";
     if (ui.apply) ui.apply.hidden = !kind || mode !== "edit";
     for (const key of ["L", "R", "deg"]) {

@@ -233,10 +233,14 @@ const DesignerProfile = (function () {
         g.fillStyle = on ? (COL.sel || "#ffd166") : (COL.handle || "#f6f6f9"); g.fill();
         g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
       }
+      // heights: the lap's top and bottom (one label when they round equal —
+      // a flat circuit used to paint dual colliding "0 m"s). Selected point next.
       g.font = LABEL_FONT; g.fillStyle = COL.text || "#c8c8d0"; g.textAlign = "right";
       const hiM = Math.round(fr.max) + " m", loM = Math.round(fr.min) + " m";
-      if (hiM === loM) { g.textBaseline = "middle"; g.fillText(hiM, W - 4, H / 2); }
-      else {
+      if (hiM === loM) {
+        g.textBaseline = "middle";
+        g.fillText(hiM, W - 4, H / 2);
+      } else {
         g.textBaseline = "top"; g.fillText(hiM, W - 4, 2);
         g.textBaseline = "bottom"; g.fillText(loM, W - 4, H - 2);
       }

@@ -80,3 +80,13 @@ test("CSS contracts: hide selectors and no new class sprawl for the checklist", 
   assert.match(css, /body\[data-hud-hide~="tyre"\] #hud-tyre/);
   assert.match(css, /#pm-hud-elements-list/);
 });
+
+test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second chip", () => {
+  const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  const H = load().HudElements;
+  // One container, one unit plate — toggling SPEED cannot leave a stray KM/H.
+  assert.match(shell, /id="hud-speed"[^>]*>\s*<span id="hud-speed-n">[\s\S]*?<span class="hud-unit">/);
+  assert.match(css, /body\[data-hud-hide~="speed"\] #hud-speed/);
+  assert.equal(H.ELEMENTS.filter((e) => e[0] === "speed").length, 1);
+});
