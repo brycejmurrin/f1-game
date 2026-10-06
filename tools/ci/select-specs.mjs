@@ -162,7 +162,11 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // Raised to 9 (2026-10-06, PR #1077): a wide UI diff (Home resize + layers
 // :modal ranking) packed 21 overflow specs and dropped hud-layout.spec.js
 // (32 tests, ~182 s measured) with dropped=1 on run 37438922786.
-export const MAX_OVERFLOW_SHARDS = 9;
+// Raised to 12 (2026-10-06, PR #1021): after #1010 ship-sync the selected
+// plan packed overflow full and dropped 8 routed specs on run 37472255445
+// (menu-keyboard, menu-survey, multiplayer-lobby/session, tilt-pipeline,
+// music-library, track-designer, image-grade-visual). Nightly already uses 12.
+export const MAX_OVERFLOW_SHARDS = 12;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -175,7 +179,10 @@ export const MAX_OVERFLOW_SHARDS = 9;
 // its own allowance of this many TARGET_SHARD_SEC jobs. Only what that pool
 // cannot afford is left in overBudgetSpecs, by name, and on a pull request a
 // name is a red verdict.
-export const MAX_OVER_BUDGET_SHARDS = 8;
+// Raised to 10 (2026-10-06, PR #1021): run 37472255445 dropped career.spec.js
+// (37 tests, 540 s/test declared) with the over-budget pool full. 9 absorbed
+// career-season; 10 is the first that still has a TARGET_SHARD_SEC for career.
+export const MAX_OVER_BUDGET_SHARDS = 10;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
