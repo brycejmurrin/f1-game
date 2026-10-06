@@ -16,7 +16,8 @@
 // BROWSER at conversion time.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
-import { toMenu, forgetStored, garageTeam, freeBuildOff, waitGarageSheet } from "../helpers/shared-page.js";
+import { toMenu, forgetStored, garageTeam, freeBuildOff } from "../helpers/shared-page.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 async function waitReady(page) {
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
