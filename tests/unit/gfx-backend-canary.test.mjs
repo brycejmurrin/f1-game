@@ -4263,7 +4263,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
   assert.match(beginBody, /frame\.eye\s*=\s*eye/,
     "probe eye must be the car, not the chase camera");
   assert.match(beginBody, /ENV_CULL_M/,
-    "probe must cap draw distance like GLX (300 m when envCull is on)");
+    "probe must cap draw distance like GLX (150 m when envCull is on)");
   assert.match(beginBody, /lit\.updateFrame\(frame\)/,
     "probe runs before gfx.begin — updateFrame must push this frame's lighting");
   const endAt = src.indexOf("envFaceEnd(face)");

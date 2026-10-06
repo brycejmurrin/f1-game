@@ -7,7 +7,7 @@
 
    This file keeps its name so the suite count does not churn. It now
    freezes: no PerfTry module / no PERF tab; late sky is unconditional;
-   env-probe radial cull is 300 m without a toggle; GLSL/WGSL/TSL keep only
+   env-probe radial cull is 150 m without a toggle; GLSL/WGSL/TSL keep only
    the gated (ON) path.
 
    HOW IT PINS THINGS (2026-09 rewrite). Two of the source-text pins in this
@@ -135,16 +135,19 @@ test("env-probe face uses the same opaque → sky order as the main camera", () 
   const face = names.slice(b + 1, e);
   const faceSky = face.lastIndexOf("drawSky");
   assert.ok(faceSky >= 0, "the probe face draws the sky");
-  assert.ok(lastWorldDraw(face) < faceSky, "probe face: opaque world first, sky last");
+  const faceWorld = Math.max(lastWorldDraw(face), face.lastIndexOf("draw"));
+  assert.ok(faceWorld < faceSky, "probe face: opaque world first, sky last");
   assert.ok(!face.includes("drawGlow"), "glow stays off on the probe face");
-  assert.ok(face.includes("drawChunked") || face.includes("drawInstanced"), "the probe face draws the world, not just the sky");
+  assert.ok(face.includes("draw"), "the probe face draws nearby world (floor/water/gate), not just the sky");
+  assert.ok(!face.includes("drawInstanced"), "probe skips city instances");
+  assert.ok(!face.includes("drawChunked"), "probe skips chunked city/terrain/road");
 });
 
-test("main camera cullDist contains the far-plane corners (not the 300 m probe cap)", () => {
+test("main camera cullDist contains the far-plane corners (not the 150 m probe cap)", () => {
   pumpNames();
   const cull = g.G.frame.cullDist;
   // farPlane is 900 m at the default RENDER DISTANCE; the corner-containing
-  // sphere is strictly larger, and nothing like the probe's 300 m cap.
+  // sphere is strictly larger, and nothing like the probe's 150 m cap.
   assert.ok(Number.isFinite(cull) && cull > 900, `cullDist ${cull} must exceed the 900 m far plane`);
   assert.ok(cull < 900 * 2, `cullDist ${cull} is not a corner-bounding sphere of a 900 m frustum`);
 });
@@ -248,18 +251,18 @@ test("already-landed leftovers stay in the product path", () => {
   assert.doesNotMatch(geom, /(?:a1|ring)\([^)]*%\s*seg/);
 });
 
-test("env-probe radial cull is 300 m without a toggle", () => {
-  // GLX: BEHAVIOUR on the mock — the probe caps a no-cull frame at 300 m and
+test("env-probe radial cull is 150 m without a toggle", () => {
+  // GLX: BEHAVIOUR on the mock — the probe caps a no-cull frame at 150 m and
   // keeps a tighter main-camera cull, restoring the caller's value after.
   const h = bootGlx();
   const free = h.frame({ cullDist: 0 });
   h.GLX.envFaceBegin(0, [1, 2, 3], free);
-  assert.equal(free.cullDist, 300, "a no-cull (0) main frame probes at 300 m");
+  assert.equal(free.cullDist, 150, "a no-cull (0) main frame probes at 150 m");
   h.GLX.envFaceEnd(0);
   assert.equal(free.cullDist, 0, "envFaceEnd restores the main camera's cull");
   const tight = h.frame({ cullDist: 120 });
   h.GLX.envFaceBegin(1, [1, 2, 3], tight);
-  assert.equal(tight.cullDist, 120, "a tighter main-camera cull (tier-3 fog) is kept, never widened to 300");
+  assert.equal(tight.cullDist, 120, "a tighter main-camera cull (tier-3 fog) is kept, never widened to 150");
   h.GLX.envFaceEnd(1);
   assert.equal(tight.cullDist, 120);
   const glx = shader("js/render/glx/glx.js");
@@ -269,16 +272,20 @@ test("env-probe radial cull is 300 m without a toggle", () => {
   const game = shader("js/game.js");
   assert.match(game, /chunkRibbons:\s*PerfGov\.tier\(\)\s*<\s*3/);
   assert.doesNotMatch(game, /envCull|PerfTry/);
+  assert.match(game, /drawWorldMeshes\(frame,\s*night,\s*wet,\s*_floodEmit,\s*false,\s*true\)/,
+    "probe face passes envProbe so drawWorldMeshes can skip city/chunked");
 
-  // WGX / TLX: the same 300 m cap, read from source (no shared mock-device
+  // WGX / TLX: the same 150 m cap, read from source (no shared mock-device
   // harness in this file; the WGX one lives in webgpu-lifecycle.test.mjs).
   const wgx = shader("js/render/webgpu/wgx.js");
-  assert.match(wgx, /cullDist\s*=\s*\w+\s*>\s*0\s*\?\s*Math\.min\(\s*\w+\s*,\s*300\s*\)\s*:\s*300/, "WGX probe caps at 300 m and keeps a tighter cull");
+  assert.match(wgx, /\bENV_CULL_M\s*=\s*150\b/);
+  assert.match(wgx, /cullDist\s*=\s*\w+\s*>\s*0\s*\?\s*Math\.min\(\s*\w+\s*,\s*ENV_CULL_M\s*\)\s*:\s*ENV_CULL_M/, "WGX probe caps at 150 m and keeps a tighter cull");
   assert.doesNotMatch(wgx, /_perfWgsl|typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
   const tlx = shader("js/render/three/tlx.js");
-  assert.match(tlx, /\bENV_CULL_M\s*=\s*300\b/);
+  assert.match(tlx, /\bENV_CULL_M\s*=\s*150\b/);
   assert.match(tlx, /cullDist\s*=\s*_envSvCull\s*>\s*0\s*\?\s*Math\.min\(\s*_envSvCull\s*,\s*ENV_CULL_M\s*\)\s*:\s*ENV_CULL_M/);
-  assert.match(tlx, /chunkedSys\.cull\(\s*rec\.chunked\s*,\s*faceVP\s*,\s*faceEye\s*,\s*faceCull\s*,\s*frameCullFog\s*\)/, "the probe face culls chunks against ITS frustum and cap (and the fog wall)");
+  assert.match(tlx, /if\s*\(\s*rec\.chunked\s*\)\s*\{/, "the probe face still walks the drawList for chunked recs");
+  assert.match(tlx, /if\s*\(\s*rec\.chunked\s*\)[\s\S]{0,280}?continue/, "hardware probe skips chunked recs (city/road/terrain)");
   assert.match(tlx, /function\s+_restoreEnvFrame\s*\(/);
   assert.doesNotMatch(tlx, /typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
 });
