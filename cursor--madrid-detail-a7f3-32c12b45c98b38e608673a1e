@@ -1,0 +1,1 @@
+1791267331	Cursor Agent	PR #1051 Madrid: merge ship, fix DETAIL same-facing coplanar (8>6); OWNED scenery/madrid.js + madrid coplanar baseline row; FORBIDDEN js/track/scenery/* city.js other circuits ratchets workflows; no push until CI Watch push released; no auto-merge/merge  [cursor/madrid-detail-a7f3; session 32c12b45c98b38e608673a1e]
