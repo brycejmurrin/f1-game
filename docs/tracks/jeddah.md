@@ -76,3 +76,21 @@ pitched hood over each one (roshan are roofed). Ground floors stay blank; the
 lattice starts at first floor, as it does in Al-Balad. Sited inland and set
 well back at gap 150–200, because Al-Balad is a few km from the Corniche: this
 is the old town *on the skyline behind* the modern city, not a trackside façade.
+
+## Detail pass — 2026-10-05
+
+Survey sheet-03 DETAIL (local scenery only; shared `city.js` open-face left to
+a separate agent):
+
+1. **S/F skeleton towers** — verified: day-path neonTower frames read open.
+   Replaced with closed local `addBox` cores + neon crowns on the pit straight
+   (do not edit city.js).
+2. **King Fahd Fountain** — verified under-read from overview; thicker jet,
+   spray cone, mid-shaft LED rings, base flood ring.
+3. **Corniche** — densified seaward palm promenade + low sea-wall coping.
+4. **Unsupported canyon feet** (~11) — seated via `foundation()` under shared
+   concreteCanyon slabs on banked stretches.
+5. **Night identity** — canyon neon fascia strips, neonSign accents, denser
+   billboards + storefront neon cubes.
+6. **`tests/data/landmarks/jeddah.json`** — registers fountain, mosque, blue
+   sail, golden twins, hotel, flagpole.
