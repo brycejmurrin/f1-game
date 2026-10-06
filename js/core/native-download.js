@@ -3,6 +3,8 @@ const NativeDownload = (function () {
   "use strict";
 
   const CACHE_DIR = "CACHE";
+  const cacheSession = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+  let cacheSequence = 0;
 
   function log(msg) {
     try { if (typeof Log !== "undefined") Log.info("ui", msg); } catch (e) { /* Log optional at boot */ }
@@ -32,7 +34,7 @@ const NativeDownload = (function () {
 
   function safeName(name) {
     const raw = String(name || "apex26-download.bin").replace(/[/\\?%*:|"<>]/g, "_");
-    return raw.slice(0, 180) || "apex26-download.bin";
+    return raw === "." || raw === ".." ? "apex26-download.bin" : raw.slice(0, 180) || "apex26-download.bin";
   }
 
   function blobToBase64(blob) {
@@ -51,23 +53,28 @@ const NativeDownload = (function () {
     const plugs = pluginPair();
     if (!plugs) throw new Error("native download plugins unavailable");
     const name = safeName(filename);
+    const id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID() : cacheSession;
+    const path = "apex26-downloads/" + id + "-" + (++cacheSequence) + "/" + name;
     const data = await blobToBase64(blob);
-    await plugs.Filesystem.writeFile({
-      path: name,
+    const written = await plugs.Filesystem.writeFile({
+      path: path,
       data: data,
       directory: CACHE_DIR,
+      recursive: true,
     });
-    let uri = name;
-    if (typeof plugs.Filesystem.getUri === "function") {
-      const got = await plugs.Filesystem.getUri({ path: name, directory: CACHE_DIR });
+    let uri = written && written.uri;
+    if (!uri && typeof plugs.Filesystem.getUri === "function") {
+      const got = await plugs.Filesystem.getUri({ path: path, directory: CACHE_DIR });
       if (got && got.uri) uri = got.uri;
     }
+    if (!uri) throw new Error("native download file URI unavailable");
     await plugs.Share.share({
       title: name,
       url: uri,
-      files: [uri],
       dialogTitle: "Save " + name,
     });
+    // Keep the cache file: a receiving app may read it after Share resolves.
     log("native download shared " + name);
     return { ok: true, name: name, uri: uri };
   }

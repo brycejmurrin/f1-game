@@ -12,8 +12,12 @@
  * So atlasDiv() is pure and pinned here, headlessly, and the rasterised result
  * stays where the boundary says it belongs.
  *
+ * Desktop player hi-res (2048) is DEFERRED off boot / garage-open — car-draw
+ * sync-uploads the 1024 preview, then requestIdleCallback-swaps the full
+ * atlas. That deferral is pinned below against car-draw.js source + a rig.
+ *
  * The other half of the policy — photo mode upgrading the cars it draws to the
- * full tier, lazily and within a bound — lives in js/car/car-draw.js
+ * player tier, lazily and within a bound — lives in js/car/car-draw.js
  * (decalTextureFor / planPhotoAtlases) and is RUN below against that source,
  * because a fixed downshift with no upgrade path is exactly what would show up
  * in a screenshot, and an unbounded upgrade is ~147 MB.
@@ -22,15 +26,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { loadCrests } from "../../tools/car/crest-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex } = loadParts();
 
 // The resident cost of one atlas at a given divisor: the exact mip chain, the
 // same arithmetic GLX.texCensus() uses. NOT w*h*4*4/3 — that rule assumes a
-// square texture and this atlas is 1024x1280.
+// square texture and this atlas is 2048x2560.
 function atlasBytes(div) {
   let total = 0, w = LiveryTex.SIZE / div, h = LiveryTex.SIZE_H / div;
   for (;;) {
@@ -41,47 +47,55 @@ function atlasBytes(div) {
 }
 
 test("the authored atlas is the size the memory arithmetic assumes", () => {
-  assert.equal(LiveryTex.SIZE, 1024);
-  assert.equal(LiveryTex.SIZE_H, 1280);
-  // 6.99 MB — the per-atlas figure §2v and the plan are built on. If the
-  // authored size ever changes, every number in both is stale and this fails.
-  assert.equal(atlasBytes(1), 6990500);
+  assert.equal(LiveryTex.SIZE, 2048);
+  assert.equal(LiveryTex.SIZE_H, 2560);
+  // ~26.7 MB — garage boards need 2× linear texels; AI/mobile keep the old
+  // absolute upload sizes via atlasDiv. If the authored size ever changes,
+  // every number in the tier table is stale and this fails.
+  assert.equal(atlasBytes(1), 27962020);
 });
 
-test("desktop: the player keeps full resolution, AI drops one step", () => {
-  assert.equal(LiveryTex.atlasDiv(true, false), 1, "the player's own car stays authored-size");
-  assert.equal(LiveryTex.atlasDiv(false, false), 2, "AI cars upload at 512x640");
+test("desktop: player preview is 1024, hi-res is 2048, AI stays 512×640", () => {
+  assert.equal(LiveryTex.atlasDiv(true, false, false), 2, "boot/garage sync path is 1024×1280 preview");
+  assert.equal(LiveryTex.atlasDiv(true, false, true), 1, "deferred hi-res is authored 2048×2560");
+  assert.equal(LiveryTex.atlasDiv(false, false), 4, "AI cars upload at 512x640");
+  assert.equal(atlasBytes(2), 6990500, "preview mip chain stays ~6.67 MB");
+  assert.equal(atlasBytes(4), 1747620, "desktop AI mip chain stays ~1.67 MB");
+  assert.equal(LiveryTex.playerHiResDeferred(false), true, "desktop player must defer hi-res");
 });
 
-test("mobile is UNCHANGED — it already had a tighter policy", () => {
-  // Not touched by this change: mobile carries a jetsam budget this is not
-  // about, and it was already at 512 player / 256 AI.
-  assert.equal(LiveryTex.atlasDiv(true, true), 2);
-  assert.equal(LiveryTex.atlasDiv(false, true), 4);
+test("mobile keeps the same absolute upload sizes as the 1024-era policy", () => {
+  // Divisors doubled with SIZE so jetsam bytes are unchanged: 512 player / 256 AI.
+  assert.equal(LiveryTex.atlasDiv(true, true), 4);
+  assert.equal(LiveryTex.atlasDiv(false, true), 8);
+  assert.equal(atlasBytes(4), 1747620);
+  assert.equal(atlasBytes(8), 436900);
+  assert.equal(LiveryTex.playerHiResDeferred(true), false, "mobile has no larger player upload to defer");
 });
 
-test("the desktop grid saving is the order of magnitude the plan claimed", () => {
-  const before = 22 * atlasBytes(1);                       // every car at full
-  const after = atlasBytes(1) + 21 * atlasBytes(2);        // player full, 21 AI at half
+test("the desktop grid stays well under the old every-car-full figure", () => {
+  // Steady-state after deferral: player hi-res + 21 AI at 512.
+  const everyFull = 22 * atlasBytes(1);
+  const tiered = atlasBytes(1) + 21 * atlasBytes(4);
+  // Boot / garage-open before deferral completes: player preview + AI.
+  const openPath = atlasBytes(2) + 21 * atlasBytes(4);
   const mb = (b) => b / 1048576;
-  // Measured before: 146.67 MB (texCensus, montreal, full grid).
-  assert.ok(Math.abs(mb(before) - 146.67) < 0.5, `before ${mb(before).toFixed(2)} MB`);
-  assert.ok(mb(after) < 50, `after ${mb(after).toFixed(2)} MB should be well under 50`);
-  // The whole point: this is worth more than every other texture lever
-  // combined. The baked material arrays measure 11.33 MB in total.
-  assert.ok(mb(before) - mb(after) > 90,
-    `expected to free >90 MB, freed ${(mb(before) - mb(after)).toFixed(1)}`);
+  assert.ok(mb(everyFull) > 500, `every-full ${mb(everyFull).toFixed(2)} MB`);
+  assert.ok(mb(tiered) < 70, `tiered ${mb(tiered).toFixed(2)} MB should stay under 70`);
+  assert.ok(mb(openPath) < 45, `open-path ${mb(openPath).toFixed(2)} MB must stay near the old ~42 MB grid`);
+  assert.ok(mb(everyFull) - mb(tiered) > 400,
+    `expected to free >400 MB vs every-full, freed ${(mb(everyFull) - mb(tiered)).toFixed(1)}`);
 });
 
 test("a tier is never bigger than the one above it", () => {
-  // Guard the guard: a sign flip or a swapped ternary would still satisfy every
-  // exact-value assertion above if someone rewrote them together.
   for (const mobile of [false, true]) {
-    assert.ok(LiveryTex.atlasDiv(true, mobile) <= LiveryTex.atlasDiv(false, mobile),
-      "the player's car must never be coarser than an AI car");
+    assert.ok(LiveryTex.atlasDiv(true, mobile, false) <= LiveryTex.atlasDiv(false, mobile),
+      "the player's preview must never be coarser than an AI car");
+    assert.ok(LiveryTex.atlasDiv(true, mobile, true) <= LiveryTex.atlasDiv(false, mobile),
+      "the player's hi-res must never be coarser than an AI car");
   }
-  assert.ok(LiveryTex.atlasDiv(true, true) >= LiveryTex.atlasDiv(true, false),
-    "mobile must never be finer than desktop");
+  assert.ok(LiveryTex.atlasDiv(true, true) >= LiveryTex.atlasDiv(true, false, false),
+    "mobile must never be finer than desktop preview");
 });
 
 test("photo mode routes every drawn car through the lazy full-tier picker", () => {
@@ -102,6 +116,36 @@ test("photo mode routes every drawn car through the lazy full-tier picker", () =
     "the per-frame plan runs before the decal queue is drawn");
 });
 
+test("desktop player hi-res atlas upload is deferred off boot and garage-open", () => {
+  // Apex Perf condition: no synchronous 26.7 MB upload on garage open.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
+  assert.match(src, /function schedulePlayerHiRes\(/,
+    "car-draw must own a deferred hi-res scheduler");
+  assert.match(src, /requestIdleCallback/,
+    "hi-res must go through requestIdleCallback (or its setTimeout fallback)");
+  assert.match(src, /buildAtlas\([^;]+,\s*(?:!!)?isPlayer,\s*false\)/,
+    "the sync getCarDecalTexture path must pass hiRes=false");
+  assert.match(src, /buildAtlas\([^;]+,\s*true,\s*true\)/,
+    "the deferred kick must pass hiRes=true");
+  assert.doesNotMatch(src, /buildAtlas\([^;]+,\s*(?:!!)?isPlayer,\s*true\)/,
+    "sync path must never request hi-res inline");
+  assert.doesNotMatch(src, /timeout:\s*2500/,
+    "requestIdleCallback must not force the upload with a 2500 ms timeout");
+  assert.match(src, /deadline\.didTimeout/,
+    "a timed-out idle callback must re-queue instead of running the 2048 paint");
+  assert.match(src, /getCarDecalTexture\(team, num, true, false\)/,
+    "photo rivals mint the player-tier preview with allowHiRes=false");
+  assert.match(src, /reapHiResGrave\(\)/,
+    "the hi-res swap must not free prev until after the next material bind");
+  assert.match(src, /_hiResGrave\.push\(\{\s*key:\s*key,\s*tex:\s*prev\s*\}\)/,
+    "grave entries are keyed so dropDecalTexture can free a parked preview");
+  assert.match(src, /g\.key !== key/,
+    "invalidate/LRU/photo-release walk the grave by cache key");
+  const tex = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  assert.match(tex, /setTransform\(\s*1\s*\/\s*div/,
+    "preview/AI/mobile must paint at upload size via setTransform, not a 2048 then downscale");
+});
+
 // THE PHOTO-MODE ATLAS POLICY, run for real against the car-draw.js decal
 // section (2026-10-04). It used to ask for the full tier on EVERY drawn car:
 // entering photo mode on a grid built ~21 full atlases in one frame and kept
@@ -110,11 +154,17 @@ test("photo mode routes every drawn car through the lazy full-tier picker", () =
 function decalRig() {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
-  const built = [], freed = [];
+  const built = [], freed = [], idle = [];
   const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => "std",
     gfx: { createTexture: (a) => { const t = { atlas: a }; built.push(a); return t; }, freeTexture: (t) => freed.push(t.atlas) } };
-  const LiveryTex = { buildAtlas: (team, _l, num, full) => team + "#" + num + (full ? ":full" : ":half") };
-  const make = new Function("G", "LiveryTex", "deps", "Log", `
+  // 5th arg hiRes: preview vs deferred full. isPlayer without hiRes → preview.
+  const LiveryTex = {
+    IS_MOBILE: false,
+    playerHiResDeferred: (mobile) => !mobile,
+    buildAtlas: (team, _l, num, isPlayer, hiRes) =>
+      team + "#" + num + (hiRes ? ":hi" : (isPlayer ? ":prev" : ":half")),
+  };
+  const make = new Function("G", "LiveryTex", "deps", "Log", "requestIdleCallback", "setTimeout", "idle", `
     const DECAL_TEX_CACHE_MAX = 36;
     const _decalTeams = [], _decalNums = [], _decalMats = [], _decalSetup = [];
     let _decalCount = 0;
@@ -126,13 +176,25 @@ function decalRig() {
           const m = new Float32Array(16); m[12] = c.at[0]; m[13] = c.at[1]; m[14] = c.at[2]; _decalMats[i] = m;
           _decalSetup[i] = !!c.player; });
         planPhotoAtlases();
-        return cars.map((c) => decalTextureFor(c.team, c.num, !!c.player).atlas);
+        const drawn = cars.map((c) => decalTextureFor(c.team, c.num, !!c.player).atlas);
+        reapHiResGrave();
+        return drawn;
       },
       cached: () => Object.keys(_decalTexCache).length,
       photo: () => _photoKeys.size,
+      flushHiRes() {
+        while (idle.length) idle.shift()({ didTimeout: false, timeRemaining: () => 50 });
+      },
+      starveHiRes() {
+        const n = idle.length;
+        for (let i = 0; i < n; i++) idle.shift()({ didTimeout: true, timeRemaining: () => 0 });
+      },
+      hiResDone: () => _hiResDone.size,
+      invalidate(teamId) { invalidateDecalTextures(teamId); },
     };`);
-  const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} });
-  return { G, api, built, freed };
+  const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} },
+    (cb) => { idle.push(cb); }, (cb) => { idle.push(cb); }, idle);
+  return { G, api, built, freed, idle };
 }
 const team = (id) => ({ id });
 function grid(n) {
@@ -141,16 +203,71 @@ function grid(n) {
   return cars;
 }
 
-test("entering photo mode on a grid builds ONE full atlas a frame, nearest the camera first", () => {
+test("sync player atlas is preview; hi-res lands only after idle flush", () => {
+  const { api, built } = decalRig();
+  const cars = grid(3);
+  const drawn = api.frame(cars);
+  assert.equal(drawn[0], "me#1:prev", "garage/boot draw uses the 1024 preview");
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0, "no hi-res upload before idle");
+  assert.equal(built.filter((a) => a.endsWith(":prev")).length, 1);
+  assert.ok(built.filter((a) => a.endsWith(":half")).length >= 3);
+  api.flushHiRes();
+  assert.equal(api.hiResDone(), 1, "one deferred hi-res completed");
+  assert.ok(built.some((a) => a === "me#1:hi"), "hi-res atlas was built after idle");
+  assert.equal(api.frame(cars)[0], "me#1:hi", "draws swap to hi-res once ready");
+});
+
+test("a starved idle callback re-queues instead of painting 2048", () => {
+  const { api, built, idle } = decalRig();
+  api.frame(grid(1));
+  assert.ok(idle.length >= 1, "hi-res is queued");
+  api.starveHiRes();
+  assert.equal(api.hiResDone(), 0, "didTimeout / tight deadline must not run the kick");
+  assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0);
+  assert.ok(idle.length >= 1, "the callback was re-queued");
+  api.flushHiRes();
+  assert.equal(api.hiResDone(), 1);
+});
+
+test("hi-res swap does not free prev while a material still holds it", () => {
+  const { api, built, freed } = decalRig();
+  const cars = grid(1);
+  api.frame(cars);
+  const prev = built.find((a) => a === "me#1:prev");
+  assert.ok(prev);
+  api.flushHiRes();
+  assert.ok(!freed.includes(prev), "preview stays alive until the next bind");
+  api.frame(cars);
+  assert.ok(freed.includes(prev), "preview is reaped after materials re-read the cache");
+});
+
+test("invalidate frees both the live atlas and a parked hi-res-swap preview", () => {
+  // custom-team.spec.js color-save: invalidateDecalTextures("custom") must
+  // free the first custom atlas even if the idle kick already swapped 2048
+  // in and parked the 1024 preview. Dropping only the live cache entry
+  // leaked id 7 while freeing the hi-res (id 9).
+  const { api, built, freed } = decalRig();
+  const cars = grid(0);
+  api.frame(cars);
+  api.flushHiRes();
+  assert.ok(built.includes("me#1:prev") && built.includes("me#1:hi"));
+  assert.ok(!freed.includes("me#1:prev"), "preview is still parked, not yet reaped");
+  api.invalidate("me");
+  assert.ok(freed.includes("me#1:prev"), "parked preview is freed on invalidate");
+  assert.ok(freed.includes("me#1:hi"), "live hi-res is freed on invalidate");
+  assert.equal(api.cached(), 0);
+});
+
+test("entering photo mode on a grid builds ONE player-tier atlas a frame, nearest the camera first", () => {
   const { G, api, built } = decalRig();
   const cars = grid(21);
-  api.frame(cars);                               // racing: player full, rivals half
+  api.frame(cars);                               // racing: player preview, rivals half
   const racing = built.length;
-  assert.equal(built.filter((a) => a.endsWith(":full")).length, 1, "only the player's car is full outside photo mode");
+  assert.equal(built.filter((a) => a.endsWith(":prev")).length, 1, "only the player's car is player-tier outside photo mode");
   G.photoMode = true;
   const drawn = api.frame(cars);
   assert.equal(built.length - racing, 1, "one atlas build on the first photo frame, not twenty-one");
-  assert.equal(drawn[1], "t1#11:full", "the rival nearest the camera got it");
+  assert.equal(drawn[1], "t1#11:prev", "the rival nearest the camera got the player-tier preview");
   assert.equal(drawn[2], "t2#12:half", "the rest draw their half tier while they wait");
   api.frame(cars);
   assert.equal(built.length - racing, 2, "and one more the next frame");
@@ -169,16 +286,30 @@ test("the photo set follows the camera, and closing photo mode frees every photo
   G.camEye = [0, 0, 5 + 21 * 8];
   for (let f = 0; f < 10; f++) api.frame(back);
   assert.equal(api.photo(), 6, "still bounded");
-  assert.ok(freed.some((a) => a === "t1#11:full"), "a full atlas no longer drawn was evicted for one in view");
+  assert.ok(freed.some((a) => a === "t1#11:prev"), "a player-tier atlas no longer drawn was evicted for one in view");
   const drawn = api.frame(back);
-  assert.ok(drawn.every((a) => a.endsWith(":full")), "the six cars in view are all full now");
+  assert.ok(drawn.every((a) => a.endsWith(":prev")), "photo rivals stay at the player-tier preview, never :hi");
   G.photoMode = false;
   const before = freed.length;
   api.frame(cars);
   assert.equal(freed.length - before, 6, "the first frame after photo mode frees the six photo atlases");
   assert.equal(api.photo(), 0);
-  assert.ok(!freed.includes("me#1:full"), "the player's own full atlas is never a photo atlas");
-  assert.ok(built.filter((a) => a === "me#1:full").length === 1, "and it was never rebuilt");
+  assert.ok(!freed.includes("me#1:prev"), "the player's own preview atlas is never a photo atlas");
+});
+
+test("photo rivals never mint a :hi atlas; only the real player does", () => {
+  const { G, api, built } = decalRig();
+  const cars = grid(5);
+  G.photoMode = true;
+  for (let f = 0; f < 8; f++) api.frame(cars);
+  api.flushHiRes();
+  api.frame(cars);
+  const hi = built.filter((a) => a.endsWith(":hi"));
+  assert.deepEqual(hi, ["me#1:hi"], "2048 is the player car only");
+  const drawn = api.frame(cars);
+  for (let i = 1; i < drawn.length; i++)
+    assert.ok(drawn[i].endsWith(":prev") || drawn[i].endsWith(":half"),
+      "rival " + drawn[i] + " must not be :hi");
 });
 
 test("the decal cache evicts the least recently drawn atlas, never the live field", () => {
@@ -200,4 +331,64 @@ test("the decal cache keys on the tier, which is what makes the upgrade cheap", 
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   assert.match(src, /\(isPlayer \? ":P" : ""\)/,
     "the resolution tier must stay part of the decal cache key");
+});
+
+test("drawCarDecals re-reads _decalTexCache every frame via decalTextureFor", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
+  const draw = src.slice(src.indexOf("function drawCarDecals("), src.indexOf("function flushDecals("));
+  assert.match(draw, /const tex = decalTextureFor\(team, num, usePlayerSetup\)/);
+  assert.match(draw, /G\.gfx\.drawDecal\(mesh, modelMat, tex/);
+  const flush = src.slice(src.indexOf("function flushDecals("), src.indexOf("function setPlayerParts("));
+  assert.match(flush, /drawCarDecals\(/);
+  assert.match(flush, /reapHiResGrave\(\)/);
+});
+
+function paintAtlasWidths(isPlayer, hiRes) {
+  const { RecCtx } = loadCrests();
+  const widths = [];
+  const sb = {
+    console: { log() {}, warn() {}, error() {}, info() {} },
+    Math, Object, Array, String, Number, JSON, Map, Set, isNaN, isFinite, parseInt, parseFloat,
+    document: {
+      querySelector: () => null,
+      createElement: () => {
+        const rec = new RecCtx();
+        const c = {
+          getContext: () => rec,
+          set width(v) { widths.push(+v); this._w = +v; },
+          get width() { return this._w || 0; },
+          set height(v) { this._h = +v; },
+          get height() { return this._h || 0; },
+        };
+        return c;
+      },
+    },
+  };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js",
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
+  const LT = vm.runInContext("LiveryTex", sb);
+  const returned = LT.buildAtlas("ferrari", {}, 16, isPlayer, hiRes);
+  return { LT, widths, returned };
+}
+
+test("sync getCarDecalTexture path never creates a canvas wider than SIZE/div", () => {
+  // The regression: paint 2048×2560 then downscale. Sync preview / AI / mobile
+  // must author the upload-size canvas (REGIONS still in SIZE space via setTransform).
+  const preview = paintAtlasWidths(true, false);
+  const pDiv = preview.LT.atlasDiv(true, false, false);
+  const pCap = preview.LT.SIZE / pDiv;
+  assert.equal(preview.returned.width, pCap, "returned preview canvas is SIZE/div");
+  assert.ok(preview.widths.every((w) => w <= pCap),
+    "sync player canvases must be ≤ " + pCap + ", got " + preview.widths.join(","));
+  const ai = paintAtlasWidths(false, false);
+  const aCap = ai.LT.SIZE / ai.LT.atlasDiv(false, false, false);
+  assert.equal(ai.returned.width, aCap, "returned AI canvas is SIZE/div");
+  assert.ok(ai.widths.every((w) => w <= aCap),
+    "sync AI canvases must be ≤ " + aCap + ", got " + ai.widths.join(","));
+  const hi = paintAtlasWidths(true, true);
+  assert.equal(hi.returned.width, hi.LT.SIZE, "deferred kick still authors 2048");
+  assert.ok(hi.widths.includes(hi.LT.SIZE));
 });

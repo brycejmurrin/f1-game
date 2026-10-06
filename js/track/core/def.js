@@ -78,8 +78,14 @@ const TrackDef = (function () {
     const src = path.pts;
     const N = src.length;
     const arc = new Float64Array(N + 1);
+    // path.pts are [x, z] (shipped + custom plan) or [x, z, y] when a custom
+    // design carries per-node heights (Track Designer). Arc length always uses
+    // the plan (x, z); y is survey / authored height, never lateral.
     for (let i = 1; i <= N; i++) { const a = src[i - 1], b = src[i % N]; arc[i] = arc[i - 1] + __M.hypot(b[0] - a[0], b[1] - a[1]); }
-    let pts = src.map((p, i) => [p[0], real ? elevationAt(id, arc[i] / arc[N]) : 0, p[1], baseHW, 0]);
+    let pts = src.map((p, i) => {
+      const authored = !real && p.length >= 3 && Number.isFinite(+p[2]) ? +p[2] : 0;
+      return [p[0], real ? elevationAt(id, arc[i] / arc[N]) : authored, p[1], baseHW, 0];
+    });
     for (let it = 0; it < 2; it++) {
       const sx = pts.map((p) => p[0]), sz = pts.map((p) => p[2]);
       const L = 0.25;

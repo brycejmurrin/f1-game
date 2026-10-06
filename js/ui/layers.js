@@ -125,6 +125,22 @@ window.UiLayers = (function () {
   }
   if (typeof HTMLDialogElement !== "undefined") trackDialog(HTMLDialogElement.prototype);
 
+  /* A dialog can sit in the top layer without a stamp in modalOrder: native
+     showModal before the prototype wrap, a wrap skip when isModal was already
+     true, or a thrown native call that TopModal swallowed. Rank 0 then loses
+     to an earlier tracked dialog, so MenuNav.activeLayer() names the sheet
+     BEHIND the one the player can see (packed-3: #pausemenu over #standings
+     while CLOSE on standings held focus). Stamp the first time top() sees a
+     live :modal, so it always outranks openings we already recorded. */
+  function modalRank(el) {
+    const existing = modalOrder.get(el);
+    if (existing) return existing;
+    if (!isModal(el)) return 0;
+    const n = ++modalSerial;
+    modalOrder.set(el, n);
+    return n;
+  }
+
   /* The topmost open layer. Layers stack (the team picker over the select
      screen, the pause settings over the pause menu) and z-index is how the CSS
      expresses that order — but a showModal() dialog is in the TOP LAYER, above
@@ -133,12 +149,14 @@ window.UiLayers = (function () {
      Rank a :modal layer even at 0×0: Chromium can drop its box after the
      hidden→showModal seam, and shownLayer would then pick the screen behind. */
   function top() {
-    const modalRank = (el) => modalOrder.get(el) || 0;
     let best = null;
     let bestRank = -Infinity;
     let bestModal = false;
     for (const el of document.querySelectorAll(ALL_SEL)) {
       const modal = isModal(el);
+      // :modal is the platform top layer even when Chromium has dropped the
+      // element's box (css-layers: hidden→showModal re-attach). Size is the
+      // wrong closed-test for that case — skip it and still rank the dialog.
       if (!modal && !shownLayer(el)) continue;
       const rank = modal ? modalRank(el) : (parseInt(getComputedStyle(el).zIndex, 10) || 0);
       // A modal always outranks a non-modal; between two modals (or two

@@ -379,8 +379,16 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: BOOT_MS });
+    /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
+       (TopModal's MutationObserver); a :modal standings used to lose
+       activeLayer() to #pausemenu with no modalOrder stamp, or when Chromium
+       dropped the 0×0 box. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
+       waitForFunction (CI selected-1 run 37414897932). polling: 100 — park()
+       stops the rAF loop. */
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
@@ -606,8 +614,10 @@ test.describe("Escape is BACK", () => {
     // it. The sheet's own open path is `hidden = false` either way (TopModal
     // mirrors that onto showModal), which is exactly what is under test here.
     await page.evaluate(() => { document.getElementById("standings").hidden = false; });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: 5_000 });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() =>
       document.getElementById("standings").hidden === true &&

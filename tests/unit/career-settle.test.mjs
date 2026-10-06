@@ -24,7 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // `const Career` lands in the context's global LEXICAL scope, not on the global
 // object — read it back by evaluating its name (same shape as race-control).
-function load(seasonLen) {
+function load(seasonLen, raceRules = false) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
@@ -49,7 +49,7 @@ function load(seasonLen) {
           drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
       ],
     },
-    Parts: { getFactorySetup: () => ({}) },
+    Parts: { getFactorySetup: () => ({}), setLegality() {} },
     Tracks: seasonLen ? { LIST: [], SEASON: new Array(seasonLen).fill({}) } : { LIST: [] },
   });
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
@@ -61,9 +61,15 @@ function load(seasonLen) {
   // stub instead — its market tests pin overall() per code on purpose.
   vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
     { filename: "js/data/driver-ratings.js" });
+  if (raceRules) {
+    for (const file of ["js/race/sporting-regs.js", "js/race/race-control.js", "js/career/season-cal.js"]) {
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
+    }
+  }
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
-  return vm.runInContext("Career", ctx);
+  return vm.runInContext(raceRules
+    ? "({ Career, SeasonCal, SportingRegs, RaceControl })" : "Career", ctx);
 }
 
 /** Start a MY TEAM career, advance the calendar past round 0, settle `order`:
@@ -85,6 +91,76 @@ function settle(mateRetired) {
   const res = Career.settleRound(order, player);
   const row = career.results[career.results.length - 1];
   return { res, row };
+}
+
+// Exercise the same compound-rule -> classification -> scoring chain as endRace.
+// Seed 3 genuinely offers a clean objective and a four-race clean sponsor.
+function settleCleanRace({ dsq = false, flavour = "myteam", playerFields = {} } = {}) {
+  const { Career, SeasonCal, SportingRegs, RaceControl } = load(4, true);
+  const teamId = flavour === "myteam" ? "custom" : "haas";
+  Career.start({ flavour, teamId, seed: 3 });
+  Career.engage(true);
+  SeasonCal.engage("career");
+  const cleanIndex = Career.objectiveChoices(0).findIndex((o) => o.type === "clean");
+  assert.ok(cleanIndex >= 0);
+  assert.equal(Career.chooseObjective(cleanIndex), true);
+  const makeCar = (id, driverId, finishT) => ({
+    team: { id }, driverId, finished: true, retired: false, lap: 9,
+    finishT, prog: 8000, penalty: 0, cuts: 0, gridPos: 10,
+    tyreLog: [{ code: "S" }, { code: "M" }],
+  });
+  const player = Object.assign(makeCar(teamId, teamId + ":0", 130), playerFields);
+  if (dsq) player.tyreLog = [{ code: "S" }];
+  const cars = [makeCar("haas", "haas:1", 110), makeCar("custom", "custom:1", 120), player];
+  const disqualified = SportingRegs.applyCompoundRule(cars, { applies: true, suspended: false });
+  const fin = cars.filter((c) => c.finished && !c.retired && !c.dsq).sort(RaceControl.finishOrder);
+  const out = cars.filter((c) => c.retired);
+  const order = RaceControl.classify(cars, fin, [], out).concat(disqualified);
+  const res = Career.scoreRound(order, player, null, null);
+  assert.ok(res);
+  return { Career, res, player, row: Career.data().results[0], sponsor: Career.sponsorAt(0) };
+}
+
+for (const flavour of ["myteam", "driver"]) {
+  test(`${flavour}: a compound-rule DSQ fails the clean objective and stored clean fact`, () => {
+    const { res, player, row, sponsor } = settleCleanRace({ dsq: true, flavour });
+    assert.equal(player.dsq, "one dry compound", "the real sporting rule disqualifies the car");
+    assert.equal(player.classified, false);
+    assert.equal(res.pts, 0);
+    assert.equal(res.obj.done, false, "a DSQ cannot complete a clean-race objective");
+    assert.equal(row.clean, false, "the sponsor ledger must not count this as clean");
+    if (flavour === "myteam") {
+      assert.equal(sponsor.type, "clean");
+      assert.equal(sponsor.done, 0);
+      assert.equal(sponsor.met, false);
+    } else {
+      assert.equal(sponsor, null, "driver careers do not own sponsor contracts");
+    }
+  });
+}
+
+test("a legal clean race keeps its objective bonus, reputation, and sponsor progress", () => {
+  const clean = settleCleanRace();
+  const dsq = settleCleanRace({ dsq: true });
+  assert.equal(clean.res.obj.done, true);
+  assert.equal(clean.row.clean, true);
+  assert.equal(clean.sponsor.done, 1);
+  assert.equal(clean.res.pos, dsq.res.pos, "same tail position isolates the objective reward");
+  assert.equal(clean.res.money - dsq.res.money, clean.Career.OBJ_BONUS);
+  assert.ok(clean.res.rep > dsq.res.rep, "a DSQ cannot earn the clean-objective reputation reward");
+});
+
+for (const [reason, playerFields] of [
+  ["retirement", { retired: true, finished: false }],
+  ["track cut", { cuts: 1 }],
+  ["time penalty", { penalty: 5 }],
+]) {
+  test(`${reason} still fails the clean objective and sponsor fact`, () => {
+    const { res, row, sponsor } = settleCleanRace({ playerFields });
+    assert.equal(res.obj.done, false);
+    assert.equal(row.clean, false);
+    assert.equal(sponsor.done, 0);
+  });
 }
 
 test("mate FINISHED P5: both cars in the points, so the double is recorded", () => {
@@ -553,7 +629,7 @@ test("a RETIREMENT does not touch craft — every DNF here is a reliability draw
 
 test("the same P3, scruffy by CONTACT: reputation differs, the money is identical", () => {
   // Contact and wall strikes are the craft-only inputs — no objective reads them
-  // (objectiveMet's "clean" brief looks at retired/cuts/penalty), so this pair
+  // (objectiveMet's "clean" brief looks at retired/dsq/cuts/penalty), so this pair
   // isolates the new channel completely.
   const clean = settleCraft({});
   const scruffy = settleCraft({ hits: 2, hitSev: 0.8, wallHits: 3 });
