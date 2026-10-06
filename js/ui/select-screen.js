@@ -433,16 +433,24 @@ function trackFilterBar() {
     b.type = "button";
     b.className = "sel-chip" + (visibleTrackFilter() === id ? " active" : "");
     b.dataset.filter = id;
+    // Mirror onto the attribute: setTrackFilter restores focus via
+    // querySelector('[data-filter=…]'), and a plain dataset write is enough in
+    // browsers but not in the mini-dom unit harness (no dataset↔attr sync).
+    b.setAttribute("data-filter", id);
     b.setAttribute("aria-pressed", visibleTrackFilter() === id ? "true" : "false");
     b.tabIndex = visibleTrackFilter() === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
       e.stopPropagation();
+      // buildSelect() replaces the bar, so the pressed chip is destroyed. Arrow
+      // keys already pass focus:true; Enter/Space (and pointer click) used to
+      // leave document.activeElement on <body>, killing the roving tabindex.
+      // Always restore onto the rebuilt chip for this filter.
       if (id === "daily-open") {
         G.daily.select(undefined, "open");
         leavePracticePick();
-        setTrackFilter(id, false, true);
-      } else setTrackFilter(id, false, false);
+        setTrackFilter(id, true, true);
+      } else setTrackFilter(id, true, false);
     };
     b.onkeydown = (e) => {
       let next = null;

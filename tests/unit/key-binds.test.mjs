@@ -396,8 +396,12 @@ function bootUi(desktop, helpSlots = {}, disk = null) {
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk
-    ? { get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d), set: (k, v) => { disk[k] = v; } }
-    : { get: () => null, set() {} };
+    ? {
+      get: (k, d) => (Object.prototype.hasOwnProperty.call(disk, k) ? disk[k] : d),
+      set: (k, v) => { disk[k] = v; },
+      rawDel: (k) => { delete disk[k]; },
+    }
+    : { get: () => null, set() {}, rawDel() {} };
   const G = { $: sb.document.getElementById, store, soundOn: false };
   const kb = KeyBinds.create(G);
   // A physical key: Input's window listener sets the latch, then the module's.
@@ -546,6 +550,72 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   assert.equal(disk.padAxes.steer, 1, "the wizard finished");
   assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
   assert.equal(disk.padRest, 0, "…and not stored");
+});
+
+test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map", () => {
+  // Bug hunt 2026-10-06: RESET called Input.resetPad() alone. SET UP A WHEEL /
+  // CALIBRATE STICK kept driving after "Controller reset to the defaults", and
+  // with default buttons the RESET chip stayed disabled.
+  const disk = {};
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const { pad } = fakePad(sb, fire);
+  pad.axes = [0, 0, 0, 0];
+  $("pm-pad-wheel").onclick();
+  pad.axes[1] = -0.9; Input.poll();
+  pad.axes[2] = 0.9; Input.poll();
+  pad.axes[3] = 0.9; Input.poll();
+  assert.equal(Input.padAxesAreDefault(), false, "wizard left a custom axis map");
+  assert.equal(Input.padsAreDefault(), true, "buttons stayed at shipped defaults");
+  assert.equal($("pm-pad-reset").disabled, false, "RESET is live when only axes differ");
+
+  // Calibrate on the wizard's steer axis (1), not axis 0.
+  pad.axes = [0, 0.08, 0, 0];
+  $("pm-pad-calib").onclick();
+  assert.ok(Math.abs(disk.padRest - 0.08) < 1e-9, "rest offset stored: " + disk.padRest);
+  assert.equal($("pm-pad-reset").disabled, false, "RESET stays live with a rest offset");
+
+  Input.setPadBinding("boost", 0, 11);
+  assert.equal(Input.padsAreDefault(), false);
+  $("pm-pad-reset").onclick();
+  assert.equal(Input.padsAreDefault(), true, "buttons reset");
+  assert.equal(Input.padAxesAreDefault(), true, "wheel axes reset");
+  assert.equal(Input.padRest(), 0, "stick rest cleared");
+  assert.equal(Object.prototype.hasOwnProperty.call(disk, "padAxes"), false, "padAxes removed from store");
+  assert.equal(Object.prototype.hasOwnProperty.call(disk, "padRest"), false, "padRest removed from store");
+  assert.equal($("pm-pad-reset").disabled, true, "RESET disables once everything is shipped");
+  assert.match($("pm-pad-note").textContent, /Controller reset/);
+});
+
+test("How to Play input disclosures stay on the article the player opened", () => {
+  // Bug hunt 2026-10-06: after helpInputReady, every render forced the active
+  // device <details> open and insertBefore'd it to the front.
+  const mkDetails = (kind, open) => ({
+    open: !!open,
+    tagName: "DETAILS",
+    getAttribute: (name) => (name === "data-input" ? kind : null),
+  });
+  const keyboard = mkDetails("keyboard", true);
+  const pad = mkDetails("pad", false);
+  const touch = mkDetails("touch", false);
+  const kids = [keyboard, pad, touch];
+  const { kb, $ } = bootUi(true, {}, {});
+  const htp = $("htp-inputs");
+  htp.dataset = { helpInputReady: "1" };
+  htp.querySelectorAll = (sel) => (sel === "details[data-input]" ? kids.slice() : []);
+  htp.insertBefore = (node) => {
+    const i = kids.indexOf(node);
+    if (i >= 0) kids.splice(i, 1);
+    kids.unshift(node);
+    htp.firstElementChild = kids[0];
+    return node;
+  };
+  htp.firstElementChild = kids[0];
+  $("howtoplay").hidden = false;
+  kb.render();
+  assert.equal(keyboard.open, true, "player-opened Keyboard stays open");
+  assert.equal(pad.open, false, "pad was not forced open");
+  assert.equal(kids[0], keyboard, "order was not rewritten to the active device");
+  assert.equal(touch.open, false);
 });
 
 test("a desktop shows both tables and never the hint", () => {
