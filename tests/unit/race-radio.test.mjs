@@ -949,6 +949,44 @@ test("a WATCH holds its commentary while a real team radio clip plays, and says 
   assert.equal(comm(r).length, 1, JSON.stringify(r.said));
 });
 
+test("a WATCH has no spotter: no 'car left' round a puppet, and a live race still gets one", () => {
+  // Its own realm with the REAL spotter: the shared one above has none, and
+  // adding it there would put traffic holds under every other test.
+  const sb = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Map, Set, String, RegExp,
+    Float64Array, Int32Array });
+  seedLog(sb);
+  sb.window = sb;
+  sb.CamModes = { CAM_MODES: [{ id: "chase" }] };
+  for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/spotter.js", "js/race/race-radio.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: f });
+  }
+  const RRs = vm.runInContext("RaceRadio", sb);
+  const run = (watching) => {
+    const spoke = [];
+    const pack = { ensure() {}, busy: () => false, plan: () => ({ secs: 0.5 }), stop() {},
+      speak: (id, text, o) => { if (o && o.channel === "spotter") spoke.push(text); return true; } };
+    // The followed car (G.player in a WATCH: RealReplay.setFollow) with a rival on its left.
+    const me = car("PLY", 340, 60, { isPlayer: true, local: true, s: 340, x: 0 });
+    const cars = [car("AAA", 1400, 60, { s: 1400, x: 0 }), car("BBB", 341, 60, { s: 341, x: -2.5 }), me];
+    // Shipped spotter is OFF; the live-race control still needs a live call.
+    const store = new Map([["spotter", true]]);
+    const G = { state: "race", soundOn: true, raceT: 0, cars, player: me, track: { total: LAP }, lapsTarget: 20,
+      timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
+      announceBusy: false, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
+      store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) },
+      announce: () => true,
+      radio: { pack, recordedPack: () => "george", volume: () => 1, busy: () => false } };
+    const radio = RRs.create(G, { seed: 3 });
+    if (watching) radio.setWatching({ nameOf: (c) => "REAL" + c.code, radioBusy: () => false });
+    for (let i = 0; i < 60; i++) { G.raceT += 1 / 60; radio.update(1 / 60); }
+    return { spoke, radio };
+  };
+  assert.deepEqual(run(false).spoke, ["Car left."], "control: the spotter calls a car alongside in a race");
+  const w = run(true);
+  assert.deepEqual(w.spoke, [], "a replay has no engineer, and the spotter is the engineer's voice");
+  assert.equal(w.radio.trafficBusy(), false, "nor does a puppet's traffic hold the commentary");
+});
+
 test("replayEvent outside a WATCH, with commentary OFF, or after the WATCH ends is a no-op", () => {
   const r = race({ cam: 2 });
   r.step(0.05, 20);

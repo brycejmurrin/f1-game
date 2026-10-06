@@ -87,11 +87,13 @@ const Spotter = (() => {
     let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0;
     const on = () => G.store.get("spotter", false) !== false;
 
-    function update(dt) {
+    // `quiet`: a REAL RACE WATCH (js/race/race-radio.js) — every car is a
+    // puppet and nobody is driving, so there is nobody to spot for.
+    function update(dt, quiet) {
       if (!Number.isFinite(dt) || dt <= 0) return "";
       const pack = G.radio && G.radio.pack;
       const p = G.player;
-      if (G.state !== "race" || G.paused || !p || p.finished || p.retired || !G.track
+      if (quiet || G.state !== "race" || G.paused || !p || p.finished || p.retired || !G.track
           || Math.abs(p.speed || 0) < G.vTop() * 0.12 || (p.pitState && p.pitState !== "none")) {
         st = fresh(); occupied = 0; if (pack && pack.stop) pack.stop("spotter"); return "";
       }
