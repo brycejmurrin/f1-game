@@ -1580,6 +1580,34 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
+  // VS Friend chrome (dialogs.css): one red primary per step, enter-code
+  // JOIN/field width, short-code error under the field, lone step chip hidden,
+  // tall CLOSE stays in the footer. Pins live here so overlays.css cannot
+  // quietly re-own the sheet without this suite noticing.
+  const vsDlg = css("css/dialogs.css");
+  assert.equal(decl(vsDlg, /#vsfriend #vs-code-host\b/, "background"), "var(--plate-opaque)",
+    "NEW CODE is a plate secondary — HOST keeps the sole red on the hub");
+  assert.equal(decl(vsDlg, /#vsfriend #vs-share-invite\b/, "background"), "var(--plate-opaque)",
+    "SHARE LINK is secondary until the room owns START");
+  assert.equal(decl(vsDlg, "#vsfriend .vs-code::placeholder", "word-break"), "normal",
+    "code placeholder never wraps mid-word");
+  assert.equal(decl(vsDlg, "#vsfriend textarea.vs-code, #vsfriend input.vs-code", "color-scheme"), "dark",
+    "code boxes use dark form tokens (no nested white scroll chrome)");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-code-go", "width"), "min(100%, 22rem)",
+    "Enter Code JOIN matches the field column width");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status", "text-align"), "center",
+    "short-code error is centred under the field");
+  assert.equal(decl(vsDlg, "#vsfriend:has(#vs-code-input:not([hidden])):has(#vs-status.vs-error) #vs-code-in", "border-color"), "var(--red)",
+    "short-code error flags the field");
+  assert.equal(decl(vsDlg, "#vsfriend .vs-step:not(.vs-two) .vs-num", "display"), "none",
+    "a lone step number chip is hidden");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-joining .vs-col > .vs-hint", "text-align"), "start",
+    "join-friend hints align with their column");
+  assert.equal(
+    decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
+    "relative",
+    "narrow/tall CLOSE stays in the footer, not absolute in the head");
+
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
