@@ -216,25 +216,14 @@ body[data-hl-set="cockpit"]:not(.desktop) :is(#hud-energy, #hud-tyre, #hud-ot, #
    back the moment the player places it. */
 body[data-hl-set="helmet"]:not(.desktop) :is(#hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
 
-/* …but the LCD only carries the read when it is big enough to READ. The wheel
-   is drawn in world space, so it shrinks with the viewport: measured at phone
-   landscape (844x390) its digits are a few pixels tall and the speed is simply
-   gone for that player, who is also the one most likely to be in cockpit view
-   (it is the default on touch). Below the 900x600 landscape breakpoint this
-   file already uses for the rest of the HUD, the floating speed readout comes
-   back. Gear stays on the LCD: it is one large glyph and survives the shrink,
-   and the gearbox chip is the HUD's widest element. */
-@media not all and (min-width: 900px) and (min-height: 600px) {
-  body.cockpit-cam #hud-speed { display: block; }
-  /* Phone landscape (844×390 class): LCD digits are a few px tall — boost the
-     floating speed so cockpit (touch default) stays readable. */
-  body.cockpit-cam #hud-speed {
-    font-size: calc(42px * var(--hud-text-boost, 1));
-    letter-spacing: 0.02em;
-    text-shadow: var(--hud-halo), 0 0 1px var(--carbon);
-  }
-  body.cockpit-cam #hud-speed .hud-unit {
-    font-size: calc(var(--fs-micro) * 1.15 * var(--hud-text-boost, 1));
-  }
-}
+/* The floating speed used to come back below 900×600: the wheel LCD measured
+   a few pixels at 844×390, so a phone in cockpit (the touch default) lost the
+   number. A later pass at 852×393 shows the LCD digits AND the floating
+   speed both readable — two speeds. The LCD keeps the read on cockpit
+   (body.cockpit-cam, every viewport). CLASSIC / NONE have no LCD
+   (no data-wheel-lcd, and cockpit-cam stays off), so they keep the chip.
+   HELMET still paints GEAR on the visor (HELMET_TOUCH, the opaque pill).
+   Its floating SPEED is the same duplicate once the wheel has an LCD, so
+   it hides too — a placed SPEED (data-hl-user) still shows. */
+body[data-helmet-cam][data-wheel-lcd]:not(.desktop) #hud-speed:not([data-hl-user]) { display: none; }
 } /* @layer overlays */

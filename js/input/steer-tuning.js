@@ -246,9 +246,14 @@ const STEER_LEVEL_LABEL = { easy: "SUPER EASY", assist: "ASSISTED", normal: "NOR
 // Same four as the store fallbacks above — this is the detection half.
 const STEER_DEFAULTS = { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7 };
 const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSlider)
-const HELP_LABEL = { low: "LOW", med: "MEDIUM", high: "HIGH" };
+// OFF, not LOW: the fold summary and the DRIVING HELP row must name the same
+// state. "LOW is off" in the How to Play copy was the old compromise; the row
+// then said LOW while AIDS · OFF painted red for the same notch.
+const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
-const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
+// "STEER OFF" (not "LINE OFF"): the setting is STEER ASSIST — Race Settings owns
+// the visual DRIVING LINE. Fold tokens must match the live help/line bands.
+const LINE_FOLD = { off: "STEER OFF", corner: "CORNERS", full: "FULL", custom: "CUSTOM" };
 // The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
 // but unpickable option: the state the ADVANCED sliders leave behind.
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
@@ -290,8 +295,27 @@ function clearPreset() { store.set("preset", "custom"); refreshPresetButtons(); 
 // (haptics, the per-device curves, pad dead zone, WEIGHT) leaves the chip alone:
 // PRO with a softer rumble is still exactly PRO on every key PRO sets.
 function clearPresetFor(key) { if (Object.prototype.hasOwnProperty.call(PRESET_STORE, key)) clearPreset(); }
+// Which named bundle (if any) the live PRESET_STORE keys still equal. The chip
+// used to trust store.preset alone — a steerSchema migration that reset
+// drivingHelp/raceLine left preset:"rookie" painted while AIDS read OFF.
+function matchPreset() {
+  for (const name of ["rookie", "relax", "standard", "pro"]) {
+    const p = PRESETS[name];
+    if (Object.keys(PRESET_STORE).every((k) => store.get(k, p[k]) === p[k])) return name;
+  }
+  return null;
+}
 function refreshPresetButtons() {
-  const active = store.get("preset", "standard");
+  const matched = matchPreset();
+  const claimed = store.get("preset", "standard");
+  // Reconcile the stored name with the values: a stale ROOKIE chip over OFF
+  // assists is the defect the AIDS summary cannot paper over.
+  if (matched) {
+    if (claimed !== matched) store.set("preset", matched);
+  } else if (claimed !== "custom") {
+    store.set("preset", "custom");
+  }
+  const active = matched;
   for (const name of ["rookie", "relax", "standard", "pro"]) {
     const btn = $("pm-preset-" + name);
     if (btn) btn.classList.toggle("active", name === active);
@@ -313,7 +337,6 @@ function refreshMacros() {
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
   SettingRow.paint($("pm-feel"), lvl || "custom", FEEL_VALUES);
-  const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
   const hb = helpBand();
   SettingRow.paint($("pm-helplevel"), hb, HELP_VALUES);
   const lb = lineBand();
@@ -325,7 +348,9 @@ function refreshMacros() {
   ]);
   Dom.paintFold($("adv-aids-sum"), [
     ["k", "AIDS"],
-    dh <= 1 ? ["off", "OFF"] : ["val", HELP_LABEL[hb]],
+    // Same tokens as pm-helplevel / pm-linemode — never OFF in the fold and
+    // LOW in the row (or the reverse) for one stored notch.
+    [hb === "low" ? "off" : "val", HELP_LABEL[hb]],
     [lb === "off" ? "off" : "val", LINE_FOLD[lb]],
   ]);
   Dom.paintFold($("adv-more"), [["k", "ADVANCED"]]);
