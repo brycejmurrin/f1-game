@@ -259,6 +259,11 @@
   margin: 0;
 }
 #rs-presets > .preset-btn { min-height: var(--chip-h); }
+/* CUSTOM is a display-only sentinel (no data-rs-preset): it lights when the
+   live draft matches no named preset (default 3-lap open). Same selected
+   plate as QUICK / WEEKEND / ENDURANCE; not a fourth writable choice. */
+#rs-preset-custom { cursor: default; }
+#rs-preset-custom:focus-visible { outline-offset: 2px; }
 .session-summary {
   margin: 0; min-width: 0; max-width: 100%;
   color: var(--dim); font-size: var(--fs-micro); font-variant-numeric: tabular-nums;
