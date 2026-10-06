@@ -1,1 +1,0 @@
-1791304719	Cursor Agent	PR: garage UX (floor mirror + categories scroll + door-open leave). OWNED js/garage/scene.js js/garage/arrival.js js/garage/setup-camera.js css/carsetup.css + unit tests. FORBIDDEN car meshes/liveries auto-merge/merge Pages. Do not enable auto-merge or merge.  [cursor/garage-ux-mirror-4fc2; session 84751be994a63407e8feb553]
