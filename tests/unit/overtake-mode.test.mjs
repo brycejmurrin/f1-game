@@ -93,6 +93,30 @@ test("under 1 s at the detection line EARNS it; the timing line GRANTS it for on
   assert.equal(c.otE, 0, "a lap's allowance does not carry over");
 });
 
+test("opening-lap grant survives the gate-closed Activation so it is usable on lap 2", () => {
+  // RaceControl.otEnabled is false until the leader starts lap 2. Earn on lap 0,
+  // grant at lap → 1 (gate still closed); without a hold the next Activation
+  // would lapse it unused exactly when the gate opens.
+  const { OM } = load();
+  const t = track(), c = car({ s: 4400, lap: 0, human: true });
+  OM.reset(c);
+  OM.lines(c, t, 0.5, true);
+  c.s = 4520; OM.lines(c, t, 0.5, true);
+  assert.equal(c.otEarned, true);
+  c.s = 10; c.lap = 1; OM.lines(c, t, 0.5, true);
+  assert.equal(c.otE, 0.125, "granted at the first S/F");
+  assert.equal(OM.arm(c, false, true), false, "race-wide gate still closed on lap 1");
+  // Next Activation with nothing re-earned: hold keeps the opening grant.
+  c.s = 4400; OM.lines(c, t, 5, true); c.s = 4520; OM.lines(c, t, 5, true);
+  c.s = 5; c.lap = 2; OM.lines(c, t, 5, true);
+  assert.equal(c.otE, 0.125, "still armed when the gate opens");
+  assert.equal(OM.arm(c, true, true), true);
+  // A further unused lap still lapses (one-lap rule after the hold).
+  c.s = 4400; OM.lines(c, t, 5, true); c.s = 4520; OM.lines(c, t, 5, true);
+  c.s = 5; c.lap = 3; OM.lines(c, t, 5, true);
+  assert.equal(c.otE, 0, "lapses after the held lap");
+});
+
 test("1.0 s is not 'less than one second', and a closed detection (SC, low grip) earns nothing", () => {
   const { OM } = load();
   const t = track();

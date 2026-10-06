@@ -902,6 +902,19 @@ test("sliding heats the surface faster than a clean rolling load (slip × force)
   assert.ok(scrub[0] > clean[0], `slide must heat more: scrub ${scrub[0]} vs clean ${clean[0]}`);
 });
 
+test("pathological NaN dt must not poison tyre temps (clamp alone is not enough)", () => {
+  // M4.clamp(NaN, lo, hi) returns NaN — the old "clamp path" comment was a
+  // false guard. A NaN dt (or heat term) must fall closed to the prior finite
+  // state so grip stays driveable.
+  const life = 0.74;
+  const amb = T.T_AMBIENT.dry;
+  const track = amb + T.T_TRACK_DELTA.dry;
+  const t = T.stepTemp(95, 90, { load: 1, vFrac: 0.5, amb, track, life, slide: 0.2, dt: NaN });
+  assert.ok(Number.isFinite(t[0]) && Number.isFinite(t[1]), `got ${t}`);
+  assert.equal(t[0], 95, "surface keeps prior finite ts");
+  assert.equal(t[1], 90, "bulk keeps prior finite tb");
+});
+
 test("cooling sinks toward ambient and a warmer track surface", () => {
   // A hotter track raises the blended sink, so a hot tyre cools less than on
   // a cold track (same air temperature).

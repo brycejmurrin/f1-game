@@ -19,12 +19,15 @@ const NetSdp = (function () {
   const line = (sdp, re) => { const m = sdp.match(re); return m ? m[1] : null; };
 
   function v4ToBytes(addr) {
-    const p = addr.split(".");
+    const p = String(addr || "").split(".");
     if (p.length !== 4) return null;
     const out = new Uint8Array(4);
     for (let i = 0; i < 4; i++) {
+      // Number("") is 0 and Number("08") is 8 — both used to pack as a real
+      // octet. Only a strict 0..255 decimal token is an IPv4 byte.
+      if (!/^\d{1,3}$/.test(p[i])) return null;
       const n = Number(p[i]);
-      if (!(n >= 0 && n <= 255)) return null;
+      if (!(n >= 0 && n <= 255) || String(n) !== p[i]) return null;
       out[i] = n;
     }
     return out;
@@ -34,6 +37,17 @@ const NetSdp = (function () {
   function v6ToBytes(addr) {
     const zone = addr.indexOf("%");
     if (zone >= 0) addr = addr.slice(0, zone);
+    // Trailing dotted IPv4 (NAT64 64:ff9b::a.b.c.d, ::a.b.c.d, …). parseInt
+    // on "192.0.2.1" used to accept 192 and silently rewrite the candidate.
+    if (addr.indexOf(".") >= 0) {
+      const lastColon = addr.lastIndexOf(":");
+      if (lastColon < 0) return null;
+      const v4 = v4ToBytes(addr.slice(lastColon + 1));
+      if (!v4) return null;
+      const hi = ((v4[0] << 8) | v4[1]).toString(16);
+      const lo = ((v4[2] << 8) | v4[3]).toString(16);
+      addr = addr.slice(0, lastColon + 1) + hi + ":" + lo;
+    }
     const halves = addr.split("::");
     if (halves.length > 2) return null;
     const grp = (s) => (s ? s.split(":").filter((x) => x.length) : []);
@@ -44,6 +58,8 @@ const NetSdp = (function () {
     const words = head.concat(new Array(fill).fill("0"), tail);
     const out = new Uint8Array(16);
     for (let i = 0; i < 8; i++) {
+      // parseInt("cafeg", 16) is 0xcafe — refuse non-hex so garbage never packs.
+      if (!/^[0-9a-fA-F]{1,4}$/.test(words[i])) return null;
       const n = parseInt(words[i], 16);
       if (!(n >= 0 && n <= 0xffff)) return null;
       out[i * 2] = n >> 8; out[i * 2 + 1] = n & 0xff;

@@ -35,14 +35,14 @@ function create(G) {
     if (!root || !root.querySelectorAll || (sheet && sheet.hidden)) return;
     const details = Array.from(root.querySelectorAll("details[data-input]"));
     if (!details.length) return;
+    // Already primed: leave the player's open article and order alone. A later
+    // rebind used to force the active-device <details> open and insertBefore it
+    // to the front, undoing a manual Keyboard/Controller/Touch choice.
+    if (root.dataset.helpInputReady) return;
     const kind = activeInputKind();
     const current = details.find((el) => el.getAttribute("data-input") === kind) || details[0];
-    if (!root.dataset.helpInputReady) {
-      for (const el of details) el.open = el === current;
-      root.dataset.helpInputReady = "1";
-    } else if (!current.open) {
-      current.open = true;
-    }
+    for (const el of details) el.open = el === current;
+    root.dataset.helpInputReady = "1";
     if (root.firstElementChild !== current && root.insertBefore) root.insertBefore(current, root.firstElementChild);
   }
 
@@ -281,14 +281,35 @@ function create(G) {
       ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Radio check", ["radio"], "gaps from the engineer"], ["Mirror", ["mirror"], "on / off"], ["Pause", ["pause"]],
     ],
   });
+  // CONTROLLER RESET must clear the whole controller story: button map, wheel
+  // axes (SET UP A WHEEL → apex26.padAxes), and CALIBRATE STICK rest (padRest).
+  // padsAreDefault() alone left pedals/steer wrong after RESET, and disabled
+  // the button entirely when only axes/rest differed from shipped.
+  const controllerIsDefault = () => Input.padsAreDefault()
+    && (!Input.padAxesAreDefault || Input.padAxesAreDefault())
+    && (!Input.padRest || Input.padRest() === 0);
+  const resetController = () => {
+    Input.resetPad();
+    if (Input.setPadAxisMap) {
+      Input.setPadAxisMap(null);
+      if (store.rawDel) store.rawDel("padAxes");
+      else store.set("padAxes", Input.getPadAxisMap());
+    }
+    if (Input.setPadRest) {
+      Input.setPadRest(0);
+      if (store.rawDel) store.rawDel("padRest");
+      else store.set("padRest", 0);
+    }
+  };
   pad = section({
     keys: false, noun: "button", key: "pad",
     section: $("pm-pad-section"), host: $("pm-pad"), note: $("pm-pad-note"), reset: $("pm-pad-reset"), help: $("htp-pad"),
     load: Input.setPadMap, get: Input.getPadMap, list: Input.padBindings, set: Input.setPadBinding, clear: Input.clearPadBinding,
-    resetAll: Input.resetPad, isDefault: Input.padsAreDefault, label: Input.padLabel,
+    resetAll: resetController, isDefault: controllerIsDefault, label: Input.padLabel,
     // A desktop always shows it (a pad may be plugged in later); a phone only
-    // once a pad has been seen, or when the map is already customised.
-    show: () => Input.padPresent() || desktop() || !Input.padsAreDefault(),
+    // once a pad has been seen, or when the map is already customised (buttons,
+    // wheel axes, or a stick rest offset — any of those is a live controller).
+    show: () => Input.padPresent() || desktop() || !controllerIsDefault(),
     idle: "Tap a slot, then press a button on the controller. Esc cancels, Backspace clears the slot. The stick and D‑pad steer.",
     armedNote: "Press a controller button… (Esc cancels, Backspace clears)", resetNote: "Controller reset to the defaults.",
     groups: [
@@ -366,6 +387,9 @@ function create(G) {
         store.set("padRest", Input.padRest());
         say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
         tick();
+        // Rest offset is part of controllerIsDefault — enable RESET without a
+        // second rebind.
+        if (pad) pad.render();
       } else {
         say("The stick was not resting — let go of it completely, then press CALIBRATE STICK again.");
       }
@@ -415,6 +439,8 @@ function create(G) {
       wheelBtn.textContent = "SET UP A WHEEL";
       say(msg);
       tick();
+      // Axes left the shipped defaults — re-paint so CONTROLLER RESET enables.
+      if (pad) pad.render();
     };
     wheelBtn.onclick = () => {
       if (running) {   // a second press abandons it and puts everything back
