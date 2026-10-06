@@ -1,1 +1,1 @@
-1791271974	Cursor Agent	PR #1075 CI Watch DIRTY sync + career shard rebalance; OWNED .github/workflows tools/ci/*; COMMIT LOCAL no push until queue < 10; no auto-merge/merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
+1791280592	Cursor Agent	PR #1075 red: career-1of5 cancelled at 6min cap (37 tests --shard=1/5); publish unpublished fatUi 2-worker no-shard; no auto-merge/merge  [cursor/ci-speedup-cb1f; session 84e2d3d6ccbe37949e635b9c]
