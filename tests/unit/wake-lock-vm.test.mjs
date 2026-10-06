@@ -4,7 +4,7 @@
  * js/game.js and PlatformSession) with the SAME mock, the same
  * sequences and the same expected logs as the browser spec.
  *
- * Ported: all 9 tests. Not portable: none — every assertion reads the mock's
+ * Ported: all 13 tests. Not portable: none — every assertion reads the mock's
  * `__wakeLog` (a JSON array) and two of them the page-error record.
  *
  * WHY A TWIN, WHY NOW (2026-09-16). The browser copy was CI's dominant flake:
