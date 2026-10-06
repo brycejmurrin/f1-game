@@ -9,7 +9,7 @@ globs:
 - Cars: meshes/liveries/presentation — not UI chrome
 - Tracks: scenery/audits — one open PR per circuit
 - Perf: boot/particles/probes — not weather design
-- CI Watch: sole merge pacer; only CI Watch arms squash auto-merge on **ready** PRs; agents never merge/arm
+- CI Watch: CI/Pages watcher; specialty bots never arm auto-merge; Merge Desk owns merge-when-green (MERGE commit only)
 - Audio / Net / Docs / Insights: stay in named lanes
 Prefer Auto/`default` only (no alternate-model fallback); draft PRs on `cursor/<topic>-<hash>` → ship; attach evidence.
 Handoff is incomplete without paths, PR/bc, OWNED globs, ranked next ≤3, blockers (or `idle / no PR`).
