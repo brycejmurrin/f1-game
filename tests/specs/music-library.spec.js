@@ -60,10 +60,16 @@ async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  // Title boots the GameAudio stub; MusicLib / SpotifyMusic arrive with LAZY_AUDIO
-  // when openSettings() → ensureAudio() runs (openAudioPanel waits for them).
+  // LAZY_AUDIO: title boots js/audio/stub.js. Tests that call GameAudio.playTrackId /
+  // setMusicBackend without openAudioPanel still need the real engine — pull it
+  // on a synthetic pointerdown (same gate as audio-smoke). openSettings also
+  // warms ensureAudio for the panel path (#pm-settings click is not a pointerdown).
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  });
   await page.waitForFunction(
-    () => typeof GameAudio !== "undefined",
+    () => typeof MusicLib !== "undefined" && typeof SpotifyMusic !== "undefined"
+      && typeof GameAudio !== "undefined" && !GameAudio._stub,
     null, { polling: 100, timeout: BOOT_MS }
   );
 }

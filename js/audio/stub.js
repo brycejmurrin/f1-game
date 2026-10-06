@@ -28,7 +28,11 @@ var GameAudio = (function () {
     overtakeReady: noop, xMode: noop, thunder: noop, uiTick: noop,
     uiSelect: noop, uiReject: noop, driveBrakeTone: noop, cornerCall: noop,
     volumes: noopObj, tuneDefaults: noopObj, layerDefaults: noopObj,
-    setTune: noop, ensure: noop, skipTrack: noop,
+    setTune: noop, ensure: noop, skipTrack: noop, prevTrack: noop,
+    // Playlist API — real engine replaces these; stub must not throw if a
+    // menu row or test races ahead of ensureAudio().
+    playTrackId: () => false, currentTrackId: () => null, trackName: noopStr,
+    tracks: () => [], addTracks: noop, removeTrack: noop,
   };
 })();
 
