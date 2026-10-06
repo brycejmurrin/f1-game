@@ -97,11 +97,10 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // css/fonts-hud.css is print→all deferred (#1101). Titillium 400/700
-        // live there; a shot before onload uses system-ui and wraps the
-        // desktop rooms row (CI 37458009585, title 0.09). Same wait as the
-        // phone 0.08 wrap — do not bless system-ui actuals.
-        await waitMenuFonts(page);
+        // fonts.load('700 16px Titillium') can succeed from the 600 face while
+        // fonts-hud 700-normal is still swap (CI 37459018234 desktop 0.09/0.04/0.03).
+        // FontFace-load those woff2s and gate on status + measureText vs Arial.
+        await waitMenuFonts(page, BOOT_MS);
         await page.waitForTimeout(600);   // let the sheet settle and measure
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,
