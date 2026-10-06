@@ -61,4 +61,12 @@ Essentially flat (built on level reclaimed land). The only real change is the en
 Hard Rock Stadium, the campus, the palms and the marina are all modelled — and
 notably the marina is modelled as what it actually is: **fake vinyl water with
 boats standing on dry tarmac**, which is the detail most versions of this
-circuit get wrong by rendering real water. **Nothing added.**
+circuit get wrong by rendering real water.
+
+## DETAIL pass (2026-10-06)
+
+Local scenery only (`js/circuits/scenery/miami.js` + `tests/data/landmarks/miami.json`):
+- Closed grandstand `endWalls` + pit end shells (shared open-face `building()` stays with city.js agent).
+- Marina bollard edge + denser berth/yacht ranks; bridge abutment pads outside span supports.
+- Hard Rock neon rim + required `miami-hard-rock-neon` LED tower for night read.
+- Palm colour variety + pastel Deco extras; landmarks: hard-rock neon, MSC Yacht Club, beach-club cabana, MIA sign.
