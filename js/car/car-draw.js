@@ -232,16 +232,15 @@ const CarDraw = (function () {
     }
 
     // PHOTO MODE ATLASES. A close-up is what photo mode is for, so a rival
-    // drawn there asks for the full-resolution atlas (":P", the player's tier)
-    // instead of its half-size one. It used to ask on EVERY drawn car: entering
-    // photo mode on a grid built ~21 full atlases (1024x1280 paint + upload +
-    // mips each) in one frame, and the ~147 MB they cost stayed resident after
-    // the mode closed. Now, per rendered frame: at most ONE new full atlas,
+    // drawn there asks for the player-tier PREVIEW atlas (":P", 1024 on desktop)
+    // instead of its half-size one. Hi-res (2048) is the real player car only —
+    // photo rivals never schedule the deferred kick. It used to ask on EVERY
+    // drawn car: entering photo mode on a grid built ~21 full atlases in one
+    // frame. Now, per rendered frame: at most ONE new player-tier preview,
     // for the uncached car nearest the photo camera; at most PHOTO_ATLAS_MAX
-    // of them at once (a full one is evicted only when it was not drawn this
-    // frame, or when the newcomer is clearly nearer than the farthest); a car
-    // waiting its turn draws its half-tier atlas; and all of them are freed on
-    // the first frame after photo mode closes. Never the player's own ":P".
+    // of them at once; a car waiting its turn draws its half-tier atlas; and
+    // all of them are freed on the first frame after photo mode closes.
+    // Never the player's own ":P".
     const PHOTO_ATLAS_MAX = 6;
     const _photoKeys = new Map();   // photo-minted ":P" key -> { f: frame last drawn, d2: camera distance² then }
     let _photoFrame = 0, _photoMint = null, _photoOn = false;
@@ -287,14 +286,15 @@ const CarDraw = (function () {
       _photoMint = best;
     }
     // The atlas a car draws with. Photo mode upgrades a rival only when its full
-    // atlas exists or this frame's plan picked it; otherwise the half tier.
+    // player-tier preview exists or this frame's plan picked it; otherwise the
+    // half tier. 2048 is the real player car only (getCarDecalTexture 4th arg).
     function decalTextureFor(team, num, usePlayerSetup) {
       if (usePlayerSetup || !G.photoMode) return getCarDecalTexture(team, num, usePlayerSetup);
       const key = decalKeyFor(team, num, true);
       if (_photoKeys.has(key) || key === _photoMint) {
         const minting = key === _photoMint;
         if (minting) _photoMint = null;                   // one per frame, whatever happens next
-        const tex = getCarDecalTexture(team, num, true);
+        const tex = getCarDecalTexture(team, num, true, false);
         if (minting && tex) _photoKeys.set(key, { f: _photoFrame, d2: 0 });
         if (tex) return tex;
       }
@@ -337,8 +337,17 @@ const CarDraw = (function () {
     // Desktop player hi-res (2048×2560, ~26.7 MB) is DEFERRED: boot / garage
     // open / warmCarAssets / prepareMenuCarAssets sync-upload the 1024 preview
     // only, then requestIdleCallback (setTimeout fallback) swaps in the full
-    // atlas. AI and mobile never schedule — atlasDiv has no larger upload.
+    // atlas. AI, mobile, and photo-mode rivals never schedule — atlasDiv has
+    // no larger upload, and photo rivals stay on the preview.
     const _hiResPending = new Set(), _hiResDone = new Set();
+    const _hiResGrave = [];   // prev preview tex; free AFTER the next bind
+    function reapHiResGrave() {
+      if (!_hiResGrave.length) return;
+      if (G.gfx && G.gfx.freeTexture) {
+        for (let i = 0; i < _hiResGrave.length; i++) G.gfx.freeTexture(_hiResGrave[i]);
+      }
+      _hiResGrave.length = 0;
+    }
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
@@ -353,7 +362,7 @@ const CarDraw = (function () {
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
           _hiResDone.add(key);
-          if (prev && G.gfx.freeTexture) G.gfx.freeTexture(prev);
+          if (prev && prev !== next) _hiResGrave.push(prev);
           if (next && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
         } catch (e) {
           Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
@@ -361,22 +370,34 @@ const CarDraw = (function () {
           _hiResPending.delete(key);
         }
       };
-      if (typeof requestIdleCallback === "function")
-        requestIdleCallback(function () { kick(); }, { timeout: 2500 });
-      else
-        setTimeout(kick, 0);
+      const enqueue = function () {
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(function (deadline) {
+            if (deadline && (deadline.didTimeout ||
+                (typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10))) {
+              enqueue();
+              return;
+            }
+            kick();
+          });
+        } else {
+          setTimeout(kick, 0);
+        }
+      };
+      enqueue();
     }
-    function getCarDecalTexture(team, num, isPlayer) {
+    function getCarDecalTexture(team, num, isPlayer, allowHiRes) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
       // at 512² and AI atlases at 256², so a team the player later switches to
       // must not reuse a cached AI-resolution atlas (and vice versa).
       const key = decalKeyFor(team, num, isPlayer);
+      const wantHi = !!isPlayer && allowHiRes !== false;
       if (key in _decalTexCache) {
         _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
         // A cache hit that never got a hi-res pass (e.g. warmed as preview)
         // still schedules — idempotent via _hiResPending / _hiResDone.
-        if (isPlayer) schedulePlayerHiRes(team, num, key);
+        if (wantHi) schedulePlayerHiRes(team, num, key);
       } else {
         let t = null;
         try {
@@ -394,7 +415,7 @@ const CarDraw = (function () {
           if (n < 3) return null;
         }
         _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick);
-        if (isPlayer && t) schedulePlayerHiRes(team, num, key);
+        if (wantHi && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
         // recently drawn goes, never one the field drew this frame.
         while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {
@@ -572,11 +593,12 @@ const CarDraw = (function () {
       const rl = cockpit ? null : deps.resolveLivery(team);
       const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
         getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
-      // PHOTO MODE upgrades rivals to the full-resolution tier, lazily: one new
-      // full atlas per frame, nearest the photo camera first, a bounded set,
+      // PHOTO MODE upgrades rivals to the player-tier PREVIEW, lazily: one new
+      // preview atlas per frame, nearest the photo camera first, a bounded set,
       // all freed when the mode closes (decalTextureFor / planPhotoAtlases).
       // Desktop AI atlases upload at half size (liverytex atlasDiv) — ample at
       // racing distance; a close-up is the one place that would show.
+      // Hi-res 2048 is the real player car only (schedulePlayerHiRes).
       //
       // NOT folded into usePlayerSetup: that argument selects the player's
       // SETUP for teamDecalState above and means something else entirely.
@@ -1262,6 +1284,7 @@ const CarDraw = (function () {
       planPhotoAtlases();
       for (let i = 0; i < _decalCount; i++)
         drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
+      reapHiResGrave();
     }
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.
     function setPlayerParts(vt, visualKey) {

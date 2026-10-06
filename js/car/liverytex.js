@@ -39,8 +39,8 @@ const LiveryTex = (function () {
   //
   // The 26.7 MB hi-res player atlas must NOT upload on boot or garage open —
   // car-draw paints the 1024 preview first, then requestIdleCallback-upgrades
-  // to 2048 (mipmapped). AI stays at 512×640. Photo-mode rival upgrades reuse
-  // the same player-tier key and the same deferral.
+  // to 2048 (mipmapped). AI stays at 512×640. Photo-mode rivals may mint the
+  // player-tier PREVIEW (1024); only the real player car defers to 2048.
   //
   // Pure on purpose: rasterising a livery needs a browser (see the boundary
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
@@ -1840,25 +1840,12 @@ const LiveryTex = (function () {
     const cy = R.y + R.h / 2 - ((e.v0 + e.v1) / 2 - 0.5) * s;
     return { x: cx - side / 2, y: cy - side / 2, w: side, h: side };
   }
-  // ONE scratch canvas for the whole grid, on phones only.
-  //
-  // The mobile tier below shrinks what is UPLOADED and never touched what is
-  // PAINTED: every atlas was authored on its own fresh 1024x1024 canvas — 4 MB
-  // of backing store — downscaled, and thrown away. warmCarAssets() in
-  // js/game.js builds all 22 before the first frame, synchronously, with no
-  // yield point, so the peak was ~88 MB of transient canvas in one burst at
-  // race start. WebKit frees a canvas backing store when the element is
-  // collected, and a synchronous loop gives the collector no opening; Safari's
-  // canvas accounting is process-wide and is an input to jetsam. That is the
-  // same 88 MB the comment below claims to have saved — it was saved on the GPU
-  // and left in place on the CPU.
-  //
-  // Reused rather than shrunk because the whole atlas is authored in SIZE units
-  // (the comment below says so, and buildAtlas reads canvas.width nowhere but
-  // its own two assignments), so painting small would mean rescaling every
-  // coordinate. Setting .width RESETS a canvas per spec — even to the same
-  // value — so the assignments already clear it between cars for free.
-  // DESKTOP IS UNCHANGED: it returns this very canvas, so it must own it.
+  // ONE scratch canvas for the whole grid, on phones only. Setting .width
+  // RESETS a canvas per spec — even to the same value — so the assignments
+  // already clear it between cars. Preview / AI / mobile paint AT upload size
+  // (SIZE/div) with setTransform(1/div) so REGIONS stay in SIZE space; only
+  // the deferred desktop-player hi-res kick authors 2048×2560. A 2048 paint
+  // then bilinear downscale on the boot path was the 26.7 MB CPU spike.
   let scratchCanvas = null;
   function scratchAtlas() {
     if (!scratchCanvas) scratchCanvas = document.createElement("canvas");
@@ -1868,13 +1855,17 @@ const LiveryTex = (function () {
   // ── main ─────────────────────────────────────────────────────────────────
   // hiRes: desktop player full 2048 upload. Callers that must stay off the
   // boot / garage-open path pass false (or omit) and let car-draw defer true.
+  // Preview / AI / mobile author the canvas at the upload size.
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
+    const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
     const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
-    canvas.width = SIZE;
-    canvas.height = SIZE_H;
+    canvas.width = SIZE / div;
+    canvas.height = SIZE_H / div;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
+    try { ctx.imageSmoothingQuality = "high"; } catch (_) { /* Safari <15 */ }
+    if (div !== 1) ctx.setTransform(1 / div, 0, 0, 1 / div, 0, 0);
 
     colors = Object.assign({}, colors || {});
     if (typeof Liveries !== "undefined" && Liveries.migratePaint) Liveries.migratePaint(colors);
@@ -2736,22 +2727,7 @@ const LiveryTex = (function () {
                     markHalo(LOGOS[teamId], c1, ink), emblemRim);
     } else drawCrest(ctx, teamId, numBadge, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
 
-    // Upload at a fraction of the authored size. All layout stays authored at
-    // SIZE (UVs are FRACTIONS of the atlas — resolution-independent); only the
-    // uploaded texture shrinks. See atlasDiv for the tiers and the measurement
-    // behind them. hiRes is desktop-player-only (atlasDiv ignores it elsewhere).
-    const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
-    if (div > 1) {
-      const small = document.createElement("canvas");
-      small.width = SIZE / div; small.height = SIZE_H / div;
-      // High-quality downscale: the authored glyphs are already hard-edged;
-      // bilinear shrink is what keeps AI boards readable at racing distance.
-      const sctx = small.getContext("2d");
-      sctx.imageSmoothingEnabled = true;
-      try { sctx.imageSmoothingQuality = "high"; } catch (_) { /* Safari <15 */ }
-      sctx.drawImage(canvas, 0, 0, small.width, small.height);
-      return small;
-    }
+    // Painted in SIZE space via setTransform(1/div); the canvas IS the upload.
     return canvas;
   }
 
