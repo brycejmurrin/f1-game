@@ -158,6 +158,14 @@
   #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
   #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
 }
+/* 844×390 compact-wide (menu-baseline phone): the ≤899 min-content rule
+   wraps RACE A FRIEND onto two lines inside the 2×2 cell, WATCH REAL
+   RACES becomes a banner, and GARAGE clips (CI 37469163266). 734×343
+   (min-height 370 misses it) keeps wrap-the-door. */
+@media (max-width: 899px) and (min-height: 370px) {
+  #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: 0; }
+  #menu-buttons #menu-primary.balanced-row > .bigbtn { white-space: nowrap; }
+}
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
