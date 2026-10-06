@@ -203,7 +203,7 @@ const RadioVoice = (function () {
     const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
     if (!api && !pack) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
     let enabled = !!G.store.get("radioVoice", false);
-    let volume = G.store.get("volRadio", 0.7);
+    let volume = G.store.get("volRadio", 0.8);
     // ONE store key holding all three channels, not nine flat ones: the repo
     // guards that a key means exactly one type (store-key-types), and a channel
     // is naturally a record. Absent keys and absent channels both mean "the

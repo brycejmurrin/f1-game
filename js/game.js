@@ -207,7 +207,7 @@ if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "real";
 if (!PhysicsConsts.DirtyAir.isLevel(raceDirtyAir)) raceDirtyAir = PhysicsConsts.DirtyAir.defaultLevel;
 let soundOn = store.get("sound", true);
-let musicEnabled = store.get("music", false);    // music on/off, independent of sound
+let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // How the player steers: "tilt" | "buttons" | "touch". Defaults to buttons —
@@ -245,7 +245,7 @@ function paintHudDetailsSummary() {
   SettingRow.paint($("pm-hudmap"), hudMapVis);
   SettingRow.paint($("pm-hudgaps"), hudGapsVis);
   // HUD > MIRROR is owned by js/render/shared/mirror-pass.js; the fold reads it back from the store.
-  const hudMirror = MirrorPass.MODES.indexOf(store.get("hudMirror", "on")) < 0 ? "on" : store.get("hudMirror", "on");
+  const hudMirror = MirrorPass.MODES.indexOf(store.get("hudMirror", "auto")) < 0 ? "auto" : store.get("hudMirror", "auto");
   SettingRow.paint($("pm-hudmirror"), hudMirror);
   const note = $("pm-hudmetrics-note");
   if (note) note.textContent = hudLayoutNote();

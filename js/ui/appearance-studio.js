@@ -25,7 +25,7 @@ const AppearanceStudio = (function () {
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
-    hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "on"),
+    hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null,
     homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));

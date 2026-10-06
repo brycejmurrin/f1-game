@@ -474,7 +474,7 @@ test("race preparation lets the main warm run first, then draws the actual hidde
 });
 
 test("preparation follows real eligibility, quality and current layout", async () => {
-  // Shipped hudMirror is ON; use AUTO (or OFF) where the case needs ineligibility.
+  // Pin AUTO where the case is about AUTO eligibility, not the stored default.
   for (const options of [{mode:"off"}, {mode:"auto", cam:"chase"}, {mode:"auto", soft:true}, {bc:true}, {state:"race"}]) {
     const h = boot({state:"count", ...options});
     assert.equal(await h.mp.prepareRace(), false);

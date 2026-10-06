@@ -517,7 +517,7 @@ const LoadingScreen = (function () {
     function annLife(info, life) {
       const r = radio();
       let chat = "normal";
-      try { chat = store && store.get ? store.get("radioChat", "key") : "key"; } catch (_) { chat = "key"; }
+      try { chat = store && store.get ? store.get("radioChat", "normal") : "normal"; } catch (_) { chat = "normal"; }
       let on = false;
       try { on = !!(r && r.debug && r.debug().enabled); } catch (_) { on = false; }
       if (!on || (chat !== "normal" && chat !== "chatty")) return life;
@@ -539,7 +539,7 @@ const LoadingScreen = (function () {
       const r = radio();
       const left = (flyMs - (Date.now() - flyT0)) / 1000;
       let chat = "normal";
-      try { chat = store && store.get ? store.get("radioChat", "key") : "key"; } catch (_) { chat = "key"; }
+      try { chat = store && store.get ? store.get("radioChat", "normal") : "normal"; } catch (_) { chat = "normal"; }
       const me = field ? field.findIndex((c) => c.isPlayer) : -1;
       if (!r || me < 0 || (chat !== "normal" && chat !== "chatty") || !(left >= RADIO_MIN_S)
         || typeof RadioLines === "undefined") { radioState = "done"; return; }

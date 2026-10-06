@@ -1,10 +1,10 @@
 /* Apex 26 — the page side of the track build Worker (js/track/build-worker.js).
-   PROTOTYPE behind apex26.buildWorker = "1", default ON (SettingsDefaults):
-   spawn() is called when RACE SETTINGS opens so the worker's own parse of the
-   build modules is done before RACE!; build() posts one circuit and resolves
-   the worker's answer; replay() turns its recorded uploads into real gfx calls
-   on the main thread and rebuilds what could not cross (the surface sampler,
-   the def, the gfx handle). Any failure answers null and the caller builds in
+   PROTOTYPE behind apex26.buildWorker = "1", default OFF: spawn() is called
+   when RACE SETTINGS opens so the worker's own parse of the build modules is
+   done before RACE!; build() posts one circuit and resolves the worker's
+   answer; replay() turns its recorded uploads into real gfx calls on the
+   main thread and rebuilds what could not cross (the surface sampler, the
+   def, the gfx handle). Any failure answers null and the caller builds in
    steps instead (loadTrackStepped) — the worker only ever saves time; a replay
    that throws is caught there and falls back the same way.
 
@@ -23,23 +23,12 @@ const TrackBuildClient = (function () {
   const _pending = new Map();
 
   function enabled() {
-    // GameStore.raw consults SettingsDefaults on a miss, so a fresh install (and
-    // RESET that clears the key) gets the shipped buildWorker default. Direct
-    // localStorage reads would ignore that file and stay stuck on OFF.
-    try {
-      if (typeof GameStore !== "undefined" && GameStore.store && GameStore.store.raw)
-        return GameStore.store.raw(KEY) === "1";
-      return localStorage.getItem(KEY) === "1";
-    } catch (_) { return false; }
+    try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; }
   }
   // BUILD IN BACKGROUND (pause > SETTINGS, with the renderer levers): the same key,
   // raw lane, "1"/"0". It takes effect on the next build: loadTrackStepped reads it.
   function set(on) {
-    try {
-      if (typeof GameStore !== "undefined" && GameStore.store && GameStore.store.rawSet)
-        GameStore.store.rawSet(KEY, on ? "1" : "0");
-      else localStorage.setItem(KEY, on ? "1" : "0");
-    } catch (_) { /* private mode: the row still reads back what stuck */ }
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (_) { /* private mode: the row still reads back what stuck */ }
     if (on) spawn();   // parse the build modules now, not at the next RACE!
     else if (_w) drop("turned off");   // the worker holds a whole TRACK_VM heap (~20 MB) for nothing
   }

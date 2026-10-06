@@ -77,7 +77,7 @@ const MirrorPass = (function () {
   function create(G, deps) {
     Log.info("game", "MirrorPass.create");
     const { drawWorldMeshes, drawCar, renderPosOf, playerAnchor, yawVisInterp, basisMat, carPaint, onModeChange } = deps;
-    let mode = G.store.get("hudMirror", "on");
+    let mode = G.store.get("hudMirror", "auto");
     if (MODES.indexOf(mode) < 0) mode = "auto";
 
     const _view = new Float32Array(16), _proj = new Float32Array(16), _vp = new Float32Array(16);

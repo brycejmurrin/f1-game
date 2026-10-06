@@ -557,7 +557,7 @@ const Announcer = (function () {
      *  a second one would be a control whose only distinction is which of two
      *  identical sliders you last touched. */
     function volume() {
-      try { return Math.max(0, Math.min(1, +G.store.get("volRadio", 0.7))); } catch (_) { return 0.7; }
+      try { return Math.max(0, Math.min(1, +G.store.get("volRadio", 0.8))); } catch (_) { return 0.8; }
     }
 
     function stop() {

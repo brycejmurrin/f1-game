@@ -88,6 +88,12 @@ async function glassBands(page, screen, rect) {
 }
 
 async function mirrorRace(page) {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("apex26.hudMirror", '"auto"');
+      localStorage.setItem("apex26.camMode", "3"); // cockpit — shipped default is helmet (19)
+    } catch (_) {}
+  });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry", { laps: 3 }));
@@ -333,11 +339,15 @@ test.describe("HUD rear-view mirror", () => {
         try {
           localStorage.setItem("apex26.gfxBackend", "three");
           localStorage.setItem("apex26.tlxForceGL", "1");
+          localStorage.setItem("apex26.camMode", "3");
         } catch (_) {}
       });
     });
     test("TLX prepares an enabled mirror before the countdown advances and reuses its target in the race", async ({ page }) => {
-      await page.addInitScript(() => localStorage.setItem("apex26.hudMirror", '"on"'));
+      await page.addInitScript(() => {
+        localStorage.setItem("apex26.hudMirror", '"on"');
+        localStorage.setItem("apex26.camMode", "3");
+      });
       await page.goto("/");
       await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       const prepared = await page.evaluate(async () => {

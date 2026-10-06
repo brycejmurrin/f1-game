@@ -57,7 +57,7 @@ const AudioPanel = (() => {
     // the short one is that #announce is already role="status", so a screen
     // reader user hears every card twice if we default this on.
     let radioOn = store.get("radioVoice", false);
-    let radioVol = store.get("volRadio", 0.7);
+    let radioVol = store.get("volRadio", 0.8);
     /* The announcer's switch is READ FROM THE MODULE, never mirrored here. It
      * is the one spoken setting a second surface also flips — the flyby editor
      * previews it — and a `let annOn` in this closure would have gone stale the
@@ -71,7 +71,7 @@ const AudioPanel = (() => {
     const CHAT_VALUES = [["off", "OFF"], ["key", "KEY CALLS"], ["normal", "NORMAL"], ["chatty", "CHATTY"]];
     const COMM_VALUES = [["off", "OFF"], ["tv", "TV CAMERAS"], ["on", "ALWAYS"]];
     const rr = () => { try { return G.raceRadio || null; } catch (e) { return null; } };
-    const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "key"));
+    const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
@@ -97,18 +97,18 @@ const AudioPanel = (() => {
       syncAudioPanel();
     }
 
-    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.3));
-    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.1));
+    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.6));
+    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
     // MENU SOUNDS: the button blips only (uiTick/uiSelect/uiReject). Under the
     // SFX switch, not beside it — SFX OFF silences menus too.
-    let menuSfxOn = store.get("menuSfx", false) !== false;
+    let menuSfxOn = store.get("menuSfx", true) !== false;
     GameAudio.setUiEnabled(menuSfxOn);
     // Restored here with the other levels rather than inside the engine: the
     // engine owns the chain, the panel owns the persistence, and radioSting is
     // reachable from showAnnounce before this panel is ever opened.
-    GameAudio.setRadioFx(store.get("radioFx", 0.4));
+    GameAudio.setRadioFx(store.get("radioFx", 1));
     if (GameAudio.setRadioPreset) GameAudio.setRadioPreset(store.get("radioPreset", "modern"));
 
     function setSfx(b) {

@@ -223,7 +223,7 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.3, "SPEC mirrors the authoritative SettingsDefaults value");
+  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
   assert.equal(f.defaults.steering.pace, 11);
   // The halo SHIPS faired; "0" is what counts as a change now.
@@ -437,7 +437,7 @@ test("settings backups preserve the announcer switch and radio effects in both m
   }
   const defaults = boot().collect("all").settings.audio;
   assert.equal(defaults.announcer, true);
-  assert.equal(defaults.radioFx, 0.4);
+  assert.equal(defaults.radioFx, 1);
 });
 
 test("restoring default motion restores OS preference following", () => {
@@ -969,7 +969,7 @@ test("unsupported and rejected persistence APIs retain an actionable backup remi
   assert.match(broken.status.textContent, /separate backup/);
 });
 
-test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, ON by default", () => {
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
@@ -977,5 +977,5 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
   assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
-  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
 });
