@@ -194,6 +194,9 @@ test("stacked season setup keeps one themed scroll owner on #ss-body", () => {
 test("preset chips are a balanced-row with a quarter-row basis (no REVERSE orphan)", () => {
   assert.match(seasonUi(), /el\("div",\s*"chip-row balanced-row"\)/);
   const rules = raceCss();
-  assert.equal(decl(rules, "#ss-presets", "--balance-basis"), "calc(25% - var(--gap) * 0.5)");
-  assert.equal(decl(rules, "#ss-presets", "--balance-min"), "4.5rem");
+  assert.equal(decl(rules, "#ss-presets", "--balance-basis"), "calc(25% - var(--gap) * 0.75)",
+    "quarter-row basis packs eight chips as 4+4 (never a one-chip REVERSE orphan)");
+  assert.equal(decl(rules, "#ss-presets", "--balance-min"), "3.75rem");
+  assert.equal(decl(rules, "#ss-presets > .sel-chip", "max-width"), "calc(25% - var(--gap) * 0.75)",
+    "long labels (2026 REAL) must not expand past a quarter-row");
 });
