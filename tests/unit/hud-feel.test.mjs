@@ -350,6 +350,18 @@ test("the ahead gap slot keeps one line so the behind line never jumps when the 
     "measured: the container was 2px with the ahead line empty and 17.6px filled (headless, 2026-09-02)");
 });
 
+// Portrait cockpit default: both #hud-gap-ahead / #hud-gap-behind are "" and
+// the plate's padding + first-child min-height painted a ~10×10 junk chip under
+// the minimap. Collapse when every child readout is :empty.
+test("empty .hud-gaps collapses — no junk chip when both gap lines are empty", () => {
+  const src = read("css/hud.css");
+  const rule = src.match(/\.hud-gaps:not\(:has\(>\s*div:not\(:empty\)\)\)\s*\{([^}]*)\}/);
+  assert.ok(rule, "a :has(:empty) collapse rule owns empty .hud-gaps");
+  assert.match(rule[1], /display:\s*none/, "fully hide — not a zero-opacity plate");
+  // Still keep the one-line ahead pin for the half-empty (P1) case.
+  assert.equal(decl(cssRules(src), ".hud-gaps > div:first-child", "min-height"), "1.3em");
+});
+
 
 test("the POS box flashes on a position change and the gap chips carry the neighbour's team colour", () => {
   const { els, G, tick, player } = boot();

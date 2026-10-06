@@ -169,13 +169,13 @@
   line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   /* The background and padding stay on the CONTAINER rather than moving to the
-     two child readouts as separate chips: tests/specs/hud-layout.spec.js
-     collides `.hud-gaps` as a container precisely so the case where nobody is
-     ahead or behind — both children empty — still has a box to measure. Chips
-     would leave a 0x0 container there and the spec would silently skip it.
-     (The dotted child-class name is spelled out nowhere in this file on purpose:
-     tests/unit/css-class-ratchet.test.mjs counts class tokens by regex and does
-     not skip comments, so writing it here alone pushed the count over.) */
+     two child readouts as separate chips, so one plate frames both lines when
+     either has text. (The dotted child-class name is spelled out nowhere in
+     this file on purpose: tests/unit/css-class-ratchet.test.mjs counts class
+     tokens by regex and does not skip comments, so writing it here alone
+     pushed the count over.) When BOTH children are empty the plate collapses
+     — see `.hud-gaps:not(:has(…))` below — so a ~10×10 junk chip does not sit
+     under the minimap on portrait cockpit with nobody ahead/behind. */
   background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); padding: 1px 7px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
@@ -185,11 +185,14 @@
    line rode up into its place — one row of jump on every P1/P2 swap. MEASURED
    headless 2026-09-02: the container was 2px tall with the ahead line empty
    and 17.6px with it filled. One line of min-height (the 1.3 line-height above)
-   on the first child pins the behind line in place; both empty is now a one-
-   line box, which hud-layout.spec still measures as a container. Child selector,
-   not the class: this file spells the child class nowhere on purpose (the
-   class-count ratchet, see above). */
+   on the first child pins the behind line in place while either line has text.
+   Child selector, not the class: this file spells the child class nowhere on
+   purpose (the class-count ratchet, see above). */
 .hud-gaps > div:first-child { min-height: 1.3em; }
+/* BOTH LINES EMPTY: hide the plate. Padding (1×7) + the ahead min-height left a
+   ~10×10 junk chip under the minimap (portrait cockpit default, nobody in
+   either slot). Collapse fully — do not keep a measurable empty box. */
+.hud-gaps:not(:has(> div:not(:empty))) { display: none; }
 /* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
    smaller than any spelling of the readout — see the threshold table there. The
    widget keeps its column (still beside the minimap, still top-left) and moves
@@ -1912,10 +1915,11 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   bottom: auto;
-  /* Same shape as #hud-limits: the sat offset divides by this element's own
-     zoom (--hud-z-bot). --hud-sec-h is the sector box, already in top-band
-     units; at the phone sizes these two zooms meet it sits under the box. */
-  top: calc((8px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
+     then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
+     S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
+     units; at phone sizes bot/top zooms meet so it still clears the box. */
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
 }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
    the car) to the left column, sitting on top of the left dock (the steer
