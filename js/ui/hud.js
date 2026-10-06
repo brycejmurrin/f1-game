@@ -482,7 +482,8 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
 // They do not count as a dock, so empty docks (desktop) still unpublish the
 // lane. TILT's tap column lives on the bottom edge, so the band is the rest
-// of the viewport.
+// of the viewport. Run again after this tick's gap strings (updateHud): fitHud
+// saw the previous spelling, and hud-layout probes on that same tick.
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
   const W = window.innerWidth, H = window.innerHeight || 0;
@@ -1427,6 +1428,13 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
+  // from the gaps box as it was at the start of this tick — empty, or the
+  // previous spelling. gapForm then drops the strip into the hanging band and
+  // hText writes the live gap, so the card that hud-layout.spec.js measures
+  // on the SAME tick (jump → wait --hud-top-h → probe, no 10 Hz wait) sat on
+  // .hud-gaps on notched-landscape tilt/touch. Re-clip from the box as painted.
+  announceLane(document.documentElement);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)

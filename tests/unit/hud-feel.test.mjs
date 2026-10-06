@@ -1011,6 +1011,15 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   gapBox._rect = { left: 160, top: 8, right: 250, bottom: 30, width: 90, height: 22 }; // above tower.bottom=62
   h.refit();
   assert.equal(laneLeft(), "258.0px", "gaps in the tower row still start the hanging lane");
+  // Same-tick growth: the spec measures after jump()'s updateHud, whose gap
+  // strings land AFTER fitHud. Widening the box without changing the fit key
+  // (text length / class / viewport) must still move the lane on this tick.
+  gapBox._rect = { left: 160, top: 8, right: 310, bottom: 30, width: 150, height: 22 };
+  h.tick();
+  assert.equal(laneLeft(), "318.0px", "a wider gaps chip re-clips the lane on the same HUD tick");
+  const src = read("js/ui/hud.js");
+  assert.ok(src.indexOf("announceLane(document.documentElement)") > src.indexOf("hText(els.gapA"),
+    "announceLane runs after this tick's gap strings, not only inside fitHud");
   for (const g of [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();
   assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");
