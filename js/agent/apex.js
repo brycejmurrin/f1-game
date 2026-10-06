@@ -213,8 +213,21 @@ function lazyTrackEnsure(o) {
     if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands.
+    // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
+    // here throws "has no path" before race()/startRace can await ensureCircuit.
+    // Leave track null; ensureScenery → ensureCircuit hydrates, then the body builds.
     const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden && l.dataset && l.dataset.phase); };
-    o[k] = function (...a) { if (!G.track && !entering() && !Tracks.building() && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) loadTrack(G.trackIdx); return fn.apply(this, a); };
+    const payloadReady = (def) => !!(Tracks.circuitPayloadResident
+      ? Tracks.circuitPayloadResident(def)
+      : (def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly));
+    o[k] = function (...a) {
+      if (!G.track && !entering() && !Tracks.building()
+          && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) {
+        const def = Tracks.LIST[G.trackIdx];
+        if (payloadReady(def)) loadTrack(G.trackIdx);
+      }
+      return fn.apply(this, a);
+    };
   }
   return o;
 }
@@ -1434,6 +1447,9 @@ const api = {
     return settled(startRace(),
       { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
+  // LAZY_CIRCUIT hydrate (title boots meta stubs). Specs that read path.pts
+  // without race() await this first — same gate as ensureScenery / startRace.
+  ensureCircuit: (idx) => (G.ensureCircuit ? G.ensureCircuit(idx) : Promise.resolve()),
   tt(trackRef, timeOfDay) {
     const i = typeof trackRef === "number"
       ? trackRef

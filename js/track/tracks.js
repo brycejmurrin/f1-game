@@ -602,9 +602,17 @@ const Tracks = (function () {
       value: pts, writable: true, configurable: true, enumerable: true
     });
     // Keep TrackDefs aligned for any reader that still walks the raw list.
+    // Mutate matching entries IN PLACE: foundation specs capture
+    // `TrackDefs.find(id)` before race(), and a slot replace left that
+    // reference forever meta-only (dressingExclusions / kit undefined).
     const TD = (typeof window !== "undefined" && window.TrackDefs) || [];
     for (let i = 0; i < TD.length; i++) {
-      if (TD[i] && TD[i].id === raw.id) TD[i] = raw;
+      if (!TD[i] || TD[i].id !== raw.id) continue;
+      if (TD[i] === raw) { delete TD[i]._metaOnly; continue; }
+      const dst = TD[i];
+      for (const k of Object.keys(dst)) delete dst[k];
+      Object.assign(dst, raw);
+      delete dst._metaOnly;
     }
     if (typeof TrackMaps !== "undefined" && TrackMaps.invalidate) TrackMaps.invalidate(raw.id);
     return true;

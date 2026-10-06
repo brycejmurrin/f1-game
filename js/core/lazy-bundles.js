@@ -45,7 +45,13 @@ function ensureCircuit(idx) {
     });
     _circuitLoads.set(def.id, p);
   }
-  return p.then(() => {});
+  // Reject when hydrate/load fails so ensureScenery / startRace never build a
+  // meta stub (a swallowed false left Tracks.build throwing "has no path").
+  return p.then((ok) => {
+    if (ok === false || !circuitResident(Tracks.LIST[idx])) {
+      throw new Error("circuit payload not resident: " + (def && def.id));
+    }
+  });
 }
 // LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
 // that circuit's bespoke scenery() closure — all 40 were 1,083 KB of boot

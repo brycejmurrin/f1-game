@@ -2113,6 +2113,12 @@ function dropTrackWorld() {
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
+  // LAZY_CIRCUIT: path/pal/sectors land via ensureCircuit before any build.
+  // Callers (flyby / startRace / intro) already await ensureScenery (which
+  // chains ensureCircuit); this gate covers a direct stepped load and races
+  // the in-flight memo so a meta stub never reaches Tracks.buildPaced.
+  await ensureCircuit(idx);
+  if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
   const prevId = builtTrackId;
@@ -2140,6 +2146,13 @@ function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
+  // Sync build: caller must have awaited ensureCircuit (or game-vm hydrated).
+  // A title meta stub has no path — refuse rather than throw deep in realPoints.
+  if (def && !def.custom && !(Tracks.circuitPayloadResident
+      ? Tracks.circuitPayloadResident(def)
+      : (def.path && def.path.pts && def.path.pts.length && !def._metaOnly))) {
+    throw new Error("loadTrack: circuit \"" + (def && def.id) + "\" still meta-only — await ensureCircuit(idx) first");
+  }
   // Menu/flyby reaches here too; only a live race/count session arms the sentinel.
   try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   try {
