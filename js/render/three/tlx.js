@@ -829,6 +829,7 @@ const TLX = (function () {
       // background loss, not a crash — same rule as GLX webglcontextlost.
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
+      let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
       try {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
         window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
@@ -866,8 +867,11 @@ const TLX = (function () {
             return;
           }
           const rk = "apex26.ctxLostReloads";
-          const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
-          sessionStorage.setItem(rk, String(n));
+          let n;
+          try {
+            n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+            sessionStorage.setItem(rk, String(n));
+          } catch (_) { n = ++_sessLostN; }
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -883,7 +887,7 @@ const TLX = (function () {
             } else {
               try { localStorage.setItem("apex26.gfxTlxFail", "context lost x" + n + " — tab fell back to WebGL2"); } catch (_) { /* blocked storage: the label still flips via gfxBound */ }
               try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
-              sessionStorage.setItem("apex26.gfxClaimFail", "1");
+              try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* claim latch best-effort; panel below still paints */ }
               // NO CANARY RE-ARM HERE. It was added on the claim of parity with
               // WGX; WGX does the opposite. wgx.js arms the probe in the ELSE of
               // its reload (`if (skipped) reload(); else setItem(probe)`) and
@@ -912,14 +916,17 @@ const TLX = (function () {
               } catch (_) { /* picker absent in harness */ }
             }
           }
-        } catch (_) { /* no sessionStorage -> skip the auto-recovery rather than loop uncounted */ }
+        } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
       };
       try {
         canvas.addEventListener("webglcontextrestored",
           function () {
             // Same two-reload budget as the loss handler: an unguarded restore
             // reload looped on a device that loses the context every boot.
-            try { if ((parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) > 2) return; } catch (_) { return; }
+            // Storage failure must not skip the reload (GLX: dead canvas).
+            var n = 0;
+            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+            if (n > 2) return;
             try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
           }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
