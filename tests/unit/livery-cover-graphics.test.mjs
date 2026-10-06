@@ -1,15 +1,10 @@
-/* livery-cover-graphics.test.mjs — crown fade is a clean ordered halftone, and
- * the cap rear cut is feathered (no hard fillRect stair-step).
+/* livery-cover-graphics.test.mjs — cover painters: ordered fade + starfield
+ * halftones, feathered cap cut and saddleFlanks rake.
  *
- * Painters under test live in js/car/livery-graphics.js:
- *   - Mercedes shipped spineLogo "fade" → drawSpineTop "fade"
- *   - Ferrari shipped spineLogo "cap" + coverBind "saddleWrap" → drawSpineTop
- *     "cap" (crown white); flank rake is saddleFlanks in liverytex.js (out of
- *     OWNED scope for this lane).
- *
- * The fade used to hash-skip cells at fixed radius, which read as a noisy
- * "broken text" dot-matrix at garage close-up. Cap used a hard rear cut that
- * stair-stepped under cover UVs.
+ *   - Mercedes spineLogo "fade" → LiveryGraphics.drawSpineTop "fade"
+ *   - Mercedes spineSide "starfield" → LiveryTex.buildAtlas starfield arm
+ *   - Ferrari spineLogo "cap" + coverBind "saddleWrap" → drawSpineTop "cap"
+ *     (crown) and saddleFlanks (flank rake)
  *
  * Run: node --test tests/unit/livery-cover-graphics.test.mjs
  */
@@ -22,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/livery-graphics.js"), "utf8");
+const TEX = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
 
 function loadGraphics() {
   const sb = { console, Math, Object, Array, String, Number, JSON, isNaN, isFinite };
@@ -183,16 +179,23 @@ test("painters: Mercedes fade and Ferrari cap are the owned crown arms", () => {
   assert.match(SRC, /Ordered halftone|ordered halftone|rMax/);
 });
 
-test("Mercedes mid-cover blotches are flank starfield in liverytex, not a second fade", () => {
-  // Crown fade is ordered. The remaining "broken text" clusters on the silver
-  // cover flanks (mercedes-cover close-up, below the airbox) are spineSide
-  // "starfield" inside LiveryTex.buildAtlas — same hash-skip recipe the fade
-  // used. #1059 owns liverytex.js; this lane does not edit it.
-  assert.doesNotMatch(SRC, /73856093/, "owned fade must stay hash-free");
-  const tex = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
-  const star = tex.match(/spineSide === "starfield"[\s\S]*?(?=else if \(spineSide ===)/);
+test("Mercedes mid-cover starfield is an ordered grid, not a hashed skip", () => {
+  assert.doesNotMatch(SRC, /73856093/, "crown fade must stay hash-free");
+  assert.doesNotMatch(TEX, /73856093/, "starfield must not hash-skip cells");
+  const star = TEX.match(/spineSide === "starfield"[\s\S]*?(?=else if \(spineSide ===)/);
   assert.ok(star, "buildAtlas still has a starfield flank arm");
-  assert.match(star[0], /73856093/, "starfield is still the hashed density skip");
-  assert.match(star[0], /19349663/);
-  assert.match(star[0], /density = 0\.28/);
+  assert.match(star[0], /rMax/, "starfield sizes dots from a cell max");
+  assert.match(star[0], /cols/, "starfield uses a regular column count");
+  assert.match(star[0], /t \* t/, "starfield radius ramps");
+  assert.doesNotMatch(star[0], /density = 0\.28/, "hashed 0.28 skip is gone");
+});
+
+test("Ferrari saddleFlanks rake is feathered, not a hard fill edge", () => {
+  const fn = TEX.match(/function saddleFlanks[\s\S]*?(?=\n  const \{ drawSpineTop)/);
+  assert.ok(fn, "saddleFlanks is still in liverytex.js");
+  assert.match(fn[0], /lineCap = "round"/, "rake strokes are round-capped");
+  assert.match(fn[0], /Sf\.h \* 0\.045/, "outer same-colour stroke anti-aliases the cut");
+  assert.match(fn[0], /F\.fx\(0\.64\)/, "crease station stays 0.64");
+  assert.match(fn[0], /F\.fx\(0\.38\)/, "rake foot stays 0.38");
+  assert.match(fn[0], /ctx\.fill\(\)/, "solid saddle fill is unchanged");
 });
