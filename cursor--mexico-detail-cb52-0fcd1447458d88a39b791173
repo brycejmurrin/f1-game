@@ -1,0 +1,1 @@
+1791262475	Cursor Agent	PR #1045 Mexico Foro Sol scenery DETAIL: merge ship into cursor/mexico-detail-cb52; OWNED js/circuits/scenery/mexico.js landmarks mexico.json docs/tracks/mexico.md + mexico baseline rows; FORBIDDEN js/track/scenery/* other circuits; no auto-merge/merge  [cursor/mexico-detail-cb52; session 0fcd1447458d88a39b791173]
