@@ -11,11 +11,14 @@ autoplay default, WebGPU soft-adapter, Steam deferred. Upstream links below.
 **CI proves "boots and renders something", not GPU performance.** Hosted runners
 have no real GPU ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)).
 
-## Automated (every PR — `desktop.yml` pack-smoke job)
+## Automated (packaging PRs — `desktop.yml` pack-smoke job)
 
-**Non-draft PRs only** (draft→ready gets a fresh run). Matrix on PR: **ubuntu-latest**
-alone (1 job). Windows / macOS pack-smoke run on `workflow_dispatch` (and full
-installers on `desktop-v*` tags via `release-build`).
+**Non-draft PRs that touch `desktop/**`, `tools/desktop/**`, or `desktop.yml`.**
+Game/shell bytes (`js/`, `css/`, staged HTML) stay on `ci.yml`; listing them
+here started Pack smoke on every ready scenery/HUD/career PR. Draft→ready
+still gets a fresh run when those packaging paths changed. Matrix on PR:
+**ubuntu-latest** alone (1 job). Windows / macOS pack-smoke run on
+`workflow_dispatch` (and full installers on `desktop-v*` tags via `release-build`).
 
 1. `npm ci` in `desktop/` (Node ≥ 22.12 recommended; electron-builder v27 requires it).
 2. `npm run pack:test` → `electron-builder --dir` with
