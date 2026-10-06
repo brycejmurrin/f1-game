@@ -83,6 +83,16 @@ test("an empty written parts sheet is a HIT, not a GarageDefaults miss", () => {
   assert.notDeepEqual(GameStore.store.get("parts.mclaren", {}), GarageDefaults.get("parts.mclaren"));
 });
 
+test("an empty written custom-livery list is a HIT, not a GarageDefaults miss", () => {
+  const { GameStore, GarageDefaults } = load({ "apex26.livery.custom.mclaren": "[]" });
+  assert.deepEqual(GameStore.store.get("livery.custom.mclaren", [{ x: 1 }]), []);
+  assert.notDeepEqual(GameStore.store.get("livery.custom.mclaren", []),
+    GarageDefaults.get("livery.custom.mclaren"));
+  const spec = fs.readFileSync(path.join(ROOT, "tests/specs/parts-liveries.spec.js"), "utf8");
+  assert.match(spec, /function pinEmptyCustoms/,
+    "creator tests must write [] after forget so GarageDefaults cannot refill");
+});
+
 test("pinFreePlay writes an empty factory sheet instead of deleting the parts key", () => {
   const helpers = fs.readFileSync(path.join(ROOT, "tests/helpers/shared-page.js"), "utf8");
   const pin = helpers.slice(helpers.indexOf("export async function pinFreePlay"),
