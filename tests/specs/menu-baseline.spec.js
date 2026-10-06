@@ -92,29 +92,69 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => {
           for (const canvas of document.querySelectorAll("#game, #game-soft")) canvas.style.visibility = "hidden";
         });
-        // Wait for the webfonts before shooting. css/fonts-hud.css is
-        // print→all deferred (#1101): Titillium 400/700-normal live there,
-        // and a screenshot before onload uses system-ui (wider) — CI
-        // oversize-menu-baseline 37455295205 wrapped every phone title
-        // button (24951 px / 0.08) while desktop (more width) stayed green.
-        await page.evaluate(async () => {
-          const link = document.querySelector('link[href*="fonts-hud.css"]');
-          if (link && link.media === "print") {
-            await new Promise((res) => {
-              const done = () => res();
-              link.addEventListener("load", done, { once: true });
-              link.addEventListener("error", done, { once: true });
-              setTimeout(done, 5000);
-            });
-            link.media = "all";
-          }
-          if (document.fonts) {
-            await document.fonts.ready;
-            await document.fonts.load('400 16px "Titillium Web"');
-            await document.fonts.load('600 16px "Titillium Web"');
-            await document.fonts.load('700 16px "Titillium Web"');
+        // Wait for IDENTITY chrome + Titillium before shooting.
+        // css/fonts-hud.css and select/carsetup are print→all (#1101).
+        // CI 37457907852 still wrapped phone title/select at 0.08 after a
+        // fonts-hud-only wait: (1) load('700 16px "Titillium Web"') is 700
+        // NORMAL but can resolve from the title-critical 600 face without
+        // fetching fonts-hud's 700-normal woff2 — .bigbtn is weight 700
+        // not italic, so font-display:swap paints system-ui (wider wrap)
+        // until that face is actually loaded; (2) a load listener + 5s
+        // page timer is skipped when onload already set media=all;
+        // (3) getComputedStyle().fontFamily is the specified stack, not
+        // the used face. Flip every print sheet to all, FontFace-load the
+        // three title-critical + .bigbtn files, then poll FontFace.status.
+        await page.evaluate(() => {
+          for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+            if (link.media === "print") link.media = "all";
           }
         });
+        await page.waitForFunction(() => {
+          const need = ["fonts-hud.css", "select.css", "carsetup.css"];
+          const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
+          return need.every((frag) => {
+            const l = links.find((x) => (x.getAttribute("href") || "").includes(frag));
+            return !!(l && l.media === "all" && l.sheet);
+          });
+        }, null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(async () => {
+          const specs = [
+            ["normal", "600", "titillium-web-latin-600-normal.woff2"],
+            ["italic", "700", "titillium-web-latin-700-italic.woff2"],
+            ["normal", "700", "titillium-web-latin-700-normal.woff2"],
+          ];
+          for (const [style, weight, file] of specs) {
+            const face = new FontFace(
+              "Titillium Web",
+              `url("assets/fonts/${file}")`,
+              { style, weight, display: "swap" },
+            );
+            document.fonts.add(await face.load());
+          }
+        });
+        await page.waitForFunction(() => {
+          if (!document.fonts) return true;
+          const faces = [...document.fonts];
+          const loaded = (style, weight) => faces.some((f) => {
+            const fam = String(f.family).replace(/["']/g, "");
+            return fam === "Titillium Web"
+              && String(f.weight) === String(weight)
+              && f.style === style
+              && f.status === "loaded";
+          });
+          if (!loaded("italic", 700) || !loaded("normal", 600) || !loaded("normal", 700)) {
+            return false;
+          }
+          // Used-face gate: fontFamily is always the stack.
+          const ctx = document.createElement("canvas").getContext("2d");
+          if (!ctx) return true;
+          const sample = "HOW TO PLAY RACE";
+          ctx.font = '700 48px "Titillium Web"';
+          const tit = ctx.measureText(sample).width;
+          ctx.font = "700 48px Arial, sans-serif";
+          const fb = ctx.measureText(sample).width;
+          return Math.abs(tit - fb) > 2;
+        }, null, { polling: 100, timeout: BOOT_MS });
         await page.waitForTimeout(600);   // let the sheet settle and measure
         if (screenName === "garage") {
           await page.evaluate(() => {
