@@ -182,7 +182,8 @@ const STRIP = {
   //   0.2 m wider + yacht glow band; then landmark re-key on this PR.
   // → post-rekey hairpin cityFront removed + Fairmont thinned (CI sweeps):
   //   273417/254782 (2026-10-05)
-  // → DETAIL pass (quay/Fairmont rails/paddock/banners): 279741/258567 (2026-10-05)
+  // → city.js day-section early-return: monaco STRIP unchanged on that row.
+  // → DETAIL pass (quay/Fairmont rails/paddock/banners) #1062: 279741/258567
   monaco: { before: 279741, after: 258567 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,

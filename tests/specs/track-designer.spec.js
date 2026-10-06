@@ -142,6 +142,8 @@ test.describe("Track designer", () => {
     await bootClean(page);
     await openDesigner(page);
     await randomiseGreen(page, 11);
+    // Theme / LOOK chips live in SCENERY mode (MODE tabs, slice B).
+    await page.evaluate(() => TrackDesigner.setMode("scenery"));
     await page.locator('#trackdesigner [data-theme="winter"]').click();
     await page.locator('#trackdesigner [data-look="time:night"]').click();
     await page.locator('#trackdesigner [data-look="crowd:packed"]').click();
@@ -286,36 +288,46 @@ test.describe("Track designer", () => {
     expect(after.design.pts.slice(0, c.i0 + 1)).toEqual(st.design.pts.slice(0, c.i0 + 1));
   });
 
-  test("strip tap adds a hill; the preview's py rises there", async ({ page }) => {
+  test("HILLY preset writes node heights; the preview's py rises", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);
     const st = await randomiseGreen(page, 7);
     expect(st.design.elevations).toEqual([]);
+    expect(st.design.heights.every((h) => h === 0)).toBe(true);
     const strip = page.locator('#trackdesigner .td-stage > canvas[data-role="profile"]');
     await expect(strip).toBeVisible();
     await expect(strip).toHaveAttribute("tabindex", "0");
     const box = await strip.boundingBox();
     expect(box && box.height).toBeGreaterThan(10);
-    // A quarter of the way along the strip, near its floor (no grip there yet).
     const flat = await page.evaluate(() => Array.from(TrackValidate.check(TrackDesigner.state().design).tr.py));
-    await strip.click({ position: { x: box.width / 4, y: box.height - 4 } });
-    await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.design.elevations.length === 1; }, null, { polling: 100, timeout: 15_000 });
+    // Per-node heights (slice C): presets write heights[] and clear legacy cosine bumps.
+    await page.evaluate(() => TrackDesigner.setMode("elevation"));
+    await expect(page.locator('#trackdesigner [data-mode="elevation"]')).toHaveAttribute("aria-pressed", "true");
+    const ok = await page.evaluate(() => TrackDesigner.applyElevPreset("hilly"));
+    expect(ok).toBe(true);
+    await page.waitForFunction(() => {
+      const s = TrackDesigner.state();
+      return !s.pending && s.design.heights.some((h) => h !== 0) && s.design.elevations.length === 0;
+    }, null, { polling: 100, timeout: 15_000 });
     const after = await page.evaluate(() => TrackDesigner.state());
     expect(after.undo, "one UNDO entry").toBe(st.undo + 1);
-    const hill = after.design.elevations[0];
-    expect([hill.halfM, hill.rise]).toEqual([160, 6]);
-    expect(Math.abs(hill.s - 0.25)).toBeLessThan(0.02);
-    await expect(strip).toHaveAttribute("data-arrows", "own");
-    await expect(strip).toHaveAttribute("aria-label", /^Elevation profile\. Hill 1 of 1: \+6 m over 320 m at /);
-    // The engine-built preview carries it: py at the hill's top is ~6 m above the flat build.
-    const rise = await page.evaluate((f) => {
-      const tr = TrackValidate.check(TrackDesigner.state().design).tr, h = TrackDesigner.state().design.elevations[0];
-      const k = Math.round(h.s * tr.n) % tr.n;
-      return tr.py[k] - f[Math.round(h.s * f.length) % f.length];
+    expect(after.design.heights.length).toBe(after.design.pts.length);
+    expect(Math.max(...after.design.heights)).toBeGreaterThanOrEqual(10);
+    await expect(page.locator('#trackdesigner [data-elev="hilly"]')).toBeVisible();
+    // Engine-built preview: peak py rises vs the flat build (Catmull-Rom on control Y).
+    const peak = await page.evaluate((f) => {
+      const tr = TrackValidate.check(TrackDesigner.state().design).tr;
+      let maxD = 0;
+      for (let i = 0; i < tr.n; i++) {
+        const d = tr.py[i] - f[i % f.length];
+        if (d > maxD) maxD = d;
+      }
+      return maxD;
     }, flat);
-    expect(rise).toBeGreaterThan(5);
-    expect(rise).toBeLessThan(7);
-    await expect(page.locator("#trackdesigner .td-row", { hasText: "HILL m" })).toBeVisible();
+    expect(peak).toBeGreaterThan(8);
+    // POINT m stepper appears once a control point is selected in ELEVATION.
+    await page.evaluate(() => TrackDesigner.setNodeHeight(0, (TrackDesigner.state().design.heights[0] || 0) + 0.25));
+    await expect(page.locator("#trackdesigner .td-row", { hasText: "POINT m" })).toBeVisible();
   });
 
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {

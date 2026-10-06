@@ -76,24 +76,25 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
-<!-- Preload the type/token + component sheets that paint the title LCP (H1).
-     Measured chrome-devtools LCPBreakdown: almost all element render delay
+<!-- Preload the title-critical sheets that paint #overlay / #title / #menu-buttons.
+     Dialogs/settings are print→all without a competing preload (survey-A findings
+     3–4). Measured chrome-devtools LCPBreakdown: almost all element render delay
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <!-- @gen-shell:preload -->
 <link rel="preload" href="css/tokens.css?v=dev" as="style">
 <link rel="preload" href="css/components.css?v=dev" as="style">
-<link rel="preload" href="css/dialogs.css?v=dev" as="style">
-<link rel="preload" href="css/settings.css?v=dev" as="style">
-<link rel="preload" href="css/settings-controls.css?v=dev" as="style">
-<link rel="preload" href="css/dialog-platform.css?v=dev" as="style">
+<link rel="preload" href="css/title.css?v=dev" as="style">
+<link rel="preload" href="css/menus.css?v=dev" as="style">
+<link rel="preload" href="css/responsive.css?v=dev" as="style">
 <!-- /@gen-shell:preload -->
 <!-- Preload the two faces the TITLE composition uses, and only those. The
-     @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
-     the system fallback paints instantly and never blocks first render — that
-     stays true; a preload does not block rendering, it only starts the fetch at
-     the shell instead of after the CSS that references it has parsed. MEASURED:
-     the faces land at ~126 ms, well before FCP.
+     @font-face rules (css/tokens.css title faces; css/fonts-hud.css the rest)
+     are deliberately `font-display: swap` so the system fallback paints instantly
+     and never blocks first render — that stays true; a preload does not block
+     rendering, it only starts the fetch at the shell instead of after the CSS
+     that references it has parsed. MEASURED: the faces land at ~126 ms, well
+     before FCP.
      HONEST SCOPE: this was chased as the cause of the title screen's ~0.45
      layout shift and it was NOT — the real cause was the first-paint value of
      body[data-density] (see the inline script below). Kept because getting the
@@ -120,6 +121,7 @@
 <link rel="stylesheet" href="css/race-setup.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/carsetup.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/fonts-hud.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=dev" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/loading.css?v=dev" media="print" onload="this.media='all'">

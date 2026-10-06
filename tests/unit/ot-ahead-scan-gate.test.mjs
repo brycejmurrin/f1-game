@@ -37,9 +37,12 @@ test("updateCar gates the overtake ahead scan on otNeedAhead", () => {
   assert.match(block, /otNeedAhead/, "scan is gated");
   assert.match(block, /OvertakeMode\.crossed\s*\(/, "crossing check feeds the gate");
   assert.match(block, /c\.otE\s*>\s*0/, "held allowance still pays for the walk");
-  assert.match(block, /if\s*\(\s*otNeedAhead\s*\)\s*for\s*\(\s*const o of ranked\s*\)/, "walk runs only when needed");
-  // Scan body still skips pit-lane / finished / retired (verify-physics #15).
-  assert.match(block, /if \(o === c \|\| o\.finished \|\| o\.retired \|\| pits\.inLane\(o\)\) continue;/);
+  assert.match(block, /if\s*\(\s*otNeedAhead\s*\)/, "walk runs only when needed");
+  assert.match(block, /Collide\.scanOtAhead/, "ahead walk is the wrap-aware bucket scan");
+  const collide = src("js/physics/collide.js");
+  const fn = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
+  assert.match(fn, /o\.finished \|\| o\.retired/);
+  assert.match(fn, /s\.skip && s\.skip\(o\)/);
 });
 
 test("otNeedAhead is true on a detection-line crossing when open, false in clear air with no allowance", () => {

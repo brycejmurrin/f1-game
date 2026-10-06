@@ -58,7 +58,19 @@ const OVERLAY_IDS = ["select", "carsetup", "career", "teampicker", "race-setting
   "standings", "results", "customize", "howtoplay", "advanced", "pmsettings", "pausemenu",
   "datahub", "track-detail", "vsfriend", "audioset", "lighting", "camtune", "photomode"];
 
+// Title/garage fit was written against the previous look. Shipped TEXT SIZE
+// is large, HIGH CONTRAST is on, HOME SCENE is photo — pin the old look so
+// 200% UI SIZE is the only enlargement under test.
+const PIN_PREVIOUS_LOOK = () => {
+  try {
+    localStorage.setItem("apex26.textSize", '"normal"');
+    localStorage.setItem("apex26.uiContrast", '"off"');
+    localStorage.setItem("apex26.homeScene", '"garage"');
+  } catch (_) {}
+};
+
 async function boot(page) {
+  await page.addInitScript(PIN_PREVIOUS_LOOK);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 30 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
@@ -150,6 +162,9 @@ const SHAPES = [["landscape", LANDSCAPE], ["portrait", { width: 393, height: 852
 
 test.describe("UI scale", () => {
   test.use({ hasTouch: true });
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(PIN_PREVIOUS_LOOK);
+  });
 
   for (const [shape, viewport] of SHAPES) {
     test.describe(shape, () => {
