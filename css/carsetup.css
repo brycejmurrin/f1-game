@@ -1053,7 +1053,14 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    scroll vertically if categories overflow — that is a side rail, allowed.
    Options remain the main catalogue. */
 #cs-inner[data-pair="on"] #cs-tabs {
-  max-height: none;
+  /* Bound the rail to its grid area so overflow-y actually scrolls. The
+     stacked-strip rule sets `overflow: hidden` + `max-height: none` on #cs-tabs,
+     and this pair override used to keep max-height:none — the rail then sized
+     to its 14 tabs and five of them sat clipped under the foot with no
+     scrollport (desktop-narrow and any short pair sheet). */
+  min-height: 0;
+  max-height: 100%;
+  align-self: stretch;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   /* a right lane for the scroll thumb — with zero right padding the sliver

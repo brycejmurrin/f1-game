@@ -403,27 +403,25 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
     "floor uplights keep a small glareW, not the old 0.5");
   assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
     "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
-  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
-    "floor reflection resolves opaque so depth write self-occludes the car");
-  assert.match(scene, /depthBias: MIRROR_BIAS/,
-    "mirror resolve uses depthBias to clear the floor without noDepthTest");
-  assert.doesNotMatch(scene, /noDepthTest:\s*true/,
-    "noDepthTest ghosted helmet/wheels/wings through each other on close-ups");
-  assert.match(scene, /const MIRROR_SHEEN_PEAK = 0\.1[0-6]/,
-    "bay fade restores a contact sheen, not a 0.26 wash");
+  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.26/,
+    "floor reflection is the accepted planar ghost (alpha 0.26)");
+  assert.match(scene, /noDepthTest:\s*true/,
+    "ghost draws after the floor with no depth test so the slab cannot hide it");
+  assert.doesNotMatch(scene, /MIRROR_RESOLVE|mirrorSheen|ensureMirrorFade/,
+    "#1025 opaque+fade path hid the contact reflection on the live bay");
 });
 
-test("floor reflection depth-resolves then fades; room is drawn first", () => {
+test("floor reflection draws after the floor and before the room", () => {
   const { GarageScene, draws } = harness();
   const car = { car: true };
   GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, null, car);
   const carAt = draws.findIndex((d) => d.mesh === car);
   assert.ok(carAt >= 0, "mirrored car is drawn");
-  // Shell/props must precede the resolve so their depth clips it.
-  assert.ok(carAt > 1, `reflection at draw ${carAt} should follow floor + room`);
+  // Floor is draw 0; the ghost must precede shell/props so they paint over it.
+  assert.equal(carAt, 1, `reflection at draw ${carAt} should be immediately after the floor`);
   const scene = read("js/garage/scene.js");
-  assert.match(scene, /function mirrorSheen\(/, "sheen falls off with distance from the car");
-  assert.match(scene, /ensureMirrorFade\(/, "bay fade quad composites the contact sheen");
+  assert.match(scene, /_gfx\.draw\(carMesh, arrivalMirror, MIRROR_OPTS\)/,
+    "ghost uses MIRROR_OPTS (noDepthTest + alpha)");
 });
 
 test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {

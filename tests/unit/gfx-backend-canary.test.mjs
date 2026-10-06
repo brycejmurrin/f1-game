@@ -2632,32 +2632,28 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
     "whether NoBlending + opacityNode=tag still ghosts cars");
 });
 
-test("the garage floor reflection depth-resolves with bias on all three backends", () => {
-  // Close-ups ghosted when the mirror used noDepthTest + alpha blend: every
-  // triangle showed through. The bay now resolves opaque (alpha 1 + depthBias)
-  // after the room so nearest surfaces win, then fades with a bay quad.
+test("the garage floor reflection is a noDepthTest ghost on all three backends", () => {
+  // #1025's opaque+depthBias resolve hid the contact sheen (polygon offset
+  // cannot lift a mesh metres below y=0). Restore the planar ghost; backends
+  // must still honour noDepthTest so the slab cannot bury it.
   const scene = code("js/garage/scene.js");
-  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
-    "garage mirror must resolve opaque for depth write / self-occlusion");
-  assert.match(scene, /depthBias:\s*MIRROR_BIAS/,
-    "under-floor mesh needs depthBias to clear the floor without noDepthTest");
-  assert.doesNotMatch(scene, /noDepthTest:\s*true/,
-    "noDepthTest ghosted helmet/wheels/wings — do not bring it back for the mirror");
-  assert.match(scene, /function mirrorSheen\(/,
-    "sheen falls off with distance from the car");
+  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.26/,
+    "garage mirror is the accepted planar ghost");
+  assert.match(scene, /noDepthTest:\s*true/,
+    "ghost must skip depth test so the floor cannot hide it");
+  assert.doesNotMatch(scene, /MIRROR_RESOLVE|mirrorSheen|ensureMirrorFade/,
+    "do not reintroduce the #1025 fade path that erased the reflection");
 
-  // depthBias must still reach every backend (the resolve pass depends on it).
   const glx = code("js/render/glx/glx.js");
-  assert.match(glx, /opts\.depthBias/, "GLX draw() must read opts.depthBias");
-  assert.match(glx, /setPolyOffset/, "GLX must apply polygon offset for depthBias");
+  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must read opts.noDepthTest");
 
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /depthBias/, "WGX must carry depthBias into the lit pipeline");
+  assert.match(wgx, /noDepthTest/, "WGX must map noDepthTest onto always-pass depth");
 
   const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  assert.match(lit, /o\.depthBias/, "tsl-lit makeMaterial must read o.depthBias");
-  assert.match(TLX, /o\.depthBias\s*\?\s*"\|db"/,
-    "tlx materialFor key must distinguish depthBias variants");
+  assert.match(lit, /o\.noDepthTest/, "tsl-lit makeMaterial must read o.noDepthTest");
+  assert.match(TLX, /o\.noDepthTest\s*\?\s*"\|nd"/,
+    "tlx materialFor key must distinguish noDepthTest variants");
 });
 
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
