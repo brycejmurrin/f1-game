@@ -852,12 +852,11 @@ function fitHarness(opts = {}) {
   const U = new Map([
     [top, R(250, 8, 300, 54)], [b.els.minimap, R(10, 8, 140, 140)],
     // Sectors below the wrapping-card band (tower.bottom + tower.height = 116)
-    // so they do not kill the default top-row slot; docks start at 720 so a
-    // remaining-height bound still leaves ≥96px.
+    // so they do not kill the default top-row slot; they still end the hanging lane.
     [b.els.hudSectors, R(650, 130, 140, 72)],
     [gear, R(100, 330, 300, 60)], [energy, R(400, 330, 300, 60)],
-    [bar, R(0, 200, 800, 200)], [dockL, R(0, 200, 150, 200)], [dockR, R(720, 200, 80, 200)],
-    [gL, R(0, 200, 150, 200)], [gR, R(720, 200, 80, 200)],
+    [bar, R(0, 200, 800, 200)], [dockL, R(0, 200, 150, 200)], [dockR, R(650, 200, 150, 200)],
+    [gL, R(0, 200, 150, 200)], [gR, R(650, 200, 150, 200)],
   ]);
   if (opts.emptyTower) U.set(top, R(400, 8, 0, 0));
   for (const [el, r] of U) el._rect = r;
@@ -952,8 +951,8 @@ test("survey leads: SECTORS x-20, MAP y+40, SPEED & GEAR x40 / s200 leave every 
 test("the radio card's top-row slot ends at a touch dock group in the tower's rows", () => {
   const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
   const on = () => h.dom.body.classList.contains("hud-radio-top");
-  // Tower R(250,8,300,54): the slot starts at 558 and ends at the right dock (720).
-  assert.ok(on()); assert.equal(w(), 720 - 8 - 558);
+  // Tower R(250,8,300,54): the slot starts at 558 and runs to innerWidth - 10.
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558);
   const boost = h.dom.document.createElement("div"); boost.className = "boost";
   h.dom.byId("dock-right").appendChild(boost);
   boost._rect = { left: 700, top: 30, right: 788, bottom: 118, width: 88, height: 88 };   // BOOST, up in the tower's rows
@@ -962,15 +961,15 @@ test("the radio card's top-row slot ends at a touch dock group in the tower's ro
   boost._rect = { left: 540, top: 30, right: 628, bottom: 118, width: 88, height: 88 };   // over the slot's start
   h.refit();
   assert.ok(!on(), "a dock group over the slot's start leaves no top-row slot");
-  boost._rect = { left: 700, top: 120, right: 788, bottom: 208, width: 88, height: 88 };  // below wrapping (8+54+54=116)
+  boost._rect = { left: 600, top: 120, right: 688, bottom: 208, width: 88, height: 88 };  // below wrapping (8+54+54=116)
   h.refit();
-  assert.ok(on()); assert.equal(w(), 700 - 8 - 558, "BOOST below the wrapping band still ends the top-row slot");
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "a group under a wrapping card does not bound the top-row slot");
 });
 
 test("the radio card's top-row slot ends at #hud-sectors in the wrapping band", () => {
   const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
   const on = () => h.dom.body.classList.contains("hud-radio-top");
-  assert.ok(on()); assert.equal(w(), 720 - 8 - 558, "sectors below the wrapping band leave the default slot");
+  assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "sectors below the wrapping band leave the default slot");
   h.els.hudSectors._rect = { left: 650, top: 8, right: 790, bottom: 80, width: 140, height: 72 };
   h.refit();
   assert.ok(!on(), "sectors in the tower's rows leave no 96px top-row slot");
@@ -1003,6 +1002,10 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.els.hudSectors._rect = { left: 500, top: 8, right: 640, bottom: 80, width: 140, height: 72 };
   h.refit();
   assert.equal(lane(), (500 - 8 - 158).toFixed(1) + "px", "SECTORS in the hanging band end the lane");
+  h.els.hudSectors._rect = { left: 650, top: 130, right: 790, bottom: 202, width: 140, height: 72 };
+  h.els.minimap._rect = { left: 10, top: 8, right: 220, bottom: 148, width: 210, height: 140 };
+  h.refit();
+  assert.equal(laneLeft(), "228.0px", "the map starts the lane when it hangs under the tower");
   for (const g of [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();
   assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");

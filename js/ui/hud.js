@@ -477,9 +477,12 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // and left fell back to 50% with transform none — card left-edge at centre,
 // hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
 // that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// so it ends the strip too; it does not count as a dock, so empty docks
-// (desktop) still unpublish the lane. TILT's tap column lives on the bottom
-// edge, so the band is the rest of the viewport.
+// that same hanging band on touch (small-landscape: #hud-sectors+#announce)
+// so it ends the strip too; the map and the gaps chip start it, so a lane
+// that begins at --sal does not sit on them (hud-layout: .hud-gaps+#announce).
+// They do not count as a dock, so empty docks (desktop) still unpublish the
+// lane. TILT's tap column lives on the bottom edge, so the band is the rest
+// of the viewport.
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
   const W = window.innerWidth, H = window.innerHeight || 0;
@@ -502,6 +505,9 @@ function announceLane(root) {
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
   const sec = els.hudSectors;
   clip(sec && !sec.hidden ? sec.getBoundingClientRect() : null, false);
+  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false);
+  const gaps = document.querySelector(".hud-gaps");
+  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
   hStyle(root, "--announce-lane-x", on ? x.toFixed(1) + "px" : "");
@@ -518,20 +524,21 @@ function radioTopSlot(root, bcast) {
   announceLane(root);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
-  const H = window.innerHeight || 0;
-  // Pause / cam share the tower's rows. Dock groups bound the remaining
-  // height (BUTTONS BOOST sits just under a wrapping-card band and still
-  // covered the slot). Sectors share the wrapping band — they sit in the
-  // tower's rows on a phone, and a long line grows about that far.
+  // Pause / cam share the tower's rows. Dock groups bound a wrapping card
+  // (min-height is the tower; a long line grows about that far). Remaining
+  // viewport height would also catch TILT's bottom taps and kill the slot,
+  // parking the card in the lane over the map (hud-layout: .hud-gaps+#announce).
+  // Sectors share the wrapping band — they sit in the tower's rows on a phone.
   const bound = (r, needPast, bot) => {
     if (!r || !r.width || !r.height || !(r.top < bot && r.bottom > t.top)) return;
     if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
   };
   for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true, t ? t.bottom : 0);
   if (t) {
-    for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, H);
+    const wrapBot = t.bottom + t.height;
+    for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, wrapBot);
     const sec = els.hudSectors;
-    bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, t.bottom + t.height);
+    bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, wrapBot);
   }
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
