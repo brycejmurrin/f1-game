@@ -380,8 +380,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("standings").hidden = false;
     });
     /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
-       (TopModal's MutationObserver). CI selected-1 (37439242991) starved a 5 s
-       poll while the material pack owned the main thread — BOOT_MS + headless. */
+       (TopModal's MutationObserver). Packed-1 starved a 5 s poll while the
+       material pack owned the main thread — BOOT_MS + headless. */
     await page.waitForFunction(() => {
       const el = document.getElementById("standings");
       return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");

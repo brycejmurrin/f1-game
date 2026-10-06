@@ -13,12 +13,12 @@ function buildEquipment(g, liv, ctx) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
   const team = scale(c1, 0.85);
   const dark = scale(STEEL, 0.55);
-  // REAR JACK: the T-bar quick-lift, parked beside the tail the way the front
-  // jack is parked beside the nose — dead astern it stands in the REAR preset.
-  block(g.mid, 1.45, 0.13, -3.35, 0.36, 0.05, 0.09, team);              // lifting head
-  for (const sx of [-1, 1]) cyl(g.mid, 1.45 + sx * 0.34, 0, -3.35, 0.06, 0.10, RUBBER, 8);
-  tube(g.mid, [1.45, 0.20, -3.42], [2.35, 0.62, -4.95], 0.03, STEEL, 6, MAT.METAL);   // handle
-  block(g.mid, 2.35, 0.62, -4.98, 0.24, 0.025, 0.025, team);           // T grip
+  // REAR JACK: the T-bar quick-lift, parked in the deep +X corner so the REAR
+  // preset is a clear look at the gearbox, not a handle across the tail.
+  block(g.mid, 2.85, 0.13, -4.55, 0.36, 0.05, 0.09, team);              // lifting head
+  for (const sx of [-1, 1]) cyl(g.mid, 2.85 + sx * 0.34, 0, -4.55, 0.06, 0.10, RUBBER, 8);
+  tube(g.mid, [2.85, 0.20, -4.62], [3.55, 0.62, -5.55], 0.03, STEEL, 6, MAT.METAL);   // handle
+  block(g.mid, 3.55, 0.62, -5.58, 0.24, 0.025, 0.025, team);           // T grip
   // WHEEL GUNS on their hoses. A boom off each cable tray carries a reel over
   // the box with its hose RETRACTED — the first pass ran a hose from each reel
   // straight down to each gun, and four 5 m diagonals crossing the car read
@@ -40,7 +40,7 @@ function buildEquipment(g, liv, ctx) {
     block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
     block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
     for (const wz of [1.7, -1.6]) {
-      const gx = sd * 1.55;
+      const gx = sd * 2.65;
       const gz = wz + (wz > 0 ? 0.55 : -0.55);
       const cz = wz * 0.55;
       // The coil: six short legs zig-zagging at floor level beside the manifold.
@@ -66,8 +66,8 @@ function buildEquipment(g, liv, ctx) {
       cyl(g.mid, cx + (w % 2 ? 0.24 : -0.24), 0, cz + (w < 2 ? 0.18 : -0.18), 0.06, 0.12, RUBBER, 8);
     tube(g.mid, [cx - 0.3, 0.16, cz], [cx - 0.55, 0.95, cz], 0.02, STEEL, 6, MAT.METAL);   // push handle
     tube(g.mid, [cx - 0.55, 0.95, cz - 0.18], [cx - 0.55, 0.95, cz + 0.18], 0.02, STEEL, 6, MAT.METAL);
-    hose(g.mid, [[cx + 0.2, 0.62, cz], [cx + 0.9, 0.30, cz + 0.9], [-0.5, 0.22, -3.35], [-0.18, 0.40, -2.72]],
-         0.02, [0.48, 0.22, 0.06], 6);                                             // umbilical
+    hose(g.mid, [[cx + 0.2, 0.62, cz], [cx + 0.55, 0.22, cz + 0.28], [cx + 0.40, 0.08, cz + 0.08], [cx + 0.75, 0.08, cz + 0.42]],
+         0.02, [0.48, 0.22, 0.06], 6);                                             // umbilical, parked at the cart
   }
   // TYRE TROLLEYS at the deep end: four wheels upright under their blankets,
   // a cable to the control box, and the compound sticker on each blanket. The
