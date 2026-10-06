@@ -1,1 +1,1 @@
-1791310761	Cursor Agent	PR#1134 vm-b2 red + #1135 CONFLICTING after #1136; triage/fix/sync; no AM/merge  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
+1791315540	Cursor Agent	PR#1135 fix openSettings await ensureAudio + MusicLib.init settle; menu-traversal/music-lib; no AM/merge  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
