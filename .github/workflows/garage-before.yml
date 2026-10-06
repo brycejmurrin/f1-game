@@ -1,0 +1,142 @@
+name: Garage before
+
+# ONE durable garage-angles BEFORE pack per ship SHA.
+#
+# Car-model agents were each spending 12–28 minutes recapturing the garage
+# grid on llvmpipe before they shot AFTER. This workflow captures the grid
+# once, on macos-latest (≈50 s boot + ≈7 s/shot; ubuntu took 13 min for
+# team=all with two views — do not add an ubuntu job). Agents download the
+# artifact with tools/garage-angles-fetch.mjs.
+#
+# This is NOT Car shot. car-shot.yml / render-car.mjs boots tools/carview.html:
+# isolated studio, no garage room, jacks, cable or garage lighting. The pack
+# is tools/shot/garage-angles.mjs, which starts its own static server.
+#
+# NOT A GATE. No pull_request trigger, not a required check, not in
+# deploy.mjs --gate-only. A newer run for the same SHA queues behind the
+# older one (cancel-in-progress: false) so a finished pack is not discarded.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "git ref to capture (default ship)"
+        required: false
+        default: "claude/f1-game-project-26h3ng"
+  workflow_run:
+    # After a successful train publish on ship. Path filter is the plan job
+    # (watched paths vs the last pack) — workflow_run has no paths:.
+    # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_run
+    workflows: ["Deploy to GitHub Pages"]
+    types: [completed]
+    branches: [claude/f1-game-project-26h3ng]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    name: Plan pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Dispatch always plans. Pages-triggered runs only when the train succeeded
+    # on ship (the branches: filter already limits the trigger).
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+          || (github.event.workflow_run.conclusion == 'success'
+              && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng') }}
+    outputs:
+      capture: ${{ steps.plan.outputs.capture }}
+      sha: ${{ steps.plan.outputs.sha }}
+      reason: ${{ steps.plan.outputs.reason }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      views: ${{ steps.plan.outputs.views }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Decide capture
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PLAN_REF: ${{ inputs.ref || 'claude/f1-game-project-26h3ng' }}
+          PLAN_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          PAGES_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/shot/garage-before.mjs --plan
+
+  capture:
+    name: Capture ${{ matrix.teams }}
+    needs: plan
+    if: needs.plan.outputs.capture == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 25
+    concurrency:
+      group: garage-before-${{ needs.plan.outputs.sha }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Garage-angles shard
+        env:
+          TEAMS: ${{ matrix.teams }}
+          OUT: scratch/garage-before
+          VIEWS: ${{ needs.plan.outputs.views }}
+        run: |
+          # Flags from env (plan outputs), never an inputs.* expression in run:.
+          # garage-angles.mjs starts its own static server — no :3456 serve.
+          echo "garage-angles --team=$TEAMS --views=$VIEWS --out=$OUT"
+          node tools/shot/garage-angles.mjs \
+            --team="$TEAMS" --full-views --views="$VIEWS" \
+            --label=0 --sheet=0 --name='{team}-{cam}' --out="$OUT"
+      - name: Upload shard
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: garage-before-shard-${{ matrix.shard }}-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before/
+          if-no-files-found: error
+          retention-days: 5
+
+  pack:
+    name: Merge pack
+    needs: [plan, capture]
+    if: needs.plan.outputs.capture == 'true' && needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: garage-before-${{ needs.plan.outputs.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
+      - name: Download shards
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: garage-before-shard-*-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before
+          merge-multiple: true
+      - name: Write MANIFEST.json
+        env:
+          PACK_SHA: ${{ needs.plan.outputs.sha }}
+        run: node tools/shot/garage-before.mjs --manifest --out=scratch/garage-before --sha="$PACK_SHA"
+      - name: Upload pack
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: garage-before-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before/
+          if-no-files-found: error
+          retention-days: 30

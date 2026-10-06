@@ -1,8 +1,18 @@
 @layer components {
 /* Career and results share restrained team-colour storytelling. Text is always
    present; motion reveals the card, never delays access to the result. */
-[data-career-part="nav"] { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--gap); }
-[data-career-part="nav"] .sel-chip { font-style: normal; text-transform: none; }
+[data-career-part="nav"] {
+  display: flex; flex-wrap: nowrap; gap: var(--gap);
+  min-width: 0; overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+[data-career-part="nav"]::-webkit-scrollbar { display: none; }
+[data-career-part="nav"] .sel-chip {
+  flex: 0 0 auto;
+  font-style: normal;
+  text-transform: none;
+}
 [data-career-part="nav"] [aria-current="location"] { border-color: var(--red); background: var(--carbon); }
 .cr-nextrace { padding: 0; overflow: hidden; border-color: var(--career-team, var(--red)); }
 .cr-nextrace > img { display: block; width: 100%; aspect-ratio: 2.4; object-fit: cover; }
@@ -13,8 +23,22 @@
 [data-career-part="objective"] { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: 0; }
 [data-career-part="objective"] strong { color: var(--text); }
 [data-career-part="story"] { padding-bottom: var(--pad); }
-[data-career-part="calendar"] { display: flex; overflow-x: auto; gap: var(--gap); padding: var(--gap) 0 var(--pad); margin: 0; list-style: none; overscroll-behavior-x: contain; touch-action: pan-x; }
-[data-career-part="calendar"] > li { flex: 0 0 10em; display: flex; flex-direction: column; gap: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); background: var(--carbon); font-size: var(--label); }
+[data-career-part="calendar"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--gap);
+  padding: var(--gap) 0 var(--pad);
+  margin: 0;
+  list-style: none;
+  overflow: visible;
+}
+[data-career-part="calendar"] > li {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: var(--gap);
+  padding: var(--pad);
+  border: 1px solid var(--plate-line); background: var(--carbon);
+  font-size: var(--label);
+}
 [data-career-part="calendar"] > li[data-stage="complete"] { border-top-color: var(--career-team, var(--red)); }
 [data-career-part="calendar"] > li[aria-current] { border-color: var(--red); background: var(--carbon); }
 [data-career-part="calendar"] > li span { color: var(--dim); }

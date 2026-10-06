@@ -48,6 +48,8 @@ function harness({ motion } = {}) {
     removeEventListener() {}
     dispatch(t) { (this.listeners[t] || []).forEach((f) => f({ target: this })); }
     get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n === docRoot; }
+    get parentElement() { return this.parentNode; }
+    scrollWidth = 0; clientWidth = 0; scrollLeft = 0; offsetLeft = 0; offsetWidth = 0;
     querySelector(s) { const c = s.replace(/^\./, ""); for (const ch of this.children) { if (ch._cls.has(c)) return ch; const r = ch.querySelector(s); if (r) return r; } return null; }
     find(pred) { for (const ch of this.children) { if (pred(ch)) return ch; const r = ch.find(pred); if (r) return r; } return null; }
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
@@ -143,12 +145,40 @@ test("returning to the tab whose pick landed detached rebuilds it: no picker stu
   assert.notEqual(sesSel.children.map((o) => o.textContent).join(" | "), "loading…", "the session select is not stuck on loading…");
 });
 
+// The strip only pans when it overflows AND the chip is clipped. A wrap row
+// (desktop) or a fully-visible chip must not scroll SCHEDULE off the left.
+function markStripOverflow(h, overflow) {
+  const strip = h.root.find((n) => n.classList.contains("dh-tabs"));
+  assert.ok(strip, "the tab strip exists");
+  strip.scrollLeft = 0;
+  if (!overflow) {
+    strip.scrollWidth = 400;
+    strip.clientWidth = 400;
+    for (const id of ["schedule", "standings", "results", "live", "telemetry", "race", "export"]) {
+      const b = h.root.find((n) => n.id === "dh-tab-" + id);
+      b.offsetLeft = 8;
+      b.offsetWidth = 72;
+    }
+    return;
+  }
+  strip.scrollWidth = 980;
+  strip.clientWidth = 360;
+  let x = 400;
+  for (const id of ["schedule", "standings", "results", "live", "telemetry", "race", "export"]) {
+    const b = h.root.find((n) => n.id === "dh-tab-" + id);
+    b.offsetLeft = x;
+    b.offsetWidth = 80;
+    x += 80;
+  }
+}
+
 // MOTION: REDUCED reaches the tab strip. scrollIntoView's explicit `behavior`
 // beats CSS scroll-behavior, so neither reduced-motion backstop (the OS query's
 // `scroll-behavior: auto`, html[data-motion]) could reach this glide: the hub
 // has to ask, live, at the call.
 test("the active tab scrolls into view instantly under MOTION: REDUCED, smoothly otherwise", async () => {
   const h = harness({ motion: "reduce" });
+  markStripOverflow(h, true);
   h.DataHub.open("live"); await h.drain();
   h.tab("results"); await h.drain();
   const reduced = h.scrolls.filter((c) => c.id === "dh-tab-results").pop();
@@ -158,4 +188,11 @@ test("the active tab scrolls into view instantly under MOTION: REDUCED, smoothly
   h.tab("live"); await h.drain();
   const full = h.scrolls.filter((c) => c.id === "dh-tab-live").pop();
   assert.equal(full.o.behavior, "smooth", "read live: full motion glides again without a reload");
+});
+
+test("a fully-visible tab strip does not scrollIntoView (SCHEDULE stays put)", async () => {
+  const h = harness();
+  markStripOverflow(h, false);
+  h.DataHub.open("export"); await h.drain();
+  assert.equal(h.scrolls.length, 0, "no overflow → the strip must not pan");
 });
