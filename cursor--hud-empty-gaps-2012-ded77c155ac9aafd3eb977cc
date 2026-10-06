@@ -1,1 +1,1 @@
-1791307231	Cursor Agent	HUD Desk PR #1131 ready: empty .hud-gaps + INPUTS/sectors; watching CI; no AM  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
+1791308802	Cursor Agent	HUD Desk #1131: fix hud-layout COMPACT gaps assert vs empty-collapse CSS  [cursor/hud-empty-gaps-2012; session ded77c155ac9aafd3eb977cc]
