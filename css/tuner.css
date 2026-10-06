@@ -493,16 +493,29 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    Five closed folds, same disclosure language as DISPLAY. ON/OFF lives in
    the fold body so a summary tap only opens. */
 .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+/* The rule lives on the fold, not the summary: a summary border is
+   inset by padding-inline, and --grad-rule faded out ~150px short of
+   the sheet edge. .as-sec is a block in #audioset-inner (grid-column
+   1 / -1 on the wide 2-col .pm-group). */
+#pmsettings-inner #audioset-inner,
+#pmsettings-inner #audioset .as-sec,
+#pmsettings-inner #audioset .as-sec > summary {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#pmsettings-inner #audioset .as-sec {
+  border-bottom: 1px solid var(--card-line);
+}
 #pmsettings-inner #audioset .as-sec > summary,
 #pmsettings-inner #audioset .as-sec > summary:active {
-  color: var(--steel);
+  /* --text + no fading --grad-rule: steel italic on --surf-1 was
+     unreadable, and the gradient stopped ~70% across the sheet. */
+  color: var(--text);
   font-style: italic;
   opacity: 1;
   background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
+  background-image: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -525,10 +538,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   #pmsettings-inner #audioset .as-sec > summary:hover {
     color: var(--text);
     background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
+    background-image: none;
     border: none;
     box-shadow: none;
   }
