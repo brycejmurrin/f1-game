@@ -2003,6 +2003,13 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   const post = code("js/render/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
+  // ForceGL / WebGL2 path: readPixels must not run in the Promise executor —
+  // Appearance's MutationObserver → previewScene used to freeze 10–15 s on that
+  // turn under llvmpipe (2026-10-05). setTimeout(run, 0) yields one macrotask.
+  const capBody = fnBody(tlx, "capturePixels");
+  assert.match(capBody, /setTimeout\s*\(\s*run\s*,\s*0\s*\)/,
+    "WebGL capturePixels defers sync readPixels off the caller's turn");
+  assert.match(capBody, /gl\.readPixels/, "the deferred run still readPixels");
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
   assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
     "softPresentState must be OWN so descriptor-copy does not keep GLX's");
@@ -2015,6 +2022,15 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /function\s+_instColorAttr\b/);
   assert.match(tlx, /\bisInstancedBufferAttribute\b/);
   assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
+});
+
+test("TLX coalesces window resize to one target realloc per frame", () => {
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /function\s+applyResize\s*\(/, "size work is factored out of the public resize()");
+  assert.match(tlx, /function\s+resizeNow\s*\(/, "begin/setRenderScale force an immediate apply");
+  assert.match(tlx, /_resizeRaf/, "window/settings storms coalesce through one rAF");
+  assert.match(fnBody(tlx, "begin"), /resizeNow\s*\(/, "the draw path still applies size on this turn");
+  assert.match(fnBody(tlx, "setRenderScale"), /resizeNow\s*\(/);
 });
 
 test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL invProj", () => {
@@ -4879,6 +4895,9 @@ test("TLX defers resize during compilation and applies the latest requested size
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
   let _glMaxDim = -1, _glMaxTries = 0;   // resize()'s once-per-device WebGL2 texture ceiling
   let _xrActive = false;                 // immersive-vr skip (tlx.js attachXrSession)
+  // begin()/setRenderScale set _resizeNow so size applies on this turn; the
+  // warm gate still lives on resize() (window storms coalesce via _resizeRaf).
+  let _resizeNow = true, _resizeRaf = 0;
   const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
@@ -4894,7 +4913,9 @@ test("TLX defers resize during compilation and applies the latest requested size
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
   const post = { resize(w, h) { calls.push(["post", w, h]); } };
-  const resize = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "resize") + "})");
+  const src = code("js/render/three/tlx.js");
+  const applyResize = eval("(function(){" + fnBody(src, "applyResize") + "})");
+  const resize = eval("(function(){" + fnBody(src, "resize") + "})");
   resize();
   renderScale = 0.75; _layoutCanvas.clientWidth = window.innerWidth = 1000;
   resize();
