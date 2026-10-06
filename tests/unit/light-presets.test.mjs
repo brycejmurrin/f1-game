@@ -189,6 +189,30 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
   assert.deepEqual(pinned, [], "per-track night|dry must defer core authenticity knobs to *|night|dry");
 });
 
+test("shared *|dusk|wet stamp supplies the fleet wet-twilight authenticity knobs", () => {
+  const P = presets();
+  const shared = P["*|dusk|wet"];
+  assert.ok(shared, "expected LightPresets['*|dusk|wet']");
+  assert.equal(shared.ambientMul, 0.84);
+  assert.equal(shared.keyMul, 0.68);
+  assert.equal(shared.lampLevel, 0.33);
+  assert.equal(shared.floodEmitMul, 0.42);
+  assert.equal(shared.bloomMul, 0.88);
+  assert.equal(shared.glowAmp, 2.2);
+  assert.equal(shared.exposureMul, 0.93);
+  const CORE = ["ambientMul", "keyMul", "lampLevel", "floodEmitMul", "bloomMul", "glowAmp", "exposureMul"];
+  const pinned = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|dusk\|wet$/.test(key) || key.startsWith("*") || key === "spa|dusk|wet") continue;
+    const o = P[key];
+    for (const id of CORE) {
+      if (!Object.prototype.hasOwnProperty.call(o, id)) continue;
+      pinned.push(`${key}.${id}=${o[id]}`);
+    }
+  }
+  assert.deepEqual(pinned, [], "per-track dusk|wet must defer core authenticity knobs to *|dusk|wet");
+});
+
 test("shared *|night|wet stamp supplies the fleet wet-night authenticity knobs", () => {
   const P = presets();
   const shared = P["*|night|wet"];
