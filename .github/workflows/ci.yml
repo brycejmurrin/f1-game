@@ -2448,25 +2448,44 @@ jobs:
       # merged so far; it is limited to "no pages.yml run is queued or running
       # on this branch", which keeps it to one train at a time. Any doubt (API
       # error, empty answer) pokes, as before.
+      # SINGLE-FLIGHT + TIP-CI GATE (2026-10-06). Never dual-dispatch Pages while
+      # a train is already queued/running. Never poke for a tip whose ship-fast
+      # CI is still pending, failed, or cancelled (Pages run 37497278920 was
+      # dispatched for 85de0ac while tip CI 37496991170 was still in_progress).
+      # cancel-in-progress stays false on pages.yml — we skip the poke instead
+      # of cancelling a live train.
       - name: Is this commit still the tip, or is no train moving?
         id: tip
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -u
           TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
-          if [ -n "$TIP" ] && [ "$TIP" != "$GITHUB_SHA" ]; then
-            # Runs not yet completed (queued, waiting, pending, requested, in_progress).
-            ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
-              --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
-            if [ "$ACTIVE" = "0" ] || [ -z "$ACTIVE" ]; then
-              echo "poke=true" >> "$GITHUB_OUTPUT"
-              echo "POKING from a superseded commit: the tip moved to $TIP and no train is queued or running, so the train gates $TIP now" | tee -a "$GITHUB_STEP_SUMMARY"
-            else
-              echo "poke=false" >> "$GITHUB_OUTPUT"
-              echo "NOT POKING: the tip moved to $TIP and $ACTIVE train run(s) are already queued or running" | tee -a "$GITHUB_STEP_SUMMARY"
-            fi
-          else
+          # Runs not yet completed (queued, waiting, pending, requested, in_progress).
+          ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
+          if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "0" ]; then
+            echo "poke=false" >> "$GITHUB_OUTPUT"
+            echo "NOT POKING: $ACTIVE train run(s) already queued or running (single-flight)" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "$TIP" ] || [ "$TIP" = "$GITHUB_SHA" ]; then
+            # This run is the tip (or tip unreadable — poke as before on doubt).
             echo "poke=true" >> "$GITHUB_OUTPUT"
+            echo "POKING tip ${GITHUB_SHA:0:7}: fast tier green and no train moving" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Tip moved: only poke when tip push CI already concluded success.
+          TIP_CI=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$GITHUB_REF_NAME&event=push&per_page=30" 2>/dev/null \
+            | jq -r --arg tip "$TIP" '[.workflow_runs[] | select(.head_sha == $tip)] | .[0] | "\(.status)|\(.conclusion // "")"' || true)
+          STATUS="${TIP_CI%%|*}"
+          CONC="${TIP_CI#*|}"
+          if [ "$STATUS" = "completed" ] && [ "$CONC" = "success" ]; then
+            echo "poke=true" >> "$GITHUB_OUTPUT"
+            echo "POKING from a superseded commit: tip $TIP already has green ship-fast CI and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "poke=false" >> "$GITHUB_OUTPUT"
+            echo "NOT POKING: tip moved to $TIP but tip CI is ${STATUS:-unknown}/${CONC:-none} (need completed/success)" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - name: Dispatch pages.yml on this branch
         if: steps.tip.outputs.poke == 'true'

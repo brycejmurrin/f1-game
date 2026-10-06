@@ -24,8 +24,9 @@ that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
 failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
 no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
 only the newest waiting push stays queued.) Before marking ready, run
-`node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready PRs already hold
-full-tier CI; draft fast-tier is uncapped).
+`node tools/ci/ready-gate.mjs` (exit 0 = Structural guards / tooling-fast green
+on the tip) **and** `node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready
+PRs already hold full-tier CI; draft fast-tier is uncapped).
 
 The other two look identical from the conclusion alone:
 

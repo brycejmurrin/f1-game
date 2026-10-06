@@ -274,6 +274,14 @@ UiLayers.setRaceGetter(() => G.state === "race" || G.state === "count");
 // Pause key: when the settings sub-menu is open it presses the same BACK
 // path (pop a page, then close); otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {
+  // Pre-race #loading: Escape is refused via data-esc="none" once the plate is
+  // a UiLayers entry (anyOpen() also keeps Escape from pausing). KeyP / pad
+  // Start still land here and must not open pause over the card — that left a
+  // stuck #pausemenu after the plate cleared.
+  if (typeof UiLayers !== "undefined") {
+    const loadingTop = UiLayers.top();
+    if (loadingTop && loadingTop.id === "loading") return;
+  }
   // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
   // press there has to close the help sheet, not the menu underneath it (which
   // would leave the help sheet floating over the race with no way back). Reached

@@ -24,6 +24,12 @@ window.UiLayers = (function () {
        touch controls behind the opaque backdrop. No data-esc-close on the
        element — onEscape returns without consuming, deliberately. */
     { id: "rotate-device", gate: false },
+    /* Pre-race plate (js/ui/loading-screen.js). Default gate so anyOpen() is
+       true while it is up: Escape must not pause under the card (input.js
+       only pauses when !anyOpen()), and driving keys stay off the car. The
+       shell marks data-esc="none"; KeyP / pad Start are refused in
+       platform-session.js because those paths do not consult anyOpen(). */
+    { id: "loading" },
     { id: "pausemenu" },
     { id: "pmsettings" },
     { id: "select" },
