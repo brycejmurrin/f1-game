@@ -337,17 +337,27 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
 test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
   const job = parseYAML(ciWorkflow).jobs["selected-verdict"];
   const script = job.steps.map((st) => st.run || "").join("\n");
-  // The dropped test sits OUTSIDE the `selected` case: a plan that ran one
-  // spec and named forty as unaffordable used to be green.
-  assert.match(script, /if \[ "\$\{DROPPED:-0\}" != "0" \]; then/);
-  assert.match(script, /exit 1\n\s*fi\n\s*elif \[ "\$SELECTED" = "skipped" \]/,
-    "dropped > 0 off the train must exit 1 whatever `selected` did");
-  assert.match(script, /CALLED" = "true"/, "the train still only warns");
+  // Verdict logic lives in selected-gate-verdict.mjs (cancel+clean junit →
+  // infra-retry; dropped > 0 still red off the train). Workflow stages junit
+  // BEFORE that script runs.
+  assert.match(script, /selected-gate-verdict\.mjs/);
+  assert.match(script, /junit-failed\.mjs/);
+  const stepNames = job.steps.map((st) => st.name || "");
+  const decide = stepNames.indexOf("One answer for the change-aware gate");
+  const junit = stepNames.indexOf("Every shard's junit");
+  assert.ok(decide > junit && junit >= 0, "junit must land before the verdict decides");
   const uses = job.steps.map((st) => st.uses || "").join("\n");
   assert.match(uses, /actions\/download-artifact@[0-9a-f]{40}/, "pinned by SHA like every other action");
   assert.match(uses, /actions\/cache\/save@/);
-  assert.ok(job.steps.filter((st) => st.uses || /junit-failed/.test(st.run || ""))
-    .every((st) => st["continue-on-error"] === true), "the carry-forward is reporting: it may never decide the verdict");
+  // download / stage / carry stay continue-on-error so a missing artifact
+  // never blocks a clean cancel; the decision step itself must NOT soft-fail.
+  const soft = job.steps.filter((st) =>
+    /download-artifact|cache\/save|Stage junit|Record failing/.test(`${st.uses || ""}\n${st.name || ""}`));
+  assert.ok(soft.length >= 3);
+  assert.ok(soft.every((st) => st["continue-on-error"] === true),
+    "junit download/stage/carry may never decide the verdict by throwing");
+  const decideStep = job.steps.find((st) => st.name === "One answer for the change-aware gate");
+  assert.ok(decideStep && decideStep["continue-on-error"] !== true, "the verdict step decides");
   // …and no `selected` shard saves it any more (one key per run, one writer).
   const selected = parseYAML(ciWorkflow).jobs.selected;
   assert.ok(!selected.steps.some((st) => /cache\/save/.test(st.uses || "")), "a shard must not race for the carry-forward key");
@@ -1433,13 +1443,10 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
   // `selected` ran — the dropped-count used to be read only on a skip.
   assert.match(job, /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
-  assert.match(job, /Structural guards \$GUARDS/, "a guard red is a red selected verdict");
-  assert.match(job, /success\) ;;\n\s+\*\) echo "::error::the selection itself did not pass/);
-  assert.match(job, /if \[ "\$CALLED" = "true" \]; then\n\s+echo "::warning::/, "on the train an unaffordable plan warns");
-  assert.match(job, /echo "::error::the plan dropped \$\{DROPPED\} routed spec\(s\)[^\n]*\n\s+exit 1/,
-    "on a push or PR a dropped spec is a red — the renderer case that poked a train with no backend booted, and the 41 routed specs that never ran");
-  assert.match(job, /elif \[ "\$SELECTED" = "skipped" \]; then\n\s+echo "nothing this diff touches has a spec/, "an empty plan with nothing dropped is a pass");
-  assert.match(job, /\*\) echo "::error::selected specs \$SELECTED"; exit 1 ;;/);
+  assert.match(job, /selected-gate-verdict\.mjs/, "verdict logic is the shared script (cancel+clean junit → infra-retry)");
+  assert.match(job, /CANCEL \+ CLEAN JUNIT IS INFRA-RETRY/, "documents the #1109 / run 37493213168 rule");
+  assert.match(job, /Every shard's junit[\s\S]*One answer for the change-aware gate/,
+    "junit is downloaded before the decision step");
   // It joins the Pages aggregate like every other job (no needs on the renderer chain).
   const verdict = report.jobs.find((j) => j.name === "selected-verdict");
   assert.ok(verdict && verdict.deployGate, "selected-verdict must be in the deploy gate");

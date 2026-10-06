@@ -262,7 +262,7 @@ const GLXChunked = (function () {
       for (let i = 0; i < st.q.length; i++) {
         const q = st.q[i];
         if (!q) continue;
-        try { gl.deleteQuery(q); } catch (_) { /* context loss owns the remainder */ }
+        try { if (!(core.ctxGone && core.ctxGone())) gl.deleteQuery(q); } catch (_) { /* context loss owns the remainder */ }
         _occQueries.delete(q);
         st.q[i] = null;
       }
@@ -277,6 +277,7 @@ const GLXChunked = (function () {
     }
 
     function createChunkedMesh(data, cellSize) {
+      if (core.ctxGone && core.ctxGone()) return null;
       const cell = cellSize > 0 ? cellSize : 72;
       let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const srcIdx = data.idx, vCount = pos.length / 3, big = vCount > 65535;
@@ -755,6 +756,7 @@ const GLXChunked = (function () {
     function freeChunkedMesh(mesh) {
       if (!mesh) return;
       _occReleaseMesh(mesh);
+      if (core.ctxGone && core.ctxGone()) return;
       core.unbindVAOIf(mesh.vao);
       if (mesh.ib) gl.deleteBuffer(mesh.ib);
       if (mesh.vbo) gl.deleteBuffer(mesh.vbo);

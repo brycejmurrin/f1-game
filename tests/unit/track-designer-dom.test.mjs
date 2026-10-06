@@ -1577,3 +1577,48 @@ test("3 LOOK: a chip per theme (twenty), dual-colour swatches, the theme's blurb
   assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\] \.swatch\s*\{/, "theme swatch paint box");
   assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
 });
+
+test("SCENERY props palette: place at selected point, remove last, caps, UNDO, save keeps props", () => {
+  const b = bootScreen();
+  openGreen(b);
+  b.D.setMode("scenery");
+  const P = b.ctx.TrackDesignerProps;
+  assert.ok(P, "TrackDesignerProps is on the FULL boot");
+  const chips = walk(b.root).filter((e) => e.dataset && e.dataset.prop);
+  assert.equal(chips.map((e) => e.dataset.prop).join(","), P.KINDS.join(","), "one chip per kind");
+  assert.ok(walk(b.root).find((e) => e.dataset && e.dataset.role === "props"), "props row");
+  assert.ok(walk(b.root).find((e) => e.dataset && e.dataset.role === "prop-actions"), "place/remove");
+  // Select point 3, place a stand.
+  assert.equal(b.D.state().propKind, "stand", "default kind");
+  assert.equal(b.D.setPropKind("stand"), false, "no-op on the same kind");
+  assert.equal(b.D.setPropKind("gantry"), true);
+  assert.equal(b.D.setPropKind("stand"), true);
+  assert.equal(b.D.state().propKind, "stand");
+  // Force selection via cyclePoint
+  b.D.cyclePoint(1); b.D.cyclePoint(1); b.D.cyclePoint(1);
+  const u0 = b.D.state().undo;
+  assert.equal(b.D.placeProp(), true);
+  assert.equal(b.D.state().design.props.length, 1);
+  assert.equal(b.D.state().design.props[0].kind, "stand");
+  assert.equal(b.D.state().undo, u0 + 1);
+  assert.equal(b.D.setPropKind("billboard"), true);
+  assert.equal(b.D.placeProp("billboard"), true);
+  assert.equal(b.D.state().design.props.length, 2);
+  assert.equal(b.D.removeProp("billboard"), true);
+  assert.equal(b.D.state().design.props.length, 1);
+  assert.equal(b.D.state().design.props[0].kind, "stand");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.props.length, 2, "UNDO restores the removed board");
+  // Cap: fill stands.
+  b.D.setPropKind("stand");
+  let guard = 0;
+  while (b.D.placeProp("stand") && guard++ < 20) { /* fill */ }
+  assert.equal(P.counts(b.D.state().design.props).stand, P.CAPS.stand);
+  assert.equal(b.D.placeProp("stand"), false, "at the stand cap");
+  const saved = b.D.save();
+  assert.equal(saved.ok, true, JSON.stringify(saved));
+  const stored = b.C.get(saved.id);
+  assert.ok(stored.props && stored.props.length >= 1, "props persist in CustomTracks");
+  const listed = b.Tracks.LIST.find((t) => t.id === saved.id);
+  assert.equal(typeof listed.scenery, "function", "saved def still carries scenery");
+});
