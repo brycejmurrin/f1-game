@@ -331,6 +331,17 @@ body.hud-bcam #hud-energy,
 body.hud-bcam #hud-bb,
 body.hud-bcam #hud-limits { display: none !important; }
 body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
+/* TV cameras keep speed and drop the gearbox plate, so the number sat on the
+   asphalt as bare italic (heli / TV, 852×393). The dock still parks it on the
+   bottom edge; the plate is what makes it a readout instead of a caption.
+   Broadcast keeps its own tower treatment and does not get this plate. */
+body.hud-bcam:not(.hud-prof-broadcast) #hud-speed {
+  background: var(--look-hud-bg);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3);
+  font-style: normal;
+}
 
 /* Broadcast profile: left timing-tower strip (upright data, fused panels). */
 body.hud-prof-broadcast .hud-top {
@@ -981,6 +992,13 @@ body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
 body[data-density="compact"] #minimap { width: 110px; height: 110px; }
 body[data-density="compact"] .hud-gaps { left: calc(128px + var(--sal) / var(--hud-z)); }
+/* MAP OFF: 146px and the compact 128px are the map's right edge. With the map
+   gone that slot is the centred tower, and the chip clips POS (phone, map OFF).
+   Take the map's own corner. Later than the compact anchor, and heavier. */
+body.hud-hide-map .hud-gaps,
+body[data-density="compact"].hud-hide-map .hud-gaps {
+  left: calc(10px + var(--sal) / var(--hud-z));
+}
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
@@ -995,6 +1013,22 @@ body[data-density="compact"] #announce {
   top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px));
   font-size: var(--fs-2);
   --radio-num: 22px;   /* the plate steps down with the card, so it never outgrows two lines of type */
+}
+/* PHONE: the centred slot under the tower is the vanishing point (852×393
+   chase: the coach line covers the apex). announceLane already stops the card
+   reaching the docks; it does not move it off the apex. When the top-row slot
+   did not fit and the left column is free (RELATIVE and STRATEGY off — they
+   live there), park the card under the minimap instead. Broadcast keeps its
+   own top; beside-the-mirror still wins (heavier). */
+body:not(.desktop):not(.hud-radio-top):not(.hud-prof-broadcast):not(.hud-mirror-side):not(:has(#hud-rel:not([hidden]))):not(:has(#hud-strat:not([hidden]))) #announce {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  transform: none;
+  min-width: 0;
+  max-width: min(280px, calc(52 * var(--vwzh)));
+  top: max(calc(var(--hud-left-h, 152px) + 8px), calc(var(--mir-bot, 0px) + 8px));
+}
+body.hud-hide-map:not(.desktop):not(.hud-radio-top):not(.hud-prof-broadcast):not(.hud-mirror-side):not(:has(#hud-rel:not([hidden]))):not(:has(#hud-strat:not([hidden]))) #announce {
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px), calc(var(--mir-bot, 0px) + 8px));
 }
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
@@ -1837,26 +1871,46 @@ body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
 body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
 body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
 body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
-/* TOUCH: RELATIVE and INPUTS ship where the touch columns sit (RELATIVE over
-   BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04 HUD survey,
-   844x390 cockpit), so on a touch screen they show once MOVE & SIZE places
-   them, the same deal as BRAKE BIAS (js/ui/hud-layout.js HIDE_RULES).
-   STRATEGY has a touch home instead: the left column under the minimap —
-   anchored to fitHud's --hud-left-h (map / gaps / broadcast tower bottom), not
-   a literal 152px that drifted under the limits chip and the gaps strip when
-   HUD SIZE or MAP size moved (player cockpit shots, 2026-10-05). Clear of both
-   button columns. When TRACK LIMITS is itself in this column, sit below that
-   chip the same way #hud-limits sits below the map. */
-body:not(.desktop) :is(#hud-rel, #hud-inputs):not([data-hl-user]) { display: none; }
+/* TOUCH HOMES. RELATIVE and INPUTS used to ship where the touch columns sit
+   (RELATIVE over BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04
+   HUD survey, 844x390 cockpit), so on a touch screen they stayed hidden until
+   MOVE & SIZE placed them. RELATIVE now takes the left column under the
+   minimap, on the same --hud-left-h anchor as STRATEGY (a literal 144px
+   drifted under the limits chip when HUD SIZE or MAP size moved). While
+   RELATIVE is actually on, STRATEGY steps to its right — under it the card
+   lands on PLAN / the steer column (852×393, all three extras on). INPUTS is
+   a short trace under the sector box, stood off the right dock. A placed
+   chip (data-hl-user) keeps the offset the player chose. */
+body:not(.desktop) #hud-rel:not([data-hl-user]) {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  right: auto;
+  top: calc(var(--hud-left-h, 152px) + 8px);
+  max-width: min(240px, 46vw);
+  line-height: 1.2;
+}
 body:not(.desktop) #hud-strat {
   top: calc(var(--hud-left-h, 152px) + 8px);
 }
 /* limits-left is only set when a touch right-dock fills the sector column
    (js/ui/hud.js fitHud); desktop docks stay empty, so this never moves the
    desktop 40svh home. Must not write `:root … body` — source-integrity forbids
-   body/html as a descendant. */
-:root[data-limits-left] #hud-strat {
+   body/html as a descendant. RELATIVE shares the column, so it drops with
+   STRATEGY. */
+:root[data-limits-left] #hud-strat,
+:root[data-limits-left] #hud-rel:not([data-hl-user]) {
   top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
+}
+body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
+  left: calc(168px + var(--sal) / var(--hud-z));
+}
+body:not(.desktop) #hud-inputs:not([data-hl-user]) {
+  left: auto;
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  bottom: auto;
+  /* Same shape as #hud-limits: the sat offset divides by this element's own
+     zoom (--hud-z-bot). --hud-sec-h is the sector box, already in top-band
+     units; at the phone sizes these two zooms meet it sits under the box. */
+  top: calc((8px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
 }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
    the car) to the left column, sitting on top of the left dock (the steer

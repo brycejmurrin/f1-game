@@ -467,7 +467,7 @@ function layoutRect(el) {
 // card's rows and reaches past the slot's start ends the strip at its left
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
-const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
+const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // THE CENTRE LANE: where neither slot fits, the card hangs centred under the
 // tower (or the mirror, or the flag), and a long message at max-width reached
 // the dock column there too. --announce-lane-w is twice the distance from the
@@ -746,7 +746,7 @@ function fitHud() {
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
   const bottom = span(_hudBottom);
-  const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  let capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
   // counted them), and the dock zooms by the RAW slider, so at HUD SIZE 150%
@@ -907,6 +907,36 @@ function fitHud() {
     const rectOf = (el) => (el && !el.hidden ? el.getBoundingClientRect() : null);
     const roomL = floorY - ceil(_dockL, [mmR, gapsR]);
     const roomR = floorY - ceil(_dockR, [rectOf(els.pausebtn), rectOf(els.btnCam)]);
+    // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
+    // outside the centred cluster, so the viewport budget above never sees them
+    // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
+    // is the dock anchor (it grows right); the cluster grows about its centre.
+    // Widths are divided back out of the zoom painted now, so the answer does
+    // not chase itself. Hidden TYRES (TIMING, COMPACT, cockpit) leave the cap.
+    // The unit harness has no visible #hud-tyre, so this stays a no-op there.
+    if (!document.body.classList.contains("desktop") && _hudBottom && _hudBottom.children) {
+      const zNow = _hudBottom.currentCSSZoom || 1;
+      let lo = Infinity, hi = -Infinity;
+      const kids = _hudBottom.children;
+      for (let i = 0; i < kids.length; i++) {
+        const c = kids[i];
+        if (!c || c.id === "hud-tyre") continue;
+        const r = layoutRect(c);
+        if (!r.width) continue;
+        if (r.left < lo) lo = r.left;
+        if (r.right > hi) hi = r.right;
+      }
+      const tyreEl = document.getElementById("hud-tyre");
+      const tyreR = tyreEl && !tyreEl.hidden ? layoutRect(tyreEl) : null;
+      if (hi > lo && tyreR && tyreR.width && zNow) {
+        const cW = (hi - lo) / zNow, tW = tyreR.width / zNow, cMid = (lo + hi) / 2;
+        const denom = cW / 2 + tW;
+        if (denom > 0 && cMid > tyreR.left) {
+          const zClear = (cMid - tyreR.left - FIT_AIR) / denom;
+          if (zClear > 0) capBot = Math.min(capBot, zClear);
+        }
+      }
+    }
     const zBot = Math.min(scale, capBot);
     const barW = barR ? barR.width : window.innerWidth;
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
