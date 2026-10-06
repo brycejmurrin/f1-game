@@ -182,3 +182,17 @@ test("painters: Mercedes fade and Ferrari cap are the owned crown arms", () => {
   assert.match(SRC, /else if \(id === "cap"\)/);
   assert.match(SRC, /Ordered halftone|ordered halftone|rMax/);
 });
+
+test("Mercedes mid-cover blotches are flank starfield in liverytex, not a second fade", () => {
+  // Crown fade is ordered. The remaining "broken text" clusters on the silver
+  // cover flanks (mercedes-cover close-up, below the airbox) are spineSide
+  // "starfield" inside LiveryTex.buildAtlas — same hash-skip recipe the fade
+  // used. #1059 owns liverytex.js; this lane does not edit it.
+  assert.doesNotMatch(SRC, /73856093/, "owned fade must stay hash-free");
+  const tex = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  const star = tex.match(/spineSide === "starfield"[\s\S]*?(?=else if \(spineSide ===)/);
+  assert.ok(star, "buildAtlas still has a starfield flank arm");
+  assert.match(star[0], /73856093/, "starfield is still the hashed density skip");
+  assert.match(star[0], /19349663/);
+  assert.match(star[0], /density = 0\.28/);
+});
