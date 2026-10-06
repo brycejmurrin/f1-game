@@ -188,6 +188,9 @@ test("an uploaded track survives a page reload (IndexedDB, not memory)", async (
     () => typeof MusicLib !== "undefined" && !GameAudio._stub,
     null, { polling: 100, timeout: BOOT_MS }
   );
+  // AudioPanel.init kicks MusicLib.init async; wait for it so the poll is not
+  // racing the IndexedDB readAll → addTracks path.
+  await page.evaluate(() => MusicLib.init());
   await expect
     .poll(() => userTracks(page), { timeout: 10000 })
     .toEqual([{ id: before.id, name: "Persisted Track", builtin: false }]);

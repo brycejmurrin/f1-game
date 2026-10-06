@@ -73,6 +73,13 @@ const SettingsNav = (function () {
 
     function show(want, focus, after) {
       const id = TITLES[want] ? want : "home";
+      // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
+      // #audioset is revealed (programmatic show("audio") included).
+      if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+          && (typeof GameAudio === "undefined" || GameAudio._stub)) {
+        AudioPanel._ensure().then(() => show(want, focus, after));
+        return;
+      }
       const index = document.getElementById("pm-settings-index");
       if (id === "home") {
         for (const [doorId, selectId, prefix] of [
@@ -140,7 +147,14 @@ const SettingsNav = (function () {
     };
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
       originDoor = door;
-      show(id, true, () => { if (onSelect) onSelect(id); });
+      const go = () => show(id, true, () => { if (onSelect) onSelect(id); });
+      // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
+      // Reveal only after ensureAudio so MenuNav.items matches a wired panel
+      // (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
+      if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+          && (typeof GameAudio === "undefined" || GameAudio._stub)) {
+        AudioPanel._ensure().then(go);
+      } else go();
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.

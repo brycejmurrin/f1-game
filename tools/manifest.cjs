@@ -892,6 +892,7 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/soundtrack.js", "js/audio/engine.js"],
   ["js/audio/radio-fx.js", "js/audio/engine.js"],
   ["js/audio/tone-model.js", "js/audio/engine.js"],
+  ["js/audio/engine.js", "js/audio/music-lib.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],
   ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],

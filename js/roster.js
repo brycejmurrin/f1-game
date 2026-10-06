@@ -194,6 +194,10 @@
       "js/audio/engine.js"
     ],
     [
+      "js/audio/engine.js",
+      "js/audio/music-lib.js"
+    ],
+    [
       "js/audio/voice-pack.js",
       "js/audio/radio-voice.js"
     ],
