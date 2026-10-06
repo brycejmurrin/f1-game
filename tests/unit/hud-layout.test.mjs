@@ -651,6 +651,10 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*body\.steer-touch #dock-right \{ anchor-name: --apex-dock-right; \}[\s\S]*body\.steer-touch #hud-sectors \{[^}]*position-anchor: --apex-dock-right;/,
     "touch sectors also tether to the right dock via CSS anchor positioning");
+  // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
+  // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
+  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
+    "lit docks cancel horizontal --hl-x on OVERTAKE / CORNER MODE so AERO×shift-up stays clear");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
     assert.match(h({ hide: id, live: false, classes: ["desktop"] }).hiddenReason(id).reason, /HUD element list/, id + " off");

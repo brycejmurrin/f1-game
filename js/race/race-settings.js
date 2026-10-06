@@ -76,6 +76,27 @@ const RaceSettings = (function () {
     return null;
   }
 
+  /** Which named preset (if any) matches the live sheet values — null is CUSTOM. */
+  function matchPreset(now, full) {
+    if (!now || full == null) return null;
+    for (const id of ["quick", "weekend", "endurance"]) {
+      const p = presetValues(id, full);
+      if (p && Object.keys(p).every((k) => now[k] === p[k])) return id;
+    }
+    return null;
+  }
+
+  /** Sheet H2 chrome for the race-settings dialog. FULL WEEKEND keeps
+   *  START QUALIFYING on the CTA; the header must say the weekend is first. */
+  function sheetTitle(opts) {
+    const o = opts || {};
+    if (o.netRoom) return "RACE SETTINGS";
+    if (o.practice) return "PRACTICE SETTINGS";
+    if (o.timeTrial) return "TIME TRIAL SETTINGS";
+    if (o.matched === "weekend" && o.qualifies) return "WEEKEND · QUALIFYING FIRST";
+    return "RACE SETTINGS";
+  }
+
   /* REMEMBER LAST RACE SETUP (apex26.raceDraft). A solo one-off Grand Prix
    * remembers what it last STARTED with — laps as a ladder rung or "FULL",
    * weather, time of day, MIXED — so the next circuit opens on the same race
@@ -133,18 +154,6 @@ const RaceSettings = (function () {
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
       const practice = typeof UiExperience !== "undefined" && UiExperience.isPracticePick && UiExperience.isPracticePick();
-      const rsTitle = $("dlg-racesettings");
-      if (rsTitle) {
-        rsTitle.textContent = netRoom ? "RACE SETTINGS"
-          : practice ? "PRACTICE SETTINGS"
-          : isTimeTrial() ? "TIME TRIAL SETTINGS"
-          : "RACE SETTINGS";
-      }
-      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY"
-        : qualifies ? "START " + qName
-        : practice ? "START PRACTICE"
-        : isTimeTrial() ? "START TIME TRIAL"
-        : "START RACE";
       wireRaceSettings();
       const tt = isTimeTrial();
       const daily = tt && G.daily ? G.daily.current() : null;
@@ -153,6 +162,11 @@ const RaceSettings = (function () {
       const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
       const presets = $("rs-presets");
       if (presets) presets.hidden = tt || isChampionship() || netRoom;
+      $("rs-go").textContent = netRoom ? "CONFIRM FOR LOBBY"
+        : qualifies ? "START " + qName
+        : practice ? "START PRACTICE"
+        : isTimeTrial() ? "START TIME TRIAL"
+        : "START RACE";
       const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
       // Off the ladder snaps to FULL (a room host's FULL stays FULL on the next
       // circuit) — EXCEPT a championship's format distance, which is clamped,
@@ -207,8 +221,16 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-dirty", G.raceDirtyAir, RS_DIRTY);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
-      paintPresetState(full);
+      const matched = paintPresetState(full);
       paintFolds();
+      // Title after preset match: FULL WEEKEND + START QUALIFYING → header
+      // names the weekend (CTA already says START QUALIFYING above).
+      const rsTitle = $("dlg-racesettings");
+      if (rsTitle) {
+        rsTitle.textContent = sheetTitle({
+          netRoom, practice, timeTrial: tt, matched, qualifies,
+        });
+      }
       const summary = $("rs-summary");
       if (summary) {
         const track = Tracks.LIST[trackIdx];
@@ -410,15 +432,47 @@ const RaceSettings = (function () {
       };
     }
 
+    /** Display-only CUSTOM chip on the preset row — lights when no named
+     *  preset matches (e.g. the default 3-lap draft). No data-rs-preset, so
+     *  the applyPreset click loop never treats it as a writable preset. */
+    function ensureCustomPreset(row) {
+      let b = row.querySelector ? row.querySelector("#rs-preset-custom") : null;
+      if (b) return b;
+      b = document.createElement("button");
+      b.id = "rs-preset-custom";
+      b.type = "button";
+      b.className = "preset-btn";
+      b.setAttribute("aria-disabled", "true");
+      b.tabIndex = -1;
+      b.textContent = "CUSTOM";
+      const cap = document.createElement("small");
+      cap.textContent = "your own mix";
+      b.appendChild(cap);
+      row.appendChild(b);
+      return b;
+    }
+
     function paintPresetState(full) {
       const now = currentPresetValues();
       const row = $("rs-presets");
-      for (const b of row && row.querySelectorAll ? row.querySelectorAll("[data-rs-preset]") : []) {
-        const p = presetValues(b.getAttribute("data-rs-preset"), full);
-        const on = p && Object.keys(p).every((k) => now[k] === p[k]);
+      if (!row) return null;
+      const matched = matchPreset(now, full);
+      for (const b of row.querySelectorAll ? row.querySelectorAll("[data-rs-preset]") : []) {
+        const id = b.getAttribute("data-rs-preset");
+        const on = matched === id;
         b.classList.toggle("active", !!on);
         b.setAttribute("aria-pressed", on ? "true" : "false");
       }
+      // CUSTOM fills the empty highlight: 3 laps / mixed weather / any draft
+      // that is not exactly quick, weekend or endurance.
+      if (!row.hidden) {
+        const custom = ensureCustomPreset(row);
+        const on = !matched;
+        custom.classList.toggle("active", on);
+        custom.setAttribute("aria-pressed", on ? "true" : "false");
+        row.setAttribute("data-rs-match", matched || "custom");
+      }
+      return matched;
     }
 
     function applyPreset(id) {
@@ -544,6 +598,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues, draftOf, draftFor };
+  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor };
 })();
 Object.freeze(RaceSettings);

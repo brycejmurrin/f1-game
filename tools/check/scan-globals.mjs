@@ -273,7 +273,9 @@ export function listFiles() {
   // read safe, it makes it invisible.
   const lazy = [...(manifest.LAZY_AGENT || []), ...(manifest.LAZY_RACE || []),
     ...(manifest.LAZY_CIRCUIT || []), ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
-    ...(manifest.LAZY_NET || []), ...(manifest.LAZY_EDITOR || [])];
+    ...(manifest.LAZY_NET || []), ...(manifest.LAZY_EDITOR || []),
+    ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
+    ...(manifest.LAZY_CAREER_UI || [])];
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),

@@ -641,7 +641,7 @@ function bootBackupUi(options = {}) {
   sb.window = sb;
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
-  const ui = sb.CareerUI.create(G);
+  const ui = sb.CareerScreen.create(G);
   ui.openSlots();
 
   function clickImport(side = "left") {

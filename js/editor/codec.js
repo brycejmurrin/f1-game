@@ -24,8 +24,27 @@ const TrackCodec = (function () {
   // any height is non-zero — flat designs (and every pre-heights code) keep the
   // old bit pattern. Older builds refuse the bit ("corrupt").
   // Props ride VERSION_PROPS (APXT2) — FLAG is full (0xff); no spare bit.
+  // Surface (kerb style + berms) also has NO flag bit: a trailing u8 after the
+  // labelled fields (and after the APXT2 props trailer when present), written
+  // only when off default. Pre-surface codes leave r.left === 0; older builds
+  // that require left === 0 refuse a trailing byte as "corrupt".
   const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64, heights: 128 };
   const FLAG_ALL = 0xff;
+  const KERB_STYLES = ["flat", "sausage", "rumble"];
+  /** Pack kerbStyle + berms into one byte; 0 = defaults (flat, berms on). */
+  function surfaceByte(it) {
+    let k = KERB_STYLES.indexOf(it && it.kerbStyle);
+    if (k < 0) k = 0;
+    const noBerm = it && it.berms === false ? 4 : 0;
+    return (k & 3) | noBerm;
+  }
+  function applySurfaceByte(design, b) {
+    if (!Number.isFinite(b) || (b & ~7) || (b & 3) > 2) return false;
+    const k = b & 3;
+    if (k) design.kerbStyle = KERB_STYLES[k];
+    if (b & 4) design.berms = false;
+    return true;
+  }
   // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
   // dropped what storage keeps (a dropped bridge turned into a RED crossing on
   // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
@@ -155,6 +174,10 @@ const TrackCodec = (function () {
         w.u8(Math.min(255, Math.max(0, p.gap | 0)));
       }
     }
+    // Ultimate trailing surface byte (kerb / berms) — only when off default so
+    // every pre-surface code keeps its exact byte length and content id.
+    const surf = surfaceByte(it);
+    if (surf) w.u8(surf);
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
     all.set(body); const c = fnv16(body, body.length); all[body.length] = c & 0xff; all[body.length + 1] = c >> 8;
@@ -219,7 +242,12 @@ const TrackCodec = (function () {
         }
         design.props = props;
       }
-      if (r.left !== 0) return { ok: false, reason: "corrupt" };
+      // Optional trailing surface byte (see surfaceByte). Zero leftovers = legacy.
+      if (r.left === 1) {
+        if (!applySurfaceByte(design, r.u8())) return { ok: false, reason: "bounds" };
+      } else if (r.left !== 0) {
+        return { ok: false, reason: "corrupt" };
+      }
       return { ok: true, design };
     } catch (e) {
       return { ok: false, reason: e instanceof RangeError && e.message === "bounds" ? "bounds" : "corrupt" };
@@ -334,6 +362,6 @@ const TrackCodec = (function () {
     return null;
   }
 
-  return { MAGIC, VERSION, VERSION_PROPS, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
+  return { MAGIC, VERSION, VERSION_PROPS, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, KERB_STYLES, surfaceByte, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
 })();
 Object.freeze(TrackCodec);
