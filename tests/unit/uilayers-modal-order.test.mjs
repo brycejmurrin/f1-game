@@ -99,6 +99,19 @@ test("with no dialogs open the z-index ranking is unchanged", () => {
   assert.equal(U.top().id, "select");
 });
 
+test("#loading is a gated UiLayers entry: anyOpen while the plate is up", () => {
+  // Without a DEFS entry, Escape paused under the pre-race card (anyOpen stayed
+  // false; top() never named #loading). Default gate + shown box → anyOpen.
+  const U = fakeDom(
+    [{ id: "loading", z: 36 }, { id: "overlay", z: 20, hidden: true }],
+    [],
+  );
+  assert.equal(U.top().id, "loading", "the plate ranks above the hidden title");
+  assert.equal(U.anyOpen(), true, "driving keys and Escape-as-pause stay gated");
+  U._nodes.get("loading").hidden = true;
+  assert.equal(U.anyOpen(), false, "clearing the plate restores anyOpen");
+});
+
 test("Photo Studio owns focus and Escape above its borrowed fly-camera controls", () => {
   const html = read("index.html");
   const layerZ = (file, id) => {
