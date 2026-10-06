@@ -370,12 +370,22 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
+      // Live SwiftShader race starves a 5 s waitForFunction: CI selected-1
+      // (run 37439242991) logged TopModal open #standings then timed out
+      // while the material pack was still on the main thread (~6 s later).
+      // headlessMode only skips render() (js/game.js).
+      window.__apex.headless(true);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
+       (TopModal's MutationObserver). CI selected-1 (37439242991) starved a 5 s
+       poll while the material pack owned the main thread — BOOT_MS + headless. */
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     const seen = await page.evaluate(() => ({
       layer: (window.MenuNav.activeLayer() || {}).id || null,
@@ -472,11 +482,12 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
+      window.__apex.headless(true);   // live-canvas stall — same as the standings twin
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
     });
     await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "pausemenu",
-      null, { polling: 100, timeout: 5_000 });
+      null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => { const l = window.MenuNav.activeLayer(); return l && l.id; })).toBe("pausemenu");
 
     await page.keyboard.down("ArrowLeft");
@@ -600,8 +611,10 @@ test.describe("Escape is BACK", () => {
     // it. The sheet's own open path is `hidden = false` either way (TopModal
     // mirrors that onto showModal), which is exactly what is under test here.
     await page.evaluate(() => { document.getElementById("standings").hidden = false; });
-    await page.waitForFunction(() => (window.MenuNav.activeLayer() || {}).id === "standings",
-      null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("standings");
+      return !!(el && el.matches(":modal") && (window.MenuNav.activeLayer() || {}).id === "standings");
+    }, null, { polling: 100, timeout: 5_000 });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() =>
       document.getElementById("standings").hidden === true &&
