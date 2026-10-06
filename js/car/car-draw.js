@@ -320,6 +320,19 @@ const CarDraw = (function () {
       if (k === undefined) { k = e.val + (num == null ? "_" : num) + (isPlayer ? ":P" : ""); m.set(num, k); }
       return k;
     }
+    // TLX exposes the three.Texture on the createTexture handle. Raise its
+    // anisotropy for player / garage atlases so sponsor boards stay crisp at
+    // grazing 3/4 angles. GLX/WGX already apply their own cap inside
+    // createTexture (4×) — those handles have no `.tex`, so this is a no-op.
+    // Render backends stay untouched (OWNED: car-draw only).
+    function crispPlayerDecal(t) {
+      const tex = t && t.tex;
+      if (!tex || typeof tex.anisotropy !== "number") return t;
+      try {
+        if (tex.anisotropy < 8) { tex.anisotropy = 8; tex.needsUpdate = true; }
+      } catch (_) { /* renderer may clamp; ignore */ }
+      return t;
+    }
     function getCarDecalTexture(team, num, isPlayer) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       // isPlayer is part of the key: on the mobile tier the player's atlas uploads
@@ -329,7 +342,10 @@ const CarDraw = (function () {
       if (key in _decalTexCache) _decalTexUse.set(key, ++_decalTexTick);   // a hit promotes
       else {
         let t = null;
-        try { t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer)); }
+        try {
+          t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer));
+          if (isPlayer) t = crispPlayerDecal(t);
+        }
         catch (e) {
           // Swallowed AND cached as null before: one transient miss stripped that
           // team's numbers/sponsors for the session, unlogged. Log and retry — but
