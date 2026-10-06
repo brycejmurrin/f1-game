@@ -491,6 +491,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      BRAKE and the steer arrows — same diameter and the same lift from the edge. */
   body.steer-buttons:not(.desktop) #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
   body.steer-buttons:not(.desktop) #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
+  /* OT sits BESIDE BRAKE in this mode (taps column | pedals column). The shared
+     dock gap of --gap*2/3 left only ~6–7 painted px between two hold-sized
+     circles at 130–150% BUTTON SIZE — translucent fills then read as one merged
+     control (player cockpit shots, 2026-10-05). Widen the RIGHT dock's column
+     gap only; row gap and the left dock keep the tighter shared spacing. */
+  body.steer-buttons:not(.desktop) #dock-right {
+    column-gap: max(var(--r-lg), var(--gap));
+    row-gap: calc(var(--gap) * 2 / 3);
+  }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
@@ -678,6 +687,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   font-size: calc(100% * var(--hud-btn-z));
   border-radius: var(--r-md);
   padding: 0;
+  /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
+     --plate is a pale wash, and these two sit on the sky, so they vanished.
+     --look-hud-* stay dark in every theme (no new colour literals). */
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
 }
 /* CAM mode button sits just left of the pause button (top-right). */
 #btn-cam {
@@ -695,6 +710,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   font-size: calc(var(--fs-micro) * var(--hud-btn-z));
   font-weight: 700;
   letter-spacing: var(--ls-3);
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, start lights, announce, cam picker, cam/pause
@@ -722,7 +740,7 @@ body.hud-hidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
-@media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
+@media (hover: hover) and (pointer: fine) { #hud-restore:hover { opacity: 0.95; } }
 #hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
 body.hud-hidden #pausebtn { right: calc(10px + var(--tap) + 4px + var(--sar)); opacity: 0.75; }

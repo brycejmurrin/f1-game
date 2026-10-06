@@ -30,7 +30,10 @@ const RecordedAnnouncer = (() => {
       const end = budgetMs > 0 ? Date.now() + budgetMs : Infinity;
       live = true;
       if (budgetMs > 0) deadline = setTimeout(stop, budgetMs);
-      const valid = () => gen === generation && G.soundOn && !(typeof document !== "undefined" && document.hidden);
+      // G.paused: a load that resolves after a pause must not start a stale clip
+      // on resume. stop() already bumps generation; this is the in-flight gate.
+      const valid = () => gen === generation && G.soundOn && !G.paused
+        && !(typeof document !== "undefined" && document.hidden);
       const ready = p.load ? p.load(id) : Promise.resolve(p.ready(id));
       ready.then((ok) => {
         if (!valid()) return;

@@ -773,7 +773,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
   text-decoration: none;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   #htp-contents a:hover, #cg-contents a:hover, #ch-contents a:hover {
     background: var(--plate-hover); color: var(--text);
   }
@@ -782,6 +782,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   background: var(--plate-press); color: var(--text);
 }
 #htp-contents a:focus-visible, #cg-contents a:focus-visible, #ch-contents a:focus-visible {
+  background: var(--plate-hover); color: var(--text);
   outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
   outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
 }
@@ -856,8 +857,8 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
     transparent calc(var(--sheen) + 14%));
 }
 @media (prefers-reduced-motion: no-preference) {
-  @media (hover: hover) {
-    .bigbtn:hover::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
+  @media (hover: hover) and (pointer: fine) {
+    .bigbtn:is(:hover, :focus-visible)::after { animation: sheen 0.62s cubic-bezier(0.3, 0, 0.2, 1); }
   }
   /* The hero (CAREER, the one solid-red door) catches the light ONCE, just
      after it lands in the title intro (css/menus.css) — scoped to one button
@@ -880,8 +881,8 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 /* Hover gated on a hover-capable pointer (see css/tokens.css); :active is the
    press state — this layer outranks the base button:active, so without these
    the big menu buttons had NO press feedback on touch. */
-@media (hover: hover) {
-  .bigbtn:hover {
+@media (hover: hover) and (pointer: fine) {
+  .bigbtn:is(:hover, :focus-visible) {
     background: var(--grad-primary-hot);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.38),
@@ -913,8 +914,8 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   /* Flat plate, same as the settings tab headers — not a lighter raised slab. */
   box-shadow: none;
 }
-@media (hover: hover) {
-  .bigbtn.alt:hover {
+@media (hover: hover) and (pointer: fine) {
+  .bigbtn.alt:is(:hover, :focus-visible) {
     background: var(--plate-hover);
     color: var(--text);
     border-color: var(--plate-line);

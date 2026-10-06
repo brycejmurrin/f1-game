@@ -586,21 +586,30 @@ test.describe("shared track foundation diagnostics", () => {
     expect(requiredIds).toEqual(expect.arrayContaining([
       "silverstone-control-tower",
       "silverstone-start-gantry",
-    ]));
-    // The Wing's facades sit on the pit lane since the scenery frame was
-    // fixed (sceneryStartFrac 0.64 -> 0.02), so the pit complex supersedes
-    // them; tests/unit/new-hooks-vm.test.mjs pins the same.
-    const wingSegments = result.models.suppressed
-      .filter((entry) => entry.id.startsWith("silverstone-wing-facade-"));
-    expect(wingSegments.map((entry) => entry.id).sort()).toEqual([
+      "silverstone-wing-wave-roof",
       "silverstone-wing-facade-1",
       "silverstone-wing-facade-2",
       "silverstone-wing-facade-3",
       "silverstone-wing-facade-4",
-    ]);
-    expect(wingSegments.every((entry) =>
-      /superseded by the pit complex/.test(entry.reason)
-    )).toBe(true);
+      "silverstone-t2-hangar-west",
+      "silverstone-t2-hangar-centre",
+      "silverstone-t2-hangar-east",
+    ]));
+    // Wing facades + wave roof were pit-superseded when anchored on the garage
+    // strip; they now sit behind pit keep (FACADE_DIST / WING_DIST) and emit.
+    const wingIds = result.models.emitted
+      .map((entry) => entry.id)
+      .filter((id) => id.startsWith("silverstone-wing-"));
+    expect(wingIds).toEqual(expect.arrayContaining([
+      "silverstone-wing-facade-1",
+      "silverstone-wing-facade-2",
+      "silverstone-wing-facade-3",
+      "silverstone-wing-facade-4",
+      "silverstone-wing-wave-roof",
+    ]));
+    expect(result.models.suppressed.filter((entry) =>
+      entry.id.startsWith("silverstone-wing-")
+    )).toEqual([]);
     const hard = [
       ...result.models.invalid,
       ...result.models.suppressed,

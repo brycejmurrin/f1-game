@@ -842,7 +842,7 @@ const PhonePad = (function () {
           reply: async (invite) => {
             if (attempt !== owner) return null;
             say("Found it — connecting…");
-            const res = await deps.acceptInvite(transport, invite, { pad: PROTO }, { gatherTimeoutMs: 2500 });
+            const res = await deps.acceptInvite(transport, invite, { pad: PROTO });
             if (attempt !== owner) return null;
             answered = res;
             return res.ok ? res.code : null;

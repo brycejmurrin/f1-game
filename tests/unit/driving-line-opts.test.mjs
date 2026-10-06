@@ -171,6 +171,11 @@ test("braking cues share one Driving fold and distinguish steering from the visu
   assert.match(cues, /LINE-SPEED CUE/);
   assert.match(cues, /takes priority/);
   assert.match(cues, /both cues OFF/);
-  assert.match(SHELL, /id="pm-linemode-label">LINE STEERING ASSIST/);
+  assert.match(SHELL, /id="pm-linemode-label">STEER ASSIST/);
   assert.match(SHELL, /visual DRIVING LINE is separate/);
+  // How to Play AIDS copy must use the same name as the settings label, and
+  // still name Race Settings' visual DRIVING LINE as a separate thing.
+  assert.match(SHELL, /STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS/);
+  assert.match(SHELL, /AIDS:<\/b> DRIVING HELP[\s\S]*STEER ASSIST \(OFF, CORNERS, FULL\)/);
+  assert.doesNotMatch(SHELL, /LINE STEERING ASSIST/);
 });

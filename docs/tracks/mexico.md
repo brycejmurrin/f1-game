@@ -58,13 +58,18 @@ Peraltada line survives as real **banking** into the final corners (6° at
 
 ## 6. Modelling Notes
 - Sell the track with the **Foro Sol baseball bowl**: continuous eye-height seat
-  walls both sides, nested tiers, green/dirt bowl floor off tarmac, and clear
-  bright **entry/exit apertures** (do not wall the corridor ends shut).
+  walls both sides, nested tiers with **closed backs** (no open-shelf read), green/dirt
+  bowl floor off tarmac, and clear bright **entry/exit apertures** seated on grade.
+- Cover the midfield mustard terrain plate with **plaza / lawn / service-road**
+  patches so the overview is not a bare ochre void.
 - Keep the ground plane **green and flat** — it is a leafy park, not a desert.
   **Park-first**: dense Mixhuca `forestEdge` on the DRS/mid-lap; push/thin
   `cityFront` so CDMX sprawl sits as backdrop, not street canyon.
 - Scatter **festive accents**: pink/orange/green banner and flag boxes on stands and
-  fences for the fiesta atmosphere.
+  fences for the fiesta atmosphere; Mexican GP billboards at Foro entry/exit.
+- Pit/paddock: white hospitality suites with green/white/red fascia behind the
+  engine pit complex (not grey/orange placeholder boxes).
+- Brick/terracotta pavilion variety on the Mixhuca sports-city arcs.
 - Ring the horizon with a **far Sierra Nevada mountain ring** (cool blue-grey rock +
   snowcaps) under denser thin-air haze; keep city towers secondary and further back.
 - Lead the entry with the **lucha-libre statue** box as a small cultural Easter egg.
@@ -75,7 +80,11 @@ Peraltada line survives as real **banking** into the final corners (6° at
 
 The Foro Sol stadium section, the Peralta banking, the crowd, the jacarandas
 and the **Popocatépetl / Iztaccíhuatl** twin-volcano silhouette on the
-high-altitude Sierra Nevada horizon are all modelled. **Nothing added.**
+high-altitude Sierra Nevada horizon are all modelled.
+
+**DETAIL 2026-10-05:** closed Foro Sol terrace/bowl backs, seated portals +
+scoreboard masts, midfield plaza/lawn/service roads, brick pavilion variety,
+Mexican GP signage/crowd, and paddock suite identity.
 
 Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
 Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in

@@ -528,3 +528,16 @@ test("pit duration prefers OpenF1 lane_duration and accepts cached legacy pit_du
   const pits = await api.pits(1);
   assert.deepEqual(Array.from(pits, (p) => p.duration), [22.2, 23.4, 24.5, 0]);
 });
+
+test("placeLabel remaps a moved venue's OpenF1 meeting country", () => {
+  const context = vm.createContext({ Date, AbortController, setTimeout, clearTimeout,
+    fetch: async () => ({ ok: true, json: async () => [] }) });
+  seedLog(context);
+  vm.runInContext(apiSource, context);
+  const api = vm.runInContext("F1API", context);
+  assert.equal(api.placeLabel("Kuala Lumpur", "Bahrain"), "Kuala Lumpur, Malaysia");
+  assert.equal(api.placeLabel("Kuala Lumpur", "Bahrain", " · "), "Kuala Lumpur · Malaysia");
+  assert.equal(api.placeLabel("Sakhir", "Bahrain"), "Sakhir, Bahrain");
+  assert.equal(api.placeLabel("Baku", "Azerbaijan"), "Baku, Azerbaijan");
+  assert.equal(api.placeLabel("", "Bahrain"), "Bahrain");
+});

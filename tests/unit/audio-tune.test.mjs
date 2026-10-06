@@ -990,6 +990,63 @@ test("a music gain created while a line is on air starts ducked", async () => {
   assert.ok(Math.abs(g.gain.value - 0.5 * 0.52 * 0.35) < 1e-9, `born at the ducked level, got ${g.gain.value}`);
 });
 
+// SPOTTER CALLS DUCK THE MUSIC TOO (#988 left this alone). The engineer path
+// ducks from radio-voice.js via setRadioDuck; the spotter never goes through
+// that module — it keys radioVoice directly — so the duck has to live on the
+// clip. Same depth as the engineer (0.35); release when the clip ends; and a
+// spotter release must not lift the music under a live engineer line (or the
+// reverse), because say() calls setRadioDuck(false) on every card replace even
+// while pack.remaining("spotter") is still holding the next line's lead.
+const clipBuf = (d) => ({ duration: d, sampleRate: SR, length: d * SR, numberOfChannels: 1, getChannelData: () => new Float32Array(1) });
+test("a spotter clip ducks the music while it is on air", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "precondition: music at the default level");
+  const h = A.radioVoice([clipBuf(0.8)], 0, { channel: "spotter" });
+  assert.ok(h, "precondition: spotter clip scheduled");
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `mid-spotter music stays ducked, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `spotter end releases the duck, got ${r.music.gain.value}`);
+});
+test("an engineer duck survives a nested spotter clip ending", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  A.setRadioDuck(true);
+  const h = A.radioVoice([clipBuf(0.5)], 0, { channel: "spotter" });
+  assert.ok(h);
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, "both holds keep the music down");
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `spotter end must not lift an engineer duck, got ${r.music.gain.value}`);
+  A.setRadioDuck(false);
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "engineer end finally releases");
+});
+test("a spotter duck survives an engineer setRadioDuck(false) while the clip is still live", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const ducked = full * 0.35;
+  const h = A.radioVoice([clipBuf(0.6)], 0, { channel: "spotter" });
+  assert.ok(h);
+  A.setRadioDuck(true);
+  A.setRadioDuck(false);   // stopVoice() on every card replace — unpaired with a spotter hold
+  assert.ok(Math.abs(r.music.gain.value - ducked) < 1e-9, `engineer false must not cut the spotter duck short, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, "spotter end releases once both holds are clear");
+});
+test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", async () => {
+  const r = await duckRig(); const A = r.GameAudio;
+  const full = 0.5 * 0.52;
+  const h = A.radioVoice([clipBuf(0.4)], 0, { channel: "radio" });
+  assert.ok(h);
+  assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
+  h.stop();
+  for (const fn of pendingTimers.splice(0)) fn();
+});
+
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
   const { GameAudio: A, release, ctx } = boot();
   const nodes = [];
@@ -1700,6 +1757,25 @@ test("the saved camera's mix is applied at boot, not only on the first camera ch
   assert.match(tail, /GameAudio\.setCameraMix\(CAM_MODES\[G\.camMode\]\.id\)/);
 });
 
+// EVERY CAMERA HAS A MIX. setCameraMix falls back to "chase" for an id CAM_KIND
+// does not list, so a camera added to CAM_MODES without a CAM_KIND entry is
+// silently heard as the chase cam. The TV director ("tv", 2026-09-30) was
+// missed when rival/pitwall/drone/helmet were added: it played the full chase
+// engine and wind behind spectator shots.
+test("every CAM_MODES id has an explicit camera mix kind", () => {
+  const modes = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const list = modes.slice(modes.indexOf("const CAM_MODES = ["));
+  const ids = [...list.slice(0, list.indexOf("];")).matchAll(/\bid:\s*"([a-z]+)"/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 20 && ids.includes("tv"), "precondition: parsed the camera list, got " + ids.join(","));
+  const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const kindSrc = eng.slice(eng.indexOf("const CAM_KIND"), eng.indexOf("});", eng.indexOf("const CAM_KIND")));
+  const listed = new Set([...kindSrc.matchAll(/\b([a-z]+):\s*"(?:onboard|chase|tv)"/g)].map((m) => m[1]));
+  assert.deepEqual(ids.filter((id) => !listed.has(id)), [], "camera ids with no CAM_KIND entry fall back to the chase mix");
+  const { GameAudio: A } = boot();
+  A.init();
+  assert.equal(A.setCameraMix("tv"), "tv", "the TV director camera gets the TV (spectator) mix");
+});
+
 // STEADY STATE SCHEDULES NOTHING. setEngine re-aimed the core's pitch, the
 // lowpass, the level and four more params on every call, and setSkid wrote
 // skidGain.gain.value (= setValueAtTime) every physics step — 0 onto 0 on
@@ -1923,4 +1999,34 @@ test("synth→sample upgrade seeds playbackRate from lastRate, not 1.0", async (
   assert.ok(src.playbackRate.value < 0.95, "upgraded source must not start at the 1.0 default, got " + src.playbackRate.value);
   assert.ok(A.rate() > 0.3 && A.rate() < 0.95, "live rate after upgrade, got " + A.rate());
   assert.ok(A.engineLevel() > 0, "mid-race upgrade keeps the voice open instead of fading from silence");
+});
+
+// THE GRID IDLES. startRaceBody calls startEngine with engGain at 0, and only
+// setEngine opens it. update() returned out of its countdown branch before the
+// race block that calls setEngine, so the player's car was silent through all
+// five lamps and the note slammed in at LIGHTS OUT (measured: engineLevel 0 at
+// every lamp, then 0 -> 0.16 in one 50 ms probe at green). The countdown must
+// drive the engine at idle, stationary (speed 0, so wind and whine stay gated).
+test("the countdown drives the player's engine at idle, not silence until lights-out", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const upd = src.slice(src.indexOf("function update(dt)"));
+  const count = upd.slice(upd.indexOf('if (state === "count") {'), upd.indexOf('if (state !== "race") return;'));
+  assert.ok(count.length > 0, "precondition: found update()'s countdown branch");
+  assert.match(count, /GameAudio\.setGridIdle\(player,\s*\{\s*soundOn,\s*wet:\s*isWetRoad\(\),\s*step:\s*_audioParamStep\s*\}\);\s*return;/,
+    "the countdown branch calls setGridIdle on the existing return (line-neutral vs ship)");
+  assert.doesNotMatch(count, /GameAudio\.setEngine\(/, "the idle pack lives in GameAudio.setGridIdle, not inline in game.js");
+  const { GameAudio: A } = boot();
+  A.init();
+  A.startEngine();
+  assert.equal(A.engineLevel(), 0, "precondition: startEngine alone leaves the engine silent");
+  const car = { rpm: 5000, gear: 1, energy: 1, ersDeploy: 0.5 };
+  A.setGridIdle(null, { soundOn: true, step: true });
+  assert.equal(A.engineLevel(), 0, "no player: stay silent");
+  A.setGridIdle(car, { soundOn: false, step: true });
+  assert.equal(A.engineLevel(), 0, "SOUND off: stay silent");
+  A.setGridIdle(car, { soundOn: true, step: false });
+  assert.equal(A.engineLevel(), 0, "non-last physics step: stay silent");
+  A.setGridIdle(car, { soundOn: true, wet: false, step: true });
+  assert.ok(A.engineLevel() > 0, "a stationary idle setGridIdle opens the note");
+  assert.equal(A.windLevel(), 0, "and keeps the wind gated on the grid");
 });

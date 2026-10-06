@@ -24,9 +24,25 @@
   #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
   #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint button { font-size: var(--fs-micro); }
-  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); }
+  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
-  #practice-goal { min-height: var(--tap); max-width: 100%; color: var(--text); background: var(--carbon); border: 1px solid var(--plate-line); }
+  /* GOAL uses the shared ‹ VALUE › row (css/settings-controls.css .set-row).
+     Cap the row so margin-left: auto cannot throw the value across the wide
+     hero; one column, so the select can hold FREE PRACTICE. color-scheme +
+     option tokens keep the native list on Apex dark chrome (not OS-light). */
+  #practice-brief select {
+    color: var(--text);
+    background: var(--plate);
+    border: 1px solid var(--plate-line);
+    border-radius: var(--r-sm);
+    color-scheme: dark;
+  }
+  #practice-brief option { color: var(--text); background: var(--plate); }
+  :root[data-ui-theme="light"] #practice-brief,
+  :root[data-ui-theme="light"] #practice-brief select { color-scheme: light; }
+  #practice-brief .set-row { margin-top: calc(var(--gap) / 2); max-width: 28rem; }
+  #practice-brief .set-row > div { margin-left: 0; }
+  #practice-brief .set-row > div > select { flex: 1 1 12rem; width: 12rem; min-width: 8rem; }
   #home-motion { position: absolute; z-index: 2; top: var(--safe-t); left: var(--safe-l); padding: calc(var(--gap) / 2) var(--gap); min-height: var(--tap); font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
   /* Disabled still hits-tests: Playwright (and a finger) land on this chip
      instead of HOW TO PLAY when it overlaps the door column. */
@@ -66,7 +82,10 @@
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
     :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
   }
-  /* The brand is top-left now, where this button used to dock: bottom-left for every wide scene, not only compact. */
+  /* Live wide docks ANIMATE bottom-left. Classic/static stays top-left
+     on desktop (title-desktop golden). Compact-wide and tall Classic
+     have their own docks; an unscoped wide Classic rule moved the
+     chip on 1440 (menu-baseline 6%, CI 37371854254). */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-primary { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
@@ -81,7 +100,9 @@
      shapes do, and ends the column above it so it covers no button. */
   :where(body[data-shape="tall"]) #overlay[data-home-scene][data-home-ready="1"]:not([data-home-scene="static"], [data-home-scene="photo"]) #title-car { display: none; }
   :where(body[data-shape="tall"]) #overlay[data-home-scene="photo"][style*="data:image"] #title-car { display: none; }
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  /* Same dock on tall Classic: :not(static) hid INSTALL/ANIMATE under
+     APEX 26 on a ~500px portrait (survey apex6). */
+  :where(body[data-shape="tall"]) #home-motion { top: auto; bottom: var(--safe-b); }
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * 0.5); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }

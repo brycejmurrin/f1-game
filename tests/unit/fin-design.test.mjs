@@ -82,8 +82,13 @@ function loadAtlas() {
   let last = null;
   const sb = {
     console, Math, Object, Array, String, Number, JSON, Map, Set, isNaN, isFinite, parseInt, parseFloat,
+    // Keep the FIRST RecCtx as `last`: buildAtlas may createElement a second
+    // canvas to downscale the preview tier, and that must not wipe the ops.
     document: { querySelector: () => null,
-                createElement: () => ({ getContext: () => (last = new RecCtx()), width: 0, height: 0 }) },
+                createElement: () => {
+                  const rec = new RecCtx();
+                  return { getContext: () => { if (!last) last = rec; return rec; }, width: 0, height: 0 };
+                } },
   };
   sb.globalThis = sb;
   vm.createContext(sb);
@@ -92,7 +97,8 @@ function loadAtlas() {
   const LT = vm.runInContext("LiveryTex", sb);
   const Teams = vm.runInContext("Teams", sb), Liveries = vm.runInContext("Liveries", sb);
   return { LT, Teams, Liveries,
-           paint: (teamId, colors) => { LT.buildAtlas(teamId, colors, 16, true); return last.ops; } };
+           // hiRes=true: record ops on the authored 2048 canvas (no preview downscale).
+           paint: (teamId, colors) => { last = null; LT.buildAtlas(teamId, colors, 16, true, true); return last.ops; } };
 }
 const A = loadAtlas();
 const R = A.LT.REGIONS;
