@@ -37,6 +37,11 @@
     country: "Belgium",
     night: false,
     theme: "green",
+    // Bespoke S/F tribune (zolder-main-grandstand) owns the pit-straight
+    // outside; without this the generic 7-box stand+crowdBank at k 0–24
+    // self-clips (6.00 m / 1326 m³ place×place @ frac ~0.02) and swallows
+    // the stand envelope. Monza / Sepang / Portimão precedent.
+    ownPitStraight: true,
     lengthKm: 4.004,
     baseHW: 7.5,
     sceneryCoordinates: "racing",

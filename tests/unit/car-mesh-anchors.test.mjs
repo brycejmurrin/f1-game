@@ -136,19 +136,23 @@ test("every front-wing top flap reaches its endplates after taper and tip rise",
     const element = elements[topIndex], planformIndex = topIndex + 1;
     const span = level <= 0 ? 0.74 : level === 1 ? 0.88 : 1;
     const endplateX = FW_SPAN * span + 0.03;
-    const expectedY = element[3] + style.frontRise * (0.65 + planformIndex * 0.12);
-    const expectedZ = element[2] - style.frontSweep * (0.75 + planformIndex * 0.10);
-    // buildComplete, not build: the top elements are ACTIVE AERO and are drawn
-    // separately so they can rotate. buildComplete merges them at their CLOSED
-    // pose, which is vertex-for-vertex the wing this assertion was written for.
+    const rise = style.frontRise * (0.65 + planformIndex * 0.12);
+    const sweep = style.frontSweep * (0.75 + planformIndex * 0.10);
+    const y0 = element[3] + rise, z0 = element[2] - sweep;
+    // Twist / teCurve / chordTaper move the tip off the recipe chord (DEFAULT_WING
+    // and TEAM_STYLE.wingStyle). Keep a volume around the old TE so we still
+    // prove the flap reaches the plate, without pinning the flat-plank Y/Z.
+    const yLo = y0 - 0.10, yHi = y0 + 0.22, zLo = z0 - 0.18, zHi = z0 + 0.14;
     const mesh = M.Car3D.buildComplete([0.7, 0.05, 0.05], [0.95, 0.8, 0.1], {
       noWheels: true, parts: { aero: 1, _visual: { aero: style } },
     });
     let maxX = 0, hits = 0;
     for (let i = 0; i < mesh.pos.length; i += 3) {
-      if (Math.abs(mesh.pos[i + 1] - expectedY) > 1e-5
-        || Math.abs(mesh.pos[i + 2] - expectedZ) > 1e-5) continue;
-      maxX = Math.max(maxX, Math.abs(mesh.pos[i]));
+      const y = mesh.pos[i + 1], z = mesh.pos[i + 2];
+      if (y < yLo || y > yHi || z < zLo || z > zHi) continue;
+      const ax = Math.abs(mesh.pos[i]);
+      if (ax < endplateX - 0.008) continue;
+      maxX = Math.max(maxX, ax);
       hits++;
     }
     if (!hits) detached.push(`${option.id}:no-tip-vertices`);

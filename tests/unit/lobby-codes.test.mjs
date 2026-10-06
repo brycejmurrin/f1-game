@@ -127,6 +127,30 @@ test("codeFrom lifts a BARE code out of brackets, quotes and a sentence's end", 
   assert.equal(LobbyCodes.codeFrom(code.slice(0, 76) + "\n" + code.slice(76, 152) + "\nok!"), code.slice(0, 152));
 });
 
+test("codeFrom re-joins a fold after the mode separator and a short mid soft-wrap", () => {
+  // Phone / mail soft-wrap often breaks right after "APEX1.s." — TAIL_JUNK /
+  // inviteFromUrl treated that "." as sentence punctuation and dropped the body
+  // (or rejoined as APEX1.sBODY). A short middle line (<20) also stopped early.
+  const { LobbyCodes } = boot();
+  const body = "Q".repeat(60) + "_-" + "z".repeat(58);
+  const code = "APEX1.s." + body;
+  assert.equal(LobbyCodes.codeFrom("APEX1.s.\n" + body), code);
+  assert.equal(LobbyCodes.codeFrom("here: APEX1.s.\n" + body + "\nthanks"), code);
+  assert.equal(LobbyCodes.codeFrom("https://x.test/#vs=APEX1.s.\n" + body), code);
+  assert.equal(
+    LobbyCodes.codeFrom("Race me https://brycejmurrin.github.io/f1-game/#vs=APEX1.s.\n" + body + " now"),
+    code);
+  const folded = code.slice(0, 76) + "\n" + code.slice(76, 88) + "\n" + code.slice(88);
+  assert.ok(code.slice(76, 88).length < 20, "fixture mid crumb is short on purpose");
+  assert.equal(LobbyCodes.codeFrom(folded), code);
+  const urlFold = "https://x.test/#vs=" + code.slice(0, 12) + "\n"
+    + code.slice(12, 27) + "\n" + code.slice(27);
+  assert.equal(LobbyCodes.codeFrom(urlFold), code);
+  // Still refuse to glue English after a complete code (mode-sep fold + prose).
+  assert.equal(LobbyCodes.codeFrom(code + " thanks"), code);
+  assert.equal(LobbyCodes.codeFrom(code + "\nSent from my iPhone"), code);
+});
+
 // L8-e: a share sheet that fails (not cancelled) has SPENT the tap; Safari then
 // refuses a clipboard write. Try the copy once, and if it fails say which tap
 // will work instead of "Could not copy".

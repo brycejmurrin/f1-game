@@ -9,7 +9,7 @@
       const { K, out, n, py, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addCone, addPrism, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
-        scaffoldStand, broadleafFall,
+        scaffoldStand, broadleafFall, tree, pine, seat, groundUnder, indexSolid,
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, foundation,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
@@ -152,8 +152,8 @@
       grandstandEx(0.02,  1,  8, 120, null, null,
         { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat" });
-      grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever" });
+      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
+      grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever", endWalls: true });
 
       // Start/finish gantry spanning the main straight + a second timing arch
       gantry(0.005, 7.5, [0.14, 0.14, 0.18]);
@@ -189,6 +189,29 @@
       }
       broadcastCompound(K(0.03), -1, 58, { vans: 3, dishes: 2, mastH: 10 });
 
+      // DETAIL 2026-10-05 (sheet-04): close open pit-end shells locally.
+      // modelGroup at the garage line is superseded by the pit complex
+      // (12 bays wrap 0.988→0.019). RAW end walls just OUTSIDE that window
+      // close the tube the S/F camera reads as an open shell.
+      {
+        const SHELL = [0.84, 0.86, 0.89];
+        // workOut 14 + bay.depth/2 6.4 → garage centreline ~20.4 m.
+        // One grounded slab per end — extra glass/roof floats (seat.box is
+        // centre-anchored; stacked addBox was +9 m unsupported).
+        for (const sf of [0.9855, 0.0215]) {
+          const a = anchor(K(sf), -1, 20.4);
+          if (onTrack(a.c[0], a.c[2], 1.2)) continue;
+          const b = [a.r, a.u, a.t];
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          out._mat = MAT.CONCRETE;
+          seat.box(out, foot, [13.6, 12.4, 0.7], SHELL, b);
+          out._mat = 0;
+        }
+      }
+
+
       const STRAIGHT_HUES = [
         [0.90, 0.62, 0.14], [0.88, 0.82, 0.22], [0.86, 0.24, 0.20], [0.92, 0.50, 0.12],
       ];
@@ -216,6 +239,44 @@
         waterBand(0.065, 0.20, -1, 26, 136, 12, BASIN,
           { id: "montreal-olympic-basin-north" });
       }
+
+      // DETAIL 2026-10-05: Olympic Basin shore edge (local only). flatTerrain
+      // stays; we only add a near-shore lip tone + quay kerb + sparse reeds so
+      // the flat teal plate no longer meets grass as a hard rectangle.
+      {
+        const SHORE = [TEAL[0] + 0.10, TEAL[1] + 0.12, TEAL[2] + 0.08];
+        const QUAY = [0.72, 0.74, 0.76];
+        // Lighter near-shore ribbon inside the north basin band.
+        waterBand(0.072, 0.188, -1, 24, 34, 8, SHORE, {
+          id: "montreal-basin-shore-north",
+        });
+        waterBand(0.575, 0.670, 1, 22, 32, 8, SHORE, {
+          id: "montreal-basin-shore-straight",
+        });
+        for (const [s0, s1, side, gap] of [
+          [0.08, 0.18, -1, 23],
+          [0.58, 0.66, 1, 21],
+        ]) {
+          const steps = 6;
+          for (let i = 0; i < steps; i++) {
+            const sf = s0 + (i + 0.5) / steps * (s1 - s0);
+            const a = anchor(K(sf), side, gap);
+            if (onTrack(a.c[0], a.c[2], 3)) continue;
+            const b = [a.r, a.u, a.t];
+            const foot = a.c.slice();
+            const gy = groundUnder(foot[0], foot[2]);
+            if (gy !== null) foot[1] = gy;
+            addBox(out, vadd(foot, a.u, 0.35), [1.6, 0.55, 14], QUAY, b);
+            // Reed clumps — cheap cones, not another waterField.
+            if (i % 2 === 0) {
+              const r = vadd(vadd(foot, a.r, side * 2.2), a.u, 0.2);
+              addCyl(out, r, 0.08, 1.6 + hash(i * 17) * 0.8, [0.30, 0.42, 0.22], 4, b);
+              addCone(out, vadd(r, a.u, 1.5), 0.45, 0.9, [0.36, 0.48, 0.24], 5, b);
+            }
+          }
+        }
+      }
+
       // Split around the north rowing tower (0.135, 49 m): a belt tree grew
       // through it once the frame was corrected.
       for (const [s0, s1] of [[0.07, 0.128], [0.142, 0.19]]) forestEdge(s0, s1, -1, 42, {
@@ -478,6 +539,77 @@
           }
         }
       }
+
+
+      // DETAIL 2026-10-05: island midfield densify — service paths, low park
+      // sheds, tree variety. Sheet-04 overview was empty green between loops.
+      // Preserves flatTerrain; no terrain mounds. Gaps clear of Floralies pads.
+      (function islandMidfield() {
+        const PATH = [0.62, 0.60, 0.54];
+        const TECH = [0.74, 0.76, 0.78], TECH_D = [0.60, 0.62, 0.66];
+        const WIN = [0.48, 0.60, 0.72];
+        for (const [sf, side, gap, len, wid] of [
+          [0.22, 1, 48, 90, 12],
+          [0.30, 1, 62, 100, 13],
+          [0.38, -1, 36, 80, 12],
+          [0.48, 1, 52, 95, 13],
+          [0.70, -1, 40, 85, 12],
+          [0.78, 1, 55, 90, 12],
+        ]) {
+          groundPatch(K(sf), side, gap, [wid, 0.20, len], PATH, {
+            id: `montreal-svc-${Math.round(sf * 1000)}-${side > 0 ? "r" : "l"}`,
+            samples: 4,
+          });
+        }
+        for (let i = 0; i < 8; i++) {
+          const sf = 0.20 + i * 0.075;
+          if (sf > 0.52 && sf < 0.58) continue; // hairpin keep-out
+          const side = (i % 2) ? 1 : -1;
+          const gap = 55 + hash(i * 13) * 28;
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 18)) continue;
+          const foot = a.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          const w = 14 + hash(i * 7) * 8;
+          const h = 5.5 + hash(i * 11) * 3.5;
+          const d = 16 + hash(i * 19) * 10;
+          const hf = (d / 2 + 3) / Math.max(1, (api.track && api.track.total) || 4361);
+          indexSolid(sf - hf, sf + hf, side, gap - w / 2 - 2, w + 5);
+          out._mat = MAT.CONCRETE;
+          seat.box(out, foot, [w, h, d], i % 2 ? TECH : TECH_D, b);
+          out._mat = MAT.METAL;
+          addBox(out, vadd(foot, a.u, h + 0.22), [w * 1.06, 0.4, d * 1.06],
+            [0.86, 0.87, 0.89], b);
+          out._mat = MAT.GLASS;
+          addBox(out, vadd(vadd(foot, a.u, h * 0.52), a.r, side * (w * 0.5 + 0.08)),
+            [0.18, h * 0.38, d * 0.5], WIN, b);
+          out._mat = 0;
+        }
+        // Casino approach plaza cue — pale pad + low bollards.
+        {
+          const a = anchor(K(0.255), 1, 95), b = [a.r, a.u, a.t];
+          if (!onTrack(a.c[0], a.c[2], 20)) {
+            groundPatch(K(0.255), 1, 95, [28, 0.18, 36], [0.70, 0.71, 0.72], {
+              id: "montreal-casino-plaza", samples: 4,
+            });
+            for (let i = 0; i < 5; i++) {
+              const p = vadd(vadd(a.c, a.t, (i - 2) * 6), a.u, 0.05);
+              addCyl(out, p, 0.18, 0.9, [0.55, 0.56, 0.58], 5, b);
+            }
+          }
+        }
+        for (let i = 0; i < 14; i++) {
+          const sf = 0.21 + i * 0.045;
+          if (sf > 0.52 && sf < 0.58) continue;
+          const side = (i % 3 === 0) ? -1 : 1;
+          const gap = 28 + hash(i * 23) * 22;
+          const ht = 7 + hash(i * 29) * 5;
+          if (i % 4 === 0) pine(K(sf), side, gap, ht + 2, FOLIAGE);
+          else if (i % 4 === 1) tree(K(sf), side, gap, ht, FOLIAGE2);
+          else bush(K(sf), side, gap, (i % 2) ? [0.22, 0.42, 0.20] : [0.18, 0.38, 0.18]);
+        }
+      })();
 
       // ── Biosphère (Expo 67 US pavilion) — Île Sainte-Hélène, far bank. ─────
       // Wikipedia / ArchDaily / Canadian Encyclopedia: 76 m diameter, 62 m high
@@ -759,6 +891,35 @@
       tyreWall(0.548, 0.568,  1, 3.0, [0.85, 0.30, 0.20]);
       marshalPost(K(0.55), -1, 9);
       billboard(K(0.52),  1, 11, 12, 4, [0.24, 0.30, 0.62]);
+
+      // DETAIL 2026-10-05: hairpin stand livery densify + billboards (sheet-04).
+      // Existing GS 15/21/24 + GS 34 keep their stepped banks; add end fascias,
+      // Canadian GP brand boards, and a short teal seat strip on the outside.
+      {
+        const TEAL_S = [0.14, 0.46, 0.52], RED_S = [0.86, 0.22, 0.18];
+        const YEL_S = [0.90, 0.82, 0.20];
+        for (const [sf, side, gap, col] of [
+          [0.535, 1, 22, RED_S], [0.55, 1, 22, TEAL_S], [0.565, 1, 22, YEL_S],
+        ]) {
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          out._mat = MAT.METAL;
+          for (const sgn of [-1, 1]) {
+            addBox(out, vadd(vadd(a.c, a.t, sgn * 14), a.u, 3.2),
+              [2.6, 5.8, 0.4], col, b);
+          }
+          out._mat = 0;
+        }
+        for (const [sf, side, gap, col] of [
+          [0.53, 1, 12, [0.88, 0.18, 0.16]],
+          [0.545, -1, 11, [0.14, 0.42, 0.68]],
+          [0.56, 1, 12, [0.90, 0.78, 0.16]],
+          [0.575, -1, 11, [0.10, 0.48, 0.42]],
+        ]) {
+          billboard(K(sf), side, gap, 11, 3.6, col);
+        }
+      }
+
       // Casino/back straight runs the length of the Olympic Basin — cool teal.
       billboard(K(0.58), -1, 11, 12, 4, [0.14, 0.46, 0.62]);
 

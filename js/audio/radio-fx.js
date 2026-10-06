@@ -355,14 +355,30 @@ const GameAudioRadioFx = (function () {
       }
       const nodes = [g];
       let dead = false;
+      /* SPOTTER OWNS ITS OWN MUSIC DUCK. The engineer ducks from radio-voice.js;
+       * the spotter never goes through that module, so the hold is latched here
+       * for the life of the clip and released once on teardown/stop. Same depth
+       * as the engineer (host.setSpotterDuck → 0.35); a separate latch so an
+       * engineer setRadioDuck(false) cannot cut it short mid-call. */
+      let spotterDuck = false;
+      const releaseSpotterDuck = () => {
+        if (!spotterDuck) return;
+        spotterDuck = false;
+        if (host.setSpotterDuck) host.setSpotterDuck(false);
+      };
       const teardown = () => {
         if (dead) return;
         dead = true; voicesLive--;
+        releaseSpotterDuck();
         for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
       };
       if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
       voicesLive++;
+      if (fx === "spotter" && host.setSpotterDuck) {
+        spotterDuck = true;
+        host.setSpotterDuck(true);
+      }
       srcs[srcs.length - 1].onended = teardown;
       let tail = null;   // the closing squelch: cancelled with the line, or it lands inside whatever cut it
       if (ch.click > 0 && radioFx > 0) {
@@ -377,6 +393,7 @@ const GameAudioRadioFx = (function () {
           try { g.gain.setTargetAtTime(0, tt, 0.015); } catch (e) { /* torn down */ }
           for (const s of srcs) { try { s.stop(tt + 0.06); } catch (e) { /* not started, or ended */ } }
           if (tail) { try { tail.stop(tt); } catch (e) { /* already played */ } }
+          releaseSpotterDuck();
           setTimeout(teardown, 120);
         },
       };

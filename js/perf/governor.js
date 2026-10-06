@@ -281,6 +281,12 @@ const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
 // conservative instead of dying the same way again; each cleanly FINISHED race
 // pays one strike back down, so a recovered device climbs back to full quality.
 const SENT_ACTIVE = "apex26.raceActive";
+// Set from tick(), which game.js only calls in race/count. loadTrackStepped
+// arms SENT_ACTIVE for menu Home/flyby builds too (a reload during SCENE
+// LOADING after Quali left the flag set). Without this, that reload counted
+// as a jetsam kill and two of them pin tier 4 — shader warm then sits on the
+// 30 s ceiling. A flag with no tick never entered a session.
+const SENT_TICKED = "apex26.raceTicked";
 const SENT_STRIKES = "apex26.crashStrikes";
 // The build those strikes were earned against. A strike is evidence that THIS
 // CODE killed this device — and the moment the code is replaced that evidence
@@ -299,6 +305,7 @@ const SENT_BUILD = "apex26.crashStrikesBuild";
 const SENT_SEEN = "apex26.crashSeen";
 const SENT_SEEN_BUILD = "apex26.crashSeenBuild";
 let _crashStrikes = 0;
+let _raceTicked = false;   // this document already stamped SENT_TICKED
 // Safe-mode floor the governor's restore path can't climb below (per session —
 // only strikes paying off across boots lift it): one strike starts with
 // lamp-shadow/SSR-class features shed (tier 2), two or more shed the whole
@@ -404,13 +411,20 @@ function init(gfx) {
       st.rawSet(SENT_BUILD, build);
       st.rawSet(SENT_STRIKES, "0");
       st.rawDel(SENT_ACTIVE);
+      st.rawDel(SENT_TICKED);
     }
     _crashStrikes = Math.min(4, parseInt(st.raw(SENT_STRIKES), 10) || 0);
     if (st.raw(SENT_ACTIVE) === "1") {
-      _crashStrikes = Math.min(4, _crashStrikes + 1);
-      st.rawSet(SENT_STRIKES, String(_crashStrikes));
+      // Only a session that presented a race/count frame is a crash. A menu
+      // world build (Home circuit after Quali, race-settings flyby) arms the
+      // same flag and a reload mid-build must not spend a strike.
+      if (st.raw(SENT_TICKED) === "1") {
+        _crashStrikes = Math.min(4, _crashStrikes + 1);
+        st.rawSet(SENT_STRIKES, String(_crashStrikes));
+      }
       st.rawDel(SENT_ACTIVE);
     }
+    st.rawDel(SENT_TICKED);
   }
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
@@ -461,7 +475,15 @@ function sentinelArm(on) {
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
-  if (on) GameStore.store.rawSet(SENT_ACTIVE, "1"); else GameStore.store.rawDel(SENT_ACTIVE);
+  if (on) {
+    _raceTicked = false;
+    GameStore.store.rawDel(SENT_TICKED);
+    GameStore.store.rawSet(SENT_ACTIVE, "1");
+  } else {
+    _raceTicked = false;
+    GameStore.store.rawDel(SENT_ACTIVE);
+    GameStore.store.rawDel(SENT_TICKED);
+  }
 }
 function cleanRace() {
   sentinelArm(false);
@@ -505,6 +527,12 @@ function frameStats() {
 }
 
 function tick(dtMs) {
+  // First race/count sample: the session existed. Menu loadTrackStepped arms
+  // SENT_ACTIVE but never reaches here (game.js gates tick on race/count).
+  if (!_raceTicked && _gfx && _gfx.isMobile) {
+    _raceTicked = true;
+    try { GameStore.store.rawSet(SENT_TICKED, "1"); } catch (_) { /* storage blocked: next boot will not count this session */ }
+  }
   if (Number.isFinite(dtMs) && dtMs > 0) {
     frameHistory[frameCursor] = dtMs; frameCursor = (frameCursor + 1) % frameHistory.length;
     frameCount = Math.min(frameHistory.length, frameCount + 1);
@@ -802,6 +830,7 @@ function clearStrikes() {
   // can prove itself again (governor may re-shed if frames still miss).
   if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
   GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
+  GameStore.store.rawDel(SENT_TICKED);
 }
 
 return {
