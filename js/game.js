@@ -6460,7 +6460,7 @@ const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
 const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
 const _wmGateWet = { roughness: 0.32, metalness: 0.35, specular: 0.65 };
 const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
-function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
+function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
   // so the huge plane stays flat and recedes into fog.
@@ -6485,7 +6485,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
       const _tc = track.meshes.terrainChunked;
       if (_tc && _tc.chunks) { _tMesh = _tc; _tChunked = true; }
     }
-    if (_tChunked) gfx.drawChunked(_tMesh, MAT_IDENT, m);
+    if (_tChunked) { if (!envProbe) gfx.drawChunked(_tMesh, MAT_IDENT, m); }
     else gfx.draw(_tMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.road) {
@@ -6507,7 +6507,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // day). Without the tier/latch terms this built a second GPU copy of the road
     // wherever per-chunk lamps are held off, while chunked.js bound the global 32.
     // Prefer per-chunk road when lamp knobs ask for it, OR whenever the
-    // env-probe radial cull is live (frustum + 300 m reach — counted ~70%
+    // env-probe radial cull is live (frustum + 150 m reach — counted ~84%
     // index drop); the cull-only path keeps chunking through tier 2 so
     // SSR/shadow sheds do not re-fuse the road.
     //
@@ -6531,7 +6531,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
       const _rc = track.meshes.roadChunked;
       if (_rc && _rc.chunks && _rc.chunks.length) { _roadMesh = _rc; _roadChunked = true; }
     }
-    if (_roadChunked) gfx.drawChunked(_roadMesh, MAT_IDENT, m);
+    if (_roadChunked) { if (!envProbe) gfx.drawChunked(_roadMesh, MAT_IDENT, m); }
     else gfx.draw(_roadMesh, MAT_IDENT, m);
   }
   if (!hideMeshes.startline && track.meshes.startline) gfx.draw(track.meshes.startline, MAT_IDENT,
@@ -6555,19 +6555,19 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     const _pb = track.meshes.propBatches;
     // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
     // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
-    if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite) {
+    if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       for (let i = 0; i < _pb.length; i++) {
         if (planes && gfx.cullInstances) gfx.cullInstances(_pb[i], planes);
         gfx.drawInstanced(_pb[i], m);
       }
     }
-    gfx.drawChunked(track.meshes.props, MAT_IDENT, m);
+    if (!envProbe) gfx.drawChunked(track.meshes.props, MAT_IDENT, m);
   }
   // Building glass: a low-roughness reflective pass so the lit shader mirrors the
   // sky in the windows (real, view-dependent reflection). Only populated for day
   // builds; empty at night (lit windows live in the emissive props mesh).
-  if (!hideMeshes.props && track.meshes.glass && !frame.mirrorLite) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
+  if (!hideMeshes.props && track.meshes.glass && !frame.mirrorLite && !envProbe) gfx.drawChunked(track.meshes.glass, MAT_IDENT, _wmGlass);
   // Water (lakes/marina/sea): low roughness so the lit shader's env term mirrors
   // the live sky + sun glint — reflective by day, warm at dusk, dark by night.
   // A touch glossier (calmer) when not raining; a little rougher in the wet.
@@ -7361,7 +7361,7 @@ function render(dt) {
         frameSky.invViewProj = _envInv;
         // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd
         // is its ONLY lowering — a throw here froze the tab into a 64px cube (2026-09-22).
-        try { drawWorldMeshes(frame, night, wet, _floodEmit, false); gfx.drawSky(frameSky); }
+        try { drawWorldMeshes(frame, night, wet, _floodEmit, false, true); gfx.drawSky(frameSky); }
         finally { gfx.envFaceEnd(_envFace); }
       }
       if (_envFace === 5) {
