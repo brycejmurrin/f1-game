@@ -1,1 +1,0 @@
-1791305601	Cursor Agent	AUDIT ONLY lighting tuner: verify every TUNE_DEFS knob → LightTune/atmosphere/render. OWNED js/lighting/** + related tests. FORBIDDEN scenery/circuits. No auto-merge/merge. No dual-dispatch Pages.  [cursor/lighting-tuner-audit-0bcf; session 2d057ac7052a681b1eabebab]
