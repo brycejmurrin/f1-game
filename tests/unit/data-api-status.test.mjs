@@ -11,6 +11,204 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
   readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
 
+// Own the clock so stalled bodies test the actual 15 s attempt deadline,
+// not a shortened timeout or a second timer started after headers.
+function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, controller = true, headersDelay = 0 } = {}) {
+  let now = 1_000_000, nextId = 0;
+  const timers = new Map(), calls = [], writes = [], lateBodies = [];
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const key = "apex26.api." + url;
+  const stale = JSON.stringify({ t: now - 1000, data: [{ rainfall: 99 }] });
+  class Clock extends Date { static now() { return now; } }
+  const context = vm.createContext({
+    Date: Clock, AbortController: controller ? AbortController : undefined,
+    setTimeout(fn, ms) { const id = ++nextId; timers.set(id, { fn, at: now + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    localStorage: { getItem: (k) => k === key ? stale : null,
+      setItem: (k, v) => writes.push({ k, v }), length: 1, key: () => key, removeItem() {} },
+    fetch(url, init) {
+      calls.push({ url, signal: init && init.signal, at: now });
+      if (status === null) return Promise.reject(new TypeError("offline"));
+      const read = () => {
+        if (body === "throw") throw new TypeError("body threw");
+        if (body === "reject") return Promise.reject(new TypeError("body rejected"));
+        if (body === "primitive") return Promise.reject("unreadable body");
+        if (body === "frozen") return Promise.reject(Object.freeze(new Error("frozen body")));
+        return new Promise((resolve, reject) => {
+          lateBodies.push({ resolve, reject });
+          if (body === "abort" && init) init.signal.addEventListener("abort", () =>
+            reject(Object.assign(new Error("body aborted"), { name: "AbortError" })));
+        });
+      };
+      const response = { ok: status === 200, status,
+        headers: { get: () => retryAfter }, text: read, json: read };
+      return headersDelay ? new Promise((resolve) =>
+        context.setTimeout(() => resolve(response), headersDelay)) : Promise.resolve(response);
+    },
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context);
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  async function advance(ms) {
+    const target = now + ms;
+    for (;;) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > target) break;
+      timers.delete(next[0]); now = next[1].at; next[1].fn(); await flush();
+    }
+    now = target; await flush();
+  }
+  return { api: context.api, calls, writes, timers, lateBodies, flush, advance };
+}
+
+for (const status of [401, 403]) {
+  for (const body of ["reject", "throw", "stall", "abort"]) {
+    test(`HTTP ${status} with a ${body} error body refuses cached weather`, async () => {
+      const h = bodyFailureHarness({ status, body });
+      let settled = false;
+      const result = h.api.weather(7, 0).then(
+        (value) => { settled = true; return { value }; },
+        (error) => { settled = true; return { error }; });
+      await h.flush();
+      if (body === "stall" || body === "abort") {
+        await h.advance(14999);
+        assert.equal(settled, false, "body reading shares the original deadline");
+        await h.advance(1);
+        assert.equal(h.calls[0].signal.aborted, true);
+      }
+      const out = await result;
+      assert.equal(out.value, undefined, "the cached rainfall must not hide a lockout");
+      assert.equal(out.error.status, status);
+      assert.equal(out.error.retryAfterMs, 0);
+      if (body === "stall" || body === "abort") assert.match(out.error.message, /timed out/);
+      assert.equal(out.error.cancelled, undefined, "a deadline is not user cancellation");
+      assert.equal(h.calls.length, 1, "authentication failures never retry");
+      assert.equal(h.timers.size, 0, "the deadline is reclaimed");
+      assert.equal(h.api.cancelAll(), 0, "no controller leaks after failure");
+      assert.equal(h.writes.length, 0, "the cache is untouched");
+    });
+  }
+}
+
+test("known error status survives a stalled body even without AbortController", async () => {
+  const h = bodyFailureHarness({ controller: false });
+  const result = h.api.weather(7, 0).catch((error) => error);
+  await h.flush();
+  assert.equal((await result).status, 403);
+  assert.equal(h.timers.size, 0);
+  const stalled = bodyFailureHarness({ controller: false, body: "stall" });
+  const pending = stalled.api.weather(7, 0).catch((error) => error);
+  await stalled.flush(); await stalled.advance(15000);
+  assert.equal((await pending).status, 403);
+  assert.equal(stalled.timers.size, 0);
+});
+
+test("headers arriving late do not restart or extend the attempt deadline", async () => {
+  const h = bodyFailureHarness({ status: 401, body: "stall", headersDelay: 14000 });
+  let settled = false;
+  const pending = h.api.weather(7, 0).catch((error) => { settled = true; return error; });
+  await h.flush(); await h.advance(14000);
+  assert.equal(h.lateBodies.length, 1, "headers arrived and body consumption began");
+  await h.advance(999);
+  assert.equal(settled, false);
+  await h.advance(1);
+  const error = await pending;
+  assert.equal(error.status, 401);
+  assert.match(error.message, /timed out/);
+  h.lateBodies[0].resolve('{"detail":"late detail"}');
+  await h.flush();
+  assert.match(error.message, /timed out/, "late body completion cannot mutate the delivered timeout");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.timers.size, 0);
+});
+
+test("primitive and frozen body rejections retain response metadata", async () => {
+  for (const body of ["primitive", "frozen"]) {
+    const h = bodyFailureHarness({ body });
+    const error = await h.api.weather(7, 0).catch((error) => error);
+    assert.equal(error.status, 403);
+    assert.equal(error.retryAfterMs, 0);
+    assert.equal(h.timers.size, 0);
+  }
+});
+
+test("cancelAll during an error body drops cached and queued weather and ignores late completion", async () => {
+  const h = bodyFailureHarness({ body: "stall", status: 429, retryAfter: "60" });
+  const first = h.api.weather(7, 0).catch((error) => error);
+  const queued = h.api.weather(8, 0).catch((error) => error);
+  await h.flush();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.api.cancelAll(), 1);
+  for (const error of await Promise.all([first, queued])) assert.equal(error.cancelled, true);
+  assert.equal(h.calls[0].signal.aborted, true);
+  assert.equal(h.timers.size, 0);
+  h.lateBodies[0].resolve('{"detail":"too late"}');
+  await h.flush(); await h.advance(90000);
+  assert.equal(h.calls.length, 1, "late error bodies cannot retry");
+  assert.equal(h.writes.length, 0);
+  const fresh = h.api.weather(8, 0).catch((error) => error);
+  await h.flush();
+  assert.equal(h.calls.length, 2, "cancellation releases the provider queue");
+  h.api.cancelAll(); assert.equal((await fresh).cancelled, true);
+});
+
+for (const body of ["reject", "stall"]) {
+  test(`HTTP 429 with a ${body} body preserves the Retry-After ceiling`, async () => {
+    const h = bodyFailureHarness({ status: 429, body, retryAfter: "120" });
+    const result = h.api.request("https://api.openf1.org/v1/weather?session_key=7", 0, { cache: false })
+      .catch((error) => error);
+    await h.flush();
+    if (body === "stall") await h.advance(15000);
+    const error = await result;
+    assert.equal(error.status, 429);
+    assert.equal(error.retryAfterMs, 120000);
+    assert.equal(h.calls.length, 1, "long Retry-After fails fast instead of retrying");
+    assert.equal(h.timers.size, 0);
+  });
+}
+
+test("a stalled 429 keeps its 60 s retry delay outside the provider queue", async () => {
+  const h = bodyFailureHarness({ status: 429, body: "stall", retryAfter: "60" });
+  const result = h.api.weather(7, 0).catch((error) => error);
+  await h.flush(); await h.advance(15000);
+  assert.equal(h.calls.length, 1);
+  assert.equal([...h.timers.values()][0].at - h.calls[0].at, 75000);
+  const other = h.api.weather(8, 0).catch((error) => error);
+  await h.flush();
+  assert.equal(h.calls.length, 2, "a different endpoint starts during retry backoff");
+  h.api.cancelAll();
+  assert.equal((await result).cancelled, true);
+  assert.equal((await other).cancelled, true);
+  assert.equal(h.timers.size, 0);
+});
+
+test("rejected 503 bodies keep the existing two-retry budget and offline fallback", async () => {
+  const h = bodyFailureHarness({ status: 503 });
+  const result = h.api.weather(7, 0);
+  await h.flush();
+  assert.equal(h.calls.length, 1);
+  await h.advance(10000);
+  assert.equal(h.calls.length, 2);
+  await h.advance(20000);
+  assert.equal((await result).rainfall, 99, "exhausted server retries still allow stale fallback");
+  assert.equal(h.calls.length, 3);
+  assert.equal(h.timers.size, 0);
+});
+
+test("offline fetches and stalled successful bodies still allow cached weather", async () => {
+  const offline = bodyFailureHarness({ status: null });
+  assert.equal((await offline.api.weather(7, 0)).rainfall, 99);
+  assert.equal(offline.timers.size, 0);
+  const h = bodyFailureHarness({ status: 200, body: "stall" });
+  const result = h.api.weather(7, 0);
+  await h.flush(); await h.advance(15000);
+  assert.equal((await result).rainfall, 99);
+  assert.equal(h.calls[0].signal.aborted, true);
+  assert.equal(h.api.cancelAll(), 0);
+  assert.equal(h.timers.size, 0);
+});
+
 test("replay location downloads bypass the raw cache while telemetry retains it", async () => {
   const cached = JSON.stringify({ t: Date.now(), data: [{ date: "2026-10-04T12:00:00Z", x: 10, y: 20 }] });
   let fetches = 0, writes = 0;
