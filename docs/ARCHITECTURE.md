@@ -163,9 +163,10 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
 | `experience.js` | `CareerExperience` | tag | CareerExperience: race brief, real season story and management navigation. |
-| `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
+| `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+| `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
 
 **`js/ui/`**
 

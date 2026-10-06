@@ -289,7 +289,7 @@ const FULL = [
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
-  "js/career/career-ui.js",
+  "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
   "js/ui/select-screen.js",
@@ -586,7 +586,6 @@ const HARD_EDGES = [
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
-  ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
@@ -686,7 +685,6 @@ const HARD_EDGES = [
   ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
   ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
   ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
-  ["js/career/career-backup.js", "js/career/career-ui.js"],     // EXPORT/IMPORT on slot cards
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -791,7 +789,6 @@ const HARD_EDGES = [
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
-  ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
 
 // ---------------------------------------------------------------------------
@@ -983,6 +980,15 @@ const LAZY_CAM_EDITOR = [
   "js/camera/flyby-editor.js",  // FlybyEditor
 ];
 const LAZY_CAM_EDITOR_EDGES = [];
+
+// CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
+// (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
+// CAREER opens. Dom / Career / CareerBackup stay FULL, so the inject needs
+// no intra-bundle edges.
+const LAZY_CAREER_UI = [
+  "js/career/career-ui.js",   // CareerScreen
+];
+const LAZY_CAREER_UI_EDGES = [];
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
@@ -1383,6 +1389,7 @@ module.exports = {
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
+  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

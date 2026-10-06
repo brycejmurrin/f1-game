@@ -468,6 +468,10 @@
     "js/camera/flyby-editor.js"
   ],
     LAZY_CAM_EDITOR_EDGES: [],
+    LAZY_CAREER_UI: [
+    "js/career/career-ui.js"
+  ],
+    LAZY_CAREER_UI_EDGES: [],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

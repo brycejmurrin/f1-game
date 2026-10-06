@@ -843,6 +843,7 @@ declare const CamTunerEditor: GameModuleFactory;
 declare const FlybyPanel: GameModuleFactory;
 declare const FlybyEditor: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;
+declare const CareerScreen: GameModuleFactory;
 declare const SeasonUI: GameModuleFactory;
 declare const DebrisWorld: GameModuleFactory;
 declare const GameHud: GameModuleFactory;

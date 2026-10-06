@@ -1,5 +1,5 @@
-/* Apex 26 — the CAREER screen (#career). THREE states in one sheet: CAREER MODES (both modes, their six save slots and their guides — the title button's one door)… */
-const CareerUI = (function () {
+/* Apex 26 — the CAREER screen (#career), LAZY_CAREER_UI. THREE states in one sheet: CAREER MODES (both modes, their six save slots and their guides — the title button's one door)… */
+const CareerScreen = (function () {
   "use strict";
 
 const STARTER_TIER_MIN = 3;
@@ -1628,4 +1628,4 @@ function create(G) {
 
 return { create, STARTER_TIER_MIN };
 })();
-Object.freeze(CareerUI);
+Object.freeze(CareerScreen);

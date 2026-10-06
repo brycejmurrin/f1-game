@@ -170,7 +170,7 @@ function loadCareerUi(careerOpts = {}) {
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
-  const ui = sb.CareerUI.create(G);
+  const ui = sb.CareerScreen.create(G);
   return { dom, ui, Career, G, $: G.$ };
 }
 
