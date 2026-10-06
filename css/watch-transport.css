@@ -21,7 +21,7 @@
   font: inherit; letter-spacing: normal;
 }
 .watch-transport button:active, .watch-transport button[aria-pressed="true"] { border-color: var(--red); background: var(--plate-on); }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .watch-transport button:hover { border-color: var(--red); background: var(--plate-on); }
 }
 .watch-transport :is(button, select, input):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -292,9 +292,28 @@ const GameAudio = (function () {
     context: () => ctx, master: () => master, enabled, engineRunning: () => engineOn,
     sfxOk, clamp01, now, resumeRejected,
   });
-  const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck } = soundtrack;
+  const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck: soundtrackRadioDuck } = soundtrack;
+  /* TWO HOLDS, ONE DUCK. The engineer (radio-voice.js) and the spotter
+   * (radioVoice clips) each latch independently: say()/stopVoice always pairs
+   * setRadioDuck(false) on a card replace, and that must not lift the music
+   * under a spotter call still finishing its remaining() lead — nor the reverse
+   * when a spotter clip ends while an engineer line is still on air. */
+  let radioDuckHold = false;
+  let spotterDuckHold = false;
+  function applyMusicDuck() {
+    return soundtrackRadioDuck(radioDuckHold || spotterDuckHold);
+  }
+  function setRadioDuck(on) {
+    radioDuckHold = !!on;
+    return applyMusicDuck();
+  }
+  function setSpotterDuck(on) {
+    spotterDuckHold = !!on;
+    return applyMusicDuck();
+  }
   const radio = GameAudioRadioFx.create({
     context: () => ctx, master: () => master, bus: () => sfxBus, enabled, sfxOk, now,
+    setSpotterDuck,
   }, signal);
   const { decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx } = radio;
   let ctxGen = 0;
@@ -483,6 +502,10 @@ const GameAudio = (function () {
     engBuf = engLoop = engWin = null; samplesReady = false; // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
     radio.resetContext();
+    // Old radioVoice onended/stop never fire on a closed context — drop both
+    // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
+    radioDuckHold = false;
+    spotterDuckHold = false;
     signal.resetContext();
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would

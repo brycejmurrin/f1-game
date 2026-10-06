@@ -687,6 +687,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   font-size: calc(100% * var(--hud-btn-z));
   border-radius: var(--r-md);
   padding: 0;
+  /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
+     --plate is a pale wash, and these two sit on the sky, so they vanished.
+     --look-hud-* stay dark in every theme (no new colour literals). */
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
 }
 /* CAM mode button sits just left of the pause button (top-right). */
 #btn-cam {
@@ -704,6 +710,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   font-size: calc(var(--fs-micro) * var(--hud-btn-z));
   font-weight: 700;
   letter-spacing: var(--ls-3);
+  background: var(--look-hud-bg);
+  color: var(--look-hud-ink);
+  border: 1px solid var(--look-hud-dim);
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, start lights, announce, cam picker, cam/pause
@@ -731,7 +740,7 @@ body.hud-hidden .touchbtn { display: none !important; }
   opacity: 0.5;
   display: none;            /* only visible while the HUD is hidden */
 }
-@media (hover: hover) { #hud-restore:hover { opacity: 0.95; } }
+@media (hover: hover) and (pointer: fine) { #hud-restore:hover { opacity: 0.95; } }
 #hud-restore:active { opacity: 0.95; }
 body.hud-hidden #hud-restore { display: block; }
 body.hud-hidden #pausebtn { right: calc(10px + var(--tap) + 4px + var(--sar)); opacity: 0.75; }

@@ -168,6 +168,13 @@ const HudLayout = (function () {
   //   cannot share that offset (x-34 puts it at -144): x-21 is 22..152 at 1280
   //   and 208..338 at 1920. At the 0.85 bottom zoom fitHud has painted every
   //   piece sits closer to the centre and the same gaps only grow.
+  // TOUCH cockpit / helmet: those desktop offsets land on the steer column
+  // and the pedal stack (852×393 cockpit + CORNERS). The chips the touch hide
+  // owns stay shipped, so a preset does not set data-hl-user and un-hide them.
+  const TOUCH_PRESET_HOLD = {
+    cockpit: { energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
+    helmet: { gearbox: 1, energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 },
+  };
   const PRESETS = Object.freeze([
     ["shipped", "SHIPPED", {}],
     ["clean", "CLEAN", { tower: { s: 85 }, map: { s: 85 }, gaps: { s: 90 }, sectors: { s: 90 },
@@ -411,8 +418,12 @@ const HudLayout = (function () {
     const p = PRESETS.find((q) => q[0] === pid);
     if (!p || !isSet(sn)) return null;
     const pr = isProf(pn) ? pn : "standard";
+    const hold = touch() && TOUCH_PRESET_HOLD[sn];
     const out = {};
-    for (const id of IDS) out[id] = normEl(Object.assign(shippedEl(id, sn, pr), p[2][id] || {}));
+    for (const id of IDS) {
+      const over = hold && hold[id] ? null : p[2][id];
+      out[id] = normEl(Object.assign({}, shippedEl(id, sn, pr), over || {}));
+    }
     return out;
   }
   /** Write preset `pid` into set `setName` of style `pn` (default: on screen). */
@@ -481,7 +492,6 @@ const HudLayout = (function () {
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
-    [["rel", "inputs"], (h, a) => !h("desktop") && !a, "touch screens: the buttons sit where it ships — move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
     [["announce"], () => true, "shows with a race message", true],

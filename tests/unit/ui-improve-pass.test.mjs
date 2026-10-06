@@ -885,7 +885,14 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
   assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-pits:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-driving:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
+  assert.ok(decl(overlays, "#howtoplay .sheet-body::after", "height") ||
+    rulesFor(overlays, /#howtoplay \.sheet-body::after/).some((r) => r.decls.get("height")),
+    "HTP body keeps scroll slack so FRIENDS can reach the pane top");
+  assert.ok(decl(overlays, "#howtoplay .sheet-body", "scroll-padding-block-start") ||
+    rulesFor(overlays, /^#howtoplay \.sheet-body$/).some((r) => r.decls.has("scroll-padding-block-start")));
   assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
     "help rows must not synchronize two unrelated answers");
   assert.equal(decl(css("css/components.css"), "#howtoplay", "--sheet-w"), "1000px");
@@ -1597,6 +1604,26 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "hidden RECALIBRATE also drops its described-by copy");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
     "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-settings-body", "padding-bottom"), "calc(var(--tap) + var(--pad))",
+    "sheet-body end padding clears BACK on Controls and Steering & Assists");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings", "overflow"), "hidden",
+    "the settings dialog is not a second page scroller");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups,/, "overflow"), "visible",
+    "nested settings groups defer scrolling to the sheet body");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups > \[role="region"\] > button/, "height"), "auto",
+    "full-row action labels size to their wrapping copy, not a --tap clip");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings-inner .preset-row.balanced-row", "align-items"), "stretch",
+    "STEERING preset cards on one line share height");
+  const presetGrid = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner \.preset-row\.balanced-row$/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.ok(presetGrid, "narrow settings packs preset cards 2-up");
+  assert.equal(presetGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(presetGrid.decls.get("grid-auto-rows"), "1fr");
+  assert.equal(presetGrid.decls.get("align-items"), "stretch");
+  const fullRow = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner\[data-shape="wide"\] \.pm-group > button/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.equal(fullRow && fullRow.decls.get("grid-column"), "1 / -1",
+    "narrow wide-shape action buttons take the full row");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
@@ -1823,8 +1850,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
   assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
-  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
+  assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
+    "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
+  const titleFlow = read("js/ui/title-flow.js");
+  assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
+    "HTP CLOSE drops a stale #htp-* hash from title-flow, not game.js");
+  assert.match(titleFlow, /\^#htp-/);
+  assert.doesNotMatch(read("js/game.js"), /\^#htp-/);
+  assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
+  assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");

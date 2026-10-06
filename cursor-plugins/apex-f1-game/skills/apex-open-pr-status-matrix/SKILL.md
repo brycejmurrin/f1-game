@@ -17,5 +17,6 @@ Use when the user wants a thorough open-PR / CI status for Apex (f1-game).
 
 ## Rules
 - No local clone.
-- CI Watch owns merges; this skill is read/report unless the user asked to fix reds.
+- Only CI Watch arms squash auto-merge on **ready** PRs; this skill is read/report unless the user asked to fix reds. Never merge/arm from here.
 - Prefer one executor for the matrix build.
+- Summarize `cursor/<topic>-<hash>` collision notes; do not rename legacy `claude/<topic>` heads.
