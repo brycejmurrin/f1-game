@@ -555,6 +555,8 @@ test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-
   const tr = { n: h.pts.length, px: h.pts.map((p) => p[0]), pz: h.pts.map((p) => p[1]), hw: h.pts.map(() => 7), total: 1600 };
   h.cv.setBuilt(tr);
   const a = h.scr(h.pts[3]);
+  // Select first, then press-drag (select-without-move: first press may still
+  // arm a mouse drag past DRAG_MOUSE once the threshold is crossed).
   h.fire("pointerdown", a);
   h.fire("pointermove", { clientX: a.clientX + 40, clientY: a.clientY });
   h.fills.length = 0;
@@ -568,6 +570,57 @@ test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-
   h.fire("pointerup", { clientX: 1e6, clientY: -1e6 });
   const p = h.ev.changes[h.ev.changes.length - 1].pts[3];
   assert.deepEqual(plain(p), [h.b.C.LIMITS.coord, -h.b.C.LIMITS.coord], "clamped to ±10 km, so the design stays saveable");
+});
+
+test("DesignerCanvas: select-without-move — tap keeps coords; jitter below threshold keeps coords; drag on selected moves", () => {
+  const h = bootCanvas();
+  assert.equal(h.b.DC.DRAG_MOUSE, 6);
+  assert.equal(h.b.DC.DRAG_TOUCH, 10);
+  assert.equal(h.b.DC.HIT_TOUCH, 44);
+  const i = 4;
+  const before = plain(h.pts[i]);
+  const at = h.scr(h.pts[i]);
+  // Tap: select only — no onChange.
+  h.tap(at);
+  assert.deepEqual(h.ev.picks, [i], "tap picks the node");
+  assert.equal(h.ev.changes.length, 0, "tap does not move");
+  assert.equal(h.cv.selection().sel, i, "canvas selection follows the tap");
+  assert.deepEqual(plain(h.pts[i]), before, "coordinates unchanged after tap");
+  // Below-threshold jitter while selected (mouse DRAG_MOUSE = 6).
+  h.fire("pointerdown", at, 2, { pointerType: "mouse" });
+  h.fire("pointermove", { clientX: at.clientX + 4, clientY: at.clientY + 3 }, 2, { pointerType: "mouse" });
+  h.fire("pointerup", { clientX: at.clientX + 4, clientY: at.clientY + 3 }, 2, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 0, "below-threshold jitter does not move");
+  // Already selected + drag above threshold → move.
+  h.fire("pointerdown", at, 3, { pointerType: "mouse" });
+  h.fire("pointermove", { clientX: at.clientX + 40, clientY: at.clientY }, 3, { pointerType: "mouse" });
+  h.fire("pointerup", { clientX: at.clientX + 40, clientY: at.clientY }, 3, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 1, "deliberate drag moves");
+  assert.equal(h.ev.changes[0].kind, "move");
+  assert.notDeepEqual(plain(h.ev.changes[0].pts[i]), before, "coordinates changed");
+});
+
+test("DesignerCanvas: empty-space drag pans without moving nodes; touch tap does not move", () => {
+  const h = bootCanvas();
+  const i = 8;
+  const before = plain(h.pts.map((p) => p.slice()));
+  const v0 = h.cv.view();
+  // Empty space far from every handle.
+  const empty = { clientX: 8, clientY: 8 };
+  h.fire("pointerdown", empty, 1, { pointerType: "mouse" });
+  h.fire("pointermove", { clientX: 48, clientY: 28 }, 1, { pointerType: "mouse" });
+  h.fire("pointerup", { clientX: 48, clientY: 28 }, 1, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 0, "pan never edits points");
+  assert.deepEqual(plain(h.pts), before);
+  const v1 = h.cv.view();
+  assert.ok(Math.abs(v1.cx - v0.cx) > 0.01 || Math.abs(v1.cz - v0.cz) > 0.01, "view panned");
+  // Touch tap on a handle: select only (needs hold or prior select to drag).
+  const at = h.scr(h.pts[i]);
+  h.fire("pointerdown", at, 2, { pointerType: "touch" });
+  h.fire("pointermove", { clientX: at.clientX + 8, clientY: at.clientY + 6 }, 2, { pointerType: "touch" }); // < DRAG_TOUCH
+  h.fire("pointerup", { clientX: at.clientX + 8, clientY: at.clientY + 6 }, 2, { pointerType: "touch" });
+  assert.equal(h.ev.changes.length, 0, "touch jitter below threshold does not move");
+  assert.deepEqual(h.ev.picks.at(-1), i);
 });
 
 // ── 2026-10-01 usability: FIX chips, HOW TO, the first-open card, hints, labels, the context row ──
@@ -741,7 +794,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.ok(hint && stageHint && hint !== stageHint);
   const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
-  assert.match(hint.textContent, /^SELECT: drag points/);
+  assert.match(hint.textContent, /^SELECT: tap a point to select/);
   // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
   const css = read("css/editor.css");
   assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
@@ -904,7 +957,7 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   const seedRow = chipsIn(design, "RANDOMISE")[0].parentNode;
   assert.deepEqual(seedRow.children.map((c) => c.textContent), ["RANDOMISE", "TRACK OF THE DAY", "START FROM…"]);
   const speed = chipsIn(design, "SPEED")[0], editRow = speed.parentNode;
-  assert.deepEqual(editRow.children.map((c) => c.textContent), ["REVERSE", "START HERE", "DELETE POINT", "SPEED", "TEST HERE"]);
+  assert.deepEqual(editRow.children.map((c) => c.textContent), ["REVERSE", "START HERE", "DELETE POINT", "PREV POINT", "NEXT POINT", "SPEED", "TEST HERE"]);
   // UNDO / REDO / FIT live on the stage toolbar (not buried under DETAILS).
   const toolbar = b.root.querySelector('.td-chips[data-role="toolbar"]');
   assert.ok(toolbar, "stage toolbar");

@@ -92,6 +92,37 @@ test("dragging a grip up sets the node height and commits ONCE on release", () =
   assert.ok(commits(h.ev)[0].h > 0, "drag up raises height: " + commits(h.ev)[0].h);
 });
 
+test("select-without-move: tap keeps height; below-threshold jitter keeps height; drag on selected moves", () => {
+  const hs = new Array(16).fill(0); hs[2] = 4;
+  const h = boot(hs);
+  h.pr.render();
+  const g = h.grips()[2] || h.grips()[0];
+  assert.ok(g, "grip drawn");
+  const h0 = h.list()[h.pr.selected() >= 0 ? h.pr.selected() : 2];
+  // Tap: select only.
+  h.fire("pointerdown", { x: g.x, y: g.y }, 1, { pointerType: "mouse" });
+  const i = h.pr.selected();
+  assert.ok(i >= 0);
+  h.fire("pointerup", { x: g.x, y: g.y }, 1, { pointerType: "mouse" });
+  assert.equal(commits(h.ev).length, 0, "tap does not commit a height change");
+  assert.equal(h.list()[i], 4, "tap keeps the node's height");
+  // Below-threshold vertical jitter (mouse DRAG_MOUSE = 6).
+  h.fire("pointerdown", { x: g.x, y: g.y }, 2, { pointerType: "mouse" });
+  h.fire("pointermove", { x: g.x + 20, y: g.y - 4 }, 2, { pointerType: "mouse" }); // horizontal ignored; |dy|<6
+  h.fire("pointerup", { x: g.x + 20, y: g.y - 4 }, 2, { pointerType: "mouse" });
+  assert.equal(commits(h.ev).length, 0, "below-threshold jitter does not move height");
+  assert.equal(h.list()[i], 4);
+  // Already selected + drag above threshold → height changes.
+  h.fire("pointerdown", { x: g.x, y: g.y }, 3, { pointerType: "mouse" });
+  assert.equal(h.pr.selected(), i, "still selected");
+  h.fire("pointermove", { x: g.x + 40, y: g.y - 80 }, 3, { pointerType: "mouse" }); // vertical only
+  h.fire("pointerup", { x: g.x + 40, y: g.y - 80 }, 3, { pointerType: "mouse" });
+  assert.equal(commits(h.ev).length, 1, "deliberate vertical drag commits");
+  assert.ok(commits(h.ev)[0].h !== 4, "height changed from " + h0);
+  assert.equal(h.DP.DRAG_MOUSE, 6);
+  assert.equal(h.DP.DRAG_TOUCH, 10);
+});
+
 test("keyboard: [ ] pick, Up/Down height, Delete flattens, Escape clears", () => {
   const hs = new Array(16).fill(0); hs[3] = 4;
   const h = boot(hs);
