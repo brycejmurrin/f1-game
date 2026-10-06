@@ -22,8 +22,8 @@ Gently rolling farmland — real but modest relief, most of it through the Estor
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | 0.985–0.045 | R | near | **Pit bay vault**: pale render garages under a corrugated barrel vault, blue steel trim (1991 Technopôle rebuild) |
-| 0.996 | R | mid | **Control block** + short conference wing (operator Business Center / Centre de Conférence) — squat two-storey, no tower |
-| 0.005 | L | near | Main grandstand (150 m), covered |
+| 0.998 | R | mid (gap 50) | **Race-control block** outside pit reject + conference wing (Business Center) — squat Technopôle silhouette with glazed deck, not a tower |
+| 0.005 | L | near | **Main French GP tribuna** — concrete bays + local seat-rake shell, blue eaves, end walls (replaces navy slab) |
 | 0.055 | R | mid | **Conservatoire de la Monoplace Française** — museum at the main entrance (inaugurated 1 May 2015, ~1 400 m²) |
 | 0.00–0.08 | both | — | Foliage suppressed at the pits — the paddock is the one built-up place on the lap |
 | 0.062+ | R | mid | Technopôle industrial sheds (Ligier / Mygale era business park) |

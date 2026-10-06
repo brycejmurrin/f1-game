@@ -28,10 +28,11 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 | 0.86–0.22 | R | near | **THE GRANDSTAND WALL**: unbroken two- and three-tier seating running the oval portion, banded blue/white/red. SF stretch owned by `indy-main-stands` |
 | ≈0.00 | R | near | **`indy-main-stands`**: continuous Paddock / Tower Terrace face opposite the Pagoda (required modelGroup) |
 | 0.90–0.20 | L | near | Inner infield stands facing back across the front straight |
-| 0.005 | L | near | **THE PAGODA**: solid base housing under five diminishing glass tiers, each with an overhanging eave, crowned by a mast — the most recognisable structure in American motor racing |
-| 0.00 | — | on road | **THE YARD OF BRICKS**: a metre-wide band of alternating brick tones laid across the full track width at the start/finish line |
-| 0.030 | L | near | **Scoring pylon**: dark LED shaft with amber digit panels (required `indy-scoring-pylon`) |
-| 0.955 | L | near | **Pit stalls**: open-fronted boxes under one long flat roof (`indy-pit-stalls`; may be superseded at runtime by the engine pit complex) |
+| 0.005 | L | near | **THE PAGODA**: closed solid core under five diminishing glazed tiers with modest eaves + IMS red crown ring (`indy-pagoda`) |
+| 0.00 | — | on road | **THE YARD OF BRICKS**: two staggered brick rows across the full track width at the start/finish line |
+| 0.030 | L | near | **Scoring pylon**: dark LED shaft with amber digit panels + amber crown (`indy-scoring-pylon`) |
+| 0.955 | L | near | **Pit stalls**: open-fronted boxes under one long flat roof with closed END walls (`indy-pit-stalls`) |
+| 0.805 | L | far | **IMS Museum** campus (`indy-museum`) + asphalt parking lots; Brickyard Crossing golf fairways/ponds on the back-stretch infield |
 | 0.92–0.98 | L | far | Gasoline Alley garage sheds + paddock motorhomes |
 | 0.115 | — | — | **Oval Turn 1**: 9° banking held over a 320 m width zone, taken flat — the only real banking on the lap |
 | 0.86–0.22 | R | near | Continuous white concrete **retaining wall** along the whole oval section — a solid barrier, not armco |

@@ -188,6 +188,24 @@ test("no HUD position, size or MOVE & SIZE offset is measured in the large viewp
   assert.match(m[1], /--hl-y, 0\) \* 1svh/, "the MOVE & SIZE vertical offset is a share of the small viewport");
 });
 
+// Phone-portrait survey 390×844 ranked tower × map: the centred POS row sits
+// on the top-left minimap. Park map+gaps under --hud-top-h only in that
+// shape; landscape / tablet / desktop keep the shipped top-left cluster.
+test("phone portrait parks the minimap under the timing tower; other shapes keep the corner", () => {
+  const src = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const q = /@media \(orientation: portrait\) and \(max-width: 500px\)\s*\{([^}]+)\}/;
+  const m = src.match(q);
+  assert.ok(m, "a portrait-and-narrow query owns the tower/map stack");
+  assert.match(m[1], /#minimap/);
+  assert.match(m[1], /\.hud-gaps/);
+  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 8px\)/);
+  const baseMap = src.match(/(?:^|\n)#minimap \{\s*position: absolute;([\s\S]*?)\n\}/);
+  assert.ok(baseMap, "shipped #minimap rule");
+  assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
+  assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
+});
+
 const plain = (o) => JSON.parse(JSON.stringify(o));
 const TD = fs.readFileSync(path.join(ROOT, "css/track-detail.css"), "utf8");
 

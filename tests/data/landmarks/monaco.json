@@ -1,7 +1,9 @@
 {
+  "why": "Monaco corner-name landmarks: Tabac tobacconist, Mirabeau apartments, La Rascasse bar, Fairmont hairpin hotel (balcony-rail mass).",
   "ids": [
     "monaco-tabac-shop",
     "monaco-mirabeau-apartments",
-    "monaco-rascasse-bar"
+    "monaco-rascasse-bar",
+    "monaco-fairmont-main"
   ]
 }

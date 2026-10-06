@@ -210,7 +210,8 @@ test("exposed-units threshold keeps the shipped bloom at default knobs, and EXPO
   const game = src("js/game.js");
   assert.match(game, /po\.threshold = clamp\(_thresh \+ LT\.threshOff, 0\.4, 1\.2\) \* frame\.exposure;/,
     "game.js scales the per-TOD threshold by the TOD exposure (not by the EXPOSURE knob)");
-  assert.match(src("js/garage/setup-camera.js"), /threshold: 0\.62 \* 1\.28/, "the garage present keeps its bloom too");
+  assert.match(src("js/garage/setup-camera.js"), /const threshold = \(t < 0\.4 \? 0\.4 : t > 1\.2 \? 1\.2 : t\) \* SP_EXPOSURE;/,
+    "the garage present keeps its bloom in exposed units, matching the race clamp");
 });
 
 test("the mirror / PiP inset takes the composite's colour grade and dither on all three backends", () => {
