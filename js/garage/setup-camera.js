@@ -27,14 +27,19 @@ function panelCover(pr, cr, cw, ch, camTop) {
 //   exposure  = base * LT.exposureMul
 //   bloom     = base * LT.bloomMul   (shed at autoTier 4, same as race)
 //   threshold = clamp(base + LT.threshOff, 0.4, 1.2) * baseExposure
-//   tune.sunShaftMul is the live slider, scaled so the shipped 1.0 is a
-//   near-zero studio shaft (the race 1.0 × skylight Y 0.86 is the wash).
+//   tune.sunShaftMul is FORCED OFF. The bay's "sun" is a soft roof fill
+//   (GarageScene.SKYLIGHT, dir Y≈0.86) — PostCommon.sunScreen still arms a
+//   ~0.35 screen-shaft from that fill, and the composite then marches bloom
+//   toward the skylight UV. After #1025 restored glossy dry-day paint, those
+//   crepuscular rays washed liveries white/sky-blue once the camera (or a
+//   team switch + orbit) put the fill on-screen. A closed pit bay has no sun
+//   disc; SCREEN SUN-SHAFT is a race/outdoor knob. Exposure / bloom / glare
+//   still route through LT so the Lighting Tuner can dial the bay.
 // Bases are a showroom, not a night-bloom track: 1.04 / 0.20 / 0.86, not the
 // old hardcoded 1.28 / 0.70 / 0.62. Slider 1 / glare 0.12 = these defaults.
 const SP_EXPOSURE = 1.04;
 const SP_BLOOM = 0.20;
 const SP_THRESH = 0.86;
-const SP_SHAFT_SCALE = 0.22;
 const RACE_GLARE_DEF = 0.12;
 function liveTune() {
   if (typeof LightTune !== "undefined" && LightTune.LT) return LightTune.LT;
@@ -49,12 +54,13 @@ function presentOpts(tune) {
   const exposureMul = _tuneNum(T, "exposureMul", 1);
   const bloomMul = _tuneNum(T, "bloomMul", 1);
   const threshOff = _tuneNum(T, "threshOff", 0);
-  const sunShaftMul = _tuneNum(T, "sunShaftMul", 1);
   const shed = typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4;
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
   const wrapped = T && typeof T === "object" ? Object.create(T) : {};
-  wrapped.sunShaftMul = sunShaftMul * SP_SHAFT_SCALE;
+  // Kill screen sun-shafts regardless of the race slider / track preset.
+  // Object.create(T) still carries the rest of the image-grade knobs.
+  wrapped.sunShaftMul = 0;
   return {
     exposure: SP_EXPOSURE * exposureMul,
     bloom: shed ? 0 : SP_BLOOM * bloomMul,
