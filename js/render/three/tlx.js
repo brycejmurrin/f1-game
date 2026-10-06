@@ -281,6 +281,12 @@ const TLX = (function () {
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      // Soft-present / capturePixels LDR unstride pool (audit #3): one grow-only
+      // Uint8ClampedArray reused across presents so a 1280×720 soft blit does not
+      // allocate ~3.7 MB of young-gen every frame. Soft blit writes straight into
+      // _softImg.data (no second full-frame copy); capturePixels clones the pool
+      // view so a held screenshot cannot be overwritten by the next read.
+      let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
@@ -2793,13 +2799,20 @@ const TLX = (function () {
         return _blitRT;
       }
       // three pads copyTextureToBuffer rows to 256 bytes (WebGPU rule).
+      function _ensureUnstridePool(need) {
+        if (!_unstridePool || _unstridePool.length < need) {
+          _unstridePool = new Uint8ClampedArray(need);
+        }
+        return _unstridePool.length === need ? _unstridePool : _unstridePool.subarray(0, need);
+      }
       function _unstrideRgba(src, w, h) {
         const bpr = 256 * Math.ceil((w * 4) / 256);
-        const data = new Uint8ClampedArray(w * h * 4);
+        const need = w * h * 4;
+        const data = _ensureUnstridePool(need);
         const row = w * 4;
         if (src.length < (h - 1) * bpr + row) {
           // tight pack fallback (WebGL backend copy)
-          if (src.length >= w * h * 4) data.set(src.subarray(0, w * h * 4));
+          if (src.length >= need) data.set(src.subarray(0, need));
         } else {
           for (let y = 0; y < h; y++) {
             data.set(src.subarray(y * bpr, y * bpr + row), y * row);
@@ -2807,8 +2820,36 @@ const TLX = (function () {
         }
         // SSR car-paint tag is 0.35 in ALPHA — a channel, not opacity.
         // Screenshots and the 2D overlay must not treat it as compositor a.
-        for (let i = 3; i < data.length; i += 4) data[i] = 255;
+        for (let i = 3; i < need; i += 4) data[i] = 255;
         return data;
+      }
+      // Soft blit: unstride + opaque alpha + ink check in ONE pass into ImageData
+      // (drops the intermediate full-frame alloc and the second RGBA walk).
+      function _unstrideIntoSoft(src, w, h, dest) {
+        const bpr = 256 * Math.ceil((w * 4) / 256);
+        const row = w * 4;
+        const need = w * h * 4;
+        let maxPx = 0;
+        if (src.length < (h - 1) * bpr + row) {
+          if (src.length < need) return 0;
+          for (let i = 0; i < need; i += 4) {
+            const r = src[i], g = src[i + 1], b = src[i + 2];
+            dest[i] = r; dest[i + 1] = g; dest[i + 2] = b; dest[i + 3] = 255;
+            const s = r + g + b;
+            if (s > maxPx) maxPx = s;
+          }
+        } else {
+          for (let y = 0; y < h; y++) {
+            const so = y * bpr, d0 = y * row;
+            for (let x = 0; x < row; x += 4) {
+              const r = src[so + x], g = src[so + x + 1], b = src[so + x + 2];
+              dest[d0 + x] = r; dest[d0 + x + 1] = g; dest[d0 + x + 2] = b; dest[d0 + x + 3] = 255;
+              const s = r + g + b;
+              if (s > maxPx) maxPx = s;
+            }
+          }
+        }
+        return maxPx;
       }
       function _readLdr(rt, readW, readH) {
         const w = readW || (rt && rt.width) || W;
@@ -2836,11 +2877,13 @@ const TLX = (function () {
         _softReadPending = true;
         _softReadSince = (typeof performance !== "undefined" ? performance.now() : Date.now());
         let read;
-        try { read = _readLdr(req.rt, req.w, req.h); }
-        catch (_) { _finishSoftBlitRead(); return; }
-        read.then(function (pack) {
+        try {
+          // Raw padded read — _unstrideIntoSoft folds unstride + ink into ImageData.
+          read = renderer.readRenderTargetPixelsAsync(req.rt, 0, 0, req.w, req.h);
+        } catch (_) { _finishSoftBlitRead(); return; }
+        read.then(function (src) {
           try {
-            const w = pack.w, h = pack.h, src = pack.data;
+            const w = req.w, h = req.h;
             // Resize/post-fallback invalidates an older source generation. One
             // in-flight read means same-size frames stay ordered, so do not drop
             // a valid completion merely because a newer frame is queued.
@@ -2849,18 +2892,9 @@ const TLX = (function () {
             if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
               _softImg = _displayCtx.createImageData(w, h);
             }
-            const img = _softImg;
-            let maxPx = 0;
-            for (let i = 0; i < src.length; i += 4) {
-              img.data[i] = src[i];
-              img.data[i + 1] = src[i + 1];
-              img.data[i + 2] = src[i + 2];
-              img.data[i + 3] = 255;
-              const s = src[i] + src[i + 1] + src[i + 2];
-              if (s > maxPx) maxPx = s;
-            }
+            const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
             if (maxPx >= 8) {
-              _displayCtx.putImageData(img, 0, 0);
+              _displayCtx.putImageData(_softImg, 0, 0);
               _softBlitNotify();
             }
             _softReadLastMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince;
@@ -3611,7 +3645,9 @@ const TLX = (function () {
               "three.js WebGPU screenshot needs SCREENSHOTS: 2D BLIT (or AUTO on software)"));
           }
           return _readLdr(rt).then(function (pack) {
-            return { width: pack.w, height: pack.h, data: pack.data };
+            // Clone off the unstride pool — callers may hold the buffer across
+            // later soft presents / captures that would otherwise overwrite it.
+            return { width: pack.w, height: pack.h, data: new Uint8ClampedArray(pack.data) };
           });
         },
         awaitSoftPresent(timeoutMs) {

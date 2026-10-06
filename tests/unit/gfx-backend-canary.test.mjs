@@ -2957,8 +2957,10 @@ test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opac
   assert.notEqual(at, -1, "overlay getContext moved");
   assert.match(src.slice(at, at + 120), /alpha:\s*false/,
     "#game-soft must be an opaque 2D context");
-  assert.match(src, /img\.data\[i \+ 3\] = 255/,
-    "putImageData blit must force opaque pixels");
+  assert.match(src, /_unstrideIntoSoft\(/,
+    "soft blit must fold unstride + opaque alpha into ImageData (audit #3)");
+  assert.match(src, /dest\[i \+ 3\] = 255/,
+    "fused soft unstride must force opaque pixels");
   assert.match(src, /data\[i\] = 255/,
     "_unstrideRgba / capturePixels must force opaque alpha too");
 });
