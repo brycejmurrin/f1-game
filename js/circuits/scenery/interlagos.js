@@ -543,11 +543,13 @@
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, h / 2), [d, h, w], FAV[(i * 3) % FAV.length], b);
-          // Closed window bands (inset, not free floating slabs).
+          // Window bands attach proud of the shell (embed ~8 cm, stand ~10 cm
+          // out). d*0.48 + 0.35/2 sat 5 mm off the front face and added the
+          // 4th same-facing coplanar spot (baseline 3).
           stage._mat = MAT.GLASS;
           for (let y = 4; y < h - 2; y += 3.4)
-            addBox(stage, vadd(vadd(a.c, a.r, d * 0.48), a.u, y),
-              [0.35, 1.6, w * 0.82], LIT_WIN, b);
+            addBox(stage, vadd(vadd(a.c, a.r, d * 0.5 + 0.10), a.u, y),
+              [0.36, 1.6, w * 0.82], LIT_WIN, b);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(a.c, a.u, h + 0.6), [d * 0.92, 1.2, w * 0.92],
                  SCREED[i % SCREED.length], b);
@@ -776,10 +778,12 @@
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(a.c, a.u, h / 2), [dp, h, w], HAZE[i % HAZE.length], b);
+            // Same proud-attach as favela cores — dp*0.48 + 0.2 is flush with
+            // the tower face (same-facing z-fight).
             stage._mat = MAT.GLASS;
             for (let y = 8; y < h - 4; y += 7.5)
-              addBox(stage, vadd(vadd(a.c, a.r, dp * 0.48), a.u, y),
-                [0.4, 2.2, w * 0.78], LIT_WIN, b);
+              addBox(stage, vadd(vadd(a.c, a.r, dp * 0.5 + 0.12), a.u, y),
+                [0.40, 2.2, w * 0.78], LIT_WIN, b);
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(a.c, a.u, h + 1.2), [dp * 0.7, 2.4, w * 0.55],
                    [0.40, 0.42, 0.46], b);
