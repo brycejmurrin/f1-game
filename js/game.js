@@ -4369,7 +4369,7 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    return;
+    GameAudio.setGridIdle(player, { soundOn, wet: isWetRoad(), step: _audioParamStep }); return;
   }
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
