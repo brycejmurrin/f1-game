@@ -650,9 +650,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
+  // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
+  "tests/unit/survey-hud.test.mjs",
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/team-livery.test.mjs",
+  "tests/unit/team-style-relief.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",

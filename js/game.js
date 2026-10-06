@@ -42,12 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
-// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
-// uses GLX. Any deferred-backend init failure also falls back to GLX. This
-// async IIFE awaits while loading the selected renderer, or when the lazy __apex surface
-// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
-// renderer call goes through.
+// Renderer selection: unset apex26.gfxBackend → TLX if requestAdapter() ok,
+// else GLX (skip three.webgpu); ="three" forces TLX; ="webgpu" uses WGX when
+// an adapter exists; ="webgl2" uses GLX. Deferred-backend init failure also
+// falls back to GLX. This async IIFE awaits while loading the selected
+// renderer, or when the lazy __apex surface loads (localhost / tests /
+// ?apex=1). `gfx` is the handle every later renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
@@ -2608,8 +2608,22 @@ async function startRaceBody() {
   if (announcer.stop) announcer.stop();
   if (hud.resetRace) hud.resetRace();
   rlap("resets");
-  loadTrack(trackIdx);
+  // Pace the rebuild: sync loadTrack + warmCarAssets was one ≤3 s long task
+  // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
+  // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
+  // live() stays true: this session owns the build (menu prep uses a generation gate).
+  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
+  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  if (vmNoFramePump) loadTrack(trackIdx);
+  else if (!(await loadTrackStepped(trackIdx, () => true))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
+  // Break the remaining sync legs (settings → car meshes) into separate tasks.
+  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
+  // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) await yieldMain();
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2744,6 +2758,7 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  if (!vmNoFramePump) await yieldMain();   // do not glue car-mesh warm onto the settings/grid sync stretch
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
@@ -2752,7 +2767,7 @@ async function startRaceBody() {
   const entryPlayer = player;
   if (!headlessMode && !document.hidden)
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
-  if (player !== entryPlayer || state !== "count") return false;
+  if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
@@ -9005,6 +9020,6 @@ if (typeof location !== "undefined" && /[#&]vs=/.test(location.hash)) ensureNet(
 // ...and a link pasted into a tab that is ALREADY running only fires
 // hashchange. The lobby's own listener exists once the bundle is up; until
 // then this is the only thing awake to pull it (wire() re-reads the fragment).
-if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); });
+if (typeof window !== "undefined") window.addEventListener("hashchange", () => { if (/[#&]vs=/.test(location.hash)) ensureNet(); }); if (typeof SurveyHud !== "undefined") SurveyHud.boot({ $, els, document, loadingScreen, canvas });
 
 })();

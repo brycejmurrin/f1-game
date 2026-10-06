@@ -156,11 +156,29 @@ export const SCREENS = [
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
       await p.waitForTimeout(300); } },
-  { id: "hud", name: "In-race HUD", root: "#hud", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
-      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
-      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); });
-      await p.waitForTimeout(600); } },
+  // APEX_SURVEY_HUD fixture — no race / scenery warm (Wave 3 UI Survey).
+  { id: "hud", name: "Survey HUD (no race)", root: "#hud", open: async (p) => {
+      await p.evaluate(() => {
+        const $ = (id) => document.getElementById(id);
+        if (typeof SurveyHud === "undefined") throw new Error("SurveyHud missing");
+        SurveyHud.apply({ $, document, els: {
+          overlay: $("overlay"), hud: $("hud"), pausebtn: $("pausebtn"),
+          btnCam: $("btn-cam"), pausemenu: $("pausemenu"),
+        } });
+      });
+      await p.waitForSelector("#hud:not([hidden])", { timeout: 15000 }); } },
+  { id: "hudpause", name: "Survey pause (no race)", root: "#pausemenu", open: async (p) => {
+      await p.evaluate(() => {
+        const $ = (id) => document.getElementById(id);
+        if (typeof SurveyHud === "undefined") throw new Error("SurveyHud missing");
+        const hooks = { $, document, els: {
+          overlay: $("overlay"), hud: $("hud"), pausebtn: $("pausebtn"),
+          btnCam: $("btn-cam"), pausemenu: $("pausemenu"),
+        } };
+        SurveyHud.apply(hooks);
+        SurveyHud.openPause(hooks);
+      });
+      await p.waitForSelector("#pausemenu:not([hidden])", { timeout: 15000 }); } },
 
   // ---------------------------------------------------------- the second half
   // Everything above was the grid's first draft, and it measured twelve screens

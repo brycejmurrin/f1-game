@@ -1671,6 +1671,9 @@ const LiveryTex = (function () {
     // keyline on the rake is what sells the edge at garage distance. `acc` is
     // the resolved saddle fill (pick or derived) — never re-pick here; a pick
     // must reach the atlas as chosen.
+    // A 1px diagonal fill aliased into a stair-step under cover UVs (Ferrari
+    // podFloor). Same-colour round strokes along the rake anti-alias the cut
+    // without shrinking the solid (lettering still sits on the saddle).
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
@@ -1680,8 +1683,20 @@ const LiveryTex = (function () {
       ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.64), Sf.y);                 // along the crease
       ctx.lineTo(F.fx(0.38), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
       ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = cssA(INK_DARK, 0.35);
-      ctx.lineWidth = Math.max(2, Sf.h * 0.018);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = cssA(acc, 0.55);
+      ctx.lineWidth = Math.max(4, Sf.h * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(acc, 0.97);
+      ctx.lineWidth = Math.max(2, Sf.h * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
+      ctx.strokeStyle = cssA(INK_DARK, 0.28);
+      ctx.lineWidth = Math.max(1.5, Sf.h * 0.014);
       ctx.beginPath();
       ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
       ctx.stroke();
@@ -2616,13 +2631,14 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "starfield") {
-      // Micro dot field on the flank panel — not finStyle "stars". Density
-      // floor keeps cover-legibility's 1.5 % flank area readable.
+      // Ordered halftone on the flank — not finStyle "stars". Same recipe as
+      // crown `fade`: regular grid, radius ramps front→rear, no hash-skip
+      // clumps. The previous 0.28 density skip read as broken-text clusters
+      // at garage close-up (Mercedes cover, 1024/2048 atlas).
       // sideTint owns starfield ink; never crestInk (that row is gone from the
       // sheet and was never a flank graphic colour).
       const dotInk = colors.sideTint
         || pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
-      const density = 0.28;
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); clipToRegion(ctx, Sf);
@@ -2631,15 +2647,24 @@ const LiveryTex = (function () {
         const x0 = su(F, u0), x1 = su(F, uEnd);
         const y0 = Sf.y + Sf.h * 0.06, y1 = Sf.y + Sf.h * 0.58;
         const w = Math.abs(x1 - x0), h = y1 - y0;
-        const step = Math.max(3, w * 0.045);
-        for (let py = y0; py < y1 - step * 0.5; py += step) {
-          for (let px = Math.min(x0, x1); px < Math.min(x0, x1) + w - step * 0.5; px += step) {
-            const hsh = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
-            if (hsh / 1000 > density) continue;
-            const r = step * 0.32;
-            ctx.fillStyle = cssA(dotInk, 0.97);
+        const cols = Math.max(8, Math.round(w / Math.max(4, w * 0.032)));
+        const rows = Math.max(6, Math.round(h / Math.max(4, w * 0.032)));
+        const cellW = w / cols, cellH = h / rows;
+        const rMax = Math.min(cellW, cellH) * 0.38;
+        const xMin = Math.min(x0, x1);
+        const xFront = F.fx(u0), xRear = F.fx(uEnd);
+        const span = xRear - xFront;
+        ctx.fillStyle = cssA(dotInk, 0.97);
+        for (let j = 0; j < rows; j++) {
+          const cy = y0 + (j + 0.5) * cellH;
+          for (let i = 0; i < cols; i++) {
+            const cx = xMin + (i + 0.5) * cellW;
+            const along = span !== 0 ? (cx - xFront) / span : 0; // 0 front, 1 rear
+            const t = 1 - Math.max(0, Math.min(1, along));
+            const r = rMax * (0.38 + 0.62 * t * t);
+            if (r < 0.4) continue;
             ctx.beginPath();
-            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.fill();
           }
         }
