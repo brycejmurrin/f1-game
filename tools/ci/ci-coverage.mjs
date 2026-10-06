@@ -151,7 +151,7 @@ const selectionGate = {
   // pages.yml is the only caller (it passes a non-empty concurrency_key), so
   // the gate runs in the deploy exactly when its `if:` does NOT test that key.
   onWorkflowCall: !/inputs\.concurrency_key\s*==\s*''/.test(selectIf),
-  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/.test(selectJob),
+  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha/.test(selectJob),
   failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectAll)
     && /no valid comparison base/.test(selectAll)
     && /comparison base .* is unreachable/.test(selectAll),

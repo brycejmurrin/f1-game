@@ -30,6 +30,7 @@ import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { isTwinned, twinOf } from "./twinned-specs.mjs";
+import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
 
@@ -190,7 +191,22 @@ export const MAX_FAILURES = 3;
 // A job's EXPECTED work before shards() splits or stops packing: close to the
 // fixed gate's own critical path (vm-a, ~6 min), so the selection is rarely
 // the last job to finish.
-export const TARGET_SHARD_SEC = 480;
+export const TARGET_SHARD_SEC = 360;
+// Passing selected legs should finish in about 10 minutes of runner time
+// (career shards were 27-34 min because shardCapMin priced three 540 s
+// timeouts). The kill timer is a ceiling for a passing run plus setup, not
+// "every test times out". --max-failures still stops a red early.
+export const MAX_SELECTED_JOB_MIN = 10;
+// Fat UI files (career*, hud-layout) cannot use Playwright --shard (it
+// splits GROUPS). One job, 2 workers. PR #1075 run 37446472987: career
+// 27/37 passed then cancelled at 9 min (~39 s/test); career-season 15/36
+// at 6 min (~46 s/test). spec-timings still reflect fake-shard leftovers
+// so billed seconds are a lie; floor the plan and the kill timer here.
+export const FAT_UI_SEC_PER_TEST = 45;
+export const FAT_UI_SELECTED_JOB_MIN = 18;
+// Over-budget / high-timeout specs (career, hud-layout): Playwright --shard
+// so each leg has this many tests, not one 30-minute packed file.
+export const MAX_TESTS_PER_JOB = 8;
 // Specs that declare this much (or more) per test NEVER share a selected job.
 // terrain-over-road still declares 1500 s for an all-circuits walk (props-
 // over-road left that set on 2026-09-30 — one test per circuit at 120 s);
@@ -298,8 +314,11 @@ export function megaSoloFlags(args) {
 // not the spend: a passing run never approaches it. A killed job reads as
 // "0 failures", which this file's history shows hiding a dead deploy, so the
 // cap is derived from the plan, never guessed.
-export const shardCapMin = (expectedSec, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
-  Math.min(90, Math.ceil((2 * expectedSec + MAX_FAILURES * perTestSec) / 60) + 6);
+export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTimeoutSec, maxMin = MAX_SELECTED_JOB_MIN) => {
+  const setupMin = 3;
+  const workMin = Math.ceil(Math.max(0, expectedSec) / 60);
+  return Math.min(maxMin, Math.max(6, workMin + setupMin));
+};
 
 /** Seconds one row of the plan is expected to take: its tests at the spec's
  *  own measured rate, or the fallback (select-budget's MEASURED). */
@@ -551,17 +570,35 @@ export function shards(r, db = timings()) {
     const sec = cost(s);
     const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
     const base = path.basename(s.file, ".spec.js");
-    const n = Math.max(1, Math.ceil(sec / TARGET_SHARD_SEC));
+    const nTime = Math.max(1, Math.ceil(sec / TARGET_SHARD_SEC));
+    const nTests = (s.ownTimeoutSec || 0) >= SELECTED_GATE.perTestTimeoutSec
+      ? Math.max(1, Math.ceil(s.tests / MAX_TESTS_PER_JOB))
+      : 1;
+    // Pages 37420997285 job oversize-career-1of5: Playwright --shard splits
+    // TEST GROUPS, not tests. A default-mode describe is one group, so shard
+    // 1/5 of career.spec.js ran ~101 tests (~22 min) while 2–5 finished in
+    // ~40 s. Fat UI files (career*, hud-layout) get 2 workers on ONE job
+    // instead of a fake even --shard.
+    const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
+    if (fatUi) {
+      const workers = 2;
+      const secFat = Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers);
+      items.push({ solo: true, name: `oversize-${base}`, files: [s.file], shard: "",
+        tests: s.tests, sec: Math.max(1, secFat), perTest, workers,
+        maxCapMin: FAT_UI_SELECTED_JOB_MIN });
+      continue;
+    }
+    const n = Math.max(nTime, nTests);
     if (n > 1) {
       for (let i = 1; i <= n; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
-          tests: Math.ceil(s.tests / n), sec: sec / n, perTest });
+          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1 });
       }
       continue;
     }
     const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
     items.push({ solo, budgeted: !!s.budgeted, pool: !!s.pool, name: `oversize-${base}`,
-      files: [s.file], shard: "", tests: s.tests, sec, perTest });
+      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
@@ -586,9 +623,11 @@ export function shards(r, db = timings()) {
       : b.items.length === 1 ? b.items[0].name : `packed-${++k}`;
     const perTest = Math.max(...b.items.map((x) => x.perTest));
     const sec = Math.round(b.sec);
+    const workers = Math.max(1, ...b.items.map((x) => x.workers || 1));
+    const maxCapMin = Math.max(MAX_SELECTED_JOB_MIN, ...b.items.map((x) => x.maxCapMin || MAX_SELECTED_JOB_MIN));
     return { name, specs: files.join(" "), shard: b.solo ? b.shard : "",
-      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest,
-      timeout: shardCapMin(sec, perTest),
+      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers,
+      timeout: shardCapMin(sec, perTest, maxCapMin),
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(",") };
   });
@@ -674,6 +713,8 @@ export const PER_CIRCUIT_DATA = new Set([
 // of THESE is not circuit-scoped: the edit is to the loop, so it runs whole.
 export const CIRCUIT_FILTERED_TESTS = new Set([
   "tests/specs/tracks-walls.spec.js",
+  "tests/specs/tracks-walls-a.spec.js",
+  "tests/specs/tracks-walls-b.spec.js",
   // props-over-road: one test per circuit since 2026-09-30 (was a single
   // 1500 s all-circuits body the selected gate excluded). Honours
   // APEX_CIRCUITS so a circuit-only PR does not bill the whole roster.
@@ -864,6 +905,8 @@ export const isDocsOnly = (changed) =>
 // here elevates the spec to oversize when its UI / backup module changes.
 export const SOURCE_AFFECTED = [
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
+  [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-season.spec.js"],
+  [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-hub.spec.js"],
 ];
 export function specsAffectedBySource(changed, root = ROOT) {
   const hit = new Set();
@@ -983,6 +1026,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const circ = circuitsTouched(changed, changedRef);
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
   const docsOnly = isDocsOnly(changed);
+  const kind = changeKind(changed);
+  const lightDiff = docsOnly || kind === "docs" || kind === "css";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
@@ -1003,10 +1048,13 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const racing = specsRacing(racingCircuitIds(changed));
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
-  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
-  const candidates = routed;
+  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
+  // Docs-/CSS-only PRs skip the selected matrix at the plan (required check
+  // names still report). Never a pull_request paths filter: those leave
+  // required checks pending.
+  const candidates = lightDiff ? [] : routed;
   const reason = !changed.length ? "none"
-    : docsOnly ? "docs"
+    : lightDiff ? (kind === "css" ? "css" : "docs")
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1

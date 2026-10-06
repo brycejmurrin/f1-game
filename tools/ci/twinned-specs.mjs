@@ -150,6 +150,8 @@ export const BROWSER_ONLY = {
   "tests/specs/parts-factory-presets.spec.js": "reads the setup screen's DOM inside evaluate (querySelector → null): 0/1",
   "tests/specs/parts-mesh-cache.spec.js": "waits on garage state the VM never reaches (three real 45 s waitForFunction timeouts) plus a DOM read: 1/5",
   "tests/specs/tracks-walls.spec.js": "one circuit (catalunya) drives the frame loop, which throws with no renderer attached: 62/63 — the spec is a unit, not a set",
+  "tests/specs/tracks-walls-a.spec.js": "fleet half of tracks-walls: same frame-loop / no-renderer failure as tracks-walls.spec.js (split so select-specs can pack ~26 tests)",
+  "tests/specs/tracks-walls-b.spec.js": "fleet half of tracks-walls: same frame-loop / no-renderer failure as tracks-walls.spec.js (split so select-specs can pack ~26 tests)",
   "tests/specs/understeer-cue.spec.js": "portable by every static measure and 0/7 under the adapter (317 s) — the standing proof that eligibility is not fidelity (docs/TESTING.md §vmPage)",
   "tests/specs/audit.spec.js": "two evaluate bodies do not survive source serialisation into the VM (`Unexpected token ';'`): 8/10",
   "tests/specs/debris.spec.js": "loads rapier through a dynamic import, which node:vm has no import callback for (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): 1/5",

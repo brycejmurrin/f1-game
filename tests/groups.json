@@ -116,6 +116,7 @@
     "tests/unit/career-settle.test.mjs",
     "tests/unit/cdmcp-measure.test.mjs",
     "tests/unit/change-driver-tools.test.mjs",
+    "tests/unit/change-kind.test.mjs",
     "// resolveChromium finds Playwright's headless shell when the full archive",
     "// was never unpacked — the cloud-agent / MCP bootstrap path.",
     "tests/unit/chromium-shell.test.mjs",
@@ -808,6 +809,8 @@
         "tests/specs/props-over-road.spec.js",
         "tests/specs/scenery-kits.spec.js",
         "tests/specs/terrain-over-road.spec.js",
+        "tests/specs/tracks-walls-a.spec.js",
+        "tests/specs/tracks-walls-b.spec.js",
         "tests/specs/tracks-walls.spec.js"
       ],
       "kind": "browser"
@@ -842,6 +845,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/bootstrap-doctor.test.mjs",
         "tests/unit/cdmcp-measure.test.mjs",
+        "tests/unit/change-kind.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/component-inventory.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
@@ -1077,6 +1081,7 @@
       "files": [
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/behind-ship.test.mjs",
+        "tests/unit/change-kind.test.mjs",
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/ci-verdict.test.mjs",
         "tests/unit/committed-images.test.mjs",
@@ -1168,6 +1173,8 @@
     },
     "test:modes": {
       "files": [
+        "tests/specs/career-hub.spec.js",
+        "tests/specs/career-season.spec.js",
         "tests/specs/career.spec.js",
         "tests/specs/quali.spec.js",
         "tests/specs/real-race.spec.js",
