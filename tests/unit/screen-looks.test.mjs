@@ -20,8 +20,12 @@ const SHELL = read("index.html");
 const EXPORT = read("js/ui/settings-export.js");
 const MANIFEST = read("tools/manifest.cjs");
 const RESP = read("css/responsive.css");
+const OVERLAYS = read("css/overlays.css");
 const CSS_ALL = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css"))
   .map((f) => read("css/" + f).replace(/\/\*[\s\S]*?\*\//g, "")).join("\n");
+// Title peek stays in blocking responsive.css; other peeks + screen-looks
+// folds live in deferred overlays.css (same @layer overlays).
+const PEEK_LAYER = RESP + "\n" + OVERLAYS;
 
 const TARGETS = { pausemenu: "dialog", datahub: "dialog", select: "div", "race-settings": "dialog",
   career: "div", carsetup: "div", standings: "dialog", pmsettings: "dialog", overlay: "div" };
@@ -355,10 +359,10 @@ test("CSS: every non-default answer and every range token has a rule; every peek
       }
     }
   }
-  const layer = RESP.slice(0, RESP.indexOf("} /* @layer overlays */"));
   for (const id of [...M.SCREENS.map((s) => s.id), "title"])
-    assert.match(layer, new RegExp(`\\[data-appearance-peek="${id}"\\]`), `${id} is revealed in @layer overlays`);
-  assert.match(layer, /:root\[data-appearance-peek\] #pmsettings > \* \{ opacity: 0\.14;/, "the page ghosts");
+    assert.match(PEEK_LAYER, new RegExp(`\\[data-appearance-peek="${id}"\\]`), `${id} is revealed in @layer overlays`);
+  assert.match(RESP, /:root\[data-appearance-peek\] #pmsettings > \* \{ opacity: 0\.14;/, "title-critical ghost stays in blocking responsive.css");
+  assert.match(OVERLAYS, /:root\[data-appearance-peek="pause"\]/, "non-title peeks live in deferred overlays.css");
   assert.match(read("css/tokens.css"), /--tap-0: var\(--tap\);/, "BUTTON HEIGHT scales the shipped tap size");
 });
 

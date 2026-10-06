@@ -129,3 +129,17 @@ test("after stop() a closing socket is not reopened", async () => {
   await new Promise((r) => setTimeout(r, 1100));
   assert.equal(h.sockets.length, n, "nothing reopens once the exchange is over");
 });
+
+test("JOIN_TIMEOUT_MS is the ~8–15 s lobby join target, not a two-minute hang", () => {
+  const h = boot();
+  assert.ok(h.NetNostr.JOIN_TIMEOUT_MS >= 8000, "enough headroom for relay open + a few reposts");
+  assert.ok(h.NetNostr.JOIN_TIMEOUT_MS <= 15000, "fake/missing codes must not sit on Looking for…");
+});
+
+test("Nostr expired copy is actionable (no false 'couple of minutes' claim)", () => {
+  const src = read("js/net/nostr.js");
+  assert.match(src, /Nobody answered that code/);
+  assert.match(src, /Check the six characters/);
+  assert.match(src, /fresh one/);
+  assert.doesNotMatch(src, /Codes only last a couple of minutes/);
+});

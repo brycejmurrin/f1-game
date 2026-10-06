@@ -17,16 +17,99 @@
 #appearance-studio [data-as="row"] input[type="range"] { flex: 1; min-width: 0; accent-color: var(--red); }
 #appearance-studio [data-as="row"] input[type="color"] { width: calc(var(--tap) * 1.3); border: 1px solid var(--plate-line); padding: calc(var(--gap) * .25); background: var(--plate); }
 #appearance-studio [data-as="row"] output { font-size: var(--fs-2); min-width: 4ch; font-variant-numeric: tabular-nums; }
-#appearance-studio [data-as="preset-list"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--tap) * 1.8)), 1fr)); gap: calc(var(--gap) * .5); }
-#appearance-studio [data-as="preset-list"] button { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; width: 100%; gap: calc(var(--gap) * .5); padding: calc(var(--gap) * .5); align-content: start; align-items: stretch; justify-content: stretch; }
-#appearance-studio [data-as="preset-list"] strong { font-size: var(--fs-micro); line-height: 1.2; overflow-wrap: normal; }
-#appearance-studio [data-as="preset-art"] { display: block; width: 100%; height: calc(var(--tap) * .75); border-radius: var(--r-sm); background: var(--studio-scene-image, var(--home-scene-image, var(--grad-primary))); border: 1px solid var(--plate-line); background-size: cover; background-position: center; }
-#appearance-studio [data-preset="paddock"] [data-as="preset-art"] { background-color: var(--carbon); background-image: linear-gradient(135deg, var(--red), var(--carbon)); }
-#appearance-studio [data-preset="broadcast"] [data-as="preset-art"] { background-image: linear-gradient(135deg, var(--red), var(--carbon)); }
-#appearance-studio [data-preset="focus"] [data-as="preset-art"] { background-image: linear-gradient(135deg, var(--surf-3), var(--carbon)); }
-#appearance-studio [data-preset="sunlight"] [data-as="preset-art"] { background-image: linear-gradient(135deg, var(--text), var(--dim)); }
+/* PREVIEW PRESET tiles: Sunlight bumps textSize to large and shrinks the
+   grid under zoom / narrow sheets. Labels must wrap inside the tile (not
+   clip BROADCAST / SUNLIGHT), and the selected ring must stay visible when
+   the art swatch fills most of the cell. Art colours are theme-stable —
+   sunlight used --text/--dim, which go near-black under LIGHT and hid the
+   pressed red fill. */
+#appearance-studio [data-as="preset-list"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--tap) * 2.1)), 1fr));
+  gap: calc(var(--gap) * .5);
+}
+#appearance-studio [data-as="preset-list"] button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+  min-height: calc(var(--tap) * 2.35);
+  gap: calc(var(--gap) * .35);
+  padding: calc(var(--gap) * .4);
+  align-content: stretch;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#appearance-studio [data-as="preset-list"] strong {
+  font-size: 0.72em;
+  line-height: 1.15;
+  letter-spacing: var(--ls-2);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  text-align: center;
+  max-width: 100%;
+  min-width: 0;
+  align-self: end;
+  padding-block: 0.15em 0.25em;
+}
+#appearance-studio [data-as="preset-list"] button[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--red) 16%, var(--plate));
+  color: var(--text);
+  border-color: var(--red);
+  border-width: 2px;
+  box-shadow: var(--edge), 0 0 0 1px var(--red);
+}
+#appearance-studio [data-as="preset-art"] {
+  display: block;
+  width: 100%;
+  height: calc(var(--tap) * .7);
+  min-height: calc(var(--tap) * .55);
+  border-radius: var(--r-sm);
+  background: var(--studio-scene-image, var(--home-scene-image, var(--grad-primary)));
+  border: 1px solid var(--plate-line);
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+#appearance-studio [data-preset="paddock"] [data-as="preset-art"] {
+  background-color: var(--carbon);
+  background-image: linear-gradient(135deg, var(--red), var(--carbon));
+}
+#appearance-studio [data-preset="broadcast"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--red), var(--carbon));
+}
+#appearance-studio [data-preset="focus"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--surf-3), var(--carbon));
+}
+#appearance-studio [data-preset="sunlight"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--look-sunlight-hi), var(--look-sunlight-lo));
+}
+#appearance-studio [data-as="preset-list"] button[aria-pressed="true"] [data-as="preset-art"] {
+  border-color: color-mix(in oklab, var(--red) 55%, var(--plate-line));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--red) 40%, transparent);
+}
 #appearance-studio [data-as="profile-row"] { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * .5); margin-block: var(--gap); }
-#appearance-studio [data-as="profile-row"] input, #appearance-studio [data-as="profile-row"] select { flex: 1 1 40%; min-width: 0; padding: calc(var(--gap) * .5); border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text); }
+#appearance-studio [data-as="profile-row"] input,
+#appearance-studio [data-as="profile-row"] select {
+  flex: 1 1 40%;
+  min-width: min(100%, 11rem);
+  padding: calc(var(--gap) * .5);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate-opaque);
+  color: var(--text);
+}
+#appearance-studio [data-as="profile-row"] > button {
+  flex: 1 1 auto;
+  min-width: min(100%, 6.5rem);
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: var(--plate-line);
+}
 #appearance-studio [data-as="note"], #appearance-studio [data-as="status"] { font-size: var(--fs-micro); color: var(--dim); line-height: 1.5; margin: var(--gap) 0 0; }
 #appearance-studio [data-as="status"] { color: var(--text); min-height: 1.5em; }
 #appearance-studio [data-as="preview-side"] { position: sticky; top: 0; min-width: 0; padding: var(--pad); background: var(--surf-1); border: 1px solid var(--plate-line); border-radius: var(--r-md); }

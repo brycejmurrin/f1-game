@@ -141,7 +141,7 @@ const GameAudio = (function () {
     cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard", visor: "onboard", helmet: "onboard",
     chase: "chase", far: "chase", drift: "chase", reverse: "chase",
     overhead: "tv", heli: "tv", side: "tv", cinematic: "tv", low: "tv", trackside: "tv",
-    rival: "tv", pitwall: "tv", drone: "tv",
+    rival: "tv", pitwall: "tv", drone: "tv", tv: "tv",
   });
   let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
@@ -292,9 +292,28 @@ const GameAudio = (function () {
     context: () => ctx, master: () => master, enabled, engineRunning: () => engineOn,
     sfxOk, clamp01, now, resumeRejected,
   });
-  const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck } = soundtrack;
+  const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck: soundtrackRadioDuck } = soundtrack;
+  /* TWO HOLDS, ONE DUCK. The engineer (radio-voice.js) and the spotter
+   * (radioVoice clips) each latch independently: say()/stopVoice always pairs
+   * setRadioDuck(false) on a card replace, and that must not lift the music
+   * under a spotter call still finishing its remaining() lead — nor the reverse
+   * when a spotter clip ends while an engineer line is still on air. */
+  let radioDuckHold = false;
+  let spotterDuckHold = false;
+  function applyMusicDuck() {
+    return soundtrackRadioDuck(radioDuckHold || spotterDuckHold);
+  }
+  function setRadioDuck(on) {
+    radioDuckHold = !!on;
+    return applyMusicDuck();
+  }
+  function setSpotterDuck(on) {
+    spotterDuckHold = !!on;
+    return applyMusicDuck();
+  }
   const radio = GameAudioRadioFx.create({
     context: () => ctx, master: () => master, bus: () => sfxBus, enabled, sfxOk, now,
+    setSpotterDuck,
   }, signal);
   const { decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx } = radio;
   let ctxGen = 0;
@@ -483,6 +502,10 @@ const GameAudio = (function () {
     engBuf = engLoop = engWin = null; samplesReady = false; // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
     radio.resetContext();
+    // Old radioVoice onended/stop never fire on a closed context — drop both
+    // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
+    radioDuckHold = false;
+    spotterDuckHold = false;
     signal.resetContext();
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would
@@ -1493,6 +1516,23 @@ const GameAudio = (function () {
     }
   }
 
+  // THE GRID IDLES. startRaceBody starts the engine with engGain at 0 and only
+  // setEngine opens it; update()'s countdown branch returns before the race
+  // block, so without this the car was silent through the lamps and slammed in
+  // at LIGHTS OUT. Stationary (speed 0) keeps wind and whine gated. game.js
+  // calls this on the countdown return; `_audioParamStep` still gates it.
+  function setGridIdle(player, opts) {
+    const o = opts || {};
+    if (!player || o.soundOn === false || o.step === false) return;
+    const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
+    const max = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.MAX_RPM) || 15000;
+    const rev = clamp01(((player.rpm || idle) - idle) / Math.max(1, max - idle));
+    setEngine(rev, 0, false, 0, player.gear, {
+      slip: 1, ax: 0, onKerb: false, wet: !!o.wet, tow: 0,
+      deploy: 0, energy: player.energy ?? 1, ersDeploy: player.ersDeploy ?? 0.5,
+    });
+  }
+
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
@@ -2137,6 +2177,7 @@ const GameAudio = (function () {
     now,
     radioVoice,
     radioVoicesLive: radio.radioVoicesLive,
+    voiceChainsLive: radio.voiceChainsLive,
     ctxGen: () => ctxGen,
     radioSting,
     radioStingStop,
@@ -2153,6 +2194,7 @@ const GameAudio = (function () {
     startEngine,
     stopEngine,
     setEngine,
+    setGridIdle,
     setSkid,
     setCarSfx,
     pitGun,
