@@ -1,7 +1,10 @@
 {
-  "why": "Wave 6 — Imola (Partenza opposite pits + Racetrack Tower over Tilke pit)",
+  "why": "Imola DETAIL — Partenza, Racetrack Tower, Senna memorial, hillside casali",
   "ids": [
     "imola-partenza-stands",
-    "imola-racetrack-tower"
+    "imola-racetrack-tower",
+    "senna-memorial",
+    "imola-hill-villas",
+    "imola-tamburello-tribute-wall"
   ]
 }

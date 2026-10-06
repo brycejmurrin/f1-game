@@ -201,8 +201,15 @@ const GLXShadow = (function () {
       return ok;
     }
 
+    // Context-loss fail-closed. Shadow passes run BEFORE gfx.begin() (game.js
+    // sunPass/lampPass), so they are the first GL traffic after a loss and the
+    // ones that used to spam INVALID_OPERATION while begin()/present() already
+    // gated on ctxGone. castShadow had the gate; Begin/Instanced/End did not.
+    function gone() { return !!(core.ctxGone && core.ctxGone()); }
+    function disarmPass() { S.depthPassOn = false; S.castCullVP = null; }
+
     function shadowBegin(lightVP) {
-      if (!S.enabled) return;
+      if (!S.enabled || gone()) { disarmPass(); return; }
       // Depth must be writable to clear/render the shadow map. This pass runs
       // before begin(), so declare the state explicitly rather than assuming it.
       setDepthMask(true);
@@ -230,14 +237,14 @@ const GLXShadow = (function () {
     }
 
     function castShadow(mesh, model) {
-      if ((core.ctxGone && core.ctxGone()) || !S.depthPassOn || !mesh) return;
+      if (gone() || !S.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(S.depthU.uModel, false, model);
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     }
 
     function castShadowInstanced(batch, count) {
-      if (!S.depthPassOn || !batch || !batch.instances) return;
+      if (gone() || !S.depthPassOn || !batch || !batch.instances) return;
       const n = count === undefined ? batch.instances : Math.min(count, batch.instances);
       if (n <= 0) return;
       // Full-set cast (default): the lit pass may have camera-repacked ibo to
@@ -304,7 +311,7 @@ const GLXShadow = (function () {
 
     function shadowEnd() {
       S.depthPassOn = false;
-      if (!S.enabled) return;
+      if (!S.enabled || gone()) return;
       gl.enable(gl.CULL_FACE);
       if (S.pcssEnabled) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, blockerFBO);
@@ -331,7 +338,7 @@ const GLXShadow = (function () {
     // into the small per-frame car map. Runs before begin() each frame (game.js
     // guards on this method existing, so WGX silently keeps blob-only shadows).
     function carShadowBegin(lightVP, boxScale) {
-      if (!S.carEnabled) return;
+      if (!S.carEnabled || gone()) { disarmPass(); return; }
       setDepthMask(true);
       S.carLightVP.set(lightVP);
       S.carBoxScale = boxScale || 1;
@@ -357,7 +364,7 @@ const GLXShadow = (function () {
     function carShadowEnd() {
       S.depthPassOn = false;
       S.castCullVP = null;   // before the early return: chunked.js reads castCullVP || lightVP for EVERY caster's frustum
-      if (!S.carEnabled) return;
+      if (!S.carEnabled || gone()) return;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
@@ -369,7 +376,7 @@ const GLXShadow = (function () {
     // nearest-N ordering). game.js guards on this method existing, so WGX
     // silently keeps unshadowed lamp cones.
     function lampShadowBegin(lightVP, lightIdx) {
-      if (!S.lampEnabled) return;
+      if (!S.lampEnabled || gone()) { disarmPass(); return; }
       setDepthMask(true);
       S.lampLightVP.set(lightVP);
       S.lampIdx = lightIdx | 0;
@@ -389,7 +396,7 @@ const GLXShadow = (function () {
     function lampShadowEnd() {
       S.depthPassOn = false;
       S.castCullVP = null;   // same — a latched lamp VP would cull the SUN pass against a lamp-sized box
-      if (!S.lampEnabled) return;
+      if (!S.lampEnabled || gone()) return;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
