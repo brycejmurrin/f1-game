@@ -161,3 +161,16 @@ test("game.js only FEEDS Damage (contact / observe / reset) and its physics path
   // damage.js writes no field on a car: state lives in its own WeakMap.
   assert.doesNotMatch(SRC.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""), /\b(c|a|b)\.\w+\s*[+\-*/]?=(?!=)/);
 });
+
+// css/hud.css: #hud-damage's top/right divide by --hud-z. It must ride the
+// top-band zoom group with #hud-limits — otherwise --hud-z is empty, the calcs
+// are invalid, and the fixed chip falls to static top-left over the minimap
+// (player cockpit shots, 2026-10-05).
+test("#hud-damage joins the top-band --hud-z zoom group with #hud-limits", () => {
+  const css = read("css/hud.css");
+  assert.match(css, /#hud-limits, #hud-damage, #hud-mirror[\s\S]*?\{ --hud-z: var\(--hud-z-top, var\(--hud-scale\)\); zoom: var\(--hud-z\); \}/);
+  const rule = css.match(/#hud-damage \{([\s\S]*?)\n\}/);
+  assert.ok(rule, "#hud-damage rule present");
+  assert.match(rule[1], /top: calc\([\s\S]*\/ var\(--hud-z\)/);
+  assert.match(rule[1], /right: calc\([\s\S]*\/ var\(--hud-z\)/);
+});

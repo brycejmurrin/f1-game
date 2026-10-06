@@ -606,6 +606,10 @@
   --gold: #ffd700;
   --silver: #c0c0c0;
   --bronze: #cd9b5a;
+  /* Appearance preset art washes — theme-stable (LIGHT must not remappoint).
+     Sunlight once painted with --text/--dim and went near-black under LIGHT. */
+  --look-sunlight-hi: #f7e7a4;
+  --look-sunlight-lo: #e0b84a;
   /* The fourth metal: the HUD's lime marks THE PLAYER wherever a table has a
      "you" row. Named for the same reason as the metals; the tach gradient's
      matching stop stays literal — a ramp's stops are chosen against each
@@ -1035,6 +1039,10 @@ body:not(.desktop) {
   --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
   --focus: #111118;
   --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+  /* Gold ON / podium metal must read on light plates (Sound ON, fold
+     summaries, garage status). Shipped #ffd700 is ~1.4:1 on --bg /
+     --plate-opaque; #7a5600 clears 4.5:1 on those grounds. */
+  --gold: #7a5600;
 }
 @media (prefers-color-scheme: light) {
   :root[data-ui-theme="system"] {
@@ -1057,9 +1065,9 @@ body:not(.desktop) {
     --edge: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
     --focus: #111118;
     --red-fill: color-mix(in oklab, var(--red) 86%, #3a0000);
+    --gold: #7a5600;
   }
 }
-
 /* ---- APPEARANCE: text size + high contrast (js/ui/appearance-opts.js) ----
    TEXT SIZE re-states the --fs-* ladder, so every token consumer grows and the
    bare-px HUD (its own HUD SIZE) does not. --fs-micro stays the floor the
@@ -1163,6 +1171,8 @@ body:not(.desktop) {
   --edge: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.45);
   --focus: #fff;
   --red-fill: color-mix(in oklab, var(--red) 90%, #1a0008);
+  /* LIGHT remaps --gold for menu plates; race chrome keeps the bright metal. */
+  --gold: #ffd700;
   /* and the INHERITED ink: .hud-value, #hud-speed and friends set no colour of
      their own, so they would inherit body's already-resolved (light) --text. */
   color: var(--text);
@@ -1261,11 +1271,14 @@ button {
   cursor: pointer;
   transition: background 0.14s, box-shadow 0.14s;
 }
-/* :hover is gated on a device that can actually hover: on iOS a tap SETS
-   :hover and it stays stuck until the next tap elsewhere, so an un-gated
-   hover reads as a button that never un-pressed. This gate applies to every
-   :hover in the split stylesheet; :active is the touch press feedback. */
-@media (hover: hover) {
+/* :hover is gated on a real hover pointer: on iOS a tap SETS :hover and it
+   stays stuck until the next tap elsewhere, so an un-gated hover reads as a
+   button that never un-pressed. Gate: (hover: hover) and (pointer: fine).
+   This applies to every :hover in the split stylesheet except the follow-up
+   sheets listed in phone-touch-surface.test.mjs; :active is the touch press
+   feedback. Keyboard keeps the :focus-visible ring below — do not fold a
+   generic button:focus-visible fill here, it would outrank .bigbtn paint. */
+@media (hover: hover) and (pointer: fine) {
   button:hover { background: var(--plate-hover); }
   button:disabled:hover { background: var(--plate); }
 }

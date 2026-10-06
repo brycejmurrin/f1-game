@@ -860,6 +860,8 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
   assert.doesNotMatch(selectedJob, new RegExp(`npm test -- .*smoke\\.spec\\.js.*--timeout=${SELECTED_TIMEOUT_MS}`));
   assert.match(selectStep, /COVERED BY FIXED BLOCKING GATE/,
     "the selection report must make its delegated coverage visible");
+  assert.match(selectStep, /COVERED BY MANUAL OPT-IN/,
+    "an env-gated spec (material-shimmer) must be named, not scheduled");
 });
 
 test("the golden-menu trial is advisory AND never runs on the Pages call", () => {

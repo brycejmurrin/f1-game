@@ -138,7 +138,9 @@ const DataLive = (function () {
       stateBadge.setAttribute("data-state", phase.toLowerCase());
       infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
-      const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
+      const place = (typeof F1API !== "undefined" && F1API.placeLabel)
+        ? F1API.placeLabel(meta.circuit, meta.country, " · ")
+        : [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
       const timeLabel = sessionTimeLabel(meta, phase, fmtDateTime);
       if (timeLabel) info.appendChild(el("div", "dh-live-sub", timeLabel));

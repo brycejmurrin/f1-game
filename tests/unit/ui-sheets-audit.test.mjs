@@ -71,6 +71,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
+  vm.runInContext(src("js/race/race-control.js"), ctx, { filename: "js/race/race-control.js" });   // shortRun: the sheet's points table
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: "js/ui/results-story.js" });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
@@ -492,7 +493,9 @@ function bootAudio({ soundOn, musicEnabled }) {
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
   const store = stubStore();
   store.set("musicSource", "builtin");
-  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0 };
+  // isRaining — SOUND ON mid-race restarts rain from live weather (panel.js),
+  // not raceWeather. The stub must expose the same hook game.js puts on G.
+  const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, isRaining: () => false };
   const api = vm.runInContext("AudioPanel", ctx).create(G);
   return { dom, G, api, calls };
 }

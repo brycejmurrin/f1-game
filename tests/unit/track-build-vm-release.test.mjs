@@ -204,10 +204,7 @@ const STRIP = {
   // → towers yield to trees / round footprints 340821/313906 (2026-10-05:
   //   city.js neonTower registers a round kind's true footprint and yields
   //   to a planted tree — one fewer unit emitted, −18 / −16)
-  // → signature heroes + Sopraelevata far-pine refill 337251/303596 (2026-10-05:
-  //   tribuna/podium/canopy emit; Rank A/B cleared of banking ruin; far pines
-  //   past gap≥100 restore wide flyby fill without Ascari cone×box)
-  monza: { before: 337251, after: 303596 },
+  monza: { before: 340821, after: 313906 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

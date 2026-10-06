@@ -23,7 +23,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
 let g = null;
 before(async () => { g = await createGame({ storage: { trackId: "monza" } }); });
@@ -232,6 +232,33 @@ test("a championship's 57 LAPS is clamped to a shorter FULL, never raised to a l
   }
 });
 
+test("NEXT ROUND clamps the format distance to the next circuit's FULL, and restores it after a short one", async () => {
+  // NEXT ROUND skips RACE SETTINGS, so the clamp above never ran: a 57-lap
+  // format raced 57 at Silverstone (full 52), and a value clamped at a short
+  // circuit stuck to every longer round (bug hunt 2026-10-05 G6).
+  const g2 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g2.apex, G = g2.G, S = vm.runInContext("SeasonCal", g2.ctx), T = vm.runInContext("Tracks", g2.ctx);
+    a.headless(true);
+    const longs = T.SEASON.filter((t) => t.gpLaps > 57), short = T.SEASON.find((t) => t.gpLaps < 57 && t.gpLaps > 3);
+    const [long, long2] = longs;   // the calendar collapses a repeated id: two different long circuits
+    G.flow = "season"; G.session = "race";
+    const r = S.applyConfig(Object.assign(S.fresh(), { quali: false, laps: 57, trackIds: [long.id, short.id, long2.id] }));
+    G.season = r.season; G.trackIdx = S.trackIndex(0); G.raceLaps = S.formatLaps(3);
+    const round = async (next) => {
+      const before = G.cars;
+      if (next) G.els.resNext.onclick(); else G.startRace();
+      await settle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+      const out = { id: G.track.def.id, laps: G.lapsTarget };
+      a.go(); g2.step(10); a.finishRace();
+      return out;
+    };
+    assert.deepEqual(await round(false), { id: long.id, laps: 57 }, "round 1 runs the format's 57");
+    assert.deepEqual(await round(true), { id: short.id, laps: short.gpLaps }, `NEXT ROUND at ${short.id} is its FULL ${short.gpLaps}, not 57`);
+    assert.deepEqual(await round(true), { id: long2.id, laps: 57 }, "and the next longer round is back on 57");
+  } finally { g2.close(); }
+});
+
 // ── the GRID RULE ─────────────────────────────────────────────────────────────
 
 // gridOrderFor() is pure over its closure: lift its source (and gridRule(),
@@ -278,6 +305,16 @@ test("STANDINGS (champ) grids a no-qualifying championship in points order (FIA 
   const q = cars.slice().reverse();
   assert.equal(gridRule("champ", { cars, champ: true, squali: true, season })(q), q, "a qualifying championship grids off the session");
   assert.equal(gridRule("champ", { cars, season })(null), null, "a one-off never reaches the championship rule");
+});
+
+test("REVERSE STANDINGS on round 1 (nobody scored) grids on pace order, as STANDINGS does", () => {
+  // The all-zero table sorted by SeasonCal.rank's last resort — the driver-id
+  // STRING — and reversed: pole to williams:1, the player P10 (bug hunt 2026-10-05 G7).
+  const cars = carsOf(4);
+  let draws = 0;
+  assert.equal(gridRule("revchamp", { cars, champ: true, season: { pts: { d0: 0 } }, rnd: () => { draws++; return 0.5; } })(null), null,
+    "gridUp's own default grid");
+  assert.equal(draws, 0, "...which draws its own jitter");
 });
 
 test("a qualifying championship and a time trial ignore the rule; RANDOM spends one draw per car", () => {
@@ -376,12 +413,12 @@ test("a MIXED race arms a weather arc at the start and walks it; the plan is the
   assert.ok(arc, "an arc is armed");
   assert.equal(arc.from, "dry");
   assert.notEqual(arc.to, "dry");
-  assert.ok(arc.dur >= 120 && arc.dur <= 420, "2–7 minutes: " + arc.dur);
+  assert.ok(arc.dur >= 90 && arc.dur <= 420, "seeded 2–7 min then race-length cap: " + arc.dur);
   // The derived plan is a function of (seed, race counter): read twice, same answer.
   g.G.wxArcPlan = null;
   const p1 = JSON.parse(JSON.stringify(g.G.wxArcPlan)), p2 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
   assert.deepEqual(p1, p2, "same seed and counter, same plan");
-  assert.ok(p1 && p1.to !== "dry" && p1.dur >= 120, JSON.stringify(p1));
+  assert.ok(p1 && p1.to !== "dry" && p1.dur >= 90, JSON.stringify(p1));
   // A host-supplied plan wins over the derived one.
   g.G.wxArcPlan = { to: "fog", dur: 200 };
   await g.race("monza", "day", "dry");

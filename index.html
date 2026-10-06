@@ -151,6 +151,20 @@
   try {
     var buildMeta = document.querySelector('meta[name="apex-build"]');
     var loaded = buildMeta ? parseInt(buildMeta.content, 10) : 0;
+    // A SPENT ?b= SHELL BUST LEAVES THE ADDRESS BAR. The reload below (and
+    // UpdateCheck.apply) adds ?b=BUILD so the navigation skips every cached
+    // shell; once this shell is running the bust has done its job, and a tab
+    // left on ?b= was reloaded, restored or bookmarked as a bust for good
+    // (sw.js treats only a b newer than its cached shell as one). Query and
+    // hash survive: ?log= and a #vs= invite must not vanish here either.
+    try {
+      var bq = new URLSearchParams(location.search);
+      if (bq.has("b") && history.replaceState) {
+        bq.delete("b");
+        var bs = bq.toString();
+        history.replaceState(history.state, "", location.pathname + (bs ? "?" + bs : "") + location.hash);
+      }
+    } catch (e) { /* a sandboxed frame may refuse replaceState: the URL keeps b, the worker copes */ }
     // OFFLINE CACHE: register the service worker (sw.js) so the game installs
     // and plays offline after one visit. The query mirrors the shell generation
     // this guard just parsed — a new deploy is therefore a genuinely
@@ -1397,7 +1411,7 @@
     </details>
 
     <details id="adv-aids-details">
-    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · LOW</summary>
+    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · OFF</summary>
     <div role="group" aria-label="Driving aids">
     <div class="adv-item">
       <div id="pm-helplevel" class="set-row" role="group" aria-labelledby="pm-helplevel-label">
@@ -1412,11 +1426,11 @@
     </div>
     <div class="adv-item">
       <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
-        <span class="tune-label" id="pm-linemode-label">LINE STEERING ASSIST</span>
+        <span class="tune-label" id="pm-linemode-label">STEER ASSIST</span>
         <div>
-          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous line steering assist">&lsaquo;</button>
+          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous steer assist">&lsaquo;</button>
           <select id="pm-linemode-sel" aria-labelledby="pm-linemode-label"></select>
-          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next line steering assist">&rsaquo;</button>
+          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next steer assist">&rsaquo;</button>
         </div>
       </div>
       <p class="adv-help">Gently steers toward the ideal line. This changes the car’s steering; the visual DRIVING LINE is separate, in RACE SETTINGS.</p>
@@ -1941,7 +1955,7 @@
         </section>
       </div>
     </div>
-    <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
+    <div class="sheet-foot"><button id="pm-settings-close" type="button" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
@@ -2464,17 +2478,16 @@
      tests/specs/menu-keyboard.spec.js ":modal" — which was RED while this shipped
      as a div, because the conversion commit lost this hunk in a merge. -->
 <dialog id="track-detail" class="screen dim" aria-labelledby="track-detail-name" data-esc-close="track-detail-close" hidden>
-  <!-- The canonical .sheet-head on a full-bleed dialog — the .dh-card
-       precedent (css/data.css): the class delivers the paint and the red h2;
-       track-detail.css keeps only the flex/padding deltas the .sheet grid
-       would otherwise supply. The h2 keeps its id (aria-labelledby target;
-       menus.js sets textContent). Close is the shared .dh-close icon recipe —
-       .tdc-close-btn had become a byte-identical copy of it in round 7. -->
+  <!-- Same .screen.dim > .sheet stack as standings / race-settings — not a
+       one-off full-bleed overlay. The head is the shared .sheet-head (white
+       title + red rail). Map wrap id is load-bearing: openTrackDetail fits
+       the canvas from it. -->
+  <div id="td-inner" class="sheet">
   <div id="track-detail-header" class="sheet-head">
     <h2 id="track-detail-name"></h2>
     <button id="track-detail-close" autofocus class="dh-close" aria-label="Close">&#x2715;</button>
   </div>
-  <div id="track-detail-body">
+  <div id="track-detail-body" class="sheet-body">
     <div id="track-detail-canvas-wrap">
       <canvas id="track-detail-canvas" width="800" height="560" role="img" aria-label="Circuit layout diagram"></canvas>
     </div>
@@ -2490,14 +2503,13 @@
         <canvas id="track-detail-elev" width="240" height="48" role="img" aria-label="Elevation profile"></canvas>
       </div>
       <div id="track-detail-drs-wrap" hidden>
-        <div class="tds-subtitle">DRS ZONES</div>
+        <div class="tds-subtitle">AERO ZONES</div>
         <div id="track-detail-drs-list"></div>
       </div>
-      <div id="track-detail-corners">
-        <div class="tdc-title">TURNS</div>
-        <div id="track-detail-list"></div>
-      </div>
+      <div class="tdc-title">TURNS</div>
+      <div id="track-detail-list"></div>
     </div>
+  </div>
   </div>
 </dialog>
 
@@ -2945,9 +2957,10 @@
       <div id="cs-tabs" class="pane pair-side"></div>
       <div id="cs-options" class="pane pair-main"></div>
     </div>
-    <!-- BACK returns to whichever screen opened the GARAGE; DONE goes FORWARD
-         (from the circuit picker it lands on race settings). Escape presses
-         BACK — see data-esc-close on #carsetup. -->
+    <!-- BACK stays visible only when DONE is a forward door (RACE SETUP from
+         the circuit picker). From title / career / pit / lobby the two agree,
+         so #carsetup[data-cs-exit=one] hides BACK. Escape still presses #cs-back
+         (data-esc-close) — the control remains in the DOM. -->
     <div class="sheet-foot"><button id="cs-back" class="bigbtn alt">BACK</button><button id="cs-done" class="bigbtn">DONE</button></div>
   </div>
 </div>
@@ -3059,10 +3072,10 @@
           <br>THROTTLE: HOLD keeps your thumb on GAS, LATCH makes GAS a tap-on, tap-off switch, AUTO drives the throttle so you only steer and brake. LEFT-HANDED swaps the two on-screen thumb groups. RECALIBRATE TILT makes the way you hold the phone straight ahead. MANUAL GEARS need tilt, a keyboard or a pad.
           <br>STEER THIS GAME WITH A PHONE shows a room code and QR code: scan or type it on a phone and the phone becomes the wheel (both need internet). In CONTROLLER, BUTTON NAMES fixes prompts that name the wrong buttons, CALIBRATE STICK cures a drifting stick, SET UP A WHEEL maps a wheel and pedals the browser cannot, and RESET CONTROLLER restores the default buttons.</dd>
         <dt>STEERING &amp; ASSISTS</dt>
-        <dd>Choose response presets and steering aids here. LINE STEERING ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.
+        <dd>Choose response presets and steering aids here. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.
           <br><b>PRESETS</b> set every handling slider at once. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD is the default car with no corner help. PRO is STANDARD with sharper RESPONSE. Moving any slider afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
           <br><b>FEEL:</b> TILT SENSITIVITY, and STEERING from SUPER EASY through ASSISTED and NORMAL to SIM (SIM also quickens turn-in).
-          <br><b>AIDS:</b> DRIVING HELP (LOW is off, MEDIUM, HIGH) steers part of each corner for you. LINE STEERING ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.
+          <br><b>AIDS:</b> DRIVING HELP (OFF, MEDIUM, HIGH) steers part of each corner for you. STEER ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.
           <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. RACING LINE biases you toward the apex (PULL) or wider (PUSH) and never overrides your steering.</p></details></dd>
         <dt>DISPLAY</dt>
         <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.
@@ -3100,7 +3113,7 @@
           <br>On a phone, USE AS CONTROLLER on the title menu steers a game on another screen: type the room code it shows.</dd>
       </dl>
     </div>
-    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">CLOSE</button></div>
+    <div class="sheet-foot"><button id="htp-close" type="button" autofocus class="bigbtn alt">CLOSE</button></div>
   </div>
 </dialog>
 
@@ -3637,6 +3650,7 @@
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/sheet-shape.js?v=dev"></script>

@@ -1029,7 +1029,7 @@ const AiDrive = (function () {
     // …and never more stops than the race has laps to hold one on (laps - 1:
     // no stop on the last). The pin is stored per circuit, not per distance, so
     // a 2-stop pin met a 2-lap sprint leg and made a zero-length stint: "BOX L0".
-    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0, Math.max(0, laps - 1)) : null;
+    let pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0, Math.max(0, laps - 1)) : null;
     let pinStart = ctx.start && TYRE[ctx.start] ? ctx.start : null;
     // TWO DRY SPECIFICATIONS (FIA Sporting Regulations B6.3.6): a dry race
     // must use at least two different compounds. `used` is what a mid-race
@@ -1078,7 +1078,11 @@ const AiDrive = (function () {
     // A start pinned to a compound the planner does not enumerate (a wet on a
     // drying track) matches no sequence: plan from the classes instead.
     if (!best && pinStart) { pinStart = null; for (const cls of CLASSES) rec([cls]); }
-    // A pinned 0-stop cannot satisfy the rule: honour the pin, not the rule.
+    // A pinned NO STOP cannot satisfy the rule, and a plan that drops it is a
+    // DSQ at the flag (endRace, SportingRegs.applyCompoundRule): the rule wins
+    // and the pin rises to the one stop it needs. Only a race too short to
+    // hold a stop at all plans on one set.
+    if (!best && twoCompound && pinStops === 0 && laps > 1) { pinStops = 1; for (const cls of CLASSES) rec([cls]); }
     if (!best && twoCompound) { twoCompound = false; for (const cls of CLASSES) rec([cls]); }
     // Stop laps are the running totals of the stint lengths — STAGGERED by the
     // roll, a lap either way in thirds of the field. Without it a field on one

@@ -212,8 +212,10 @@ const NetTransport = (function () {
     // landed). iceServers are fixed at RTCPeerConnection construction, so
     // stale credentials only hurt the NEXT gather — refresh before that.
     if (url && !iceCredFresh() && !fetchingIce) {
-      fetchedIce = null;
-      fetchedIceAt = 0;
+      // Keep last-good fetchedIce while the refresh runs. Nulling it here made
+      // iceServers() STUN-only mid-refresh, so a PC built in that window lost a
+      // still-usable TURN. Replace only when a new list lands (or rtc() drops a
+      // malformed cache). A failed refresh keeps the prior credentials.
       // BOUNDED. A credentials endpoint that never answers — captive portal,
       // dead DNS, a firewall that blackholes rather than refuses — must not
       // become an unbounded wait, because the lobby now awaits this before
@@ -239,9 +241,9 @@ const NetTransport = (function () {
         // but docs/MULTIPLAYER.md documents prefetchIce() as the thing that has
         // to land before a connection is built — and when it does not, every wire dump
         // reads relay:0 while the relay is demonstrably alive. Retained so that
-        // symptom has a cause attached to it.
+        // symptom has a cause attached to it. Last-good stays if we had one.
         Log.warn("net", "TURN credential fetch failed, gathering STUN-only:", err && err.message);
-        return null;
+        return fetchedIce;
       }).finally(() => { clearTimeout(bail); fetchingIce = null; });
     }
     if (fetchingIce) jobs.push(fetchingIce);
@@ -372,7 +374,10 @@ const NetTransport = (function () {
     if (stunOnly) return list;
     const mine = turnFromStore();
     if (mine) list.push(mine);
-    if (iceCredFresh()) list.push(...fetchedIce);
+    // Use last-good even while a TTL refresh is in flight (or briefly past
+    // ICE_CRED_TTL_MS). iceCredFresh() gates the FETCH, not the merge — forcing
+    // STUN-only mid-refresh dropped a still-usable TURN on the next PC.
+    if (fetchedIce) list.push(...fetchedIce);
     // The free relays go LAST when opted in, and only ever add candidates.
     // ICE tries every pair it can form and keeps the best, so ordering by
     // INTENT — yours, then your operator's, then whatever is free — means a
@@ -397,8 +402,13 @@ const NetTransport = (function () {
     if (!PC) return null;                      // caller falls back / reports
 
     const ep = makeEndpoint(opts.name || "rtc");
+    // iceServers are fixed at construction — see lobby.js readyIce(). stats().turn
+    // must describe THIS PeerConnection, not whatever hasRelay() says later when
+    // a credentials fetch lands (or expires) after the PC was built.
+    let usedIce = null;
     const build = (stunOnly) => {
-      const cfg = { iceServers: iceServers(opts, stunOnly) };
+      usedIce = iceServers(opts, stunOnly);
+      const cfg = { iceServers: usedIce };
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
       return new PC(cfg);
@@ -425,6 +435,10 @@ const NetTransport = (function () {
         return null;
       }
     }
+    const hadTurn = (usedIce || []).some((e) => {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      return urls.some((u) => /^turns?:/i.test(String(u || "")));
+    });
     Log.info("net", "rtc create");
     const chans = {};
     const STATE_INBOX_CAP = 64;
@@ -599,7 +613,7 @@ const NetTransport = (function () {
       ice: pc.iceConnectionState,
       gathering: pc.iceGatheringState,
       candidates: Object.assign({}, found),
-      turn: hasRelay(),
+      turn: hadTurn,
       ownTurn: !!turnFromStore(),
     });
     return ep;
