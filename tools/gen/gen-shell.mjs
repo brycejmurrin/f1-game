@@ -163,7 +163,8 @@ export function swOptionalFiles() {
     ...Object.values(MANIFEST.DEFERRED).flat(),
     ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
-    ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR,
+    ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
+    ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
   ];
 }
 
@@ -176,6 +177,9 @@ function swOptionalBlock() {
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
     ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR — the track designer behind the TRACK DESIGNER door", MANIFEST.LAZY_EDITOR],
+    ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
+    ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
+    ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
   ];
   const out = [];
   for (const [title, files] of groups) {
@@ -200,6 +204,9 @@ function rosterSource() {
     ["LAZY_NET", MANIFEST.LAZY_NET], ["LAZY_NET_EDGES", MANIFEST.LAZY_NET_EDGES],
     ["LAZY_WORKER", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR", MANIFEST.LAZY_EDITOR], ["LAZY_EDITOR_EDGES", MANIFEST.LAZY_EDITOR_EDGES],
+    ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
+    ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
+    ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.
     ["TRACK_VM", MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map(MANIFEST.circuitPath) : [e]))],

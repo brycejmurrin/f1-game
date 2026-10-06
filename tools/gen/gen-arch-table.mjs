@@ -114,6 +114,9 @@ export function rosterOf() {
   add(MANIFEST.LAZY_NET, "LAZY_NET");
   add(MANIFEST.LAZY_AUDIO || [], "LAZY_AUDIO");
   add(MANIFEST.LAZY_EDITOR || [], "LAZY_EDITOR");
+  add(MANIFEST.LAZY_XR || [], "LAZY_XR");
+  add(MANIFEST.LAZY_CAM_EDITOR || [], "LAZY_CAM_EDITOR");
+  add(MANIFEST.LAZY_CAREER_UI || [], "LAZY_CAREER_UI");
   return out;
 }
 

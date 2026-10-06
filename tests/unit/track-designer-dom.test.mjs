@@ -823,9 +823,9 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   }
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
-  // MODE + numbered groups; ELEVATION / LOOK stay in the DOM (mode toggles visibility).
+  // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
   // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 6), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "3 LOOK", "4 DETAILS"]);
+  assert.deepEqual(labels().slice(0, 7), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "3 LOOK", "4 DETAILS"]);
   assert.ok(labels().includes("5 CHECKS"));
   const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
   assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
@@ -1517,16 +1517,36 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
   const T = b.ctx.TrackThemes;
   assert.equal(T.ORDER.length, 20);
+  assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
+  // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
+  for (const id of T.ORDER) {
+    const p = T.PRESETS[id];
+    assert.ok(Array.isArray(p.swatch) && p.swatch.length === 2, id + " has a swatch pair");
+    assert.match(p.swatch[0], /^#[0-9a-fA-F]{6}$/, id + " swatch[0] hex");
+    assert.match(p.swatch[1], /^#[0-9a-fA-F]{6}$/, id + " swatch[1] hex");
+    assert.equal(T.swatchCss(id), "linear-gradient(135deg," + p.swatch[0] + " 50%," + p.swatch[1] + " 50%)");
+  }
   const themeChips = walk(b.root).filter((e) => e.dataset && e.dataset.theme);
   assert.deepEqual(themeChips.map((e) => e.dataset.theme), [...T.ORDER], "one chip per preset, in share-code order");
-  const blurb = walk(b.root).find((e) => e.classList && e.classList.contains("td-hint") && e.textContent === T.get(b.D.state().design.theme).blurb);
+  for (const chip of themeChips) {
+    const p = T.get(chip.dataset.theme);
+    assert.equal(chip.getAttribute("aria-label"), p.label || chip.dataset.theme);
+    const sw = chip.children.find((c) => c.classList && c.classList.contains("swatch"));
+    assert.ok(sw, chip.dataset.theme + " has a swatch");
+    assert.equal(sw.getAttribute("aria-hidden"), "true");
+    assert.equal(sw.style.background, T.swatchCss(chip.dataset.theme), chip.dataset.theme + " paints its swatch pair");
+    const lab = chip.children.find((c) => c.dataset && c.dataset.role === "theme-label");
+    assert.ok(lab && lab.textContent === (p.label || chip.dataset.theme.toUpperCase()), chip.dataset.theme + " keeps a visible label");
+  }
+  const blurb = walk(b.root).find((e) => e.dataset && e.dataset.role === "theme-blurb");
   assert.ok(blurb, "the active theme's blurb is shown");
+  assert.equal(blurb.textContent, T.get(b.D.state().design.theme).blurb);
   assert.equal(b.D.setTheme("winter"), true);
   assert.equal(blurb.textContent, T.PRESETS.winter.blurb, "…and follows the theme");
   const look = (key, v) => walk(b.root).find((e) => e.dataset && e.dataset.look === key + ":" + v);
@@ -1551,6 +1571,54 @@ test("3 LOOK: a chip per theme (twenty), the theme's blurb, and TIME OF DAY / TR
   assert.notEqual(b.C.sanitize(b.D.state().design).id, idLook);
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.look), { time: "auto", trees: "normal", crowd: "packed" }, "UNDO restores the previous look");
+  // CSS contract: LOOK tiles live in editor.css without new class tokens.
+  const css = read("css/editor.css");
+  assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\]\s*\{/, "theme grid");
+  assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\] \.swatch\s*\{/, "theme swatch paint box");
+  assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
+});
+
+// ── Banking UI + kerb styles + berms (overhaul E+F+G) ──────────────────────
+test("ELEVATION mode exposes BANKING & KERBS: FLAT/SAUSAGE/RUMBLE + BERMS ON/OFF; undo restores", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const bank = b.root.querySelector('[data-role="bank-kerbs"]');
+  assert.ok(bank, "bank-kerbs group is built");
+  assert.equal(bank.hidden, true, "hidden outside elevation");
+  b.D.setMode("elevation");
+  assert.equal(bank.hidden, false, "shown in elevation");
+  const kerbs = bank.querySelector('[data-role="kerb-style"]');
+  assert.deepEqual([...kerbs.children].map((c) => c.textContent), ["FLAT", "SAUSAGE", "RUMBLE"]);
+  assert.equal(kerbs.children[0].getAttribute("aria-pressed"), "true", "flat is default");
+  const u0 = b.D.state().undo;
+  kerbs.children[1].click();
+  assert.equal(b.D.state().design.kerbStyle, "sausage");
+  assert.equal(b.D.state().undo, u0 + 1);
+  assert.equal(kerbs.children[1].getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.setKerbStyle("sausage"), false, "same style is no edit");
+  assert.equal(b.D.setKerbStyle("rumble"), true);
+  assert.equal(b.D.state().design.kerbStyle, "rumble");
+  const berms = bank.querySelector('[data-role="berms"]');
+  assert.deepEqual([...berms.children].map((c) => c.textContent), ["BERMS ON", "BERMS OFF"]);
+  assert.equal(berms.children[0].getAttribute("aria-pressed"), "true", "berms on by default");
+  assert.equal(b.D.setBerms(false), true);
+  assert.equal(b.D.state().design.berms, false);
+  assert.equal(berms.children[1].getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.setBerms(false), false);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.berms, undefined, "undo restores default (absent = ON)");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.kerbStyle, "sausage");
+});
+
+test("HOWTO elevation step names bank, kerb styles and berms", () => {
+  const b = bootScreen();
+  const elev = b.D.HOWTO.STEPS.find((s) => s.title === "Elevation");
+  assert.ok(elev, "Elevation step exists");
+  assert.match(elev.text, /BANK/i);
+  assert.match(elev.text, /sausage/i);
+  assert.match(elev.text, /rumble/i);
+  assert.match(elev.text, /BERMS/i);
 });
 
 test("SCENERY props palette: place at selected point, remove last, caps, UNDO, save keeps props", () => {

@@ -493,6 +493,49 @@
       "js/editor/designer.js"
     ]
   ],
+    LAZY_XR: [
+    "js/xr/xr-plan.js",
+    "js/xr/xr-rig.js",
+    "js/xr/xr-input.js",
+    "js/xr/xr-session.js",
+    "js/xr/apex-xr.js",
+    "js/xr/xr-ui.js"
+  ],
+    LAZY_XR_EDGES: [
+    [
+      "js/xr/xr-plan.js",
+      "js/xr/apex-xr.js"
+    ],
+    [
+      "js/xr/xr-rig.js",
+      "js/xr/xr-input.js"
+    ],
+    [
+      "js/xr/xr-rig.js",
+      "js/xr/xr-session.js"
+    ],
+    [
+      "js/xr/xr-input.js",
+      "js/xr/xr-session.js"
+    ],
+    [
+      "js/xr/xr-session.js",
+      "js/xr/xr-ui.js"
+    ],
+    [
+      "js/xr/apex-xr.js",
+      "js/xr/xr-ui.js"
+    ]
+  ],
+    LAZY_CAM_EDITOR: [
+    "js/camera/tuner-panel.js",
+    "js/camera/flyby-editor.js"
+  ],
+    LAZY_CAM_EDITOR_EDGES: [],
+    LAZY_CAREER_UI: [
+    "js/career/career-ui.js"
+  ],
+    LAZY_CAREER_UI_EDGES: [],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

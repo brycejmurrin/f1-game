@@ -285,7 +285,7 @@ const FULL = [
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
-  "js/career/career-ui.js",
+  "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
   "js/ui/select-screen.js",
@@ -323,7 +323,7 @@ const FULL = [
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
   "js/lighting/tuner-panel.js",
-  "js/camera/tuner-panel.js",
+  "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
@@ -361,14 +361,11 @@ const FULL = [
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
-  // WebXR Phase 0 — seated immersive-vr (capability, rig math, input, UI, boot).
-  "js/xr/xr-rig.js",
-  "js/xr/xr-input.js",
-  "js/xr/xr-session.js",
-  "js/xr/xr-plan.js",   // pure path selection (task 20); before ApexXR / XROpts
+  // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
+  // the game.js façade (applyEyes / present no-op until LAZY_XR lands). The
+  // session, rig, ENTER VR button and bootPick live in LAZY_XR — title never
+  // names them, and a session without navigator.xr never fetches them.
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
-  "js/xr/apex-xr.js",   // bootPick / detect / noteFallback façade
-  "js/xr/xr-ui.js",
   "js/xr/xr-boot.js",
   "js/ui/hud.js",
   "js/ui/results-story.js",
@@ -586,7 +583,6 @@ const HARD_EDGES = [
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
-  ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
@@ -686,7 +682,6 @@ const HARD_EDGES = [
   ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
   ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
   ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
-  ["js/career/career-backup.js", "js/career/career-ui.js"],     // EXPORT/IMPORT on slot cards
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -785,7 +780,6 @@ const HARD_EDGES = [
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
-  ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
 
 // ---------------------------------------------------------------------------
@@ -982,6 +976,46 @@ const LAZY_EDITOR = [
 const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
+
+// WEBXR SESSION (js/xr/* minus the boot façade). ~42 KB behind navigator.xr /
+// ENTER VR / an armed apex26.xr — a flat title session runs none of it.
+// xr-boot.js / xr-opts.js stay FULL: game.js calls XrBoot every frame (no-op
+// until XrSession exists) and SETTINGS paints VR rows at eval.
+const LAZY_XR = [
+  "js/xr/xr-plan.js",    // XRPlan: pure path selection
+  "js/xr/xr-rig.js",     // XrRig: seated eye math
+  "js/xr/xr-input.js",   // XrInput: controller → Input.remoteSample
+  "js/xr/xr-session.js", // XrSession: immersive-vr owner
+  "js/xr/apex-xr.js",    // ApexXR: bootPick / detect (renderer-boot typeof-guards)
+  "js/xr/xr-ui.js",      // XrUi: ENTER VR button
+];
+// Call-time only (mapFrame / start / bootPick); order is the inject order.
+const LAZY_XR_EDGES = [
+  ["js/xr/xr-plan.js", "js/xr/apex-xr.js"],
+  ["js/xr/xr-rig.js", "js/xr/xr-input.js"],
+  ["js/xr/xr-rig.js", "js/xr/xr-session.js"],
+  ["js/xr/xr-input.js", "js/xr/xr-session.js"],
+  ["js/xr/xr-session.js", "js/xr/xr-ui.js"],
+  ["js/xr/apex-xr.js", "js/xr/xr-ui.js"],
+];
+
+// CAMERA TUNER + FLYBY SHOT EDITOR panels (~48 KB). Pause-menu authoring
+// only; title flyby reads FlybyPanel.loadSaved() which stays FULL with the
+// shot algebra. Opened from #pm-camtune / #pm-flyby.
+const LAZY_CAM_EDITOR = [
+  "js/camera/tuner-panel.js",   // CamTunerEditor
+  "js/camera/flyby-editor.js",  // FlybyEditor
+];
+const LAZY_CAM_EDITOR_EDGES = [];
+
+// CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
+// (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
+// CAREER opens. Dom / Career / CareerBackup stay FULL, so the inject needs
+// no intra-bundle edges.
+const LAZY_CAREER_UI = [
+  "js/career/career-ui.js",   // CareerScreen
+];
+const LAZY_CAREER_UI_EDGES = [];
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
@@ -1382,6 +1416,8 @@ module.exports = {
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
+  LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
+  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,
 };

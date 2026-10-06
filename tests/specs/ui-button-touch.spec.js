@@ -586,19 +586,20 @@ test.describe("Selection screen — iOS tablet portrait layout", () => {
     expect(before.overflowY).toBe("hidden");
     expect(before.scrollWidth).toBeGreaterThan(before.clientWidth);
 
-    // #sel-tracks uses scroll-snap-type:x proximity + scroll-snap-align:center
-    // on each .track-row. A magic scrollLeft (120) lands inside the first
-    // tile's snap basin and snaps straight back to 0 on CI (tablet 768×1024) —
-    // that is the af2cd8c5d red (Expected >0, Received 0). Aim at the
-    // *centre-aligned* scrollLeft of a mid/late row so proximity locks onto
-    // that snap instead of the first tile.
+    // #sel-tracks uses scroll-snap-type:x proximity + scroll-snap-align:start
+    // on each .track-row (#1022; was center). A magic scrollLeft (120) or a
+    // centre-aim lands inside the first tile's start-snap basin and snaps
+    // straight back to 0 on CI (tablet 768×1024) — af2cd8c5d / selected-2 red
+    // (Expected >0, Received 0). Aim at the *start-aligned* scrollLeft of a
+    // mid/late row (offsetLeft − scroll-padding) so proximity locks onto that
+    // snap instead of the first tile.
     const aimed = await page.locator("#sel-tracks").evaluate((list) => {
       const rows = [...list.querySelectorAll(".track-row")];
       if (!rows.length) return { ok: false, reason: "no-rows" };
       const row = rows[Math.min(8, rows.length - 1)];
-      // centre align: scrollLeft that puts row's midpoint at the list midpoint
-      const target = Math.max(0,
-        row.offsetLeft + row.offsetWidth / 2 - list.clientWidth / 2);
+      const pad = parseFloat(getComputedStyle(list).scrollPaddingInlineStart) || 0;
+      // start align: scrollLeft that puts row's start at the padded snap edge
+      const target = Math.max(0, row.offsetLeft - pad);
       if (!(target > 0)) return { ok: false, reason: "target-not-positive", target };
       list.scrollLeft = target;
       return { ok: true, target, scrollLeft: list.scrollLeft, row: row.textContent?.trim() };

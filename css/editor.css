@@ -173,6 +173,59 @@
   grid-template-columns: none;
   min-width: 0;
 }
+/* 3 LOOK: theme tiles — dual-colour swatch from TrackThemes.swatch, label under.
+   Bigger than the default 12px .sel-chip .swatch so picking a look is obvious.
+   Attribute selectors (no new class tokens) keep the cssClasses ratchet flat. */
+#trackdesigner .td-chips[data-role="themes"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.75em, 1fr));
+  gap: calc(var(--gap) / 2);
+  min-width: 0;
+}
+#trackdesigner .td-chips[data-role="themes"] > .sel-chip {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: calc(var(--gap) / 4);
+  height: auto;
+  min-height: 0;
+  padding: calc(var(--gap) / 3);
+  white-space: normal;
+  text-align: center;
+}
+#trackdesigner .td-chips[data-role="themes"] .swatch {
+  display: block;
+  width: 100%;
+  height: calc(var(--chip-h) * 1.15);
+  min-height: 28px;
+  margin: 0;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--plate-line);
+  flex: none;
+  box-sizing: border-box;
+}
+#trackdesigner .td-chips[data-role="themes"] > .sel-chip.active .swatch {
+  box-shadow: inset 0 0 0 2px var(--red);
+  border-color: var(--red);
+}
+#trackdesigner .td-chips[data-role="themes"] [data-role="theme-label"] {
+  display: block;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-2);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+#trackdesigner .td-hint[data-role="theme-blurb"] {
+  color: var(--text);
+  line-height: 1.35;
+  min-height: 2.7em;
+}
+@media (forced-colors: active) {
+  /* Colour IS the content on a theme swatch (same carve-out as .sel-chip .swatch
+     in tokens.css — restated here because the tile is larger and path-scoped). */
+  #trackdesigner .td-chips[data-role="themes"] .swatch { forced-color-adjust: none; }
+}
 /* Slice H: scenery props palette under 3 LOOK — kind chips + place/remove. */
 #trackdesigner .td-chips[data-role="props"],
 #trackdesigner .td-chips[data-role="prop-actions"] {
@@ -229,6 +282,10 @@
 #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] {
   height: max(72px, calc(var(--chip-h) * 2.8));
   min-height: 72px;
+}
+/* Banking & kerbs group (elevation mode): keep chip rows from crowding. */
+#trackdesigner[data-mode="elevation"] .td-group[data-role="bank-kerbs"] .td-chips {
+  margin-top: calc(var(--gap) / 4);
 }
 /* Narrow + short LANDSCAPE only (734×343 measured 2026-10-05): the
    portrait/narrow rule stacks the body with minmax(200px,1fr) AND turns the

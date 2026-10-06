@@ -154,8 +154,12 @@ dots mark slope, crest and dip warnings.
   (5 m with Shift); Delete / Enter flatten that node.
 - **Presets** — **Flat** clears heights; **Rolling** / **Hilly** write smooth
   per-node profiles (one UNDO each). Old saves without heights load flat.
+- **BANKING & KERBS** — in the same mode: pick **KERB** style (**FLAT** /
+  **SAUSAGE** / **RUMBLE**) for the whole circuit, and **BERMS ON** /
+  **BERMS OFF** for the outer catch-fence mound on banked corners. Tap a
+  **TURNS** row and set **BANK °** (below) to bank that corner.
 
-Every height edit is one UNDO step.
+Every height, bank, kerb or berm edit is one UNDO step.
 
 ## TURNS — every corner, tappable
 
@@ -174,6 +178,8 @@ at its apex over the corner's own length, cambered toward the inside; FLAT
 takes the banking away. Over 5.7° the checks add an FIA amber (Grade 1 allows
 5.7°; it is advice, not a block). A banked or narrowed corner says so on its
 row: `T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m · BANK 6° · 12 m WIDE`.
+Banking reuses the engine's `bankZones`; with **BERMS ON** (the default) the
+outer side of a banked corner grows a grass berm.
 
 ## 5 CHECKS and FIX
 

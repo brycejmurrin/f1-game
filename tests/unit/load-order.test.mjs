@@ -197,7 +197,9 @@ function lazyFiles() {
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
+    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
+    ...(MANIFEST.LAZY_CAREER_UI || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -243,7 +245,9 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_SCENERY || []),
                    ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
-                   ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])]) {
+                   ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
+                   ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
+                   ...(MANIFEST.LAZY_CAREER_UI || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -263,7 +267,9 @@ test("sw.js stamps every injected asset it seeds", () => {
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
-    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || [])];
+    ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
+    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
+    ...(MANIFEST.LAZY_CAREER_UI || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -413,6 +419,56 @@ test("tools/carview.html tags equal MANIFEST.CARVIEW", () => {
   const srcs = parseTags(carview, /<script[^>]*\bsrc="([^"]+)"/g)
     .map((s) => s.replace(/^\.\.\//, "")).map(stripV);
   assert.deepEqual(srcs, MANIFEST.CARVIEW);
+});
+
+test("LAZY_XR is tagless and FULL keeps only the XR boot façade", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const full = new Set(MANIFEST.FULL);
+  assert.deepEqual([...full].filter((f) => f.startsWith("js/xr/")).sort(),
+    ["js/xr/xr-boot.js", "js/xr/xr-opts.js"]);
+  for (const f of (MANIFEST.LAZY_XR || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_XR but still has a <script> tag`);
+    assert.ok(!full.has(f), `${f} is LAZY_XR but still on FULL`);
+  }
+  for (const [before, after] of (MANIFEST.LAZY_XR_EDGES || [])) {
+    const bi = MANIFEST.LAZY_XR.indexOf(before), ai = MANIFEST.LAZY_XR.indexOf(after);
+    assert.ok(bi >= 0 && ai > bi, `${before} must precede ${after} in LAZY_XR`);
+  }
+});
+
+test("FULL editor files are the picker boot half only (LAZY_EDITOR already lifted the rest)", () => {
+  // props.js is FULL so CustomTracks.sync()/share see TrackDesignerProps without
+  // opening the designer (ship #1129 scenery props palette).
+  assert.deepEqual(MANIFEST.FULL.filter((f) => f.startsWith("js/editor/")), [
+    "js/editor/track-themes.js",
+    "js/editor/props.js",
+    "js/editor/custom-tracks.js",
+  ]);
+  for (const f of MANIFEST.LAZY_EDITOR) {
+    assert.ok(!MANIFEST.FULL.includes(f), `${f} is LAZY_EDITOR — must not also be FULL`);
+  }
+});
+
+test("LAZY_CAM_EDITOR is tagless; FULL keeps FlybyPanel algebra + CamTunerPanel stub", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const full = new Set(MANIFEST.FULL);
+  assert.ok(full.has("js/camera/flyby-panel.js"), "shot algebra stays FULL for loadSaved at boot");
+  assert.ok(full.has("js/camera/cam-tuner-boot.js"), "CamTunerPanel stub stays FULL");
+  assert.ok(!full.has("js/camera/tuner-panel.js"));
+  assert.ok(!full.has("js/camera/flyby-editor.js"));
+  for (const f of (MANIFEST.LAZY_CAM_EDITOR || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_CAM_EDITOR but still has a <script> tag`);
+  }
+});
+
+test("LAZY_CAREER_UI is tagless; FULL keeps CareerUI stub only", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const full = new Set(MANIFEST.FULL);
+  assert.ok(full.has("js/career/career-ui-boot.js"), "CareerUI stub stays FULL");
+  assert.ok(!full.has("js/career/career-ui.js"));
+  for (const f of (MANIFEST.LAZY_CAREER_UI || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_CAREER_UI but still has a <script> tag`);
+  }
 });
 
 test("TRACK_VM entries exist in FULL", () => {

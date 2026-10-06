@@ -32,8 +32,8 @@ const TrackDesigner = (function () {
       { n: 1, title: "Start", text: "Pick a MODE (DRAW / EDIT / ELEVATION / SCENERY / TEST), then RANDOMISE, TRACK OF THE DAY, START FROM…, or DRAW one closed loop." },
       { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); tap the road to add one, double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
       { n: 3, title: "Corners", text: "Still in EDIT, choose CORNER / HAIRPIN / CHICANE / S-BEND, set radius and angle, then tap where it should begin — UNDO takes a stamp back." },
-      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select (height stays put), then drag vertically — or use POINT m / Flat / Rolling / Hilly. Old saves without heights load flat." },
-      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD. Optionally place a few props (stand, gantry, trees, water, flood, billboard) — capped so the circuit stays cheap." },
+      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select then drag vertically (or POINT m / Flat / Rolling / Hilly); bank a turn (BANK °), pick KERB flat/sausage/rumble, and keep BERMS on banked corners." },
+      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD; optionally place a few capped props (stand, gantry, trees, water, flood, billboard), then name the circuit." },
       { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
@@ -72,8 +72,15 @@ const TrackDesigner = (function () {
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
   const fmtLap = (s) => { if (!(s > 0)) return "—"; const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };
   function blank() {
+    // kerbStyle / berms omitted at defaults (flat + berms on) so content ids match older saves.
     return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
   }
+  const KERB_STYLES = (typeof CustomTracks !== "undefined" && CustomTracks.KERB_STYLES) || ["flat", "sausage", "rumble"];
+  function kerbOf(d) {
+    const v = d && d.kerbStyle;
+    return KERB_STYLES.includes(v) ? v : "flat";
+  }
+  function bermsOn(d) { return !(d && d.berms === false); }
   /** Parallel heights for the current pts (Flat when missing — old saves). */
   function ensureHeights(d) {
     if (!d || !Array.isArray(d.pts)) return d;
@@ -99,7 +106,7 @@ const TrackDesigner = (function () {
   function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
-    if (mode === "elevation") return "ELEVATION: tap a grip to select (height stays) · drag vertically to edit · POINT m / Flat / Rolling / Hilly";
+    if (mode === "elevation") return "ELEVATION: tap a grip to select · drag vertically · Flat / Rolling / Hilly · bank a turn (BANK °) · KERB flat/sausage/rumble · BERMS on banked corners";
     if (mode === "scenery") return "SCENERY: theme + TIME / TREES / CROWD · pick a PROP then PLACE AT POINT (or REMOVE LAST)";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
@@ -780,23 +787,34 @@ const TrackDesigner = (function () {
     // Always keep 2 CORNERS in the rail (hiding the whole group left 1 SHAPE → 3 LOOK).
     ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under 1 SHAPE to stamp.");
     ui.shape.append(ui.apply, ui.shapeHint);
-    // theme
+    // theme — colour swatch tiles (preset.swatch pair), not text-only chips
     const theme = group("3 LOOK");
     ui.themeGroup = theme;
     ui.themes = el("div", "td-chips");
+    ui.themes.dataset.role = "themes";
+    ui.themes.setAttribute("role", "group");
+    ui.themes.setAttribute("aria-label", "Theme");
     for (const id of TrackThemes.ORDER) {
       const p = TrackThemes.get(id);
-      const b = btn("", "sel-chip", () => setTheme(id)); b.dataset.theme = id;
-      // Palette entries are linear RGB triples (js/circuits defs); the picker's
-      // swatch idiom (select-screen.js) writes the same inline background.
-      const c = (p.pal && (p.pal.grass || p.pal.sand || p.pal.runoff)) || (p.furniture && p.furniture.fol) || null;
+      const label = p.label || id.toUpperCase();
+      const b = btn("", "sel-chip", () => setTheme(id));
+      b.dataset.theme = id;
+      b.setAttribute("aria-label", label);
+      b.setAttribute("aria-pressed", "false");
+      if (p.blurb) b.title = p.blurb;
+      // Reuse .swatch (select.css); editor.css sizes it as a dual-colour tile.
       const sw = el("span", "swatch");
-      if (Array.isArray(c) && c.length >= 3) sw.style.background = "rgb(" + c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)).join(",") + ")";
-      b.append(sw, document.createTextNode(p.label || id.toUpperCase()));
+      sw.setAttribute("aria-hidden", "true");
+      sw.style.background = TrackThemes.swatchCss(id);
+      const name = el("span", "", label);
+      name.dataset.role = "theme-label";
+      b.append(sw, name);
       ui.themes.appendChild(b);
     }
     theme.appendChild(ui.themes);
     ui.themeBlurb = el("div", "td-hint", "");
+    ui.themeBlurb.dataset.role = "theme-blurb";
+    ui.themeBlurb.setAttribute("aria-live", "polite");
     theme.appendChild(ui.themeBlurb);
     // Scenery options (TrackThemes.LOOK): one chip row per knob, under its theme.
     ui.look = {};
@@ -884,6 +902,25 @@ const TrackDesigner = (function () {
       return design.heights[sel] || 0;
     }, (v) => setNodeHeight(sel, v), 1, (v) => (v > 0 ? "+" : "") + v);
     ui.elevGroup.append(ui.elevPresets, ui.elevHint, ui.elevNode);
+    // Banking + kerbs (E+F) and berms (G): elevation mode owns the road cross-section.
+    ui.bankGroup = group("BANKING & KERBS");
+    ui.bankGroup.setAttribute("data-role", "bank-kerbs");
+    ui.bankHint = el("div", "td-hint", "Tap a row under TURNS, then set BANK ° · kerbs and berms apply to the whole circuit");
+    ui.kerbChips = el("div", "td-chips");
+    ui.kerbChips.setAttribute("aria-label", "Kerb style");
+    ui.kerbChips.setAttribute("data-role", "kerb-style");
+    for (const name of KERB_STYLES) {
+      const b = btn(name.toUpperCase(), "sel-chip", () => setKerbStyle(name));
+      b.dataset.kerb = name;
+      ui.kerbChips.appendChild(b);
+    }
+    ui.bermChips = el("div", "td-chips");
+    ui.bermChips.setAttribute("aria-label", "Berms on banked corners");
+    ui.bermChips.setAttribute("data-role", "berms");
+    ui.bermOn = btn("BERMS ON", "sel-chip", () => setBerms(true));
+    ui.bermOff = btn("BERMS OFF", "sel-chip", () => setBerms(false));
+    ui.bermChips.append(ui.bermOn, ui.bermOff);
+    ui.bankGroup.append(ui.bankHint, ui.kerbChips, ui.bermChips);
     // issues
     const issues = el("div", "td-group");
     ui.checksGroup = issues;
@@ -904,7 +941,7 @@ const TrackDesigner = (function () {
     ui.load = btn("LOAD", "sel-chip", () => loadFrom(ui.code.value));
     loadRow.appendChild(ui.load);
     sharing.append(ui.code, loadRow);
-    pane.append(modes, tools, ui.shape, ui.elevGroup, theme, circuit, issues, sharing);
+    pane.append(modes, tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
     buildDesigned(circuit);
@@ -1002,6 +1039,9 @@ const TrackDesigner = (function () {
     // #1039: keep 2 CORNERS in the rail so numbering never skips 1 → 3; hide only stamp controls (and only outside EDIT).
     if (ui.shape) ui.shape.hidden = mode !== "edit";
     if (ui.elevGroup) ui.elevGroup.hidden = !showElev;
+    // Banking/kerbs live in elevation mode (road cross-section); turn BANK ° also
+    // stays under TURNS when a corner is selected (buildAuthoring).
+    if (ui.bankGroup) ui.bankGroup.hidden = !showElev;
     if (ui.themeGroup) ui.themeGroup.hidden = !(mode === "scenery");
     if (ui.shapeHint) ui.shapeHint.hidden = !!kind || mode !== "edit";
     if (ui.apply) ui.apply.hidden = !kind || mode !== "edit";
@@ -1057,6 +1097,15 @@ const TrackDesigner = (function () {
     if (ui.nextPt) ui.nextPt.disabled = !(design && design.pts && design.pts.length);
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
     if (ui.elevNode) { ui.elevNode.hidden = !(showElev && sel >= 0); if (!ui.elevNode.hidden) ui.elevNode._refresh(); }
+    if (ui.kerbChips) for (const b of ui.kerbChips.children) {
+      const on = b.dataset.kerb === kerbOf(design);
+      b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (ui.bermOn) {
+      const on = bermsOn(design);
+      ui.bermOn.classList.toggle("active", on); ui.bermOn.setAttribute("aria-pressed", on ? "true" : "false");
+      ui.bermOff.classList.toggle("active", !on); ui.bermOff.setAttribute("aria-pressed", !on ? "true" : "false");
+    }
     if (root) root.dataset.mode = mode;
     refreshAuthoring();
     syncProfile();
@@ -1495,6 +1544,31 @@ const TrackDesigner = (function () {
     message("T" + c.n + (deg ? " banked " + deg + "°" + (deg > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
     return true;
   }
+  /** Whole-circuit kerb ribbon: flat / sausage / rumble (mesh.js buildKerbs). */
+  function setKerbStyle(style) {
+    if (!design) return false;
+    const next = KERB_STYLES.includes(style) ? style : "flat";
+    if (kerbOf(design) === next) return false;
+    commit(Object.assign({}, design, { kerbStyle: next }), "kerb:" + next);
+    message("Kerb style: " + next.toUpperCase() + " — UNDO to revert");
+    return true;
+  }
+  /** Berms on the outer side of banked corners (surface.js). Default ON. */
+  function setBerms(on) {
+    if (!design) return false;
+    const want = !!on;
+    if (bermsOn(design) === want) return false;
+    const next = Object.assign({}, design);
+    if (want) {
+      if ((design.bankZones || []).length) next.berms = true;
+      else delete next.berms;
+    } else {
+      next.berms = false;
+    }
+    commit(next, want ? "berms:on" : "berms:off");
+    message(want ? "Berms ON for banked corners" : "Berms OFF — UNDO to revert");
+    return true;
+  }
   /** "· BANK 6° · 12.6 m WIDE" on a TURNS row whose apex carries a zone. */
   function turnTags(c) {
     return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
@@ -1905,6 +1979,6 @@ const TrackDesigner = (function () {
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setPropKind, placeProp, removeProp, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
-    setSpanWidth, setCornerBank };
+    setSpanWidth, setCornerBank, setKerbStyle, setBerms };
 })();
 Object.freeze(TrackDesigner);

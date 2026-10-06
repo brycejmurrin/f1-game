@@ -1396,6 +1396,15 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
 }
+/* OVERTAKE / CORNER MODE: cockpit --hl-x (+30vw) parks both chips under the
+   right dock — BOOST / OT / AERO taps and the shift column. Hud-survey ranked
+   aero×shift-up on desktop/tablet/portrait; Bryce cockpit shots show OT/BOOST
+   covering the labels. When either dock holds a lit touch control, keep the
+   raised --hl-y and drop only the horizontal shove. A real desktop race has
+   empty docks (:has fails) so the strip beside the wheel is unchanged. */
+body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl] {
+  translate: 0 calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
+}
 /* Its PEEK (js/ui/screen-looks.js PEEK_ONLY.hud): the whole race HUD shows
    through the ghosted settings page, the selected element outlined. */
 /* :root twice: (1,3,0) outranks the (1,2,1) hide rule above without naming body. */

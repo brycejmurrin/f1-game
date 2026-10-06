@@ -710,3 +710,24 @@ test('pinned IWER offset adapter restores standard rigid-transform viewer and st
   const further = shifted.getOffsetReferenceSpace(new iwer.XRRigidTransform({ x: 0, y: .2, z: 0 }));
   near(frame.getViewerPose(further).transform.position.y, -.2, 'nested offsets retain standard sign');
 });
+
+test("mountUi on a flat session does not fetch LAZY_XR", () => {
+  const ctx = vm.createContext({
+    console, Math,
+    navigator: {},
+    document: { body: {}, readyState: "complete", addEventListener() {}, createElement() { return {}; } },
+    localStorage: { getItem() { return null; } },
+    window: {},
+    ApexRoster: { LAZY_XR: ["js/xr/xr-session.js"], LAZY_XR_EDGES: [] },
+    ScriptLoader: { create() { return { load() { ctx.fetched += 1; return Promise.resolve(true); } }; } },
+  });
+  seedLog(ctx);
+  ctx.window = ctx;
+  ctx.fetched = 0;
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  ctx.XrBoot.mountUi();
+  assert.equal(ctx.fetched, 0);
+  assert.equal(typeof ctx.window.__apexXr.ensure, "function");
+  ctx.XrBoot.bind({ gfx: {}, tickBody() {}, windowTick() {}, getCamMode() { return 0; }, setCamMode() {} });
+  assert.equal(ctx.XrBoot.isBound(), false);
+});

@@ -227,6 +227,16 @@ const TrackThemes = (function () {
    *  newer share code): the circuit still builds, in the default look. */
   function get(id) { return PRESETS[has(id) ? id : ORDER[0]]; }
 
+  /** Dual-colour LOOK preview CSS from a preset's existing `swatch` pair.
+   *  Same 135° split the team picker uses (js/ui/select-screen.js). ORDER and
+   *  the pairs themselves stay fixed — slice I may append themes later. */
+  function swatchCss(id) {
+    const p = get(id);
+    const a = (Array.isArray(p.swatch) && p.swatch[0]) || "#555555";
+    const b = (Array.isArray(p.swatch) && p.swatch[1]) || a;
+    return "linear-gradient(135deg," + a + " 50%," + b + " 50%)";
+  }
+
   /** A design's lap length (m): its stored lengthM, else the control polygon. */
   function lapM(design) {
     if (!design) return 0;
@@ -767,6 +777,6 @@ const TrackThemes = (function () {
     };
   }
 
-  return { ORDER, PRESETS, LOOK, has, get, sanitizeLook, lookOf, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
+  return { ORDER, PRESETS, LOOK, has, get, swatchCss, sanitizeLook, lookOf, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
 })();
 Object.freeze(TrackThemes);
