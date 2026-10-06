@@ -666,6 +666,37 @@ body:has(dialog[open]) #save-warning { display: none; }
   background: var(--plate-opaque);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
 }
+/* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
+   (#home-motion, css/experience.css). Lift this chip one --tap so the
+   two never share a hit target (survey ~500px, 2026-10-05). --safe-b
+   already includes --sab, matching the toggle's dock. Desktop Classic
+   keeps ANIMATE top-left, so a bare :has(home-motion) lift would
+   still walk INSTALL on the title-desktop golden. */
+body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+:where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+body[data-shape="wide"]:has(#overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+/* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
+   which would otherwise wipe the leftover-row inset (menus.css is
+   @layer components and loses). Extra attrs beat the shorthand. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+body[data-shape="wide"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
 /* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
    non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
    of the safe area, a full tap target; never shown in a race (the module hides
