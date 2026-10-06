@@ -793,6 +793,30 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
+test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110)", () => {
+  // select-specs shards() emits oversize-tlx-probes-1of3 with --shard=1/3 and a
+  // 6 min kill timer sized for ~1/3 of the file. megaShardPlan + megaSoloFlags
+  // would pin the whole mega to shard 1 and drop --shard — 1of3 ran 17/17 under
+  // that 6 min cap while 2of3/3of3 printed "solos on this shard: none" in 1 s.
+  const runner = fs.readFileSync(path.join(ROOT, "tools/ci/run-playwright.mjs"), "utf8");
+  assert.match(runner, /playwrightShard/, "imports the shard parser");
+  assert.match(runner, /megas-only \+ --shard/, "names the oversize exception");
+  assert.match(runner, /skip megaShardPlan/, "does not re-home a planned count shard");
+  const tlx = "tests/specs/tlx-probes.spec.js";
+  assert.equal(isMegaSweepSpec(tlx), true, "tlx-probes still peels when packed with siblings");
+  const alone = ["--timeout=180000", "--shard=1/3", "--workers=1", tlx];
+  const { mega, rest, peeled } = partitionMegaSweepArgs(alone);
+  assert.equal(peeled, true);
+  assert.deepEqual(mega, [tlx]);
+  assert.ok(!rest.some((a) => /\.spec\.js$/.test(a)), "after peel, argv is flags only");
+  assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
+  // Packed with a sibling: peel stays the packed-group path (megaShardPlan).
+  const packed = ["--shard=2/4", "tests/specs/qatar-foundation.spec.js", tlx];
+  const p = partitionMegaSweepArgs(packed);
+  assert.deepEqual(p.mega, [tlx]);
+  assert.ok(p.rest.some((a) => a.includes("qatar-foundation")), "sibling stays on the shared shard");
+});
+
 test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
   // modes nightly 2026-10-04 (run 37195789273): career AND quali solo on shard
   // 1 = 1827 s against 185/276/410 s on shards 2-4.
