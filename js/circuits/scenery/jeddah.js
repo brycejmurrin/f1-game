@@ -108,6 +108,9 @@
         // so BFS grounds the run. Every-slab footings made flatCoplanar spots;
         // every-4th left 9 unsupported islands.
         let fi = 0;
+        // Tag continues the lattice across SAUDI_BLOCKS: without it along()
+        // emits the shared end node twice (byte-identical boxes, 0.0 mm, 2.2 m²
+        // — the two extra coplanar spots vs baseline 4).
         along(s0, s1, 5.5, (k, spacing) => {
           if ((fi++ % 2) !== 0) return;
           const p = anchor(k, side, gap);
@@ -134,7 +137,7 @@
             addBox(out, vadd(p.c, p.u, -h * 0.5 + 0.08),
               [0.70, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
           }
-        });
+        }, `jeddah-canyon-feet:${side}:${gap.toFixed(2)}`);
       };
       for (const side of [-1, 1]) {
         for (const [b0, b1, accent] of SAUDI_BLOCKS) {
