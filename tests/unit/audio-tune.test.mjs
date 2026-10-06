@@ -1955,13 +1955,21 @@ test("the countdown drives the player's engine at idle, not silence until lights
   const upd = src.slice(src.indexOf("function update(dt)"));
   const count = upd.slice(upd.indexOf('if (state === "count") {'), upd.indexOf('if (state !== "race") return;'));
   assert.ok(count.length > 0, "precondition: found update()'s countdown branch");
-  assert.match(count, /GameAudio\.setEngine\([^;]*,\s*0,\s*false,\s*0,\s*player\.gear/,
-    "the countdown branch calls setEngine stationary (boost 0, on-road, speed 0)");
+  assert.match(count, /GameAudio\.setGridIdle\(player,\s*\{\s*soundOn,\s*wet:\s*isWetRoad\(\),\s*step:\s*_audioParamStep\s*\}\);\s*return;/,
+    "the countdown branch calls setGridIdle on the existing return (line-neutral vs ship)");
+  assert.doesNotMatch(count, /GameAudio\.setEngine\(/, "the idle pack lives in GameAudio.setGridIdle, not inline in game.js");
   const { GameAudio: A } = boot();
   A.init();
   A.startEngine();
   assert.equal(A.engineLevel(), 0, "precondition: startEngine alone leaves the engine silent");
-  A.setEngine(0, 0, false, 0, 1, {});
-  assert.ok(A.engineLevel() > 0, "a stationary idle setEngine opens the note");
+  const car = { rpm: 5000, gear: 1, energy: 1, ersDeploy: 0.5 };
+  A.setGridIdle(null, { soundOn: true, step: true });
+  assert.equal(A.engineLevel(), 0, "no player: stay silent");
+  A.setGridIdle(car, { soundOn: false, step: true });
+  assert.equal(A.engineLevel(), 0, "SOUND off: stay silent");
+  A.setGridIdle(car, { soundOn: true, step: false });
+  assert.equal(A.engineLevel(), 0, "non-last physics step: stay silent");
+  A.setGridIdle(car, { soundOn: true, wet: false, step: true });
+  assert.ok(A.engineLevel() > 0, "a stationary idle setGridIdle opens the note");
   assert.equal(A.windLevel(), 0, "and keeps the wind gated on the grid");
 });

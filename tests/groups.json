@@ -42,6 +42,9 @@
     "tests/unit/apex-tools-mcp.test.mjs",
     "tests/unit/appearance-opts.test.mjs",
     "tests/unit/appearance-studio.test.mjs",
+    "// Sunlight/Broadcast Appearance chrome: preset label wrap, selected ring,",
+    "// theme-stable art, light --gold, light .sheet-foot (css pins).",
+    "tests/unit/appearance-sunlight-chrome.test.mjs",
     "// Every AUTHORED activation-zone turn table resolves against the BUILT",
     "// centreline. One unresolvable pair discards a circuit's whole table and",
     "// falls through to ZONE_COUNT — silently, which is how monza shipped a",
@@ -606,6 +609,7 @@
     "// Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.",
     "tests/unit/suzuka-crossover-span.test.mjs",
     "tests/unit/team-livery.test.mjs",
+    "tests/unit/team-style-relief.test.mjs",
     "tests/unit/telemetry-trace.test.mjs",
     "tests/unit/terrain-falloff.test.mjs",
     "tests/unit/terrain-normals.test.mjs",
@@ -1029,7 +1033,8 @@
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/parts-locked-equivalent.test.mjs",
         "tests/unit/setup-tune.test.mjs",
-        "tests/unit/team-livery.test.mjs"
+        "tests/unit/team-livery.test.mjs",
+        "tests/unit/team-style-relief.test.mjs"
       ],
       "kind": "node"
     },
