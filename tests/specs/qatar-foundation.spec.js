@@ -9,15 +9,6 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
 
-  const metadata = await page.evaluate(() => {
-    const def = window.TrackDefs.find((track) => track.id === "qatar");
-    return {
-      sceneryCoordinates: def.sceneryCoordinates,
-      flatTerrain: def.flatTerrain,
-      terrainOuter: def.terrainOuter,
-      dressingExclusions: def.dressingExclusions,
-    };
-  });
   const collectSession = () => page.evaluate(() => {
     const profile = window.__apex.trackProfile(360);
     const heights = profile.map((point) => point.y);
@@ -43,6 +34,17 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
     const lights = window.__apex.lightState();
     return window.__apex.info().track === "qatar" && lights.builtNight;
   }, null, { polling: 100, timeout: BOOT_MS });
+  // LAZY_CIRCUIT: title boots meta stubs — dressingExclusions land only after
+  // race()/ensureCircuit mutates TrackDefs in place (Tracks.hydrate).
+  const metadata = await page.evaluate(() => {
+    const def = window.TrackDefs.find((track) => track.id === "qatar");
+    return {
+      sceneryCoordinates: def.sceneryCoordinates,
+      flatTerrain: def.flatTerrain,
+      terrainOuter: def.terrainOuter,
+      dressingExclusions: def.dressingExclusions,
+    };
+  });
   const night = await collectSession();
 
   await page.evaluate(() => window.__apex.race("qatar", "day", "dry"));
