@@ -4193,7 +4193,6 @@ function quitToMenu() {
   qualiSheet.close();
   _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
-  radioVoice.halt();   // spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s it; update() never reaches raceRadio after state=menu
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
   mirrorPass.cancelPreparation();
@@ -4223,6 +4222,9 @@ function quitToMenu() {
   // on a browser with no speechSynthesis — so quitting mid-transmission left the
   // hiss running over the title screen. The sting is GameAudio's, so it ends here
   // with everything else rather than borrowing another module's lifetime.
+  // Spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s
+  // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
+  radioVoice.halt();
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
