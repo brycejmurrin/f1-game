@@ -141,7 +141,7 @@ const GameAudio = (function () {
     cockpit: "onboard", hood: "onboard", tcam: "onboard", rear: "onboard", visor: "onboard", helmet: "onboard",
     chase: "chase", far: "chase", drift: "chase", reverse: "chase",
     overhead: "tv", heli: "tv", side: "tv", cinematic: "tv", low: "tv", trackside: "tv",
-    rival: "tv", pitwall: "tv", drone: "tv",
+    rival: "tv", pitwall: "tv", drone: "tv", tv: "tv",
   });
   let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
@@ -1493,6 +1493,23 @@ const GameAudio = (function () {
     }
   }
 
+  // THE GRID IDLES. startRaceBody starts the engine with engGain at 0 and only
+  // setEngine opens it; update()'s countdown branch returns before the race
+  // block, so without this the car was silent through the lamps and slammed in
+  // at LIGHTS OUT. Stationary (speed 0) keeps wind and whine gated. game.js
+  // calls this on the countdown return; `_audioParamStep` still gates it.
+  function setGridIdle(player, opts) {
+    const o = opts || {};
+    if (!player || o.soundOn === false || o.step === false) return;
+    const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
+    const max = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.MAX_RPM) || 15000;
+    const rev = clamp01(((player.rpm || idle) - idle) / Math.max(1, max - idle));
+    setEngine(rev, 0, false, 0, player.gear, {
+      slip: 1, ax: 0, onKerb: false, wet: !!o.wet, tow: 0,
+      deploy: 0, energy: player.energy ?? 1, ersDeploy: player.ersDeploy ?? 0.5,
+    });
+  }
+
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
@@ -2154,6 +2171,7 @@ const GameAudio = (function () {
     startEngine,
     stopEngine,
     setEngine,
+    setGridIdle,
     setSkid,
     setCarSfx,
     pitGun,
