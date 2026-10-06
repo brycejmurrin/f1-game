@@ -103,4 +103,9 @@ fi
 
 ensure_mcp_clones
 
+# Verify repo MCP wrappers (symlink Playwright chrome channel + mcp-smoke).
+# Non-strict: a partial snapshot still passes install; session-start / agents
+# use `./tools/mcp/apex-tools-mcp.sh call` when the host catalog is empty.
+bash "$ROOT/tools/env/ensure-mcp-ready.sh" || true
+
 echo "OK: cloud-agent install complete"

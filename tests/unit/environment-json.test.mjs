@@ -70,6 +70,11 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
   // Live Build bld-20261006-83ec36f4 listed playwright-official as npx while
   // .mcp.json launches it via bash tools/mcp/playwright-mcp.sh — set membership
   // alone would not catch that per-name mismatch.
+  for (const row of env.mcpServerAllowlist || []) {
+    assert.equal(typeof row.name, "string", "each mcpServerAllowlist row needs a name (dashboard sync drops attach)");
+    assert.ok(row.name.length > 0, "mcpServerAllowlist name must be non-empty");
+    assert.equal(row.command, "bash", `${row.name} allowlist command must be bash`);
+  }
   for (const [name, row] of Object.entries(cfg.mcpServers)) {
     assert.ok(allowByName.has(name), `${name} must appear in mcpServerAllowlist by name`);
     assert.equal(
