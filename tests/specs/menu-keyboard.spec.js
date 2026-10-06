@@ -15,6 +15,7 @@
 // wheel helper hangs in this app when the point under the cursor has no scrollable
 // ancestor at all, which is exactly the case under test.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
 const DESKTOP = { width: 1440, height: 760 };
 
@@ -216,20 +217,16 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.uiScale(200));
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    // BOOT_MS, not 8 s. These two waits are the only ones in this file that sit
-    // on GPU work — the garage builds a 3D car preview, at 200% UI size, under
-    // SwiftShader — and 8 s was not a budget anyone measured. What it costs:
-    // this test failed 1 run in 3 here, at line 192 in one sample and line 196
-    // in the next, which is the shape of a budget running out rather than of a
-    // defect. Driven directly on an idle box the garage unhides in 180 ms, so
-    // the typical case has 44x headroom and the loaded case has none.
-    // The ASSERTIONS below are untouched; only the wait for the machine moves,
-    // the same way every race-fixture wait in this suite already reads BOOT_MS.
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => {
-      [...document.querySelectorAll("#cs-tabs .cs-tab")].find((e) => /LIVERY/i.test(e.textContent))?.click();
-    });
-    await page.waitForFunction(() => document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20, null, { polling: 100, timeout: BOOT_MS });
+    // #carsetup unhides before tabs paint; LIVERY click then never sticks
+    // (CI 37462241753: TEAM stayed selected, waitForFunction on .cs-liv > 20
+    // hit BOOT_MS). Same wait as menu-baseline ENGINE.
+    await waitGarageSheet(page, BOOT_MS);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.waitForFunction(() => {
+      const tab = document.querySelector('#cs-tabs [data-cs-cat="livery"]');
+      if (!tab || tab.getAttribute("aria-selected") !== "true") return false;
+      return document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20;
+    }, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const opts = document.getElementById("cs-options");
       opts.scrollTop = 0;
