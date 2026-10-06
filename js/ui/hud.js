@@ -467,38 +467,81 @@ function layoutRect(el) {
 // card's rows and reaches past the slot's start ends the strip at its left
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
-const RADIO_TOP_MIN = 120, RADIO_TOP_GAP = 8;
-// THE CENTRE LANE: where neither slot fits, the card hangs centred under the
-// tower (or the mirror, or the flag), and a long message at max-width reached
-// the dock column there too. --announce-lane-w is twice the distance from the
-// screen's centre to the nearest dock group in the band the centred card can
-// occupy (the tower's bottom down LANE_ROWS), less the gap — SCREEN px, and
-// css/hud.css caps a touch card's width by it over its own zoom. No group in
-// the band (desktop: both docks empty) removes it, so the cap falls away.
-const LANE_ROWS = 200;
+const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
+// THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
+// tower. A long message at a centred max-width reached whichever dock sat
+// closer to the middle (tilt auto, 852×393: pedals on the left, BOOST on the
+// right — a symmetric half from the pedals still covered BOOST). --announce-lane-x
+// (screen px) / -shift / -w are that gap; css/hud.css divides x by this
+// element's --hud-z (a calc embedding var(--hud-z) on :root is invalid there
+// and left fell back to 50% with transform none — card left-edge at centre,
+// hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
+// that same hanging band on touch (small-landscape: #hud-sectors+#announce)
+// so it ends the strip too; the map and the gaps chip start it even when they
+// still sit in the tower's row (r.bottom <= tower.bottom), because a dropped
+// or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
+// They do not count as a dock, so empty docks (desktop) still unpublish the
+// lane. TILT's tap column lives on the bottom edge, so the band is the rest
+// of the viewport. Run again after this tick's gap strings (updateHud): fitHud
+// saw the previous spelling, and hud-layout probes on that same tick.
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  const cx = window.innerWidth / 2, y0 = t ? t.bottom : 0;
-  let half = Infinity;
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) {
-    const r = g.getBoundingClientRect();
-    if (!r || !r.width || !r.height || r.top >= y0 + LANE_ROWS || r.bottom <= y0) continue;
-    if (r.left >= cx) half = Math.min(half, r.left - cx - RADIO_TOP_GAP);
-    else if (r.right <= cx) half = Math.min(half, cx - r.right - RADIO_TOP_GAP);
+  const W = window.innerWidth, H = window.innerHeight || 0;
+  const y0 = t ? t.bottom : 0, mid = W / 2;
+  let sal = 0, sar = 0;
+  if (typeof getComputedStyle === "function" && root) {
+    try {
+      const cs = getComputedStyle(root);
+      sal = parseFloat(cs.getPropertyValue("--sal")) || 0;
+      sar = parseFloat(cs.getPropertyValue("--sar")) || 0;
+    } catch (_) { /* mini-dom / detached root */ }
   }
-  hStyle(root, "--announce-lane-w", half === Infinity ? "" : (2 * Math.max(0, half)).toFixed(1) + "px");   // "" removes it
+  let left = sal, right = W - sar, any = false;
+  const clip = (r, counts, always) => {
+    if (!r || !r.width || !r.height) return;
+    if (!always && (r.top >= H || r.bottom <= y0)) return;
+    if (counts) any = true;
+    if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
+    else left = Math.max(left, r.right);
+  };
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
+  const sec = els.hudSectors;
+  clip(sec && !sec.hidden ? sec.getBoundingClientRect() : null, false, true);
+  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false, true);
+  const gaps = document.querySelector(".hud-gaps");
+  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false, true);
+  const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
+  const on = any && w > 0;
+  hStyle(root, "--announce-lane-x", on ? x.toFixed(1) + "px" : "");
+  hStyle(root, "--announce-lane-shift", on ? "0%" : "");
+  hStyle(root, "--announce-lane-w", on ? w.toFixed(1) + "px" : "");
+  if (!on && root && root.style && root.style.removeProperty) {
+    root.style.removeProperty("--announce-lane-x");
+    root.style.removeProperty("--announce-lane-shift");
+    root.style.removeProperty("--announce-lane-w");
+  }
 }
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
   announceLane(root);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
-  const bound = (r, needPast) => {
-    if (!r || !r.width || !r.height || !(r.top < t.bottom && r.bottom > t.top)) return;
+  // Pause / cam share the tower's rows. Dock groups bound a wrapping card
+  // (min-height is the tower; a long line grows about that far). Remaining
+  // viewport height would also catch TILT's bottom taps and kill the slot,
+  // parking the card in the lane over the map (hud-layout: .hud-gaps+#announce).
+  // Sectors share the wrapping band — they sit in the tower's rows on a phone.
+  const bound = (r, needPast, bot) => {
+    if (!r || !r.width || !r.height || !(r.top < bot && r.bottom > t.top)) return;
     if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
   };
-  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true);
-  if (t) for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false);
+  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true, t ? t.bottom : 0);
+  if (t) {
+    const wrapBot = t.bottom + t.height;
+    for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, wrapBot);
+    const sec = els.hudSectors;
+    bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, wrapBot);
+  }
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
   if (!fits) return;
@@ -746,7 +789,7 @@ function fitHud() {
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
   const bottom = span(_hudBottom);
-  const capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
+  let capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
   // counted them), and the dock zooms by the RAW slider, so at HUD SIZE 150%
@@ -907,6 +950,36 @@ function fitHud() {
     const rectOf = (el) => (el && !el.hidden ? el.getBoundingClientRect() : null);
     const roomL = floorY - ceil(_dockL, [mmR, gapsR]);
     const roomR = floorY - ceil(_dockR, [rectOf(els.pausebtn), rectOf(els.btnCam)]);
+    // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
+    // outside the centred cluster, so the viewport budget above never sees them
+    // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
+    // is the dock anchor (it grows right); the cluster grows about its centre.
+    // Widths are divided back out of the zoom painted now, so the answer does
+    // not chase itself. Hidden TYRES (TIMING, COMPACT, cockpit) leave the cap.
+    // The unit harness has no visible #hud-tyre, so this stays a no-op there.
+    if (!document.body.classList.contains("desktop") && _hudBottom && _hudBottom.children) {
+      const zNow = _hudBottom.currentCSSZoom || 1;
+      let lo = Infinity, hi = -Infinity;
+      const kids = _hudBottom.children;
+      for (let i = 0; i < kids.length; i++) {
+        const c = kids[i];
+        if (!c || c.id === "hud-tyre") continue;
+        const r = layoutRect(c);
+        if (!r.width) continue;
+        if (r.left < lo) lo = r.left;
+        if (r.right > hi) hi = r.right;
+      }
+      const tyreEl = document.getElementById("hud-tyre");
+      const tyreR = tyreEl && !tyreEl.hidden ? layoutRect(tyreEl) : null;
+      if (hi > lo && tyreR && tyreR.width && zNow) {
+        const cW = (hi - lo) / zNow, tW = tyreR.width / zNow, cMid = (lo + hi) / 2;
+        const denom = cW / 2 + tW;
+        if (denom > 0 && cMid > tyreR.left) {
+          const zClear = (cMid - tyreR.left - FIT_AIR) / denom;
+          if (zClear > 0) capBot = Math.min(capBot, zClear);
+        }
+      }
+    }
     const zBot = Math.min(scale, capBot);
     const barW = barR ? barR.width : window.innerWidth;
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
@@ -1355,6 +1428,13 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
+  // from the gaps box as it was at the start of this tick — empty, or the
+  // previous spelling. gapForm then drops the strip into the hanging band and
+  // hText writes the live gap, so the card that hud-layout.spec.js measures
+  // on the SAME tick (jump → wait --hud-top-h → probe, no 10 Hz wait) sat on
+  // .hud-gaps on notched-landscape tilt/touch. Re-clip from the box as painted.
+  announceLane(document.documentElement);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)

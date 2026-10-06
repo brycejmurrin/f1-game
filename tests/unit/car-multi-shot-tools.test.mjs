@@ -50,15 +50,15 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+  assert.match(src, /if \(preset && preset\.views != null && !argvHas\("--views"\)\) return preset\.views/,
     "preset views win over multi-team rollup default");
   assert.match(src, /if \(rollupOnly && !argvHas\("--views"\)\) return rollupViewFlag \|\| "side"/,
     "multi-team rollup defaults to one view unless --full-views or a preset");
   assert.match(src, /return "spine"/,
     "single-team default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
-  assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
-    "capture must not await soft-present twice after settleGarage");
+  assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: false/,
+    "capture awaits present — skipAwait duplicated frames under --fast");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   // The WALK never reloads (openGarage pins the team live); only the --serve /
@@ -228,7 +228,7 @@ test("a preset is a bundle of plain flags, and a named camera is parameters", ()
   assert.match(src, /delete liv\.logo;/, "logos=default strips the authored mark rows");
   assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
     "--site/--cdn opens github.io; --live is gallery-only");
-  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+  assert.match(src, /if \(preset && preset\.views != null && !argvHas\("--views"\)\) return preset\.views/,
     "preset views win over the multi-team rollup default");
   assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");

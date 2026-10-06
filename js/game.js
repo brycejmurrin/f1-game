@@ -2203,6 +2203,8 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
     if (gfx.envProbeReset) gfx.envProbeReset();
+    _envHold = false; _envFace = -1; _envLatchTod = null;
+    _envLatch.fill(NaN); _envLatch[7] = -1;
     // Only a NEW circuit re-keys the ghost. A tuner TIME preview flipping
     // day<->dark rebuilds the same one, and re-keying there dropped the lap
     // being recorded and filed later PBs under the context-less slot instead
@@ -4361,7 +4363,7 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    return;
+    GameAudio.setGridIdle(player, { soundOn, wet: isWetRoad(), step: _audioParamStep }); return;
   }
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
@@ -6396,8 +6398,9 @@ let setupPreviewOn = false;
 // → glass → water → gate), shared verbatim by the MAIN camera pass and the
 // live env-probe faces (which re-render the world around the player car so the
 // paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
-let _envFace = -1;   // probe face cursor: one of the 6 cube faces per frame
-let _frameNo = 0;    // render frame counter (env-probe cadence, etc.)
+// _envFace cursor; after face 5, _envHold until move/sun/wet/tod/lights (audit 2026-10-05 #2).
+let _envFace = -1, _frameNo = 0, _envHold = false, _envLatchTod = null;
+const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4;
 // Set by GLX's webglcontextlost handler (persisted) — once a device has lost the
 // context we skip the extra per-frame env-probe pass on every subsequent load so
 // the reflection feature can't keep exhausting a memory-constrained GPU.
@@ -7335,51 +7338,41 @@ function render(dt) {
   const _floodEmit = _atmo.floodEmit(frame.sunDir ? frame.sunDir[1] : null);
   _lastFloodEmit = _floodEmit;   // exposed via __apex.lightState()
   frameSky.lightning = _ltFlash || 0;
-  // ── Live env probe: render ONE 64px cubemap face of the world around the
-  // player car every fourth frame on a live race (full refresh every 24 frames). The car-paint clearcoat
-  // samples it for REAL reflections of the surroundings — trees, buildings,
-  // track, sky — including everything behind the camera that SSR can't see.
-  // CAR tuner ENV REFLECTION (carEnvCube) = 0 skips the pass entirely.
-  // Skip it under a free/debug camera (dbgCam): the probe re-draws the whole world
-  // a second time each frame and is anchored to the player car, which isn't the
-  // subject while flying the lighting-tuner free camera — dropping it here removes
-  // the biggest per-frame load multiplier during the exact mode that OOM-crashes.
-  // Advance one face every FOURTH frame on a live race — a full 6-face cube
-  // cycle then takes 24 frames instead of 6, cutting the probe's whole-world
-  // re-draw cost by ~75% (imperceptible on a 64px blurred reflection probe).
-  // When the governor has already cut render scale (stage 1) but has not yet
-  // shed the probe (tier still 0), slow further to every EIGHTH frame — the
-  // scale lever is the first pressure signal, and a half-rate cube still
-  // refreshes in <1 s at 60 Hz. park() freezes physics for shots/tests — then
-  // one face per frame so a parked M9 cube goes ready in 6 presents, not 24
-  // (SwiftShader is seconds-per-frame).
-  // Live race/count only — results freezes above; menu flyby has no player car
-  // paint that needs a probe, and a mid-results probe was a whole-world redraw.
+  // ── Live env probe: one 64px cubemap face / 4th race frame (full cube / 24);
+  // clearcoat samples real surroundings SSR can't see. carEnvCube=0 skips; dbgCam
+  // skips (OOM). Stage-1 renderScale<0.98 → every 8th frame (_envMask). park() →
+  // 1 face/frame. After face 5: HOLD until move/sun/wet/tod/lights (audit 2026-10-05 #2).
   const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
   if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
-    _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
-    const _pex = smp2.p[0] + smp2.r[0] * player.x,
-          _pez = smp2.p[2] + smp2.r[2] * player.x;
-    const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
-    if (_envInv) {
-      frameSky.invViewProj = _envInv;
-      // THE `finally` IS LOAD-BEARING: it prevents a frozen game, not a lost
-      // reflection. envFaceBegin raises GLX's `_envActive`, begin() branches on
-      // it every frame, and envFaceEnd is its ONLY lowering — so a throw below
-      // left the whole game rendering into a 64-pixel cubemap for the life of
-      // the tab, under a canvas stuck on its last good frame. Ledger 2026-09-22.
-      // Same early-Z order as the main camera (opaque → sky). The 64² face
-      // is ~200× smaller, but the sky still filled every pixel the world
-      // then overwrote. Glow stays off on the probe (`false` below).
-      try {
-        drawWorldMeshes(frame, night, wet, _floodEmit, false);
-        gfx.drawSky(frameSky);
-      } finally {
-        gfx.envFaceEnd(_envFace);
+    const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
+    const _es = frame.sunDir || [0, 1, 0], _ew = frame.wetness || 0, _elg = frame.allLightsGen || 0;
+    if (_envHold) {
+      const dx = _pex - _envLatch[0], dy = _pey - _envLatch[1], dz = _pez - _envLatch[2];
+      if (dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
+        || Math.abs(_es[0] - _envLatch[3]) > 1e-4 || Math.abs(_es[1] - _envLatch[4]) > 1e-4 || Math.abs(_es[2] - _envLatch[5]) > 1e-4
+        || Math.abs(_ew - _envLatch[6]) > 1e-3 || raceTimeOfDay !== _envLatchTod || _elg !== _envLatch[7])
+        { _envHold = false; _envFace = -1; }
+    }
+    if (!_envHold) {
+      _envFace = (_envFace + 1) % 6;
+      const _envInv = gfx.envFaceBegin(_envFace, [_pex, _pey, _pez], frame);
+      if (_envInv) {
+        frameSky.invViewProj = _envInv;
+        // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd
+        // is its ONLY lowering — a throw here froze the tab into a 64px cube (2026-09-22).
+        try { drawWorldMeshes(frame, night, wet, _floodEmit, false); gfx.drawSky(frameSky); }
+        finally { gfx.envFaceEnd(_envFace); }
+      }
+      if (_envFace === 5) {
+        _envHold = true; _envLatchTod = raceTimeOfDay;
+        _envLatch[0] = _pex; _envLatch[1] = _pey; _envLatch[2] = _pez; _envLatch[3] = _es[0];
+        _envLatch[4] = _es[1]; _envLatch[5] = _es[2]; _envLatch[6] = _ew; _envLatch[7] = _elg;
       }
     }
-  } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
+  } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) {
+    gfx.envProbeReset(); _envHold = false; _envFace = -1;   // tier 1 sheds PRODUCER; envReady latches
+  }
   // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
   mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;

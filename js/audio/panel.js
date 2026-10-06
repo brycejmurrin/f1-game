@@ -43,7 +43,9 @@ const AudioPanel = (() => {
       else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
         GameAudio.startMusic(G.trackIdx);
         GameAudio.startEngine();
-        if (G.raceWeather === "rain") GameAudio.startRain();
+        // isRaining(), like every other startRain caller: a race whose weather
+        // arc turned wet (or dried out) is not described by the weather it gridded in.
+        if (G.isRaining()) GameAudio.startRain();
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
