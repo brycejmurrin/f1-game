@@ -270,6 +270,71 @@ test("an instance matrix reproduces exactly what replay() emitted", () => {
   }
 });
 
+const matDet3 = (m, i = 0) => {
+  const b = i * 16;
+  const rx = m[b], ry = m[b + 1], rz = m[b + 2];
+  const ux = m[b + 4], uy = m[b + 5], uz = m[b + 6];
+  const tx = m[b + 8], ty = m[b + 9], tz = m[b + 10];
+  return rx * (uy * tz - uz * ty) - ry * (ux * tz - uz * tx) + rz * (ux * ty - uy * tx);
+};
+
+test("an instanced UNIT_BOX on a left-handed basis gets a right-handed matrix", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const out = buf();
+  const build = (rec) => rec.box([0, 0, 0], [1, 1, 1], [0.5, 0.5, 0.5]);
+  // Track frame is left-handed (r×u = -t). Same test addBox uses in geom.js.
+  const r = [0.6, 0, 0.8], u = [0, 1, 0], t = [0.8, 0, -0.6];
+  const cr = [
+    r[1] * u[2] - r[2] * u[1],
+    r[2] * u[0] - r[0] * u[2],
+    r[0] * u[1] - r[1] * u[0],
+  ];
+  assert.ok(cr[0] * t[0] + cr[1] * t[1] + cr[2] * t[2] < 0, "fixture must be LH");
+  g.instance("unit-box", { o: [10, 2, -4], r, u, t, s: [14, 40, 22] },
+             build, { kind: "buildingMass" }, emitter(), out);
+
+  const { batches } = g.batches();
+  assert.equal(batches.length, 1);
+  const det = matDet3(batches[0].matrices, 0);
+  assert.ok(det > 0, `LH UNIT_BOX instance det must be +, got ${det}`);
+  // Canonical first triangle is CCW-outward. After the RH restore it must
+  // still face away from the instance origin (the box centre).
+  const idx = batches[0].geo.idx;
+  const pos = batches[0].geo.pos;
+  const tri = [0, 1, 2].map((k) => applyMat4(batches[0].matrices, 0, [
+    pos[idx[k] * 3], pos[idx[k] * 3 + 1], pos[idx[k] * 3 + 2],
+  ]));
+  const e1 = [tri[1][0] - tri[0][0], tri[1][1] - tri[0][1], tri[1][2] - tri[0][2]];
+  const e2 = [tri[2][0] - tri[0][0], tri[2][1] - tri[0][1], tri[2][2] - tri[0][2]];
+  const nrm = [
+    e1[1] * e2[2] - e1[2] * e2[1],
+    e1[2] * e2[0] - e1[0] * e2[2],
+    e1[0] * e2[1] - e1[1] * e2[0],
+  ];
+  const mid = [
+    (tri[0][0] + tri[1][0] + tri[2][0]) / 3 - 10,
+    (tri[0][1] + tri[1][1] + tri[2][1]) / 3 - 2,
+    (tri[0][2] + tri[1][2] + tri[2][2]) / 3 + 4,
+  ];
+  assert.ok(nrm[0] * mid[0] + nrm[1] * mid[1] + nrm[2] * mid[2] > 0,
+    "first triangle must face outward from the box centre");
+});
+
+test("a right-handed instance matrix is left unchanged", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const r = [0.6, 0, 0.8], u = [0, 1, 0], t = [-0.8, 0, 0.6];
+  g.instance("unit-box", { o: [0, 0, 0], r, u, t },
+             (rec) => rec.box([0, 0, 0], [1, 1, 1], [1, 1, 1]),
+             { kind: "buildingMass" }, emitter(), buf());
+  const m = g.batches().batches[0].matrices;
+  assert.ok(matDet3(m) > 0);
+  const col = (c) => [m[c], m[c + 1], m[c + 2]];
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  assert.ok(near(col(0), r), "RH r column must be unchanged");
+  assert.ok(near(col(4), u), "RH u column must be unchanged");
+  assert.ok(near(col(8), t), "RH t column must be unchanged");
+});
+
 test("a partially suppressed placement is NOT instanced", () => {
   const g = TrackGraph.create({ raw: RAW });
   const out = buf();

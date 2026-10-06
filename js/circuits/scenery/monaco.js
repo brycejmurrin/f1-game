@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat } = api;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat, motorhome } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (15 per build here,
@@ -313,6 +313,19 @@
               addBox(stage, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
               addBox(stage, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
             }
+            // Road-facing balcony rails (square side) — breaks the stacked-slab
+            // read at Casino Square without sharing city.js balcony logic.
+            for (let f = 1; f <= 4; f++) {
+              const fy = 4 + f * 6;
+              stage._mat = MAT.STONE;
+              addBox(stage, vadd(vadd(a.c, a.r, -22.4), a.u, fy - 1.4), [1.1, 0.28, 28], CREAM, b);
+              stage._mat = MAT.METAL;
+              addBox(stage, vadd(vadd(a.c, a.r, -22.9), a.u, fy - 0.7), [0.14, 1.0, 27.5], [0.52, 0.54, 0.55], b);
+              for (let zi = -5; zi <= 5; zi++) {
+                addCyl(stage, vadd(vadd(vadd(a.c, a.r, -22.9), a.t, zi * 2.6), a.u, fy - 0.7),
+                  0.05, 1.0, [0.52, 0.54, 0.55], 3, b);
+              }
+            }
             stage._mat = MAT.STONE;
             for (let i = -3; i <= 3; i++) {
               addCyl(stage, vadd(vadd(a.c, a.t, i * 3.8), a.r, -15.2), 0.55, 7.2, [0.90, 0.85, 0.74], 6, b);
@@ -491,19 +504,66 @@
         // racing line. Apex planter/palms on the inside (L) of the bend.
         // Was K(0.385..0.415) -> racing 0.774-0.805: the whole wrap stood at
         // the swimming pool, 1.35 km from the hairpin (r 9.5 m at 0.3811).
-        // One hotel + two wings. Five 14–24 m masses at ±0.005/±0.015 on a
-        // 9.5 m hairpin occupied the same world cell (clip-audit 4.5 m, frac
-        // 0.40–0.44). 0.022 lap (~73 m) between wings, smaller along-track
-        // depth, slightly further out.
+        // DETAIL 2026-10-05: closed modelGroup + balcony rails replace the
+        // three generic building() slabs (open-face day path is a shared bug).
+        // Wings stay 0.022 lap apart so clip-audit does not re-merge them.
         const FAIRMONT = [0.91, 0.89, 0.84];
+        const RAIL = [0.52, 0.54, 0.55];
         const HP = 0.3811;
-        const k = KRACE(HP);
-        building(k, racingSide(1), 11, 20, 50, 22,
-          { kind: "notch", wall: FAIRMONT, window: WIN, floor: 6, lit: true, windowCol: WINLIT, setback: true });
-        building(KRACE(HP - 0.022), racingSide(1), 12, 16, 40, 14,
-          { kind: "chevron", wall: CREAM, window: WIN, floor: 6, lit: true, windowCol: WINLIT });
-        building(KRACE(HP + 0.022), racingSide(1), 12, 16, 42, 14,
-          { kind: "podium", wall: [0.90, 0.87, 0.80], window: WIN, floor: 6, lit: true, windowCol: WINLIT });
+        // gap = near-face clearance (same as old building() dist). Anchor at
+        // gap + w/2 so the mass sits outside the road; road face is -r.
+        const emitFairmont = (raceFrac, gap, w, h, d, wall) => {
+          const k = KRACE(raceFrac);
+          const a = anchor(k, racingSide(1), gap + w / 2);
+          if (onTrack(a.c[0], a.c[2], Math.max(w, d) * 0.45 + 2)) return;
+          const b = [a.r, a.u, a.t];
+          const face = -w * 0.51; // toward the road
+          const bounds = {
+            center: vadd(a.c, a.u, h * 0.5), size: [w + 2.4, h + 2, d + 2], basis: b,
+          };
+          const build = (stage) => {
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, d], wall, b);
+            const floors = Math.max(4, Math.floor(h / 6));
+            for (let f = 1; f <= floors; f++) {
+              const fy = f * (h / (floors + 1));
+              stage._mat = MAT.GLASS;
+              for (const z of [-d * 0.28, 0, d * 0.28]) {
+                addBox(stage, vadd(vadd(vadd(a.c, a.r, face), a.t, z), a.u, fy),
+                  [0.18, 2.4, d * 0.22], WIN, b);
+              }
+              stage._mat = 0;
+              addBox(stage, vadd(vadd(a.c, a.r, face * 1.01), a.u, fy + 0.35),
+                [0.12, 0.7, d * 0.72], WINLIT, b);
+              stage._mat = MAT.STONE;
+              addBox(stage, vadd(vadd(a.c, a.r, face - 0.45), a.u, fy - 1.35),
+                [1.0, 0.28, d * 0.92], CREAM, b);
+              stage._mat = MAT.METAL;
+              addBox(stage, vadd(vadd(a.c, a.r, face - 0.95), a.u, fy - 0.7),
+                [0.12, 1.05, d * 0.90], RAIL, b);
+              for (let zi = -3; zi <= 3; zi++) {
+                addCyl(stage, vadd(vadd(vadd(a.c, a.r, face - 0.95), a.t, zi * d * 0.12), a.u, fy - 0.7),
+                  0.05, 1.05, RAIL, 3, b);
+              }
+              stage._mat = MAT.STONE;
+            }
+            // Roof sits on the mass top (addBox, not seat.box — seat would
+            // drop onto distant terrain and leave a 40 m+ unsupported gap).
+            stage._mat = MAT.ROOF;
+            addBox(stage, vadd(a.c, a.u, h + 0.5), [w * 1.04, 1.0, d * 1.04], [0.82, 0.78, 0.70], b);
+            stage._mat = 0;
+          };
+          // Literal id on the required group — scenery-api-contract scans source
+          // for modelGroup("monaco-fairmont-main" { required: true }.
+          if (raceFrac === HP) {
+            modelGroup("monaco-fairmont-main", bounds, build, { required: true });
+          } else {
+            modelGroup(`monaco-fairmont-${raceFrac < HP ? "west" : "east"}`, bounds, build);
+          }
+        };
+        emitFairmont(HP, 11, 20, 50, 22, FAIRMONT);
+        emitFairmont(HP - 0.022, 12, 16, 40, 14, CREAM);
+        emitFairmont(HP + 0.022, 12, 16, 42, 14, [0.90, 0.87, 0.80]);
         for (let i = 0; i < 5; i++) {
           const pk = KRACE(HP - 0.012 + i * 0.006);
           // place() seats a box at ground + h/2 - 0.8, so height = 0.8 + the
@@ -842,16 +902,19 @@
       };
 
       // Marina rows — white deck stacks denser at Port Hercule (~0.65 L).
-      for (let i = 0; i < 12; i++) {
-        const s = 0.58 + i * 0.032;
+      // DETAIL: +4 tenders in the near rank (small sc) for quay densify without
+      // adding waterField stations or megaYacht berths (clip budget).
+      for (let i = 0; i < 16; i++) {
+        const s = 0.58 + i * 0.026;
         const k = K(s);
         const rank = i % 2;
         const dist = 16 + rank * 20 + hash(k * 7) * 4;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 12)) continue;
         const b = [a.r, a.u, a.t];
-        const sc = 0.78 + hash(k * 9 + i) * 0.75;
-        const hull = (i % 8 === 0) ? [0.16, 0.18, 0.24] : [0.97, 0.97, 0.99];
+        const sc = (i >= 12 ? 0.55 : 0.78) + hash(k * 9 + i) * (i >= 12 ? 0.35 : 0.75);
+        const hull = (i % 8 === 0) ? [0.16, 0.18, 0.24]
+          : (i % 5 === 2) ? [0.94, 0.90, 0.82] : [0.97, 0.97, 0.99];
         yacht(vadd(a.c, a.r, -2 + (i % 3) * 4), b, a.u, a.r, a.t, sc, hull);
       }
       for (let i = 0; i < 6; i++) {
@@ -864,18 +927,46 @@
         addBox(out, vadd(a.c, a.u, 0.5), [40, 2.6, 8], [0.70, 0.66, 0.58], [a.r, a.u, a.t]);
       }
 
-      // ── QUAY BOLLARDS ─────────────────────────────────────────────────────
+      // ── QUAY BOLLARDS + SHORE STEPS (local densify; no waterField edits) ──
       {
         const BOLLARD = [0.74, 0.72, 0.70];
         const RING    = [0.68, 0.65, 0.60];
-        for (let i = 0; i < 8; i++) {
-          const k = K(0.61 + i * 0.012);
+        const QUAY    = [0.74, 0.70, 0.62];
+        for (let i = 0; i < 14; i++) {
+          const k = K(0.595 + i * 0.012);
           const a = anchor(k, -1, 6 + (i % 2) * 1.5);
           if (!onTrack(a.c[0], a.c[2], 2.8)) {
             addCyl(out, vadd(a.c, a.u, 0), 0.28, 1.2, BOLLARD, 6, [a.r, a.u, a.t]);
             if (i % 2 === 0) addCyl(out, vadd(a.c, a.u, 0.9), 0.35, 0.24, RING, 7, [a.r, a.u, a.t]);
           }
         }
+        // Quay steps down toward the harbour sheet — three short risers every
+        // ~40 m, seated on terrain so they read as shore edge, not floating.
+        for (let i = 0; i < 6; i++) {
+          const k = K(0.60 + i * 0.045);
+          const a = anchor(k, -1, 9.5);
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          const b = [a.r, a.u, a.t];
+          for (let step = 0; step < 3; step++) {
+            addBox(out, vadd(vadd(a.c, a.r, -step * 1.4), a.u, 0.15 + step * 0.35),
+              [1.3, 0.55, 8.5], QUAY, b);
+          }
+          // Thin rail along the top riser.
+          out._mat = MAT.METAL;
+          for (const z of [-3.5, 0, 3.5]) {
+            addCyl(out, vadd(vadd(a.c, a.t, z), a.u, 0.2), 0.06, 1.15, [0.62, 0.64, 0.66], 4, b);
+          }
+          addBox(out, vadd(a.c, a.u, 1.25), [0.1, 0.1, 8.2], [0.62, 0.64, 0.66], b);
+          out._mat = 0;
+        }
+        // Shore lip colour break (SEA2) just beyond the wall — local strip only.
+        groundedSegments({
+          id: "monaco-harbour-shore-lip",
+          points: Array.from({ length: 8 }, (_, i) => ({
+            k: K(0.595 + i * 0.04), side: -1, dist: 12,
+          })),
+          width: 1.6, height: 0.35, color: SEA2,
+        });
       }
 
       {
@@ -899,15 +990,27 @@
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.5), [10.5, 9, 14], CREAM, b);
-          addBox(stage, vadd(vadd(a.c, a.r, 5.05), a.u, 2.15), [0.35, 3.5, 12.6], OCHRE, b);
+          // Shopfront fascia — cream face is at r≈5.25; keep boards ≥3 cm proud
+          // (coplanar-audit: a 5.12 green band fought the cream at 10 mm).
+          addBox(stage, vadd(vadd(a.c, a.r, 5.45), a.u, 2.15), [0.35, 3.5, 12.6], OCHRE, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.55), a.u, 4.55), [0.28, 1.1, 12.8], [0.12, 0.28, 0.18], b);
           stage._mat = MAT.GLASS;
           for (const z of [-4.2, 0, 4.2])
-            addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.28), a.t, z), a.u, 2.35), [0.18, 2.8, 3.2], WINLIT, b);
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.48), a.t, z), a.u, 2.35), [0.18, 2.8, 3.2], WINLIT, b);
+          // Red/cream striped street awning (harbour-side shop identity).
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.r, 5.8), a.u, 4.15), [2.0, 0.45, 14.6], [0.16, 0.15, 0.14], b);
+          for (let i = 0; i < 8; i++) {
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 6.05), a.t, -6.3 + i * 1.8), a.u, 4.15),
+              [2.0, 0.42, 1.7], i & 1 ? [0.78, 0.14, 0.14] : CREAM, b);
+          }
           stage._mat = MAT.METAL;
-          addBox(stage, vadd(vadd(a.c, a.r, 5.38), a.u, 6.25), [0.28, 1.65, 7.0], [0.20, 0.18, 0.15], b);
-          wordCue(stage, a, b, "TABAC", 5.57, 5.88, 0.25, [0.98, 0.88, 0.52]);
+          addBox(stage, vadd(vadd(a.c, a.r, 5.65), a.u, 6.25), [0.28, 1.65, 7.0], [0.20, 0.18, 0.15], b);
+          wordCue(stage, a, b, "TABAC", 5.78, 5.88, 0.25, [0.98, 0.88, 0.52]);
+          // Door recess + planter tub under the awning.
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(vadd(a.c, a.r, 5.55), a.u, 1.1), [0.4, 2.0, 1.6], [0.35, 0.22, 0.14], b);
+          stage._mat = MAT.FOLIAGE;
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.9), a.t, 5.8), a.u, 0.55), [0.9, 0.7, 1.1], PALMGRN, b);
           stage._mat = 0;
         }, { required: true });
       }
@@ -1052,15 +1155,17 @@
         addCyl(out, vadd(aL.c, aL.u, 6.3), 0.65, 0.22, LAMP, 7, b);
       }
 
-      // Harbour-side lamp posts along the quay (sparser)
-      for (let i = 0; i < 8; i++) {
-        const s = 0.585 + i * 0.05;
+      // Harbour-side lamp posts along the quay (+ warm night glow discs)
+      for (let i = 0; i < 12; i++) {
+        const s = 0.585 + i * 0.035;
         const k = K(s);
         const aQ = anchor(k, -1, 2.4);
         if (onTrack(aQ.c[0], aQ.c[2], 1.2)) continue;
         const bQ = [aQ.r, aQ.u, aQ.t];
         addCyl(out, aQ.c, 0.09, 5.8, [0.70, 0.72, 0.74], 5, bQ);
         addCyl(out, vadd(aQ.c, aQ.u, 5.6), 0.55, 0.20, LAMP, 7, bQ);
+        // Soft sodium pool under the cap (reads at dusk/night).
+        addBox(out, vadd(aQ.c, aQ.u, 5.35), [0.9, 0.12, 0.9], WINLIT, bQ);
       }
 
       // ── PIT WALL & START GRANDSTAND (s=0.03, R) ──────────────────────────
@@ -1167,6 +1272,56 @@
       for (const [s, sd] of [[0.07, 1], [0.18, -1], [0.33, 1], [0.62, -1], [0.74, 1], [0.84, -1], [0.93, 1]]) {
         const col = [[0.85, 0.20, 0.20], [0.10, 0.30, 0.70], [0.95, 0.80, 0.10], [0.10, 0.55, 0.45]][K(s) % 4];
         billboard(K(s), sd, 2.5, 7, 3.2, col);
+      }
+      // S/F + Rascasse brand banners (fence-post boards, Miami idiom).
+      {
+        const bannerSites = [
+          [0.012, 1, 3.8], [0.028, 1, 3.8], [0.045, -1, 4.0],
+          [0.865, 1, 3.6], [0.878, -1, 3.8], [0.892, 1, 3.6],
+        ];
+        for (const [sf, side, gap] of bannerSites) {
+          const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
+          if (onTrack(a.c[0], a.c[2], 3)) continue;
+          for (let i = 0; i < 3; i++) {
+            const along2 = (i - 1) * 4.2;
+            const col = (i % 2) ? [0.78, 0.12, 0.14] : [0.95, 0.94, 0.92];
+            const foot = vadd(a.c, a.t, along2);
+            addBox(out, vadd(foot, a.u, 2.4), [0.22, 2.8, 2.6], col, b);
+            for (const po of [-0.9, 0.9]) {
+              addBox(out, vadd(vadd(foot, a.t, po), a.u, 1.4), [0.12, 2.8, 0.12], [0.72, 0.74, 0.76], b);
+            }
+          }
+        }
+      }
+      // Harbour-side paddock dressing — inland of the Port Hercule stands
+      // (authored 0.62–0.70, side +1). Cliff-side motorhomes at Rascasse/S/F
+      // buried 25 m into the amphitheatre (ground-audit); keep them on the
+      // flat harbour shelf and skip any site where terrain rises >2 m above
+      // the road.
+      {
+        const MH = [
+          [0.625, 1, 28, 10, 5.2, 14, [0.92, 0.92, 0.94], [0.75, 0.12, 0.14]],
+          [0.645, 1, 30, 11, 5.4, 15, [0.88, 0.90, 0.93], [0.10, 0.28, 0.62]],
+          [0.665, 1, 32, 10, 5.0, 13, [0.94, 0.90, 0.82], [0.10, 0.55, 0.40]],
+          [0.685, 1, 30, 11, 5.2, 14, [0.90, 0.88, 0.84], [0.85, 0.55, 0.10]],
+        ];
+        for (const [sf, side, gap, w, h, d, wall, accent] of MH) {
+          const k = K(sf), a = anchor(k, side, gap + w / 2);
+          if (onTrack(a.c[0], a.c[2], 8)) continue;
+          const g = terrainYAt(a.c[0], a.c[2]);
+          if (g != null && g > py[k] + 2.0) continue;
+          motorhome(k, side, gap, w, h, d, { wall, accent, window: WINLIT, lit: true });
+        }
+        // Low hospitality crates / tyre stacks between motorhomes.
+        for (let i = 0; i < 4; i++) {
+          const k = K(0.630 + i * 0.015);
+          const a = anchor(k, 1, 26);
+          if (onTrack(a.c[0], a.c[2], 4)) continue;
+          const g = terrainYAt(a.c[0], a.c[2]);
+          if (g != null && g > py[k] + 2.0) continue;
+          place(k, 1, 26 + (i % 2) * 2, [1.4, 1.2, 1.4], [0.55, 0.55, 0.52]);
+          place(k, 1, 27.5, [2.2, 0.9, 1.6], [0.20, 0.22, 0.24]);
+        }
       }
 
       fence(0.66, 0.71, -1, 2.0, 3.2, [0.78, 0.80, 0.82]);
@@ -1340,6 +1495,10 @@
             for (const z of [-3.8, 0, 3.8])
               addBox(stage, vadd(vadd(vadd(a.c, a.r, 7.62), a.t, z), a.u, fy + 0.15),
                 [0.22, 2.2, 2.4], WIN, b);
+            // Warm interior glow strip (hotel/apartment night read).
+            stage._mat = 0;
+            addBox(stage, vadd(vadd(a.c, a.r, 7.72), a.u, fy + 0.4),
+              [0.12, 0.65, 10.0], WINLIT, b);
             stage._mat = MAT.METAL;
             addBox(stage, vadd(vadd(a.c, a.r, 8.4), a.u, fy - 0.45),
               [0.18, 1.15, 10.4], [0.52, 0.54, 0.55], b);

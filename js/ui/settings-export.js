@@ -905,8 +905,14 @@ function create(G) {
   return _ui;
 }
 
+/** Remount the BACKUP & RESTORE controls if create already ran (idempotent).
+ *  SettingsNav calls this when the files page opens so a missed boot mount
+ *  cannot leave an empty panel (title + Back only). */
+function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
+
 return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
          applySettings, applyGarage, applyCareer, resetGarage, isGarageKey, isCareerKey, garageValue, create,
+         ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();

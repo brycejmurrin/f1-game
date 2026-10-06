@@ -18,8 +18,11 @@ const TrackCodec = (function () {
   // when one is off its default — so every code made before it is unchanged.
   // country (64): a label like name, after it. A build that predates it refuses
   // the bit ("corrupt"), so a code carries it only when a country is set.
-  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64 };
-  const FLAG_ALL = 0x7f;
+  // heights (128): per-node Y metres on the 0.25 m lattice. Written only when
+  // any height is non-zero — flat designs (and every pre-heights code) keep the
+  // old bit pattern. Older builds refuse the bit ("corrupt").
+  const FLAG = { hwZones: 1, bankZones: 2, elevations: 4, bridges: 8, name: 16, look: 32, country: 64, heights: 128 };
+  const FLAG_ALL = 0xff;
   // = CustomTracks.LIMITS.zones for every list: a lower cap here silently
   // dropped what storage keeps (a dropped bridge turned into a RED crossing on
   // the receiver). 24 of each is ~600 bytes, well inside MAX_CODE.
@@ -103,6 +106,10 @@ const TrackCodec = (function () {
     if (country && country.length) flags |= FLAG.country;
     const look = TrackThemes.sanitizeLook(it.look);
     if (look) flags |= FLAG.look;
+    const hs = Array.isArray(it.heights) ? it.heights : null;
+    let hasH = false;
+    if (hs && hs.length === it.pts.length) for (let i = 0; i < hs.length; i++) if (hs[i]) { hasH = true; break; }
+    if (hasH) flags |= FLAG.heights;
     w.u8(VERSION).u8(flags).u8(themeIdx).u8(Math.round(it.baseHW * 10)).varint(it.seed >>> 0).varint(it.pts.length);
     const q = (v) => Math.round(v * UNIT);
     let px = q(it.pts[0][0]), pz = q(it.pts[0][1]);
@@ -120,6 +127,17 @@ const TrackCodec = (function () {
     if (flags & FLAG.name) { w.u8(name.length).bytes(name); }
     if (flags & FLAG.look) { const L = TrackThemes.LOOK; w.u8(L.time.indexOf(look.time) | (L.trees.indexOf(look.trees) << 2) | (L.crowd.indexOf(look.crowd) << 4)); }
     if (flags & FLAG.country) { w.u8(country.length).bytes(country); }
+    // Heights after the label fields: older decoders that ignore unknown flags
+    // never reached here; a heights bit forces refusal on builds that lack it.
+    if (flags & FLAG.heights) {
+      let py = q(hs[0] || 0), dy = 0;
+      w.zz(py);
+      for (let i = 1; i < hs.length; i++) {
+        const y = q(hs[i] || 0), ndy = y - py;
+        if (i === 1) w.zz(ndy); else w.zz(ndy - dy);
+        dy = ndy; py = y;
+      }
+    }
     const body = w.out();
     const all = new Uint8Array(body.length + 2);
     all.set(body); const c = fnv16(body, body.length); all[body.length] = c & 0xff; all[body.length + 1] = c >> 8;
@@ -161,6 +179,17 @@ const TrackCodec = (function () {
         design.look = { time: L.time[t], trees: L.trees[tr], crowd: L.crowd[c] };
       }
       if (flags & FLAG.country) { const n = r.u8(); if (n > 32) return { ok: false, reason: "bounds" }; design.country = new TextDecoder().decode(r.bytes(n)); }
+      if (flags & FLAG.heights) {
+        const heights = [];
+        let y = r.zz(), dy = 0;
+        const pushH = () => { if (Math.abs(y) > COORD_MAX) throw new RangeError("bounds"); heights.push(y / UNIT); };
+        pushH();
+        for (let i = 1; i < N; i++) {
+          if (i === 1) dy = r.zz(); else dy += r.zz();
+          y += dy; pushH();
+        }
+        design.heights = heights;
+      }
       if (r.left !== 0) return { ok: false, reason: "corrupt" };
       return { ok: true, design };
     } catch (e) {

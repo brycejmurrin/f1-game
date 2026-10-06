@@ -1,11 +1,14 @@
 # Desktop packaging (Electron)
 #
 # Two lanes:
-#   1. pack-smoke — non-draft PRs that touch desktop/, tools/desktop/ or any
-#      file stage-files.mjs packages (js/, css/, assets/, vendor/, the shell…):
+#   1. pack-smoke — non-draft PRs that touch the Electron shell itself
+#      (desktop/, tools/desktop/, this workflow). Game bytes (js/, css/,
+#      assets/, vendor/, the HTML shell) are already gated by ci.yml; listing
+#      them here started a Pack smoke job on every ready scenery/HUD/career PR
+#      (2026-10-06: 19 Desktop runs in 80, same SHA as a skipped draft run).
 #      ubuntu-only electron-builder --dir + Playwright _electron (xvfb + soft GL).
 #      Windows / macOS pack-smoke lives on tag / workflow_dispatch only (Actions
-#      load: 1 job per PR push, not 3). Does NOT compete with pages.yml.
+#      load: 1 job per packaging PR, not 3). Does NOT compete with pages.yml.
 #   2. release — workflow_dispatch + tags desktop-v*: full installers on the
 #      3-OS matrix, optional signed-verify when secrets exist (skip cleanly
 #      otherwise), auto-update plan echo. Never on push to the ship branch.
@@ -23,28 +26,14 @@ name: Desktop packages
 
 on:
   pull_request:
-    # Everything tools/desktop/stage-files.mjs stages into the app is an input
-    # of the package (STAGE_ROOT_FILES + STAGE_DIRS); keep this list in step
-    # with it. Draft PRs still skip the job (see pack-smoke's `if`).
+    # Packaging machinery only. Staged game/shell bytes stay on ci.yml (and
+    # pages.yml's ship-filter); a js/ or css/ PR must not spend an Electron
+    # runner. Draft PRs still skip the job (see pack-smoke's `if`).
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "desktop/**"
       - "tools/desktop/**"
       - ".github/workflows/desktop.yml"
-      - "docs/notes/DESKTOP-TEST-PLAN.md"
-      - "index.html"
-      - "bench.html"
-      - "controller.html"
-      - "cockpit-view.html"
-      - "version.json"
-      - "manifest.json"
-      - "sw.js"
-      - ".nojekyll"
-      - "js/**"
-      - "css/**"
-      - "icons/**"
-      - "assets/**"
-      - "vendor/**"
   workflow_dispatch:
     inputs:
       signed_verify:

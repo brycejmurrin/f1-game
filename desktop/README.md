@@ -112,10 +112,11 @@ Artifacts land in `desktop/dist/`. They are **unsigned**.
 
 ## CI
 
-`.github/workflows/desktop.yml` — PR **pack-smoke** (path-filtered) plus
+`.github/workflows/desktop.yml` — PR **pack-smoke** (path-filtered to
+`desktop/**`, `tools/desktop/**`, and the workflow file) plus
 **workflow_dispatch** / tags matching `desktop-v*` for full installers. It does
-**not** run on push to the ship branch and does not touch the Pages release
-train.
+**not** run on ordinary `js/` / `css/` PRs, on push to the ship branch, or on
+the Pages release train.
 
 ## Native flag
 
