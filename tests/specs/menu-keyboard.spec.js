@@ -370,6 +370,11 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.park(0.1);
+      // Live SwiftShader race starves a 5 s waitForFunction: selected-1
+      // logged TopModal open #standings then timed out while the material
+      // pack still owned the main thread. headlessMode only skips render()
+      // (js/game.js) — same stall stop as the Escape sibling below.
+      window.__apex.headless(true);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
