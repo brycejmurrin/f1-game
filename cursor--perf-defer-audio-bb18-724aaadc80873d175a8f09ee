@@ -1,1 +1,1 @@
-1791317079	Cursor Agent	fix #1134 race() await ensureCircuit before Tracks.build  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
+1791317693	Cursor Agent	fix #1135: sync Settings reveal; MusicLib.init after real GameAudio  [cursor/perf-defer-audio-bb18; session 724aaadc80873d175a8f09ee]
