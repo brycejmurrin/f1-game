@@ -422,6 +422,7 @@ test("readLayerBytes reads layers straight through a scratch WebGL2 context, nev
     texImage2D(...a) { uploaded.push(a[a.length - 1]); },
     readPixels(x, y, w, h, f, t, dst) { dst.fill(uploaded[uploaded.length - 1].fill); },
     deleteFramebuffer() {}, deleteTexture() {},
+    isContextLost() { return false; },
     getExtension(n) { return n === "WEBGL_lose_context" ? { loseContext() { lost++; } } : null; },
   };
   const assets = assetLoader({
@@ -445,7 +446,15 @@ test("readLayerBytes reads layers straight through a scratch WebGL2 context, nev
   assert.equal(uploaded.length, 2, "byte layers skip the GPU round trip");
   assert.equal(data[page], 41); assert.equal(data[2 * page], 7); assert.equal(data[3 * page], 99);
   assert.equal(data[0], 0, "an absent layer is left untouched");
-  assert.equal(lost, 1, "the scratch context is released");
+  assert.equal(lost, 0, "the scratch context is retained for reuse (not loseContext'd)");
+  // Second pack: same Assets instance must not spin up another WebGL2 context.
+  const data2 = new Uint8Array(page * n);
+  images[1] = { fill: 11 };
+  images[3] = { fill: 22 };
+  const done2 = assets.readLayerBytes(size, images, n, data2);
+  assert.deepEqual([...done2], [1, 2, 3]);
+  assert.equal(contexts.length, 1, "one scratch WebGL2 context for the session");
+  assert.equal(data2[page], 11); assert.equal(data2[3 * page], 22);
 });
 
 test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas getImageData", () => {

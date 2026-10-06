@@ -115,9 +115,42 @@ const Assets = (function () {
   // than a TexImageSource (TLX's DataArrayTexture, WGX's writeTexture).
   // A 2D canvas cannot do this: drawImage()+getImageData() premultiplies
   // through the backing store and colour-manages (tlx.js createTextureArray
-  // has the 2026-08-17 measurement). One scratch WebGL2 context uploads each
-  // layer with every unpack conversion off and reads it back from an FBO.
+  // has the 2026-08-17 measurement). One session-scoped scratch WebGL2
+  // context uploads each layer with every unpack conversion off and reads
+  // it back from an FBO — creating/losing a context per pack was a multi-
+  // second SwiftShader stall (static audit 2026-10-05 #5).
   // `data` holds n pages of size*size*4; returns the indices it wrote.
+  let _scratchGl = null;   // { cv, gl, tex, fbo, size, view, page }
+  function _ensureScratchGl(size) {
+    const page = size * size * 4;
+    if (_scratchGl && _scratchGl.gl && !_scratchGl.gl.isContextLost()) {
+      if (_scratchGl.size !== size) {
+        _scratchGl.cv.width = size;
+        _scratchGl.cv.height = size;
+        _scratchGl.size = size;
+        _scratchGl.page = page;
+        _scratchGl.view = null;
+      }
+      return _scratchGl;
+    }
+    let cv = null;
+    try {
+      cv = (typeof OffscreenCanvas !== "undefined")
+        ? new OffscreenCanvas(size, size)
+        : Object.assign(document.createElement("canvas"), { width: size, height: size });
+    } catch (_) { return null; }
+    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
+    if (!gl) return null;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    const tex = gl.createTexture();
+    const fbo = gl.createFramebuffer();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    _scratchGl = { cv, gl, tex, fbo, size, page, view: null };
+    return _scratchGl;
+  }
   function readLayerBytes(size, images, n, data) {
     const page = size * size * 4;
     const done = [];
@@ -133,19 +166,18 @@ const Assets = (function () {
       } else pending.push(i);
     }
     if (!pending.length) return done;
-    let cv = null;
-    try {
-      cv = (typeof OffscreenCanvas !== "undefined")
-        ? new OffscreenCanvas(size, size)
-        : Object.assign(document.createElement("canvas"), { width: size, height: size });
-    } catch (_) { return done; }
-    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
-    if (!gl) return done;
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-    const tex = gl.createTexture();
-    const fbo = gl.createFramebuffer();
+    const scratch = _ensureScratchGl(size);
+    if (!scratch) return done;
+    const { gl, tex, fbo } = scratch;
+    // One reusable view onto `data` (rebuilt when the destination buffer or
+    // page size changes) — avoids a fresh Uint8Array wrapper per layer.
+    let view = scratch.view;
+    if (!view || view.buffer !== data.buffer || view.byteOffset !== data.byteOffset ||
+        scratch.page !== page) {
+      view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      scratch.view = view;
+      scratch.page = page;
+    }
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     for (const i of pending) {
@@ -154,14 +186,10 @@ const Assets = (function () {
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) continue;
         gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE,
-          new Uint8Array(data.buffer, data.byteOffset + i * page, page));
+          view.subarray(i * page, i * page + page));
         done.push(i);
       } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
     }
-    gl.deleteFramebuffer(fbo);
-    gl.deleteTexture(tex);
-    const lose = gl.getExtension("WEBGL_lose_context");
-    if (lose) { try { lose.loseContext(); } catch (_) { /* already lost */ } }
     return done.sort((a, b) => a - b);
   }
 

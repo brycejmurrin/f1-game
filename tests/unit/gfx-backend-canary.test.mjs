@@ -376,6 +376,62 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
   assert.equal(h.GLX.backendState().ctxLost, true, "backendState names the loss for race-start fail-fast");
 });
 
+test("GLX chunked create/free and instanced free fail closed after context loss", () => {
+  // Track switch calls Tracks.free → freeChunkedMesh / freeInstancedBatch while
+  // the 1.2 s restore timer is still pending. Those entry points used to keep
+  // talking to a lost context (createVertexArray / deleteBuffer), which is
+  // INVALID_OPERATION spam and a leak of JS-side GPU handles. createMesh already
+  // returned null; the >2000-tri chunked path never asked ctxGone.
+  // createChunkedMesh nulls data.pos/idx after upload unless _keepPositions —
+  // rebuild per harness so the second create is not reading a emptied bag.
+  const fatGeo = () => {
+    const nTri = 2000;
+    const pos = [], nrm = [], col = [], idx = [];
+    for (let i = 0; i < nTri * 3; i++) {
+      pos.push(i, 0, 0); nrm.push(0, 1, 0); col.push(1, 1, 1);
+    }
+    for (let t = 0; t < nTri; t++) idx.push(t * 3, t * 3 + 1, t * 3 + 2);
+    return { pos, nrm, col, idx };
+  };
+  const h = bootGlx();
+  const live = h.GLX.createChunkedMesh(fatGeo(), 72);
+  assert.ok(live && live.chunks && live.chunks.length, "live fat mesh is chunked, not the small-mesh fallback");
+  h.reset();
+  h.GLX.freeChunkedMesh(live);
+  assert.ok(h.count("deleteBuffer") >= 2, "a live free releases VBO + IBO");
+  assert.ok(h.count("deleteVertexArray") >= 1, "a live free releases the VAO");
+
+  const h2 = bootGlx();
+  const fatLive = h2.GLX.createChunkedMesh(fatGeo(), 72);
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const batch = h2.GLX.createInstancedBatch(tri, new Float32Array(32), null, { cellSize: 72 });
+  const tex = h2.GLX.createTexture({ width: 2, height: 2 });
+  h2.loseContext();
+  h2.reset();
+  assert.equal(h2.GLX.createChunkedMesh(fatGeo(), 72), null, "chunked upload refuses a lost context");
+  h2.GLX.freeChunkedMesh(fatLive);
+  h2.GLX.freeInstancedBatch(batch);
+  h2.GLX.freeTexture(tex);
+  assert.equal(h2.GLX.cullInstances(batch, [new Float32Array(4), new Float32Array(4), new Float32Array(4),
+    new Float32Array(4), new Float32Array(4), new Float32Array(4)]), 0);
+  assert.deepEqual(h2.calls.map((c) => c[0]), [], "free/cull after loss must not touch gl");
+});
+
+test("GLX restores even when sessionStorage is blocked", () => {
+  // Loss+restore both used to `return` in the storage catch, so a private-mode
+  // tab that got webglcontextrestored never reloaded and sat on _ctxLost=true.
+  const h = bootGlx();
+  let reloads = 0;
+  h.sandbox.location.reload = () => { reloads++; };
+  h.sandbox.sessionStorage.getItem = () => { throw new Error("blocked"); };
+  h.sandbox.sessionStorage.setItem = () => { throw new Error("blocked"); };
+  h.sandbox.__timers.length = 0;
+  h.loseContext();
+  assert.equal(h.sandbox.__timers.length, 1, "loss still arms a counted reload without storage");
+  h.restoreContext();
+  assert.ok(reloads >= 1, "webglcontextrestored reloads instead of leaving a dead canvas");
+});
+
 test("GLX's third visible context loss says so instead of leaving a silent dead canvas", () => {
   // Two counted reloads per tab, then GLX (nothing beneath it) stopped with
   // no exception, so the error overlay never painted. TLX reports the same
