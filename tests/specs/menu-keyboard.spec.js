@@ -371,8 +371,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => {
       window.__apex.park(0.1);
       // Live SwiftShader race starves a 5 s waitForFunction: CI selected-1
-      // (run 37439242991) logged TopModal open #standings then timed out
-      // while the material pack was still on the main thread (~6 s later).
+      // (runs 37439242991 / 37414897932) logged TopModal open #standings then
+      // timed out while the material pack was still on the main thread.
       // headlessMode only skips render() (js/game.js) — same stall stop as
       // the Escape sibling below.
       window.__apex.headless(true);
@@ -380,13 +380,15 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       document.getElementById("pausemenu").hidden = false;
       document.getElementById("standings").hidden = false;
     });
-    /* Blocking components.css now owns dialog.screen 100% box + [open] grid
-       so print→all dialog-platform cannot leave a 0×0 :modal. Wait for :modal
-       AND a non-zero box so UiLayers.top names #standings, not #pausemenu.
-       BOOT_MS, not 5 s: the material pack can still own the main thread
-       after unhide (this box: TopModal open at 29 s, pack loaded at 46 s).
-       polling: 100 — park() stops the rAF loop (see track-detail below).
-       Then evaluate (frame-free) so the layer assert does not depend on rAF. */
+    /* WAIT FOR :modal AND the layer rank. Visible arrives before showModal
+       (TopModal's MutationObserver); a :modal standings used to lose
+       activeLayer() to #pausemenu with no modalOrder stamp, or when Chromium
+       dropped the 0×0 box — UiLayers ranks :modal even at 0×0. Blocking
+       components.css (#1101) also owns dialog.screen 100% box + [open] grid
+       so print→all dialog-platform cannot leave a 0×0 :modal; wait for that
+       painted box too. BOOT_MS, not 5 s: live SwiftShader starves a 5 s
+       waitForFunction (CI selected-1 runs 37414897932 / 37439242991).
+       polling: 100 — park() stops the rAF loop. Then evaluate (frame-free). */
     await page.waitForFunction(() => {
       const s = document.getElementById("standings");
       if (!s || !s.matches(":modal")) return false;
