@@ -1589,6 +1589,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   const comp = css("css/components.css");
   assert.equal(decl(comp, ".set-row", "display"), "flex");
   assert.equal(decl(comp, ".set-row", "flex-wrap"), "wrap", "the ‹ select › cluster drops to its own line, never squeezes");
+  assert.equal(decl(css("css/settings.css"), "#pm-panel-driving .set-row > div", "flex-wrap"), "wrap",
+    "Driving ‹ select › cluster wraps at small-phone 200% instead of overflowing the pane");
   assert.equal(decl(comp, ".set-row > div > select", "appearance"), "none", "the chevrons are the arrows");
   assert.equal(decl(comp, ".set-row > div > button", "width"), "var(--chip-h)", "each chevron is a full tap square");
   assert.equal(decl(comp, "#pmsettings-inner .pm-groups .set-row > div > button", "width"), "var(--chip-h)",
