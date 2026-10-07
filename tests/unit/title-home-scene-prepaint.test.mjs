@@ -6,10 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { chromium } from "playwright";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -55,24 +53,46 @@ test("live Home grid geometry lives in blocking css/menus.css", () => {
   );
 });
 
+test("compact-wide live Home grid-places #menu-secondary under the brand", () => {
+  // Source pin: #menu-buttons { display: contents } lifts groups into #overlay
+  // so #menu-secondary can grid-place under #menu-brand (no DOM move).
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{\s*display:\s*contents/,
+    "lifts door groups into the overlay grid",
+  );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*2;[\s\S]*height:\s*var\(--tap\)/,
+    "parks #menu-secondary under the brand as a --tap row",
+  );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*min-height:\s*var\(--tap-paint\)/,
+    "under-brand rooms keep the --tap-paint floor",
+  );
+  const secondaryBlock = menus.match(
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,
+  );
+  assert.ok(secondaryBlock, "compact-wide #menu-secondary rule block exists");
+  assert.match(secondaryBlock[0], /display:\s*flex/, "rooms stay a visible flex row");
+  assert.doesNotMatch(secondaryBlock[0], /display:\s*none/);
+});
+
 test("portrait live Home #menu-buttons is tall before data-home-ready", async () => {
   const chrome = process.env.APEX_CHROME || "/usr/local/bin/google-chrome";
   if (!fs.existsSync(chrome)) return;
-  const server = spawn("npx", ["--yes", "serve", "-l", "3456", "."], {
-    cwd: ROOT, stdio: "ignore",
-  });
-  await new Promise((r) => setTimeout(r, 1500));
+  // Ephemeral port — fixed :3456 races other tooling-fast / serve jobs.
+  const { startStaticServer, launchChromium, shutdown } = await import("../../tools/lib/harness.mjs");
+  const srv = await startStaticServer(ROOT);
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: true,
+    browser = await launchChromium({
       executablePath: chrome,
       args: ["--use-angle=swiftshader-webgl", "--disable-dev-shm-usage"],
     });
-    const page = await (await browser.newContext({
-      viewport: { width: 393, height: 659 },
-    })).newPage();
-    await page.goto("http://127.0.0.1:3456/", { waitUntil: "domcontentloaded" });
+    const page = await browser.newPage({ viewport: { width: 393, height: 659 } });
+    await page.goto(srv.url, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForSelector("#menu-buttons");
     const metrics = await page.evaluate(() => new Promise((resolve) => {
       const read = () => {
@@ -94,8 +114,8 @@ test("portrait live Home #menu-buttons is tall before data-home-ready", async ()
     assert.ok(metrics.clientHeight >= 280,
       `#menu-buttons clientHeight ${metrics.clientHeight} want >= 280 (scroll ${metrics.scrollHeight})`);
   } finally {
-    if (browser) await browser.close();
-    server.kill("SIGTERM");
+    await Promise.allSettled([browser?.close(), srv.close()]);
+    await shutdown();
   }
 });
 
