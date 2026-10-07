@@ -464,15 +464,63 @@ export function createExtras(ctx) {
   const tail = (file, n = 40) => {
     try { const t = fs.readFileSync(file, "utf8").split("\n"); return t.slice(-n - 1).join("\n").trim(); } catch { return ""; }
   };
+  /** One-shot `call` must not SIGKILL durable jobs on exit — they outlive the CLI. */
+  const callCli = process.argv[2] === "call";
+  const jobManifestPath = (id) => path.join(JOB_DIR, `${id}.json`);
+  const writeJobManifest = (j) => {
+    try {
+      fs.writeFileSync(jobManifestPath(j.id), JSON.stringify({
+        id: j.id, kind: j.kind, state: j.state, exit: j.exit, pid: j.child?.pid || j.pid || null,
+        browser: j.browser, started: j.started, ended: j.ended, argv: j.argv,
+        log: path.relative(ROOT, j.log), stderr: path.relative(ROOT, j.err),
+      }, null, 2) + "\n");
+    } catch (e) { log(`job manifest write failed: ${e.message}`); }
+  };
+  const pidAlive = (pid) => {
+    if (!pid) return false;
+    try { process.kill(pid, 0); return true; } catch { return false; }
+  };
+  const refreshDiskJob = (meta) => {
+    if (!meta || meta.state !== "running") return meta;
+    if (pidAlive(meta.pid)) return meta;
+    // Parent may have exited before the child's exit handler ran — infer from log.
+    let exit = meta.exit;
+    try {
+      const text = fs.readFileSync(path.join(ROOT, meta.log), "utf8");
+      const last = text.trim().split("\n").filter(Boolean).pop() || "";
+      if (/"ok"\s*:\s*true/.test(last)) exit = 0;
+      else if (/"ok"\s*:\s*false/.test(last) || last) exit = exit ?? 1;
+    } catch { /* empty log */ }
+    meta.state = exit === 0 ? "done" : "failed";
+    meta.exit = exit ?? 1;
+    meta.ended = meta.ended || Date.now();
+    try { fs.writeFileSync(jobManifestPath(meta.id), JSON.stringify(meta, null, 2) + "\n"); } catch { /* */ }
+    return meta;
+  };
+  const loadDiskJob = (id) => {
+    try {
+      const raw = JSON.parse(fs.readFileSync(jobManifestPath(id), "utf8"));
+      return refreshDiskJob(raw);
+    } catch { return null; }
+  };
+  const listDiskJobs = () => {
+    try {
+      return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
+    } catch { return []; }
+  };
   const jobView = (j, full = false) => {
     // log = the CLI's stdout, where every job CLI reports; stderr beside it.
     // (Until 2026-10-05 log named the stderr file, which stayed 0 bytes for
     // verify_all / float_all while the output sat in an unreported .out.)
+    const logRel = j.log.startsWith(ROOT) ? path.relative(ROOT, j.log) : j.log;
+    const errRel = j.err ? (j.err.startsWith(ROOT) ? path.relative(ROOT, j.err) : j.err) : (j.stderr || "");
     const v = { jobId: j.id, kind: j.kind, state: j.state, exit: j.exit, elapsedMs: (j.ended || Date.now()) - j.started,
-      log: path.relative(ROOT, j.log), stderr: path.relative(ROOT, j.err), argv: j.argv };
+      log: logRel, stderr: errRel, argv: j.argv, durable: true };
     if (full) {
-      v.tail = [tail(j.log, 30), tail(j.err, 20)].filter(Boolean).join("\n--- stderr ---\n");
-      if (j.state !== "running") { try { const o = ctx.splitOut(fs.readFileSync(j.log, "utf8")); if (o.out != null) v.out = o.out; } catch { /* no log */ } }
+      const logAbs = path.join(ROOT, logRel);
+      const errAbs = errRel ? path.join(ROOT, errRel) : "";
+      v.tail = [tail(logAbs, 30), errAbs ? tail(errAbs, 20) : ""].filter(Boolean).join("\n--- stderr ---\n");
+      if (j.state !== "running") { try { const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")); if (o.out != null) v.out = o.out; } catch { /* no log */ } }
     }
     return v;
   };
@@ -482,8 +530,11 @@ export function createExtras(ctx) {
     try { plan = jobPlan(kind, args); } catch (e) { if (e.refuse) return e.refuse; throw e; }
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser });
     if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env });
-    const running = [...jobs.values()].filter((j) => j.state === "running");
-    if (running.length >= 2) return refuse("jobs_busy", `${running.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
+    const memRunning = [...jobs.values()].filter((j) => j.state === "running");
+    const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
+    if (memRunning.length + diskRunning.length >= 2) {
+      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
+    }
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
     fs.mkdirSync(JOB_DIR, { recursive: true });
     const id = `${kind}-${Date.now().toString(36)}-${++jobSeq}`;
@@ -492,38 +543,64 @@ export function createExtras(ctx) {
     const env = plan.env ? { ...process.env, ...plan.env } : process.env;
     const child = spawn(plan.argv[0], plan.argv.slice(1), { cwd: ROOT, detached: true, env, stdio: ["ignore", logFd, errFd] });
     fs.closeSync(logFd); fs.closeSync(errFd);
-    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, state: "running", exit: null, started: Date.now(), ended: null, log, err };
+    try { child.unref(); } catch { /* */ }
+    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started: Date.now(), ended: null, log, err };
     jobs.set(id, j);
+    writeJobManifest(j);
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
       if (j.state === "running") j.state = code === 0 ? "done" : "failed";
+      writeJobManifest(j);
       // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
       if (j.browser && !j.cancelTree) releaseLock();
     });
-    child.on("error", (e) => { j.state = "failed"; j.exit = String(e.message); j.ended = Date.now(); if (j.browser) releaseLock(); });
-    return toolResult({ ok: true, ...jobView(j), hint: "apex_job_status {jobId} for progress; the result lands in out when state is done." });
+    child.on("error", (e) => {
+      j.state = "failed"; j.exit = String(e.message); j.ended = Date.now();
+      writeJobManifest(j);
+      if (j.browser) releaseLock();
+    });
+    return toolResult({
+      ok: true, ...jobView(j),
+      hint: "apex_job_status {jobId} for progress (works across call processes via disk manifest); result in out when done.",
+    });
   }
   function jobStatus(args) {
-    if (!args.jobId) return toolResult({ ok: true, jobs: [...jobs.values()].map((j) => jobView(j)) });
-    const j = jobs.get(String(args.jobId));
-    if (!j) return refuse("unknown_job", `no job ${args.jobId} in this server process`, "apex_job_status {} lists them.");
+    if (!args.jobId) {
+      const fromDisk = listDiskJobs();
+      const merged = new Map(fromDisk.map((j) => [j.id, j]));
+      for (const j of jobs.values()) merged.set(j.id, j);
+      return toolResult({ ok: true, jobs: [...merged.values()].map((j) => jobView(j)) });
+    }
+    const id = String(args.jobId);
+    const j = jobs.get(id) || loadDiskJob(id);
+    if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
   }
   async function jobCancel(args) {
-    const j = jobs.get(String(args.jobId || ""));
-    if (!j) return refuse("unknown_job", `no job ${args.jobId}`, "apex_job_status {} lists them.");
+    const id = String(args.jobId || "");
+    let j = jobs.get(id);
+    const disk = !j ? loadDiskJob(id) : null;
+    if (!j && !disk) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists them.");
+    if (!j && disk) {
+      j = { ...disk, child: { pid: disk.pid }, log: path.join(ROOT, disk.log), err: path.join(ROOT, disk.stderr || disk.log.replace(/\.log$/, ".err")) };
+    }
     let survivors;
     if (j.state === "running") {
       j.state = "cancelled";
-      j.cancelTree = processTree(j.child.pid);
+      j.cancelTree = processTree(j.child?.pid || j.pid);
       survivors = (await killTreeAndWait(j.cancelTree)).survivors.length;
+      j.ended = Date.now();
+      writeJobManifest(j);
       if (j.browser) releaseLock();
     }
     return toolResult({ ok: true, ...jobView(j), survivors });
   }
   process.on("exit", () => {
-    for (const j of jobs.values()) if (j.state === "running") { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }
+    // Durable jobs outlive one-shot `call`; only the long-lived serve process reaps them.
+    if (!callCli) {
+      for (const j of jobs.values()) if (j.state === "running") { try { process.kill(-j.child.pid, "SIGKILL"); } catch { /* gone */ } }
+    }
     if (sess) { try { process.kill(-sess.child.pid, "SIGKILL"); } catch { /* gone */ } }
   });
 
