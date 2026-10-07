@@ -254,7 +254,37 @@ test("apex_shot_survey dryRun plans a multi-shot session", () => {
   assert.equal(body.ok, true);
   assert.equal(body.dryRun, true);
   assert.equal(body.shots.length, 4);
+  assert.equal(body.willRouteToJob, false);
   assert.match(body.out, /artifacts\/track-survey\/monza-survey/);
+});
+
+test("apex_shot_survey scenery dryRun would route to a job", () => {
+  const r = callCli("apex_shot_survey", { track: "monza", preset: "scenery", dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.willRouteToJob, true);
+  assert.ok(body.estShots > 4);
+});
+
+test("apex_job_start shot_survey dryRun builds track-shot-survey argv", () => {
+  const r = callCli("apex_job_start", {
+    kind: "shot_survey", track: "spa", preset: "dual", label: "spa-dual", dryRun: true,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.ok(body.argv.some((a) => String(a).endsWith("track-shot-survey.mjs")), body.argv);
+  assert.ok(body.argv.includes("--preset") && body.argv.includes("dual"), body.argv);
+  assert.equal(body.browser, true);
+});
+
+test("apex_job_start shot_survey accepts multi tracks", () => {
+  const r = callCli("apex_job_start", {
+    kind: "shot_survey", tracks: "monza,spa", preset: "lap", dryRun: true,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.ok(body.argv.includes("--tracks") && body.argv.includes("monza,spa"), body.argv);
 });
 
 test("apex_pick_tests argv never contains --bg; includes --json", () => {

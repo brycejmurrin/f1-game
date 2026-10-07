@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.11.0";
+const SERVER_VERSION = "1.12.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -427,13 +427,19 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — ONE track-session boot, then 1–32 shots on the same circuit (~10–25 s each), a labeled contact panel (track-session sheet), and index.html. Presets: scenery (12 orbit), lap (quarters), dual (orbit+trackside), inspect (eye+orbit). Prefer this over repeated apex_shot for scenery surveys. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot track survey: ≤4 shots sync (~1–2 min); ≥5 shots, tracks:[…], or async:true → apex_job_start shot_survey (jobId at once; poll apex_job_status). One Chromium — not parallel. Presets scenery/lap/dual/inspect. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["track"],
       properties: {
-        track: { type: "string", description: "Circuit id." },
+        track: { type: "string", description: "Circuit id (required unless tracks)." },
+        tracks: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 16,
+          description: "Queue circuits sequentially under one lock (always async/job).",
+        },
         preset: {
           type: "string",
           enum: ["scenery", "lap", "dual", "inspect", "custom"],
@@ -475,10 +481,12 @@ const CATALOG = [
         sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
         panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
-        closeSession: { type: "boolean", description: "Free browser lock when done (default true)." },
-        keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
+        async: { type: "boolean", description: "Force job route (default when >4 shots or multi-track)." },
+        sync: { type: "boolean", description: "Force sync MCP call (host may timeout past ~2 min)." },
+        closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
+        keepSession: { type: "boolean", description: "When true, leave session open (sync path)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
-        image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true)." },
+        image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true; sync path)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -656,12 +664,14 @@ const CATALOG = [
   {
     name: "apex_hud_shot",
     kind: "browser",
-    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / pageError). Returns structuredContent {shot, findings, measurements} and a resource_link to the PNG. ~2 min on SwiftShader (one boot). Local tree only. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — ONE race-HUD cell (~2 min SwiftShader). Default: apex_job_start hud_shot (jobId; poll apex_job_status). Pass sync:true only if the host will hold the MCP call. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
         track: { type: "string", description: "Circuit id (default monza)." },
         frac: { type: "number", description: "Lap fraction to park at (default 0.18)." },
+        async: { type: "boolean", description: "Force job route (default)." },
+        sync: { type: "boolean", description: "Force sync MCP call (~2 min; host may timeout)." },
         device: { type: "string", enum: HUD_ENUMS.device },
         cam: { type: "string", enum: HUD_ENUMS.cam, description: "CamModes id (default chase)." },
         profile: { type: "string", enum: HUD_ENUMS.profile },
@@ -696,7 +706,7 @@ const CATALOG = [
   {
     name: "apex_hud_survey",
     kind: "browser",
-    description: "Browser (lock first) — the race-HUD survey over a matrix: quick (13 cells, 3 boots, ~10 min), leads (static-audit repros with numeric checks, ~25 min), full (pairwise, ~33 cells / 20 boots, ~45 min — prefer the CLI in the background), exhaustive (~470 cells, shard required) or a matrix JSON under scratch/ or artifacts/. Returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — race-HUD matrix: quick ~10 min, leads ~25, full ~45, exhaustive needs shard. Default: apex_job_start hud_survey (jobId). Pass sync:true only for a host that will hold minutes. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
@@ -705,6 +715,8 @@ const CATALOG = [
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
+        async: { type: "boolean", description: "Force job route (default)." },
+        sync: { type: "boolean", description: "Force sync MCP call (host may timeout)." },
         track: { type: "string" },
         frac: { type: "number" },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
@@ -764,13 +776,28 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once. Browser kinds (survey_track, shot_survey, hud_*, ui_*, flicker_gate) hold the lock until exit — not parallel. Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
-        track: { type: "string", description: "survey_track: circuit id." },
+        track: { type: "string", description: "survey_track / shot_survey: circuit id." },
+        tracks: { type: "string", description: "shot_survey: comma list of circuit ids (sequential queue)." },
+        preset: { type: "string", description: "shot_survey: scenery|lap|dual|inspect." },
+        label: { type: "string", description: "shot_survey: shot name prefix." },
+        count: { type: "number", description: "shot_survey: evenly spaced fracs." },
+        fracs: { type: "array", items: { type: "number" }, description: "shot_survey: lap fractions." },
+        cam: { type: "string", description: "shot_survey: camera id." },
+        cams: { type: "array", items: { type: "string" }, description: "shot_survey: camera list." },
+        tod: { type: "string", description: "shot_survey: day|dusk|dawn|night." },
+        el: { type: "number" },
+        dist: { type: "number" },
+        az: { type: "number" },
+        cols: { type: "number", description: "shot_survey: panel columns." },
+        out: { type: "string", description: "shot_survey / hud_*: artifacts/ or scratch/ dir." },
+        panel: { type: "boolean" },
+        index: { type: "boolean" },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
         viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
@@ -1021,11 +1048,13 @@ bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
 bound("apex_shot_survey", "track", { enum: knownCircuits() });
+bound("apex_shot_survey", "tracks", { items: { type: "string", enum: knownCircuits() }, maxItems: 16 });
 bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
 bound("apex_shot_survey", "fracs", { maxItems: 32 });
 bound("apex_shot_survey", "shots", { maxItems: 32 });
 bound("apex_shot_survey", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_shot_survey", "el", { minimum: -90, maximum: 90 });
+schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }];
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
@@ -1984,6 +2013,21 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (mockMode()) return hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
 
   if (hud) {
+    // Host MCP CallDynamicTool often dies at ~60–120 s; a cell is ~2 min and
+    // quick matrix ~10 min. Default to a background job unless sync:true.
+    const forceSync = args.sync === true || args.async === false;
+    if (!forceSync) {
+      const kind = name === "apex_hud_shot" ? "hud_shot" : "hud_survey";
+      const jr = extras().handlers.apex_job_start({ kind, _argv: argv, dryRun: args.dryRun });
+      const body = JSON.parse(jr.content[0].text);
+      if (body.ok === false) return jr;
+      return toolResult({
+        ...body,
+        routed: `apex_job_start ${kind}`,
+        estimateMs: HUD_TIMEOUT_MS(name, args),
+        hint: "Poll apex_job_status {jobId}. Pass sync:true only when the host will hold the MCP call for minutes.",
+      });
+    }
     const took = acquireLock(name);
     if (took) return took;
     return runSpawn(argv, { timeoutMs: HUD_TIMEOUT_MS(name, args), env, signal })

@@ -192,6 +192,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
 | **shot/show-menus.mjs** | Every menu and popup, then the Display survey, as JPEGs plus an index.html in artifacts/show-menus. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
+| **shot/track-shot-survey.mjs** | One Chromium boot per circuit: preset/fracs shots, contact sheet, index.html, JSON summary; `--tracks` queues… | survey-track |
 
 ### `tools/gfx/`
 

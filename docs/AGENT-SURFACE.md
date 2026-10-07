@@ -306,9 +306,13 @@ Pins the wrap always applies (you cannot override them):
 - `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
   `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
-- `apex_shot_survey` → one `track-session.mjs --serve` boot, then 1–32 shots,
-  a contact `sheet`, and `index.html`; presets `scenery`|`lap`|`dual`|`inspect`
-  or explicit `fracs` / `shots`; never spawns N separate `shot.mjs` boots
+- `apex_shot_survey` → ≤4 shots sync (one `track-session` boot + panel); ≥5 shots,
+  `tracks:[…]`, or `async:true` → `apex_job_start` kind `shot_survey`
+  (`tools/shot/track-shot-survey.mjs`, progress `= shot i/n`); multi-track is a
+  sequential queue under one lock (not parallel). `sync:true` forces a long MCP call
+- `apex_hud_shot` / `apex_hud_survey` → default to `apex_job_start` kinds
+  `hud_shot` / `hud_survey` (host MCP often dies at 60–120 s; a cell is ~2 min);
+  pass `sync:true` to keep the old blocking call
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `op survey` is the same batch as
   `apex_shot_survey`; `cam`/`tod`/`frac` are enum- and range-checked,

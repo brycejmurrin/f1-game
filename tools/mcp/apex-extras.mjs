@@ -156,25 +156,68 @@ export function createExtras(ctx) {
   }
   /** One boot, N shots, optional contact panel + index.html (apex_shot_survey / apex_track op survey). */
   async function handleShotSurvey(args = {}) {
+    const tracksRaw = args.tracks != null && args.tracks !== ""
+      ? (Array.isArray(args.tracks) ? args.tracks.map(String) : String(args.tracks).split(",").map((s) => s.trim()).filter(Boolean))
+      : null;
     let track;
-    try { track = needTrack(args.track); } catch (e) { return e.refuse; }
+    try {
+      if (tracksRaw && tracksRaw.length > 1) {
+        for (const id of tracksRaw) needTrack(id);
+        track = tracksRaw[0];
+      } else if (tracksRaw && tracksRaw.length === 1) {
+        track = needTrack(tracksRaw[0]);
+      } else {
+        track = needTrack(args.track);
+      }
+    } catch (e) { return e.refuse; }
+    const multi = tracksRaw && tracksRaw.length > 1 ? tracksRaw : null;
     let plan;
     try { plan = buildTrackShotSurveyPlan(args); }
     catch (e) { return refuse("bad_args", String(e.message || e), "See apex_shot_survey inputSchema."); }
     const out = assertSafeOut(args.out || `artifacts/track-survey/${track}-${plan.label}`);
     const wantPanel = args.panel !== false;
     const wantIndex = args.index !== false;
+    const estShots = multi ? plan.shots.length * multi.length : plan.shots.length;
+    const forceAsync = args.async === true || !!multi || estShots > SHOT_SURVEY_SYNC_MAX;
+    const forceSync = args.async === false || args.sync === true;
 
     if (args.dryRun) {
       return toolResult({
-        ok: true, dryRun: true, track, out, ...plan,
-        hint: "Opens one track-session, fires each shot (~10–25 s), then sheet + index.html.",
+        ok: true, dryRun: true, track, tracks: multi || [track], out, ...plan,
+        estShots, willRouteToJob: forceAsync && !forceSync,
+        hint: forceAsync && !forceSync
+          ? "Host MCP often times out past ~4 shots: this call would apex_job_start shot_survey."
+          : "Opens one track-session, fires each shot (~10–25 s), then sheet + index.html.",
       });
     }
     if (mockMode()) {
+      let planJ;
+      try { planJ = jobPlan("shot_survey", { track, tracks: multi ? multi.join(",") : track, ...args }); }
+      catch (e) { if (e.refuse) return e.refuse; throw e; }
       return toolResult({
-        ok: true, mock: true, track, out, ...plan,
-        argv: nodeArgv("shot/track-session.mjs", "--serve", "--track", track, "--out", out),
+        ok: true, mock: true, track, tracks: multi || [track], out, ...plan,
+        willRouteToJob: forceAsync && !forceSync, argv: planJ.argv,
+      });
+    }
+
+    // Long / multi-track surveys: return a jobId immediately (same pattern as graph_parity_all).
+    if (forceAsync && !forceSync) {
+      const jr = jobStart({
+        kind: "shot_survey",
+        track: multi ? undefined : track,
+        tracks: multi ? multi.join(",") : track,
+        preset: args.preset, label: args.label, count: args.count, fracs: args.fracs,
+        cam: args.cam, cams: args.cams, tod: args.tod, el: args.el, dist: args.dist, az: args.az,
+        cols: args.cols, out: args.out, panel: args.panel, index: args.index,
+      });
+      const body = bodyOf(jr);
+      if (body.ok === false) return jr;
+      return toolResult({
+        ...body,
+        routed: "apex_job_start shot_survey",
+        estShots,
+        estimateMs: estShots * 20000 + 45000,
+        hint: "Browser lock held until the job exits. Poll apex_job_status {jobId}; panels under artifacts/track-survey/. Not parallel — one Chromium.",
       });
     }
 
@@ -301,6 +344,50 @@ export function createExtras(ctx) {
   function jobPlan(kind, a) {
     switch (kind) {
       case "survey_track": return { browser: true, argv: nodeArgv("track/survey-track.mjs", needTrack(a.track), ...(a.oblique ? ["--oblique"] : [])) };
+      case "shot_survey": {
+        const tracks = a.tracks != null && a.tracks !== ""
+          ? (Array.isArray(a.tracks) ? a.tracks.join(",") : String(a.tracks))
+          : needTrack(a.track);
+        if (!LIST_RE.test(tracks) || tracks.startsWith("-")) {
+          throw Object.assign(new Error("tracks"), { refuse: refuse("bad_args", "shot_survey needs track or tracks", 'e.g. {"kind":"shot_survey","track":"monza","preset":"dual"} or tracks:"monza,spa".') });
+        }
+        for (const id of tracks.split(",")) needTrack(id.trim());
+        const argv = nodeArgv("shot/track-shot-survey.mjs", "--json");
+        if (tracks.includes(",")) argv.push("--tracks", tracks);
+        else argv.push("--track", tracks);
+        if (a.preset) argv.push("--preset", String(a.preset));
+        if (a.label) argv.push("--label", String(a.label));
+        if (a.count != null) argv.push("--count", String(a.count));
+        if (Array.isArray(a.fracs) && a.fracs.length) argv.push("--fracs", a.fracs.join(","));
+        if (a.cam) argv.push("--cam", String(a.cam));
+        if (Array.isArray(a.cams) && a.cams.length) argv.push("--cams", a.cams.join(","));
+        if (a.tod) argv.push("--tod", String(a.tod));
+        if (a.el != null) argv.push("--el", String(a.el));
+        if (a.dist != null) argv.push("--dist", String(a.dist));
+        if (a.az != null) argv.push("--az", String(a.az));
+        if (a.cols != null) argv.push("--cols", String(a.cols));
+        if (a.out) argv.push("--out", assertSafeOut(a.out));
+        if (a.panel === false) argv.push("--no-panel");
+        if (a.index === false) argv.push("--no-index");
+        return { browser: true, argv };
+      }
+      case "hud_shot": {
+        // Argv builder lives on the parent server (hudShotArgv); pass a prebuilt argv via a._argv in tests only.
+        if (!Array.isArray(a._argv) || !a._argv.length) {
+          throw Object.assign(new Error("hud_shot"), {
+            refuse: refuse("bad_args", "hud_shot job is started via apex_hud_shot async routing", "Call apex_hud_shot with async:true, or run node tools/shot/hud-survey.mjs …"),
+          });
+        }
+        return { browser: true, argv: a._argv };
+      }
+      case "hud_survey": {
+        if (!Array.isArray(a._argv) || !a._argv.length) {
+          throw Object.assign(new Error("hud_survey"), {
+            refuse: refuse("bad_args", "hud_survey job is started via apex_hud_survey async routing", "Call apex_hud_survey with async:true / matrix quick|full, or run the CLI in the background."),
+          });
+        }
+        return { browser: true, argv: a._argv };
+      }
       case "ui_gallery": {
         const s = list(a.screens, "screens"), v = list(a.viewports, "viewports");
         return { browser: true, argv: nodeArgv("ui/layout-audit.mjs", "--gallery", "--jobs=1", ...(s ? [`--screens=${s}`] : []), ...(v ? [`--viewports=${v}`] : [])) };
@@ -501,4 +588,10 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+export const JOB_KINDS = [
+  "survey_track", "shot_survey", "hud_shot", "hud_survey",
+  "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet",
+  "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all",
+];
+/** Host MCP CallDynamicTool often dies at ~60–120 s; sync shot surveys above this go through jobs. */
+export const SHOT_SURVEY_SYNC_MAX = 4;
