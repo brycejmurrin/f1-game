@@ -54,12 +54,22 @@ test("live Home grid geometry lives in blocking css/menus.css", () => {
 });
 
 test("compact-wide live Home grid-places #menu-secondary under the brand", () => {
-  // Source pin: #menu-buttons { display: contents } lifts groups into #overlay
-  // so #menu-secondary can grid-place under #menu-brand (no DOM move).
+  // Source pin: #menu-buttons spans the overlay with subgrid so #menu-secondary
+  // can sit under #menu-brand while remaining the title scroll box (no DOM move).
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{\s*display:\s*contents/,
-    "lifts door groups into the overlay grid",
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*grid-template-columns:\s*subgrid/,
+    "subgrids door groups onto the overlay columns",
+  );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*overflow-y:\s*auto/,
+    "keeps #menu-buttons as the title scroll box",
+  );
+  assert.doesNotMatch(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*display:\s*contents/,
+    "display:contents drops the scroll box (ui-scale @200% / SE hit tests)",
   );
   assert.match(
     menus,
