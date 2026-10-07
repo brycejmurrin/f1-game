@@ -515,29 +515,56 @@ test("fit clamps a size-only piece on its own, not as one block with every other
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
-function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null } = {}) {
+function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null, mirror = null } = {}) {
   const written = Object.assign({}, stored);
   const els = {};
+  const byId = {};
   const cls = new Set(classes);
   const hud = { hidden: !live };
   const body = {
-    classList: { contains: (c) => cls.has(c) },
+    classList: {
+      contains: (c) => cls.has(c),
+      add: (c) => { cls.add(c); },
+      remove: (c) => { cls.delete(c); },
+      toggle: (c, on) => { if (on) cls.add(c); else cls.delete(c); },
+    },
     getAttribute: (k) => (k === "data-hud-hide" ? hide : (k in bodyAttrs ? bodyAttrs[k] : null)),
     hasAttribute: (k) => (k === "data-hud-hide" ? !!hide : Object.prototype.hasOwnProperty.call(bodyAttrs, k)),
   };
   const root = { hasAttribute: (k) => k in rootAttrs };
   const doc = {
     readyState: "complete", body, documentElement: root,
-    getElementById: (id) => (id === "hud" ? hud : null),
+    getElementById: (id) => {
+      if (id === "hud") return hud;
+      if (id in byId) return byId[id];
+      return null;
+    },
     querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())),
     addEventListener() {},
   };
   const ctx = { console, document: doc,
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } } };
   if (gameHud) ctx.GameHud = gameHud;
+  if (mirror) {
+    // MirrorPass.instance() shape used by revealMirror / mirrorMode.
+    let mode = mirror.mode || "auto";
+    let collapsed = !!mirror.collapsed;
+    const chip = {
+      hidden: !collapsed,
+      click() { collapsed = false; chip.hidden = true; },
+    };
+    byId["hud-mirror-chip"] = chip;
+    ctx.MirrorPass = {
+      instance: () => ({
+        mode: () => mode,
+        setMode: (v) => { mode = v; written.hudMirror = v; },
+        state: () => ({ mode, collapsed, shown: mode !== "off" && !collapsed }),
+      }),
+    };
+  }
   vm.createContext(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
-  return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs };
+  return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
 
 test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
@@ -690,6 +717,45 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   const top = T.els[".hud-top"] || (T.els[".hud-top"] = fakeEl());
   top.hidden = true;
   assert.deepEqual(plain(T.H.hiddenReason("tower")), { reason: "hidden right now", soft: true });
+});
+
+test("MIRROR: off is hard; soft-hidden until placed; placing turns MIRROR on", () => {
+  // DISPLAY › HUD › MIRROR off greys MOVE & SIZE (hard), like the element list.
+  const off = load3({ classes: ["desktop"], live: true, stored: { hudMirror: "off" }, mirror: { mode: "off" } });
+  const mirOff = off.els["#hud-mirror"] || (off.els["#hud-mirror"] = fakeEl());
+  mirOff.hidden = true;
+  const rOff = off.H.hiddenReason("mirror");
+  assert.ok(rOff && !rOff.soft && /MIRROR is off/.test(rOff.reason), "off is hard: " + JSON.stringify(rOff));
+
+  // AUTO / not drawn: soft note, sliders stay — a place cures it.
+  const soft = load3({ classes: ["desktop"], live: true, stored: { hudMirror: "auto" }, mirror: { mode: "auto" } });
+  const mir = soft.els["#hud-mirror"] || (soft.els["#hud-mirror"] = fakeEl());
+  mir.hidden = true;
+  const rSoft = soft.H.hiddenReason("mirror");
+  assert.ok(rSoft && rSoft.soft && /not needed/.test(rSoft.reason), "soft until placed: " + JSON.stringify(rSoft));
+
+  // Placing (non-shipped offset → data-hl-user) flips MirrorPass to ON and clears hidden.
+  soft.H.set("mirror", { x: 5 }, "other");
+  assert.equal(soft.written.hudMirror, "on", "place sets HUD › MIRROR to ON");
+  assert.equal(mir.hidden, false, "place clears #hud-mirror[hidden]");
+  assert.ok(clsHas(soft, "hud-mirror-on"), "place paints hud-mirror-on for peek/fit");
+  assert.equal(soft.H.hiddenReason("mirror"), null, "placed mirror is no longer soft-hidden");
+
+  // Session collapse: place clicks the chip then forces ON.
+  const col = load3({ classes: ["desktop"], live: true, stored: { hudMirror: "on" }, mirror: { mode: "on", collapsed: true } });
+  const mirC = col.els["#hud-mirror"] || (col.els["#hud-mirror"] = fakeEl());
+  mirC.hidden = true;
+  assert.ok(col.H.hiddenReason("mirror").soft, "collapsed mirror is soft");
+  col.H.set("mirror", { y: -3 }, "other");
+  assert.equal(col.byId["hud-mirror-chip"].hidden, true, "place clears the collapse chip");
+  assert.equal(mirC.hidden, false);
+});
+
+function clsHas(L, c) { return L.cls.has(c); }
+
+test("empty #hud-sectors plate collapses — no junk gap before buildSecRows", () => {
+  assert.match(CSS, /#hud-sectors:empty\s*\{\s*display:\s*none/,
+    "empty sector plate hides fully (padding must not reserve a gap)");
 });
 
 test("TRACK LIMITS origin follows its live anchor (:root[data-limits-left])", () => {

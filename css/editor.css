@@ -106,7 +106,14 @@
   font-size: var(--fs-micro);
   box-sizing: border-box;
 }
-.td-row .sel-chip { min-height: var(--tap-sm); padding: 0; justify-content: center; }
+/* Stepper ± keys: --tap-sm squares on desktop; on touch the house --tap floor
+   is 52px and layout-audit measured these at 52×39 (2026-10-07). */
+.td-row .sel-chip {
+  min-height: var(--tap-paint);
+  min-width: var(--tap-paint);
+  padding: 0;
+  justify-content: center;
+}
 .td-num { text-align: center; font-variant-numeric: tabular-nums; }
 .td-input {
   min-height: var(--chip-h);
@@ -125,6 +132,9 @@
   background: var(--plate);
   border-radius: var(--r-xs);
   cursor: pointer;
+  /* CHECKS rows are full-width taps on phone (layout-audit ~33px tall). */
+  min-height: var(--tap-paint);
+  box-sizing: border-box;
 }
 .td-issue[data-level="red"] { border-left-color: var(--slower); }
 .td-issue[data-level="amber"] { border-left-color: var(--sec-slow); }
@@ -256,8 +266,34 @@
    the foot becomes a 3-up grid (two rows of three, the message under them)
    instead of a wrapping row that cost 172px on a 412px-wide phone. */
 @media (max-width: 760px), (orientation: portrait) {
-  .td-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 1fr) minmax(0, 42%); }
+  /* Drop the 200px stage floor: it forced the canvas row past td-body and every
+     rail chip read as clipped (86 cells, layout-audit 2026-10-07). Both rows
+     need minmax(0,…) so the rail scrollport keeps a definite height. */
+  .td-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+  .td-stage { overflow: hidden; min-height: 0; }
+  /* DOM builds toolbar before the canvases; flex order puts the map on top so
+     the chips stop clipping past td-body (layout-audit 2026-10-07). */
+  .td-stage > canvas:not([data-role="profile"]) { order: 1; }
+  .td-stage > canvas[data-role="profile"] { order: 2; }
+  .td-stage > .td-chips[data-role="toolbar"] { order: 3; }
+  .td-rail { min-height: 0; max-height: 100%; }
   .td-stage .td-hint { display: none; }   /* the rail's copy under 1 SHAPE stays */
+  /* Stats duplicate the foot message on a narrow stack; hiding them buys canvas
+     without losing numbers (est lap still in CHECKS / foot status). */
+  .td-stats { display: none; }
+  .td-stage > canvas[data-role="profile"] {
+    height: max(44px, calc(var(--chip-h) * 1.35));
+    min-height: 44px;
+  }
+  .td-stage > .td-chips[data-role="toolbar"] .sel-chip {
+    min-height: var(--tap-paint);
+    min-width: 0;
+    flex: 1 1 0;
+    padding-inline: calc(var(--gap) / 3);
+  }
   .td-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
   .td-foot .td-msg { grid-column: 1 / -1; }
 }

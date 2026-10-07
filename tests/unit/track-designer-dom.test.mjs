@@ -847,6 +847,12 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setTool("straight");
   assert.equal(labels().find((t) => t.startsWith("2 CORNERS ·")), "2 CORNERS · STRAIGHT 200 m");
   // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
+  assert.match(css, /\.td-row \.sel-chip \{[^}]*min-height:\s*var\(--tap-paint\)/, "stepper ± keys floor at --tap-paint on touch");
+  assert.match(css, /\.td-row \.sel-chip \{[^}]*min-width:\s*var\(--tap-paint\)/, "stepper ± keys width floor at --tap-paint on touch");
+  assert.match(css, /\.td-issue \{[^}]*min-height:\s*var\(--tap-paint\)/, "CHECKS issue rows floor at --tap-paint");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
+    "portrait stack hides duplicate stage stats so the canvas row stays inside td-body");
   assert.match(css, /\.td-rail \{[^}]*overflow-x:\s*hidden/, "rail clips horizontal overflow");
   assert.match(css, /\.td-rail \{[^}]*scrollbar-gutter:\s*stable/, "rail reserves scrollbar gutter");
   assert.match(css, /\.td-tab \{[^}]*flex:\s*1 1 0/, "equal-width tabs (no jump)");

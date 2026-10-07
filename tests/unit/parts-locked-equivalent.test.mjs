@@ -72,3 +72,16 @@ test("getVisualTiers agrees with resolveSetup for a locked signature", () => {
   assert.equal(tiers._visual.tyres.id, "supersoft");
   assert.equal(bandKey(tiers._visual.tyres.band), bandKey([0.88, 0.1, 0.3]));
 });
+
+test("Audi factory Neuburg Compound band is team color2 (not supersoft magenta)", () => {
+  const audi = M.Teams.LIST.find((t) => t.id === "audi");
+  assert.ok(audi, "audi roster entry");
+  const asked = M.Parts.CATALOG.find((c) => c.id === "tyres")
+    .options.find((o) => o.id === "sig_audi_tyre");
+  assert.equal(asked.equivalent, "compound_c4");
+  assert.equal(bandKey(asked.visual.band), bandKey(audi.color2));
+  assert.notEqual(bandKey(asked.visual.band), bandKey([0.75, 0.1, 0.3]));
+  const tiers = M.Parts.getVisualTiers(M.Parts.FACTORY_PRESETS.audi, audi);
+  assert.equal(tiers._ids.tyres, "sig_audi_tyre");
+  assert.equal(bandKey(tiers._visual.tyres.band), bandKey(audi.color2));
+});
