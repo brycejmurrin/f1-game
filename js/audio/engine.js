@@ -28,7 +28,7 @@ var GameAudio = (function () {
   let whineOsc = null, whineGain = null;          // turbo whine
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
   let lfo = null, lfoG = null;                    // offroad pitch wobble (8 Hz)
-  let skidSrc = null, skidFilter = null, skidGain = null;
+  let skidSrc = null, skidFilter = null, skidGain = null, skidLfo = null, skidLfoGain = null;
   let voiceFormant = null;                       // per-manufacturer peaking EQ
   let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
@@ -924,6 +924,14 @@ var GameAudio = (function () {
     skidGain = ctx.createGain();
     skidGain.gain.value = 0;
     skidSrc.connect(skidFilter).connect(skidGain).connect(sfxBus);
+    // ~4.8 Hz centre wobble (sin(30*t)) on the audio thread — setSkid used to
+    // re-aim the bandpass every frame when |Δf| >= 1 (~60/s while sliding).
+    skidLfo = ctx.createOscillator();
+    skidLfo.type = "sine";
+    skidLfo.frequency.value = 30 / (2 * Math.PI);
+    skidLfoGain = ctx.createGain();
+    skidLfoGain.gain.value = 0;
+    skidLfo.connect(skidLfoGain).connect(skidFilter.frequency);
 
     // CAR SFX (setCarSfx): scrub and lock-up share one noise loop through two
     // filters — a low, broad scrub for fronts sliding past their peak and a
@@ -989,6 +997,7 @@ var GameAudio = (function () {
     harvSrc.start();
     ersOsc.start();
     lfo.start();
+    skidLfo.start();
     skidSrc.start();
     scrubSrc.start();
     surfSrc.start();
@@ -1102,14 +1111,14 @@ var GameAudio = (function () {
     // on resume, so a long session would pay it again and again. limGain feeds engGain.gain — an
     // AudioParam, not a node — which is why it is invisible when you read the
     // graph for outputs.
-    const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
+    const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, skidLfo, skidLfoGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
                   deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
                   revSend, convolver, revReturn, deadPitLim, scrubFilter, scrubGain, lockFilter, lockGain,
                   surfFilter, surfGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
-    engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
+    engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = skidLfo = skidLfoGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     brakeFilter = brakeGain = null;
     scrubFilter = scrubGain = lockFilter = lockGain = surfFilter = surfGain = null;
@@ -1612,13 +1621,18 @@ var GameAudio = (function () {
     if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { glideLevel(skidGain.gain, sv); skidGain._apexSkidV = sv; }
     if (v > 0) {
       const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
-      // The ~4.8 Hz wobble rides the same glide: per-frame steps of the centre
-      // frequency were the filter's own zipper.
-      const f = base + v * 320 + Math.sin(now() * 30) * 60;
-      if (Math.abs((skidFilter.frequency._apexSkidF ?? -1) - f) >= 1) {
-        skidFilter.frequency.setTargetAtTime(f, now(), LEVEL_TAU);
-        skidFilter.frequency._apexSkidF = f;
+      const centre = base + v * 320;
+      if (Math.abs((skidFilter.frequency._apexSkidBase ?? -1) - centre) >= 1) {
+        skidFilter.frequency.setTargetAtTime(centre, now(), LEVEL_TAU);
+        skidFilter.frequency._apexSkidBase = centre;
       }
+      if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 60) {
+        skidLfoGain.gain.setTargetAtTime(60, now(), LEVEL_TAU);
+        skidLfoGain._apexDepth = 60;
+      }
+    } else if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 0) {
+      skidLfoGain.gain.setTargetAtTime(0, now(), LEVEL_TAU);
+      skidLfoGain._apexDepth = 0;
     }
   }
 
@@ -1800,7 +1814,10 @@ var GameAudio = (function () {
     // `input` at frame rate, so one drag reconfigured the render thread ~60x/s.
     const ir = buildIR(venue);
     if (convolver.buffer !== ir) convolver.buffer = ir;
-    revReturn.gain.setTargetAtTime(layers.reverb ? venue.level * tune.reverb * camMix.reverb : 0, now(), 0.2);
+    const wet = layers.reverb ? venue.level * tune.reverb * camMix.reverb : 0;
+    revReturn.gain.setTargetAtTime(wet, now(), 0.2);
+    // Mute the send when SPACE is off — returning at 0 still fed the convolver.
+    if (revSend) revSend.gain.setTargetAtTime(wet > 0 ? 1 : 0, now(), 0.05);
   }
 
   function setVoice(engineName) {
