@@ -450,7 +450,9 @@
         palette: WALL_INL, lit: true,
         step: 55, floor: 4,
       });
-      cityFront(0.56, 0.74, -1, 78, {
+      // gap 78 buried one facade unit (terrain bulge inland ~0.24 m); 64 matches
+      // the near row and keeps the gold-window strip on higher ground.
+      cityFront(0.56, 0.74, -1, 64, {
         minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
         step: 55, floor: 4,
