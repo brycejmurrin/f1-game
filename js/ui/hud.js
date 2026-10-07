@@ -1058,6 +1058,7 @@ function fitHud() {
   // whole same-key backoff after a camera class change. Flush so currentCSSZoom
   // matches the cap we just wrote, then publish.
   if (_hudTop) void _hudTop.offsetHeight;
+  if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
@@ -1234,6 +1235,7 @@ function fitHud() {
   }
   radioTopSlot(root, bcast);
   mirrorClear(root);
+  if (els.minimap) void els.minimap.offsetHeight;
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.
