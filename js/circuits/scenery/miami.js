@@ -359,7 +359,7 @@
           // Fallback if the kit is unavailable — keep the pit lane building.
           building(K(0.0), -1, 13, 22, 9, 120, { kind: "hall", wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         }
-        building(K(0.0), -1, 42, 26, 22, 120,
+        building(K(0.0), -1, 42, 26, 14, 120,
           { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER, neon: 0 });
         // DETAIL: closed end walls on the pit grandstand block (local; not city.js)
         // Vertical faces only — a roof slab fought grandstandEx flatCoplanar.
@@ -415,9 +415,10 @@
         });
       }
       cityFront(0.04, 0.12, 1, 30, {
-        minH: 14, maxH: 38, depth: 25, step: 20,
+        minH: 6, maxH: 14, depth: 14, step: 28,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
+      carPark(0.07, 1, 34, 2, 12);
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
 
       wall(0.13, 0.19,  1, 3, 1.2, CONCRETE);
@@ -437,7 +438,7 @@
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
       cityFront(0.18, 0.26, -1, 42, {
-        minH: 10, maxH: 26, depth: 16, step: 18,
+        minH: 5, maxH: 12, depth: 12, step: 26,
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
@@ -563,10 +564,8 @@
           endWalls: true,
         });
       }
-      cityFront(0.42, 0.53, -1, 24, {
-        minH: 14, maxH: 34, depth: 22, step: 20,
-        palette: SKY_PAL_STADIUM, lit: true, windowCol: WIN_AMBER,
-      });
+      carPark(0.43, -1, 24, 3, 16);
+      carPark(0.48, -1, 28, 2, 14);
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
       carPark(0.47, -1, 60, 4, 18);
       parkingDeck(0.55, 1, 70, { tiers: 4, w: 34, len: 56 });
@@ -739,12 +738,12 @@
       billboard(K(0.52), 1, 10, 16, 8, TEAL);
       billboard(K(0.54), 1, 10, 16, 8, PINK);
       const DECO = [
-        [0.500, "ziggurat", WHITE,            22],
-        [0.518, "fin",      [0.96, 0.86, 0.70], 18],
-        [0.536, "chevron",  [0.86, 0.94, 0.94], 20],
-        [0.554, "setback",  [0.98, 0.82, 0.78], 16],
-        [0.572, "notch",    WHITE,            21],
-        [0.590, "ziggurat", [0.80, 0.92, 0.96], 17],
+        [0.500, "ziggurat", WHITE,            12],
+        [0.518, "fin",      [0.96, 0.86, 0.70], 10],
+        [0.536, "chevron",  [0.86, 0.94, 0.94], 11],
+        [0.554, "setback",  [0.98, 0.82, 0.78], 9],
+        [0.572, "notch",    WHITE,            11],
+        [0.590, "ziggurat", [0.80, 0.92, 0.96], 10],
       ];
       for (const [s, kind, wallCol, h] of DECO) {
         building(K(s), 1, 22, 20, h, 18, {
@@ -757,9 +756,9 @@
       }
       // DETAIL: extra pastel street masses (variety beyond the Deco six)
       const PASTEL_EXTRA = [
-        [0.508, "podium",  [0.95, 0.72, 0.78], 14],
-        [0.545, "slab",    [0.55, 0.85, 0.90], 12],
-        [0.580, "setback", [0.98, 0.90, 0.70], 15],
+        [0.508, "podium",  [0.95, 0.72, 0.78], 8],
+        [0.545, "slab",    [0.55, 0.85, 0.90], 7],
+        [0.580, "setback", [0.98, 0.90, 0.70], 9],
       ];
       for (const [s, kind, wallCol, h] of PASTEL_EXTRA) {
         building(K(s), 1, 28, 16, h, 14, {
@@ -808,9 +807,10 @@
         bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
       });
       cityFront(0.76, 0.86, -1, 34, {
-        minH: 16, maxH: 38, depth: 22, step: 20,
+        minH: 6, maxH: 14, depth: 14, step: 28,
         palette: SKY_PAL_DUSKGLASS, lit: true, windowCol: WIN_AMBER,
       });
+      carPark(0.80, -1, 38, 2, 14);
       for (let i = 0; i < 12; i++) {
         palm(K(0.76 + i * 0.006), (i % 2) ? 1 : -1, 12 + (i % 2) * 4, 8 + hash(i * 5) * 2, PALM_GREEN);
       }
@@ -825,7 +825,7 @@
       }
 
       cityFront(0.87, 0.97, -1, 26, {
-        minH: 10, maxH: 28, depth: 22, step: 18,
+        minH: 5, maxH: 12, depth: 12, step: 26,
         palette: [WHITE, ...rotPal(SKY_PAL, 3)], lit: true, windowCol: WIN_AMBER,
       });
       const FINAL_STANDS = ["pastel", "teal"];
@@ -889,6 +889,8 @@
       palmRow(0.60, 0.72, -1, 18, 28, 8.5);    // Turnpike service road
       palmRow(0.38, 0.55,  1, 16, 26, 8.5);    // stadium-lot perimeter
       palmRow(0.48, 0.58,  1, 20, 22, 9.5);    // beach-club palm belt
+      palmRow(0.02, 0.14,  1, 18, 22, 8.5);    // pit-straight (replaces generic palm scatter)
+      palmRow(0.64, 0.78, -1, 16, 24, 8.0);    // Turnpike outer service road
       const LIVE_OAK = [0.22, 0.38, 0.20];
       // Kept clear of the stadium-lot cityFront (side -1, 24-46 m): a species
       // call guards against the ROAD only, never against a building already
