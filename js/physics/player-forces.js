@@ -290,8 +290,16 @@ const PlayerForces = (function () {
             Math.max((PC.COAST_YAW_HI || 1.1) - (PC.COAST_YAW_LO || 0.65), 1e-3),
           0, 1)
       : 0;
+    // Speed-scaled yaw damp (local): identity at ≤50 m/s, smoothstep to
+    // 1+EXTRA by 65 m/s. Step-steer overshoot grew with speed (8%→19% from
+    // 50→83 m/s at lock 0.5) because YAW_DAMP alone has no speed term; this
+    // keeps the 220–300 km/h band near 8–12% without slowing ≤50 m/s turn-in
+    // or touching COAST_YAW_*/the speed equation.
+    const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
+    const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
+    const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
     const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
-    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * (c.yawRateCur || 0);
+    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * (c.yawRateCur || 0);
     c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
     // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both
     // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
