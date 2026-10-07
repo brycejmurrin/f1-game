@@ -105,8 +105,12 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
   assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
   const experience = read("css/experience.css");
-  assert.match(experience, /#menu-brand \{[\s\S]*background:\s*var\(--scrim-heavy\)/,
-    "live Home brand sits on a solid --scrim-heavy plate so bright liveries cannot wash the wordmark");
+  const menus = readCssSource("css/menus.css");
+  assert.match(
+    menus + experience,
+    /#menu-brand \{[\s\S]*background:\s*var\(--scrim-heavy\)/,
+    "live Home brand sits on a solid --scrim-heavy plate so bright liveries cannot wash the wordmark",
+  );
   assert.doesNotMatch(experience, /#menu-brand \{[\s\S]*?background:\s*linear-gradient\([^;]*transparent\)/,
     "brand plate must not fade to transparent over Ferrari white / SIDE wordmarks");
   assert.match(
