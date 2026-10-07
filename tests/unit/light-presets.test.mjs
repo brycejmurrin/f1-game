@@ -215,6 +215,35 @@ test("shared *|dawn|wet stamp supplies the fleet wet-dawn look", () => {
   assert.deepEqual(pinned, [], "per-track dawn|wet must defer to *|dawn|wet (fogTint/mistHeight exceptions only)");
 });
 
+test("shared *|day|dry stamp supplies the fleet clear-daylight authenticity knobs", () => {
+  const P = presets();
+  const shared = P["*|day|dry"];
+  assert.ok(shared, "expected LightPresets['*|day|dry']");
+  assert.equal(shared.keyMul, 1.22);
+  assert.equal(shared.sunElev, 6);
+  assert.equal(shared.shadowTintAmt, 0.18);
+  assert.equal(shared.cloudCover, -0.1);
+  assert.equal(shared.tint, -0.04);
+  assert.equal(shared.saturation, 1.02);
+  assert.equal(shared.ambTemp, 0.04);
+  assert.equal(shared.fogTint, -0.04);
+  assert.equal(shared.exposureMul, 1.04);
+  assert.equal(shared.lampLevel, 0);
+  assert.equal(shared.floodEmitMul, 0.08);
+  const redundant = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|day\|dry$/.test(key) || key.startsWith("*")) continue;
+    const o = P[key];
+    for (const [id, v] of Object.entries(o)) {
+      if (Object.prototype.hasOwnProperty.call(shared, id) && shared[id] === v) {
+        redundant.push(`${key}.${id}=${v}`);
+      }
+    }
+  }
+  assert.deepEqual(redundant, [],
+    "per-track day|dry must not re-pin a knob at the same value as *|day|dry");
+});
+
 test("shared *|day|wet stamp supplies the fleet wet-daylight authenticity knobs", () => {
   const P = presets();
   const shared = P["*|day|wet"];
