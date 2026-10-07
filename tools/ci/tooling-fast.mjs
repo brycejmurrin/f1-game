@@ -700,6 +700,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
   "tests/unit/steer-presets.test.mjs",
+  // STEER LOCK slider: notch 7 = 0.35 rad after #1206 lockTaper hold. Source pin, ~0 s.
+  "tests/unit/steer-tuning-lock.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   "tests/unit/store-cross-tab.test.mjs",
   // ...and its sibling: the PREFIX is not the whole contract. Two features
