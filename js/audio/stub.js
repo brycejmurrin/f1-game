@@ -6,12 +6,18 @@
 "use strict";
 
 var GameAudio = (function () {
+  // platform-session.js registers its "the platform took the audio" pause at
+  // wireLifecycle — on THIS stub. Held here so ensureAudio can hand it to the
+  // real engine (js/core/lazy-bundles.js restoreOnEngine).
+  let interrupted = null;
   function noop() { return undefined; }
   function noop0() { return 0; }
   function noopStr() { return ""; }
   function noopObj() { return {}; }
   return {
     _stub: true,
+    onInterrupted: (fn) => { interrupted = typeof fn === "function" ? fn : null; },
+    _interruptHook: () => interrupted,
     init: noop, setEnabled: noop, setSfxEnabled: noop, setUiEnabled: noop,
     setMusicEnabled: noop, setMusicVolume: noop0, setSfxVolume: noop0,
     setMusicSource: noopStr, musicSource: noopStr, setMusicBackend: noop,

@@ -7390,7 +7390,11 @@ function render(dt) {
   // clearcoat samples real surroundings SSR can't see. carEnvCube=0 skips; dbgCam
   // skips (OOM). Stage-1 renderScale<0.98 → every 8th frame (_envMask). park() →
   // 1 face/frame. After face 5: HOLD until move/sun/wet/tod/lights (audit 2026-10-05 #2).
-  const _envMask = (!frozen && gfx.getRenderScale && gfx.getRenderScale() < 0.98) ? 7 : 3;
+  // Stage-1 scale drop OR any evidence-based shed → every 8th frame (was scale-only).
+  const _envMask = (!frozen && (
+    (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
+    (PerfGov.autoShed && PerfGov.autoShed() > 0)
+  )) ? 7 : 3;
   if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
@@ -8105,6 +8109,14 @@ function render(dt) {
   po.ssrTopUV = _ssrLow ? 0.82 : 0.62;
   po.ssrNear  = _ssrLow ? -1.0 : -2.5;
   po.flareMul = LT.flareMul; po.speedBlur = _spd; po.tune = LT;
+  // Avoidable post passes at lower GRAPHICS tiers / mid autoShed (perf frame r2):
+  //   bloomLevels — drop the widest bloom octaves (2 FS passes each) on MEDIUM/LOW
+  //   grLite — one godray blur pair even with sun shafts (MEDIUM+); ULTRA/HIGH keep two
+  {
+    const _ut = PerfGov.userTier(), _as = PerfGov.autoShed();
+    po.bloomLevels = (_as >= 3 || _ut >= 4) ? 2 : ((_as >= 1 || _ut >= 2) ? 3 : 0);
+    po.grLite = _ut >= 2 || _as >= 1;
+  }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
   po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
   armBackendProbe();
