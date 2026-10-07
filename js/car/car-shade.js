@@ -557,19 +557,26 @@ const CarShade = (function () {
     -0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.58, -1.70, -1.80, -1.90, -1.95, -2.00,
   ]);
   // Dense garage/near cross-section: keys = [foot, shoulder, facet, crown].
-  // Quarter-ellipse shoulder→crown; mid samples tugged toward the facet so
-  // crest width at ±0.55x stays honest for mounted decals.
+  // A fuller quarter-ellipse shoulder→crown (the sparse polyline's chords are
+  // the boxy look); a light mid tug toward the facet keeps crest width near
+  // ±0.55x so mounted decals stay on the skin.
   function densifyCoverPts(keys, n) {
-    n = n == null ? 5 : n;
+    n = n == null ? 6 : n;
     const foot = keys[0], shoulder = keys[1], facet = keys[2], crown = keys[3];
     const pts = [foot, shoulder];
-    const rx = Math.max(1e-6, shoulder[0] - crown[0]), ry = Math.max(1e-6, crown[1] - shoulder[1]);
+    // Inflate the ellipse slightly past the chord so the hump reads as round,
+    // not three planks, under garage lighting (measured 2026-10-06 rear).
+    const rx = Math.max(1e-6, (shoulder[0] - crown[0]) * 1.12);
+    const ry = Math.max(1e-6, (crown[1] - shoulder[1]) * 1.04);
     for (let i = 1; i <= n; i++) {
       const t = i / (n + 1), th = t * Math.PI * 0.5;
       let x = crown[0] + rx * Math.cos(th), y = shoulder[1] + ry * Math.sin(th);
-      if (t > 0.35 && t < 0.65) {
-        const w = 1 - Math.abs(t - 0.5) / 0.15;
-        x += (facet[0] - x) * 0.35 * w; y += (facet[1] - y) * 0.35 * w;
+      // Never wider than the shoulder or above the crown (envelope of the keys).
+      x = Math.min(shoulder[0], Math.max(crown[0], x));
+      y = Math.max(shoulder[1], Math.min(crown[1], y));
+      if (t > 0.40 && t < 0.60) {
+        const w = 1 - Math.abs(t - 0.5) / 0.10;
+        x += (facet[0] - x) * 0.18 * w; y += (facet[1] - y) * 0.18 * w;
       }
       pts.push([x, y]);
     }
