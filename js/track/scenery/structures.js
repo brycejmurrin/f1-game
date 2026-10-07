@@ -450,7 +450,10 @@ const SceneryStructures = (function () {
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
         if (st === "cabin") {                          // timber lean-to, open front
           rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]); // top 2.4
-          rec.prism([0, 2.30, 0], [2.6, 1.0, 2.8], roof);            // was 2.7: 0.30 m air gap over the wall
+          // Seat on the wall (was 2.7 → 0.30 m air gap). Eaves 2.2×2.4 (was
+          // 2.6×2.8): the larger prism at the seated height clipped a fold-
+          // nearby spectatorHill tread on anderstorp (severe 1.00 m @0.831).
+          rec.prism([0, 2.30, 0], [2.2, 1.0, 2.4], roof);
           // Open-front board: sunk and thickened into the wall. At [1.0, 0.9]
           // × 0.12 m it hung 0.45 m off the ground and lost the wall AABB on
           // Spa's banked cabin posts (gap 0.15–0.16 m, ground-audit 2026-10-07).
