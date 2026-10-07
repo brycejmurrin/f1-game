@@ -123,7 +123,9 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
 /* UI Fit (layout-audit ios-iphone-landscape-safari@100): SAVE/LOAD/RESET
  * GARAGE FILE painted h=46 vs tapFloor 52 — plain <button>s in #cs-garage-file
  * (no .sel-edit), so components.css never floored them. Play-shape short
- * landscape: CLOSE GARAGE rides header row col 2; #cs-tabs spans the strip row. */
+ * landscape: CLOSE GARAGE rides header row col 2; #cs-tabs spans the strip row.
+ * Play-shape grid is also inside @media (orientation: landscape) so a portrait
+ * sheet that misreads shape≠tall cannot take #cs-body { display: contents }. */
 it("#cs-garage-file buttons floor at --tap-paint; play-shape tabs full-width strip", () => {
   const css = fs.readFileSync(path.join(REPO, "css/carsetup.css"), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "");
@@ -147,6 +149,15 @@ it("#cs-garage-file buttons floor at --tap-paint; play-shape tabs full-width str
     css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) > \.sheet-foot > \.bigbtn\s*\{[^}]*min-height:\s*var\(--tap-paint/s,
     "header-row dismiss keeps --tap-paint height");
+  // Landscape gate: the nearest @media before play-shape #cs-body { display:
+  // contents } must be orientation:landscape — portrait must not take that path.
+  const bodyRe = /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) > #cs-body\s*\{[^}]*display:\s*contents/;
+  assert.match(css, bodyRe, "play-shape still uses #cs-body display:contents");
+  const bodyAt = css.search(bodyRe);
+  const mediaBefore = [...css.slice(0, bodyAt).matchAll(/@media\s*\(([^)]+)\)/g)].pop();
+  assert.ok(mediaBefore && /orientation:\s*landscape/i.test(mediaBefore[1]),
+    "play-shape #cs-body display:contents must sit under @media (orientation: landscape), got "
+    + (mediaBefore ? mediaBefore[1] : "no @media"));
 });
 
 it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
