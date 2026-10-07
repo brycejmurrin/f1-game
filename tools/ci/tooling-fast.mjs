@@ -579,6 +579,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  "tests/unit/race-session-lazy.test.mjs",
   // Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus
   // Season SETUP scroll/chip pins (layer on #1082 chrome).
   "tests/unit/race-setup-sheets.test.mjs",
