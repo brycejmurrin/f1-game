@@ -1482,6 +1482,18 @@ const AiDrive = (function () {
   function digOutEscalated(stuckT, t, street) {
     return (stuckT || 0) > stuckThreshold(t) + digOutBudget(t, street);
   }
+  // ONCE DIG-OUT HAS FAILED, IT STAYS FAILED UNTIL DIG-OUT ENDS. digOutEscalated
+  // is a line on stuckT, and dig-out's own sideways yank un-boxes the car for a
+  // few frames — stuckT decays back under the line while the car is still at
+  // walking pace and still digging. Unlatched, that flicker put `!unstuckActive`
+  // back in charge: dig-out re-vetoed the rescue it had just escalated to, and
+  // rescueT bled to zero and restarted (monaco, stalled pole car, 2026-10-07:
+  // rescueT 1.23 of 1.25 → 0, worst crawl 5.3 s). Held while dig-out is still on
+  // (`digging` = unstuckActive); clears the moment stuckT falls under the dig-out
+  // threshold, i.e. the car got free or was rescued.
+  function digOutHeld(held, escalatedNow, digging) {
+    return !!escalatedNow || (!!held && !!digging);
+  }
 
   // How long an AI must sit slow before the rescue unwedges it. Contact used to
   // VETO the rescue outright (`contactT === 0` in the aiStuck conjunction), so
@@ -1574,7 +1586,7 @@ const AiDrive = (function () {
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
-    digOutBudget, digOutEscalated,
+    digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,

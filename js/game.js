@@ -87,8 +87,20 @@ const lazyBundles = LazyBundles.create({
     if (audioPanel && audioPanel.init) audioPanel.init();
     if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
   },
+  // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
+  onRaceSessionReady: () => {
+    pits = PitLane.create(G);
+    engineer = RaceEngineer.create(G);
+    startLights = StartLights.create(G);
+    marshalPanels = MarshalPanels.create(G);
+    records = SessionRecords.create(G);
+    raceRadio = RaceRadio.create(G);
+    flyingStart = FlyingStart.create(G, {
+      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
+    });
+  },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1880,7 +1892,7 @@ function redFlagRestart() {
     // gravel trap; otT/otE held a move that ended when the flag flew.
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
-    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
@@ -1955,7 +1967,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
@@ -2596,6 +2608,7 @@ async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
+  await ensureRaceSession();   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   await ensureAudio();   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -3529,9 +3542,9 @@ tyres = TyreModel.create(G);
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
-pits = PitLane.create(G);
-const startLights = StartLights.create(G);   // the start gantry's lamps (js/race/start-lights.js); a const — game.js's top-level lets are ratcheted
-const marshalPanels = MarshalPanels.create(G);   // the posts' light panels follow race control (js/race/marshal-panels.js)
+pits = PitLane.create(G);   // stub until ensureRaceSession; recreated in onRaceSessionReady
+let startLights = StartLights.create(G);   // LAZY_RACE_SESSION — recreated when the real bundle lands
+let marshalPanels = MarshalPanels.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
@@ -3543,12 +3556,12 @@ radioVoice = RadioVoice.create(G);
 // the loading screen's flyby. After the radio: it borrows that module's
 // speakable() and per-channel tune, and nothing else.
 announcer = Announcer.create(G);
-const records = SessionRecords.create(G);
-const coach = DrivingCoach.create(G);
-const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
+let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
+const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
+let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on ensure
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
-const flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // qualifying + time trial start at speed (js/race/flying-start.js)
+let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -6151,7 +6164,10 @@ function updateCar(c, dt, ranked) {
     // car it was waiting for — unless dig-out has already failed (laneX
     // overwrite makes lateral dig-out useless in the pit), in which case the
     // escalate path still fires onto laneX below.
-    const digEsc = AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street);
+    // Escalation is HELD while dig-out stays on (AiDrive.digOutHeld): a partial
+    // yank that dips stuckT under the line must not re-veto the rescue.
+    c.digEscHeld = AiDrive.digOutHeld(c.digEscHeld, AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street), unstuckActive);
+    const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
       (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
@@ -6180,7 +6196,7 @@ function updateCar(c, dt, ranked) {
         // Pace-scaled restore floor (same shape as coast()); never above vTop().
         c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
       }
-      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
   }
   // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes

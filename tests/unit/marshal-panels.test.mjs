@@ -171,7 +171,7 @@ test("a marshal post carries a dark, still panel — no waving flag in a hash co
 
 test("game.js wires MarshalPanels after the gantry lamps", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /const marshalPanels = MarshalPanels\.create\(G\)/);
+  assert.match(game, /let marshalPanels = MarshalPanels\.create\(G\)/);
   assert.match(game, /startLights\.update\(\);[^\n]*\n\s*marshalPanels\.update\(dt\);[^\n]*\n\s*Particles\.update\(dt\);/);
 });
 
