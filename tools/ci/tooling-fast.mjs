@@ -693,6 +693,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
+  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
+  "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
