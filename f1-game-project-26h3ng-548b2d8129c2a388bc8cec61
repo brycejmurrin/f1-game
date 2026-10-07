@@ -1,1 +1,0 @@
-1791323882	Cursor Agent	perf(boot): load/boot/transition hitches — js/core/** js/render/renderer-boot.js js/render/shared/assets.js js/render/shared/gltf.js js/perf/race-entry-profile.js js/perf/renderer-picker.js js/track/build-client.js js/track/build-worker.js index.html(script) sw.js tools/manifest.cjs(load)  [claude/f1-game-project-26h3ng; session 548b2d8129c2a388bc8cec61]
