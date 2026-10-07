@@ -268,20 +268,40 @@ async function bootAgentSurface() {
 // arrive applyLightTune() re-walks TUNE_DEFS and fires liveEffects only for
 // knobs that moved. Worst case is a frame of default lighting, not a wrong
 // scene that stays wrong.
-async function raceAssets() {
-  // The circuit already selected (persisted trackIdx, or the default) is the
-  // one a player is most likely to race and the one the __apex no-track
-  // fallback would build, so fetch its scenery up front rather than making the
-  // first GO wait for it.
-  ensureCircuit(deps.getContext().trackIdx);
-  ensureScenery(deps.getContext().trackIdx);
+//
+// Split (2026-10-06): scenery/circuit leave the boot turn via queueMicrotask
+// (not requestIdleCallback — game-vm stubs rIC as a no-op, and a bare first
+// build is a different physics world; tools/lib/game-vm.cjs §raceAssets).
+// LAZY_RACE lighting (~361 KB) stays on real idle so it does not fight title
+// paint for the wire. ensureScenery already awaits ensureCircuit.
+function scheduleIdle(fn, timeoutMs) {
+  const ms = timeoutMs != null ? timeoutMs : 2000;
+  if (typeof requestIdleCallback === "function") requestIdleCallback(fn, { timeout: ms });
+  else setTimeout(fn, Math.min(ms, 800));
+}
+function raceAssets() {
   // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
   // networkidle wall. First pointerdown / SOUND click / Settings /
   // MUSIC & SOUND / startRace pulls it (startRace awaits ensureAudio
   // before startEngine; openSettings and the audio door also call it).
-  if (window.LightPresets) return;
-  await loadBackendScripts(RACE_FILES, []);
-  if (window.LightPresets) deps.applyLightTuneIfReady();
+  const kickScenery = () => {
+    // Selected circuit (persisted trackIdx / default): most likely RACE! and
+    // the __apex no-track fallback — fetch scenery (and its path payload) here.
+    ensureScenery(deps.getContext().trackIdx);
+    // Opt-in build worker: parse TRACK_VM off the main thread while the menu
+    // idles so RACE! does not pay worker importScripts on the critical path.
+    if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
+      try { TrackBuildClient.idleWarm(); } catch (_) { /* warm is best-effort */ }
+    }
+  };
+  if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
+  else Promise.resolve().then(kickScenery);
+  scheduleIdle(() => {
+    if (window.LightPresets) return;
+    loadBackendScripts(RACE_FILES, []).then(() => {
+      if (window.LightPresets) deps.applyLightTuneIfReady();
+    });
+  }, 2500);
 }
 
 return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface };

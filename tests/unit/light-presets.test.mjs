@@ -189,6 +189,32 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
   assert.deepEqual(pinned, [], "per-track night|dry must defer core authenticity knobs to *|night|dry");
 });
 
+test("shared *|dawn|wet stamp supplies the fleet wet-dawn look", () => {
+  const P = presets();
+  const shared = P["*|dawn|wet"];
+  assert.ok(shared, "expected LightPresets['*|dawn|wet']");
+  assert.equal(shared.exposureMul, 0.96);
+  assert.equal(shared.ambientMul, 1.08);
+  assert.equal(shared.keyMul, 0.62);
+  assert.equal(shared.lampLevel, 0.13);
+  assert.equal(shared.floodEmitMul, 0.22);
+  assert.equal(shared.bloomMul, 0.34);
+  assert.equal(shared.glowAmp, 2.35);
+  assert.equal(shared.wetDark, 1.22);
+  const ALLOW = new Set(["fogTint", "mistHeight"]);
+  const CORE = ["exposureMul", "ambientMul", "keyMul", "lampLevel", "floodEmitMul", "bloomMul", "glowAmp", "wetDark"];
+  const pinned = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|dawn\|wet$/.test(key) || key.startsWith("*")) continue;
+    const o = P[key];
+    for (const id of Object.keys(o)) {
+      if (ALLOW.has(id)) continue;
+      if (CORE.includes(id) || id in shared) pinned.push(`${key}.${id}=${o[id]}`);
+    }
+  }
+  assert.deepEqual(pinned, [], "per-track dawn|wet must defer to *|dawn|wet (fogTint/mistHeight exceptions only)");
+});
+
 test("shared *|dusk|wet stamp supplies the fleet wet-twilight authenticity knobs", () => {
   const P = presets();
   const shared = P["*|dusk|wet"];

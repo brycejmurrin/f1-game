@@ -1678,3 +1678,43 @@ test("SCENERY props palette: place at selected point, remove last, caps, UNDO, s
   const listed = b.Tracks.LIST.find((t) => t.id === saved.id);
   assert.equal(typeof listed.scenery, "function", "saved def still carries scenery");
 });
+
+test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () => {
+  const b = bootScreen();
+  openGreen(b);
+  b.D.setMode("scenery");
+  b.D.cyclePoint(1); b.D.cyclePoint(1); b.D.cyclePoint(1);
+  const sel = b.D.state().sel;
+  assert.ok(sel > 0);
+  assert.equal(b.D.placeProp("stand"), true);
+  const s0 = b.D.state().design.props[0].s;
+  const expectFlip = ((1 - s0) % 1 + 1) % 1;
+  assert.equal(b.D.reverse(), true);
+  const sRev = b.D.state().design.props[0].s;
+  assert.ok(Math.abs(sRev - expectFlip) < 1e-6, "REVERSE flips prop s: " + s0 + " → " + sRev + " (want " + expectFlip + ")");
+  // START HERE at a mid point: prop s shifts by the start arc fraction.
+  const pts = b.D.state().design.pts;
+  const N = pts.length;
+  const iStart = Math.floor(N / 3);
+  let L = 0, upto = 0;
+  for (let k = 0; k < N; k++) {
+    const a = pts[k], c = pts[(k + 1) % N];
+    const d = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    if (k < iStart) upto += d;
+    L += d;
+  }
+  const f = L ? upto / L : 0;
+  const expectStart = ((sRev - f) % 1 + 1) % 1;
+  assert.equal(b.D.setStart(iStart), true);
+  const sStart = b.D.state().design.props[0].s;
+  assert.ok(Math.abs(sStart - expectStart) < 1e-6, "START HERE remaps prop s: " + sRev + " → " + sStart + " (want " + expectStart + ")");
+  // Delete a point (remapZones path): prop still present and remapped, not stranded at old s.
+  const sBeforeDel = sStart;
+  const delAt = Math.min(2, b.D.state().design.pts.length - 1);
+  assert.equal(b.D.deletePoint(delAt), true);
+  assert.ok(b.D.state().design.props && b.D.state().design.props.length === 1, "delete keeps the prop");
+  assert.notEqual(b.D.state().design.props[0].s, sBeforeDel, "delete remaps prop s away from the pre-delete fraction");
+  // RANDOMISE replaces the loop — authored props must not strand on the new shape.
+  assert.equal(b.D.randomise(42), true);
+  assert.equal(b.D.state().design.props, undefined, "RANDOMISE clears props");
+});

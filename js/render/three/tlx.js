@@ -1553,6 +1553,14 @@ const TLX = (function () {
       let _dMatUsed = 0;
       function poolModelMat(model) {
         if (!model) return null;
+        // World-baked track/terrain/props pass MAT_IDENT — acquireMesh treats
+        // null as identity, so skip the per-draw Float32Array copy (150-400
+        // draws/frame were identity on montreal).
+        if (model[0] === 1 && model[5] === 1 && model[10] === 1 && model[15] === 1
+            && model[1] === 0 && model[2] === 0 && model[3] === 0
+            && model[4] === 0 && model[6] === 0 && model[7] === 0
+            && model[8] === 0 && model[9] === 0 && model[11] === 0
+            && model[12] === 0 && model[13] === 0 && model[14] === 0) return null;
         let m = _dMats[_dMatUsed] || (_dMats[_dMatUsed] = new Float32Array(16));
         _dMatUsed++;
         m.set(model);
@@ -1696,7 +1704,11 @@ const TLX = (function () {
         for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
-          for (const i of c.idx) {
+          // Indexed for — `for…of` on c.idx minted an iterator per visible cell
+          // per cull (camera + shadow). GLX/WGX already use indexed loops.
+          const idx = c.idx;
+          for (let j = 0, jn = idx.length; j < jn; j++) {
+            const i = idx[j];
             // No src.subarray — per-instance views were GC on Vegas-scale batches
             // (GLX/WGX already element-copy; design E mirrored here).
             const so = i * 16, dOff = n * 16;
@@ -2450,8 +2462,29 @@ const TLX = (function () {
         // pooled mesh at identity forever — world-baked track/terrain look
         // right, but cars, flaps, blob shadows and any non-identity draw()
         // sit at the origin (correct only in the garage).
-        if (matrixArr) m.matrix.fromArray(matrixArr); else m.matrix.identity();
-        m.matrixWorld.copy(m.matrix);
+        // Skip the fromArray + matrixWorld.copy when this pool slot already
+        // holds the same 16 floats (identity via poolModelMat null, or a
+        // repeat of the last non-ident matrix) — ~150-400 draws/frame.
+        if (!matrixArr) {
+          if (!m.__tlxIdent) {
+            m.matrix.identity();
+            m.matrixWorld.identity();
+            m.__tlxIdent = true;
+          }
+        } else {
+          const prev = m.__tlxMat;
+          let same = !m.__tlxIdent && !!prev;
+          if (same) {
+            for (let i = 0; i < 16; i++) if (prev[i] !== matrixArr[i]) { same = false; break; }
+          }
+          if (!same) {
+            if (!prev) m.__tlxMat = new Float32Array(16);
+            m.__tlxMat.set(matrixArr);
+            m.matrix.fromArray(matrixArr);
+            m.matrixWorld.copy(m.matrix);
+            m.__tlxIdent = false;
+          }
+        }
         m.matrixWorldNeedsUpdate = false;
         m.visible = true;
         if (!m.parent) scene.add(m);
