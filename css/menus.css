@@ -827,13 +827,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
    while they paint at 125%. The requested --ui-scale remains untouched for the
    slider, sheet layouts and density classifier. */
 @media (max-width: 899px), (max-height: 699px) {
-  /* Beat `#overlay > * { zoom: var(--ui-scale) }` (title.css). Both were (1,0,0)
-     when the brand used `:where(...) #menu-brand`, so source order alone decided
-     the winner — and under load CI once read the coarse default 1.09 as brand
-     zoom while --ui-scale was already 2 (oversize-ui-scale-3of3 @ 76f1c6b9,
-     "decorative brand geometry stays compact"). `#overlay > #menu-brand` is
-     (2,0,0) and always takes the compact brand cap. */
-  :where(body[data-density="compact"]) #overlay > #menu-brand {
+  :where(body[data-density="compact"]) #menu-brand {
     zoom: var(--ui-compact-brand-scale);
     --vwz: calc(1vw / var(--ui-compact-brand-scale));
     --vhz: calc(1vh / var(--ui-compact-brand-scale));
