@@ -952,6 +952,7 @@
         recordBarrier(0.86, 0.88, side, 2.6);
         recordBarrier(0.98, 0.06, side, 2.6);
         recordBarrier(0.06, 0.15, side, 2.6);
+        recordBarrier(0.55, 0.68, side, 2.6);
       }
       tyreWall(0.075, 0.105, 1, 3.2, [0.88, 0.25, 0.18]);
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);
