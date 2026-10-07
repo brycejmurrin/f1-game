@@ -406,6 +406,20 @@ async function precacheAssetLists() {
     "js/circuits/scenery/buddh.js",
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
+    // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
+    "js/race/reliability.js",
+    "js/race/damage.js",
+    "js/race/duel.js",
+    "js/race/session-records.js",
+    "js/race/pit-lane.js",
+    "js/race/engineer.js",
+    "js/race/radio-lines.js",
+    "js/race/race-facts.js",
+    "js/race/spotter.js",
+    "js/race/race-radio.js",
+    "js/race/start-lights.js",
+    "js/race/marshal-panels.js",
+    "js/race/flying-start.js",
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
@@ -603,8 +617,10 @@ self.addEventListener("install", (event) => {
     // Everything loadBackendScripts() injects is requested as `<path>?v=<build>`,
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
+    // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
+    // (LAZY_RACE_SESSION) and js/workers/ (bitmap-decode). Keep both path classes.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$|^js\/workers\//.test(u)
         ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then

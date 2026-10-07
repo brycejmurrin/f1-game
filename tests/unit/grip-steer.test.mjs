@@ -67,35 +67,77 @@ test("at speed with full lock demand, |delta| is capped near the front peak", ()
     `capped delta ${delta} should sit near alphaPk ${alphaPk}`);
 });
 
-test("rear slide opens countersteer room (cap tracks opposing βr)", () => {
+test("normal cornering (βr opposite steer) stays on the peak-slip cap, not the tight countersteer blend", () => {
+  // Real bicycle sign: right steer (s>0) with positive yaw → βr typically < 0.
+  // The old −s·βr weight fired the countersteer blend here and crushed lock
+  // well below αpk (hairpin 0.27 → 0.15 at notch 8). +s·βr keeps w≈0.
+  const muF = 18, cs = 130, af = 1.3, ar = 1.5;
+  const alphaPk = (Math.PI / 2) * muF / cs * GS.TARGET;
+  const driver = 0.27;
+  const st = {
+    speed: 12, vLat: 0.3, yawRate: 0.65, muF, csFront: cs, af, ar,
+    braking: false, shaped: 1, dt: 1 / 60,
+  };
+  const vx = Math.max(Math.abs(st.speed), GS.VX_FLOOR);
+  const betaR = Math.atan2(st.vLat - ar * st.yawRate, vx);
+  assert.ok(betaR < 0, `expected βr opposite right steer, got ${betaR}`);
+  let capSm = 0, delta = driver;
+  for (let i = 0; i < 50; i++) {
+    const out = GS.apply(driver, { ...st, capSm }, GS.assistK(8));
+    delta = out.delta;
+    capSm = out.capSm;
+  }
+  // Must not be crushed toward 0.28·αpk (the old false countersteer blend).
+  // A tiny raise from the −βr self term is fine; the bug was a ~40% cut.
+  assert.ok(delta > 0.22, `hairpin lock must not collapse below peak (got ${delta}, αpk=${alphaPk})`);
+  assert.ok(Math.abs(delta - driver) / driver < 0.08, `lock stays near driver (got ${delta} vs ${driver})`);
+});
+
+test("rear slide opens countersteer room (cap tracks same-sign s·βr) and preserves correction", () => {
   const base = {
     speed: 40, muF: 20, csFront: 130, af: 1.3, ar: 1.5,
     braking: false, shaped: 0.2, dt: 1 / 60, yawRate: 0,
   };
-  // Cap formula: capCtr = 0.28·αpk − s·βr. For left countersteer (s=−1) and
-  // rear slide to the right (βr>0), −s·βr > 0 and capCtr grows with |βr|.
+  // Cap formula: capCtr = 0.28·αpk + s·βr. Steering into a right slide
+  // (s=+1, βr>0) raises +s·βr and opens room; left countersteer (s=−1, βr>0)
+  // keeps w≈0 and stays on capIn so the correction is not stripped.
   const alphaPk = (Math.PI / 2) * 20 / 130 * GS.TARGET;
-  const out = GS.apply(-0.4, { ...base, vLat: 6, capSm: 0 }, 1);
-  assert.ok(out.capSm > 0.25 * alphaPk - 1e-6, "floor holds");
-  // After smoothing settles, cap should exceed the no-slide capIn·blend path:
-  // with vLat=6, βr≈atan2(6,40)≈0.15, −s·βr≈0.15 so capCtr ≈ 0.28αpk+0.15.
   let capSm = 0;
   for (let i = 0; i < 40; i++) {
     capSm = GS.apply(-0.4, { ...base, vLat: 6, capSm }, 1).capSm;
   }
-  const noSlide = (() => {
-    let c = 0;
-    for (let i = 0; i < 40; i++) c = GS.apply(-0.4, { ...base, vLat: 0, capSm: c }, 1).capSm;
-    return c;
-  })();
-  // With no slide, cap ≈ αpk; with the slide, blend toward a smaller capIn but
-  // larger capCtr — the observable contract is that apply still returns a finite
-  // cap and the countersteer demand is not zeroed.
-  assert.ok(Number.isFinite(capSm) && capSm > 0);
-  assert.ok(Number.isFinite(noSlide) && noSlide > 0);
+  assert.ok(capSm > 0.25 * alphaPk - 1e-6, `settled floor holds (capSm=${capSm}, floor=${0.25 * alphaPk})`);
   const caught = GS.apply(-0.4, { ...base, vLat: 6, capSm }, 1).delta;
   assert.ok(caught < 0, "countersteer direction preserved");
   assert.ok(Math.abs(caught) > 0.05, "countersteer still has authority");
+  // Same-state slide: assist must not strip a modest left correction.
+  const driver = -0.15;
+  const slide = {
+    speed: 20, vLat: 5, yawRate: 0.9, muF: 18, csFront: 130,
+    af: 1.3, ar: 1.5, braking: false, shaped: -0.5, dt: 1 / 60,
+  };
+  let d = driver, c = 0;
+  for (let i = 0; i < 50; i++) {
+    const o = GS.apply(driver, { ...slide, capSm: c }, GS.assistK(8));
+    d = o.delta; c = o.capSm;
+  }
+  assert.ok(d / driver >= 0.95, `slide countersteer retained ${(d / driver * 100).toFixed(1)}% (need ≥95%)`);
+});
+
+test("VX_FLOOR matches the player-forces slip |vx| floor (4 m/s)", () => {
+  assert.equal(GS.VX_FLOOR, 4);
+});
+
+test("forPlayer is identity at OFF and pools without changing the apply result", () => {
+  GS.setLevel(1);
+  const c = { vLat: 1, yawRateCur: 0.2, speed: 30, gripSteerCapSm: 0 };
+  const opts = { muF: 18, csFront: 130, af: 1.3, ar: 1.5, braking: false, shaped: 0.5, dt: 1 / 60 };
+  assert.equal(GS.forPlayer(0.3, c, opts), 0.3);
+  GS.setLevel(8);
+  const a = GS.forPlayer(0.3, c, opts);
+  const b = GS.forPlayer(0.3, c, opts);
+  assert.ok(Number.isFinite(a) && Number.isFinite(b));
+  assert.ok(Math.abs(a) <= 0.3 + 1e-9);
 });
 
 test("PRESETS bundle gripSteer: ROOKIE/RELAX on, STANDARD/PRO off", () => {
