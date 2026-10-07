@@ -77,7 +77,7 @@ node -e '
     console.log(`SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
   // Past overflow AND spill: never a quiet skip. An error annotation names it
   // on the PR checks page, and `dropped` below reds selected-verdict.
-  for (const s of r.skipped) console.log(`::error::NOT RUN ANYWHERE (overflow and spill are both full): ${s.file} (${s.tests} tests) — run its group with tools/ci/remote-group.mjs or split the change`);
+  for (const s of r.skipped) console.log(`::error::DROPPED (over budget; overflow AND spill are full — NOT RUN ANYWHERE): ${s.file} (${s.tests} tests) — run its group with tools/ci/remote-group.mjs or split the change`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s): ${s.file} (${s.tests} tests)`);
   const shards = r.shards || [];
