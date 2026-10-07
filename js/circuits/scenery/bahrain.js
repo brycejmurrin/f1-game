@@ -23,6 +23,8 @@
       // they dress the real pit straight; the paddock/pit lane is on its
       // RIGHT (+1), the main grandstand on its LEFT (-1).
       const SF = 0.7297, T1F = 0.8335;
+      // Final corner apex (def.turns[14] racing 0.8783) in this scenery frame.
+      const FC = 0.608;
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -688,34 +690,28 @@
       building(K(0.90), -1, 46, 12, 8, 18,
         { kind: "hall", wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
 
-      grandstandEx(0.925, 1, 34, 58, STAND_CREAM, SEAT_BLUE,
-        { roof: "truss", suites: true, endWalls: true });
-      floodMast(K(0.912), 1, 42, 40);
-      floodMast(K(0.940), 1, 42, 40);
-      billboard(K(0.925), 1, 20, 14, 4, BILLBOARD_LITE);
+      // Pit-exit floods (+1 paddock side) — old 0.912/0.940 were scenery absolutes
+      // that K() landed on the T3–T4 leg; key off SF like the Sakhir tower.
+      grandstandEx(SF + 0.142, 1, 32, 36, null, null,
+        { livery: "steel", roof: "flat", endWalls: true });
+      floodMast(K(SF + 0.158), 1, 42, 40);
+      floodMast(K(SF + 0.182), 1, 42, 40);
+      billboard(K(SF - 0.022), 1, 20, 14, 4, BILLBOARD_LITE);
       // Fourth hero broadcast vantage — final corner onto the pit straight.
-      cameraTower(K(0.918), -1, 40, { h: 20 });
+      cameraTower(K(FC + 0.012), -1, 40, { h: 20 });
 
-      // Second pit building: media/control centre with cool lit windows
-      building(K(0.95), -1, 2, 14, 10, 56,
-        { kind: "slab", wall: [0.86, 0.85, 0.80], window: WIN_COOL, lit: true, floor: 4 });
-      wall(0.92, 0.99, -1, 4, 1.0, [0.85, 0.85, 0.85]);
-
-      for (let i = 0; i < 6; i++) {
-        const k = (K(0.985) + i * 4) % n;
-        hospitality(k, -1, 32 + (i % 2) * 6, 12, 7 + hash(k * 3) * 3, 16);
-      }
-      // Taller paddock office block: media/comms tower complex
-      building(K(0.97), -1, 68, 22, 24, 28,
+      wall(SF - 0.038, SF + 0.018, -1, 4, 1.0, [0.85, 0.85, 0.85]);
+      // Paddock fin / comms mast (pit-side, not the duplicate slab at old 0.95).
+      building(K(SF + 0.048), 1, 68, 22, 24, 28,
         { kind: "fin", wall: [0.78, 0.76, 0.70], window: WIN_COOL, lit: true, floor: 6 });
-      tower(K(0.95), -1, 88, 5, 40,
+      tower(K(SF + 0.040), 1, 88, 5, 40,
         { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: 6 });
-      // Pit-lane furniture
-      tyreWall(0.90, 0.98, -1, 5, TYRE_CAP);
-      guardrail(0.985, 0.06, 1, 9, [0.80, 0.80, 0.82]);
+      // Pit-lane furniture along the real pit straight (SF frame).
+      tyreWall(SF + 0.004, SF + 0.052, -1, 5, TYRE_CAP);
+      guardrail(SF - 0.006, SF + 0.042, 1, 9, [0.80, 0.80, 0.82]);
       // Start-line advertising hoardings
-      billboard(K(0.99), 1, 11, 13, 4, BILLBOARD_LITE);
-      billboard(K(0.02), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
+      billboard(K(SF + 0.004), 1, 11, 13, 4, BILLBOARD_LITE);
+      billboard(K(SF - 0.010), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
 
       if (typeof every === "function") {
         // The engine's floodMastRing(55, {dist: 30}) hand-rolled from the same
@@ -759,10 +755,10 @@
       if (typeof every === "function" && typeof apiFloodMast === "function") {
         const half = Math.max(1, Math.round(27.5 / (ds || 4)));
         const SKIP = [
-          [-1, 0.915, 0.070],   // pit lane, pit buildings, paddock edge
+          [-1, 0.962, 0.028],   // pit lane, pit buildings, paddock edge (SF band)
           [ 1, 0.975, 0.020],   // main grandstand at gap 18
           [-1, 0.475, 0.560],   // blue runoff paint 9-17 m out
-          [ 1, 0.900, 0.950],   // pink final-corner apron paint
+          [ 1, 0.868, 0.892],   // pink final-corner apron (FC ≈ racing 0.878)
           [ 1, 0.105, 0.125],   // fold-side legs (ring exceptions above)
           [-1, 0.195, 0.215],
           [ 1, 0.815, 0.845],
@@ -890,17 +886,10 @@
           if (f) overlay(f, Math.min(2.2, 3.25 - w2 * 0.5 - 0.05), [w2, 0.16, 5.5], (i % 2) ? BLUE_B : BLUE_A);
         }
         for (let i = 0; i < 6; i++) {
-          const sf = 0.905 + i * 0.008;
+          const sf = (FC - 0.038 + i * 0.008) % 1;
           const a = anchor(K(sf), 1, 12 + (i % 2) * 2);
           if (onTrack(a.c[0], a.c[2], 7)) continue;
           paint(a, 0, 2 * SEP, [7.0, 0.18, 9.0], (i % 2) ? PINK_A : PINK_B);
-        }
-        // Green runoff strip along the main-straight outside (photo: vivid turf).
-        for (let i = 0; i < 8; i++) {
-          const sf = 0.985 + i * 0.004;
-          const a = anchor(K(sf % 1), 1, 9.5);
-          if (onTrack(a.c[0], a.c[2], 5)) continue;
-          paint(a, 0, 2 * SEP, [3.2, 0.16, 10], [0.12, 0.55, 0.22]);
         }
       }
 
@@ -976,8 +965,8 @@
         out._mat = 0;
       };
 
-      windTower(K(0.985), -1, 52, 16);
-      windTower(K(0.02),  -1, 46, 14);
+      windTower(K(SF + 0.168), -1, 58, 16);
+      windTower(K(SF + 0.192),  1, 64, 14);
       windTower(K(0.63),  -1, 56, 15);
       windTower(K(0.80),   1, 58, 14);
       // F1 Village marquee — back straight hospitality terrace only (T4 outside
@@ -985,7 +974,7 @@
       marquee(K(0.79),  1, 40, 12, 44);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
-      videoWall(K(0.02),  1, 40, 12, 7);
+      videoWall(K(SF + 0.012),  1, 40, 12, 7);
       videoWall(K(0.055), 1, 46, 11, 6.5);
       videoWall(K(0.81),  1, 40, 12, 7);
       videoWall(K(0.42),  1, 40, 11, 6.5);
@@ -1010,21 +999,13 @@
       // corner — were inside-of-curve at gap 58 and both failed the clip audit
       // for exactly that reason. Anything this deep and this far out belongs on
       // a straight until along() reports the arc length at the emitter's gap.
-      terrace(0.996, 0.030, 1, 58,
+      terrace(SF + 0.012, SF + 0.034, -1, 62,
         { rows: 6, rise: 1.4, depth: 2.6, step: 9, density: 0.5,
           conc: [0.76, 0.70, 0.57], concAlt: [0.68, 0.62, 0.50],
           crowd: [SEAT_BLUE, SEAT, [0.62, 0.58, 0.52], [0.40, 0.30, 0.24]] });
 
       const FROND     = [0.26, 0.34, 0.16];
       const FROND_DRY = [0.32, 0.36, 0.19];
-      for (let i = 0; i < 10; i++) {
-        // i = 2 (0.973) and 9 (1.036) found no free ground within +12 m of
-        // their gap (hospitality / wind tower) and were dropped every build.
-        if (i === 2 || i === 9) continue;
-        const sf = 0.955 + i * 0.009;
-        const k = K(sf), hv = hash(k * 83 + i * 3);
-        palm(k, -1, 42 + (i % 2) * 4, 9 + hv * 4, hv < 0.5 ? FROND : FROND_DRY);
-      }
       const ACACIA     = [0.34, 0.36, 0.20];
       const ACACIA_DRY = [0.40, 0.39, 0.23];
       for (const [sf, side, dist] of [
