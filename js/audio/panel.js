@@ -387,6 +387,45 @@ var AudioPanel = (() => {
     }
 
     $("pm-audio").addEventListener("click", () => { syncAudioPanel(); });
+    /* Short viewports hide the audio scroller's scrollbar (css/settings.css) and
+     * settings-tabs.js resets scrollTop when MUSIC opens, so a <details> fold
+     * can expand with its body still below the visible pane — it looks like
+     * nothing happened. Bring opened folds back into view; refresh ScrollFade
+     * when the fade chrome wraps this pane. */
+    function audioMotionReduced() {
+      try {
+        if (typeof window !== "undefined" && window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+        const d = typeof document !== "undefined" && document.documentElement &&
+          document.documentElement.dataset;
+        return !!(d && d.motion === "reduce");
+      } catch (e) { return false; }
+    }
+    function scrollOpenedAudioFold(det) {
+      if (!det || !det.open) return;
+      const behavior = audioMotionReduced() ? "auto" : "smooth";
+      const opts = { block: "nearest", inline: "nearest", behavior };
+      let target = null;
+      for (let i = 0; i < det.children.length; i++) {
+        const ch = det.children[i];
+        if (ch && ch.tagName !== "SUMMARY") { target = ch; break; }
+      }
+      if (!target) {
+        if (det.querySelector) target = det.querySelector("summary");
+        if (!target) target = det;
+      }
+      if (target && target.scrollIntoView) target.scrollIntoView(opts);
+      if (typeof ScrollFade !== "undefined" && ScrollFade.refresh) ScrollFade.refresh();
+    }
+    const audioInner = $("audioset-inner");
+    if (audioInner && audioInner.addEventListener) {
+      audioInner.addEventListener("toggle", (ev) => {
+        const det = ev.target;
+        if (!det || det.tagName !== "DETAILS" || !det.open) return;
+        if (audioInner.contains && !audioInner.contains(det)) return;
+        scrollOpenedAudioFold(det);
+      });
+    }
     if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
       SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
     }
