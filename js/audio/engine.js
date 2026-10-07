@@ -2085,9 +2085,12 @@ var GameAudio = (function () {
   // u <= 0 stands the layer down AND resets the clock, so no backlog is banked
   // while the player is on the pace — the overrun crackle above learned that
   // the hard way (`if (t > overrunT) overrunT = t`).
+  function assistPlaybackQuiet() {
+    return typeof RealRace !== "undefined" && RealRace.status && !!RealRace.status().watch;
+  }
   function brakeCue(urgency) {
     cueU = urgency > 0 ? Math.min(urgency, 1) : 0;
-    if (!cueU || !sfxOk()) { cueT = now(); return; }
+    if (!cueU || !sfxOk() || assistPlaybackQuiet()) { cueT = now(); return; }
     const t = now();
     if (t < cueT) return;
     blip(520, "square", 0.07, 0.003, 0.045);
@@ -2101,7 +2104,7 @@ var GameAudio = (function () {
   let driveCueT = 0, driveCueFired = 0, cornerCallFired = 0;
   function driveBrakeTone(urgency) {
     const u = urgency > 0 ? Math.min(urgency, 1) : 0;
-    if (!u || !sfxOk()) { driveCueT = now(); return; }
+    if (!u || !sfxOk() || assistPlaybackQuiet()) { driveCueT = now(); return; }
     const t = now();
     if (t < driveCueT) return;
     blip(380, "triangle", 0.09, 0.004, 0.06);
@@ -2110,7 +2113,7 @@ var GameAudio = (function () {
   }
   // +k = LEFT turn (AGENTS.md). Two pitches, never speech / announce.
   function cornerCall(side) {
-    if (!sfxOk()) return;
+    if (!sfxOk() || assistPlaybackQuiet()) return;
     const left = side === "L" || side === 1 || side === "left";
     blip(left ? 620 : 480, "sine", 0.11, 0.005, 0.10);
     cornerCallFired++;
