@@ -649,12 +649,11 @@ function prebakeLamps() {
 // Capture / regression read of the sky vectors GLX uploads (post cityGlowMul + wx blend).
 function skyGlowProbe() {
   const sky = G.frameSky || {};
-  return {
-    cityGlow: sky.cityGlow ? sky.cityGlow.slice() : null,
-    moon: sky.moon != null ? sky.moon : null,
-    horizon: sky.horizon ? sky.horizon.slice() : null,
-    wxBlend: wxBlend(),
-  };
+  const out = { cityGlow: null, moon: null, horizon: null, wxBlend: wxBlend() };
+  if (sky.cityGlow) out.cityGlow = sky.cityGlow.slice();
+  if (sky.moon != null) out.moon = sky.moon;
+  if (sky.horizon) out.horizon = sky.horizon.slice();
+  return out;
 }
 if (typeof window !== "undefined") window.__apexAtmoSkyProbe = skyGlowProbe;
 return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S, skyGlowProbe };
