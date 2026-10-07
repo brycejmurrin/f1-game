@@ -76,7 +76,9 @@ var RivalAudio = (() => {
         // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
         const np = G.netPlay;
         slot.net = !!(np && np.active && np.active() && np.owns && np.owns(c));
-        slot.key = typeof G.wireId === "function" ? G.wireId(c) : G.cars.indexOf(c);
+        // Index in G.cars — read-only. Do not call G.wireId here: it caches c._wireId and
+        // episode-transients.test.mjs expects that field absent after reset().
+        slot.key = G.cars.indexOf(c);
       }
       // Bind voices. A car already bound keeps its voice; a voice whose car left
       // the set is freed; a newcomer takes the lowest free voice.
