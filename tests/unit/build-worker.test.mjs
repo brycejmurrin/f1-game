@@ -1,5 +1,5 @@
 // The track build Worker (js/track/build-worker.js + js/track/build-client.js),
-// PROTOTYPE behind apex26.buildWorker. Its promise is the stepped build's:
+// behind apex26.buildWorker (default ON when multi-core). Its promise is the stepped build's:
 // NOTHING changes. The worker runs the unchanged Tracks.build against a
 // recording gfx, its message crosses a structured clone (what postMessage
 // does), and TrackBuildClient.replay issues the recorded uploads against the
@@ -129,8 +129,13 @@ test("a worker error answers an error message, never a throw", async () => {
 test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackStepped) reads", () => {
   const mem = new Map();
   main.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
+  main.Worker = main.Worker || class {};
+  main.navigator = { hardwareConcurrency: 4 };
   const C = main.TrackBuildClient;
-  assert.equal(C.enabled(), false, "unset reads OFF");
+  assert.equal(C.enabled(), true, "unset reads ON when Worker + multi-core");
+  main.navigator = { hardwareConcurrency: 1 };
+  assert.equal(C.enabled(), false, "unset reads OFF on a single logical core");
+  main.navigator = { hardwareConcurrency: 4 };
   C.set(false); assert.equal(mem.get("apex26.buildWorker"), "0"); assert.equal(C.enabled(), false);
   mem.set("apex26.buildWorker", "1"); assert.equal(C.enabled(), true, "\"1\" is on");
   mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);

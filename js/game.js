@@ -2141,8 +2141,9 @@ async function loadTrackStepped(idx, live) {
   let built = null;
   try {
     dropTrackWorld();
-    // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
-    // replayed here; null (off, failed) falls back to the stepped build.
+    // apex26.buildWorker (default ON when multi-core): built off the main thread
+    // and replayed here; null (off, failed) falls back to the stepped build.
+    // startRaceBody may already have kicked the same key — build() dedupes.
     const opts = trackBuildOpts(sessionDark, wantSlots);
     const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
@@ -2612,6 +2613,24 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
+  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
+  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  // Kick the build worker BEFORE session resets so geometry runs off-thread while
+  // we clear race state (~resets leg). loadTrackStepped awaits the same promise
+  // (TrackBuildClient.build dedupes on circuit|night|slots|chunk|mobile).
+  if (!vmNoFramePump && typeof TrackBuildClient !== "undefined" && TrackBuildClient.enabled()) {
+    try {
+      const def = Tracks.LIST[trackIdx];
+      if (def && !def.custom) {
+        const sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
+        if (!(builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots)) {
+          TrackBuildClient.build(trackIdx, def, trackBuildOpts(sessionDark, wantSlots), gfx,
+            sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
+        }
+      }
+    } catch (_) { /* kick is best-effort; loadTrackStepped builds or paces */ }
+  }
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2638,9 +2657,6 @@ async function startRaceBody() {
   // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
   // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
   // live() stays true: this session owns the build (menu prep uses a generation gate).
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }

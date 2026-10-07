@@ -1023,7 +1023,7 @@ test("unsupported and rejected persistence APIs retain an actionable backup remi
   assert.match(broken.status.textContent, /separate backup/);
 });
 
-test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, ON by default", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
@@ -1031,5 +1031,5 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
   assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
-  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
 });
