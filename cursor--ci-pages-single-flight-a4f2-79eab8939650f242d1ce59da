@@ -1,1 +1,0 @@
-1791305230	Cursor Agent	ci(pages): single-flight deploy train. OWNED .github/workflows/pages.yml + poke-train in ci.yml + docs/notes/CI-PAGES-SINGLE-FLIGHT. Sibling patch applied. FORBIDDEN game js/css. Do not enable auto-merge or merge.  [cursor/ci-pages-single-flight-a4f2; session 79eab8939650f242d1ce59da]

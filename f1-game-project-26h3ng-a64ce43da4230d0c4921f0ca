@@ -1,1 +1,0 @@
-1791305401	Cursor Agent	Time Trial HUD TT position label flake. OWNED tests/specs/time-trial.spec.js + js/ui/hud.js TT pos path. FORBIDDEN unrelated. Do not enable auto-merge or merge.  [claude/f1-game-project-26h3ng; session a64ce43da4230d0c4921f0ca]
