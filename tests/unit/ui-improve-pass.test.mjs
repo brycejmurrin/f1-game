@@ -133,10 +133,19 @@ function bootMenus(disk = {}, o = {}) {
   const dom = makeDom();
   dom.body.insertAdjacentHTML = () => {};
   const data = new Map(Object.entries(disk).map(([k, v]) => [k, JSON.stringify(v)]));
+  const listeners = new Set();
   const store = {
-    broken: null, subscribe: () => () => {},
+    broken: null, rev: 0,
+    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     get: (k, d) => (data.has(k) ? JSON.parse(data.get(k)) : d),
-    set: (k, v) => { data.set(k, JSON.stringify(v)); return true; },
+    set: (k, v) => {
+      // Mirror GameStore.write: undefined removes the key and notifies.
+      if (v === undefined) data.delete(k);
+      else data.set(k, JSON.stringify(v));
+      store.rev++;
+      for (const fn of listeners) fn({ key: k, local: true });
+      return true;
+    },
     rawDel: (k) => { data.delete(k); return true; },
   };
   const LIST = [
@@ -272,6 +281,8 @@ test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing writt
 
 test("FAVOURITE CIRCUITS: the CIRCUIT DETAIL toggle → store → data-fav → the chip, and back", () => {
   const h = bootMenus();
+  const noticed = [];
+  h.G.store.subscribe((c) => noticed.push(c && c.key));
   h.menus.openTrackDetail();
   const btn = h.dom.byId("track-detail-fav");
   assert.equal(btn.tagName, "BUTTON");
@@ -284,13 +295,17 @@ test("FAVOURITE CIRCUITS: the CIRCUIT DETAIL toggle → store → data-fav → t
   assert.equal(h.tile("spa").dataset.fav, "1", "the strip was rebuilt with the badge");
   assert.ok(!("fav" in h.tile("monza").dataset));
   assert.deepEqual(h.chips(), ["all", "season", "classic", "fav"], "the chip appears with the first favourite");
+  assert.ok(noticed.includes("favTracks"), "starring notifies subscribers");
   // FAVOURITES filters the strip; selection still indexes Tracks.LIST.
   h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "fav").onclick({ stopPropagation() {} });
   assert.equal(JSON.parse(h.data.get("trackFilter")), "fav");
   assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
   // The last one out: key deleted, the filter falls back to ALL, the chip goes.
+  const beforeClear = noticed.filter((k) => k === "favTracks").length;
   btn.onclick();
   assert.equal(h.data.has("favTracks"), false, "an empty list is the shipped state — nothing stored");
+  assert.equal(noticed.filter((k) => k === "favTracks").length, beforeClear + 1,
+    "clearing the last favourite notifies (write/set, not silent rawDel)");
   assert.equal(btn.textContent, "☆ FAVOURITE");
   assert.equal(JSON.parse(h.data.get("trackFilter")), "all");
   assert.deepEqual(h.chips(), ["all", "season", "classic"]);
@@ -1495,6 +1510,38 @@ test("backup settings use the same page, focus and BACK behavior as other settin
   h.door("files").click();
   h.nav.showCurrent();
   assert.equal(h.panel("files").hidden, true, "reopening settings starts at home");
+});
+
+test("Settings index DRIVING subtitle rebuilds badges once (empty coach select)", () => {
+  // Boot can call show("home") before SettingRow fills #pm-coach-sel. The old
+  // path only rewrote the coach line when selectedOptions[0] existed, then
+  // always appended " · Badges n/m" — so each visit stacked another badges bit.
+  const dom = makeDom();
+  const sb = uiSandbox(dom, {
+    ResizeObserver: class { observe() {} },
+    ScrollFade: { refresh() {} },
+    Badges: { summary: () => ({ held: 2, total: 8 }) },
+  });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  const index = dom.byId("pm-settings-index");
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
+    index.appendChild(dom.byId(id));
+  const drv = dom.byId("pm-open-driving");
+  const small = dom.document.createElement("small");
+  small.textContent = "Coach, practice, strategy & badges";
+  drv.appendChild(small);
+  // Empty select: no selectedOptions[0] (boot before SettingRow wires).
+  const coach = dom.document.createElement("select");
+  coach.id = "pm-coach-sel";
+  dom.body.appendChild(coach);
+  const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => {});
+  const once = small.textContent;
+  assert.match(once, /Badges 2\/8/);
+  assert.equal((once.match(/Badges/g) || []).length, 1);
+  nav.show("home");
+  nav.show("home");
+  assert.equal((small.textContent.match(/Badges/g) || []).length, 1, "badges clause is rebuilt, not appended");
+  assert.match(small.textContent, /Badges 2\/8$/);
 });
 
 test("title settings, pause standings, and career modes stay reachable", () => {
