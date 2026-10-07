@@ -1,1 +1,1 @@
-1791401192	Cursor Agent	UI Fit #1238 CI red: fix menus.css compact-wide secondary (subgrid + hit/overflow); pin  [cursor/ui-fit-home-secondary-row-fa7a; session c640675b8bc38784436ee884]
+1791402549	Cursor Agent	UI Fit #1238: raise unit-suite floor 550+ so merge-base Structural guards pass (ship has 550)  [cursor/ui-fit-home-secondary-row-fa7a; session c640675b8bc38784436ee884]
