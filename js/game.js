@@ -1892,7 +1892,7 @@ function redFlagRestart() {
     // gravel trap; otT/otE held a move that ended when the flag flew.
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
-    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
@@ -1967,7 +1967,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
@@ -6164,7 +6164,10 @@ function updateCar(c, dt, ranked) {
     // car it was waiting for — unless dig-out has already failed (laneX
     // overwrite makes lateral dig-out useless in the pit), in which case the
     // escalate path still fires onto laneX below.
-    const digEsc = AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street);
+    // Escalation is HELD while dig-out stays on (AiDrive.digOutHeld): a partial
+    // yank that dips stuckT under the line must not re-veto the rescue.
+    c.digEscHeld = AiDrive.digOutHeld(c.digEscHeld, AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street), unstuckActive);
+    const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
       (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
@@ -6193,7 +6196,7 @@ function updateCar(c, dt, ranked) {
         // Pace-scaled restore floor (same shape as coast()); never above vTop().
         c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
       }
-      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
   }
   // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes
