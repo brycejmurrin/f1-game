@@ -136,6 +136,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
+  "js/workers/bitmap-decode-client.js": ["__APEX_BUILD"], // stamps the bitmap decode Worker's URL like build-client
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
   "js/render/glx/glx.js": ["__apexReportError"], // shell error card: the third visible context loss says so, like TLX

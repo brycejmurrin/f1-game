@@ -204,7 +204,8 @@ const FULL = [
   // precede tracks.js, which reads CircuitElevations at LIST build time.
   "js/track/circuit-elevations.js",
   "js/track/tracks.js",
-  "js/track/build-client.js", // TrackBuildClient: the build Worker's page side (apex26.buildWorker, default OFF)
+  "js/track/build-client.js", // TrackBuildClient: the build Worker's page side (apex26.buildWorker, default ON when multi-core)
+  "js/workers/bitmap-decode-client.js", // BitmapDecode: createImageBitmap in a Worker (js/workers/bitmap-decode-worker.js)
   "js/ui/track-maps.js",
   // THE TRACK DESIGNER'S BOOT HALF (js/editor/): the theme presets and the
   // registry that appends the player's saved circuits to Tracks.LIST at eval,
@@ -1072,6 +1073,7 @@ const LAZY_NET = [
 // TRACK_VM, which js/roster.js carries expanded for it.
 const LAZY_WORKER = [
   "js/track/build-worker.js",
+  "js/workers/bitmap-decode-worker.js",
 ];
 
 // THE BUILD WORKER'S OWN EXTRAS, imported after TRACK_VM. NOT TRACK_VM itself:

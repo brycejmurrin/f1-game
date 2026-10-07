@@ -77,7 +77,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 30 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 31 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -296,6 +296,12 @@ _Module index over 30 directories, in load order. `tag` = a `<script>` in index.
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
+
+**`js/workers/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `bitmap-decode-client.js` | `BitmapDecode` | tag | page side of js/workers/bitmap-decode-worker.js. |
 
 **`js/editor/`**
 

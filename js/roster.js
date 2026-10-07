@@ -496,7 +496,8 @@
     ]
   ],
     LAZY_WORKER: [
-    "js/track/build-worker.js"
+    "js/track/build-worker.js",
+    "js/workers/bitmap-decode-worker.js"
   ],
     LAZY_EDITOR: [
     "js/editor/shape.js",
