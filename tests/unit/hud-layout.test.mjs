@@ -515,12 +515,16 @@ test("fit clamps a size-only piece on its own, not as one block with every other
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
-function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, gameHud = null } = {}) {
+function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null } = {}) {
   const written = Object.assign({}, stored);
   const els = {};
   const cls = new Set(classes);
   const hud = { hidden: !live };
-  const body = { classList: { contains: (c) => cls.has(c) }, getAttribute: (k) => (k === "data-hud-hide" ? hide : null) };
+  const body = {
+    classList: { contains: (c) => cls.has(c) },
+    getAttribute: (k) => (k === "data-hud-hide" ? hide : (k in bodyAttrs ? bodyAttrs[k] : null)),
+    hasAttribute: (k) => (k === "data-hud-hide" ? !!hide : Object.prototype.hasOwnProperty.call(bodyAttrs, k)),
+  };
   const root = { hasAttribute: (k) => k in rootAttrs };
   const doc = {
     readyState: "complete", body, documentElement: root,
@@ -533,7 +537,7 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   if (gameHud) ctx.GameHud = gameHud;
   vm.createContext(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
-  return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs };
+  return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs };
 }
 
 test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
@@ -613,7 +617,15 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.match(h({ classes: ["hud-hide-map"], live: false }).hiddenReason("map").reason, /MAP is off/);
   assert.match(h({ classes: ["hud-hide-gaps"], live: false }).hiddenReason("gaps").reason, /GAPS is off/);
   assert.match(h({ hide: "pos energy", live: false, classes: ["desktop"] }).hiddenReason("energy").reason, /HUD element list/);
+  assert.match(h({ hide: "speed", live: false, classes: ["desktop"] }).hiddenReason("speed").reason, /HUD element list/,
+    "SPEED off in the element list greys MOVE & SIZE (TOGGLE.speed)");
   assert.match(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("gearbox").reason, /wheel/);
+  assert.match(h({ classes: ["cockpit-cam", "desktop"], live: false }).hiddenReason("speed").reason, /wheel/,
+    "cockpit-cam hard-hides SPEED with GEAR (no data-hl-user escape)");
+  assert.match(h({ classes: ["hud-prof-broadcast", "hud-bcam"], live: false }).hiddenReason("speed").reason, /BROADCAST/,
+    "BROADCAST+TV hides .hud-bottom including SPEED");
+  assert.equal(h({ classes: ["hud-bcam"], live: false }).hiddenReason("speed"), null,
+    "plain TV cams keep plated SPEED (css/hud.css)");
   // The touch-cockpit row follows the cockpit LAYOUT set (setCam), not the wheel LCD.
   const hc = (o) => { const x = h(o); x.setCam("cockpit"); return x; };
   const touch = hc({ classes: ["cockpit-cam"], live: false }).hiddenReason("ot");
@@ -736,9 +748,18 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
     assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
   }
   for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
-  // SPEED's second copy is the data-wheel-lcd attribute, not a class, so
-  // hiddenReason stays null (the harness has no wheel) while the CSS hides it.
+  // With a wheel LCD the floating SPEED is a duplicate — soft-hide until placed
+  // (css/track-detail.css data-helmet-cam + data-wheel-lcd; MOVE & SIZE notes it).
   assert.match(TD, /body\[data-helmet-cam\]\[data-wheel-lcd\]:not\(\.desktop\) #hud-speed:not\(\[data-hl-user\]\) \{ display: none; \}/);
+  const lcd = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" } });
+  lcd.H.setCam("helmet");
+  const spd = lcd.H.hiddenReason("speed");
+  assert.ok(spd && spd.soft && /wheel LCD/.test(spd.reason), "touch helmet + LCD soft-hides SPEED: " + JSON.stringify(spd));
+  assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill with an LCD");
+  const placed = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" },
+    stored: { hudLayout: { v: 3, standard: { helmet: { speed: { x: 5, y: 0, s: 100 } } } } } });
+  placed.H.setCam("helmet");
+  assert.equal(placed.H.hiddenReason("speed"), null, "a placed SPEED (data-hl-user) shows beside the LCD");
   const rule = TD.match(/body\[data-hl-set="helmet"\]:not\(\.desktop\) :is\(([^)]*)\):not\(\[data-hl-user\]\)\s*\{\s*display:\s*none/);
   assert.ok(rule, "the touch-helmet hide rule exists");
   // GEAR sits on the wheel LCD — plate-opaque so SPD/G on the mesh does not ghost through.
