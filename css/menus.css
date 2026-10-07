@@ -382,6 +382,32 @@ html[data-home-live] #overlay #menu-brand {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
 :where(body[data-density="compact"]) html[data-home-live] #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
+/* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
+   experience.css used to wait). Classic/static keeps the three-band portrait cars. */
+@media (max-width: 699px) {
+  html[data-home-live] :where(body[data-shape="tall"]) #overlay {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
+  html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
+    grid-row: 2;
+    align-self: stretch;
+    height: auto;
+    max-height: none;
+  }
+}
+@media (min-width: 700px) {
+  html[data-home-live] :where(body[data-shape="tall"]) #overlay {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  html[data-home-live] :where(body[data-shape="tall"]) #title-car { display: none; }
+  html[data-home-live] :where(body[data-shape="tall"]) #menu-buttons {
+    grid-row: 2;
+    align-self: stretch;
+    height: auto;
+    max-height: none;
+  }
+}
 
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
