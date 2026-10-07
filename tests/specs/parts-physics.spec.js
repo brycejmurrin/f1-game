@@ -1105,22 +1105,41 @@ test.describe("Parts module — visual recipes", () => {
     expect(Math.max(...result.paintColors.flat())).toBeLessThanOrEqual(1);
   });
 
-  test("wheel sidewalls remain rubber outside a distinct metal aero cover", async ({ page }) => {
+  test("wheel sidewalls remain rubber outside an open metal rim (spokes / lip / nut)", async ({ page }) => {
     await load(page);
     const result = await page.evaluate(() => {
-      const mesh = Car3D.buildWheel(0.34, [0.85, 0.1, 0.08]);
-      const outer = new Set(), cover = new Set();
-      for (let i = 0; i < mesh.mat.length; i++) {
-        const x = Math.abs(mesh.pos[i * 3]);
-        const radius = Math.hypot(mesh.pos[i * 3 + 1], mesh.pos[i * 3 + 2]);
-        if (x > 0.165 && radius > 0.30) outer.add(mesh.mat[i]);
-        if (x > 0.165 && radius > 0.08 && radius < 0.21) cover.add(mesh.mat[i]);
-      }
-      return { outer: [...outer], cover: [...cover], surfaces: Car3D.SURFACES };
+      // Default 2026 wheel: open rim. coverVanes alone must not rebuild the
+      // 2022–25 dish — only an explicit visual.cover opts the cover back in.
+      const open = Car3D.buildWheel(0.34, [0.85, 0.1, 0.08], null, null, false,
+        { coverVanes: 10 }, null, { spokes: 0 });
+      const covered = Car3D.buildWheel(0.34, [0.85, 0.1, 0.08], null, null, false,
+        { cover: 1, coverVanes: 6 }, null, { spokes: 0 });
+      const mats = (mesh, pred) => {
+        const s = new Set();
+        for (let i = 0; i < mesh.mat.length; i++) {
+          const x = Math.abs(mesh.pos[i * 3]);
+          const radius = Math.hypot(mesh.pos[i * 3 + 1], mesh.pos[i * 3 + 2]);
+          if (pred(x, radius)) s.add(mesh.mat[i]);
+        }
+        return [...s];
+      };
+      const face = (x, r) => x > 0.165 && r > 0.08 && r < 0.21;
+      const outer = (x, r) => x > 0.165 && r > 0.30;
+      return {
+        openOuter: mats(open, outer),
+        openFace: mats(open, face),
+        coveredFace: mats(covered, face),
+        openTris: open.idx.length / 3,
+        coveredTris: covered.idx.length / 3,
+        surfaces: Car3D.SURFACES,
+      };
     });
-    expect(result.outer).toContain(result.surfaces.rubber);
-    expect(result.outer).not.toContain(result.surfaces.metal);
-    expect(result.cover).toContain(result.surfaces.metal);
+    expect(result.openOuter).toContain(result.surfaces.rubber);
+    expect(result.openOuter).not.toContain(result.surfaces.metal);
+    expect(result.openFace).toContain(result.surfaces.metal);
+    // Opt-in cover still paints a metal/carbon face; default open must be cheaper.
+    expect(result.coveredFace.length).toBeGreaterThan(0);
+    expect(result.openTris).toBeLessThan(result.coveredTris);
   });
 
   test("static car geometry across brake packages reserves emissive surfaces for the FIA rain light", async ({ page }) => {

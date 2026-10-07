@@ -8,8 +8,35 @@ const { els, loadBackendScripts } = deps;
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — the race payload, fetched before the first race.
+// LAZY_RACE — lighting presets, fetched before the first race.
 const RACE_FILES = ApexRoster.LAZY_RACE;
+// LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
+// the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
+// does not pay the whole fetch on the critical path.
+const RACE_SESSION_FILES = ApexRoster.LAZY_RACE_SESSION || [];
+const RACE_SESSION_EDGES = ApexRoster.LAZY_RACE_SESSION_EDGES || [];
+let raceSessionLoad = null;
+function raceSessionReady() {
+  return typeof PitLane !== "undefined" && PitLane && !PitLane._stub;
+}
+function ensureRaceSession() {
+  if (raceSessionLoad) return raceSessionLoad;
+  if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
+  if (raceSessionReady()) {
+    raceSessionLoad = Promise.resolve(true);
+    return raceSessionLoad;
+  }
+  raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, { strict: true }).then((ok) => {
+    if (!ok || !raceSessionReady()) {
+      Log.warn("race", "the race-session bundle did not load");
+      raceSessionLoad = null;
+      return false;
+    }
+    if (typeof deps.onRaceSessionReady === "function") deps.onRaceSessionReady();
+    return true;
+  });
+  return raceSessionLoad;
+}
 // LAZY_CIRCUIT (tools/manifest.cjs): full js/circuits/<id>.js payload. Title
 // boots with GENERATED meta.js (~picker fields only); path/pal/sectors/kit
 // hydrate here before buildCenterline / Tracks.build / TrackMaps.compute.
@@ -317,9 +344,12 @@ function raceAssets() {
       if (window.LightPresets) deps.applyLightTuneIfReady();
     });
   }, 2500);
+  // Prefetch the session stub's real modules on idle so startRace's await is
+  // usually a no-op. Do not put them on the title paint path (microtask).
+  scheduleIdle(() => { ensureRaceSession(); }, 2800);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface };
 }
   return { create };
 })();

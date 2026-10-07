@@ -78,6 +78,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/all-lights-fill.test.mjs",
   // The pack's wildcard environment fills in only what the palette did not author;
   // an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/always-lamp-floor.test.mjs",
   "tests/unit/ambient-env-override.test.mjs",
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
@@ -114,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
+  "tests/unit/blip-voice-pool.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
@@ -232,6 +234,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
   "tests/unit/data-hub-picker.test.mjs",
@@ -303,6 +306,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
+  "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
@@ -316,6 +321,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
+  "tests/unit/finish-coast-rev-vm.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
@@ -411,6 +417,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
@@ -423,8 +430,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
+  "tests/unit/incident-rpm.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
+  "tests/unit/keyboard-first-audio-vm.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
@@ -502,6 +511,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
+  "tests/unit/net-audio-revs-vm.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -562,6 +572,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
+  "tests/unit/pu-harvest-audio.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -572,6 +583,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  "tests/unit/race-session-lazy.test.mjs",
   // Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus
   // Season SETUP scroll/chip pins (layer on #1082 chrome).
   "tests/unit/race-setup-sheets.test.mjs",
@@ -712,6 +724,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // blur/reset belongs in the edit loop rather than in a browser group.
   "tests/unit/throttle-latch.test.mjs",
   "tests/unit/title-art.test.mjs",
+  "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
@@ -788,6 +801,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
+  // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
+  "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
@@ -820,6 +836,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
   // never writes apex26.gfxBackend. ~0.1 s.
   "tests/unit/xr-plan.test.mjs",
+  // Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer
+  // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
+  // unchanged. createGame once, ~2.5 s.
+  "tests/unit/yaw-damp-speed.test.mjs",
   // @gen-test-groups:end
 ]);
 

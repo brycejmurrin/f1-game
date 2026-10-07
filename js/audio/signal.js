@@ -2,6 +2,11 @@
 "use strict";
 
 var GameAudioSignal = (function () {
+  // Session-wide blip fire count (all create() hosts). Unit tests that used to
+  // count OscillatorNode.start() need this once voices are pooled and started
+  // once; the audible path does not read it.
+  let blipFireTotal = 0;
+
   // Dominant period of the loop region, by autocorrelation. Bounded on BOTH
   // axes so this stays a ~10 ms main-thread cost paid once: an 8192-sample
   // window (the loop is steady, so more buys nothing) and lags spanning
@@ -75,19 +80,56 @@ var GameAudioSignal = (function () {
       g.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
     }
 
+    /* Fixed-size blip voice pool. OscillatorNode is one-shot after stop(), so
+       each voice stays alive: start once, envelope the gain, reuse. Overrun
+       crackle used to allocate osc+gain on every pop (~5–15 Hz on a sustained
+       lift); UI / brake / shift blips share the same pool. Envelope + frequency
+       math is unchanged — only the node lifetime differs. */
+    const BLIP_POOL = 8;
+    const blipVoices = []; // { osc, g, freeAt }
+    let blipFired = 0;
+
+    function acquireBlipVoice(t0) {
+      let v = null;
+      for (let i = 0; i < blipVoices.length; i++) {
+        if (blipVoices[i].freeAt <= t0) { v = blipVoices[i]; break; }
+      }
+      if (!v && blipVoices.length < BLIP_POOL) {
+        const osc = host.context().createOscillator();
+        const g = host.context().createGain();
+        g.gain.value = 0.0001;
+        osc.connect(g).connect(host.bus());
+        osc.start(0);
+        v = { osc, g, freeAt: 0 };
+        blipVoices.push(v);
+      }
+      if (!v) {
+        v = blipVoices[0];
+        for (let i = 1; i < blipVoices.length; i++) {
+          if (blipVoices[i].freeAt < v.freeAt) v = blipVoices[i];
+        }
+      }
+      return v;
+    }
+
     function blip(freq, type, peak, attack, decay, slideTo, when) {
       if (!host.sfxOk()) return;
       const t0 = host.now() + (when || 0);
-      const osc = host.context().createOscillator();
-      const g = host.context().createGain();
+      const dur = attack + decay;
+      const v = acquireBlipVoice(t0);
+      blipFired++;
+      blipFireTotal++;
+      v.freeAt = t0 + dur + 0.05;
+      const osc = v.osc, g = v.g;
       osc.type = type;
+      osc.frequency.cancelScheduledValues(t0);
       osc.frequency.setValueAtTime(freq, t0);
-      if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + attack + decay);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
       env(g, t0, peak, attack, decay);
-      osc.connect(g).connect(host.bus());
-      osc.start(t0);
-      osc.stop(t0 + attack + decay + 0.05);
-      osc.onended = () => { osc.disconnect(); g.disconnect(); };
+    }
+
+    function blipStats() {
+      return { fired: blipFired, pool: blipVoices.length, poolCap: BLIP_POOL };
     }
 
     function noiseBuf(seconds) {
@@ -167,11 +209,23 @@ var GameAudioSignal = (function () {
       noiseBurst(peak, decay, { type: "bandpass", frequency: 2600, q: 1.2, attack: 0.02 });
     }
 
-    return { env, blip, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise,
+    return { env, blip, blipStats, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise,
       noisePoolSeconds: NOISE_POOL_S,
-      resetContext() { noisePoolBuf = null; _loopNoise.clear(); },
+      resetContext() {
+        noisePoolBuf = null;
+        _loopNoise.clear();
+        for (let i = 0; i < blipVoices.length; i++) {
+          const v = blipVoices[i];
+          try { v.osc.disconnect(); } catch (e) { /* closed ctx */ }
+          try { v.g.disconnect(); } catch (e) { /* closed ctx */ }
+        }
+        blipVoices.length = 0;
+      },
     };
   }
-  return { create, detectPeriod, findStableLoop };
+  return {
+    create, detectPeriod, findStableLoop,
+    blipFireTotal() { return blipFireTotal; },
+  };
 })();
 Object.freeze(GameAudioSignal);

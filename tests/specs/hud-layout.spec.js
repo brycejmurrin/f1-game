@@ -99,7 +99,7 @@ async function race(page, steer, manual, ins, opts) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(([s, m, prof, lay]) => {
+  await page.evaluate(([s, m, prof, lay, hudSc, btnSc]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
     // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
@@ -111,7 +111,9 @@ async function race(page, steer, manual, ins, opts) {
     // with no stylesheet behind it at all — three names that set a body class
     // and changed nothing on screen.
     if (lay) localStorage.setItem("apex26.hudMetricsLayout", JSON.stringify(lay));
-  }, [steer, manual, o.profile || null, o.layout || null]);
+    if (hudSc != null) localStorage.setItem("apex26.hudScale", JSON.stringify(hudSc));
+    if (btnSc != null) localStorage.setItem("apex26.hudBtnScale", JSON.stringify(btnSc));
+  }, [steer, manual, o.profile || null, o.layout || null, o.hudScale ?? null, o.btnScale ?? null]);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
@@ -458,6 +460,26 @@ test.describe("metrics layout", () => {
 // Asserted as GEOMETRY rather than by faking race state: un-hide, read the rect
 // and restore INSIDE one evaluate, so the 10 Hz HUD tick cannot re-hide it
 // between the write and the read (one task, one forced layout, no race).
+// steer-buttons at HUD/BUTTON SIZE ~140%: #hud-sectors shared the right column
+// with BOOST/OT and overlapped the pedal discs (steer-touch fix, 2026-10-07).
+test.describe("buttons steer high HUD scale", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("sector plate clears BOOST and OT (notched landscape, ~140%)", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { hudScale: 140, btnScale: 140 });
+    const targets = [
+      { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
+      { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const sectorHits = r.hudClash.filter((p) => p.startsWith("hud-sectors+") || p.endsWith("+hud-sectors"));
+    expect(sectorHits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });

@@ -441,11 +441,20 @@ test('camera-only fixture strips remote radio audio without mutating source and 
   assert.equal(sanitized.script.radio[0].url, undefined); assert.equal(sanitized.script.radio[0].t, 10);
   assert.equal(sanitized.offline.removedRadioUrls, 1); assert.equal(sanitized.offline.captionsPreserved, true);
   const source = readFileSync(resolve(ROOT, 'js/race/real-replay.js'), 'utf8');
+  const stopStart = source.indexOf('    function stopRadioClip() {');
+  const stopEnd = source.indexOf('\n    function stop()', stopStart);
   const start = source.indexOf('    function playRadio(h) {');
   const end = source.indexOf('\n    function finish()', start);
   let audioCalls = 0;
-  const play = new Function('Audio', 'run', 'G', 'return (' + source.slice(start, end).trim() + ');')(function Audio() { audioCalls++; return { play: () => Promise.resolve() }; }, {}, { soundOn: true });
-  play(original.radio[0]); assert.equal(audioCalls, 1, 'unsanitized URL reaches actual Audio constructor');
+  const play = new Function('Audio', 'GameAudioRadioFx', 'GameAudio', 'run', 'G', 'CAPTION_S', `${source.slice(stopStart, stopEnd)}\n${source.slice(start, end)}\nreturn playRadio;`)(
+    function Audio() { audioCalls++; return { play: () => Promise.resolve(), pause() {}, volume: 1, onended: null, onerror: null }; },
+    undefined,
+    { setRadioDuck() {} },
+    { audio: null },
+    { soundOn: true, radio: { volume: () => 1 }, announce() {} },
+    3,
+  );
+  play(original.radio[0]); assert.equal(audioCalls, 1, 'unsanitized URL reaches Audio when the FX bridge is absent');
   audioCalls = 0; play(sanitized.script.radio[0]); assert.equal(audioCalls, 0);
   const fixture = loadFixture({ fixture: 'default', track: 'baku' });
   assert.ok(fixture.offline.removedRadioUrls > 0); assert.ok(fixture.data.script.radio.every((radio) => !('url' in radio)));

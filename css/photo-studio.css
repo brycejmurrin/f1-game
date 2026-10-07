@@ -20,6 +20,12 @@
 #ps-panel .balanced-row { gap: calc(var(--gap) * .5); --balance-basis: 6rem; }
 #ps-shots { --balance-basis: 4rem; }
 #ps-panel button:not(.bigbtn):not([data-step]) { min-height: var(--tap-min); padding: calc(var(--gap) * .5) var(--gap); font-size: var(--fs-micro); }
+@media (pointer: coarse) {
+  #ps-panel button:not(.bigbtn):not([data-step]),
+  #ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-paint); }
+}
+body[data-density="compact"] #ps-panel button:not(.bigbtn):not([data-step]),
+body[data-density="compact"] #ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-paint); }
 #ps-panel .tune-row { display: flex; flex-direction: column; gap: calc(var(--gap) * .5); }
 #ps-panel input[type="file"] { min-width: 0; max-width: 100%; min-height: var(--tap); padding: calc(var(--gap) * .5); font-family: var(--font-ui); font-size: var(--fs-2); color: var(--text); background: var(--surf-3); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
 #ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-min); margin-inline-end: calc(var(--gap) * .5); font-family: inherit; color: var(--text); background: var(--plate); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
