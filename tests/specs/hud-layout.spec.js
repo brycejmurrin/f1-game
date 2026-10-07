@@ -480,6 +480,87 @@ test.describe("buttons steer high HUD scale", () => {
   });
 });
 
+// TILT was left out of #1191's steer-buttons dock standoff: at HUD 150% the
+// sector strip still sat on BOOST (844×390 survey). Same --dock-r-w + anchor
+// tether, without regressing the buttons/touch cases above.
+test.describe("tilt steer high HUD scale", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("sector plate clears BOOST (phone landscape, 150%)", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150 });
+    const targets = [
+      { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
+      { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const sectorHits = r.hudClash.filter((p) => p.startsWith("hud-sectors+") || p.endsWith("+hud-sectors"));
+    expect(sectorHits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+// Opt-in RELATIVE / INPUTS ship off; the 2026-10-07 survey turned them on and
+// measured readout-on-control (REL×steer/BRAKE, INPUTS×BOOST column / gear box).
+async function enableOptIns(page) {
+  await page.evaluate(() => {
+    if (typeof HudElements === "undefined") throw new Error("HudElements missing");
+    for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
+  });
+  await page.waitForFunction(() => {
+    const rel = document.getElementById("hud-rel");
+    const inp = document.getElementById("hud-inputs");
+    if (!rel || !inp || rel.hidden || inp.hidden) return false;
+    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect();
+    return rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0;
+  }, null, { polling: 100, timeout: 10_000 });
+}
+
+test.describe("opt-in readouts vs touch controls", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("RELATIVE clears left steer / BRAKE; INPUTS clears right dock (buttons 150%)", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { hudScale: 150, btnScale: 150, cam: "cockpit" });
+    await enableOptIns(page);
+    const targets = [
+      { key: "hud-rel", sel: "#hud-rel", role: "hud" },
+      { key: "hud-inputs", sel: "#hud-inputs", role: "hud" },
+      { key: "btn-steer-left", sel: "btn-steer-left", role: "ctrl" },
+      { key: "btn-steer-right", sel: "btn-steer-right", role: "ctrl" },
+      { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
+      { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+      { key: "btn-aero", sel: "btn-aero", role: "ctrl" },
+      { key: "btn-throttle", sel: "btn-throttle", role: "ctrl" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const hits = r.hudClash.filter((p) => p.includes("hud-rel") || p.includes("hud-inputs"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+test.describe("desktop INPUTS vs gear box", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+  test("INPUTS clears SPEED & GEAR at HUD 150% chase", async ({ page }) => {
+    const v = { name: "desktop", w: 1280, h: 720, sal: 0, sar: 0, sat: 0, sab: 0 };
+    await race(page, "tilt", false, v, { hudScale: 150, cam: "chase" });
+    await enableOptIns(page);
+    const targets = [
+      { key: "hud-inputs", sel: "#hud-inputs", role: "hud" },
+      { key: "hud-gearbox", sel: "#hud-gearbox", role: "hud" },
+      { key: "hud-speed", sel: "#hud-speed", role: "hud" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const hits = r.hudClash.filter((p) => p.includes("hud-inputs"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });

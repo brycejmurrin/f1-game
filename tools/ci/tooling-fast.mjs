@@ -413,6 +413,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",

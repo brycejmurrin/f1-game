@@ -202,9 +202,11 @@ file changes a screen owned by another.
 - `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
   hidden by a `hud` rule when the pause card is up.
 - `.steer-touch` / `.steer-buttons` — `touch-controls` + `hud`. Body classes from
-  `js/game.js` for touch-steer vs on-screen pedals: layout differs in
-  `touch-controls`, and `#hud-sectors` takes `--dock-r-w` / the right-dock CSS
-  anchor in `hud` on both so the sector strip clears BOOST / OT at high HUD SIZE.
+  `js/game.js` for touch-steer vs on-screen pedals (tilt is unmarked): layout
+  differs in `touch-controls`, and phone `#hud-sectors` takes `--dock-r-w` / the
+  right-dock CSS anchor in `hud` via `body:not(.desktop)` so the sector strip
+  clears BOOST / OT at high HUD SIZE in every steer mode; touch `#hud-rel` /
+  `#hud-inputs` cap above the left/right docks.
 - `.minibtn` — `menus` + `responsive`
 - `.cs-stat-*` (4 classes) — `carsetup` + `menus` + `responsive`
 - `.dh-card` / `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `data` + `components`

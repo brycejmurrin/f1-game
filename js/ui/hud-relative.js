@@ -162,6 +162,19 @@ const HudRelative = (function () {
       }
       if (dirty) dom.el.setAttribute("aria-label", rowLabel(c.pos, car.code, i === SELF, c.gap, r.rel > 0, tyre, r.laps));
     }
+    // TOUCH clearance: css/hud.css caps #hud-rel above the left dock at high
+    // HUD SIZE. When that max-height clips, drop the farthest road neighbours
+    // first (never the player's row) so we never paint a half-row over BRAKE.
+    fitRows();
+  }
+  /** Hide outermost occupied rows until the card fits its capped box. */
+  function fitRows() {
+    if (!root || !built || !(root.clientHeight > 0)) return;
+    const order = [0, 4, 1, 3];
+    for (let k = 0; k < order.length && root.scrollHeight > root.clientHeight + 1; k++) {
+      const dom = built[order[k]];
+      if (dom && !dom.el.hidden) dom.el.hidden = true;
+    }
   }
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
@@ -169,5 +182,5 @@ const HudRelative = (function () {
       + ", tyre " + tyre + (laps > 0 ? ", " + laps + " lap up" : laps < 0 ? ", " + -laps + " lap down" : "");
   }
 
-  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, rows });
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, rows });
 })();

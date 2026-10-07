@@ -928,12 +928,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
-  /* STAND OFF THE RIGHT DOCK on touch STEER (touch + buttons). Same --dock-r-w
+  /* STAND OFF THE RIGHT DOCK on every phone STEER mode. Same --dock-r-w
      clearance #hud-limits / #hud-damage take; those chips sit lower. BOOST /
      OT / AERO share the right column and at HUD/BTN SIZE 130–150% (short
      landscape) the sector strip sat under BOOST until sectors consumed
-     --dock-r-w on steer-touch and steer-buttons (2026-10-05 survey, 2026-10-07
-     buttons fix). fitHud publishes --dock-r-w whenever the dock has a box. */
+     --dock-r-w on steer-touch and steer-buttons (2026-10-05 / 2026-10-07) and
+     on tilt (game.js never adds a tilt body class — only touch/buttons — so
+     the phone rule is body:not(.desktop)). fitHud publishes --dock-r-w
+     whenever the dock has a box; desktop stays 0. */
   right: calc(10px + var(--sar) / var(--hud-z));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
@@ -949,8 +951,7 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    fills it on the first HUD tick. Until then padding + background left a junk
    gap under the pause column (same class of bug as empty .hud-gaps above). */
 #hud-sectors:empty { display: none; }
-body.steer-touch #hud-sectors,
-body.steer-buttons #hud-sectors {
+body:not(.desktop) #hud-sectors {
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
 }
 .sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; border-left: 3px solid transparent; padding-left: calc(var(--gap) / 2); margin-left: calc(var(--gap) / -2); }
@@ -1909,6 +1910,11 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
   top: calc(var(--hud-left-h, 152px) + 8px);
   max-width: min(240px, 46vw);
   line-height: 1.2;
+  /* Without the left-dock anchor (engines that lack CSS Anchor Positioning),
+     keep the card from eating the whole column at HUD 150% — five rows used
+     to paint over the steer arrows / BRAKE (2026-10-07 survey, up to ~6k px²). */
+  max-height: min(42svh, 11.5em);
+  overflow: hidden;
 }
 body:not(.desktop) #hud-strat {
   top: calc(var(--hud-left-h, 152px) + 8px);
@@ -1933,6 +1939,20 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  /* Cap the trace so it cannot grow down into BOOST / OT at HUD 150%. The
+     anchor block below tightens this to the measured dock top when supported. */
+  max-height: min(22svh, 5.5em);
+  overflow: hidden;
+}
+/* DESKTOP: the default left + bottom:22svh home grew into SPEED & GEAR at
+   HUD SIZE 150% (chase 1280×720 survey). Park under the sector column like
+   the touch home — right + top from the pause/sectors stack — so the bottom
+   band stays the driver's. A placed chip (data-hl-user) keeps its offset. */
+body.desktop #hud-inputs:not([data-hl-user]) {
+  left: auto;
+  right: calc(10px + var(--sar) / var(--hud-z));
+  bottom: auto;
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
 }
 /* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
@@ -1964,19 +1984,39 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK. Same CSS Anchor Positioning pattern as TYRES
      on the left dock (Modern Web Guidance css-layout §5: tether floating
-     chrome to its trigger, do not guess offsets). steer-touch and
-     steer-buttons: #hud-sectors is fixed and zoomed (--hud-z), so anchor()
-     is divided like --sar; max() keeps the measured --dock-r-w floor when the
-     engine's inset is smaller. */
-  body.steer-touch #dock-right,
-  body.steer-buttons #dock-right { anchor-name: --apex-dock-right; }
-  body.steer-touch #hud-sectors,
-  body.steer-buttons #hud-sectors {
+     chrome to its trigger, do not guess offsets). All phone steer modes
+     (tilt is unmarked on body): #hud-sectors is fixed and zoomed (--hud-z),
+     so anchor() is divided like --sar; max() keeps the measured --dock-r-w
+     floor when the engine's inset is smaller. */
+  body:not(.desktop) #dock-right { anchor-name: --apex-dock-right; }
+  body:not(.desktop) #hud-sectors {
     position-anchor: --apex-dock-right;
     right: max(
       calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px)),
       calc((anchor(left) + var(--gap)) / var(--hud-z))
     );
+  }
+  /* TOUCH RELATIVE ↔ LEFT DOCK. Cap the card above the steer column so five
+     rows at HUD 150% cannot paint over the arrows / BRAKE. --hud-left-h is
+     already in this element's zoom units; anchor(top) is screen px → divide. */
+  body:not(.desktop) #hud-rel:not([data-hl-user]) {
+    position-anchor: --apex-dock-left;
+    max-height: max(
+      3.2em,
+      min(42svh, 11.5em, calc(anchor(top) / var(--hud-z) - var(--hud-left-h, 152px) - 16px))
+    );
+    overflow: hidden;
+  }
+  /* TOUCH INPUTS ↔ RIGHT DOCK. Same cap against the pedal / BOOST column. */
+  body:not(.desktop) #hud-inputs:not([data-hl-user]) {
+    position-anchor: --apex-dock-right;
+    max-height: max(
+      2.4em,
+      min(22svh, 5.5em, calc(anchor(top) / var(--hud-z)
+        - (8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)
+        - var(--hud-sec-h, 4.8em) - 20px))
+    );
+    overflow: hidden;
   }
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
