@@ -676,6 +676,7 @@
     "// blur/reset belongs in the edit loop rather than in a browser group.",
     "tests/unit/throttle-latch.test.mjs",
     "tests/unit/title-art.test.mjs",
+    "tests/unit/title-home-scene-prepaint.test.mjs",
     "tests/unit/title-menu-even.test.mjs",
     "tests/unit/tlx-chunked-lifecycle.test.mjs",
     "// TLX's instanced cull reuses its resident pack by surviving CELL SET",
