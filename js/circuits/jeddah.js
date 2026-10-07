@@ -24,8 +24,12 @@
     sceneryCoordinates: "racing",
     dressingExclusions: [
       { kind: "city", s0: 0.05, s1: 0.66, side: 1 },
+      // Inland (−1): generic neonTower rows at 13–25 m walled off landmarks; hand
+      // cityFront sits at 60–90 m in scenery/jeddah.js instead.
+      { kind: "city", s0: 0, s1: 1, side: -1 },
       { kind: "lamps", s0: 0, s1: 1 },
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
+      { kind: "foliage", s0: 0, s1: 1, side: -1 },
     ],
     lengthKm: 6.2,
     tyreSeverity: 0.90,  // Fresh street surface vs Bahrain abrasive (Isola); high speed but lower abrasiveness

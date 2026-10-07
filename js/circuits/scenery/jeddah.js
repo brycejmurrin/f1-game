@@ -438,21 +438,22 @@
         }
       }
 
-      // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
-      cityFront(0.04, 0.24, -1, 22, {
-        minH: 14, maxH: 34, depth: 16,
+      // ── INLAND CITY WALL — left (L), 60–90 m back; cityFront h = base + range
+      // (minH + factor·(maxH−minH)), capped ~24 m so heroes read past the row.
+      cityFront(0.04, 0.24, -1, 64, {
+        minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
-      cityFront(0.35, 0.48, -1, 18, {
-        minH: 18, maxH: 40, depth: 18,
+      cityFront(0.35, 0.48, -1, 72, {
+        minH: 12, maxH: 24, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
-      cityFront(0.56, 0.74, -1, 18, {
-        minH: 14, maxH: 36, depth: 18,
+      cityFront(0.56, 0.74, -1, 78, {
+        minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
 
       // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
@@ -460,7 +461,7 @@
       // of warm-gold window towers. Base-anchored via seat.box (addBox is
       // centre-anchored — mid-height LED strips were reading as floaters).
       {
-        const a = anchor(K(0.275), -1, 72), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.275), -1, 86), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const H = 128;
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
@@ -495,7 +496,7 @@
         }
       }
       {
-        const a = anchor(K(0.295), -1, 95), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.295), -1, 90), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -518,18 +519,18 @@
           }, { required: true });
         }
       }
-      building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
-      building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
-      tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
-      cityFront(0.245, 0.335, -1, 96, {
-        minH: 24, maxH: 62, depth: 20,
+      building(K(0.27), -1, 82, 22, 24, 18, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 5 });
+      building(K(0.30), -1, 88, 20, 22, 16, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 5 });
+      tower(K(0.285), -1, 92, 14, 24, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 6 });
+      cityFront(0.245, 0.335, -1, 68, {
+        minH: 11, maxH: 23, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
-        step: 68, floor: 5,
+        step: 68, floor: 4,
       });
 
       // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.
       {
-        const a = anchor(K(0.055), -1, 38), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.055), -1, 74), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -617,8 +618,8 @@
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
-      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
+      building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });
+      tower(K(0.71), -1, 86, 14, 24, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 6 });
 
       // Billboards — Corniche signage character
       billboard(K(0.70), -1, 13, 10, 11, GREEN);   // 13 = midpoint of the 26 m strip to the parallel 0.275 leg; at 26 a panel end was on that road
