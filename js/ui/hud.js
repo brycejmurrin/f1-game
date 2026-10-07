@@ -1052,9 +1052,9 @@ function fitHud() {
   // Flush #hud-sectors after --dock-r-w so announceLane / radioTopSlot clip
   // the post-reflow plate (Pages: #hud-sectors+#announce).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
-  // Under load (parallel hud-layout workers) the leftmost-control inset can
-  // land 1–2 px short and #hud-sectors still rects onto BOOST. Measure once
-  // after the flush and widen --dock-r-w in top-band units until clear.
+  // Under load the leftmost-control inset can land 1–2 px short (parallel
+  // hud-layout workers). One pre-fit widen keeps --dock-r-w honest before
+  // HudLayout.fit() reclamps MOVE & SIZE offsets.
   if (els.hudSectors && _dockR && dockPad > 0) {
     const secR = els.hudSectors.getBoundingClientRect();
     let ctrlLeft = Infinity;
@@ -1063,8 +1063,7 @@ function fitHud() {
       if (r.width && r.height) ctrlLeft = Math.min(ctrlLeft, r.left);
     }
     if (secR.width && Number.isFinite(ctrlLeft) && secR.right > ctrlLeft - 4) {
-      const needPx = secR.right - (ctrlLeft - 4);
-      dockPad += needPx / zTop;
+      dockPad += (secR.right - (ctrlLeft - 4)) / zTop;
       hStyle(root, "--dock-r-w", dockPad.toFixed(1) + "px");
       void els.hudSectors.offsetHeight;
     }
@@ -1073,6 +1072,56 @@ function fitHud() {
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
+  // fit() can undo the dock inset; shrink the sector plate before widening
+  // --dock-r-w again (widening slides the plate left into #minimap).
+  if (els.hudSectors && _dockR && dockPad > 0) {
+    const margin = 8;
+    const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
+    const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
+    const secEl = els.hudSectors;
+    if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
+    for (let pass = 0; pass < 4; pass++) {
+      const secR = secEl.getBoundingClientRect();
+      if (!secR.width) break;
+      let worst = 0;
+      for (const g of _dockR.children) {
+        const r = g.getBoundingClientRect();
+        if (!(r.width && r.height)) continue;
+        if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+      }
+      if (!(worst > 0.5)) break;
+      const zSec = secEl.currentCSSZoom || 1;
+      const curW = secR.width / zSec;
+      const nextW = Math.max(48, curW - worst / zSec);
+      secEl.style.maxWidth = nextW.toFixed(1) + "px";
+      void secEl.offsetHeight;
+    }
+    let secR = secEl.getBoundingClientRect();
+    let worst = 0;
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (!(r.width && r.height)) continue;
+      if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+    }
+    if (worst > 0.5) {
+      let add = worst;
+      if (mapClear && secR.left - add < mapClear) add = Math.max(0, secR.left - mapClear);
+      if (add > 0.5) {
+        dockPad += add / zTop;
+        hStyle(root, "--dock-r-w", dockPad.toFixed(1) + "px");
+        void secEl.offsetHeight;
+      }
+    }
+    secR = secEl.getBoundingClientRect();
+    let onDock = false;
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (r.width && r.height && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
+    }
+    if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
+  }
+  radioTopSlot(root, bcast);
+  mirrorClear(root);
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.
