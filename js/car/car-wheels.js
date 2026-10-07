@@ -367,10 +367,10 @@ const CarWheels = (function () {
         if (dish > 0) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
-          // Open-path dish step used to piggy-back on the 50 mm cover bowl for
-          // optical depth; without a cover, 0.012*dish (12 mm at dish:1) falls
-          // under parts-sweep WEAK_MM. 0.024*dish → 24 / 48 mm keeps dish:1/2
-          // distinct from taped / flat open rims.
+          // Cover path keeps the old shallow bowl (cover already fills the face).
+          // Open path: deeper rim recess only — NO floor fan to the hub, so
+          // factory dish:1 cars (mercedes/ferrari/…) stay open-spoked with the
+          // brake disc visible. 0.024*dish → 24 / 48 mm for parts-sweep WEAK_MM.
           const dishStep = useCover ? 0.012 * dish : 0.024 * dish;
           const dxIn = ss[0] + dir * (0.014 - dishStep);
           const DISH_SEG = 16;
@@ -380,15 +380,29 @@ const CarWheels = (function () {
             const oy1 = cy + rimR * 0.98 * Math.cos(a1), oz1 = cz + rimR * 0.98 * Math.sin(a1);
             const iy0 = cy + dr * Math.cos(a0), iz0 = cz + dr * Math.sin(a0);
             const iy1 = cy + dr * Math.cos(a1), iz1 = cz + dr * Math.sin(a1);
-            addQuad(out,
-              [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
-              HUBCAP, SURFACES.metal);
-            addQuad(out,
-              [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-              RC_DEEP, SURFACES.metal);
-            addTri(out, [dxIn, cy, cz],
-                   [dxIn, iy0, iz0],
-                   [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+            if (useCover) {
+              addQuad(out,
+                [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
+                HUBCAP, SURFACES.metal);
+              addQuad(out,
+                [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
+                RC_DEEP, SURFACES.metal);
+              addTri(out, [dxIn, cy, cz],
+                     [dxIn, iy0, iz0],
+                     [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+            } else {
+              // Open: narrow rim lip + recess wall only (inner radius stays near
+              // the lip — not the old hub-reaching floor). Spokes / rotor show.
+              const lipInner = rimR * (dish === 2 ? 0.86 : 0.90);
+              const ly0 = cy + lipInner * Math.cos(a0), lz0 = cz + lipInner * Math.sin(a0);
+              const ly1 = cy + lipInner * Math.cos(a1), lz1 = cz + lipInner * Math.sin(a1);
+              addQuad(out,
+                [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, ly1, lz1], [dxOut, ly0, lz0],
+                HUBCAP, SURFACES.metal);
+              addQuad(out,
+                [dxOut, ly0, lz0], [dxOut, ly1, lz1], [dxIn, ly1, lz1], [dxIn, ly0, lz0],
+                RC_DEEP, SURFACES.metal);
+            }
           }
         }
       }
