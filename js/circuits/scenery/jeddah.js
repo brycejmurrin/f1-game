@@ -104,36 +104,37 @@
       const terrainYAt = api.terrainYAt;
       const seatCanyonFeet = (s0, s1, side, gap) => {
         if (typeof along !== "function") return;
-        // Sparse footings (every 2nd slab ≈ 11 m): adjacent canyon AABBs touch,
-        // so BFS grounds the run. Every-slab footings made flatCoplanar spots;
-        // every-4th left 9 unsupported islands.
+        // Every 2nd canyon slab + 11 m-wide pier: half the columns, each spans
+        // two panels (props-tri budget) and still closes the 2.56 m BFS gaps.
         let fi = 0;
         // Tag continues the lattice across SAUDI_BLOCKS: without it along()
         // emits the shared end node twice (byte-identical boxes, 0.0 mm, 2.2 m²
         // — the two extra coplanar spots vs baseline 4).
         along(s0, s1, 5.5, (k, spacing) => {
           if ((fi++ % 2) !== 0) return;
+          spacing = 11;
           const p = anchor(k, side, gap);
           const b = [p.r, p.u, p.t];
           let lo = Infinity;
           if (terrainYAt) {
-            for (const ox of [-0.25, 0, 0.25]) {
+            for (const ox of [-0.35, 0, 0.35]) {
               const x = p.c[0] + p.r[0] * ox + p.t[0] * ox * 0.5;
               const z = p.c[2] + p.r[2] * ox + p.t[2] * ox * 0.5;
               const y = terrainYAt(x, z);
               if (y != null && y < lo) lo = y;
             }
           }
+          const idx = fi - 1;
           if (Number.isFinite(lo)) {
             const gapM = p.c[1] - lo;
-            if (gapM < 0.22 || gapM > 3.5) return;
-            const h = gapM + 0.15;
-            addBox(out, [p.c[0], lo + h * 0.5, p.c[2]],
-              [0.65, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
-          } else {
-            // Off-mesh (water/void): deep footing reaches the audit surface.
-            // Jitter height so neighbouring footing tops are not coplanar.
-            const h = 3.05 + (fi % 3) * 0.12;
+            if (gapM < 0.15 || gapM > 3.5) return;
+            const h = gapM + 0.28 + (idx % 5) * 0.022 + hash(k + side * 0.7) * 0.04;
+            const lift = hash(k * 1.3 + side) * 0.06;
+            addBox(out, [p.c[0] + p.r[0] * lift, lo + h * 0.5, p.c[2] + p.r[2] * lift],
+              [0.68, h, spacing * 0.88], [0.56, 0.57, 0.60], b);
+          } else if (side < 0) {
+            // Inland void mesh only — seaward off-mesh footings coplanar waterBand.
+            const h = 3.05 + (idx % 3) * 0.12;
             addBox(out, vadd(p.c, p.u, -h * 0.5 + 0.08),
               [0.70, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
           }
@@ -214,14 +215,14 @@
       // Corniche palm promenade densify — seaward (R) Red Sea corridor + marina
       // lagoon: a second staggered row so the waterfront reads as planted, not
       // bare plate between the canyon and the water (survey sheet-03).
-      for (let i = 0; i < 18; i++) {
-        const s = 0.08 + i * 0.016;
+      for (let i = 0; i < 20; i++) {
+        const s = 0.08 + i * 0.015;
         palmLit(K(s), 1, 9.5 + (i % 3) * 2.2, 7.2 + hash(i * 19) * 2.4, PALMFROND);
         if (i % 2 === 0)
           palmLit(K(s + 0.008), 1, 15.5 + (i % 2) * 2, 6.4 + hash(i * 23) * 2, [0.10, 0.40, 0.18]);
       }
       for (let i = 0; i < 12; i++) {
-        palmLit(K(0.44 + i * 0.014), 1, 10 + (i % 2) * 3.5,
+        palmLit(K(0.42 + i * 0.014), 1, 10 + (i % 2) * 3.5,
           6.8 + hash(i * 29) * 2.2, (i % 2) ? PALMFROND : [0.14, 0.48, 0.20]);
       }
       // Low Corniche sea wall / promenade rail on the seaward edge (outside the

@@ -55,7 +55,7 @@
     turns: [0.1725, 0.1820, 0.2055, 0.2565, 0.2660, 0.2765, 0.2860, 0.3000, 0.3190, 0.3285, 0.3530, 0.3695, 0.4790, 0.4865, 0.4950, 0.5075, 0.5550, 0.5780, 0.5935, 0.6045, 0.6115, 0.6385, 0.7880, 0.8045, 0.8260, 0.8755, 0.9975],
     // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
     barrier: { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
-    furniture: { tree: "palm",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
+    furniture: { tree: "none",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["scaffold", "sandstone", "darkSteel"],  // temporary tube on Corniche stone
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
