@@ -110,7 +110,9 @@
       const SKY_SIL  = [0.26, 0.29, 0.38];   // dark blue-grey tower silhouette (lifted so it reads)
       const SKY_SIL2 = [0.21, 0.24, 0.34];   // deeper varied tone
       (function manamaSkyline() {
-        const clusters = [[0.22, 8, 1]];   // [arcStart, count, side]
+        // Manama CBD sits northwest of Sakhir; read from the back straight, not
+        // over the open desert at the T3–T4 kink (0.22 was the old diagonal frame).
+        const clusters = [[0.640, 6, -1]];   // [arcStart, count, side]
         for (const [arc0, count, side] of clusters) {
           for (let i = 0; i < count; i++) {
             const sFrac = (arc0 + i * 0.024) % 1;
@@ -509,7 +511,6 @@
       // on itself at 0.20-0.21, so 30 m inside that fold is on the tarmac of the
       // next leg (rejBox dropped it every build).
       floodMast(K(0.195), -1, 18, 40);
-      floodMast(K(0.20),  1, 30, 40);
 
       // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
       // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
@@ -539,9 +540,6 @@
       billboard(K(0.23), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
       billboard(K(0.27),  1, 11, 12, 4, [0.90, 0.55, 0.05]);
       marshalPost(K(0.24), -1, 24);
-      for (let i = 0; i < 3; i++) {
-        hospitality((K(0.255) + i * 5) % n, 1, 44 + i * 6, 11, 6, 14);
-      }
 
       // Open desert left + grandstand right. Sparse dry scrub only — no green palms.
       for (let i = 0; i < 8; i++) {
@@ -980,12 +978,11 @@
 
       windTower(K(0.985), -1, 52, 16);
       windTower(K(0.02),  -1, 46, 14);
-      windTower(K(0.255),  1, 60, 13);
       windTower(K(0.63),  -1, 56, 15);
       windTower(K(0.80),   1, 58, 14);
-      // F1 Village marquees — back straight + T4 hospitality terrace.
+      // F1 Village marquee — back straight hospitality terrace only (T4 outside
+      // is open desert beyond the University stand; 0.26 marquee sat in runoff).
       marquee(K(0.79),  1, 40, 12, 44);
-      marquee(K(0.26),  1, 54, 12, 40);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
       videoWall(K(0.02),  1, 40, 12, 7);
@@ -1028,12 +1025,6 @@
         const k = K(sf), hv = hash(k * 83 + i * 3);
         palm(k, -1, 42 + (i % 2) * 4, 9 + hv * 4, hv < 0.5 ? FROND : FROND_DRY);
       }
-      for (let i = 0; i < 7; i++) {
-        const sf = 0.238 + i * 0.007;
-        const k = K(sf), hv = hash(k * 97 + i * 5);
-        palm(k, 1, 36 + (i % 2) * 5, 8.5 + hv * 3.5, hv < 0.45 ? FROND : FROND_DRY);
-      }
-
       const ACACIA     = [0.34, 0.36, 0.20];
       const ACACIA_DRY = [0.40, 0.39, 0.23];
       for (const [sf, side, dist] of [
