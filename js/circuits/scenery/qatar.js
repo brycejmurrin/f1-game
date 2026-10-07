@@ -455,10 +455,10 @@
       }
       marshalPost(K(0.30), -1, 6);
 
-      for (let i = 0; i < 9; i++) {
-        const k = (K(0.305) + i * Math.round(n * 0.007)) % n;
+      for (let i = 0; i < 5; i++) {
+        const k = (K(0.305) + i * Math.round(n * 0.012)) % n;
         for (const side of [-1, 1]) {
-          if (hash(k * 53 + side * 17) <= 0.55) {
+          if (hash(k * 53 + side * 17) <= 0.38) {
             const dd = 26 + hash(k * 59 + side) * 36;
             const scrubCol = hash(k * 61 + side) < 0.5 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
             bush(k, side, dd, scrubCol);
@@ -486,26 +486,17 @@
       guardrail(0.36, 0.50, -1, 4, [0.78, 0.78, 0.80]);
       marshalPost(K(0.43), 1, 6);
 
-      for (let i = 0; i < 6; i++) {
-        const s = 0.46 + i * 0.042;
-        const w = 58 + hash(i * 17 + 4) * 28;
-        const h = 3.0 + hash(i * 23 + 9) * 2.2;
-        const gap = 155 + hash(i * 31 + 2) * 55;
-        const a = anchor(K(s), 1, gap);
-        const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
-        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
-        mountain(a.c[0], a.c[2], baseY, w, h,
-          { seg: 6, seed: 620 + i * 13, rough: 0.30, snowline: 1.6,
-            forest: DUNE, rock: DUNE_N, snow: DUNE_N });
-      }
-
       (function katharaAndStadium() {
         const BRONZE = [0.20, 0.15, 0.10];
         const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];
+        // Real bearings from the OSM centre (Wikipedia 25.49°N 51.454°E): Katara
+        // ~153° / 16 km, Lusail Stadium ~155° / 8.5 km, Aspire ~182° / 25 km
+        // (Aspire deliberately omitted — not on the Lusail horizon). Track frame:
+        // s≈0.82 right shoulder @ ~720 m ≈ 151°; stadium slightly earlier / farther.
 
         (function kataraTowers() {
-          const s = 0.515, dist = 540;
-          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          const s = 0.82, dist = 720;
+          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
           modelGroup("qatar-katara-towers", {
             center: vadd(a.c, a.u, 55), size: [40, 112, 40], basis: b,
           }, (stage) => {
@@ -521,8 +512,8 @@
 
         // Lusail Stadium: wide low golden bowl/drum, ~45 m tall x 90 m wide.
         (function lusailStadium() {
-          const s = 0.542, dist = 560;
-          const a = anchor(K(s), -1, dist), b = [a.r, a.u, a.t];
+          const s = 0.80, dist = 740;
+          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
           modelGroup("qatar-lusail-stadium", {
             center: vadd(a.c, a.u, 22.5), size: [92, 46, 92], basis: b,
           }, (stage) => {
@@ -586,9 +577,9 @@
       billboard(K(0.92), 1, 6, 12, 3.6, AD[5]);
 
       // Sparse desert scrub only (palms/oasis water culled)
-      every(120, (k) => {
+      every(140, (k) => {
         for (const side of [-1, 1]) {
-          if (hash(k * 29 + side * 7) <= 0.40) {
+          if (hash(k * 29 + side * 7) <= 0.28) {
             const dd = 40 + hash(k * 31 + side) * 50;
             const scrubCol = hash(k * 41 + side) < 0.55 ? [0.50, 0.46, 0.32] : [0.30, 0.36, 0.20];
             bush(k, side, dd, scrubCol);
