@@ -1,1 +1,0 @@
-1791279854	Cursor Agent	PR #1077 selected-verdict dropped hud-layout.spec.js; raise MAX_OVERFLOW_SHARDS 8→9 (OWNED tools/ci/select-specs.mjs constant only)  [cursor/narrow-resize-blackout-6ff3; session 9ac93805b3ce700797470418]
