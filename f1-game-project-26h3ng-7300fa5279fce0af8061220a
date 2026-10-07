@@ -1,0 +1,1 @@
+1791369381	Cursor Agent	perf(audio): move LAZY_AUDIO off first title tap: js/core/lazy-bundles.js ensureAudio/restoreOnEngine; js/game.js onAudioReady+gesture hook; tests/unit/*audio*  [claude/f1-game-project-26h3ng; session 7300fa5279fce0af8061220a]
