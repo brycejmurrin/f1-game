@@ -1,1 +1,0 @@
-1791301887	Cursor Agent	Perf-lane: broadcast #1108 done; track-switch leak outside js/render + 60s race alloc. OWNED dispose/teardown proven module + tests. Skip gfx-track js/render. Do not enable auto-merge or merge.  [cursor/broadcast-tower-pool-64da; session ad43615521b06b73727a5ea6]

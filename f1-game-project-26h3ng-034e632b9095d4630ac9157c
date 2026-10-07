@@ -1,1 +1,0 @@
-1791300109	Cursor Agent	Bug hunt: land datahub exclusive-open (How to Play stack) + sibling overlay bugs. OWNED js/data/hub.js tests/unit/data-hub-picker.test.mjs; FORBIDDEN js/game.js css/**. Do not enable auto-merge or merge.  [claude/f1-game-project-26h3ng; session 034e632b9095d4630ac9157c]

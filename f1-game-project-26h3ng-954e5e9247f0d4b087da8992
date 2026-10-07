@@ -1,1 +1,0 @@
-1791301729	Cursor Agent	Perf-lane (user override): mirror / post ping-pong / soft-blit pool on tip. OWNED mirror-pass.js+game call site, tlx-post SSAO/bloom binds, tlx soft-blit pool. Coordinate around gfx-track bug-hunt.  [claude/f1-game-project-26h3ng; session 954e5e9247f0d4b087da8992]
