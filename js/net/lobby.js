@@ -1531,6 +1531,12 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
+            // Drop the half-built invite transport/PC for THIS attempt. Leaving
+            // it after expiry (or a courier fail) leaked the RTCPeerConnection,
+            // kept status().pending true, and blocked a retry from the same guest.
+            // Connected guests live in `transports`/`sessions` — dropPending()
+            // does not touch them.
+            dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
             if (r.error === "expired" && sessions.size) {
