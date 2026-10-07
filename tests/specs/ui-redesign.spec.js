@@ -219,10 +219,17 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("sel-car").click();
   });
+  // openSetup() unhides #carsetup and sets aria-busy, then buildSetup() runs
+  // after two rAFs (so Change Car never freezes on the click stack). Pair /
+  // density can classify while busy is still set and #cs-tabs is empty —
+  // CI 37680910253 (#1243 tip) hit tabs.count === 0 at the tall assert below
+  // because this wait returned one frame early. Wait out busy + real tabs.
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
-    return setup && !setup.hidden && inner?.dataset.pair === "off" && inner.dataset.density === "compact";
+    return setup && !setup.hidden && !setup.hasAttribute("aria-busy")
+      && inner?.dataset.pair === "off" && inner.dataset.density === "compact"
+      && document.querySelectorAll('#cs-tabs [role="tab"]').length > 10;
   }, null, { polling: 100, timeout: 10_000 });
   const compactWideGarage = await page.evaluate(() => {
     const tabsEl = document.getElementById("cs-tabs");
@@ -258,11 +265,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // "off" in the compact-wide state above, so a pair-only wait passes before
   // SheetShape's ResizeObserver reclassifies — and the measure below then
   // still sees the compact 7×2 grid (overflow hidden) instead of the strip.
+  // Also require tabs still present: a shape-only wait can win the same
+  // openSetup rAF race if the compact wait above ever regresses.
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
-    return setup && !setup.hidden && inner && inner.dataset.pair !== "on" &&
-      inner.dataset.shape === "tall";
+    return setup && !setup.hidden && !setup.hasAttribute("aria-busy")
+      && inner && inner.dataset.pair !== "on" && inner.dataset.shape === "tall"
+      && document.querySelectorAll('#cs-tabs [role="tab"]').length > 10;
   }, null, { polling: 100, timeout: 10_000 });
   const tabs = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#cs-tabs [role="tab"]')];
@@ -476,6 +486,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // it from pause → settings → MORE at 200% on the short landscape sheet.
   await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
   await page.setViewportSize({ width: 852, height: 393 });
+  await page.evaluate(() => {
+    if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+  });
   // SETTLE BEFORE MEASURING. The race HUD was fitted at 734x343 a moment ago,
   // and fitHud re-caps --hud-z-top on its next 10 Hz tick at the new size.
   // Reading straight after the resize caught the map BETWEEN the two (CI
@@ -493,7 +506,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const want = +root.style.getPropertyValue("--hud-z-top")
       || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
     return Math.abs((mm.currentCSSZoom || 1) - want) < 1e-3;
-  }, null, { polling: 100, timeout: 5_000 }).catch(() => {});
+  }, null, { polling: 100, timeout: 5_000 });
   // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
   // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
   // and the fit pass's cap alongside it, so the next failure names its own

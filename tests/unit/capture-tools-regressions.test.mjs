@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, truncateSync } from 'node:fs';
+import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, truncateSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
@@ -65,6 +65,7 @@ test('capture parsers reject nonfinite dimensions, scales and unknown flags; see
   assert.equal(parseCaptureArgs(['--seed=0', '--plan'], 'capture-bundle').seed, 0);
   assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'capture-bundle'), /out/);
   assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'capture-bundle'), /unknown track/);
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-path-test-'));
   try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'capture-bundle'), /out real/); }
   finally { rmSync(dir, { recursive: true, force: true }); }
@@ -121,6 +122,7 @@ test('single-screen layout dispatch actually forwards 130 percent and rejects sc
 });
 
 test('garage reset plan preserves existing evidence and invalid part enum never creates output', () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-plan-test-'));
   try {
     writeFileSync(resolve(dir, 'preserved.txt'), 'evidence');
@@ -194,6 +196,7 @@ test('stylesheet load, error and deadline all restore handlers and clear owned t
 });
 
 test('capture runtime obeys actual soft screenshot file and numeric present-wait exports', async () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-runtime-test-'));
   const path = resolve(dir, 'scene.png');
   const png = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#678' } }).composite([{ input: await sharp({ create: { width: 40, height: 30, channels: 3, background: '#abc' } }).png().toBuffer(), top: 14, left: 28 }]).png().toBuffer();
@@ -237,6 +240,7 @@ test('capture operations cap the remaining whole-run budget without passing zero
 });
 
 test('recordCapture passes the real CDP helper sixty-second cap or smaller remaining deadline', async () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-cdp-budget-'));
   const png = await sharp({ create: { width: 96, height: 64, channels: 3, background: '#678' } }).composite([{ input: await sharp({ create: { width: 40, height: 30, channels: 3, background: '#abc' } }).png().toBuffer(), top: 14, left: 28 }]).png().toBuffer();
   const originalSet = globalThis.setTimeout, originalClear = globalThis.clearTimeout;
@@ -281,6 +285,7 @@ test('whole-run deadline invokes harness cleanup without awaiting direct browser
 });
 
 test('replay fixture rejects oversized regular files before parsing and rejects nonfiles', () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-fixture-test-'));
   const path = resolve(dir, 'large.json');
   try {

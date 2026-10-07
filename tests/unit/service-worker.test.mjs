@@ -1171,6 +1171,70 @@ test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed
   assert.equal(fetched, 0);
 });
 
+// L8-c: assets/voice/ URLs carry no ?v= (voice-pack.js fetches bare .json + .bin
+// pairs). Cache-first could pair a stale index with a fresh bin after deploy.
+function voiceHarness({ net, immediateTimeoutMs } = {}) {
+  const h = createHarness({
+    immediateTimeoutMs,
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return net(url);
+    },
+  });
+  h.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/assets/voice/george.json`, new Response('{"oldIndex":true}', { status: 200 })],
+    [`${ORIGIN}/assets/voice/george.bin`, new Response("old-bytes", { status: 200 })],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
+  return h;
+}
+
+test("voice json and bin are network-first: fetch runs before a stale cache can be the only answer", async () => {
+  const order = [];
+  const h = voiceHarness({
+    net: async (url) => {
+      order.push(`fetch:${url.pathname}`);
+      return new Response(url.pathname.endsWith(".json") ? '{"newIndex":true}' : "new-bytes", { status: 200 });
+    },
+  });
+  for (const path of ["/assets/voice/george.json", "/assets/voice/george.bin"]) {
+    order.length = 0;
+    const ev = h.fetchEvent(new Request(`${ORIGIN}${path}`));
+    const body = await (await ev.responsePromise).text();
+    assert.equal(order[0], `fetch:${path}`, `${path} must hit the network first`);
+    assert.notEqual(body, path.endsWith(".json") ? '{"oldIndex":true}' : "old-bytes");
+    await Promise.all(ev.lifetimes);
+    assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}${path}`).text(), body,
+      `${path} fresh copy is written to the current cache`);
+  }
+});
+
+test("offline, voice json and bin fall back to the cached pair", async () => {
+  const h = voiceHarness({ net: async () => { throw new TypeError("offline"); } });
+  const j = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.json`));
+  assert.equal(await (await j.responsePromise).text(), '{"oldIndex":true}');
+  const b = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`));
+  assert.equal(await (await b.responsePromise).text(), "old-bytes");
+});
+
+test("a slow voice fetch loses the race to cache, and its late answer is still cached", async () => {
+  let release;
+  const late = new Promise((r) => { release = r; });
+  const h = voiceHarness({ immediateTimeoutMs: 3000, net: () => late });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"oldIndex":true}');
+  release(new Response('{"newIndex":true}', { status: 200 }));
+  await Promise.all(ev.lifetimes);
+  assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/assets/voice/george.json`).text(), '{"newIndex":true}');
+});
+
+test("pack routing is unchanged when voice is network-first", async () => {
+  const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"new":true}');
+});
+
 for (const cached of [false, true]) {
   test(`a fresh pack response bypasses a stalled generation read (cached=${cached})`, async () => {
     const version = deferred();
