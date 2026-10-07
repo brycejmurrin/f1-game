@@ -208,6 +208,7 @@ const ReplayBuf = (function () {
         c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
         c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
       }
+      if (typeof G.replaySyncRpms === "function") G.replaySyncRpms();
     }
     function beginScrub(showControls = true) {
       if (!allowed()) return false;

@@ -1,6 +1,7 @@
 /* replay-buf.test.mjs — instant-replay ring (js/camera/replay-buf.js).
  * Budget, wrap, interpolate, restore equality, solo/net scrub gates,
- * career-settle / endRace source pins. Run: node --test tests/unit/replay-buf.test.mjs
+ * career-settle / endRace source pins, pause-menu scrub audio (game-vm).
+ * Run: node --test tests/unit/replay-buf.test.mjs
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,8 +9,12 @@ import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
+const { createGame, settle: vmSettle } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
+const { install: installFakeAudio } = require("./fake-audio-vm.cjs");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
 function boot(document) {
@@ -307,4 +312,59 @@ test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every
     assert.ok(w.frames >= R.HZ * 2 - 1, n + " cars: frames=" + w.frames);
     assert.equal(w.cars, Math.min(R.MAX_CARS, n));
   }
+});
+
+async function bootSoloRaceForScrubAudio() {
+  let fa = null;
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); } });
+  const sb = g.sandbox;
+  sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
+  await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
+  for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
+  sb.GameAudio.init();
+  g.G.soundOn = true;
+  await g.race("monza", "day", "dry");
+  g.apex.headless(true);
+  g.apex.setInput({ throttle: true, steer: 0 });
+  const t0 = sb.performance.now();
+  for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
+  return { g, sb, G: g.G, t0, frameBase: 240 };
+}
+
+test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
+  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  try {
+    const doc = g.sandbox.document;
+    G.els.pausebtn.onclick();
+    assert.equal(G.paused, true);
+    assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause silences the engine");
+    const rb = G.replayBuf;
+    assert.ok(rb && rb.window().frames >= 90, "need ~3 s of ring before scrub");
+    let radioCalls = 0;
+    const origRadio = sb.GameAudio.radioVoice.bind(sb.GameAudio);
+    sb.GameAudio.radioVoice = (...a) => { radioCalls++; return origRadio(...a); };
+    assert.equal(rb.beginScrub(false), true);
+    assert.equal(rb.isScrubbing(), true);
+    const player = G.player;
+    for (let i = 1; i <= 20; i++) g.pumpFrame(t0 + (frameBase + i) * 1000 / 60);
+    assert.equal(sb.GameAudio.debug().engineOn, true, "scrub/play feeds the engine voice");
+    const rivals = sb.GameAudio.rivalState().filter((v) => v.gain > 0.001);
+    assert.ok(rivals.some((v) => v.hz > 200), "at least one rival above idle pitch during scrub");
+    assert.equal(radioCalls, 0, "no new radio voice lines during replay scrub");
+    const w = rb.window();
+    rb.apply(w.t0);
+    const slow = player.speed, rpmSlow = player.rpm;
+    rb.apply(w.t1);
+    const fast = player.speed, rpmFast = player.rpm;
+    assert.notEqual(slow, fast, "precondition: scrub window spans different speeds");
+    assert.notEqual(rpmSlow, rpmFast, "rpm must follow replayed speed, not stay pinned");
+    assert.ok(rpmFast > rpmSlow === fast > slow, "rpm ordering matches speed ordering");
+    rb.endScrub();
+    g.pumpFrame(t0 + (frameBase + 25) * 1000 / 60);
+    assert.equal(sb.GameAudio.debug().engineOn, false, "back on the pause menu: engine off again");
+    doc.getElementById("pm-resume").onclick();
+    assert.equal(G.paused, false);
+    g.step(3);
+    assert.equal(sb.GameAudio.debug().engineOn, true, "resume restores live race engine");
+  } finally { g.close(); }
 });

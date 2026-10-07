@@ -631,6 +631,7 @@ interface GameCtx {
   readonly updateTrackPreview: () => void;
   readonly ltKey: () => string;
   readonly exitPhotoMode: () => void;
+  readonly replaySyncRpms: () => void;
 
   // ── Atmosphere helpers ────────────────────────────────────────────────────
   readonly clamp: (v: number, a: number, b: number) => number;
