@@ -1676,12 +1676,15 @@ const TrackDesigner = (function () {
       },
     });
   }
+  /** Per-node height lattice (same as ElevPresets.clampH / the strip). */
+  function elevH(h) {
+    return typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4;
+  }
   /** Replace the whole heights[] array (group elev from the strip). Keeps sel/span. */
   function setHeights(list, anchor) {
     if (!design || !Array.isArray(list)) return false;
     ensureHeights(design);
-    const clamp = (h) => (typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4);
-    const next = design.pts.map((_, k) => clamp(k < list.length ? list[k] : 0));
+    const next = design.pts.map((_, k) => elevH(k < list.length ? list[k] : 0));
     let same = next.length === design.heights.length;
     if (same) for (let k = 0; k < next.length; k++) if (next[k] !== design.heights[k]) { same = false; break; }
     if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length) sel = anchor;
@@ -1698,17 +1701,16 @@ const TrackDesigner = (function () {
   function setNodeHeight(i, h) {
     if (!design || !(i >= 0 && i < design.pts.length)) return false;
     ensureHeights(design);
-    const clamp = (v) => (typeof ElevPresets !== "undefined" ? ElevPresets.clampH(v) : Math.round((+v || 0) * 4) / 4);
-    const v = clamp(h);
+    const v = elevH(h);
     const keepSpan = hasSpan() && typeof TrackShape !== "undefined" && TrackShape.inSpan(i, sel, span, design.pts.length);
     // POINT m / single-node edit: when a SPAN is selected and the anchor is in
     // it, offset every grip in the group by the same delta (relative hills stay).
     if (keepSpan) {
-      const dh = v - clamp(design.heights[i] || 0);
+      const dh = v - elevH(design.heights[i] || 0);
       if (dh === 0) { refreshControls(); return false; }
       const group = TrackShape.spanIndices(sel, span, design.pts.length);
       const next = design.heights.slice();
-      for (const j of group) next[j] = clamp((next[j] || 0) + dh);
+      for (const j of group) next[j] = elevH((next[j] || 0) + dh);
       commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:span");
       if (prof && prof.setSelection) prof.setSelection(sel, span);
       return true;
