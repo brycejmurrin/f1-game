@@ -184,30 +184,36 @@ async function race(page, steer, manual, ins, opts) {
         || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
       if (phoneSteer && (!boost || boost.hidden)) return false;
-      if (!boost || boost.hidden) return true;
       const sec = document.getElementById("hud-sectors");
       if (!sec || sec.hidden || !sec.childElementCount) return false;
-      const b = boost.getBoundingClientRect(), s = sec.getBoundingClientRect();
-      if (!(b.width > 0 && s.width > 0)) return false;
-      const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
-      // S3 must sit entirely left of BOOST (fitHud's painted grow + same-key
-      // clash re-fit). Full AABB alone missed a wrap that still shared rows.
-      if (s.right > b.left + 0.5) return false;
+      const s = sec.getBoundingClientRect();
+      if (!(s.width > 0)) return false;
+      // BOOST clearance only when BOOST sits on the RIGHT (buttons/touch).
+      // Tilt parks BOOST on the left — using that edge as the dock target
+      // blew --dock-r-w to midCap (CI: dockRW 907, sectors under --sal).
+      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      const boostOnRight = !!(b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2);
+      if (boostOnRight) {
+        const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+        if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+        if (s.right > b.left + 0.5) return false;
+      } else if (!boost || boost.hidden) {
+        /* desktop / no BOOST — tower wait above is enough */
+      }
       const ann = document.getElementById("announce");
       if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
         const a = ann.getBoundingClientRect();
         if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
             && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) return false;
       }
-      // Notch safe box: a mid-fit #minimap can sit under --sal for one tick
-      // (full-suite w2: unsafe ["#minimap"] on buttons/manual). Require the
-      // map inside the injected safe insets before freezing.
+      // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
+      // for one tick. Require both inside the injected safe insets.
+      const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
+      const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
+      if (s.left < sal - 0.5 || s.right > window.innerWidth - sar + 0.5) return false;
       const map = document.getElementById("minimap");
       if (map && !map.hidden) {
         const m = map.getBoundingClientRect();
-        const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
-        const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
         if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
       }
       // Freeze in the same turn that saw clearance. updateHud still ticks

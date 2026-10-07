@@ -664,18 +664,18 @@ function fitHud() {
     // #hud-sectors+btn-boost after the wait already saw clearance).
     let clash = false;
     if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
+      const s = els.hudSectors.getBoundingClientRect();
       const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-      if (boost && !boost.hidden) {
-        const s = els.hudSectors.getBoundingClientRect();
-        const b = boost.getBoundingClientRect();
-        if (s.width && b.width && s.right > b.left - 8) clash = true;
-        else {
-          const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
-          if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
-            const a = ann.getBoundingClientRect();
-            if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
-                && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) clash = true;
-          }
+      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
+      if (b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2
+          && s.width && s.right > b.left - 8) clash = true;
+      else {
+        const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
+        if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
+          const a = ann.getBoundingClientRect();
+          if (a.width > 0 && s.width && s.left < a.right - 0.5 && a.left < s.right - 0.5
+              && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) clash = true;
         }
       }
     }
@@ -1071,9 +1071,27 @@ function fitHud() {
   // paint (CI oversize workers=2 otherwise published in the wrong z → S3×BOOST).
   if (_dockR) void _dockR.offsetHeight;
   if (els.hudSectors) void els.hudSectors.offsetHeight;
-  const zPaint = () => (els.hudSectors && els.hudSectors.currentCSSZoom)
-    || +root.style.getPropertyValue("--hud-z-top")
-    || scale || 1;
+  // Prefer the --hud-z-top we just wrote. currentCSSZoom can still read 1 for
+  // a frame after set(), which under-insets S3 onto BOOST (CI oversize:
+  // dockRW 211 at z≈1 while the plate paints at ~0.55).
+  const zPaint = () => {
+    const pub = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+    const live = els.hudSectors && els.hudSectors.currentCSSZoom;
+    if (!(live > 0)) return pub;
+    if (pub < 0.95 && live > pub + 0.15) return pub;
+    return live;
+  };
+  // BOOST only anchors --dock-r-w when it sits in the RIGHT half. Tilt parks
+  // BOOST on the left column; using that left as the inset target blew midCap
+  // (CI: dockRW 907, #hud-sectors unsafe under --sal).
+  const boostRightLeft = () => {
+    const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
+    if (!boost || boost.hidden) return NaN;
+    const br = boost.getBoundingClientRect();
+    if (!(br.width && br.height)) return NaN;
+    if ((br.left + br.right) / 2 < window.innerWidth / 2) return NaN;
+    return br.left;
+  };
   const dockLeftOf = () => {
     let left = Infinity;
     if (_dockR) {
@@ -1083,13 +1101,10 @@ function fitHud() {
         if (r.width && r.height) left = Math.min(left, r.left);
       }
     }
-    // Prefer the BOOST disc when lit — grp-taps can still be mid-wrap while
+    // Prefer the RIGHT-dock BOOST disc — grp-taps can still be mid-wrap while
     // the button's box has already landed (CI: dockLeft 597 vs BOOST 587).
-    const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-    if (boost && !boost.hidden) {
-      const br = boost.getBoundingClientRect();
-      if (br.width && br.height) left = Math.min(left, br.left);
-    }
+    const brLeft = boostRightLeft();
+    if (Number.isFinite(brLeft)) left = Math.min(left, brLeft);
     if (!Number.isFinite(left) && _dockR) {
       const dr = _dockR.getBoundingClientRect();
       if (dr.width) left = dr.left;
@@ -1110,11 +1125,8 @@ function fitHud() {
     // Cap so S3 cannot walk past mid into #minimap / #announce.
     return Math.min(need, midCap);
   };
-  // Publish from the current leftmost / BOOST edge, then at most one painted
-  // correction. Under load a multi-pass += grow could fire while #hud-sectors
-  // had not yet taken the inset (offsetHeight flush lagged), stacking up to
-  // midCap (~half the viewport) and shoving S3 onto #announce (oversize CI
-  // workers=2: dockRW 607 with BOOST still at 587).
+  // Publish from the current leftmost right-dock / BOOST edge, then at most
+  // one painted correction against a RIGHT-side BOOST only.
   let zTop = zPaint();
   let dockRW = insetFor(dockLeftOf(), zTop);
   hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
@@ -1122,17 +1134,14 @@ function fitHud() {
   if (_dockR) void _dockR.offsetHeight;
   if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
     const secR = els.hudSectors.getBoundingClientRect();
-    const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-    const br = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
-    const left = (br && br.width) ? br.left : dockLeftOf();
+    const brLeft = boostRightLeft();
+    const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
     if (secR.width && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5) {
       zTop = zPaint();
       if (zTop > 0) {
-        const overlapPx = secR.right - (left - DOCK_AIR);
-        const midCap = Math.max(0, (window.innerWidth / 2) / zTop - 10 - sarPx / zTop);
-        // Absolute clear from the BOOST edge — do not stack a second += grow
-        // on a stale plate (that is how dockRW hit midCap).
-        dockRW = Math.min(insetFor(left, zTop) + Math.max(overlapPx / zTop, 0), midCap);
+        // Absolute clear from the right-dock edge — never stack += grow on a
+        // stale plate, and never aim at a left-column BOOST (tilt).
+        dockRW = insetFor(left, zTop);
         hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
         void els.hudSectors.offsetHeight;
         if (_dockR) void _dockR.offsetHeight;
