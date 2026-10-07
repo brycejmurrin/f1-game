@@ -136,10 +136,62 @@ test("JOIN_TIMEOUT_MS is the ~8–15 s lobby join target, not a two-minute hang"
   assert.ok(h.NetNostr.JOIN_TIMEOUT_MS <= 15000, "fake/missing codes must not sit on Looking for…");
 });
 
+test("HOST_TIMEOUT_MS is ~120 s so a typed room code still works (#1061 guest stay short)", () => {
+  const h = boot();
+  assert.ok(h.NetNostr.HOST_TIMEOUT_MS >= 60000, "host must outlast a human carrying the code");
+  assert.ok(h.NetNostr.HOST_TIMEOUT_MS <= 180000, "not forever — INVITE ANOTHER refreshes");
+  assert.ok(h.NetNostr.HOST_TIMEOUT_MS > h.NetNostr.JOIN_TIMEOUT_MS * 4,
+    "host and guest deadlines must not share the 12 s JOIN window");
+});
+
 test("Nostr expired copy is actionable (no false 'couple of minutes' claim)", () => {
   const src = read("js/net/nostr.js");
   assert.match(src, /Nobody answered that code/);
   assert.match(src, /Check the six characters/);
   assert.match(src, /fresh one/);
   assert.doesNotMatch(src, /Codes only last a couple of minutes/);
+});
+
+test("host expiry uses HOST_TIMEOUT_MS; guest keeps JOIN_TIMEOUT_MS (source)", () => {
+  const src = read("js/net/nostr.js");
+  assert.match(src, /const HOST_TIMEOUT_MS = 120000/);
+  assert.match(src, /hosting \? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS/);
+  assert.match(src, /clearExpire\(\)/, "guest clears expiry once the answer is posted");
+});
+
+test("host room survives past JOIN_TIMEOUT; guest still expires around it (acceptance)", async () => {
+  // Live repro 14296/3faf59d9: host code T9Q4VH died at 12 s with JOIN_TIMEOUT
+  // shared across roles. Real timers (PBKDF2 needs them); host + guest run in
+  // parallel so wall time is one JOIN_TIMEOUT window, not two.
+  const hostH = boot();
+  const guestH = boot();
+  let hostFail = null;
+  const hostP = hostH.NetNostr.directExchange({
+    code: "T9Q4VH", send: "OFFER", onJoiner: () => {},
+    onFail: (r) => { hostFail = r; },
+  });
+  const guestP = guestH.NetNostr.directExchange({
+    code: "ZZZZZZ",
+    reply: async () => { throw new Error("no offer expected"); },
+  });
+  await Promise.all([hostH.untilSockets(1), guestH.untilSockets(1)]);
+  hostH.sockets[0].open();
+  guestH.sockets[0].open();
+  const hostRoom = await hostP;
+  assert.equal(hostRoom.ok, true, "host exchange resolves to a live room handle");
+
+  const joinMs = guestH.NetNostr.JOIN_TIMEOUT_MS;
+  assert.ok(joinMs <= 15000, "#1061 guest window intact");
+  const guestRes = await Promise.race([
+    guestP,
+    new Promise((_, rej) => setTimeout(() => rej(new Error("guest hung past JOIN_TIMEOUT")), joinMs + 3000)),
+  ]).then((r) => r, (e) => e);
+  assert.equal(guestRes && guestRes.ok, false, "missing-code guest still fails");
+  assert.equal(guestRes && guestRes.error, "expired", "…with expired, not a hang");
+
+  // Same wall time is still well under HOST_TIMEOUT — host must not have fired onFail.
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(hostFail, null, "host must NOT expire at JOIN_TIMEOUT");
+  assert.ok(hostH.sockets.some((s) => s.readyState === 1), "host sockets still open past guest expiry");
+  hostRoom.stop();
 });
