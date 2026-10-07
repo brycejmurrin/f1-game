@@ -706,6 +706,59 @@ test.describe("desktop INPUTS vs gear box", () => {
   });
 });
 
+// PORTRAIT RACE-ANYWAY (body.rotate-ok): the bottom cluster must not pile
+// TYRES / #hud-plan onto GEAR, or grow the gear box into AERO/OT. Tip before
+// this fix (61e0a644 survey): gearbox×tyre 12499px² and gearbox×btn-aero at
+// 390×844 chase HUD 150%. Pages-gate only — run locally; say so in the PR.
+for (const v of [
+  { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
+  { name: "phone-portrait-360", w: 360, h: 740, sal: 0, sar: 0, sat: 0, sab: 0 },
+]) {
+  test.describe(`portrait bottom cluster (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("tilt HUD 150%: tyre/plan clear gear; gear clears AERO/OT", async ({ page }) => {
+      await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150, cam: "chase" });
+      await page.evaluate(() => {
+        document.body.classList.add("rotate-ok");
+        localStorage.setItem("apex26.portraitOk", "1");
+        if (window.__apex && window.__apex.tyres) window.__apex.tyres({ level: "real" });
+        const plan = document.getElementById("hud-plan");
+        if (plan && !plan.textContent) plan.textContent = "PLAN NO STOP";
+        const tyre = document.getElementById("hud-tyre");
+        if (tyre) tyre.hidden = false;
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        window.__apex.jump(0.15, 60, 0);
+      });
+      await page.waitForFunction(() => {
+        const gear = document.getElementById("hud-gearbox");
+        const tyre = document.getElementById("hud-tyre");
+        const aero = document.getElementById("btn-aero");
+        if (!gear || !tyre || tyre.hidden || !aero || aero.hidden) return false;
+        const g = gear.getBoundingClientRect(), t = tyre.getBoundingClientRect(), a = aero.getBoundingClientRect();
+        if (!(g.width && t.width && a.width)) return false;
+        const gearTyre = g.left < t.right - 0.5 && t.left < g.right - 0.5
+          && g.top < t.bottom - 0.5 && t.top < g.bottom - 0.5;
+        const gearAero = g.left < a.right - 0.5 && a.left < g.right - 0.5
+          && g.top < a.bottom - 0.5 && a.top < g.bottom - 0.5;
+        return !gearTyre && !gearAero;
+      }, null, { polling: 100, timeout: 30_000 });
+      const targets = [
+        { key: "hud-gearbox", sel: "#hud-gearbox", role: "hud" },
+        { key: "hud-tyre", sel: "#hud-tyre", role: "hud" },
+        { key: "btn-aero", sel: "btn-aero", role: "ctrl" },
+        { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+        { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      ];
+      const recs = await page.evaluate(probeHudElements, { targets });
+      const r = analyzeOverlap(recs, v.w, v.h, v);
+      const hits = r.hudClash.filter((p) =>
+        p.includes("hud-gearbox") || p.includes("hud-tyre"));
+      expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+    });
+  });
+}
+
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
