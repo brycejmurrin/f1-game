@@ -52,6 +52,8 @@
       { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
       { kinds: ["city"], s0: 0.15, s1: 0.55 },
       { kinds: ["city"], s0: 0.83, s1: 0.95 },
+      // Valdebebas / IFEMA pit straight: drop generic city.js CBD towers at s≈0.08.
+      { kinds: ["city"], s0: 0.06, s1: 0.15 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
@@ -78,6 +80,9 @@
     standSet: ["crimson", "sandstone", "steel"],  // the file hardcodes these at its own call sites
     // IFEMA / Castilian campus: white / glass / steel / stone (not ochre brick canyon)
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // Mid-rise fh/bh (e.g. fh:[10,14] bh:[18,14]) regresses clip-audit past
+    // baseline 7 without a follow-up pass — Valdebebas height is the exclusion
+    // above plus the bespoke urbanBlock band in scenery/madrid.js.
     cityStyle: { neon: ["red", "gold", "white", "cyan", "violet"], bias: 0.28, fh: [14, 38], bh: [30, 70],
                  kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] },
                  dayPal: ["white", "bluglass", "steel", "stone", "paleblue", "concrete", "darkglass", "cream"] },
