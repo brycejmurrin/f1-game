@@ -3,9 +3,14 @@
 
 const NetNostr = (function () {
   // Guest join of a fake/missing code must fail in the lobby in ~8–15 s, not
-  // sit on "Looking for that room…" for two minutes. Hosts that need longer
-  // mint a fresh code (INVITE ANOTHER); this is not a relay event TTL.
+  // sit on "Looking for that room…" for two minutes (#1061). The HOST keeps
+  // the code advertised longer — a friend typing a six-letter code off another
+  // screen takes tens of seconds, and lobby.js / INVITE ANOTHER reopen assume
+  // ~120 s (HOST_TIMEOUT_MS). Sharing JOIN_TIMEOUT for both roles made live
+  // hosts show "Nobody answered…" at 12 s while a late guest still joined
+  // (apex-sha 3faf59d9 / build 14296). Not a relay event TTL.
   const JOIN_TIMEOUT_MS = 12000;
+  const HOST_TIMEOUT_MS = 120000;
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
   const MAX_HANDSHAKE_CHARS = 512 * 1024;
@@ -258,18 +263,27 @@ const NetNostr = (function () {
         if (unlisten) { unlisten(); unlisten = null; }
       };
       // Every deadline goes through later() so finish() can reclaim it — an
-      // orphaned 2-min expiry timer otherwise retains this whole closure
+      // orphaned host-timeout timer otherwise retains this whole closure
       // (sockets, module, payloads) long after the exchange settled.
       const timers = [];
-      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+      const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
       let unlisten = null;   // the visibility listener's teardown (set once the sockets exist)
       let again = null;   // the reply's re-publish interval (heard, below)
+      let expireTimer = null;
+      const clearExpire = () => {
+        if (expireTimer == null) return;
+        clearTimeout(expireTimer);
+        const i = timers.indexOf(expireTimer);
+        if (i >= 0) timers.splice(i, 1);
+        expireTimer = null;
+      };
       const finish = (r) => {
         if (done) return;
         done = true;
         clearInterval(tick); clearInterval(repost); clearInterval(again);
         for (const id of timers) clearTimeout(id);
         timers.length = 0;
+        expireTimer = null;
         shut();
         nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
@@ -322,6 +336,10 @@ const NetNostr = (function () {
           return;
         }
         await publish(out);
+        // Answer is on the wire: do not let JOIN_TIMEOUT kill the exchange
+        // during the 5.2 s re-post window (a late find + answer used to land
+        // past 12 s and codeJoin printed "Nobody answered…" while connected).
+        clearExpire();
         // Publish it a few more times before leaving: a relay that dropped the
         // first copy must not cost the whole handshake, and this is cheap.
         let n = 0;
@@ -341,14 +359,14 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
-      later(() => finish({ ok: false, error: "expired",
+      expireTimer = later(() => finish({ ok: false, error: "expired",
         // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
         // differ, so the two never meet — say what fixes that too. Lobby
         // codeJoin already surfaces why.message; keep this actionable.
         message: "Nobody answered that code. Check the six characters, or ask "
                + "your friend for a fresh one — if it keeps happening, both "
                + "reload the game and try a new code." }),
-        JOIN_TIMEOUT_MS);
+        hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
 
       let opened = 0;
       // ONE SOCKET PER RELAY, REOPENED WHEN IT DIES. A phone host switches to
@@ -485,7 +503,7 @@ const NetNostr = (function () {
   // createEvent/subscribe is reached.
   const exchange = directExchange;
 
-  return { JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
+  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
     RELAYS, relayUrls, validRelay,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
     readRelayFrame, createBoundedInbox };
