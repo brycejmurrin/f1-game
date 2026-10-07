@@ -688,7 +688,7 @@ function buildChampion() {
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
-  if (G.soundOn) GameAudio.finish();
+  // endRace already played the finish fanfare; a second finish() here stacked blips on the season finale.
 }
 
 return { buildResults, buildTTResults, buildStandings, buildChampion };

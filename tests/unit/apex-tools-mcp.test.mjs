@@ -1410,6 +1410,33 @@ test("a job's reported log is the file holding its output, and status tails it",
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 
+// 2026-10-07 (#1192): apex_hud_shot / apex_hud_survey outlast the host's
+// ~60–120 s MCP call, so they default to hud_* jobs. Those kinds run only the
+// argv the server built and pinned — never one a JSON caller supplies.
+test("hud_shot / hud_survey jobs take a server-pinned argv only", async () => {
+  const body = (r) => JSON.parse(r.stdout);
+  for (const kind of ["hud_shot", "hud_survey"]) {
+    const bare = body(callCli("apex_job_start", { dryRun: true, kind }));
+    assert.equal(bare.error, "bad_args", `${kind} without a pinned argv must refuse`);
+    const smuggled = body(callCli("apex_job_start", { dryRun: true, kind, _argv: ["/bin/sh", "-c", "id"] }));
+    assert.equal(smuggled.error, "bad_args", `${kind} must reject a caller argv`);
+  }
+  const { createExtras, HUD_JOB_ARGV, JOB_KINDS } = await import("../../tools/mcp/apex-extras.mjs");
+  assert.ok(JOB_KINDS.includes("hud_shot") && JOB_KINDS.includes("hud_survey"));
+  assert.equal(typeof HUD_JOB_ARGV, "symbol");
+  const toolResult = (b, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(b) }], ...(isError || b.ok === false ? { isError: true } : {}) });
+  const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+  const x = createExtras({ ROOT, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+    assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut: () => ({}), log() {}, mockMode: () => false });
+  const argv = [process.execPath, "tools/shot/hud-survey.mjs", "--device", "desktop-1280", "--cam", "chase"];
+  const planned = JSON.parse(x.handlers.apex_job_start({ kind: "hud_shot", dryRun: true, [HUD_JOB_ARGV]: argv }).content[0].text);
+  assert.equal(planned.ok, true, JSON.stringify(planned));
+  assert.deepEqual(planned.argv, argv);
+  assert.equal(planned.browser, true, "hud jobs hold the browser lock");
+  const viaString = JSON.parse(x.handlers.apex_job_start({ kind: "hud_shot", dryRun: true, "Symbol(apex.hudJobArgv)": argv }).content[0].text);
+  assert.equal(viaString.error, "bad_args", "a string key never stands in for the Symbol");
+});
+
 test("apex_graph_parity all:true routes to the graph_parity_all job, never the 180 s spawn", () => {
   const body = (r) => JSON.parse(r.stdout);
   const all = callCli("apex_graph_parity", { dryRun: true, base: "HEAD~1", all: true });
