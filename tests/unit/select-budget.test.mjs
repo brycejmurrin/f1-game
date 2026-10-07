@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { capacity, declaredTests, MEASURED, VARIANTS, SPEC_COUNTS } from "../../tools/ci/select-budget.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -75,6 +76,19 @@ test("declaredTests expands statically resolvable for-of loops (per-circuit spec
   assert.equal(declaredTests("tests/specs/abudhabi-foundation.spec.js"), 2);
   // menu-baseline: 2 shapes × 3 screens (the ci.yml comment already says six)
   assert.equal(declaredTests("tests/specs/menu-baseline.spec.js"), 6);
+});
+
+test("declaredTests expands the auditTracks() roster (terrain-over-road)", () => {
+  // CI runs 37603233990 (selected-3, 72 tests run vs 21 billed) and
+  // 37607617812 (selected-4, 73 run vs 22 billed): `for (const trk of
+  // TRACKS)` with TRACKS = auditTracks() billed once, so terrain-over-road
+  // read as 5 tests, packed beside five other specs, and the 10-minute job
+  // was cancelled at its cap with 0 failures — which skipped poke-train.
+  const roster = createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS.length;
+  assert.ok(roster >= 40, `expected a full circuit roster, got ${roster}`);
+  // 4 named single-circuit tests + one per circuit in the roster.
+  assert.equal(declaredTests("tests/specs/terrain-over-road.spec.js"), 4 + roster,
+    "terrain-over-road bills one test per audited circuit, not one for the loop");
 });
 
 test("the spec census is real — anti-vacuity", () => {

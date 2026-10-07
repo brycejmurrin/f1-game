@@ -1,5 +1,5 @@
 /* Apex 26 — RELIABILITY: whether a car reaches the flag at all. Without it every car finishes every race, and a championship — a career above all — is a pure … */
-const Reliability = (function () {
+var Reliability = (function () {
   "use strict";
 
   // What the RELIABILITY race setting means, as a scale on every risk below. OFF is

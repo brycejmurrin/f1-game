@@ -78,6 +78,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/all-lights-fill.test.mjs",
   // The pack's wildcard environment fills in only what the palette did not author;
   // an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/always-lamp-floor.test.mjs",
   "tests/unit/ambient-env-override.test.mjs",
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
@@ -580,6 +581,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  "tests/unit/race-session-lazy.test.mjs",
   // Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus
   // Season SETUP scroll/chip pins (layer on #1082 chrome).
   "tests/unit/race-setup-sheets.test.mjs",
