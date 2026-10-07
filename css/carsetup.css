@@ -330,30 +330,38 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
-/* PLAY-SHAPE GARAGE (compact, stacked, not tall): a one-line head with CLOSE
-   GARAGE / BACK+DONE in the header row's trailing column, then ONE full-width
-   pan-x category strip, then the parts list. MEASURED (852×344, 2026-10-07):
-   placing .sheet-foot beside #cs-tabs on row 2 left the strip ~207px — only
-   ~3 of 15 tabs visible without scrolling; the auto column beside the strip was
-   mostly dead space once exit=one shows a single dismiss. Row 1 is already
-   `minmax(0,1fr) auto`: the head shares the line with FREE BUILD, so the foot
-   rides column 2 row 1 and #cs-tabs spans 1 / -1 on row 2. Tall (portrait)
-   sheets keep the stack above — they have height. Tab order is unchanged
-   (foot stays last in the DOM). */
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  row-gap: calc(var(--gap) * 0.5);
-}
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; min-width: 0; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > #cs-body { display: contents; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
-  grid-column: 1 / -1; grid-row: 2;
-  padding-inline: var(--pad);
-  scroll-padding-inline: var(--pad);
+/* PLAY-SHAPE GARAGE (compact, stacked, short LANDSCAPE only): a one-line head
+   with CLOSE GARAGE / BACK+DONE in the header row's trailing column, then ONE
+   full-width pan-x category strip, then the parts list. MEASURED (852×344,
+   2026-10-07): placing .sheet-foot beside #cs-tabs on row 2 left the strip
+   ~207px — only ~3 of 15 tabs visible without scrolling; the auto column
+   beside the strip was mostly dead space once exit=one shows a single dismiss.
+   Row 1 is already `minmax(0,1fr) auto`: the head shares the line with FREE
+   BUILD, so the foot rides column 2 row 1 and #cs-tabs spans 1 / -1 on row 2.
+   Gated on `orientation: landscape` as well as `:not([data-shape="tall"])`:
+   a 70% portrait sheet can read shape=wide (wider than tall — comment near the
+   portrait --compact-at), and without the orientation gate the #cs-body
+   `display: contents` + header-foot grid would fire on portrait. Train Desk
+   job 112998862430 failed tabs.count at 390×844; live dump there is
+   tall/normal (play-shape off, 15 tabs) — the zero was the openSetup rAF race
+   (spec wait). The landscape gate is the belt so a shape misread cannot apply
+   play-shape in portrait. Tab order unchanged (foot stays last in the DOM). */
+@media (orientation: landscape) {
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    row-gap: calc(var(--gap) * 0.5);
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; min-width: 0; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > #cs-body { display: contents; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
+    grid-column: 1 / -1; grid-row: 2;
+    padding-inline: var(--pad);
+    scroll-padding-inline: var(--pad);
+  }
 }
 /* THE ONE STRIP IS EVERY STACKED COMPACT SHEET'S, portrait included; only the
-   grid placement above is play-shape's. MEASURED (layout-audit,
+   landscape grid placement above is play-shape's. MEASURED (layout-audit,
    ios-iphone-portrait 393x659, 2026-10-05, on 42cb42fbf): the tall garage
    kept two tab rows of two-line tabs and a roomy head, and #cs-options was a
    62 px box over 2832 px (50.7 screens). With the portrait --compact-at (the
@@ -401,49 +409,51 @@
   scroll-snap-align: start;
   scroll-snap-stop: normal;
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
-  grid-column: 2; grid-row: 1;
-  align-self: center;
-  display: flex; flex-direction: column; flex-wrap: nowrap;
-  gap: calc(var(--gap) * 0.45);
-  padding: 0 var(--pad) 0 calc(var(--gap) * 0.5);
-  background: none;
-  min-width: 0;
-  justify-self: end;
-  justify-content: center;
+@media (orientation: landscape) {
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
+    grid-column: 2; grid-row: 1;
+    align-self: center;
+    display: flex; flex-direction: column; flex-wrap: nowrap;
+    gap: calc(var(--gap) * 0.45);
+    padding: 0 var(--pad) 0 calc(var(--gap) * 0.5);
+    background: none;
+    min-width: 0;
+    justify-self: end;
+    justify-content: center;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
+    padding-inline: calc(var(--gap) * 0.65);
+    min-width: var(--tap-paint, var(--tap));
+    min-height: var(--tap-paint, var(--tap));
+    min-block-size: var(--tap-paint, var(--tap));
+    max-width: 9em;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options {
+    grid-column: 1 / -1; grid-row: 3;
+    padding: 0 var(--pad) calc(var(--pad) * 0.25);
+  }
+  /* ...AND THE HEAD IS ONE LINE. Same measurement: the head was two lines, the
+     title over a budget row that was itself readout-over-FREE-BUILD, 76 own of
+     the 281. The title stacks GARAGE over the team name in a narrow column, the
+     readout wraps to two lines beside FREE BUILD instead of above it, and the
+     row is as tall as the FREE BUILD chip (~52 own with padding). The budget row
+     asks for 5.5 chips of width, so a team name too long for the title column
+     still wraps the row underneath, as before — nothing truncates.
+     FOLDED WITH #919 (d5eb31183): its compact-tier `#cs-budget-row` nowrap and
+     `#cs-budget` flex: 1 1 0 / min-width: 0 (end of this file, every compact
+     garage) are the readout-beside-FREE-BUILD half of this, so those
+     declarations are no longer repeated here; this tier adds only the title
+     column, the row's width basis and the readout's leading. */
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-header { flex-wrap: wrap; align-items: center; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar {
+    flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: 0;
+    min-width: 0; max-width: calc(var(--label) * 7.5);
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { line-height: 1.2; }
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
-  padding-inline: calc(var(--gap) * 0.65);
-  min-width: var(--tap-paint, var(--tap));
-  min-height: var(--tap-paint, var(--tap));
-  min-block-size: var(--tap-paint, var(--tap));
-  max-width: 9em;
-}
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options {
-  grid-column: 1 / -1; grid-row: 3;
-  padding: 0 var(--pad) calc(var(--pad) * 0.25);
-}
-/* ...AND THE HEAD IS ONE LINE. Same measurement: the head was two lines, the
-   title over a budget row that was itself readout-over-FREE-BUILD, 76 own of
-   the 281. The title stacks GARAGE over the team name in a narrow column, the
-   readout wraps to two lines beside FREE BUILD instead of above it, and the
-   row is as tall as the FREE BUILD chip (~52 own with padding). The budget row
-   asks for 5.5 chips of width, so a team name too long for the title column
-   still wraps the row underneath, as before — nothing truncates.
-   FOLDED WITH #919 (d5eb31183): its compact-tier `#cs-budget-row` nowrap and
-   `#cs-budget` flex: 1 1 0 / min-width: 0 (end of this file, every compact
-   garage) are the readout-beside-FREE-BUILD half of this, so those
-   declarations are no longer repeated here; this tier adds only the title
-   column, the row's width basis and the readout's leading. */
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-header { flex-wrap: wrap; align-items: center; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar {
-  flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: 0;
-  min-width: 0; max-width: calc(var(--label) * 7.5);
-}
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget { line-height: 1.2; }
 #cs-options {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
@@ -1643,11 +1653,14 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot > button {
   min-width: 0; margin: 0;
 }
-/* Play-shape (compact, wide): dismiss lives in the header row — not the
-   two-column foot grid above, which belongs on portrait/tall stacked sheets. */
-#cs-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > .sheet-foot {
-  display: flex; flex-direction: column; flex-wrap: nowrap;
-  grid-template-columns: none;
+/* Play-shape (compact, short landscape): dismiss lives in the header row —
+   not the two-column foot grid above, which belongs on portrait/tall stacked
+   sheets. Same orientation gate as the play-shape block above. */
+@media (orientation: landscape) {
+  #cs-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > .sheet-foot {
+    display: flex; flex-direction: column; flex-wrap: nowrap;
+    grid-template-columns: none;
+  }
 }
 
 /* ---------- portrait: the car gets the bottom band ---------- */
