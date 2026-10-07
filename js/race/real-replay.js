@@ -268,11 +268,20 @@ const RealReplay = (function () {
       return true;
     }
 
+    function stopRadioClip() {
+      if (!run || !run.audio) return;
+      try {
+        if (run.audio.stop) run.audio.stop();
+        else run.audio.pause();
+      } catch (e) { /* already gone */ }
+      run.audio = null;
+    }
+
     function stop() {
       if (!run) return;
       if (transport) transport.stop();
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
-      if (run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; }
+      stopRadioClip();
       if (bc) bc.stop();
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching(null);
       if (G.setCamMode && run.savedCamera != null) G.setCamMode(run.savedCamera, { persist: false });
@@ -300,7 +309,7 @@ const RealReplay = (function () {
       if (c) setFollow(c);
       return c ? c.code : null;
     }
-    function setSpeed(v) { if (run && v > 0) { run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); if (run.speed !== 1 && run.audio) { run.audio.pause(); run.audio = null; } } return run ? run.speed : 0; }
+    function setSpeed(v) { if (run && v > 0) { run.speed = clamp(v, SPEEDS[0], SPEEDS[SPEEDS.length - 1]); if (run.speed !== 1 && run.audio) stopRadioClip(); } return run ? run.speed : 0; }
     function stepSpeed(dir) {
       if (!run) return 0;
       let i = SPEEDS.findIndex((s) => s >= run.speed - 1e-6); if (i < 0) i = SPEEDS.length - 1;
@@ -317,7 +326,7 @@ const RealReplay = (function () {
     function reposition(t, highlight, paint = false) {
       run.T = t; run.fired.clear();
       // A discontinuity must release the prior audio and all broadcast history.
-      if (run.audio) { run.audio.pause(); run.audio = null; }
+      stopRadioClip();
       pose(true);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (bc) bc.resetTiming();
@@ -441,7 +450,7 @@ const RealReplay = (function () {
     // Gate on G.paused too: rotate-block / photo-mode re-hide #pausemenu in the
     // same task as setPaused(true), so MutationObserver runs after the card is
     // already hidden again and `!pause.hidden` alone never fires (#1029's twin).
-    const cutClip = () => { if (run && run.audio) { try { run.audio.pause(); } catch (e) { /* already gone */ } run.audio = null; } };
+    const cutClip = () => stopRadioClip();
     if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
       document.addEventListener("visibilitychange", () => { if (document.hidden) cutClip(); });
       const pause = typeof document.getElementById === "function" ? document.getElementById("pausemenu") : null;
@@ -449,19 +458,38 @@ const RealReplay = (function () {
         new MutationObserver(() => { if (G.paused || !pause.hidden) cutClip(); }).observe(pause, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
-    // A real clip is an HTMLAudioElement, outside the WebAudio master, so SOUND
-    // OFF and VOICE VOLUME never reached it: honour both here (iOS ignores
-    // .volume, so a zero volume skips the clip rather than trusting it).
+    // OpenF1 clips run through GameAudioRadioFx (band-pass, compressor, duck) when
+    // the lazy audio bundle is up; plain HTMLAudio + duck is the last resort.
     function playRadio(h) {
       if (!h.url || typeof Audio === "undefined") return;
       const vol = G.radio && G.radio.volume ? G.radio.volume() : 0.9;
       if (!G.soundOn || !(vol > 0)) { if (G.announce) G.announce(h.text, CAPTION_S, "info"); return; }
       try {
-        if (run.audio) run.audio.pause();
-        const a = new Audio(h.url); a.volume = Math.min(1, vol); run.audio = a;
-        const p = a.play(); if (p && p.catch) p.catch(() => { /* autoplay refused: the caption still says who called */ });
+        stopRadioClip();
+        let clip = null;
+        if (typeof GameAudioRadioFx !== "undefined" && GameAudioRadioFx && GameAudioRadioFx.playWatchMedia) {
+          clip = GameAudioRadioFx.playWatchMedia(h.url, { volume: vol });
+        } else if (typeof GameAudio !== "undefined" && GameAudio && GameAudio.radioMediaClip) {
+          clip = GameAudio.radioMediaClip(h.url, { volume: vol });
+        }
+        if (!clip) {
+          if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+          const a = new Audio(h.url);
+          a.volume = Math.min(1, vol);
+          const off = () => { if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false); };
+          a.onended = a.onerror = off;
+          clip = {
+            get paused() { return a.paused; },
+            get ended() { return a.ended; },
+            pause() { a.pause(); off(); },
+            play() { return a.play(); },
+            stop() { a.pause(); off(); },
+          };
+        }
+        run.audio = clip;
+        if (clip.play && clip.paused) { const p = clip.play(); if (p && p.catch) p.catch(() => { /* autoplay refused */ }); }
         if (G.announce) G.announce(h.text, CAPTION_S, "info");
-      } catch (e) { /* no audio: silent replay */ }
+      } catch (e) { stopRadioClip(); /* no audio: silent replay */ }
     }
     function finish() {
       if (!run || run.finished) return;

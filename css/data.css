@@ -40,6 +40,8 @@
 body[data-density="compact"] .dh-overlay { align-items: stretch; }
 
 .dh-card {
+  /* 760px fit phones and the default APPEARANCE width token; wide desktop
+     grows in the body[data-width="wide"] rule below so seven tabs stay one row. */
   width: min(760px, 100%);
   /* UI SIZE applies here — the hub used to sit outside every zoomed subtree
      (ARCHITECTURE-REVIEW A13/A14), so SETTINGS ▸ UI SIZE never touched it.
@@ -91,6 +93,9 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
    --wide-at / --compact-at are local (zoom-aware); the old min-width/min-height
    media query could not see UI SIZE. */
 body[data-width="wide"][data-density="normal"] .dh-card {
+  /* Seven destinations at normal tab padding need ~900px; 760 wrapped WATCH &
+     DRIVE + EXPORT onto a second row at 1280×800 (layout-audit 2026-10-06). */
+  width: min(920px, 100%);
   --dh-desk-h: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
   min-height: var(--dh-desk-h);
   max-height: var(--dh-desk-h);
@@ -185,6 +190,11 @@ body[data-density="compact"] .dh-error { gap: var(--gap); padding: var(--gap); }
 body[data-density="compact"] .dh-race-sub {
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
 }
+/* Portrait / tall narrow: venue lines ("Circuit de Monaco · Monte Carl…")
+   must wrap like compact — the default nowrap+ellipsis is for wide one-line rows. */
+body[data-shape="tall"][data-width="narrow"] .dh-race-sub {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
 /* TALL-SHAPED viewport: a tab GRID so every destination is visible without a
    sideways gesture. As many columns as a label fits (auto-fit on the label's
    own width, 7.1 of its font), not a fixed two: the grid was sized for six
@@ -226,10 +236,20 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   /* a flick at the end of a long standings table shouldn't rubber-band the page
      behind the hub */
   overscroll-behavior-y: contain;
+  /* ScrollFade draws .sf-scroll::before; hide the native gutter so desktop does
+     not show a grey bar beside the orange thumb (settings #pm-settings-body). */
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
   padding: calc(var(--gap) * 4 / 3) calc(var(--gap) * 1.5);
   display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
 }
+.dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
+body[data-width="wide"][data-density="normal"] .dh-content {
+  /* Pinned desktop card height: extra bottom pad so the last schedule row is
+     not half-clipped at scrollTop max (1280×800 walkthrough 2026-10-06). */
+  padding-bottom: calc(var(--gap) * 2);
+}
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
 .dh-section {
@@ -828,6 +848,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line); border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3); font: inherit; font-size: var(--fs-3);
   max-width: 220px; min-width: 0;
+  min-height: var(--tap-paint);
 }
 /* Narrow local width: selects take full width so they don't truncate names */
 body[data-width="narrow"] .dh-pick-field { width: 100%; }

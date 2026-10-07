@@ -728,6 +728,39 @@ test("WATCH: a rotate-block pause that re-hides the card in the same task still 
   replay.stop();
 });
 
+test("WATCH OpenF1 team radio routes through GameAudioRadioFx.playWatchMedia (FX chain + duck)", () => {
+  const ducks = [];
+  const chain = [];
+  const playWatchMedia = (url, o) => {
+    chain.push({ url, volume: o && o.volume });
+    ducks.push(true);
+    return {
+      chained: true,
+      paused: false,
+      ended: false,
+      pause() { ducks.push(false); },
+      play: () => Promise.resolve(),
+      stop() { ducks.push(false); },
+    };
+  };
+  const { replay, G, options } = transportReplay({
+    Audio: class { play() { return Promise.resolve(); } pause() {} },
+    GameAudioRadioFx: { playWatchMedia },
+    GameAudio: { setRadioDuck: (on) => ducks.push(!!on) },
+  });
+  options.script.radio = [{ t: 3, num: 1, url: "https://example.test/radio.mp3" }];
+  G.soundOn = true;
+  G.radio = { volume: () => 0.8 };
+  replay.start(options);
+  replay.tick(3.5);
+  assert.equal(chain.length, 1, "playWatchMedia is used instead of bare new Audio()");
+  assert.equal(chain[0].url, "https://example.test/radio.mp3");
+  assert.equal(chain[0].volume, 0.8);
+  assert.ok(ducks.includes(true), "music duck latched for the clip");
+  replay.stop();
+  assert.ok(ducks.includes(false), "stop releases the duck");
+});
+
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
   const { replay, G, cars, drivers, options } = transportReplay();
   drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;
