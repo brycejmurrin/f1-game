@@ -3007,6 +3007,7 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  GameAudio.stopMusic();   // the race loop must not play under the results sheet
   // quitToMenu hides the rain field; endRace must too — otherwise it keeps
   // drawing into every frame behind the results sheet (audio alone stopped).
   // Particles.rainActive() is the seed gate, not the audio flag.

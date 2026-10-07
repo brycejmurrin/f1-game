@@ -823,6 +823,7 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/engine-revs-replay-vm.test.mjs",
         "tests/unit/finish-coast-rev-vm.test.mjs",
         "tests/unit/incident-rpm.test.mjs",
