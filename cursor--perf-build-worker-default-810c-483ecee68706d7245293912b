@@ -1,1 +1,0 @@
-1791345931	Cursor Agent	perf: default buildWorker ON + race-entry overlap (js/track/build-*, js/workers/**, startRace loaders)  [cursor/perf-build-worker-default-810c; session 483ecee68706d7245293912b]
