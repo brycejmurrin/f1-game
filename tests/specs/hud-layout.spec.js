@@ -176,26 +176,35 @@ async function race(page, steer, manual, ins, opts) {
       if (!tower) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
-    }, null, { polling: 100, timeout: 5_000 });
-    // fitHud publishes --dock-r-w after the top/dock zoom caps (2026-10-07:
-    // #hud-sectors+#announce fix). Under CI parallel load the tower wait alone
-    // was enough for --hud-top-h but sectors still measured on BOOST
-    // (notched-landscape buttons, 4 workers, APEX_FAIL_ON_FLAKY=1).
-    await page.waitForFunction(async () => {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
+      // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
       if (document.body.classList.contains("desktop")) return true;
+      const phoneSteer = document.body.classList.contains("steer-buttons")
+        || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
-      const sectors = document.getElementById("hud-sectors");
-      if (!boost || boost.hidden || !sectors) return false;
-      const sec = sectors.getBoundingClientRect();
-      const br = boost.getBoundingClientRect();
-      if (!(sec.width > 0 && br.width > 0)) return false;
+      if (phoneSteer && (!boost || boost.hidden)) return false;
+      if (!boost || boost.hidden) return true;
+      const sec = document.getElementById("hud-sectors");
+      if (!sec || sec.hidden || !sec.childElementCount) return false;
+      const b = boost.getBoundingClientRect(), s = sec.getBoundingClientRect();
+      if (!(b.width > 0 && s.width > 0)) return false;
       const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
       if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
-      const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
-        && sec.top < br.bottom - 0.5 && br.top < sec.bottom - 0.5;
-      return !hit;
+      // S3 must sit entirely left of BOOST (fitHud's painted grow + same-key
+      // clash re-fit). Full AABB alone missed a wrap that still shared rows.
+      if (s.right > b.left + 0.5) return false;
+      const ann = document.getElementById("announce");
+      if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
+        const a = ann.getBoundingClientRect();
+        if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
+            && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) return false;
+      }
+      // Freeze in the same turn that saw clearance. updateHud still ticks
+      // while frozen, but fitHud's painted-clash path re-opens the same-key
+      // backoff if wrap-reverse crawls BOOST back onto S3.
+      try { window.__apex.freeze(true); } catch (_) { /* */ }
+      return true;
     }, null, { polling: 100, timeout: 15_000 });
   }
 }
@@ -519,7 +528,14 @@ test.describe("tilt steer high HUD scale", () => {
       const a = rel.getBoundingClientRect(), b = brake.getBoundingClientRect();
       if (!(a.width && b.width)) return false;
       // fitRows must have slid/capped the card clear of BRAKE (TILT left column).
-      return !(a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
+      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) return false;
+      // jump() + REL unhide re-fits; wait until S3 has cleared BOOST again.
+      const sec = document.getElementById("hud-sectors");
+      const boost = document.getElementById("btn-boost");
+      if (!sec || !boost || sec.hidden || boost.hidden || !sec.childElementCount) return false;
+      const s = sec.getBoundingClientRect(), g = boost.getBoundingClientRect();
+      if (!(s.width > 0 && g.width > 0)) return false;
+      return s.right <= g.left + 0.5;
     }, null, { polling: 100, timeout: 10_000 });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },

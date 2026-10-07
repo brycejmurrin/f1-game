@@ -1027,6 +1027,15 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.refit();
   assert.equal(lane(), (300 - 8 - 158).toFixed(1) + "px",
     "sectors whose centre is left of mid still end the RIGHT of the lane");
+  // Large --dock-r-w can push S3 past the left chrome so w≤0. Clearing the
+  // lane vars then recentres #announce onto the plate (oversize CI).
+  h.els.hudSectors._rect = { left: 100, top: 80, right: 240, bottom: 160, width: 140, height: 80 };
+  h.refit();
+  assert.equal(lane(), "0px",
+    "collapsed lane keeps --announce-lane-w:0 instead of clearing (no centre fallback)");
+  assert.equal(laneLeft(), "158.0px", "collapsed lane keeps the left pin");
+  assert.ok(h.dom.byId("announce").hasAttribute("data-lane-collapsed"),
+    "collapsed lane sets #announce[data-lane-collapsed] for the hard CSS collapse");
   h.els.hudSectors._rect = { left: 650, top: 130, right: 790, bottom: 202, width: 140, height: 72 };
   h.els.minimap._rect = { left: 10, top: 8, right: 220, bottom: 148, width: 210, height: 140 };
   h.refit();
@@ -1053,7 +1062,8 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   const rule = css.match(/body:not\(\.desktop\) #announce \{[^}]*\}/);
   assert.ok(rule, "a touch-only #announce lane rule");
   assert.match(rule[0], /max-width: min\(440px, calc\(72 \* var\(--vwzh\)\), calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
-  assert.match(rule[0], /min-width: min\(200px, calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
+  assert.match(rule[0], /min-width:\s*0/);
+  assert.match(rule[0], /width:\s*min\(100%, max-content, calc\(var\(--announce-lane-w/);
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/);
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?transform: translateX\(var\(--announce-lane-shift, -50%\)\)/);
   assert.doesNotMatch(css, /body\.desktop[^{]*#announce[^{]*\{[^}]*announce-lane/, "desktop never reads the lane");
