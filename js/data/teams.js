@@ -143,11 +143,11 @@ const Teams = (function () {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: RB letters on their own blue read 1.00:1 bare — a light rim.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
-        // The VCARB 03 shows more bare carbon than paint on its wings, and the
-        // family yellow nose tip (launch renders, 15 Jan 2026).
+        // Detroit launch 2026 base: matte white + blue spine; no Miami yellow nose tip.
+        // The VCARB 03 shows more bare carbon than paint on its wings.
         logo3: [0.97, 0.97, 0.98], finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
-                spineTint: [0.086, 0.204, 0.796], wingCarbon: "carbon", nose: [1.0, 0.788, 0.024] },
-      color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
+                spineTint: [0.086, 0.204, 0.796], wingCarbon: "carbon", finish: "matte" },
+      color: [0.961, 0.961, 0.969], color2: [0.086, 0.204, 0.796], /* cool white #F5F5F7 / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
       drivers: [
