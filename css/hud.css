@@ -1932,6 +1932,10 @@ body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
   left: calc(168px + var(--sal) / var(--hud-z));
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
+  /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
+     absolute child of #hud could resolve before --dock-r-w lands and paint the
+     trace over the steer column (844×390 cockpit, INPUTS opt-in). */
+  position: fixed;
   left: auto;
   /* Cap the dock standoff: at HUD/BTN 150% the wrap-reverse right dock can
      measure ~480px wide, and adding the full --dock-r-w shoved this trace

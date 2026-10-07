@@ -43,6 +43,9 @@ test("CSS: touch #hud-rel is capped above the left dock (steer / BRAKE)", () => 
 
 test("CSS: #hud-inputs clears the right dock on touch and the gear box on desktop", () => {
   assert.match(CSS,
+    /body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)\s*\{[^}]*position:\s*fixed/,
+    "touch INPUTS uses fixed layout like sectors");
+  assert.match(CSS,
     /min\(var\(--dock-r-w, 0px\), 128px\)/,
     "touch INPUTS caps --dock-r-w so a wrapped dock cannot shove it left");
   assert.match(CSS,

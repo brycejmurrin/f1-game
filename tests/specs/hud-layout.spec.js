@@ -524,13 +524,21 @@ async function enableOptIns(page) {
     if (typeof HudElements === "undefined") throw new Error("HudElements missing");
     for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
   });
-  await page.waitForFunction(() => {
+  await page.waitForFunction(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const rel = document.getElementById("hud-rel");
     const inp = document.getElementById("hud-inputs");
-    if (!rel || !inp || rel.hidden || inp.hidden) return false;
-    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect();
-    return rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0;
-  }, null, { polling: 100, timeout: 10_000 });
+    const steerR = document.getElementById("btn-steer-right");
+    if (!rel || !inp || !steerR || rel.hidden || inp.hidden || steerR.hidden) return false;
+    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect(), sr = steerR.getBoundingClientRect();
+    if (!(rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0 && sr.width > 0)) return false;
+    const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+    if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+    // INPUTS must sit in the right column (under sectors), not over the steer pair.
+    if (ir.left < sr.right + 4) return false;
+    if (rr.right > ir.left - 4) return false;
+    return true;
+  }, null, { polling: 100, timeout: 15_000 });
 }
 
 test.describe("opt-in readouts vs touch controls", () => {
