@@ -293,7 +293,8 @@ function restoreOnEngine() {
     if (hook && GameAudio.onInterrupted) GameAudio.onInterrupted(hook);
     if (typeof CamModes !== "undefined" && CamModes.CAM_MODES && CamModes.CAM_MODES[G.camMode]) GameAudio.setCameraMix(CamModes.CAM_MODES[G.camMode].id);
     const ua = typeof navigator !== "undefined" ? navigator.userActivation : null;
-    if (G.soundOn && (!ua || ua.hasBeenActive)) GameAudio.init();   // AudioPanel.init's setSound then starts the title loop on it
+    const desktopShell = typeof Native !== "undefined" && Native.platform() === "desktop";
+    if (G.soundOn && (desktopShell || !ua || ua.hasBeenActive)) GameAudio.init();   // AudioPanel.init's setSound then starts the title loop on it
   } catch (e) { Log.warn("audio", "first-gesture replay failed: " + (e && e.message)); }
   return true;
 }
@@ -409,9 +410,29 @@ function raceAssets() {
   // usually a no-op. Do not put them on the title paint path (microtask).
   scheduleIdle(() => { ensureRaceSession(); }, 2800);
   scheduleIdle(() => { prefetchAudio(); }, 4500);
+  bootDesktopAudio();
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface };
+function bootDesktopAudio() {
+  if (typeof Native === "undefined" || Native.platform() !== "desktop") return;
+  const bind = () => {
+    ensureAudio().then((ok) => {
+      if (!ok) return;
+      const G = deps.getContext();
+      if (!G || !G.soundOn) return;
+      try {
+        GameAudio.init();
+        if (G.musicEnabled !== false) GameAudio.startMusic(-1);
+      } catch (e) { Log.warn("audio", "desktop boot audio bind failed: " + (e && e.message)); }
+    });
+  };
+  // game-vm stubs requestIdleCallback as a no-op — use a microtask so unit tests
+  // see the bind without a title gesture. Real Electron still prefers idle paint.
+  if (audioIsGameVm()) queueMicrotask(bind);
+  else scheduleIdle(bind, 400);
+}
+
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio };
 }
   return { create };
 })();
