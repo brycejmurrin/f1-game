@@ -5694,12 +5694,10 @@ function updateCar(c, dt, ranked) {
     // taper reaches the same place at every pace. The slider's own mapping
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
-    // HYPERBOLIC, not clamped-linear: `1 - v/ref` goes negative at any real
-    // racing speed, so a Math.max(0.4, …) floor becomes the operating point —
-    // every notch from 1 to 9 bit-for-bit identical at 72 m/s
-    // (docs/research/PHASE-C-SLIDER-DESIGN.md §2). 1/(1+x) is never negative by
-    // construction, so it needs no floor; do not add one.
-    const lockTaper = 1 / (1 + vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
+    // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
+    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
+    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively

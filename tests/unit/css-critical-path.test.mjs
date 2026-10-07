@@ -113,9 +113,10 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   for (const f of MANIFEST.CSS_PRELOAD) preload += fs.statSync(path.join(ROOT, f)).size;
   // Pre home-live CLS (2026-10-07): blocking 208648 / preload 214469. Live Home
   // grid geometry in css/menus.css adds ~3.6 KiB so experience.css cannot move
-  // the title column on first paint.
-  assert.ok(blocking < 214000, `blocking CSS is ${blocking} B; want < 214000`);
-  assert.ok(preload < 214000, `preload CSS is ${preload} B; want < 214000`);
+  // the title column on first paint. Compact-wide under-brand #menu-secondary
+  // nest (2026-10-07 UI Fit) adds ~2 KiB more in the same blocking sheet.
+  assert.ok(blocking < 218000, `blocking CSS is ${blocking} B; want < 218000`);
+  assert.ok(preload < 218000, `preload CSS is ${preload} B; want < 218000`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });
