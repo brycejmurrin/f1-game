@@ -1,1 +1,0 @@
-1791267873	Cursor Agent	env-probe cost: skip city/chunked on hardware probe faces + ENV_CULL_M 150; OWNED js/game.js env-probe + drawWorldMeshes probe flag, glx/tlx/wgx env-probe, probe tests, chunk-reach; FORBIDDEN other game.js, #1033 hunks, js/fx, js/physics; no auto-merge/merge  [claude/f1-game-project-26h3ng; session 5c56d059932e58c46ab0d529]
