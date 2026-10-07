@@ -581,7 +581,7 @@ const RaceSettings = (function () {
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
             (!isChampionship() && gridFromQuali() && !qualiResults())) { dismissSheet(); openQuali(); }
         else if (raceIntro) {
-          // raceIntroFromSheet raises #loading, yields a frame, then starts the intro.
+          // As every other raceIntro caller does: it hides the title first, so a throw here left no screen at all.
           try { raceIntro(startRace, sheet, $("rs-go")); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); dismissSheet(); startRace(); }
         }
         else { dismissSheet(); startRace(); }

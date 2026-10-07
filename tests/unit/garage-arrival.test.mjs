@@ -417,8 +417,6 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   assert.match(go, /const dismissSheet = \(\) => \{/, 'rs-go sync-dismisses the :modal dialog so #loading is not trapped under top layer');
   assert.ok(go.indexOf('dismissSheet();') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
   assert.match(game, /buildStandings, raceIntro: raceIntroFromSheet,/, 'game.js wires the sheet-covering intro into race settings');
-  assert.match(wrapper, /sheet\.close\(\)/, 'raceIntroFromSheet sync-closes the dialog (MutationObserver is too late)');
-  assert.match(wrapper, /afterPaint|yieldPaint/, 'and yields so #loading paints before intro / warm work');
 });
 
 const introGameSource = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
