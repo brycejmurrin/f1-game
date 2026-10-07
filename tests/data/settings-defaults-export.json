@@ -6483,7 +6483,7 @@
   "appearance.lookRace": "js/ui/screen-looks.js RACE SETTINGS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
   "appearance.lookCareer": "js/ui/screen-looks.js CAREER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
   "appearance.lookGarage": "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
-  "display.buildWorker": "js/track/build-client.js BUILD IN BACKGROUND (only \"1\" is on)",
+  "display.buildWorker": "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)",
   "display.gfxHigh": "js/perf/quality-preset.js (legacy mobile tier)",
   "display.gfxBackend": "js/perf/renderer-picker.js + js/game.js boot (unset = TLX/Three on every device)",
   "display.tlxForceGL": "js/perf/renderer-picker.js (null = AUTO)",

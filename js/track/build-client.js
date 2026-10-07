@@ -1,9 +1,10 @@
 /* Apex 26 — the page side of the track build Worker (js/track/build-worker.js).
-   PROTOTYPE behind apex26.buildWorker = "1", default OFF: spawn() is called
-   when RACE SETTINGS opens so the worker's own parse of the build modules is
-   done before RACE!; build() posts one circuit and resolves the worker's
-   answer; replay() turns its recorded uploads into real gfx calls on the
-   main thread and rebuilds what could not cross (the surface sampler, the
+   Ships ON by default when Worker exists and the device reports more than one
+   logical core (apex26.buildWorker "1"/"0" still forces on/off). spawn() runs
+   when RACE SETTINGS opens (or idleWarm on the title) so the worker parses the
+   build modules before RACE!; build() posts one circuit and resolves the
+   worker's answer; replay() turns its recorded uploads into real gfx calls on
+   the main thread and rebuilds what could not cross (the surface sampler, the
    def, the gfx handle). Any failure answers null and the caller builds in
    steps instead (loadTrackStepped) — the worker only ever saves time; a replay
    that throws is caught there and falls back the same way.
@@ -22,8 +23,22 @@ const TrackBuildClient = (function () {
   let _w = null, _ready = null, _seq = 0;
   const _pending = new Map();
 
+  // Explicit "1"/"0" wins; unset → ON when a Worker exists and there is a spare
+  // core (MULTITHREADING-PLAN §3: single-core phones can lose on worker parse).
+  function defaultOn() {
+    if (typeof Worker === "undefined") return false;
+    try {
+      const cores = (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 2;
+      return cores > 1;
+    } catch (_) { return true; }
+  }
   function enabled() {
-    try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; }
+    try {
+      const v = localStorage.getItem(KEY);
+      if (v === "1") return true;
+      if (v === "0") return false;
+      return defaultOn();
+    } catch (_) { return defaultOn(); }
   }
   // BUILD IN BACKGROUND (pause > SETTINGS, with the renderer levers): the same key,
   // raw lane, "1"/"0". It takes effect on the next build: loadTrackStepped reads it.
@@ -178,13 +193,26 @@ const TrackBuildClient = (function () {
     if (msg.taken) return null;
     msg.taken = true;
     const { track, recs } = msg, real = new Array(recs.length), fallback = [], budget = budgetMs > 0 ? budgetMs : 8;
+    // The worker built with its own keepGeometry=false. Stamp the PAGE's flag
+    // (and the road/terrain always-keep rule from tracks.js) onto each geo
+    // before upload so createChunkedMesh does not null props.pos under
+    // __apex.trackGeometry(true) — montreal-foundation day→night hit that.
+    const keepFull = typeof Tracks !== "undefined" && typeof Tracks.keepGeometry === "function" && !!Tracks.keepGeometry();
+    const stampKeep = (args) => {
+      const geo = args && args[0];
+      if (!geo || typeof geo !== "object") return args;
+      if (keepFull || geo === track.roadGeo || geo === track.terrainGeo) geo._keepPositions = true;
+      if (keepFull) geo._keepFullGeometry = true;
+      return args;
+    };
     try {
       for (let i = 0; i < recs.length;) {
         const t0 = performance.now();
         do {
           const r = recs[i];
-          real[i++] = r.op === "mesh" ? gfx.createMesh(...r.args)
-            : r.op === "chunked" ? gfx.createChunkedMesh(...r.args) : gfx.createInstancedBatch(...r.args);
+          const args = (r.op === "mesh" || r.op === "chunked") ? stampKeep(r.args) : r.args;
+          real[i++] = r.op === "mesh" ? gfx.createMesh(...args)
+            : r.op === "chunked" ? gfx.createChunkedMesh(...args) : gfx.createInstancedBatch(...r.args);
         } while (i < recs.length && performance.now() - t0 < budget);
         if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
       }
@@ -204,7 +232,7 @@ const TrackBuildClient = (function () {
         if (h.chunks && h.chunks.length) continue;
         if (h.chunks == null) m[base] = h;
         else {
-          m[base] = gfx.createMesh(recs[tok.__rec].args[0]);
+          m[base] = gfx.createMesh(stampKeep([recs[tok.__rec].args[0]])[0]);
           fallback.push(m[base]);
           // The empty chunk handle is replaced, so the adopted track cannot
           // free it later. Remove it from our ledger before releasing it.
@@ -251,6 +279,6 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY };
+  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY, defaultOn };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

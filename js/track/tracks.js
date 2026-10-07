@@ -725,6 +725,9 @@ const Tracks = (function () {
     keepGeometry = !!value;
     return keepGeometry;
   }
+  // Read by TrackBuildClient.replay: the worker's Tracks copy never sees the
+  // page's keepGeometry flag, so replay must stamp _keepPositions itself.
+  function getKeepGeometry() { return keepGeometry; }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
 })();
