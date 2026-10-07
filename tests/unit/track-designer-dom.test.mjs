@@ -803,8 +803,8 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   // 3-up foot grid — stacking ALL short heights (incl. 852×344 safari) made
   // clipped findings worse (layout-audit 2026-10-05).
   assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*62%\)\s*minmax\(0,\s*1fr\)/,
-    "narrow+short landscape drops the stage floor so stage+rail fit the body");
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*3fr\)\s*minmax\(0,\s*1fr\)/,
+    "narrow+short landscape biases height to the stage row");
   assert.match(css,
     /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?\.td-foot \{ display: flex/,
     "narrow+short landscape restores a single-row foot");
@@ -859,6 +859,19 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
   // Phone short: elevation strip stays reachable (not display:none).
   assert.match(css, /max-height: 500px[\s\S]*?data-role="profile"[\s\S]*?display:\s*block/, "profile strip kept on short phones");
+  assert.match(css, /\.td-stage canvas \{[^}]*min-height:\s*72px/, "main map canvas keeps a 72px floor in every layout");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1\.65fr\)/,
+    "portrait stack biases height to the stage row");
+  assert.match(css,
+    /@media \(max-height: 500px\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
+    "short viewports hide duplicate stage stats (852×344 safari 2-col included)");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(72px,\s*1fr\)\s*auto/,
+    "portrait stage grid: definite map row + profile");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?\[data-role="toolbar"\][\s\S]*?position:\s*absolute/,
+    "portrait floats UNDO/REDO/FIT on the map to save stack height");
 });
 
 test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {

@@ -115,9 +115,17 @@ const DesignerCanvas = (function () {
     }
 
     // ── size ────────────────────────────────────────────────────────────────
+    let resizeRetry = 0;
     function resize() {
       const r = canvas.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+      /* Flex/grid can report a 0–2px box before the stage row earns height (layout-audit 2026-10-07). */
+      if (h < 8 && resizeRetry < 4) {
+        resizeRetry++;
+        requestAnimationFrame(resize);
+        return;
+      }
+      resizeRetry = 0;
       dpr = Math.min(3, window.devicePixelRatio || 1);
       if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
       W = w; H = h;
