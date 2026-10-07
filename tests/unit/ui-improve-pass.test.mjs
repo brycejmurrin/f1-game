@@ -761,6 +761,10 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     "snap-start so the last flag is not centre-clipped at the strip end");
   assert.equal(decl(sel, "#sel-tracks .track-row:last-child", "scroll-snap-align"), "end",
     "last flag snaps to the end slack instead of hanging off the clip");
+  assert.equal(
+    decl(sel, '#sel-inner[data-density="compact"] #sel-tracks .track-row', "min-height"),
+    "var(--tap-paint)",
+    "compact flag tiles floor at --tap-paint on phone landscape (not padding-only ~45px)");
   assert.equal(decl(sel, "#sel-tracks", "padding-inline-end"), "calc(var(--pad) + var(--chip-h))",
     "strip end pad is one chip plus --pad so the last flag clears the edge");
   assert.equal(decl(sel, "#sel-car small", "white-space"), "normal",

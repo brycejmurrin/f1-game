@@ -296,7 +296,14 @@
    one tap-height row so the hero under it keeps its still (a 393px-tall phone
    has ~200px of body to split between the two). */
 #sel-inner[data-density="compact"] #sel-tracks .track-row-name { display: none; }
-#sel-inner[data-density="compact"] #sel-tracks .track-row { min-width: 0; min-height: 0; padding-block: calc(var(--gap) * 0.2); }
+#sel-inner[data-density="compact"] #sel-tracks .track-row {
+  min-width: 0;
+  /* Flags-only row still floors at --tap-paint: padding-only sizing painted
+     ~71×45 on ios-iphone-landscape (layout-audit 2026-10-06) vs the 52px
+     house floor. The strip stays one row; the hero keeps the name. */
+  min-height: var(--tap-paint);
+  padding-block: calc(var(--gap) * 0.2);
+}
 #sel-inner[data-density="compact"] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.2); }
 /* No tracking and no cap in compact: CLASSICS needed 64px against a 1.2-chip
    divider and lost its last letters (fit-audit 852x393; 52px on a mouse, where
