@@ -34,6 +34,7 @@
     "tests/unit/all-lights-fill.test.mjs",
     "// The pack's wildcard environment fills in only what the palette did not author;",
     "// an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.",
+    "tests/unit/always-lamp-floor.test.mjs",
     "tests/unit/ambient-env-override.test.mjs",
     "// The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice",
     "// ladder on the platforms that do not have Daniel.",
@@ -70,6 +71,7 @@
     "tests/unit/behind-ship.test.mjs",
     "// BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.",
     "tests/unit/bitmap-decode-worker.test.mjs",
+    "tests/unit/blip-voice-pool.test.mjs",
     "// Pure-VM physics/career suites added 2026-09-22 (the coverage census's",
     "// zero-reference module and the two thin spots): each under a second.",
     "tests/unit/body-attitude.test.mjs",
@@ -526,6 +528,7 @@
     "// The branch-prune rule behind prune-branches.yml: merged-only, never an",
     "// open PR's head, claims on age; pure fixtures, under a second.",
     "tests/unit/prune-branches.test.mjs",
+    "tests/unit/pu-harvest-audio.test.mjs",
     "tests/unit/quick-validate.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
@@ -808,6 +811,7 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/engine-revs-replay-vm.test.mjs",
         "tests/unit/finish-coast-rev-vm.test.mjs",
         "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -816,6 +820,7 @@
         "tests/unit/net-audio-revs-vm.test.mjs",
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
@@ -1200,6 +1205,7 @@
     "test:lifecycle-unit": {
       "files": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "kind": "node"

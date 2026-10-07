@@ -78,6 +78,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/all-lights-fill.test.mjs",
   // The pack's wildcard environment fills in only what the palette did not author;
   // an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/always-lamp-floor.test.mjs",
   "tests/unit/ambient-env-override.test.mjs",
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
@@ -114,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
+  "tests/unit/blip-voice-pool.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
@@ -438,7 +440,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
   "tests/unit/lamp-shadow-pick.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
-  "tests/unit/lazy-audio-yield.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -570,6 +571,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
+  "tests/unit/pu-harvest-audio.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",

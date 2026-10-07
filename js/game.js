@@ -4318,7 +4318,7 @@ const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comp
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
 const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
-                  deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
+                  deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
@@ -4540,6 +4540,8 @@ function update(dt) {
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
+    _engArg.throttle = player.throttleDemand ?? 0; _engArg.brake = player.brakeDemand ?? 0;
+    _engArg.regen = player.ersRegen ?? 0.5;
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
       clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
