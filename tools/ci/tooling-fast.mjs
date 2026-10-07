@@ -570,6 +570,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
+  "tests/unit/pu-harvest-audio.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
