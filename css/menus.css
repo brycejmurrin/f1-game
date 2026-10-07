@@ -344,44 +344,44 @@ html[data-home-live] #overlay #menu-brand {
   align-self: end; position: relative; z-index: 1; isolation: isolate; overflow: hidden;
   padding: var(--gap); border-radius: var(--r-md); background: var(--scrim-heavy);
 }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay {
+html[data-home-live] :where(body[data-shape="wide"]) #overlay {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: start; gap: var(--gap);
 }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay #menu-brand {
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; align-self: start; text-align: start; align-items: flex-start;
 }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay #title {
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #title {
   font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4));
 }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay #menu-buttons {
+html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons {
   grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   touch-action: pan-y; min-height: 0;
 }
 @media (max-height: 660px) {
-  :where(body[data-shape="wide"]) html[data-home-live] #overlay #menu-buttons { gap: calc(var(--gap) * 0.5); }
-  :where(body[data-shape="wide"]) html[data-home-live] #overlay :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
-  :where(body[data-shape="wide"]) html[data-home-live] #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-buttons { gap: calc(var(--gap) * 0.5); }
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
+  html[data-home-live] :where(body[data-shape="wide"]) #overlay #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
 }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
-:where(body[data-shape="wide"]) html[data-home-live] #overlay :is(#menu-primary, #menu-explore) {
+html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
+html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-primary, #menu-explore) {
   --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap));
 }
-:where(body[data-shape="tall"]) html[data-home-live] #overlay { grid-template-rows: auto minmax(0, 1fr); }
-:where(body[data-shape="tall"]) html[data-home-live] #overlay #menu-buttons {
+html[data-home-live] :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, 1fr); }
+html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   align-self: stretch; align-content: start; min-height: 0; max-height: 100%;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
 }
-:where(body[data-shape="wide"][data-density="compact"]) html[data-home-live] #overlay {
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   grid-template-columns: minmax(0, 1fr) min(46%, 400px);
 }
-:where(body[data-shape="wide"][data-density="compact"]) html[data-home-live] #overlay #menu-buttons { align-self: start; }
-:where(body[data-density="compact"]) html[data-home-live] #overlay #menu-buttons .bigbtn {
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { align-self: start; }
+html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-:where(body[data-density="compact"]) html[data-home-live] #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
+html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
    experience.css used to wait). Classic/static keeps the three-band portrait cars. */
 @media (max-width: 699px) {
@@ -500,7 +500,7 @@ html[data-home-live] #overlay #menu-brand {
 /* experience.css's live-scene `padding: var(--gap)` is a shorthand that
    would wipe the inset above. These two beat it (extra attrs / :has) so
    HOW TO PLAY still scrolls clear of ANIMATE / INSTALL. */
-html[data-home-live] body[data-shape="tall"] #overlay #menu-buttons {
+html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   padding-bottom: calc(var(--tap) + var(--gap));
   scroll-padding-bottom: calc(var(--tap) + var(--gap));
   scrollbar-width: none;
