@@ -434,16 +434,27 @@ const SceneryStructures = (function () {
       // proud of its track-facing side) when race control shows a flag. Until
       // 2026-10-04 this was a waving cloth flag coloured by hash(k) — yellow on
       // ~72 % of posts, blue on the rest — standing yellows all race long.
-      const polePos = vadd(p.c, p.r, side * 1.4), panelAt = vadd(polePos, p.u, 3.3);
+      //
+      // POLE_LAT 1.12 (was 1.4): the hut's back face is at |r|=1.1, so the
+      // 8 cm pole overlaps the wall AABB. At 1.4 m the pole + panel were a
+      // separate unsupported cluster (monaco 6, spa 2, brands_hatch — ground-
+      // audit 2026-10-07): hillside terrain under the offset foot sat
+      // 0.28-0.40 m below the sink, and the roof styles below left a
+      // > GAP (0.15 m) air gap over the wall so support never reached them.
+      const POLE_LAT = 1.12;
+      const polePos = vadd(p.c, p.r, side * POLE_LAT), panelAt = vadd(polePos, p.u, 3.3);
       const panel = vadd(vadd(vadd(panelAt, p.t, 0.525), p.u, 0.31), p.r, -side * 0.12);
       ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
       ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
         if (st === "cabin") {                          // timber lean-to, open front
-          rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]);
-          rec.prism([0, 2.7, 0], [2.6, 1.0, 2.8], roof);
-          rec.box([-side * 1.0, 0.9, 0], [0.12, 0.9, 2.6], [0.40, 0.31, 0.22]);
+          rec.box([0, 1.0, 0], [2.0, 2.8, 2.6], [0.52, 0.40, 0.28]); // top 2.4
+          rec.prism([0, 2.30, 0], [2.6, 1.0, 2.8], roof);            // was 2.7: 0.30 m air gap over the wall
+          // Open-front board: sunk and thickened into the wall. At [1.0, 0.9]
+          // × 0.12 m it hung 0.45 m off the ground and lost the wall AABB on
+          // Spa's banked cabin posts (gap 0.15–0.16 m, ground-audit 2026-10-07).
+          rec.box([-side * 0.95, 0.55, 0], [0.22, 1.8, 2.6], [0.40, 0.31, 0.22]);
         } else if (st === "container") {               // shipping container
           rec.box([0, 1.0, 0], [2.4, 2.6, 5.4], [0.28, 0.44, 0.40]);
           rec.box([0, 1.0, 0], [2.5, 1.0, 5.5], [0.22, 0.37, 0.34]);   // rib band
@@ -451,8 +462,11 @@ const SceneryStructures = (function () {
         } else if (st === "kiosk") {                   // glazed booth, thin canopy
           for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
             rec.cyl([dr * 0.95, -0.35, dt * 0.95], 0.07, 2.9, [0.55, 0.56, 0.60], 4);
-          rec.box([0, 1.5, 0], [1.9, 1.5, 1.9], [0.32, 0.44, 0.52]);
-          rec.box([0, 2.6, 0], [2.6, 0.16, 2.6], roof);
+          rec.box([0, 1.5, 0], [1.9, 1.5, 1.9], [0.32, 0.44, 0.52]); // top 2.25
+          // Seat into the wall (≥ GAP) but keep the canopy TOP clear of the
+          // wall's top plane by MIN_SEP — a flush 2.25/2.25 pair was 7 flat
+          // coplanar spots on Suzuka's kiosk posts (ground-audit 2026-10-07).
+          rec.box([0, 2.20, 0], [2.6, 0.20, 2.6], roof);             // 2.10..2.30; was 2.6 float / 2.17 flush
         } else if (st === "bunker") {                  // half-buried concrete cell
           rec.box([0, 0.55, 0], [3.0, 1.9, 3.0], [0.70, 0.70, 0.67]);
           rec.box([-side * 1.5, 0.95, 0], [0.14, 0.5, 2.2], [0.12, 0.13, 0.15]);
@@ -462,21 +476,28 @@ const SceneryStructures = (function () {
           for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
             rec.cyl([dr * 1.1, -0.35, dt * 1.1], 0.06, 2.7, [0.60, 0.61, 0.64], 4);
           rec.mat(MAT.FABRIC);
-          rec.prism([0, 2.6, 0], [2.8, 0.8, 2.8], roof);
+          rec.prism([0, 2.25, 0], [2.8, 0.8, 2.8], roof);            // was 2.6: fabric sat above the pole tops
           rec.mat(0);
         } else if (st === "tower") {                   // raised platform + ladder
           for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
             rec.cyl([dr * 1.0, -0.35, dt * 1.0], 0.09, 3.6, [0.46, 0.47, 0.50], 4);
-          rec.box([0, 3.3, 0], [2.6, 0.2, 2.6], [0.62, 0.63, 0.66]);
-          rec.box([0, 3.9, 0], [2.6, 0.9, 0.10], roof);
+          rec.box([0, 3.3, 0], [2.6, 0.2, 2.6], [0.62, 0.63, 0.66]); // deck top 3.4
+          rec.box([0, 3.35, 0], [2.6, 0.9, 0.10], roof);             // was 3.9: rail floated 5 cm over the deck
           rec.box([side * 1.3, 1.6, 0], [0.10, 3.4, 0.6], [0.46, 0.47, 0.50]);
         } else {                                       // hut (default): pitched roof + door + window
           rec.box([0, 1.1, 0], [2.2, 3.0, 2.2], [0.85, 0.86, 0.88]);   // wall block, base sunk 0.4, top at 2.6
-          rec.prism([0, 2.55, 0], [2.6, 0.85, 2.6], roof);             // pitched roof seated on the wall top (prism is base-anchored)
+          // Seat the prism ≥ 15 cm into the wall so banked world AABBs still
+          // touch (ground-audit TOUCH=0.05 / GAP=0.15); 2.55 left only 5 cm.
+          rec.prism([0, 2.40, 0], [2.6, 1.0, 2.6], roof);
           rec.box([-side * 1.12, 0.55, 0], [0.12, 1.3, 0.9], [0.20, 0.21, 0.24]); // trackward doorway, proud of the face
           rec.box([-side * 1.12, 1.8, 0.6], [0.08, 0.6, 0.6], [0.34, 0.46, 0.55]); // window pane
         }
-        rec.cyl([side * 1.4, -0.35, 0], 0.08, 4.35, [0.4, 0.4, 0.42], 4);   // base sunk
+        // Pole against the back face; foot sunk 1.0 m so a lateral grade drop
+        // of up to ~0.65 m still grounds it (was -0.35 / 4.35 → top still 4.0).
+        rec.cyl([side * POLE_LAT, -1.0, 0], 0.08, 5.0, [0.4, 0.4, 0.42], 4);
+        // Short arm so every style's wall half-width (cabin 1.0 … bunker 1.5)
+        // still chains support to the pole under the AABB touch test.
+        rec.box([side * (POLE_LAT * 0.5), 1.55, 0], [POLE_LAT, 0.14, 0.14], [0.4, 0.4, 0.42]);
       }, { kind: "marshalPost", k, side });
       flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
