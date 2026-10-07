@@ -556,6 +556,8 @@ test("the coke pinch narrows the cover's FOOT only: exact at both ends, never wi
 
 test("the rounded engine cover is one closed, outward skin at CarShade.COVER_Z, and the build draws it there", () => {
   assert.deepEqual(Array.from(CarShade.COVER_Z), [-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00]);
+  assert.ok(CarShade.COVER_Z_NEAR.length > CarShade.COVER_Z.length, "garage/near has denser rear rings");
+  for (const z of CarShade.COVER_Z) assert.ok(CarShade.COVER_Z_NEAR.includes(z), `NEAR keeps mid/far ring ${z}`);
   for (const car of recipeCars()) {
     const a = Car3D.bodyAnchors(car.parts, car.id, car.spine, true), o = collect();
     CarShade.coverLoft(o, a, Car3D.coverProfile, -0.55, -2.00, [1, 0, 0], o.tri);
@@ -574,6 +576,56 @@ test("the rounded engine cover is one closed, outward skin at CarShade.COVER_Z, 
   };
   assert.deepEqual(rings(true), Array.from(CarShade.COVER_Z), "the rounded cover is drawn at every ring");
   assert.deepEqual(rings(false), [-0.55, -2.00], "the flat cover keeps its two stations");
+});
+
+// Garage / near densifies the engine-cover cross-section and rear COVER_Z
+// rings; field body and silhouette (mid / far track LOD) keep the cheap loft
+// so rival-car budgets do not grow with the garage polish.
+test("garage/near densifies the engine cover; mid/far LOD keep the cheap loft", () => {
+  const c = { x: 0.24, bottom: 0.22, top: 0.82, k: 0.02 };
+  const sparse = Car3D.coverProfile(c), dense = Car3D.coverProfile(c, true);
+  assert.equal(sparse.pts.length, 4, "mid/far profile stays four points");
+  assert.ok(dense.pts.length > sparse.pts.length, "garage/near samples the shoulder→crown curve");
+  assert.deepEqual(dense.keys, sparse.pts, "dense keys match the sparse polyline");
+  assert.equal(dense.pts[0][0], sparse.pts[0][0], "foot stays the first point");
+  assert.equal(dense.pts[1][0], sparse.pts[1][0], "shoulder stays pts[1] for flank drapes");
+  const rb = factoryCars(Parts, Teams).find((car) => car.id === "redbull");
+  const ecTris = (opts) => {
+    const m = Car3D.build([0.2, 0.2, 0.6], [0.9, 0.9, 0.1], {
+      teamId: "redbull", parts: rb.parts, livery: rb.spine ? { spineHeight: rb.spine } : {},
+      smooth: true, measure: true, noWheels: true, ...opts,
+    });
+    const i = m.parts.findIndex((p) => p.name === "engineCover");
+    const from = m.parts.slice(0, i).reduce((n, p) => n + p.vertices, 0);
+    const n = m.parts[i].vertices;
+    let t = 0;
+    for (let k = 0; k < m.idx.length; k += 3) {
+      const a = m.idx[k], b = m.idx[k + 1], c2 = m.idx[k + 2];
+      if (a >= from && a < from + n && b >= from && b < from + n && c2 >= from && c2 < from + n) t++;
+    }
+    return t;
+  };
+  const near = ecTris({}), mid = ecTris({ field: true }), far = ecTris({ silhouette: true });
+  assert.equal(mid, far, "field body and silhouette share the cheap cover loft");
+  assert.ok(near > mid, `garage/near cover ${near} should beat mid/far ${mid}`);
+  // Mid/far must not pick up the denser rings: their cover-coloured z set is
+  // exactly COVER_Z (the near build also has those, plus the extra rear rings).
+  const coverZs = (opts) => {
+    const SENT = [0.31, 0.62, 0.93];
+    const m = Car3D.build([0.2, 0.2, 0.6], [0.9, 0.9, 0.1], {
+      teamId: "redbull", parts: rb.parts, livery: { cover: SENT }, smooth: true, noWheels: true, ...opts,
+    });
+    const z = new Set();
+    for (let v = 0; v < m.pos.length / 3; v++) {
+      if (m.col[v * 3] === SENT[0] && m.col[v * 3 + 1] === SENT[1] && m.col[v * 3 + 2] === SENT[2]
+          && m.pos[v * 3 + 2] <= -0.55 && m.pos[v * 3 + 2] >= -2.00) z.add(+m.pos[v * 3 + 2].toFixed(4));
+    }
+    return [...z].sort((a, b) => b - a);
+  };
+  assert.deepEqual(coverZs({ field: true }).filter((z) => CarShade.COVER_Z.includes(z)),
+    Array.from(CarShade.COVER_Z), "mid LOD stays on COVER_Z");
+  const nearZs = coverZs({});
+  for (const z of CarShade.COVER_Z_NEAR) assert.ok(nearZs.includes(z), `near build has ring ${z}`);
 });
 
 // A COLOURED livery halo is paint, a grey one metal. Since the metal surface

@@ -549,7 +549,33 @@ const CarShade = (function () {
   //   the pinch. car-mesh drapes the flank decal at the same rings, so the
   //   graphic stays its 14 mm off the skin (13.0-14.7 measured) where one
   //   straight quad, a chord across the pinch, stood up to 40 mm off it.
+  // Mid / far track LOD (field body, silhouette): the original nine rings.
   const COVER_Z = Object.freeze([-0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.70, -1.90, -2.00]);
+  // Garage / near: same envelope + rings that tighten the taper into the rear
+  // wing. car-mesh drapes flank decals on COVER_Z; extras only refine the skin.
+  const COVER_Z_NEAR = Object.freeze([
+    -0.55, -0.66, -0.90, -1.13, -1.28, -1.47, -1.58, -1.70, -1.80, -1.90, -1.95, -2.00,
+  ]);
+  // Dense garage/near cross-section: keys = [foot, shoulder, facet, crown].
+  // Quarter-ellipse shoulder→crown; mid samples tugged toward the facet so
+  // crest width at ±0.55x stays honest for mounted decals.
+  function densifyCoverPts(keys, n) {
+    n = n == null ? 5 : n;
+    const foot = keys[0], shoulder = keys[1], facet = keys[2], crown = keys[3];
+    const pts = [foot, shoulder];
+    const rx = Math.max(1e-6, shoulder[0] - crown[0]), ry = Math.max(1e-6, crown[1] - shoulder[1]);
+    for (let i = 1; i <= n; i++) {
+      const t = i / (n + 1), th = t * Math.PI * 0.5;
+      let x = crown[0] + rx * Math.cos(th), y = shoulder[1] + ry * Math.sin(th);
+      if (t > 0.35 && t < 0.65) {
+        const w = 1 - Math.abs(t - 0.5) / 0.15;
+        x += (facet[0] - x) * 0.35 * w; y += (facet[1] - y) * 0.35 * w;
+      }
+      pts.push([x, y]);
+    }
+    pts.push(crown);
+    return pts;
+  }
   const RAMP = Object.freeze({ from: -0.38, to: -1.48, coke: 0.95, span: 0.35, outer: 0.75, inner: 0.50, min: 0.03, gap: 0.01 });
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const cokeOf = (c) => Math.max(0.72, Math.min(1.38, c == null ? 1 : c));   // car3d sidepodStations' clamp
@@ -580,11 +606,13 @@ const CarShade = (function () {
     const s = 1 - Math.pow(1 - t, p);
     return Object.assign({}, c, { xb: Math.max(0.76 * c.x, F.x * (1 - s) + R.x * s) });
   }
-  /** The ENGINE COVER from zF to zR as one closed skin: per COVER_Z ring the
-   *  section is car3d's coverProfile(anchors.coverAt(z)).pts — foot, shoulder,
-   *  facet, crown on the right, mirrored — closed along the bottom. */
-  function coverLoft(out, anchors, profile, zF, zR, col, tri) {
-    const zs = [zF].concat(COVER_Z.filter((z) => z < zF && z > zR), [zR]);
+  /** The ENGINE COVER from zF to zR as one closed skin: per ring the section
+   *  is car3d's coverProfile(…).pts — foot, shoulder, facet(s), crown on the
+   *  right, mirrored — closed along the bottom. `o.zs` selects the ring table
+   *  (COVER_Z mid/far, COVER_Z_NEAR garage/near); default COVER_Z. */
+  function coverLoft(out, anchors, profile, zF, zR, col, tri, o) {
+    const table = (o && o.zs) || COVER_Z;
+    const zs = [zF].concat(table.filter((z) => z < zF && z > zR), [zR]);
     skin(out, zs.map((z) => {
       const p = profile(anchors.coverAt(z)).pts;
       return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
@@ -791,8 +819,8 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
-           downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, smooth,
+  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, COVER_Z_NEAR, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
+           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, smooth,
            skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();
