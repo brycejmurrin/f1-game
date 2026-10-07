@@ -57,6 +57,7 @@ var RivalAudio = (() => {
           const prev = slots[at - 1], cur = slots[at];
           cur.lat = prev.lat; cur.arc = prev.arc; cur.rev = prev.rev;
           cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
+          cur.net = prev.net; cur.key = prev.key;
           at--;
         }
         const slot = slots[at];
@@ -72,6 +73,10 @@ var RivalAudio = (() => {
         // arc 0 stepped the pitch by ~300 cents across 0.2 m of arc as a car
         // came past. Lateral speed is not tracked (track-frame x is a position).
         slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
+        // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
+        const np = G.netPlay;
+        slot.net = !!(np && np.active && np.active() && np.owns && np.owns(c));
+        slot.key = typeof G.wireId === "function" ? G.wireId(c) : G.cars.indexOf(c);
       }
       // Bind voices. A car already bound keeps its voice; a voice whose car left
       // the set is freed; a newcomer takes the lowest free voice.

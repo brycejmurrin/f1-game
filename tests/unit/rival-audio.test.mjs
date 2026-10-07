@@ -191,6 +191,23 @@ test("a voice is handed on only when its car leaves the voiced set", () => {
     assert.equal(r.slot, first.find((f) => f.arc === r.arc).slot, `the car at ${r.arc} m kept its voice`);
 });
 
+test("net-owned rivals are flagged for heavier engine pitch smoothing", () => {
+  const me = car({ s: 500 });
+  const remote = car({ s: 510 });
+  const ai = car({ s: 515 });
+  const G = {
+    track: { total: LAP },
+    cars: [me, remote, ai],
+    wireId: (c) => G.cars.indexOf(c),
+    netPlay: { active: () => true, owns: (c) => c === remote },
+  };
+  const got = load().create(G).collect(me);
+  const byArc = Object.fromEntries(got.map((r) => [r.arc, r]));
+  assert.equal(byArc[10].net, true, "net-owned rival");
+  assert.equal(byArc[15].net, false, "local AI rival");
+  assert.equal(byArc[10].key, 1);
+});
+
 test("Doppler closing speed is the line-of-sight component: zero when level, full when in line", () => {
   // -(arc/dist)·Δv, not -sign(arc)·Δv: the old form flipped the full Δv across
   // arc = 0 — a ~300-cent pitch step in 0.2 m as a car came past.
