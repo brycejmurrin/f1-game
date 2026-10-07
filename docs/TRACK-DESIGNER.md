@@ -32,10 +32,11 @@ the browser loses nothing.
 | You want to… | Do this |
 |---|---|
 | Select a point | Tap (click) a white point — selecting never moves it. |
-| Move the road | Drag a **selected** point (or drag past a short threshold on mouse). Arrow keys nudge 1 m (10 m with Shift). **UNDO** restores an accidental move. |
+| Select a group (SPAN) | Shift-tap a second point, or press **SELECT END** then tap the end. The road between them highlights; every white point on that stretch is in the group. Tap a **TURNS** row to select that corner as a span. |
+| Move the road | Drag a **selected** point (or drag past a short threshold on mouse). With a SPAN selected, drag any point in the group — the whole stretch moves together. Arrow keys nudge 1 m (10 m with Shift), the whole SPAN when one is selected. **UNDO** restores an accidental move. |
 | Add a point | Tap (click) the road between two points. |
 | Remove a point | Double-tap it, press and hold it and choose DELETE, or select it and press **DELETE POINT**. A loop keeps at least 8 points. |
-| Cycle points | **PREV POINT** / **NEXT POINT**, Tab, or `[` `]` step through the loop; Escape deselects. |
+| Cycle points | **PREV POINT** / **NEXT POINT**, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. |
 | Draw a new circuit | Pick **DRAW** and draw one closed loop in a single stroke. It closes, smooths and spaces itself, and the start goes on its longest straight. |
 | Look around | Pinch or use the wheel to zoom, drag empty space to pan, **FIT VIEW** to recentre. Pan and zoom never move points. |
 | Turn it around | **REVERSE** runs the circuit the other way; the start line stays put. |
@@ -67,8 +68,9 @@ about to lay down, for example `CORNER R 60 m × 90° LEFT`:
 
 Then tap the point where the shape should begin: it replaces the road after
 that point and rejoins the loop. **STAMP AT SELECTED POINT** does the same for
-the point you have selected. Shift-tap a second point first to replace exactly
-the stretch between the two. Not what you wanted? **UNDO**.
+the point you have selected. With a SPAN selected (shift-tap a second point,
+**SELECT END**, or a **TURNS** row), the button reads **REPLACE THE SELECTED
+SPAN** and rebuilds exactly that stretch. Not what you wanted? **UNDO**.
 
 ## The start line
 
@@ -148,10 +150,14 @@ Switch to **ELEVATION** mode. The strip under the canvas is the circuit's
 height profile (start line on the left), with one grip per control point. Amber
 dots mark slope, crest and dip warnings.
 
-- **Select** — tap a grip. Selecting never changes height.
+- **Select** — tap a grip. Selecting never changes height. Shift-tap a second
+  grip (or **SELECT END** then tap) for a SPAN — every grip in the group
+  highlights.
 - **Edit height** — drag the **selected** grip vertically (horizontal motion
-  is ignored), or use **POINT m** in the rail. Up/Down on the strip nudge 1 m
-  (5 m with Shift); Delete / Enter flatten that node.
+  is ignored), or use **POINT m** in the rail. With a SPAN selected, a drag or
+  **POINT m** / Up/Down offsets the whole group by the same amount (relative
+  hills inside the span stay). Up/Down nudge 1 m (5 m with Shift); Delete /
+  Enter flatten that node (or every node in the SPAN).
 - **Presets** — **Flat** clears heights; **Rolling** / **Hilly** write smooth
   per-node profiles (one UNDO each). Old saves without heights load flat.
 - **BANKING & KERBS** — in the same mode: pick **KERB** style (**FLAT** /

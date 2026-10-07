@@ -47,11 +47,15 @@ function boot(heights) {
   const ev = { changes: [], selects: [] };
   let pr = null;
   pr = DP.create(canvas, {
-    onChange: (i, h, live) => {
-      ev.changes.push({ i, h, live });
-      if (!live) { list = list.slice(); list[i] = h; pr.setHeights(list); }
+    onChange: (i, h, live, all) => {
+      ev.changes.push({ i, h, live, all: all ? all.slice() : null });
+      if (!live) {
+        list = Array.isArray(all) ? all.slice() : list.slice();
+        if (!Array.isArray(all)) list[i] = h;
+        pr.setHeights(list);
+      }
     },
-    onSelect: (i) => ev.selects.push(i),
+    onSelect: (i, j) => ev.selects.push({ i, j }),
   });
   pr.setBuilt(tr, null, d.pts);
   pr.setHeights(list);
@@ -158,4 +162,27 @@ test("flat elevation: one height label when max and min round equal (no collidin
   const heightLabels = h.rec.texts.filter((t) => / m$/.test(t) && !/PT /.test(t));
   assert.equal(heightLabels.length, 1, "one coalesced label: " + heightLabels.join(","));
   assert.equal(heightLabels[0], "0 m");
+});
+
+test("span elev: selection API + Up/Down offset every grip in the group by the same delta", () => {
+  const n = design().pts.length;
+  const hs = new Array(n).fill(0);
+  for (let i = 2; i <= 5; i++) hs[i] = i; // relative hills inside the span
+  const h = boot(hs);
+  h.pr.select(2, 5);
+  assert.deepEqual(plain(h.pr.selection()), { sel: 2, span: 5 });
+  assert.deepEqual(plain(h.ev.selects.at(-1)), { i: 2, j: 5 });
+  h.ev.changes.length = 0;
+  h.key("ArrowUp");
+  assert.equal(commits(h.ev).length, 1);
+  const all = plain(commits(h.ev)[0].all);
+  assert.ok(Array.isArray(all) && all.length === n, "commit carries the full heights[]");
+  for (let i = 2; i <= 5; i++) assert.equal(all[i], hs[i] + 1, "point " + i + " keeps relative height");
+  assert.equal(all[0], 0, "outside the span stays put");
+  assert.equal(all[1], 0);
+  // Delete flattens the whole span.
+  h.ev.changes.length = 0;
+  h.key("Delete");
+  const flat = plain(commits(h.ev).at(-1).all);
+  for (let i = 2; i <= 5; i++) assert.equal(flat[i], 0, "span flattened");
 });

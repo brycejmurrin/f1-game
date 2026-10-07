@@ -331,7 +331,26 @@ const TrackShape = (function () {
     return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
 
+  /** Control indices from `a` to `b` inclusive, walking forward around the loop.
+   *  One point when `b` is missing / equal; empty when `a` is out of range. The
+   *  designer uses this for a selected SPAN: move, elevate or stamp the group. */
+  function spanIndices(a, b, N) {
+    N = N | 0;
+    if (!(N > 0) || !Number.isInteger(a) || a < 0 || a >= N) return [];
+    if (!Number.isInteger(b) || b < 0 || b >= N || b === a) return [a];
+    const out = [a];
+    for (let i = a, n = 0; n < N && i !== b; n++) { i = (i + 1) % N; out.push(i); }
+    return out;
+  }
+  /** True when index `i` lies on the forward span from `a` to `b` (inclusive). */
+  function inSpan(i, a, b, N) {
+    if (!Number.isInteger(i) || i < 0 || i >= N) return false;
+    const g = spanIndices(a, b, N);
+    for (let k = 0; k < g.length; k++) if (g[k] === i) return true;
+    return false;
+  }
+
   return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, clothoidPts, dubins, dubinsWords, dubinsSample,
-    rdp, resample, catmull, menger, rotate, project, enforceSpacing, convexHull, segIntersect, crossings, clearance, rng };
+    rdp, resample, catmull, menger, rotate, project, enforceSpacing, convexHull, segIntersect, crossings, clearance, rng, spanIndices, inSpan };
 })();
 Object.freeze(TrackShape);
