@@ -102,6 +102,24 @@ for (const id of ["monza", "vegas"]) {
   });
 }
 
+test("replay stamps _keepPositions when the page asked for trackGeometry", async () => {
+  const def = Tracks.LIST.find((d) => d.id === "monza");
+  worker.posted.length = 0;
+  await worker.send({ type: "build", seq: 91, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  const msg = worker.posted[0];
+  assert.equal(msg.type, "built", msg.message);
+  // Foundation specs call __apex.trackGeometry(true) before race; the worker's
+  // own Tracks copy never sees that flag — replay must stamp it.
+  assert.equal(typeof main.Tracks.keepGeometry, "function");
+  assert.equal(main.Tracks.setKeepGeometry(true), true);
+  const b = recorder();
+  const tB = await main.TrackBuildClient.replay(msg, def, b.gfx);
+  assert.ok(tB.propsGeo && tB.propsGeo.pos && tB.propsGeo.pos.length > 0,
+    "props.pos survives createChunkedMesh when keepGeometry is on");
+  assert.equal(tB.propsGeo._keepFullGeometry, true);
+  main.Tracks.setKeepGeometry(false);
+});
+
 test("a ribbon the backend did not chunk is re-seated as tracks.js does it", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;

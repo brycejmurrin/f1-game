@@ -193,13 +193,26 @@ const TrackBuildClient = (function () {
     if (msg.taken) return null;
     msg.taken = true;
     const { track, recs } = msg, real = new Array(recs.length), fallback = [], budget = budgetMs > 0 ? budgetMs : 8;
+    // The worker built with its own keepGeometry=false. Stamp the PAGE's flag
+    // (and the road/terrain always-keep rule from tracks.js) onto each geo
+    // before upload so createChunkedMesh does not null props.pos under
+    // __apex.trackGeometry(true) — montreal-foundation day→night hit that.
+    const keepFull = typeof Tracks !== "undefined" && typeof Tracks.keepGeometry === "function" && !!Tracks.keepGeometry();
+    const stampKeep = (args) => {
+      const geo = args && args[0];
+      if (!geo || typeof geo !== "object") return args;
+      if (keepFull || geo === track.roadGeo || geo === track.terrainGeo) geo._keepPositions = true;
+      if (keepFull) geo._keepFullGeometry = true;
+      return args;
+    };
     try {
       for (let i = 0; i < recs.length;) {
         const t0 = performance.now();
         do {
           const r = recs[i];
-          real[i++] = r.op === "mesh" ? gfx.createMesh(...r.args)
-            : r.op === "chunked" ? gfx.createChunkedMesh(...r.args) : gfx.createInstancedBatch(...r.args);
+          const args = (r.op === "mesh" || r.op === "chunked") ? stampKeep(r.args) : r.args;
+          real[i++] = r.op === "mesh" ? gfx.createMesh(...args)
+            : r.op === "chunked" ? gfx.createChunkedMesh(...args) : gfx.createInstancedBatch(...r.args);
         } while (i < recs.length && performance.now() - t0 < budget);
         if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
       }
@@ -219,7 +232,7 @@ const TrackBuildClient = (function () {
         if (h.chunks && h.chunks.length) continue;
         if (h.chunks == null) m[base] = h;
         else {
-          m[base] = gfx.createMesh(recs[tok.__rec].args[0]);
+          m[base] = gfx.createMesh(stampKeep([recs[tok.__rec].args[0]])[0]);
           fallback.push(m[base]);
           // The empty chunk handle is replaced, so the adopted track cannot
           // free it later. Remove it from our ledger before releasing it.
