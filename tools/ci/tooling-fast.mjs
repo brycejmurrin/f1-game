@@ -797,6 +797,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
+  // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
+  "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",

@@ -324,6 +324,9 @@ test("an installed music backend receives every music call", async ({ page, page
   expect(await page.evaluate(() => GameAudio.musicBackend() === window.__stub)).toBe(true);
 
   const result = await page.evaluate(() => {
+    // Async music startup can land after installStubBackend() cleared the log on
+    // a loaded CI shard — drain before asserting the four deliberate calls.
+    window.__mb.calls.length = 0;
     GameAudio.startMusic();
     GameAudio.stopMusic();
     const skipped = GameAudio.skipTrack();
