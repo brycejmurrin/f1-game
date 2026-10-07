@@ -215,6 +215,40 @@ test("shared *|dawn|wet stamp supplies the fleet wet-dawn look", () => {
   assert.deepEqual(pinned, [], "per-track dawn|wet must defer to *|dawn|wet (fogTint/mistHeight exceptions only)");
 });
 
+test("shared *|day|wet stamp supplies the fleet wet-daylight authenticity knobs", () => {
+  const P = presets();
+  const shared = P["*|day|wet"];
+  assert.ok(shared, "expected LightPresets['*|day|wet']");
+  assert.equal(shared.ambientMul, 1.02);
+  assert.equal(shared.keyMul, 0.9);
+  assert.equal(shared.cloudCover, 0.2);
+  assert.equal(shared.exposureMul, 0.94);
+  assert.equal(shared.fogDensityMul, 1.12);
+  assert.equal(shared.saturation, 0.92);
+  assert.equal(shared.shadowStr, 0.88);
+  assert.equal(shared.ssrWetMul, 1.28);
+  assert.equal(shared.wetDark, 1.15);
+  assert.equal(shared.tint, -0.15);
+  assert.equal(shared.lampLevel, 0);
+  const ALLOW = new Set(["fogDensityMul", "mistDensity", "daySkyBlue", "ambTemp", "weatherSunMute"]);
+  const CORE = [
+    "ambientMul", "keyMul", "cloudCover", "exposureMul", "fogDensityMul", "saturation",
+    "shadowStr", "shadowTintAmt", "ssrWetMul", "wetDark", "tint", "lampLevel", "floodEmitMul",
+  ];
+  const pinned = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|day\|wet$/.test(key) || key.startsWith("*") || key === "spa|day|wet") continue;
+    const o = P[key];
+    for (const id of Object.keys(o)) {
+      if (ALLOW.has(id)) continue;
+      if (CORE.includes(id) || id in shared) pinned.push(`${key}.${id}=${o[id]}`);
+    }
+  }
+  assert.deepEqual(pinned, [], "per-track day|wet must defer to *|day|wet (fog/mist/sky exceptions only)");
+  const spa = P["spa|day|wet"];
+  assert.ok(spa && Object.keys(spa).every((id) => id === "shadowTintAmt"), "spa|day|wet keeps shadowTintAmt only");
+});
+
 test("shared *|dusk|dry stamp supplies the fleet dry-twilight authenticity knobs", () => {
   const P = presets();
   const shared = P["*|dusk|dry"];
