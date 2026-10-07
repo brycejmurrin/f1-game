@@ -65,6 +65,39 @@ test("countdown setGridIdle reuses a pooled opts bag", () => {
   assert.equal(/GameAudio\.setGridIdle\(player, \{\s*soundOn/.test(g), false);
 });
 
+test("race present sheds bloom mips + godray blur pair at MEDIUM/LOW", () => {
+  const g = read("js/game.js");
+  assert.match(g, /po\.bloomLevels\s*=/);
+  assert.match(g, /po\.grLite\s*=/);
+  assert.match(g, /userTier\(\)/);
+  // Env probe cadence also reacts to autoShed (not only renderScale).
+  assert.match(g, /autoShed\(\)\s*>\s*0/);
+});
+
+test("TLX/GLX/WGX honour opts.bloomLevels truncation", () => {
+  const tlx = read("js/render/three/tlx-post.js");
+  const glx = read("js/render/glx/post.js");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(tlx, /o\.bloomLevels\s*>\s*0/);
+  assert.match(glx, /opts\.bloomLevels\s*>\s*0/);
+  assert.match(wgx, /o\.bloomLevels\s*>\s*0/);
+  assert.match(tlx, /useLv/);
+  assert.match(glx, /useLv/);
+  assert.match(wgx, /useLv/);
+});
+
+test("GLX setPolyOffset caches bias and draw() passes depthBias without a literal", () => {
+  const glx = read("js/render/glx/glx.js");
+  const setPoly = lift(glx, "setPolyOffset");
+  assert.match(setPoly, /_polyOn/);
+  assert.match(setPoly, /_polyF/);
+  const draw = lift(glx, "draw");
+  assert.match(draw, /setPolyOffset\(_db\)/);
+  assert.equal(/setPolyOffset\(\[_db/.test(draw), false);
+  assert.match(glx, /function uf2\(/);
+  assert.match(glx, /uf2\(litU\.uBakeOrigin/);
+});
+
 
 test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", () => {
   // Synthetic pack loop mirroring cullInstances' inner cell walk. Measures
