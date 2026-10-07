@@ -21,7 +21,7 @@
  * radio drops a line it cannot finish (RadioVoice.plan "too-long"), and
  * tests/unit/race-radio.test.mjs speaks every one to prove it. Keep them short.
  */
-const RadioLines = (function () {
+var RadioLines = (function () {
   "use strict";
 
   const POOLS = Object.freeze({

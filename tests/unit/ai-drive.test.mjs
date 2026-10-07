@@ -384,6 +384,18 @@ test("dig-out has a budget — past it, rescue must be allowed to arm", () => {
     "past dig-out budget: escalate to rescue");
 });
 
+test("dig-out escalation holds until dig-out ends — a partial yank cannot re-veto rescue", () => {
+  // THE DEFECT (monaco, stalled pole car, 2026-10-07): dig-out's sideways yank
+  // dipped stuckT just under thresh + budget while the car still crawled, so
+  // digEsc flickered false, `!unstuckActive` vetoed rescue again and rescueT
+  // bled from 1.23 to 0 — a 5.3 s crawl against a 5 s cap.
+  assert.equal(A.digOutHeld(false, false, true), false, "digging, never escalated: dig-out keeps its budget");
+  assert.equal(A.digOutHeld(false, true, true), true, "escalates past the budget");
+  assert.equal(A.digOutHeld(true, false, true), true, "stuckT dipped under the line mid-dig: still escalated");
+  assert.equal(A.digOutHeld(true, false, false), false, "dig-out ended (free or rescued): latch clears");
+  assert.equal(A.digOutHeld(true, true, false), true, "escalatedNow always wins");
+});
+
 test("otSide: a tie does not send the whole queue one way", () => {
   const flat = { roomL: 4, roomR: 4, kAhead: 0, lane: 0 };
   // Clearly freer side always wins, whatever the corner or the lane says.

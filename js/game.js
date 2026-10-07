@@ -87,8 +87,20 @@ const lazyBundles = LazyBundles.create({
     if (audioPanel && audioPanel.init) audioPanel.init();
     if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
   },
+  // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
+  onRaceSessionReady: () => {
+    pits = PitLane.create(G);
+    engineer = RaceEngineer.create(G);
+    startLights = StartLights.create(G);
+    marshalPanels = MarshalPanels.create(G);
+    records = SessionRecords.create(G);
+    raceRadio = RaceRadio.create(G);
+    flyingStart = FlyingStart.create(G, {
+      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
+    });
+  },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1880,7 +1892,7 @@ function redFlagRestart() {
     // gravel trap; otT/otE held a move that ended when the flag flew.
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
-    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
@@ -1955,7 +1967,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
@@ -2608,6 +2620,7 @@ async function startRaceBody() {
   }
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
+  await ensureRaceSession();   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   await ensureAudio();   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -3541,9 +3554,9 @@ tyres = TyreModel.create(G);
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
-pits = PitLane.create(G);
-const startLights = StartLights.create(G);   // the start gantry's lamps (js/race/start-lights.js); a const — game.js's top-level lets are ratcheted
-const marshalPanels = MarshalPanels.create(G);   // the posts' light panels follow race control (js/race/marshal-panels.js)
+pits = PitLane.create(G);   // stub until ensureRaceSession; recreated in onRaceSessionReady
+let startLights = StartLights.create(G);   // LAZY_RACE_SESSION — recreated when the real bundle lands
+let marshalPanels = MarshalPanels.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
@@ -3555,12 +3568,12 @@ radioVoice = RadioVoice.create(G);
 // the loading screen's flyby. After the radio: it borrows that module's
 // speakable() and per-channel tune, and nothing else.
 announcer = Announcer.create(G);
-const records = SessionRecords.create(G);
-const coach = DrivingCoach.create(G);
-const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
+let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
+const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
+let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on ensure
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
-const flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // qualifying + time trial start at speed (js/race/flying-start.js)
+let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -3747,14 +3760,12 @@ let _studio = null;
 let _introSheet = null;
 function sheetRelease(hide) {
   const h = _introSheet; if (!h) return;
-  if (hide && !loadingScreen.phase()) loadingScreen.building(loadingInfo());
-  if (!hide) loadingScreen.stop();   // retry: drop the plate so the sheet is usable
   _introSheet = null; h.btn.disabled = false; if (h.back) h.back.disabled = false;
   if (h.btn.textContent === "PREPARING…") h.btn.textContent = h.label;   // unless the sheet relabelled it meanwhile
-  h.sheet.hidden = !!hide;
+  if (hide) h.sheet.hidden = true;
 }
-/** Cold preparation's cover: the build card (also behind race settings). */
-function introCover(info, n) { loadingScreen.building(info, () => studioSkip(n)); }
+/** Cold preparation's cover: the build card, unless race settings already covers it. */
+function introCover(info, n) { if (!_introSheet) loadingScreen.building(info, () => studioSkip(n)); }
 function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
@@ -3957,50 +3968,31 @@ function startRaceCovered() {
 }
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
-// START RACE / PRACTICE START FROM RACE SETTINGS. The sheet is a <dialog> in the
-// top layer, so #loading cannot paint over it — hide + sync-close first, raise
-// the plate, THEN yield one frame before intro / warm work (otherwise the
-// MutationObserver close and the first paint never run and the player sees a
-// frozen Race Settings dialog for the whole long task).
+// START RACE / PRACTICE START FROM RACE SETTINGS (_introSheet). The sheet stays up
+// with PREPARING… while a warm compiles or the first garage frame presents — then
+// studioShown hides it for the drive-out. The race card arrives with the flyby,
+// not before the garage leave. A warm compiling at the tap owns the renderer
+// (TLX presents nothing, 1-4 s on a real GPU): waited out under the sheet, bounded
+// as awaitIntroWarm is. The menu's own build and warms stand down, as when the
+// sheet closed.
 function raceIntroFromSheet(go, sheet, btn) {
   if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
-  if (sheet) {
-    sheet.hidden = true;
-    try { if (sheet.open && typeof sheet.close === "function") sheet.close(); } catch (_) { /* already closed */ }
-  }
-  if (loadingScreen.phase()) return;
-  loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race");
-  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.beginUi) RaceEntryProfile.beginUi("uiStart");
-  const back = btn ? $("rs-cancel") : null;
-  const owner = btn ? (_introSheet = { sheet, btn, back, label: btn.textContent }) : null;
-  if (btn) { btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true; }
+  if (!sheet || !btn) { if (sheet) sheet.hidden = true; raceIntro(go); return; }
+  const back = $("rs-cancel"), owner = _introSheet = { sheet, btn, back, label: btn.textContent };
+  btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const failed = (e) => {
-    if (owner && _introSheet !== owner) return;
+    if (_introSheet !== owner) return;
     Log.warn("game", "pre-race preparation failed", e); cancelIntro(); loadingScreen.stop();
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  const yieldPaint = (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint)
-    ? () => RaceEntryProfile.afterPaint()
-    : () => Promise.resolve();
-  (async () => {
-    try {
-      // Paint #loading (and finish dialog.close) before menuGridCars / warm / ensure*.
-      await yieldPaint();
-      if (owner && _introSheet !== owner) return;
-      try {
-        if (gfx.warming && gfx.warming()) {
-          const n = ++_introRun, settings = entrySettings();
-          const live = () => n === _introRun && state === "menu" && settings === entrySettings();
-          if (await awaitIntroWarm(live)) intro();
-          else if (owner && _introSheet === owner) sheetRelease(false);
-          return;
-        }
-      } catch (e) { failed(e); return; }
-      intro();
-    } catch (e) { failed(e); }
-  })();
+  try { if (!(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
+  const n = ++_introRun, settings = entrySettings();
+  const live = () => n === _introRun && state === "menu" && settings === entrySettings();
+  (async () => { try {
+    if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) sheetRelease(false);
+  } catch (e) { failed(e); } })();
 }
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
@@ -4338,7 +4330,7 @@ const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comp
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
 const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
-                  deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
+                  deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
@@ -4560,6 +4552,8 @@ function update(dt) {
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
+    _engArg.throttle = player.throttleDemand ?? 0; _engArg.brake = player.brakeDemand ?? 0;
+    _engArg.regen = player.ersRegen ?? 0.5;
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
       clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
@@ -4639,7 +4633,10 @@ function updateCar(c, dt, ranked) {
   if (c.retired) { c._prevS = c.s; return; }
   // A net-owned rival takes no local motion, finished or not: coasting it here
   // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c._prevS = c.s; return; }
+  // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
+  // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
+  // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4648,8 +4645,13 @@ function updateCar(c, dt, ranked) {
   // Same contract for a networked rival: its owner is integrating it on their
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
-  if (netPlay.owns(c)) { c._prevS = c.s; return; }
-  if (realRace.owns(c)) { c._prevS = c.s; return; }   // a REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js)
+  // ...but its ENGINE is heard here: rpm is never on the wire (poseRemote writes gear and
+  // speed), and RivalAudio / setEngine read c.rpm, so a skipped car droned at makeCars'
+  // IDLE_RPM all race. rpmFor is pure — the owner's own gear at the posed speed.
+  if (netPlay.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
+  // A REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js). Its gear is
+  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead.
+  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -6176,7 +6178,10 @@ function updateCar(c, dt, ranked) {
     // car it was waiting for — unless dig-out has already failed (laneX
     // overwrite makes lateral dig-out useless in the pit), in which case the
     // escalate path still fires onto laneX below.
-    const digEsc = AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street);
+    // Escalation is HELD while dig-out stays on (AiDrive.digOutHeld): a partial
+    // yank that dips stuckT under the line must not re-veto the rescue.
+    c.digEscHeld = AiDrive.digOutHeld(c.digEscHeld, AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street), unstuckActive);
+    const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
       (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
@@ -6205,7 +6210,7 @@ function updateCar(c, dt, ranked) {
         // Pace-scaled restore floor (same shape as coast()); never above vTop().
         c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
       }
-      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
   }
   // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes
@@ -9085,8 +9090,13 @@ if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurf
 lazyBundles.raceAssets();
 // First pointerdown also kicks LAZY_AUDIO so a later SOUND click still has a
 // chance to unlock AudioContext on the same gesture chain (iOS).
+// ...and the first KEY: platform-session's firstGesture (init + startMusic) takes a
+// keydown too, but on the stub — with nothing pulling the bundle, restoreOnEngine's
+// replay never ran and a keyboard-first title stayed silent. Escape is no activation.
 if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+  const keyKick = (e) => { if (e && e.key === "Escape") return; window.removeEventListener("keydown", keyKick, true); ensureAudio(); };
+  window.addEventListener("keydown", keyKick, true);
 }
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
