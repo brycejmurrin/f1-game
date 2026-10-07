@@ -118,9 +118,22 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
   assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
-  // Dock width is published whenever the right dock has a box so #hud-sectors
-  // (above limits) can stand off BOOST before the limits chip would hit it.
-  assert.match(hud, /const dockRW = \(dockR && dockR\.width\) \? dockR\.width \/ chromeZ : 0;/);
+  // Dock inset is published AFTER zoom caps, from BOOST / leftmost dock
+  // control, using the plate's painted zoom + screen-px air, then one
+  // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
+  assert.match(hud, /btn-boost/);
+  assert.match(hud, /DOCK_AIR \/ z/);
+  assert.match(hud, /secR\.right > left - DOCK_AIR/);
+  // After --hud-z-top, flush #minimap so currentCSSZoom catches the cap
+  // (selected-2 ui-redesign: compact mmCss 142 = 110×staleZoom/zTop).
+  assert.match(hud, /if \(els\.minimap\) void els\.minimap\.offsetHeight/);
+  // Painted announce collapse must be terminal in the fit: a trailing
+  // radioTopSlot re-lit hud-radio-top and cleared data-lane-collapsed.
+  const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitHud") + 1));
+  const paintCollapse = fitBody.indexOf('toggleAttribute("data-lane-collapsed", true)');
+  assert.ok(paintCollapse > 0, "fitHud paints data-lane-collapsed on a hit");
+  assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
+    "no radioTopSlot after painted announce collapse (undoes the collapse)");
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {

@@ -352,9 +352,14 @@ const NetNostr = (function () {
       let answering = false;
       const inbox = createBoundedInbox(heard);
 
+      // Guest: once answering, stop the looking tick — lobby onTick used to
+      // overwrite Connected during the 5.2 s answer re-post (build 14296).
+      // Host keeps ticking ("Waiting for them…") for the whole host window.
       const tick = setInterval(() => {
         if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
-        else if (onTick) { try { onTick(); } catch (e) { /* a caller bug must not stop the exchange */ } }
+        else if (onTick && !answering) {
+          try { onTick(); } catch (e) { /* a caller bug must not stop the exchange */ }
+        }
       }, 1000);
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);

@@ -158,7 +158,7 @@ const selectionGate = {
   // Both dropped buckets are named as annotations (2026-10-04: DROPPED, was
   // EXCLUDED / SKIPPED plain lines).
   surfacesBudgetSkips: /::warning::DROPPED \(declares/.test(selectAll)
-    && /::warning::DROPPED \(over budget/.test(selectAll),
+    && /::(?:warning|error)::DROPPED \(over budget/.test(selectAll),
 };
 const report = {
   specsOnDisk: ALL_SPECS.length,
