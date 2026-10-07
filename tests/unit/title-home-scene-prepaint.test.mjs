@@ -71,6 +71,15 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*min-height:\s*var\(--tap-paint\)/,
     "under-brand rooms keep the --tap-paint floor",
   );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*nowrap/,
+    "under-brand room labels stay on one line (no wrap clip)",
+  );
+  assert.doesNotMatch(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
+  );
   const secondaryBlock = menus.match(
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,
   );
