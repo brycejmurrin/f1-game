@@ -21,7 +21,7 @@ try:
 except Exception:
     sys.exit(0)
 name = d.get("tool_name") or ""
-BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|apex-tools__apex_(eval|shot|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$")
+BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$")
 if not BROWSER.match(name):
     sys.exit(0)
 sub = d.get("agent_id") or "/subagents/" in str(d.get("transcript_path") or "")

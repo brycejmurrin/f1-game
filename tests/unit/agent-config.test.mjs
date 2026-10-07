@@ -364,7 +364,7 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   assert.ok(mcp, "the MCP browser guard is registered");
   const re = new RegExp(mcp.matcher);
   for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page",
-                   "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
+                   "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_shot_survey", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
     assert.ok(re.test(n), `matcher must select ${n}`);
   for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
     assert.ok(!re.test(n), `matcher must leave ${n} alone`);

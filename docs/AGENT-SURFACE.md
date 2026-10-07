@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Twenty-six `apex_*` tools wrap the CLIs (`apex_garage` and `apex_track` are
+do the work. Twenty-eight `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -281,6 +281,7 @@ of one `tests/unit/` file, no CLI of its own.
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
+| `apex_shot_survey` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
 | `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
@@ -305,8 +306,12 @@ Pins the wrap always applies (you cannot override them):
 - `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
   `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
+- `apex_shot_survey` → one `track-session.mjs --serve` boot, then 1–32 shots,
+  a contact `sheet`, and `index.html`; presets `scenery`|`lap`|`dual`|`inspect`
+  or explicit `fracs` / `shots`; never spawns N separate `shot.mjs` boots
 - `apex_track` → one session per server: `open` takes the browser lock until
-  `close` (or the server exits); `cam`/`tod`/`frac` are enum- and range-checked,
+  `close` (or the server exits); `op survey` is the same batch as
+  `apex_shot_survey`; `cam`/`tod`/`frac` are enum- and range-checked,
   `az`/`el`/`dist`/`h` bounded, `track` must be a `Tracks.LIST` id, `out` stays under
   `artifacts/`/`scratch/`. `h` is metres above the road (eye height on `eye`, aim
   point on `orbit` — frames a prop far overhead); `el` on `eye` is the pitch
