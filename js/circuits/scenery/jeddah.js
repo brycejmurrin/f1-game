@@ -104,36 +104,37 @@
       const terrainYAt = api.terrainYAt;
       const seatCanyonFeet = (s0, s1, side, gap) => {
         if (typeof along !== "function") return;
-        // Sparse footings (every 2nd slab ≈ 11 m): adjacent canyon AABBs touch,
-        // so BFS grounds the run. Every-slab footings made flatCoplanar spots;
-        // every-4th left 9 unsupported islands.
+        // Every 2nd canyon slab + 11 m-wide pier: half the columns, each spans
+        // two panels (props-tri budget) and still closes the 2.56 m BFS gaps.
         let fi = 0;
         // Tag continues the lattice across SAUDI_BLOCKS: without it along()
         // emits the shared end node twice (byte-identical boxes, 0.0 mm, 2.2 m²
         // — the two extra coplanar spots vs baseline 4).
         along(s0, s1, 5.5, (k, spacing) => {
           if ((fi++ % 2) !== 0) return;
+          spacing = 11;
           const p = anchor(k, side, gap);
           const b = [p.r, p.u, p.t];
           let lo = Infinity;
           if (terrainYAt) {
-            for (const ox of [-0.25, 0, 0.25]) {
+            for (const ox of [-0.35, 0, 0.35]) {
               const x = p.c[0] + p.r[0] * ox + p.t[0] * ox * 0.5;
               const z = p.c[2] + p.r[2] * ox + p.t[2] * ox * 0.5;
               const y = terrainYAt(x, z);
               if (y != null && y < lo) lo = y;
             }
           }
+          const idx = fi - 1;
           if (Number.isFinite(lo)) {
             const gapM = p.c[1] - lo;
-            if (gapM < 0.22 || gapM > 3.5) return;
-            const h = gapM + 0.15;
-            addBox(out, [p.c[0], lo + h * 0.5, p.c[2]],
-              [0.65, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
-          } else {
-            // Off-mesh (water/void): deep footing reaches the audit surface.
-            // Jitter height so neighbouring footing tops are not coplanar.
-            const h = 3.05 + (fi % 3) * 0.12;
+            if (gapM < 0.15 || gapM > 3.5) return;
+            const h = gapM + 0.28 + (idx % 5) * 0.022 + hash(k + side * 0.7) * 0.04;
+            const lift = hash(k * 1.3 + side) * 0.06;
+            addBox(out, [p.c[0] + p.r[0] * lift, lo + h * 0.5, p.c[2] + p.r[2] * lift],
+              [0.68, h, spacing * 0.88], [0.56, 0.57, 0.60], b);
+          } else if (side < 0) {
+            // Inland void mesh only — seaward off-mesh footings coplanar waterBand.
+            const h = 3.05 + (idx % 3) * 0.12;
             addBox(out, vadd(p.c, p.u, -h * 0.5 + 0.08),
               [0.70, h, spacing * 0.70], [0.56, 0.57, 0.60], b);
           }
@@ -214,14 +215,14 @@
       // Corniche palm promenade densify — seaward (R) Red Sea corridor + marina
       // lagoon: a second staggered row so the waterfront reads as planted, not
       // bare plate between the canyon and the water (survey sheet-03).
-      for (let i = 0; i < 18; i++) {
-        const s = 0.08 + i * 0.016;
+      for (let i = 0; i < 20; i++) {
+        const s = 0.08 + i * 0.015;
         palmLit(K(s), 1, 9.5 + (i % 3) * 2.2, 7.2 + hash(i * 19) * 2.4, PALMFROND);
         if (i % 2 === 0)
           palmLit(K(s + 0.008), 1, 15.5 + (i % 2) * 2, 6.4 + hash(i * 23) * 2, [0.10, 0.40, 0.18]);
       }
       for (let i = 0; i < 12; i++) {
-        palmLit(K(0.44 + i * 0.014), 1, 10 + (i % 2) * 3.5,
+        palmLit(K(0.42 + i * 0.014), 1, 10 + (i % 2) * 3.5,
           6.8 + hash(i * 29) * 2.2, (i % 2) ? PALMFROND : [0.14, 0.48, 0.20]);
       }
       // Low Corniche sea wall / promenade rail on the seaward edge (outside the
@@ -437,21 +438,24 @@
         }
       }
 
-      // ── INLAND CITY WALL — left (L), step=55m gives ~22 buildings total ──
-      cityFront(0.04, 0.24, -1, 22, {
-        minH: 14, maxH: 34, depth: 16,
+      // ── INLAND CITY WALL — left (L), 60–90 m back; cityFront h = base + range
+      // (minH + factor·(maxH−minH)), capped ~24 m so heroes read past the row.
+      cityFront(0.04, 0.24, -1, 64, {
+        minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
-      cityFront(0.35, 0.48, -1, 18, {
-        minH: 18, maxH: 40, depth: 18,
+      cityFront(0.35, 0.48, -1, 72, {
+        minH: 12, maxH: 24, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
-      cityFront(0.56, 0.74, -1, 18, {
-        minH: 14, maxH: 36, depth: 18,
+      // gap 78 buried one facade unit (terrain bulge inland ~0.24 m); 64 matches
+      // the near row and keeps the gold-window strip on higher ground.
+      cityFront(0.56, 0.74, -1, 64, {
+        minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
-        step: 55, floor: 5,
+        step: 55, floor: 4,
       });
 
       // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
@@ -459,7 +463,7 @@
       // of warm-gold window towers. Base-anchored via seat.box (addBox is
       // centre-anchored — mid-height LED strips were reading as floaters).
       {
-        const a = anchor(K(0.275), -1, 72), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.275), -1, 86), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 28)) {
           const H = 128;
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
@@ -494,7 +498,7 @@
         }
       }
       {
-        const a = anchor(K(0.295), -1, 95), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.295), -1, 90), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -517,18 +521,18 @@
           }, { required: true });
         }
       }
-      building(K(0.27), -1, 55, 28, 115, 26, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 8 });
-      building(K(0.30), -1, 88, 24, 172, 22, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 8 });
-      tower(K(0.285), -1, 140, 18, 160, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 12 });
-      cityFront(0.245, 0.335, -1, 96, {
-        minH: 24, maxH: 62, depth: 20,
+      building(K(0.27), -1, 82, 22, 24, 18, { kind: "spire", wall: [0.22, 0.22, 0.27], window: WINWARM,  lit: true, floor: 5 });
+      building(K(0.30), -1, 88, 20, 22, 16, { kind: "antenna", wall: [0.18, 0.19, 0.24], window: WINCOOL,  lit: true, floor: 5 });
+      tower(K(0.285), -1, 92, 14, 24, { col: [0.16, 0.17, 0.22], seg: 4, cap: true, capCol: LED, mast: 6 });
+      cityFront(0.245, 0.335, -1, 68, {
+        minH: 11, maxH: 23, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
-        step: 68, floor: 5,
+        step: 68, floor: 4,
       });
 
       // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.
       {
-        const a = anchor(K(0.055), -1, 38), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.055), -1, 74), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -616,8 +620,8 @@
       tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
-      building(K(0.69), -1, 60, 26, 68, 22, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 8 });
-      tower(K(0.71), -1, 100, 18, 105, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 10 });
+      building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });
+      tower(K(0.71), -1, 86, 14, 24, { col: [0.18, 0.19, 0.24], seg: 4, cap: true, capCol: LED, mast: 6 });
 
       // Billboards — Corniche signage character
       billboard(K(0.70), -1, 13, 10, 11, GREEN);   // 13 = midpoint of the 26 m strip to the parallel 0.275 leg; at 26 a panel end was on that road

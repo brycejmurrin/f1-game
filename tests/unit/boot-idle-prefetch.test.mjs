@@ -75,10 +75,11 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
   `, ctx);
   ctx.__raceAssets();
   assert.equal(warmCalls, 0, "microtask not yet drained");
-  assert.equal(idles.length, 2, "lights + race-session on idle");
+  assert.equal(idles.length, 3, "lights + race-session + audio-prefetch on idle");
   const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 2500);
   assert.ok(lightIdle, "lights idle at 2500ms");
   assert.ok(idles.some((i) => i.opts && i.opts.timeout === 2800), "race-session idle at 2800ms");
+  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 4500), "audio HTTP prefetch idle at 4500ms");
   await new Promise((r) => queueMicrotask(r));
   assert.equal(warmCalls, 1, "idleWarm from scenery microtask");
   assert.equal(lightLoads, 0, "lights not yet");
