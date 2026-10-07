@@ -205,7 +205,7 @@
       // The chicane bowl walls (bowlSeatWall 0.700–0.730 L, 0.742–0.775 R, gap
       // 24) stand where the 22/26 m hedges run: the hedge chunks were built
       // straight through the seating mass. The dune grass stops at the bowl.
-      const HEDGE_SKIP = [[0.687, 0.738, -1], [0.737, 0.788, 1]];
+      const HEDGE_SKIP = [[0.687, 0.738, -1], [0.737, 0.782, 1]];
       const marramHedge = (s0, s1, side, gap, h, col) => {
         const step = 5 / track.total;
         let i = 0;
@@ -351,7 +351,7 @@
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });   // Arena-In approach / T10 R outside
-      bowlSeatWall(0.742, 0.784, 1, 24, {
+      bowlSeatWall(0.742, 0.778, 1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });   // T11 L outside through Arena exit kink
@@ -666,14 +666,12 @@
       fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
       fence(0.04, 0.09, -1, 8.0, 4.2, fenceCol);
       fence(0.11, 0.19, 1,  8.0, 4.2, fenceCol);   // Hugenholtz outer-rim GA fence
-      fence(0.38, 0.46, 1,  10.0, 3.8, fenceCol); // seaward GA pinch at Scheivlak dunes
       fence(0.48, 0.54, -1, 9.0, 4.0, fenceCol);
       fence(0.86, 0.99, 1,  8.0, 4.4, fenceCol);
       fence(0.94, 1.00, -1, 8.0, 4.2, fenceCol);
       recordBarrier(0.00, 0.10, 1, 8.0);
       recordBarrier(0.04, 0.09, -1, 8.0);
       recordBarrier(0.11, 0.19, 1, 8.0);
-      recordBarrier(0.38, 0.46, 1, 10.0);
       recordBarrier(0.48, 0.54, -1, 9.0);
       recordBarrier(0.86, 0.99, 1, 8.0);
       recordBarrier(0.94, 1.00, -1, 8.0);
