@@ -44,7 +44,8 @@ function boot(opts = {}) {
   const v = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts, document: sb.document, listeners };
+  const blipFires = () => vm.runInContext("GameAudioSignal.blipFireTotal()", v);
+  return { A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts, document: sb.document, listeners, blipFires };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
@@ -262,22 +263,25 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
 // MENU SOUNDS (apex26.menuSfx) and ONE CLICK, ONE SOUND: the track tile once
 // played uiSelect then tickUi's uiTick — two blips for one tap.
 test("ui blips: one per click, and MENU SOUNDS OFF silences them without touching SFX", async () => {
+  // Blip voices are pooled (OscillatorNode starts once); fire count is the
+  // observable, not createOscillator / start().
   const clock = { t: 1000 };
-  const { A, started } = boot({ perf: { now: () => clock.t } });
+  const { A, started, blipFires } = boot({ perf: { now: () => clock.t } });
   A.init(); await flush();
-  const oscs = () => started.filter((n) => n.kind === "osc").length;
-  let n = oscs();
+  let n = blipFires();
   A.uiSelect(); A.uiTick();
-  assert.equal(oscs() - n, 1, "a second ui blip on the same click is dropped");
-  clock.t += 200; n = oscs();
+  assert.equal(blipFires() - n, 1, "a second ui blip on the same click is dropped");
+  clock.t += 200; n = blipFires();
   A.uiTick();
-  assert.equal(oscs() - n, 1, "the next click still sounds");
-  A.setUiEnabled(false); clock.t += 200; n = oscs();
+  assert.equal(blipFires() - n, 1, "the next click still sounds");
+  A.setUiEnabled(false); clock.t += 200; n = blipFires();
   A.uiTick(); A.uiSelect(); A.uiReject();
-  assert.equal(oscs() - n, 0, "MENU SOUNDS OFF");
+  assert.equal(blipFires() - n, 0, "MENU SOUNDS OFF");
   assert.equal(A.uiEnabled(), false);
   A.lap();
-  assert.ok(oscs() - n > 0, "race sfx are not menu sounds");
+  assert.ok(blipFires() - n > 0, "race sfx are not menu sounds");
+  assert.ok(started.filter((n) => n.kind === "osc").length <= 8,
+    "pooled blip oscillators stay within the voice cap");
 });
 
 // ── uploads and PCM (2026-10-04) ───────────────────────────────────────────
