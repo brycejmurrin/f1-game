@@ -287,11 +287,11 @@ const GLXBackend = (function () {
         gl.activeTexture(gl.TEXTURE12); gl.bindTexture(gl.TEXTURE_2D, _bakeTex);
       }
       uf1(litU.uBakeOn, _litUf, "bakeOn", 1);
-      gl.uniform2f(litU.uBakeOrigin, lb.x0, lb.z0);
-      gl.uniform2f(litU.uBakeSize, lb.tilesX * lb.T * lb.cell, lb.tilesY * lb.T * lb.cell);
+      uf2(litU.uBakeOrigin, _litUf, "bakeOrigin", lb.x0, lb.z0);
+      uf2(litU.uBakeSize, _litUf, "bakeSize", lb.tilesX * lb.T * lb.cell, lb.tilesY * lb.T * lb.cell);
       uf3(litU.uBakeScale, _litUf, "bakeScale", sc);
       if (litU.uBakeGrid) gl.uniform3f(litU.uBakeGrid, lb.tilesX, lb.tilesY, lb.T);
-      if (litU.uBakeAtlas) gl.uniform2f(litU.uBakeAtlas, lb.atlasW, lb.atlasH * 2);
+      if (litU.uBakeAtlas) uf2(litU.uBakeAtlas, _litUf, "bakeAtlas", lb.atlasW, lb.atlasH * 2);
     } else {
       // Bake off for ~2 s (120 frames): free the light atlas + indirection.
       if (_bakeTex && ++_bakeOffN > 120) {
@@ -387,6 +387,16 @@ const GLXBackend = (function () {
     else { p[0] = a; p[1] = b; p[2] = c; p[3] = d; }
     gl.uniform4f(loc, a, b, c, d);
   }
+  // vec2 twin — bake origin/size/atlas are session-stable but begin() re-enters
+  // for env faces; without a cache they re-upload every begin.
+  function uf2(loc, cache, key, a, b) {
+    if (!loc) return;
+    const p = cache[key];
+    if (p !== undefined && p[0] === a && p[1] === b) return;
+    if (p === undefined) cache[key] = [a, b];
+    else { p[0] = a; p[1] = b; }
+    gl.uniform2f(loc, a, b);
+  }
 
   // VAO bind cache — drawElements requires the right VAO, but consecutive draws
   // of the same mesh (or repeated skid/shadow quads sharing shadowVAO) would
@@ -425,13 +435,22 @@ const GLXBackend = (function () {
     gl.colorMask(true, true, true, on);
   }
   const ROAD_BIAS = [-4.0, -8.0];   // decals sit on the road: shared, not a literal per draw
+  // Value cache matching setBlend/setDepthMask — flushBlobs/drawMark/drawShadow
+  // re-state the same ROAD_BIAS bracket; consecutive same-bias calls no-op.
+  // resetDrawState() must invalidate (it writes GL directly).
+  let _polyOn = false, _polyF = 0, _polyU = 0;
   function setPolyOffset(bias) {
     if (bias) {
-      gl.enable(gl.POLYGON_OFFSET_FILL);
-      gl.polygonOffset(bias[0], bias[1]);
-    } else {
+      const f = bias[0], u = bias[1];
+      if (!_polyOn || _polyF !== f || _polyU !== u) {
+        if (!_polyOn) gl.enable(gl.POLYGON_OFFSET_FILL);
+        gl.polygonOffset(f, u);
+        _polyOn = true; _polyF = f; _polyU = u;
+      }
+    } else if (_polyOn) {
       gl.polygonOffset(0, 0);
       gl.disable(gl.POLYGON_OFFSET_FILL);
+      _polyOn = false;
     }
   }
   function resetDrawState() {
@@ -439,6 +458,7 @@ const GLXBackend = (function () {
     gl.colorMask(true, true, true, true);
     gl.polygonOffset(0, 0);
     gl.disable(gl.POLYGON_OFFSET_FILL);
+    _polyOn = false; _polyF = 0; _polyU = 0;
   }
 
   function compile(type, src) {
@@ -2408,7 +2428,8 @@ const GLXBackend = (function () {
     // near plane. polygonOffset scales with the local depth slope, so a
     // decal wins at every distance and grazing angle without moving it.
     const _db = opts && opts.depthBias;
-    if (_db) { setPolyOffset([_db[0], _db[1]]); }
+    // Pass the caller's pair — no per-draw [f,u] literal (was ~alloc/draw).
+    if (_db) { setPolyOffset(_db); }
     // noDepthTest: a planar reflection drawn UNDER the floor (GarageScene) is
     // behind the floor's depth and would never pass; it draws untested, writes
     // no depth (alpha < 1), and everything opaque after it overwrites it.

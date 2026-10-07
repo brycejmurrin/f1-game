@@ -503,7 +503,9 @@
         // The second pair exists for the sun march's shadow-slice stripes; a lamp
         // cone has no such slices. -2 half-res passes per night frame.
         // apex26.grLite=0 restores two pairs (same knob as GLX).
-        const grPairs = (!sunGR && _grLite) ? 1 : 2;
+        // opts.grLite (GRAPHICS MEDIUM/LOW / mid autoShed) forces one pair even
+        // with sun shafts — avoidable day cost at lower tiers.
+        const grPairs = (o.grLite || (!sunGR && _grLite)) ? 1 : 2;
         for (let bp = 0; bp < grPairs; bp++) {
           if (_fixedMats && P.blurGRH) {
             // H/V materials stay bound to godrayRT / godrayBlurRT (bindFixedGR).
@@ -524,11 +526,15 @@
 
       // 1+2) bright pass + mip-chain bloom (js/render/glx/shaders/glsl-post.js)
       const haveBloom = bloomAmt > 0 && ensureBloom();
-      if (haveBloom) {
+      // opts.bloomLevels>0 truncates the widest octaves (MEDIUM/LOW / mid shed).
+      const useLv = haveBloom
+        ? ((o.bloomLevels > 0) ? Math.min(nLv, o.bloomLevels | 0) : nLv)
+        : 0;
+      if (haveBloom && useLv > 0) {
         P.bright.U.threshold.value = threshold;
         P.bright.U.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;   // threshold is in exposed units
         runPass(P.bright.mat, bloomLv[0].rt);
-        for (let i = 1; i < nLv; i++) {
+        for (let i = 1; i < useLv; i++) {
           if (_fixedMats && P.downFixed && P.downFixed[i - 1]) {
             const d = P.downFixed[i - 1];
             d.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
@@ -542,7 +548,7 @@
           }
         }
         P.spread.value = gk("bloomSpread");           // BLOOM SPREAD knob
-        for (let i = nLv - 1; i >= 1; i--) {
+        for (let i = useLv - 1; i >= 1; i--) {
           // Intermediates accumulate (ONE,ONE); the FINAL into level 0
           // OVERWRITES — level 0 still holds the sharp bright pass.
           let up;
@@ -562,8 +568,8 @@
       // 3) composite (js/render/glx/shaders/glsl-post.js)
       const C = P.composite.U;
       P.composite.tex.bloom.value = haveBloom ? bloomLv[0].rt.texture : blackTex;
-      // Normalise the mip-chain accumulation (nLv-1 summed octaves).
-      C.bloomAmt.value = bloomAmt * 1.25 / Math.max(nLv - 1, 1);
+      // Normalise the mip-chain accumulation (useLv-1 summed octaves).
+      C.bloomAmt.value = bloomAmt * 1.25 / Math.max(useLv - 1, 1);
       P.composite.tex.ssao.value = haveAO ? ssaoRT.texture : whiteTex;
       C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
