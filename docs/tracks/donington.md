@@ -39,6 +39,7 @@ where the parkland, the woods and most of the spectator banking live.
 | 0.7887 | +1 | 20 | **Melbourne Hairpin**, the bottom of the GP loop (added 1985): sparse and rural. `tyreWall` on the inside, a `hedge` boundary beyond it, a `marshalPost`, and a shallow `ridge` closing the loop off from the infield. |
 | 0.8700 | -1 | 30 | Melbourne loop return / Wheatcroft Straight approach — the least developed stretch. `hedge` field boundary with isolated `tree` beyond, plain `guardrail`, `groundPatch` of rough grass between track and hedge. |
 | 0.9437 | +1 | 13 | **Goddards**, the last corner onto the pit straight. `tyreWall` on the inside, `sponsorHoarding` on the outside of the exit, a `marshalPost` at the apex, and the pit-exit `building` end wall just beyond. (No `grandstandEx` — crowdBank buried into the exit berm at every probed gap; viewing is `spectatorHill` + S/F stands.) |
+| horizon | −1 | ~3400 | **Ratcliffe-on-Soar** (`donington-ratcliffe-power`): eight cooling towers + chimney on bearing ~66° from s≈0.32 (8.8 km real, compressed for fog). Station closed Sept 2024; towers still standing — demolition not before 2029 ([Uniper](https://www.uniper.energy/united-kingdom/news/uniper-signs-up-erith-for-demolition-contract-at-ratcliffe-on-soar-power-station/)). |
 
 ## 5. Track features
 

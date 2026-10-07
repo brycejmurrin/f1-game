@@ -45,7 +45,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, seat, MAT } = api;
+        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT } = api;
 
       // 1. PALETTE + LOCAL HELPERS
       //    Overcast English green: desaturated, cool, low contrast. Nothing
@@ -254,7 +254,6 @@
       forestEdge(0.050, 0.110, -1, 48, { col: LEAF_D });
       // --- behind the Hollywood-side bank: observation box, a service
       //     hardstanding with a marshal unit, then a deeper broadleaf rank.
-      hut(K(0.0663), -1, 27, CREAM);
       safeBox(K(0.072), -1, 30, [4.2, 3.0, 6], WALL_2);          // commentary box
       billboard(K(0.056), -1, 17, 7, 2.6, [0.66, 0.68, 0.66]);
       groundPatch(K(0.084), -1, 32, [16, 0.16, 44], GRAVEL);
@@ -383,7 +382,6 @@
       // --- behind the viewing bank: a small terrace, the marshals' hut and a
       //     field boundary with a rank of hedgerow oaks beyond it.
       terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
-      hut(K(0.3342), 1, 28, CREAM);
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
       hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
@@ -426,7 +424,6 @@
       //     by the brief; the only man-made thing here is the marshals' hut.
       rank(0.486, 0.562, -1, 64, 20, 1490, 10.0, 17.0);
       for (let i = 0; i < 7; i++) bush(K(0.494 + i * 0.010), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
-      hut(K(0.5162), -1, 27, WALL_2);
 
       // 12. s 0.5713 +1 18 — McLEANS
       tyreWall(0.562, 0.584, 1, 12, TW_Y);
@@ -436,7 +433,6 @@
       guardrail(0.550, 0.600, 1, 12, ARMCO);
       // --- small standing bank with its own hut and a rough-grass apron, then
       //     hedgerow and parkland trees stepping back into the estate.
-      hut(K(0.5713), 1, 26, CREAM);
       safeBox(K(0.588), 1, 30, [3.6, 2.6, 5], WALL_2);
       groundPatch(K(0.574), 1, 34, [22, 0.16, 62], ROUGH);
       hedge(0.548, 0.606, 1, 56, 2.0, HEDGE_L);
@@ -482,7 +478,6 @@
       rank(0.644, 0.736, -1, 56, 22, 1710, 10.5, 17.5);
       for (let i = 0; i < 8; i++) bush(K(0.652 + i * 0.010), -1, 24 + (i % 3) * 5, i % 2 ? LEAF_D : LEAF_C);
       slopeRidge(K(0.700), -1, 62, 90, 22, 5.0, GRASS_D);
-      hut(K(0.6803), -1, 24, CREAM);
 
       // 14. s 0.7592 -1 12 — THE ESSES (spectator tunnel crossing)
       guardrail(0.735, 0.782, -1, 11, ARMCO);
@@ -515,7 +510,6 @@
       for (let i = 0; i < 3; i++) specimen(K(0.776 + i * 0.018), 1, 52, 400 + i * 15);
       // --- the rural tell: a brick farm building group well back behind the
       //     hedge, a field gate onto rough grazing, and hedgerow standards.
-      hut(K(0.7887), 1, 22, CREAM);
       building(K(0.802), 1, 74, 12, 5.2, 22, { col: BRICK, roof: ROOF_R });
       building(K(0.812), 1, 70, 10, 4.4, 16, { col: STEEL, roof: ROOF_D, flat: true });
       for (let i = 0; i < 4; i++) safeBox(K(0.784 + i * 0.006), 1, 66, [3.4, 2.4, 4.5], i % 2 ? ROUGH : GRASS_D);
@@ -551,7 +545,6 @@
       safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);
       building(K(0.978), 1, 26, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
       groundPatch(K(0.968), 1, 38, [22, 0.16, 54], TARMACISH);
-      hut(K(0.9437), 1, 20, CREAM);
       for (let i = 0; i < 4; i++)
         safeBox(K(0.932 + i * 0.013), -1, 44, [5.2, 3.2, 8], i % 2 ? TENT : CREAM);
       // Dropped the floating Goddards terrace (unsupported 1.83 m / 0.54 m);
@@ -613,16 +606,50 @@
       spectatorHill(0.660, 0.700, -1, 20, { h: 5.0, col: GRASS });
       spectatorHill(0.910, 0.935, -1, 28, { h: 5.5, col: GRASS });
 
-      // Continuous armco so the whole edge reads as a circuit, not a lane.
-      guardrail(0.0, 1.0, -1, 13.5, ARMCO);
-      guardrail(0.10, 0.93, 1, 14.5, ARMCO);
-
       // Posts on the eighths, skipping the ones already placed above.
       for (let i = 0; i < 8; i++) {
         const s = i / 8;
         if (s > 0.30 && s < 0.40) continue;
         marshalPost(K(s), 1, 17);
       }
+      // ── RATCLIFFE-ON-SOAR, NE HORIZON ─────────────────────────────────────
+      // Donington Park (52.829° N, 1.376° W) → Ratcliffe station (52.861° N,
+      // 1.256° W): ~8.8 km on bearing 66.1° (OS/Wikipedia). Outboard normal at
+      // s≈0.32 / side −1 runs 64.8° — one anchor carries the cluster. Closed
+      // Sept 2024; cooling towers still standing, demolition not before 2029
+      // (Uniper / East Midlands CCA, 2025). Compressed to 3.4 km for fog.
+      {
+        const RAT_DIST = 3400;
+        const aR = anchor(K(0.32), -1, RAT_DIST);
+        const bR = [aR.r, aR.u, aR.t];
+        const gy = terrainYAt(aR.c[0], aR.c[2]);
+        const footY = (gy === null ? aR.c[1] : gy);
+        const COOL = [0.60, 0.62, 0.64];
+        const CHIM = [0.54, 0.56, 0.58];
+        const tower = (stage, foot, h, r0) => {
+          addFrustum(stage, foot, r0, r0 * 0.52, h * 0.46, COOL, 10, bR);
+          addFrustum(stage, vadd(foot, aR.u, h * 0.46), r0 * 0.52, r0 * 0.68, h * 0.54, COOL, 10, bR);
+        };
+        modelGroup("donington-ratcliffe-power", {
+          center: vadd(aR.c, aR.u, 55),
+          size: [220, 120, 180],
+          basis: bR,
+        }, (stage) => {
+          const hub = [aR.c[0], footY, aR.c[2]];
+          const layouts = [
+            [-72, -38], [-24, -38], [24, -38], [72, -38],
+            [-72, 38], [-24, 38], [24, 38], [72, 38],
+          ];
+          for (const [along, lateral] of layouts) {
+            const foot = vadd(vadd(hub, aR.t, along), aR.r, lateral);
+            tower(stage, foot, 88, 14);
+          }
+          const chimBase = vadd(vadd(hub, aR.t, 108), aR.r, -18);
+          addFrustum(stage, chimBase, 5.5, 4.2, 112, CHIM, 10, bR);
+          addCyl(stage, vadd(chimBase, aR.u, 112), 3.8, 18, CHIM, 8, bR);
+        }, { required: true });
+      }
+
         // ---------------------------------------------------------------- FAR HORIZON
       // Without a horizon the road rises and falls through a pancake-flat plane
       // that meets the sky at a hard edge: the road moves and nothing behind it
