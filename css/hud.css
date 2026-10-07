@@ -1933,17 +1933,24 @@ body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   left: auto;
-  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  /* Cap the dock standoff: at HUD/BTN 150% the wrap-reverse right dock can
+     measure ~480px wide, and adding the full --dock-r-w shoved this trace
+     onto the LEFT steer arrows (844×390). A small floor (BOOST column
+     width-ish) keeps a gap from the pedals without crossing RELATIVE. */
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), 128px));
   bottom: auto;
   /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
-  /* Cap the trace so it cannot grow down into BOOST / OT at HUD 150%. The
-     anchor block below tightens this to the measured dock top when supported. */
-  max-height: min(22svh, 5.5em);
+  max-width: min(120px, 22vw);
+  max-height: min(18svh, 4.2em);
   overflow: hidden;
+}
+body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
+  width: 84px;
+  height: 32px;
 }
 /* DESKTOP: the default left + bottom:22svh home grew into SPEED & GEAR at
    HUD SIZE 150% (chase 1280×720 survey). Park under the sector column like
@@ -1996,28 +2003,10 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       calc((anchor(left) + var(--gap)) / var(--hud-z))
     );
   }
-  /* TOUCH RELATIVE ↔ LEFT DOCK. Cap the card above the steer column so five
-     rows at HUD 150% cannot paint over the arrows / BRAKE. --hud-left-h is
-     already in this element's zoom units; anchor(top) is screen px → divide. */
-  body:not(.desktop) #hud-rel:not([data-hl-user]) {
-    position-anchor: --apex-dock-left;
-    max-height: max(
-      3.2em,
-      min(42svh, 11.5em, calc(anchor(top) / var(--hud-z) - var(--hud-left-h, 152px) - 16px))
-    );
-    overflow: hidden;
-  }
-  /* TOUCH INPUTS ↔ RIGHT DOCK. Same cap against the pedal / BOOST column. */
-  body:not(.desktop) #hud-inputs:not([data-hl-user]) {
-    position-anchor: --apex-dock-right;
-    max-height: max(
-      2.4em,
-      min(22svh, 5.5em, calc(anchor(top) / var(--hud-z)
-        - (8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)
-        - var(--hud-sec-h, 4.8em) - 20px))
-    );
-    overflow: hidden;
-  }
+  /* RELATIVE / INPUTS: do NOT set position-anchor here. `left: auto` on
+     INPUTS then resolved against the dock and dumped the trace onto the
+     steer arrows (844×390 buttons 150%). Height caps stay on the home
+     rules; HudRelative fitRows() slides/caps RELATIVE off the left pedals. */
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */

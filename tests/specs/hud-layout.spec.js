@@ -489,15 +489,31 @@ test.describe("tilt steer high HUD scale", () => {
   test("sector plate clears BOOST (phone landscape, 150%)", async ({ page }) => {
     const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
     await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150 });
+    await page.evaluate(() => {
+      if (typeof HudElements !== "undefined") HudElements.set("rel", true);
+      window.__apex.jump(0.15, 60, 0);
+    });
+    await page.waitForFunction(() => {
+      const rel = document.getElementById("hud-rel");
+      const brake = document.getElementById("btn-brake");
+      if (!rel || rel.hidden || !brake) return false;
+      const a = rel.getBoundingClientRect(), b = brake.getBoundingClientRect();
+      if (!(a.width && b.width)) return false;
+      // fitRows must have slid/capped the card clear of BRAKE (TILT left column).
+      return !(a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
+    }, null, { polling: 100, timeout: 10_000 });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
+      { key: "hud-rel", sel: "#hud-rel", role: "hud" },
       { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
       { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+      { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
+      { key: "btn-throttle", sel: "btn-throttle", role: "ctrl" },
     ];
     const recs = await page.evaluate(probeHudElements, { targets });
     const r = analyzeOverlap(recs, v.w, v.h, v);
-    const sectorHits = r.hudClash.filter((p) => p.startsWith("hud-sectors+") || p.endsWith("+hud-sectors"));
-    expect(sectorHits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+    const hits = r.hudClash.filter((p) => p.includes("hud-sectors") || p.includes("hud-rel"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
   });
 });
 

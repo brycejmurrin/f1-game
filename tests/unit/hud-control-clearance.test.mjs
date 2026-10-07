@@ -37,20 +37,17 @@ test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => 
 
 test("CSS: touch #hud-rel is capped above the left dock (steer / BRAKE)", () => {
   assert.match(CSS,
-    /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)[\s\S]{0,400}?position-anchor:\s*--apex-dock-left/,
-    "touch RELATIVE anchors to the left dock");
-  assert.match(CSS,
-    /#hud-rel:not\(\[data-hl-user\]\)[\s\S]{0,500}?max-height:[\s\S]{0,120}?anchor\(top\)/,
-    "touch RELATIVE max-height clears anchor(top) of the left dock");
+    /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)[\s\S]{0,500}?max-height:\s*min\(42svh/,
+    "touch RELATIVE has a height cap so five rows cannot cover the pedals");
 });
 
 test("CSS: #hud-inputs clears the right dock on touch and the gear box on desktop", () => {
   assert.match(CSS,
-    /body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)[\s\S]{0,500}?position-anchor:\s*--apex-dock-right/,
-    "touch INPUTS anchors to the right dock");
+    /min\(var\(--dock-r-w, 0px\), 128px\)/,
+    "touch INPUTS caps --dock-r-w so a wrapped dock cannot shove it left");
   assert.match(CSS,
-    /body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)[\s\S]{0,600}?max-height:[\s\S]{0,120}?anchor\(top\)/,
-    "touch INPUTS max-height clears the right-dock top");
+    /#hud-inputs:not\(\[data-hl-user\]\)[\s\S]*?max-height:\s*min\(18svh/,
+    "touch INPUTS height-caps so it cannot grow into BOOST");
   assert.match(CSS,
     /body\.desktop #hud-inputs:not\(\[data-hl-user\]\)\s*\{[^}]*bottom:\s*auto/,
     "desktop INPUTS leaves the bottom band (SPEED & GEAR) alone");
