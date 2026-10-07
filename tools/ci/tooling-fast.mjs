@@ -438,6 +438,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
   "tests/unit/lamp-shadow-pick.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
+  "tests/unit/lazy-audio-yield.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a

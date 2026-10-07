@@ -1499,6 +1499,7 @@ what it covers.
 | `audio-sample-upgrade.test.mjs` | fake-AudioContext harness for `GameAudio`: an engine started on the synth voice (samples not yet decoded) upgrades to the samples at the next `setEngine` once they are ready, exactly once |
 | `audio-recovery.test.mjs` | fake-AudioContext harness: an undecodable track advances the playlist (and a list where nothing decodes stops), and SOUND EFFECTS turned on mid-race starts the rain the race asked for |
 | `lazy-audio-firstbind-vm.test.mjs` | full game VM: boot-time `GameAudio.init()`, saved camera mix, and stored AUDIO DRIVING CUES level that hit the LAZY_AUDIO stub are replayed when the real engine binds (contexts, engineOn, onboard mix, cue level and fired counts) |
+| `lazy-audio-yield.test.mjs` | `ensureAudio` yields before LAZY_AUDIO eval and before `onAudioReady`; awaiting still gets a ready engine; game-vm skips the yield; no `GameAudio.init` without user activation |
 | `keyboard-first-audio-vm.test.mjs` | full game VM: the first title keydown (not Escape) pulls LAZY_AUDIO so keyboard-first sessions get an AudioContext and title music, not only pointerdown |
 | `net-audio-revs-vm.test.mjs` | full game VM: VS FRIEND guest — net-owned rivals at speed derive `c.rpm` from wire gear/speed (rival voice Hz > idle, none stay at IDLE_RPM >30 m/s) |
 | `finish-coast-rev-vm.test.mjs` | full game VM: after the chequered flag the player's rpm winds down with `coast()` (solo and while waiting for a VS FRIEND human) |
