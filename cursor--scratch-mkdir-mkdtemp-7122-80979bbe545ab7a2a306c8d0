@@ -1,0 +1,1 @@
+1791399081	Cursor Agent	fix scratch/ mkdir before mkdtemp: capture-tools-regressions + trim-comments  [cursor/scratch-mkdir-mkdtemp-7122; session 80979bbe545ab7a2a306c8d0]
