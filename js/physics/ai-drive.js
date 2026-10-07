@@ -1503,7 +1503,11 @@ const AiDrive = (function () {
   // has already failed (`escalated`), contact patience ran during that window
   // — use the short arm so a street wall-pile is not another 7 s of crawl.
   function aiRescueDelay(contacting, escalated) {
-    if (escalated) return contacting ? 2.0 : 1.25;
+    // Escalated non-contact: monaco pole stall measured ~5.3 s crawl at 10 Hz
+    // sampling (ai-pack-stuck-vm) after #1209 — 1.25 s stacked one sample high
+    // over the 5.0 s gate; 0.95 s keeps rescue inside the pin without reopening
+    // the pre-fix 7+ s forever-crawl.
+    if (escalated) return contacting ? 2.0 : 0.95;
     return contacting ? 7 : 4;
   }
 
