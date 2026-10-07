@@ -1667,11 +1667,19 @@ const NetLobby = (function () {
       let watching = false;
       const watch = () => { if (!watching) { watching = true; waitForOpen(); } };
       const pid = pendingId;   // onConnected() nulls pendingId once it adopts the transport
+      // Once the guest has found the host (or ICE is open), onTick must not
+      // paint the pre-connect "Looking…" line over Connecting / Connected /
+      // room status — live build 14296 showed looking/expiry while joined.
+      let found = false;
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
-        onTick: () => { if (operationCurrent(gen)) say("Looking for that room… (code " + code + ")"); },
+        onTick: () => {
+          if (!operationCurrent(gen) || found || watching || transports.has(pid)) return;
+          say("Looking for that room… (code " + code + ")");
+        },
         reply: async (inviteCode) => {
           if (!operationCurrent(gen) || transport !== pending) return null;
+          found = true;
           say("Found it — answering…");
           // Default gather (waitForIce re-check + null-candidate end). A short
           // per-answer gather cap here was a leftover workaround; readyIce

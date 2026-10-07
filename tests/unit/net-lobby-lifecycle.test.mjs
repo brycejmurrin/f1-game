@@ -1271,3 +1271,73 @@ test("codeJoin and phone-pad acceptInvite do not pass gatherTimeoutMs: 2500", as
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(phone),
     "phone-pad acceptInvite must not force gatherTimeoutMs: 2500");
 });
+
+// Live build 14296 / tip after #1237: guest ICE opened and onConnected said
+// "Connected.", but codeJoin's onTick (and a racing expired swap) still painted
+// "Looking for that room…" / "Nobody answered…" over it during the answer
+// re-post window. Once connected, status must never regress and no expiry
+// error may be emitted.
+test("once guest connected, status never regresses and no expiry error", async () => {
+  const made = [];
+  let transport = null;
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: {
+      acceptInvite: async () => ({ ok: true, code: "answer", peer: null }),
+    },
+    rendezvous: {
+      usingPrivateRelay: () => false,
+      normalise: (c) => String(c || "").toUpperCase().replace(/[^0-9A-Z]/g, ""),
+      valid: (c) => /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/.test(String(c || "").toUpperCase()),
+      swap: async (o) => {
+        const out = await o.reply("host-invite");
+        assert.ok(out, "guest posted an answer");
+        // Open ICE while the exchange is still live (nostr ~5.2 s re-post).
+        transport.status = "open";
+        for (let i = 0; i < 40 && !h.lobby.status().connected; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        assert.equal(h.lobby.status().connected, true,
+          "guest reached Connected before swap settles");
+        // openRoom advances past "Connected." to the waiting-room line — that
+        // is forward progress. onTick/expiry must not go backwards to looking
+        // or "Nobody answered…".
+        const afterConnected = h.status.textContent;
+        assert.doesNotMatch(afterConnected, /Looking for that room|Nobody answered/i);
+        if (typeof o.onTick === "function") o.onTick();
+        assert.equal(h.status.textContent, afterConnected,
+          "onTick must not overwrite Connected/room status with Looking for that room");
+        assert.doesNotMatch(h.status.textContent, /Looking for that room|Nobody answered/i);
+        // Expiry racing clearExpire while the transport is adopted.
+        return {
+          ok: false,
+          error: "expired",
+          message: "Nobody answered that code. Check the six characters, or ask "
+            + "your friend for a fresh one — if it keeps happening, both "
+            + "reload the game and try a new code.",
+        };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    transport = {
+      status: "new",
+      onClose() {},
+      close() { transport.status = "closed"; },
+      stats: () => ({ ice: "connected", connection: "connected" }),
+    };
+    return transport;
+  });
+  try {
+    const result = await h.lobby.codeJoin("ABC234");
+    assert.equal(result.ok, true, "expired + adopted transport still counts as joined");
+    assert.equal(h.lobby.status().connected, true);
+    assert.doesNotMatch(h.status.textContent,
+      /Looking for that room|Nobody answered|Could not join/i,
+      "no looking/joining/expiry line after Connected");
+  } finally {
+    h.lobby.cancel();
+  }
+});
