@@ -203,8 +203,14 @@ async function race(page, steer, manual, ins, opts) {
       const ann = document.getElementById("announce");
       if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
         const a = ann.getBoundingClientRect();
-        if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
-            && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) return false;
+        const hit = (el) => {
+          if (!el || el.hidden) return false;
+          const r = el.getBoundingClientRect();
+          return a.width > 0 && r.width > 0
+            && r.left < a.right - 0.5 && a.left < r.right - 0.5
+            && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5;
+        };
+        if (hit(sec) || hit(document.querySelector(".hud-top"))) return false;
       }
       // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
       // for one tick. Require both inside the injected safe insets.

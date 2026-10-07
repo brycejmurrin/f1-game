@@ -1117,7 +1117,9 @@ function fitHud() {
   // AIR before dividing shrank the inset (tilt @150% S3×BOOST). Zoomed +8 was
   // only ~4px at z≈0.5 and failed CI workers=2. Keep 8px — more shoved S3 into
   // #announce before announceLane could clip the card.
-  const DOCK_AIR = 8;
+  // 8px under-cleared BOOST by ~2px at HUD 140% on CI (sectors r 590.7 vs
+  // BOOST l 588.8). 12px screen air is still well below the midCap.
+  const DOCK_AIR = 12;
   const insetFor = (left, z) => {
     if (!Number.isFinite(left) || !(z > 0)) return 0;
     const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
@@ -1148,24 +1150,30 @@ function fitHud() {
       }
     }
   }
-  radioTopSlot(root, bcast);   // after the dock cap: it stands off the docks as painted
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
-  // Clip the radio lane AFTER HudLayout.fit — a post-lane nudge of #hud-sectors
-  // left --announce-lane-w spanning into S1–S3 (oversize CI workers=2:
-  // #hud-sectors+#announce on notched-landscape buttons).
+  // Radio top slot AFTER HudLayout.fit — a pre-fit slot used the shipped tower
+  // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
+  // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
+  radioTopSlot(root, bcast);
   announceLane(root);
-  // Painted guarantee: if the card still rects onto S3 (lane vars computed
-  // against a pre-grow plate, or flex min-content ignored width:0), collapse.
+  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
+  // the hanging lane and drop the top slot.
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annPaint && !annPaint.hidden && els.hudSectors && !els.hudSectors.hidden) {
+  if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
-    const s = els.hudSectors.getBoundingClientRect();
-    if (a.width > 0 && s.width > 0
-        && s.left < a.right - 0.5 && a.left < s.right - 0.5
-        && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) {
+    const hit = (el) => {
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return !!(a.width > 0 && r.width > 0
+        && r.left < a.right - 0.5 && a.left < r.right - 0.5
+        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
+    };
+    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+    if (hit(els.hudSectors) || hit(tower)) {
+      hToggle(document.body, "hud-radio-top", false);
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
       hStyle(root, "--announce-lane-shift", "0%");
