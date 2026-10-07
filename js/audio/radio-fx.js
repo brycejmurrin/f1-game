@@ -2,6 +2,8 @@
 "use strict";
 
 var GameAudioRadioFx = (function () {
+  /** Set when GameAudioRadioFx.create() runs; used by WATCH OpenF1 clips without an engine.js export. */
+  let playWatchMediaFn = null;
   function create(host, signal) {
     /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
      *
@@ -406,8 +408,125 @@ var GameAudioRadioFx = (function () {
       return radioFx;
     }
 
+    /* OPENF1 WATCH CLIPS (js/race/real-replay.js): recorded team radio through the
+     * same band-pass / soft-clip / compressor chain as voice-pack lines, with music
+     * ducking for the clip's lifetime. MediaElementSource when CORS allows; else
+     * fetch+decode into radioVoice; else plain HTMLAudio with duck only. */
+    const _watchClips = new Set();
+    function radioMediaClip(url, o) {
+      if (!url || typeof url !== "string") return null;
+      const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
+      if (!(vol > 0) || !host.enabled() || !host.sfxOk()) return null;
+      let ducked = false;
+      const duck = () => {
+        if (ducked) return;
+        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) { GameAudio.setRadioDuck(true); ducked = true; }
+      };
+      const releaseDuck = () => {
+        if (!ducked) return;
+        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        ducked = false;
+      };
+      duck();
+      let dead = false;
+      let el = null;
+      let nodes = [];
+      let voiceHandle = null;
+      let chained = false;
+      let ended = false;
+      const entry = {};
+      const teardown = () => {
+        if (dead) return;
+        dead = true;
+        ended = true;
+        _watchClips.delete(entry);
+        releaseDuck();
+        if (voiceHandle && voiceHandle.stop) { try { voiceHandle.stop(); } catch (e) { /* gone */ } voiceHandle = null; }
+        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
+        nodes = [];
+        if (el) {
+          el.onended = el.onerror = null;
+          try { el.pause(); } catch (e) { /* gone */ }
+          el = null;
+        }
+      };
+      entry.teardown = teardown;
+      _watchClips.add(entry);
+      const handle = {
+        get chained() { return chained; },
+        get paused() { return dead || ended || (el ? el.paused : !voiceHandle); },
+        get ended() { return ended || (el ? el.ended : dead || !voiceHandle); },
+        pause() { teardown(); },
+        play() {
+          if (dead || !el) return Promise.resolve();
+          return el.play().catch(() => { teardown(); });
+        },
+        stop() { teardown(); },
+      };
+      function plainFallback() {
+        chained = false;
+        if (typeof Audio === "undefined") { teardown(); return null; }
+        el = new Audio(url);
+        el.volume = Math.min(1, vol);
+        el.onended = el.onerror = () => teardown();
+        const p = el.play();
+        if (p && p.catch) p.catch(() => teardown());
+        return handle;
+      }
+      const disconnectMedia = () => {
+        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
+        nodes = [];
+        if (el) { el.onended = el.onerror = null; el = null; }
+        chained = false;
+      };
+      const tryFetchDecode = () => {
+        if (dead || typeof fetch !== "function" || !host.context()) { plainFallback(); return; }
+        fetch(url, { mode: "cors", credentials: "omit" }).then((r) => {
+          if (!r.ok) throw new Error("fetch " + r.status);
+          return r.arrayBuffer();
+        }).then((ab) => decodeClip(ab)).then((buf) => {
+          if (dead) return;
+          const h = radioVoice([buf], host.now(), { fx: "radio", channel: "radio", volume: vol });
+          if (!h) { plainFallback(); return; }
+          chained = true;
+          voiceHandle = h;
+          const endAt = (h.end - host.now()) * 1000 + 150;
+          setTimeout(() => { if (!dead) teardown(); }, Math.max(50, endAt));
+        }).catch(() => { if (!dead) plainFallback(); });
+      };
+      const ctx = host.context();
+      if (!ctx || ctx.state === "closed" || ctx.state !== "running") return plainFallback();
+      el = new Audio();
+      el.crossOrigin = "anonymous";
+      el.preload = "auto";
+      try {
+        const mediaSrc = ctx.createMediaElementSource(el);
+        const preset = RADIO_PRESETS[radioPreset];
+        const ch = Object.assign({}, VOICE_CH.radio, {
+          lo: preset.lo, hi: preset.hi, drive: preset.drive, click: 0,
+        });
+        const g = ctx.createGain();
+        g.gain.value = ch.level * vol;
+        mediaSrc.connect(g);
+        g.connect(voiceChain("radio:" + radioPreset, ch));
+        nodes = [mediaSrc, g];
+        chained = true;
+        el.onended = () => teardown();
+        el.onerror = () => { if (dead) return; disconnectMedia(); tryFetchDecode(); };
+        el.src = url;
+        const p = el.play();
+        if (p && p.catch) p.catch(() => { if (dead) return; disconnectMedia(); tryFetchDecode(); });
+        return handle;
+      } catch (e) {
+        disconnectMedia();
+        tryFetchDecode();
+        return handle;
+      }
+    }
+    playWatchMediaFn = radioMediaClip;
+
     return {
-      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset,
+      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset, radioMediaClip,
       radioPreset: () => radioPreset,
       radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
       radioVoicesLive: () => voicesLive,
@@ -428,12 +547,17 @@ var GameAudioRadioFx = (function () {
       radioChannels: () => Object.keys(RADIO_CH),
       resetContext() {
         radioStingStop();
+        for (const w of _watchClips) w.teardown();
+        _watchClips.clear();
         for (const ent of _voiceChains.values()) dropVoiceChain(ent);
         _voiceChains.clear();
         radioBed = null;
       },
     };
   }
-  return { create };
+  function playWatchMedia(url, o) {
+    return playWatchMediaFn ? playWatchMediaFn(url, o) : null;
+  }
+  return { create, playWatchMedia };
 })();
 Object.freeze(GameAudioRadioFx);

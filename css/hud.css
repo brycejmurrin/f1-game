@@ -746,6 +746,8 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   .hud-gaps {
     top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   }
+  /* Helmet touch: the PLAN row under TYRES read as a plate on GEAR (390×844). */
+  body[data-hl-set="helmet"]:not(.desktop) #hud-plan:not(:empty) { display: none; }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -926,14 +928,12 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
-  /* STAND OFF THE RIGHT DOCK only in TOUCH STEER. Same --dock-r-w
-     clearance #hud-limits / #hud-damage take, but those chips sit lower.
-     On touch, BOOST / OT / AERO is that column and at HUD/BTN SIZE 130–150%
-     (and short landscape) the strip sat under BOOST — measured tip + live
-     Pages, 2026-10-05. On BUTTONS the wrap-reverse dock is a full pedal
-     column; adding that width here lands the strip on the centred radio
-     card (hud-layout CI: #hud-sectors+#announce, notched-landscape buttons).
-     fitHud still publishes --dock-r-w whenever the dock has a box. */
+  /* STAND OFF THE RIGHT DOCK on touch STEER (touch + buttons). Same --dock-r-w
+     clearance #hud-limits / #hud-damage take; those chips sit lower. BOOST /
+     OT / AERO share the right column and at HUD/BTN SIZE 130–150% (short
+     landscape) the sector strip sat under BOOST until sectors consumed
+     --dock-r-w on steer-touch and steer-buttons (2026-10-05 survey, 2026-10-07
+     buttons fix). fitHud publishes --dock-r-w whenever the dock has a box. */
   right: calc(10px + var(--sar) / var(--hud-z));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
@@ -949,7 +949,8 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    fills it on the first HUD tick. Until then padding + background left a junk
    gap under the pause column (same class of bug as empty .hud-gaps above). */
 #hud-sectors:empty { display: none; }
-body.steer-touch #hud-sectors {
+body.steer-touch #hud-sectors,
+body.steer-buttons #hud-sectors {
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
 }
 .sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; border-left: 3px solid transparent; padding-left: calc(var(--gap) / 2); margin-left: calc(var(--gap) / -2); }
@@ -1951,14 +1952,26 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
     bottom: calc(anchor(top) + var(--gap));
     margin: 0;
   }
+  /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
+     it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
+  body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
+  body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
+    position: absolute;
+    position-anchor: --apex-hud-tyre;
+    left: anchor(left);
+    bottom: calc(anchor(top) + var(--gap));
+    margin: 0;
+  }
   /* TOUCH SECTORS ↔ RIGHT DOCK. Same CSS Anchor Positioning pattern as TYRES
      on the left dock (Modern Web Guidance css-layout §5: tether floating
-     chrome to its trigger, do not guess offsets). Scoped to steer-touch so
-     BUTTONS docks do not drag the strip into #announce. #hud-sectors is
-     fixed and zoomed (--hud-z), so anchor() is divided like --sar; max()
-     keeps the measured --dock-r-w floor when the engine's inset is smaller. */
-  body.steer-touch #dock-right { anchor-name: --apex-dock-right; }
-  body.steer-touch #hud-sectors {
+     chrome to its trigger, do not guess offsets). steer-touch and
+     steer-buttons: #hud-sectors is fixed and zoomed (--hud-z), so anchor()
+     is divided like --sar; max() keeps the measured --dock-r-w floor when the
+     engine's inset is smaller. */
+  body.steer-touch #dock-right,
+  body.steer-buttons #dock-right { anchor-name: --apex-dock-right; }
+  body.steer-touch #hud-sectors,
+  body.steer-buttons #hud-sectors {
     position-anchor: --apex-dock-right;
     right: max(
       calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px)),

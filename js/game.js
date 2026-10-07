@@ -2141,10 +2141,15 @@ async function loadTrackStepped(idx, live) {
   let built = null;
   try {
     dropTrackWorld();
-    // apex26.buildWorker (PROTOTYPE, default OFF): built off the main thread and
-    // replayed here; null (off, failed) falls back to the stepped build.
+    // apex26.buildWorker (default ON when multi-core): off the main thread for
+    // IN-SESSION track switches only (state race/count). Cold race entry from
+    // the menu stays on the paced build — quiet A/B showed worker+replay
+    // regressing race-entry maxBlock/loadTrack wall while cutting track-switch
+    // longtasks (see PR #1175 table). null (off/failed) → stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
-    const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
+    const switchInSession = (state === "race" || state === "count");
+    const msg = switchInSession && typeof TrackBuildClient !== "undefined"
+      && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
@@ -2612,6 +2617,9 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
+  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
+  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2638,9 +2646,6 @@ async function startRaceBody() {
   // (RaceEntryProfile 2026-10-05: loadTrack 1273 ms, warmCarAssets 1187 ms).
   // Already-built worlds short-circuit inside loadTrackStepped → loadTrack.
   // live() stays true: this session owns the build (menu prep uses a generation gate).
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (vmNoFramePump) loadTrack(trackIdx);
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }

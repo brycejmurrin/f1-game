@@ -112,6 +112,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/behind-ship.test.mjs",
+  // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
+  "tests/unit/bitmap-decode-worker.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
@@ -412,6 +414,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
@@ -677,6 +680,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/start-lights.test.mjs",
   "tests/unit/start-race-latch.test.mjs",
   "tests/unit/steel-role.test.mjs",
+  // Mid-corner lift-off snap cap (COAST_YAW_* in consts + player-forces): yaw
+  // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
+  // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
+  "tests/unit/steer-feel-lift-off.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
