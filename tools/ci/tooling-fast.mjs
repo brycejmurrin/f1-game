@@ -471,6 +471,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
+  // marshalPost style roofs seat on walls and the signal pole chains to the
+  // hut (ground-audit unsupported on monaco/spa/suzuka kiosk posts). ~0.1 s.
+  "tests/unit/marshal-post-grounding.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
