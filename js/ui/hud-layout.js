@@ -119,20 +119,20 @@ const HudLayout = (function () {
   // 123..210 y366-413; ENERGY from y577 — measured by the hud-survey helmet
   // cells, docs/notes/HELMET-VISOR-HUD-2026-10-05.md). TOUCH (HELMET_TOUCH,
   // read through shippedEl while body lacks .desktop): the steer and pedal
-  // columns sit beside the wheel, so ENERGY goes to the dash line above the
-  // wheel's top edge (844x390, dock zoom 0.865: y-37 is 197..212, the wheel
-  // from 215) and TYRES stays in the left corner between STRATEGY (bottom 211)
-  // and the steer buttons (top 289): y-2 is 232..273, where the chase row's
-  // own position sat 8 px over the buttons at this zoom. GEAR takes the LCD's
-  // place and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay
-  // with the touch buttons that carry them (css/track-detail.css, the helmet
+  // columns sit beside the wheel, so ENERGY stacks in the left bottom strip
+  // above TYRES (css/hud.css anchor-positioning on helmet touch — the old
+  // y-37 centre lift read as an ERS pill floating mid-visor, 2026-10-07).
+  // TYRES stays in the left corner between STRATEGY and the steer buttons:
+  // y-2 is 232..273 at 844×390 dock zoom 0.865. GEAR takes the LCD's place
+  // and SPEED sits right of it; only OVERTAKE / AERO / BRAKE BIAS stay with
+  // the touch buttons that carry them (css/track-detail.css, the helmet
   // touch hide).
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
   // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
   // where the wheel's screen is (the chase row's own centre, one step down),
   // SPEED moves right of it (the owner asked for the chip on the visor,
   // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
-  const HELMET_TOUCH = { energy: { x: 0, y: -37, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
+  const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
     gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
