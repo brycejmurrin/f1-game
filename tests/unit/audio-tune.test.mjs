@@ -96,6 +96,7 @@ function boot(opts) {
       { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
+    createMediaElementSource: (el) => Object.assign(node("mediaSrc", counts), { mediaElement: el }),
     resume: () => Promise.resolve(), close() {},
   };
   const sb = {
@@ -116,6 +117,7 @@ function boot(opts) {
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
   if (opts && opts.realWatch) sb.RealRace = { status: () => ({ watch: true }) };
+  if (opts && opts.Audio) sb.Audio = opts.Audio;
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
@@ -130,7 +132,7 @@ function boot(opts) {
   // Sources are excluded: a STOPPED BufferSource/Oscillator is collected without
   // a disconnect, so counting them would report a leak this file cannot fix.
   const liveNodes = () => [...live].filter((n) => n.kind !== "src" && n.kind !== "osc").length;
-  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx };
+  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx, vctx };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -1046,6 +1048,38 @@ test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", 
   assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
   h.stop();
   for (const fn of pendingTimers.splice(0)) fn();
+});
+
+test("playWatchMedia ducks music and routes media elements through the radio band", async () => {
+  const b = boot({
+    Audio: function AudioMock() {
+      this.crossOrigin = "";
+      this.preload = "";
+      this.src = "";
+      this.volume = 1;
+      this.paused = false;
+      this.ended = false;
+      this.play = () => Promise.resolve();
+      this.pause = () => {};
+    },
+  });
+  const gains = [];
+  const mk = b.ctx.createGain;
+  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  b.GameAudio.init();
+  b.GameAudio.startMusic();
+  await b.release();
+  const musicGain = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
+  assert.ok(musicGain, "precondition: music gain");
+  const full = musicGain.gain.value;
+  const GameAudioRadioFx = vm.runInContext("GameAudioRadioFx", b.vctx);
+  const h = GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.9 });
+  assert.ok(h && h.chained, "media element path chains into WebAudio");
+  assert.ok(Math.abs(musicGain.gain.value - full * 0.35) < 1e-9, "music ducks for the clip");
+  assert.ok((b.counts.mediaSrc || 0) >= 1, "createMediaElementSource ran");
+  assert.ok((b.counts.biquad || 0) >= 2, "radio band filters are in the graph");
+  h.stop();
+  assert.ok(Math.abs(musicGain.gain.value - full) < 1e-9, "stop releases the duck");
 });
 
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
