@@ -1,1 +1,0 @@
-1791328827	Cursor Agent	fix(hud): race HUD layout soft-hide/dock — OWNED js/ui/hud*.js js/ui/survey-hud.js css/hud.css css/fonts-hud.css tests/unit/**hud*; FORBIDDEN circuits/car/lighting/menu UI; no AM/merge  [claude/f1-game-project-26h3ng; session c5b8a3b16e3fc6db11eb7c1e]
