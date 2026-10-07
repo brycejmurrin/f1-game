@@ -732,7 +732,6 @@ const CATALOG = [
         label: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
         count: { type: "integer", minimum: 1, maximum: 32 },
         fracs: { type: "array", items: { type: "number", minimum: 0, maximum: 1 }, minItems: 1, maxItems: 32 },
-        cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
         cams: { type: "array", items: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] }, maxItems: 5 },
         shots: { type: "array", maxItems: 32, items: { type: "object" } },
         cols: { type: "integer", minimum: 0, maximum: 12 },
