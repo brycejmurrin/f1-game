@@ -1,1 +1,1 @@
-1791350598	Cursor Agent	perf #1175: stamp _keepPositions on worker replay when Tracks.keepGeometry  [cursor/perf-build-worker-default-810c; session 483ecee68706d7245293912b]
+1791351458	Cursor Agent	perf #1175: merge ship after #1181; keep worker gate + frame changes  [cursor/perf-build-worker-default-810c; session 483ecee68706d7245293912b]
