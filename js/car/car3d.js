@@ -1474,14 +1474,14 @@ const Car3D = (function () {
     // The loft is three stacked blocks over coverProfile — flank, lower facet,
     // upper facet + crown — at the two anchor stations (the same numbers as
     // `front`/`rear` above, which other parts still read for their datums).
-    // Flat path always uses the four KEYS (3 stacked blocks). Rounded path
-    // densifies the cross-section and (at garage/near) the rear COVER_Z rings.
+    // Flat path always uses the four KEYS (3 stacked blocks). Rounded garage/
+    // near densifies the CROSS-SECTION only — COVER_Z stays shared with the
+    // flank-decal drape (car-mesh) so mid rings never leave the band floating.
     const pf = coverProfile(anchors.coverAt(front.z)), pr = coverProfile(anchors.coverAt(rear.z));
     const loftKeys = (c) => { const p = coverProfile(c); return { pts: p.keys || p.pts }; };
     if (_round) {
-      const loftProf = _coverHi ? ((c) => coverProfile(c, true)) : loftKeys;
-      CarShade.coverLoft(out, anchors, loftProf, front.z, rear.z, c1, addTri,
-        _coverHi ? { zs: CarShade.COVER_Z_NEAR } : null);
+      CarShade.coverLoft(out, anchors, _coverHi ? ((c) => coverProfile(c, true)) : loftKeys,
+        front.z, rear.z, c1, addTri);
     } else for (let k = 0; k < 3; k++) {
       const ring = (p, z) => {
         const q = p.keys || p.pts;
