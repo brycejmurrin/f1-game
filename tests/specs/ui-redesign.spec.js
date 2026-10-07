@@ -496,7 +496,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const want = +root.style.getPropertyValue("--hud-z-top")
       || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
     return Math.abs((mm.currentCSSZoom || 1) - want) < 1e-3;
-  }, null, { polling: 100, timeout: 30_000 });
+  }, null, { polling: 100, timeout: 5_000 });
   // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
   // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
   // and the fit pass's cap alongside it, so the next failure names its own

@@ -1056,7 +1056,10 @@ function fitHud() {
   // before the cap write left the CSS var one pass behind --hud-z-top, so a
   // probe that required |rect/zoom − published| ≤ 0.1px could miss for the
   // whole same-key backoff after a camera class change. Flush so currentCSSZoom
-  // matches the cap we just wrote, then publish.
+  // matches the cap we just wrote, then publish. Flush the map too: under a
+  // heavy post-cap pass Chromium can leave #minimap.currentCSSZoom on the
+  // previous tick's cap while --hud-z-top is already new (selected-2
+  // ui-redesign: mmCss 142 = 110×0.862/0.666 while zTop was 0.862).
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
@@ -1211,7 +1214,11 @@ function fitHud() {
   radioTopSlot(root, bcast);
   announceLane(root);
   // Painted guarantee: if the card still rects onto S3 or the tower, collapse
-  // the hanging lane and drop the top slot.
+  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
+  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
+  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
+  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
+  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
@@ -1233,7 +1240,6 @@ function fitHud() {
       void annPaint.offsetHeight;
     }
   }
-  radioTopSlot(root, bcast);
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
 }
