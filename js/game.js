@@ -4601,7 +4601,10 @@ function updateCar(c, dt, ranked) {
   if (c.retired) { c._prevS = c.s; return; }
   // A net-owned rival takes no local motion, finished or not: coasting it here
   // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c._prevS = c.s; return; }
+  // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
+  // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
+  // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4610,8 +4613,13 @@ function updateCar(c, dt, ranked) {
   // Same contract for a networked rival: its owner is integrating it on their
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
-  if (netPlay.owns(c)) { c._prevS = c.s; return; }
-  if (realRace.owns(c)) { c._prevS = c.s; return; }   // a REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js)
+  // ...but its ENGINE is heard here: rpm is never on the wire (poseRemote writes gear and
+  // speed), and RivalAudio / setEngine read c.rpm, so a skipped car droned at makeCars'
+  // IDLE_RPM all race. rpmFor is pure — the owner's own gear at the posed speed.
+  if (netPlay.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
+  // A REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js). Its gear is
+  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead.
+  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -9047,8 +9055,13 @@ if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurf
 lazyBundles.raceAssets();
 // First pointerdown also kicks LAZY_AUDIO so a later SOUND click still has a
 // chance to unlock AudioContext on the same gesture chain (iOS).
+// ...and the first KEY: platform-session's firstGesture (init + startMusic) takes a
+// keydown too, but on the stub — with nothing pulling the bundle, restoreOnEngine's
+// replay never ran and a keyboard-first title stayed silent. Escape is no activation.
 if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+  const keyKick = (e) => { if (e && e.key === "Escape") return; window.removeEventListener("keydown", keyKick, true); ensureAudio(); };
+  window.addEventListener("keydown", keyKick, true);
 }
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
