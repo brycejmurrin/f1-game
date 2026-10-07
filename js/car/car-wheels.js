@@ -260,13 +260,13 @@ const CarWheels = (function () {
         }
       }
 
-      // Radial vanes: on a covered face they dress the dish; on an open rim they
-      // are thin blades in the spoke plane (tyre recipes still vary coverVanes).
-      // coverVanes alone never opts the three-ring COVER back in — useCover does.
+      // Cover vanes dress a covered face only. On an open rim they densify into
+      // a fake dish (factory tyre recipes still set coverVanes:4–12); coverVanes
+      // alone never opts the three-ring COVER back in — useCover does.
       const VANE = [0.26, 0.26, 0.30];
-      const coverVanes = tyreStyle && tyreStyle.coverVanes != null
-        ? tyreStyle.coverVanes
-        : (useCover ? 6 : 0);
+      const coverVanes = useCover
+        ? (tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes : 6)
+        : 0;
       for (const ss of [[x0, -1], [x1, 1]]) {
         const xs = ss[0] + ss[1] * 0.014;
         for (let k = 0; k < coverVanes; k++) {
