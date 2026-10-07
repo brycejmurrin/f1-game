@@ -1180,7 +1180,7 @@ const NetLobby = (function () {
     // SEAL THE ROOM before the race owns the connections. close() only clears the
     // lobby's own timers, so the room-code subscription reopened by onConnected()
     // (codeHost({quiet:true}) — a fresh pending transport plus live relay sockets)
-    // survived into the race for the whole 120 s JOIN_TIMEOUT. A second guest
+    // survived into the race for the whole HOST_TIMEOUT_MS (~120 s). A second guest
     // arriving on that still-live code drove onJoiner -> onConnected mid-race:
     // the lobby's 25 ms pump restarted alongside NetPlay, a session NetPlay never
     // adopts was built, and openRoom()'s setNetRoom(true) sent later garage /
@@ -1531,8 +1531,8 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
-            // onConnected() reopens the code for the next arrival; its expiry two minutes
-            // later is not a failure of a room that is already full.
+            // onConnected() reopens the code for the next arrival; its expiry
+            // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
             if (r.error === "expired" && sessions.size) {
               say("The room code has expired — INVITE ANOTHER makes a new one.");
               return;
@@ -1667,11 +1667,19 @@ const NetLobby = (function () {
       let watching = false;
       const watch = () => { if (!watching) { watching = true; waitForOpen(); } };
       const pid = pendingId;   // onConnected() nulls pendingId once it adopts the transport
+      // Once the guest has found the host (or ICE is open), onTick must not
+      // paint the pre-connect "Looking…" line over Connecting / Connected /
+      // room status — live build 14296 showed looking/expiry while joined.
+      let found = false;
       const done = await NetRendezvous.swap({
         code, slot: "answer", want: "offer", token: codeWait,
-        onTick: () => { if (operationCurrent(gen)) say("Looking for that room… (code " + code + ")"); },
+        onTick: () => {
+          if (!operationCurrent(gen) || found || watching || transports.has(pid)) return;
+          say("Looking for that room… (code " + code + ")");
+        },
         reply: async (inviteCode) => {
           if (!operationCurrent(gen) || transport !== pending) return null;
+          found = true;
           say("Found it — answering…");
           // Default gather (waitForIce re-check + null-candidate end). A short
           // per-answer gather cap here was a leftover workaround; readyIce
@@ -1688,6 +1696,13 @@ const NetLobby = (function () {
       // `transport !== pending` is also SUCCESS now: onConnected() may have adopted it.
       if (!operationCurrent(gen)) return cancelledResult();
       if (transport !== pending && !transports.has(pid)) return cancelledResult();
+      // Belt-and-braces with nostr clearExpire(): if the 12 s guest deadline
+      // still races the answer re-post, an adopted transport means we joined —
+      // do not paint "Nobody answered…" over a live connection.
+      if (!done.ok && done.error === "expired" && transports.has(pid)) {
+        watch();
+        return { ok: true, code };
+      }
       if (!done.ok) {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);

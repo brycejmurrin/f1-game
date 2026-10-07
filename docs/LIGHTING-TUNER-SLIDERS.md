@@ -575,7 +575,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
 | `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×4, chunked.js, glx.js×3, shadow-pass.js |
 | `lampBake` | BAKED LAMP POOLS | 0 … 1 | 1 | — |   | game.js×5, atmosphere.js×2, glx.js×6 |
-| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, tuner-panel.js, chunked.js×3, glx.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, profiles.js×5, tuner-panel.js, chunked.js×3, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
 | `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js×2, profiles.js, glx.js×2 |
 

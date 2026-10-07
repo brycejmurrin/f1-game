@@ -430,6 +430,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
+  "tests/unit/incident-rpm.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -456,6 +457,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
+  "tests/unit/light-store-perchunk-pin.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
@@ -797,6 +799,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
+  // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
+  "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",

@@ -330,28 +330,28 @@
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
-/* PLAY-SHAPE GARAGE (compact, stacked, not tall): a one-line head, then ONE
-   pan-x category strip with BACK / DONE beside it, then the parts list.
-   MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05, tip
-   a7d27757f): a 306 px sheet (281 own) split head 76 + a two-row 9px tab grid
-   60 + foot 58, which left #cs-options an 80 px box over 1386 px of parts
-   (17.3 screens) and painted fifteen 26-47 x 31 px tabs. Two tab rows at 44
-   would have cost the list another 25 own (80 -> 55), so the strip is ONE row
-   at the coarse floor, and the action bar that took a 58-unit row of its own
-   rides BESIDE it — that row is one button tall either way. Expected budget:
-   head ~52 + strip/bar ~54 + gaps 8 -> #cs-options ~165 own (~2x). The rows
-   flatten into the one strip exactly as the pair rail flattens them (display:
-   contents), so the strip is the scroller and the active tab's scrollIntoView
-   centres it there. The bar is still the last thing in the DOM: Tab order is
-   unchanged. Tall (portrait) sheets keep the stack above — they have height. */
+/* PLAY-SHAPE GARAGE (compact, stacked, not tall): a one-line head with CLOSE
+   GARAGE / BACK+DONE in the header row's trailing column, then ONE full-width
+   pan-x category strip, then the parts list. MEASURED (852×344, 2026-10-07):
+   placing .sheet-foot beside #cs-tabs on row 2 left the strip ~207px — only
+   ~3 of 15 tabs visible without scrolling; the auto column beside the strip was
+   mostly dead space once exit=one shows a single dismiss. Row 1 is already
+   `minmax(0,1fr) auto`: the head shares the line with FREE BUILD, so the foot
+   rides column 2 row 1 and #cs-tabs spans 1 / -1 on row 2. Tall (portrait)
+   sheets keep the stack above — they have height. Tab order is unchanged
+   (foot stays last in the DOM). */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto auto minmax(0, 1fr);
   row-gap: calc(var(--gap) * 0.5);
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; min-width: 0; }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > #cs-body { display: contents; }
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs { grid-column: 1; grid-row: 2; padding-left: var(--pad); scroll-padding-inline: var(--pad); }
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
+  grid-column: 1 / -1; grid-row: 2;
+  padding-inline: var(--pad);
+  scroll-padding-inline: var(--pad);
+}
 /* THE ONE STRIP IS EVERY STACKED COMPACT SHEET'S, portrait included; only the
    grid placement above is play-shape's. MEASURED (layout-audit,
    ios-iphone-portrait 393x659, 2026-10-05, on 42cb42fbf): the tall garage
@@ -401,28 +401,24 @@
   scroll-snap-align: start;
   scroll-snap-stop: normal;
 }
-/* Play-shape only: keep a trailing snap pad so the last visible tab can sit
-   fully inside the strip instead of kissing the BACK column. */
-#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
-  padding-inline-end: calc(var(--gap) * 0.5);
-}
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
-  grid-column: 2; grid-row: 2;
-  padding: 0 var(--pad) 0 0;
+  grid-column: 2; grid-row: 1;
+  align-self: center;
+  display: flex; flex-direction: column; flex-wrap: nowrap;
+  gap: calc(var(--gap) * 0.45);
+  padding: 0 var(--pad) 0 calc(var(--gap) * 0.5);
   background: none;
-  /* Foot stays tappable at --tap; do not let its content width starve the
-     category strip. Measured 852×344: two 126px buttons left the strip 188px
-     — only TEAM+ENGINE fully fit, AERO clipped to "AER" at the strip edge. */
   min-width: 0;
   justify-self: end;
+  justify-content: center;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn {
-  /* Prefer a shorter label padding so three+ category tabs clear fully beside
-     BACK/CLOSE; height stays the sheet foot / --tap floor. */
   padding-inline: calc(var(--gap) * 0.65);
   min-width: var(--tap-paint, var(--tap));
-  max-width: 7.5em;
+  min-height: var(--tap-paint, var(--tap));
+  min-block-size: var(--tap-paint, var(--tap));
+  max-width: 9em;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options {
   grid-column: 1 / -1; grid-row: 3;
@@ -468,6 +464,14 @@
    is nothing left to be scoped away from.) */
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
+/* UI Fit (layout-audit ios-iphone-landscape-safari@100): SAVE / LOAD / RESET
+   GARAGE FILE are plain <button>s in #cs-garage-file (no .sel-edit), so the
+   components.css tap / chip floors never reach them — painted h=46 against
+   tapFloor 52 (3× tapSoft). Floor at --tap-paint in this sheet only. */
+#cs-garage-file > button {
+  min-height: var(--tap-paint);
+  min-block-size: var(--tap-paint);
+}
 /* The garage team card is the only .team-card in a ~260px option pane; the
    select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap the
    name/sub spans (not a second .tm-name/.tm-sub definition — that coupling
@@ -1638,6 +1642,12 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 }
 #cs-inner[data-density="compact"]:not([data-pair="on"]) > .sheet-foot > button {
   min-width: 0; margin: 0;
+}
+/* Play-shape (compact, wide): dismiss lives in the header row — not the
+   two-column foot grid above, which belongs on portrait/tall stacked sheets. */
+#cs-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > .sheet-foot {
+  display: flex; flex-direction: column; flex-wrap: nowrap;
+  grid-template-columns: none;
 }
 
 /* ---------- portrait: the car gets the bottom band ---------- */

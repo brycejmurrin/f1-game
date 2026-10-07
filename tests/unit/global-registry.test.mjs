@@ -133,7 +133,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield on UI Start Race (Chrome 129+); typeof-guarded, else rAF+setTimeout / Promise.resolve
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
-  "js/core/lazy-bundles.js": ["__TEST_MODE"], // Playwright init-script flag enabling the agent surface
+  "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
