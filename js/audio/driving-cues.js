@@ -94,7 +94,11 @@ var DrivingCues = (function () {
 
   function create(G) {
     Log.info("audio", "DrivingCues.create");
-    let level = 1;
+    // THE SAVED LEVEL, not OFF. steer-tuning.js restores it at boot, but under
+    // LAZY_AUDIO that restore lands on the stub's noop setLevel, and this
+    // create() (game.js onAudioReady) is the real module's first breath.
+    const saved = G && G.store && G.store.get ? +G.store.get("audioCues", 1) : 1;
+    let level = Number.isFinite(saved) ? clamp(saved, 1, 10) : 1;
     let cfg = fromSlider(level);
     let nextBrakeT = 0, lastMs = 0, lastU = 0;
     // callArmed: a SAME-side call needs the called turn to be behind the car —
