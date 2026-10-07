@@ -42,9 +42,12 @@ const UiExperience = (function () {
   function homeVariation(store) {
     const shots = ["hero", "front", "side", "rear"], environments = ["garage", "track", "night", "pitlane", "studio"];
     let visiting = false, index = 0;
+    // Reused — enter/peek run every title Home frame; callers read fields sync.
+    const _values = { mode: "garage", shot: "hero" };
     function values(mode, camera) {
-      return { mode: mode === "auto" ? environments[index % environments.length] : mode,
-        shot: shots.includes(camera) ? camera : shots[index % shots.length] };
+      _values.mode = mode === "auto" ? environments[index % environments.length] : mode;
+      _values.shot = shots.includes(camera) ? camera : shots[index % shots.length];
+      return _values;
     }
     return {
       enter(mode, camera, retainScene = false) {
@@ -104,7 +107,19 @@ const UiExperience = (function () {
     // Photo Studio's SUBJECT for this visit: "track" or "garage" laid over the
     // stored Home scene while the studio is open (never written to the store).
     let photoScene = null, photoSwitching = false, photoSwitch = 0;
-    const selectedScene = () => { const s = AppearanceStudio.scene(); return photoScene ? { ...s, mode: photoScene } : s; };
+    // Scratch for photo-subject overlay + variation merge — renderHome used to
+    // mint { ...selected, ...enter() } and a freePane host rect every title frame.
+    const _sceneScratch = { mode: "", shot: "", motion: "" };
+    const _hostRect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    const _worldView = { motion: "still", shot: "hero", viewKey: "0", pane: null };
+    const selectedScene = () => {
+      const s = AppearanceStudio.scene();
+      if (!photoScene) return s;
+      _sceneScratch.mode = photoScene;
+      _sceneScratch.shot = s.shot;
+      _sceneScratch.motion = s.motion;
+      return _sceneScratch;
+    };
     const variation = homeVariation(GameStore.store);
     const world = HomeWorld.create(G, { prepareTrack: deps.prepareTrack, worldReady: deps.trackReady,
       capture: deps.captureTrackCamera, restore: deps.restoreTrackCamera, contextKey: deps.trackKey,
@@ -336,18 +351,32 @@ const UiExperience = (function () {
       const covered = overlay.inert && !photoOpen;
       if (!visible || covered || failure) { variation.leave(); stopHome(photoOpen && G.state === "menu" && !G.setupPreviewOn); return false; }
       const selected = selectedScene();
-      s = { ...selected, ...variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen) };
+      const varied = variation.enter(selected.mode, AppearanceStudio.homeCamera(), photoOpen);
+      s = _sceneScratch;
+      s.mode = (varied && varied.mode) || selected.mode;
+      s.shot = (varied && varied.shot) || selected.shot;
+      s.motion = (varied && varied.motion) || selected.motion;
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
-      const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-      const worldView = { motion, shot: s.shot, viewKey: String(homeViewGen),
-        pane: rect ? GarageExperience.freePane(rect, { left: 0, top: 0, right: innerWidth, bottom: innerHeight, width: innerWidth, height: innerHeight }) : null };
       // Scene ownership only — never viewport size or menu pane (those settle
       // via onHomeViewportChange → gfx.resize / homeViewGen).
       const sig = s.mode + ":" + s.shot + ":" + motion + ":" + photoOpen;
+      const trackHome = s.mode === "track" || s.mode === "pitlane";
+      // Pane + host rect only when the circuit Home actually needs them (not
+      // every garage/night/studio title frame).
+      let trackView = null;
+      if (trackHome) {
+        const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
+        _hostRect.right = innerWidth; _hostRect.bottom = innerHeight;
+        _hostRect.width = innerWidth; _hostRect.height = innerHeight;
+        _worldView.motion = motion; _worldView.shot = s.shot;
+        _worldView.viewKey = String(homeViewGen);
+        _worldView.pane = rect ? GarageExperience.freePane(rect, _hostRect) : null;
+        trackView = _worldView;
+      }
       if (signature !== sig) {
         stopHome(photoOpen); stamp();
-        if (["track", "pitlane"].includes(s.mode)) {
-          world.begin(s.mode, worldView); signature = sig;
+        if (trackHome) {
+          world.begin(s.mode, trackView); signature = sig;
         } else deps.setupCam.beginHome(["garage", "night", "studio"].includes(s.mode) ? s.mode : "garage", { motion, shot: s.shot, panel: photoOpen ? null : panel });
         home = !!deps.setupCam.homeState(); if (!home && !world.wantsTrack()) return false; signature = sig;
         // Layout refreshes borrow a new Home session, but a photo's shot belongs
@@ -355,8 +384,8 @@ const UiExperience = (function () {
         if (home && photoOpen && photoHomeCamera) deps.setupCam.restoreCamera(photoHomeCamera);
         photoHomeCamera = null;
       }
-      if (["track", "pitlane"].includes(s.mode)) {
-        world.begin(s.mode, worldView);
+      if (trackHome) {
+        world.begin(s.mode, trackView);
         if (photoOpen && G.photoMode) deps.updateTrackPhoto(Math.min(dt || 0, 1 / 20));
         return !world.needsFrame(dt, { interactive: photoOpen, force: photoOpen && dt === 0 });
       }

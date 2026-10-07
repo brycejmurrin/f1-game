@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
+import { buildTrackShotSurveyPlan, writeSurveyIndex } from "../lib/track-shot-survey.mjs";
 
 const TRACK_TOOL = "tools/shot/track-session.mjs";
 const ID_RE = /^[a-z0-9_]{2,40}$/;
@@ -153,10 +154,102 @@ export function createExtras(ctx) {
     }
     return toolResult({ ok: true, op: "open", ...r, hint: "Now op shot / eval / track / sheet / diff; op close when done (the browser lock is held until then)." });
   }
+  /** One boot, N shots, optional contact panel + index.html (apex_shot_survey / apex_track op survey). */
+  async function handleShotSurvey(args = {}) {
+    let track;
+    try { track = needTrack(args.track); } catch (e) { return e.refuse; }
+    let plan;
+    try { plan = buildTrackShotSurveyPlan(args); }
+    catch (e) { return refuse("bad_args", String(e.message || e), "See apex_shot_survey inputSchema."); }
+    const out = assertSafeOut(args.out || `artifacts/track-survey/${track}-${plan.label}`);
+    const wantPanel = args.panel !== false;
+    const wantIndex = args.index !== false;
+
+    if (args.dryRun) {
+      return toolResult({
+        ok: true, dryRun: true, track, out, ...plan,
+        hint: "Opens one track-session, fires each shot (~10–25 s), then sheet + index.html.",
+      });
+    }
+    if (mockMode()) {
+      return toolResult({
+        ok: true, mock: true, track, out, ...plan,
+        argv: nodeArgv("shot/track-session.mjs", "--serve", "--track", track, "--out", out),
+      });
+    }
+
+    try {
+      if (!sess || sess.track !== track) {
+        if (sess) await handleTrack({ op: "close" });
+        const opened = await trackOpen({ track, out });
+        const body = bodyOf(opened);
+        if (body.ok === false) return opened;
+      }
+
+      const captured = [];
+      const failed = [];
+      for (const s of plan.shots) {
+        let reply;
+        try {
+          reply = await sessSend({
+            shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
+            h: s.h, side: s.side, tod: s.tod, hud: s.hud,
+          }, 240000);
+        } catch (e) {
+          failed.push({ ...s, error: String(e.message || e) });
+          continue;
+        }
+        if (reply.ok) {
+          sess.shots++;
+          captured.push({ ...s, png: reply.png, spread: reply.spread, kb: reply.kb });
+        } else failed.push({ ...s, error: reply.error || "shot failed" });
+      }
+
+      let panelPng = null;
+      if (wantPanel && captured.length) {
+        try {
+          const sh = await sessSend({ sheet: plan.sheetName, cols: plan.cols || 0 }, 120000);
+          if (sh.ok) panelPng = sh.png;
+        } catch (e) { log(`survey panel failed: ${e.message}`); }
+      }
+
+      let indexHtml = null;
+      if (wantIndex && captured.length) {
+        indexHtml = writeSurveyIndex(sess.out, {
+          track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
+        });
+      }
+
+      const ok = captured.length > 0 && failed.length === 0;
+      const result = toolResult({
+        ok,
+        track,
+        out: sess.out,
+        preset: plan.preset,
+        label: plan.label,
+        captured: captured.length,
+        failed: failed.length,
+        shots: captured,
+        failures: failed.length ? failed : undefined,
+        panel: panelPng,
+        indexHtml,
+        hint: failed.length
+          ? "Retry failed cells with apex_track op shot, or lower count / switch preset."
+          : "Gallery: open index.html in out; panel PNG is the labeled contact sheet.",
+      }, { isError: captured.length === 0 });
+      return withImage(result, panelPng, args.image !== false);
+    } finally {
+      if (sess && !args.keepSession && args.closeSession !== false) {
+        await handleTrack({ op: "close" });
+      }
+    }
+  }
+
   async function handleTrack(args = {}) {
     const op = String(args.op || "status");
     try {
       if (op === "open") return await trackOpen(args);
+      if (op === "survey") return handleShotSurvey(args);
     } catch (e) { if (e.refuse) return e.refuse; return refuse("bad_args", String(e.message || e), "See the apex_track inputSchema."); }
     if (op === "close") {
       const s = sess;
@@ -171,8 +264,10 @@ export function createExtras(ctx) {
       cmd.eval = args.expr;
     } else if (op === "track") {
       try { cmd.track = needTrack(args.track); } catch (e) { return e.refuse; }
-    } else if (op === "sheet") cmd.sheet = args.name || "sheet";
-    else if (op === "diff") {
+    } else if (op === "sheet") {
+      cmd.sheet = args.name || "sheet";
+      if (args.cols != null) cmd.cols = Number(args.cols);
+    } else if (op === "diff") {
       if (!Array.isArray(args.diff) || args.diff.length !== 2) return refuse("bad_args", "diff needs two shot names", 'Pass {"op":"diff","diff":["a","b"]}.');
       cmd.diff = args.diff.map(String);
     } else if (op === "status") cmd.status = true;
@@ -393,6 +488,7 @@ export function createExtras(ctx) {
   return {
     thumbBlock,
     handlers: {
+      apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
       apex_job_status: (a) => jobStatus(a),

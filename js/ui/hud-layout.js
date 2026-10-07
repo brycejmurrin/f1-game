@@ -471,9 +471,14 @@ const HudLayout = (function () {
      "cockpit-cam" is the wheel's LCD (gear / speed); the touch-cockpit row
      follows the painted LAYOUT set (shown(), = body[data-hl-set]) instead,
      whatever the wheel. */
-  const BOTTOM = ["gearbox", "energy", "tyre", "ot", "aero", "bb"];
+  // SPEED rides .hud-bottom with GEAR on BROADCAST+TV (css/hud.css hides the
+  // whole band) and shares the wheel-LCD hide with GEAR on cockpit-cam. It is
+  // NOT in the plain hud-bcam list — TV cams keep a plated #hud-speed.
+  const BOTTOM = ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
+  /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
+  const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   const HIDE_RULES = Object.freeze([
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
@@ -486,11 +491,15 @@ const HudLayout = (function () {
     [["sectors"], (h) => h("hud-met-driver"), "LAYOUT is DRIVER"],
     [["gearbox", "ot", "aero", "energy", "bb", "limits"].concat(READOUTS), (h) => h("hud-bcam"), "TV camera"],
     [["sectors"], (h) => h("hud-bcam") && !h("hud-prof-broadcast"), "TV camera"],
-    [["gearbox"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
-    [["gearbox", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
+    // css/track-detail.css: body.cockpit-cam hides GEAR + SPEED with no data-hl-user escape.
+    [["gearbox", "speed"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
+    [["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
+    // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd] soft-hides SPEED until placed.
+    [["speed"], (h, a) => !h("desktop") && !a && bodyAttr("data-helmet-cam") && bodyAttr("data-wheel-lcd"),
+      "touch helmet: the wheel LCD shows it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
@@ -498,7 +507,7 @@ const HudLayout = (function () {
     [["mirror"], (h, a, off, el) => !!(el && el.hidden), "MIRROR is off or not needed now (DISPLAY › HUD › MIRROR)", true],
   ].map(Object.freeze));
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
-  const TOGGLE = Object.freeze({ gearbox: "gear", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
+  const TOGGLE = Object.freeze({ gearbox: "gear", speed: "speed", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
     damage: "damage", rel: "rel", strat: "strat", inputs: "inputs" });
   /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
   function drawn(el) {

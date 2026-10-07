@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.10.0"
+    "version": "1.11.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -30,6 +30,7 @@
     "apex_doctor",
     "apex_eval",
     "apex_shot",
+    "apex_shot_survey",
     "apex_agent",
     "apex_garage",
     "apex_select_specs",

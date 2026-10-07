@@ -159,7 +159,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // Twenty-six pinned wrappers: readiness, session checks, the track session, jobs, UI, audits and the race-HUD survey pair.
+  // Twenty-seven pinned wrappers: readiness, session checks, track session + shot survey, jobs, UI, audits and the race-HUD survey pair.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
@@ -180,6 +180,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_select_specs",
     "apex_session_status",
     "apex_shot",
+    "apex_shot_survey",
     "apex_status",
     "apex_track",
     "apex_track_audit",
@@ -244,6 +245,16 @@ test("apex_shot: a directory `out` becomes the CLI's default file inside it", ()
   assert.match(outArg, /mcp-track-test\/monaco-52-trackside\.png$/, body.argv);
   const r2 = callCli("apex_shot", { track: "monza", out: "artifacts/mcp-track-test/x.png", dryRun: true });
   assert.match(JSON.parse(r2.stdout).argv.find((a) => a.includes("mcp-track-test")), /x\.png$/);
+});
+
+test("apex_shot_survey dryRun plans a multi-shot session", () => {
+  const r = callCli("apex_shot_survey", { track: "monza", preset: "lap", dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.equal(body.dryRun, true);
+  assert.equal(body.shots.length, 4);
+  assert.match(body.out, /artifacts\/track-survey\/monza-survey/);
 });
 
 test("apex_pick_tests argv never contains --bg; includes --json", () => {

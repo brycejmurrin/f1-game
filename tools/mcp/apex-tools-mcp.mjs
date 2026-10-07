@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.10.0";
+const SERVER_VERSION = "1.11.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -424,6 +424,68 @@ const CATALOG = [
     },
   },
   {
+    name: "apex_shot_survey",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — ONE track-session boot, then 1–32 shots on the same circuit (~10–25 s each), a labeled contact panel (track-session sheet), and index.html. Presets: scenery (12 orbit), lap (quarters), dual (orbit+trackside), inspect (eye+orbit). Prefer this over repeated apex_shot for scenery surveys. Skill: survey-track.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["track"],
+      properties: {
+        track: { type: "string", description: "Circuit id." },
+        preset: {
+          type: "string",
+          enum: ["scenery", "lap", "dual", "inspect", "custom"],
+          description: "scenery = 12 orbit cells (default); dual/inspect use two cams.",
+        },
+        label: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$", description: "Shot name prefix (default survey)." },
+        count: { type: "integer", minimum: 1, maximum: 32, description: "Evenly spaced fracs when fracs omitted." },
+        fracs: { type: "array", items: { type: "number", minimum: 0, maximum: 1 }, minItems: 1, maxItems: 32 },
+        cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
+        cams: { type: "array", items: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] }, maxItems: 5 },
+        shots: {
+          type: "array",
+          maxItems: 32,
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              frac: { type: "number" },
+              cam: { type: "string" },
+              tod: { type: "string" },
+              az: { type: "number" },
+              el: { type: "number" },
+              dist: { type: "number" },
+              h: { type: "number" },
+              side: { type: "number" },
+              hud: { type: "boolean" },
+            },
+          },
+          description: "Explicit shot list; overrides preset/count/fracs.",
+        },
+        az: { type: "number" },
+        el: { type: "number" },
+        dist: { type: "number" },
+        h: { type: "number" },
+        side: { type: "number", enum: [-1, 1] },
+        tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
+        hud: { type: "boolean" },
+        cols: { type: "integer", minimum: 0, maximum: 12, description: "Panel columns (0 = auto)." },
+        sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
+        panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
+        index: { type: "boolean", description: "Write index.html gallery (default true)." },
+        closeSession: { type: "boolean", description: "Free browser lock when done (default true)." },
+        keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
+        out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
+        image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
     name: "apex_agent",
     week: 2,
     description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. Skill: agent-view.",
@@ -659,13 +721,25 @@ const CATALOG = [
     name: "apex_track",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot {frac,cam,az,el,dist,h,side,tod,name} (eye: el = pitch, h = eye height; orbit: h = aim height, so a prop 200 m up frames) / eval {expr} / track {track} / sheet / diff {diff:[a,b]} in ~10–25 s each, close to free the lock. Shots return a thumbnail. Skill: survey-track.",
+    description: "Browser (lock first) — a PERSISTENT track session over track-session.mjs --serve: op open {track} once (~30 s), then shot / eval / track / sheet / diff / status / close (~10–25 s each), or op survey {track,preset|fracs} for a multi-shot panel in one call (same as apex_shot_survey). Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        op: { type: "string", enum: ["open", "shot", "eval", "track", "sheet", "diff", "status", "close"] },
-        track: { type: "string", description: "Circuit id (open; op track switches)." },
+        op: { type: "string", enum: ["open", "shot", "eval", "track", "sheet", "diff", "status", "close", "survey"] },
+        track: { type: "string", description: "Circuit id (open; op track switches; survey requires)." },
+        preset: { type: "string", enum: ["scenery", "lap", "dual", "inspect", "custom"] },
+        label: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
+        count: { type: "integer", minimum: 1, maximum: 32 },
+        fracs: { type: "array", items: { type: "number", minimum: 0, maximum: 1 }, minItems: 1, maxItems: 32 },
+        cams: { type: "array", items: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] }, maxItems: 5 },
+        shots: { type: "array", maxItems: 32, items: { type: "object" } },
+        cols: { type: "integer", minimum: 0, maximum: 12 },
+        sheetName: { type: "string" },
+        panel: { type: "boolean" },
+        index: { type: "boolean" },
+        closeSession: { type: "boolean" },
+        keepSession: { type: "boolean" },
         frac: { type: "number", minimum: 0, maximum: 1 },
         cam: { type: "string", enum: ["park", "eye", "orbit", "cinematic", "trackside"] },
         az: { type: "number" },
@@ -946,6 +1020,12 @@ bound("apex_track", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
+bound("apex_shot_survey", "track", { enum: knownCircuits() });
+bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
+bound("apex_shot_survey", "fracs", { maxItems: 32 });
+bound("apex_shot_survey", "shots", { maxItems: 32 });
+bound("apex_shot_survey", "dist", { exclusiveMinimum: 0, maximum: 10000 });
+bound("apex_shot_survey", "el", { minimum: -90, maximum: 90 });
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });

@@ -49,6 +49,9 @@ function liveTune() {
 function _tuneNum(T, id, fallback) {
   return T && Number.isFinite(T[id]) ? T[id] : fallback;
 }
+// Reused every garage frame — gfx.present / begin consume opts synchronously.
+const _presentOpts = { exposure: 0, bloom: 0, threshold: 0, contact: 0, tune: null };
+const _presentTune = { sunShaftMul: 0 };
 function presentOpts(tune) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
@@ -57,17 +60,16 @@ function presentOpts(tune) {
   const shed = typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4;
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
-  const wrapped = T && typeof T === "object" ? Object.create(T) : {};
   // Kill screen sun-shafts regardless of the race slider / track preset.
-  // Object.create(T) still carries the rest of the image-grade knobs.
-  wrapped.sunShaftMul = 0;
-  return {
-    exposure: SP_EXPOSURE * exposureMul,
-    bloom: shed ? 0 : SP_BLOOM * bloomMul,
-    threshold,
-    contact: 0,
-    tune: wrapped,
-  };
+  // Prototype chain carries the rest of the image-grade knobs (no Object.create).
+  Object.setPrototypeOf(_presentTune, T && typeof T === "object" ? T : null);
+  _presentTune.sunShaftMul = 0;
+  _presentOpts.exposure = SP_EXPOSURE * exposureMul;
+  _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul;
+  _presentOpts.threshold = threshold;
+  _presentOpts.contact = 0;
+  _presentOpts.tune = _presentTune;
+  return _presentOpts;
 }
 function glareScale(tune) {
   const T = tune === undefined ? liveTune() : tune;
@@ -468,18 +470,45 @@ function getSetupPreviewMesh() {
 // else the picker's — its weather and hour, and the career's tally for the wall.
 // `asSetup`: the ctx the SETUP garage will draw with, even while the title's
 // Home session borrows the room (GaragePrebuild keys and builds the room on it).
+// One reused ctx object per frame — GarageScene.draw / live / ctxKey read it
+// synchronously, so a fresh {} (+ results.filter) every orbit frame was GC only.
+const _garageCtx = {
+  track: null, weather: null, tod: null, night: false, wins: 0, last: null,
+  sponsor: null, career: false, round: 0, spin: false, achievements: null,
+  sceneNow: 0, ambient: true, studio: false,
+};
+let _winsCacheN = -1, _winsCacheV = 0;
 function garageCtx(asSetup = false) {
   const c = Career.inCareer() ? Career.data() : null, h = home.active && !asSetup;
   const t = c ? Tracks.SEASON[c.season.round % Tracks.SEASON.length]
           : (G.seasonMode && G.season) ? SeasonCal.track(G.season.round) : Tracks.LIST[G.trackIdx];
-  return { track: t, weather: G.raceWeather, tod: G.raceTimeOfDay,
-           night: G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)),
-           wins: c ? c.results.filter((r) => r.p === 1).length : 0,
-           last: c && c.results.length ? c.results[c.results.length - 1] : null,
-           sponsor: c ? Career.sponsor() : null, career: !!c, round: c ? c.season.round : 0, spin: setupPreviewSpin,
-           achievements: typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null,
-           sceneNow: asSetup ? ambientClock.value : garageNow(), ambient: !reducedMotion() && (!h || home.moving),
-           studio: h && home.mode === "studio", ...(h ? { night: home.mode === "night" } : {}) };
+  const ctx = _garageCtx;
+  ctx.track = t;
+  ctx.weather = G.raceWeather;
+  ctx.tod = G.raceTimeOfDay;
+  ctx.night = h ? home.mode === "night"
+    : (G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)));
+  if (c) {
+    const n = c.results.length;
+    if (n !== _winsCacheN) {
+      let w = 0;
+      for (let i = 0; i < n; i++) if (c.results[i].p === 1) w++;
+      _winsCacheN = n; _winsCacheV = w;
+    }
+    ctx.wins = _winsCacheV;
+    ctx.last = n ? c.results[n - 1] : null;
+    ctx.sponsor = Career.sponsor();
+    ctx.career = true;
+    ctx.round = c.season.round;
+  } else {
+    ctx.wins = 0; ctx.last = null; ctx.sponsor = null; ctx.career = false; ctx.round = 0;
+  }
+  ctx.spin = setupPreviewSpin;
+  ctx.achievements = typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null;
+  ctx.sceneNow = asSetup ? ambientClock.value : garageNow();
+  ctx.ambient = !reducedMotion() && (!h || home.moving);
+  ctx.studio = !!(h && home.mode === "studio");
+  return ctx;
 }
 function captureCamera() {
   return { az: setupPreviewAz, el: setupPreviewEl, dist: setupPreviewDist, spin: setupPreviewSpin,
@@ -505,6 +534,7 @@ function beginHome(mode, opts) {
 function endHome() { return home.end(); }
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 const _spInvProj = new Float32Array(16);
+const _spEye = [0, 0, 0], _spUp = [0, 1, 0], _spSun = [0, 0.86, 0.51];
 const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on store.rev
 function renderSetupPreview(dt, holdDriveOut = false) {
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
@@ -589,9 +619,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // PAN shifts the orbit centre and the look-at together, so strafing tracks
   // along the car instead of swinging the aim off it — the difference between
   // "walk down the flank" and "turn your head at the far end of the pit box".
-  const eye = [setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe,
-               setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe,
-               setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe];
+  const eye = _spEye;
+  eye[0] = setupPreviewOrbit[0] + setupPreviewPan[0] + Math.sin(setupPreviewAz) * spDist * spCe;
+  eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
+  eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
   M4.perspectiveTo(_spProj, homeFov * Math.PI / 180, gfx.aspect, 0.1, 60);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
@@ -606,15 +637,17 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
   if (arriving && arriving.active) {
-    eye.splice(0, 3, ...arriving.eye);
-    _spAim.splice(0, 3, ...arriving.aim);
+    eye[0] = arriving.eye[0]; eye[1] = arriving.eye[1]; eye[2] = arriving.eye[2];
+    _spAim[0] = arriving.aim[0]; _spAim[1] = arriving.aim[1]; _spAim[2] = arriving.aim[2];
     M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 60);
   }
-  M4.lookAtTo(_spView, eye, _spAim, [0, 1, 0]);
+  M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
   GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
+  const liv = _spLiv();
+  const lightsRig = GarageScene.live(liv, sceneTime, context);
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
@@ -628,9 +661,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
+    viewProj: _spVP, view: _spView, eye, sunDir: _spSun, sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), sceneTime, context),
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return false;
@@ -643,25 +676,27 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
   arrivalCar[0] = -ac; arrivalCar[2] = as; arrivalCar[8] = as; arrivalCar[10] = ac;
   arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
-  GarageScene.draw(Teams.LIST[G.teamIdx], _spLiv(), eye, getTeamParts, G.driverIdx, context, getSetupPreviewMesh(), arriving, arrivalCar);
-  gfx.draw(getSetupPreviewMesh(), arrivalCar, spMat);
+  const team = Teams.LIST[G.teamIdx];
+  const carMesh = getSetupPreviewMesh();
+  GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
+  gfx.draw(carMesh, arrivalCar, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
   {
-    const aSt = teamDecalState(Teams.LIST[G.teamIdx], true);
-    drawAeroFlaps(Teams.LIST[G.teamIdx], aSt.val, setupPreviewAeroX, arrivalCar, spMat,
+    const aSt = teamDecalState(team, true);
+    drawAeroFlaps(team, aSt.val, setupPreviewAeroX, arrivalCar, spMat,
       aSt.aero);
   }
   // `night` here means "the sun is not the key" — which in a garage it is not.
   // The decal shader is sun + ambient + glow only, so without this the liveries'
   // logos and numbers would darken with the skylight and nothing would lift them.
   const gSeat = garageSeat();
-  drawCarDecals(Teams.LIST[G.teamIdx], arrivalCar, true,
-    (gSeat && gSeat.num) || carDecalNum(Teams.LIST[G.teamIdx], null), false, true);
+  drawCarDecals(team, arrivalCar, true,
+    (gSeat && gSeat.num) || carDecalNum(team, null), false, true);
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.live(_spLiv(), sceneTime, context), GarageScene.glareStr() * glareScale());
+  gfx.drawGlow(lightsRig, GarageScene.glareStr() * glareScale());
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }

@@ -132,7 +132,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|apex-tools__apex_(eval|shot|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$",
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$",
         "hooks": [
           {
             "type": "command",

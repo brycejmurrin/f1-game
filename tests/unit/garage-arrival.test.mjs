@@ -619,7 +619,9 @@ test('a refused garage begin returns false and cannot reveal the unpresented fra
   const refusal = vm.createContext({
     gfx: { begin() { beginCalls++; return false; }, present() { presents++; } },
     _spVP: [], _spView: [], _spProj: [], _spInvProj: [], eye: [],
-    GarageScene: { live: () => [] }, _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {},
+    _spSun: [0, 0.86, 0.51], lightsRig: [],
+    GarageScene: { live: () => [], SKYLIGHT: [], AMB_SKY: [], AMB_GROUND: [], BACKDROP: [] },
+    _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {},
   });
   vm.runInContext('function refusedFrame() {\n' + introCameraSource.slice(at, end) +
     '\n gfx.present(); return true; }', refusal);

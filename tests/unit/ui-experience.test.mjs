@@ -137,7 +137,7 @@ test('narrow resize does not stopHome/beginHome; debounced settle only calls gfx
   assert.match(code, /const sig = s\.mode \+ ":" \+ s\.shot \+ ":" \+ motion \+ ":" \+ photoOpen;/);
   assert.doesNotMatch(code, /const sig = [^;\n]*innerWidth/);
   assert.match(code, /HOME_RESIZE_MS/);
-  assert.match(code, /viewKey:\s*String\(homeViewGen\)/);
+  assert.match(code, /viewKey\s*=\s*String\(homeViewGen\)/);
   const dom = makeDom();
   for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
   let begins = 0, ends = 0, resizes = 0, owned = false;
