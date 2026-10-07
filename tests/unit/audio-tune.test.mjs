@@ -261,7 +261,7 @@ test("a fresh engine carries the shipped voice, and an identity trim reduces to 
   // JSON round-trip: values come back from the vm realm with that realm's
   // Object prototype, and strict deepEqual compares prototypes.
   assert.deepEqual(JSON.parse(JSON.stringify(A.tuneDefaults())), Object.assign({}, TUNE_IDENTITY, {
-    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.5,
+    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.62, boost: 1.12,
   }), "the shipped ENGINE voice");
   A.setTune(TUNE_IDENTITY);
   // The pre-tune formula: IDLE and CURVE at 1 must reduce the four-knob curve
