@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.11.0";
+const SERVER_VERSION = "1.12.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -427,17 +427,23 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — ONE track-session boot, then 1–32 shots on the same circuit (~10–25 s each), a labeled contact panel (track-session sheet), and index.html. Presets: scenery (12 orbit), lap (quarters), dual (orbit+trackside), inspect (eye+orbit). Prefer this over repeated apex_shot for scenery surveys. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader, progress/findings JSON. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["track"],
       properties: {
-        track: { type: "string", description: "Circuit id." },
+        track: { type: "string", description: "Circuit id (or use tracks[])." },
+        tracks: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 12,
+          description: "Queue several circuits sequentially (one lock). Implies async job by default.",
+        },
         preset: {
           type: "string",
-          enum: ["scenery", "lap", "dual", "inspect", "custom"],
-          description: "scenery = 12 orbit cells (default); dual/inspect use two cams.",
+          enum: ["quick", "dual_lite", "night_pass", "scenery", "full", "lap", "dual", "inspect", "custom"],
+          description: "quick=4 orbit; dual_lite=4×2; night_pass=6 night orbit; scenery/full=12; dual/inspect=16.",
         },
         label: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$", description: "Shot name prefix (default survey)." },
         count: { type: "integer", minimum: 1, maximum: 32, description: "Evenly spaced fracs when fracs omitted." },
@@ -475,10 +481,13 @@ const CATALOG = [
         sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
         panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
-        closeSession: { type: "boolean", description: "Free browser lock when done (default true)." },
+        resume: { type: "boolean", description: "Skip cells whose PNG already exists under out/." },
+        async: { type: "boolean", description: "true=jobId via shot_survey; false=sync; default=job when estimate≥60s or multi-track." },
+        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack (default llvmpipe when Mesa dri present)." },
+        closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
         keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
-        image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true)." },
+        image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true; sync path)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -764,13 +773,24 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
-        track: { type: "string", description: "survey_track: circuit id." },
+        track: { type: "string", description: "survey_track / shot_survey: circuit id." },
+        tracks: { type: "string", description: "shot_survey: comma-separated circuit ids (sequential)." },
+        preset: { type: "string", description: "shot_survey: quick|dual_lite|night_pass|scenery|full|lap|dual|inspect|custom." },
+        label: { type: "string", description: "shot_survey: shot name prefix." },
+        out: { type: "string", description: "shot_survey: output dir under artifacts/ or scratch/." },
+        resume: { type: "boolean", description: "shot_survey: skip existing PNGs." },
+        panel: { type: "boolean", description: "shot_survey: contact sheet (default true)." },
+        index: { type: "boolean", description: "shot_survey: index.html (default true)." },
+        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "shot_survey: software GL." },
+        tod: { type: "string", enum: ["day", "dusk", "dawn", "night"], description: "shot_survey: time of day override." },
+        count: { type: "integer", description: "shot_survey: frac count override." },
+        fracs: { type: "array", items: { type: "number" }, description: "shot_survey: explicit fracs." },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
         viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
@@ -1021,11 +1041,13 @@ bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
 bound("apex_shot_survey", "track", { enum: knownCircuits() });
+bound("apex_shot_survey", "tracks", { maxItems: 12 });
 bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
 bound("apex_shot_survey", "fracs", { maxItems: 32 });
 bound("apex_shot_survey", "shots", { maxItems: 32 });
 bound("apex_shot_survey", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_shot_survey", "el", { minimum: -90, maximum: 90 });
+bound("apex_shot_survey", "gl", { enum: ["llvmpipe", "swiftshader"] });
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
@@ -1606,6 +1628,39 @@ function mockSuccess(name, argv, env = {}) {
   });
 }
 
+function statusNext(lock, playwright, loadavg) {
+  const load = Array.isArray(loadavg) ? loadavg[0] : 0;
+  if (lock?.held) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: `browser lock held by ${lock.tool || "pid " + lock.pid}`,
+      hint: "Wait for the owner to finish, or apex_job_status if it is a job; do not start a second browser apex_*.",
+    };
+  }
+  if (playwright?.busy || playwright?.suite) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: "Playwright suite or busy Chromium occupancy",
+      hint: "Finish or stop the suite before apex_shot_survey / apex_track.",
+    };
+  }
+  if (load >= 3) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: `loadavg ${load.toFixed?.(2) ?? load} ≥ 3`,
+      hint: "Box is busy; delay browser surveys (test-bg also refuses at this load).",
+    };
+  }
+  return {
+    action: "ready",
+    tool: "apex_shot_survey",
+    reason: "lock free; occupancy clear",
+    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
+  };
+}
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -1617,25 +1672,33 @@ function handleStatus(args = {}) {
     });
   }
   if (mockMode()) {
+    const loadavg = os.loadavg();
+    const lock = { held: false };
+    const playwright = emptyPlaywright();
     return toolResult({
       ok: true,
       mock: true,
-      lock: { held: false },
+      lock,
       chromeDaemon: { up: false, port: null },
       testBg: { recorded: false, running: [] },
-      playwright: emptyPlaywright(),
-      loadavg: os.loadavg(),
+      playwright,
+      loadavg,
+      next: statusNext(lock, playwright, loadavg),
       knownGap: KNOWN_GAP,
     });
   }
   const chromePort = daemonPort();
+  const lock = lockInfo();
+  const playwright = playwrightLive();
+  const loadavg = os.loadavg();
   return toolResult({
     ok: true,
-    lock: lockInfo(),
+    lock,
     chromeDaemon: { up: chromePort != null, port: chromePort },
     testBg: testBgStatus(),
-    playwright: playwrightLive(),
-    loadavg: os.loadavg(),
+    playwright,
+    loadavg,
+    next: statusNext(lock, playwright, loadavg),
     knownGap: KNOWN_GAP,
   });
 }

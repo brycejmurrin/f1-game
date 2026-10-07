@@ -255,6 +255,49 @@ test("apex_shot_survey dryRun plans a multi-shot session", () => {
   assert.equal(body.dryRun, true);
   assert.equal(body.shots.length, 4);
   assert.match(body.out, /artifacts\/track-survey\/monza-survey/);
+  assert.equal(typeof body.estimateMs, "number");
+  // lap (4 shots) estimates past the MCP cancel window → async job by default
+  assert.equal(body.asyncDefault, true);
+});
+
+test("apex_shot_survey dryRun multi-track prefers async job", () => {
+  const r = callCli("apex_shot_survey", { tracks: ["monza", "spa"], preset: "quick", dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.tracks, ["monza", "spa"]);
+  assert.equal(body.asyncDefault, true);
+  assert.equal(body.shots.length, 4);
+});
+
+test("apex_shot_survey dryRun single-shot stays sync by default", () => {
+  const r = callCli("apex_shot_survey", {
+    track: "monza",
+    preset: "custom",
+    shots: [{ name: "only", frac: 0.5, cam: "orbit", tod: "day" }],
+    dryRun: true,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.asyncDefault, false);
+});
+
+test("apex_job_start shot_survey dryRun builds shot-survey.mjs argv", () => {
+  const r = callCli("apex_job_start", {
+    kind: "shot_survey",
+    tracks: "monza,spa",
+    preset: "dual_lite",
+    label: "q",
+    dryRun: true,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.equal(body.kind, "shot_survey");
+  assert.ok(body.browser);
+  assert.ok(body.argv.some((a) => String(a).endsWith("shot-survey.mjs")), body.argv);
+  assert.ok(body.argv.includes("monza,spa"), body.argv);
+  assert.ok(body.argv.includes("dual_lite"), body.argv);
 });
 
 test("apex_pick_tests argv never contains --bg; includes --json", () => {

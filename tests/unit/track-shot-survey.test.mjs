@@ -5,9 +5,16 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildTrackShotSurveyPlan,
+  estimateSurveyMs,
+  filterResumeShots,
   linspaceFracs,
+  normalizeSurveyTracks,
+  scoreShotFindings,
+  shouldSurveyAsync,
+  writeSurveyFindings,
   writeSurveyIndex,
   MAX_SURVEY_SHOTS,
+  SURVEY_ASYNC_MS,
 } from "../../tools/lib/track-shot-survey.mjs";
 
 test("linspaceFracs spreads without hitting 1.0 duplicate", () => {
@@ -20,6 +27,15 @@ test("buildTrackShotSurveyPlan: scenery preset yields 12 orbit shots", () => {
   assert.equal(p.shots.length, 12);
   assert.equal(p.shots[0].cam, "orbit");
   assert.match(p.shots[0].name, /^survey-/);
+});
+
+test("buildTrackShotSurveyPlan: quick / dual_lite / night_pass presets", () => {
+  assert.equal(buildTrackShotSurveyPlan({ preset: "quick" }).shots.length, 4);
+  assert.equal(buildTrackShotSurveyPlan({ preset: "dual_lite" }).shots.length, 8);
+  const night = buildTrackShotSurveyPlan({ preset: "night_pass" });
+  assert.equal(night.shots.length, 6);
+  assert.equal(night.shots[0].tod, "night");
+  assert.equal(buildTrackShotSurveyPlan({ preset: "full" }).shots.length, 12);
 });
 
 test("buildTrackShotSurveyPlan: dual preset caps at 32 cells", () => {
@@ -42,6 +58,39 @@ test("buildTrackShotSurveyPlan rejects >32 shots", () => {
     () => buildTrackShotSurveyPlan({ track: "monza", fracs: Array.from({ length: 20 }, (_, i) => i / 20), cams: ["orbit", "trackside"] }),
     /max 32/,
   );
+});
+
+test("normalizeSurveyTracks + estimate + async policy", () => {
+  assert.deepEqual(normalizeSurveyTracks({ tracks: ["monza", "spa", "monza"] }), ["monza", "spa"]);
+  const quick = buildTrackShotSurveyPlan({ preset: "quick" });
+  assert.ok(estimateSurveyMs(quick.shots.length, 1) >= SURVEY_ASYNC_MS);
+  assert.equal(shouldSurveyAsync({}, quick, 1), true);
+  assert.equal(shouldSurveyAsync({}, quick, 2), true);
+  const one = buildTrackShotSurveyPlan({
+    preset: "custom",
+    shots: [{ name: "only", frac: 0.5, cam: "orbit", tod: "day" }],
+  });
+  assert.ok(estimateSurveyMs(one.shots.length, 1) < SURVEY_ASYNC_MS);
+  assert.equal(shouldSurveyAsync({}, one, 1), false);
+  assert.equal(shouldSurveyAsync({ async: true }, one, 1), true);
+  assert.equal(shouldSurveyAsync({ async: false }, buildTrackShotSurveyPlan({ preset: "dual" }), 3), false);
+});
+
+test("filterResumeShots and findings helpers", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
+  const plan = buildTrackShotSurveyPlan({ preset: "lap", label: "r" });
+  fs.writeFileSync(path.join(dir, `${plan.shots[0].name}.png`), "x");
+  const { pending, resumed } = filterResumeShots(dir, plan.shots, true);
+  assert.equal(resumed.length, 1);
+  assert.equal(pending.length, 3);
+  assert.deepEqual(scoreShotFindings({ spread: 1.5, kb: 40 }), ["low_spread", "near_blank", "tiny_png"]);
+  const { file } = writeSurveyFindings(dir, {
+    track: "monza", label: "r", preset: "lap",
+    shots: [{ name: "a", spread: 1.5, kb: 40, frac: 0, cam: "orbit", tod: "day" }],
+  });
+  assert.equal(path.basename(file), "findings.json");
+  const body = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(body.flagged, 1);
 });
 
 test("writeSurveyIndex writes readable gallery", () => {

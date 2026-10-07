@@ -1,5 +1,5 @@
 // track-shot-survey.mjs — plan + index for multi-shot track scenery surveys (apex_shot_survey / apex_track op survey).
-// @doc Build shot lists (presets, fracs, cams) and write a simple HTML gallery; used by apex-extras, no browser here.
+// @doc Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey).
 // @skill survey-track
 import fs from "node:fs";
 import path from "node:path";
@@ -8,6 +8,14 @@ const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
 const NAME_RE = /^[A-Za-z0-9._-]{1,80}$/;
 export const MAX_SURVEY_SHOTS = 32;
+export const MAX_SURVEY_TRACKS = 12;
+
+/** Rough wall-clock estimate used to choose sync vs async (job) path. */
+export const SURVEY_BOOT_MS = 30000;
+export const SURVEY_SHOT_MS = 15000;
+/** Above this estimate, apex_shot_survey defaults to async (job) unless async:false.
+ *  Tuned under Cursor's ~60 s MCP cancel: even a 4-cell "quick" pass should job. */
+export const SURVEY_ASYNC_MS = 60000;
 
 /** Evenly spaced lap fractions in [0, 1), never duplicating start/finish. */
 export function linspaceFracs(count) {
@@ -20,8 +28,16 @@ export function linspaceFracs(count) {
 }
 
 export const SURVEY_PRESETS = {
+  /** Fast explore: 4 orbit cells. */
+  quick: { count: 4, cam: ["orbit"], el: 22, dist: 45, az: 45, tod: "day" },
+  /** Dual-lite: 4 fracs × orbit+trackside = 8 cells. */
+  dual_lite: { count: 4, cam: ["orbit", "trackside"], el: 20, dist: 42, az: 45, tod: "day" },
+  /** Night lighting pass: 6 orbit cells at night. */
+  night_pass: { count: 6, cam: ["orbit"], el: 18, dist: 40, az: 45, tod: "night" },
   /** Default scenery pass: orbit every ~1/12 lap. */
   scenery: { count: 12, cam: ["orbit"], el: 22, dist: 45, az: 45, tod: "day" },
+  /** Alias for scenery (agents asking for a "full" pass). */
+  full: { count: 12, cam: ["orbit"], el: 22, dist: 45, az: 45, tod: "day" },
   /** Quarter-lap anchors. */
   lap: { fracs: [0, 0.25, 0.5, 0.75], cam: ["orbit"], el: 22, dist: 45, az: 45, tod: "day" },
   /** Orbit + trackside at the same fractions (max 16 fracs → 32 cells). */
@@ -29,6 +45,8 @@ export const SURVEY_PRESETS = {
   /** Driver eye + orbit for prop/gap spotting (8 fracs × 2 cams). */
   inspect: { count: 8, cam: ["eye", "orbit"], el: 18, dist: 40, az: 45, tod: "day" },
 };
+
+export const SURVEY_PRESET_KEYS = Object.keys(SURVEY_PRESETS);
 
 function pctTag(frac) {
   return String(Math.round(Number(frac) * 100)).padStart(2, "0");
@@ -56,13 +74,32 @@ function normLabel(label) {
   return s;
 }
 
+/** Normalize track | tracks[] into a deduped list (1..MAX_SURVEY_TRACKS). */
+export function normalizeSurveyTracks(args = {}, known = null) {
+  let raw = [];
+  if (Array.isArray(args.tracks) && args.tracks.length) raw = args.tracks.map(String);
+  else if (args.track != null && args.track !== "") raw = [String(args.track)];
+  if (!raw.length) throw new Error("track or tracks[] required");
+  if (raw.length > MAX_SURVEY_TRACKS) throw new Error(`tracks max ${MAX_SURVEY_TRACKS}`);
+  const seen = new Set();
+  const out = [];
+  for (const id of raw) {
+    if (!/^[a-z0-9_]{2,40}$/.test(id)) throw new Error(`bad track id ${id}`);
+    if (known && !known.includes(id)) throw new Error(`unknown track ${id}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
   const label = normLabel(args.label ?? args.prefix ?? "survey");
   const presetKey = args.preset == null || args.preset === "" ? "scenery" : String(args.preset);
   const presetDef = presetKey === "custom" ? null : SURVEY_PRESETS[presetKey];
   if (presetKey !== "custom" && !presetDef) {
-    throw new Error(`preset must be custom or one of ${Object.keys(SURVEY_PRESETS).join(", ")}`);
+    throw new Error(`preset must be custom or one of ${SURVEY_PRESET_KEYS.join(", ")}`);
   }
 
   if (Array.isArray(args.shots) && args.shots.length) {
@@ -140,6 +177,82 @@ export function buildTrackShotSurveyPlan(args = {}) {
   };
 }
 
+/** Wall-clock estimate for one or more tracks (same shot plan per track). */
+export function estimateSurveyMs(shotCount, trackCount = 1) {
+  const n = Math.max(0, Number(shotCount) || 0);
+  const t = Math.max(1, Number(trackCount) || 1);
+  return t * (SURVEY_BOOT_MS + n * SURVEY_SHOT_MS);
+}
+
+/** Prefer async (job) when multi-track or long estimate, unless async:false. */
+export function shouldSurveyAsync(args = {}, plan, trackCount = 1) {
+  if (args.async === false) return false;
+  if (args.async === true) return true;
+  const shots = plan?.shots?.length ?? 0;
+  return trackCount > 1 || estimateSurveyMs(shots, trackCount) >= SURVEY_ASYNC_MS;
+}
+
+export function shotPngPath(outDir, name) {
+  return path.join(outDir, `${name}.png`);
+}
+
+/** Split planned shots into already-on-disk (resume) vs still needed. */
+export function filterResumeShots(outDir, shots, resume = false) {
+  if (!resume) return { pending: shots.slice(), resumed: [] };
+  const pending = [];
+  const resumed = [];
+  for (const s of shots) {
+    const png = shotPngPath(outDir, s.name);
+    if (fs.existsSync(png)) resumed.push({ ...s, png, resumed: true });
+    else pending.push(s);
+  }
+  return { pending, resumed };
+}
+
+/** Heuristic flags for a captured cell (spread/kb from track-session). */
+export function scoreShotFindings(shot = {}) {
+  const flags = [];
+  const spread = Number(shot.spread);
+  const kb = Number(shot.kb);
+  if (Number.isFinite(spread) && spread < 5) flags.push("low_spread");
+  if (Number.isFinite(spread) && spread < 2) flags.push("near_blank");
+  if (Number.isFinite(kb) && kb < 80) flags.push("tiny_png");
+  if (Number.isFinite(kb) && kb > 2500) flags.push("huge_png");
+  return flags;
+}
+
+export function writeSurveyProgress(outDir, progress) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, "progress.json");
+  fs.writeFileSync(file, JSON.stringify({ ...progress, updatedAt: new Date().toISOString() }, null, 2) + "\n");
+  return file;
+}
+
+export function writeSurveyFindings(outDir, meta) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const shots = (meta.shots || []).map((s) => {
+    const flags = s.flags || scoreShotFindings(s);
+    return { ...s, flags };
+  });
+  const flagged = shots.filter((s) => (s.flags || []).length);
+  const body = {
+    ok: meta.ok !== false,
+    track: meta.track,
+    tracks: meta.tracks,
+    label: meta.label,
+    preset: meta.preset,
+    captured: shots.length,
+    flagged: flagged.length,
+    shots,
+    panel: meta.panelPng || null,
+    indexHtml: meta.indexHtml || null,
+    writtenAt: new Date().toISOString(),
+  };
+  const file = path.join(outDir, "findings.json");
+  fs.writeFileSync(file, JSON.stringify(body, null, 2) + "\n");
+  return { file, findings: body };
+}
+
 /** Static HTML gallery beside the PNGs (relative img paths). */
 export function writeSurveyIndex(outDir, meta) {
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -163,6 +276,31 @@ figcaption{font:11px/1.3 monospace;margin-top:4px;color:#9aa3b2}
 </body></html>`;
   const file = path.join(outDir, "index.html");
   fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(file, html);
+  return file;
+}
+
+/** Multi-track compare gallery (relative paths into per-track dirs). */
+export function writeCompareIndex(outDir, meta) {
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const tracks = meta.tracks || [];
+  const sections = tracks.map((t) => {
+    const rel = esc(t.relIndex || `${t.track}/index.html`);
+    const panel = t.panel ? `<p><a href="${esc(t.panel)}">${esc(path.basename(t.panel))}</a></p>` : "";
+    return `<section><h2><a href="${rel}">${esc(t.track)}</a> — ${t.captured ?? 0} shot(s)</h2>${panel}</section>`;
+  }).join("\n");
+  const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>compare shot survey</title>
+<style>
+body{font:14px/1.4 system-ui,sans-serif;margin:1rem;background:#14161c;color:#e6e9ef}
+a{color:#8ec7ff} section{margin:1rem 0;padding:0.75rem 0;border-bottom:1px solid #2a2f3a}
+</style></head><body>
+<h1>compare — ${esc(meta.label || "survey")}</h1>
+<p>preset ${esc(meta.preset || "custom")}; ${tracks.length} track(s).</p>
+${sections}
+</body></html>`;
+  fs.mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);
   return file;
 }
