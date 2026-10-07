@@ -443,13 +443,24 @@ const NetTransport = (function () {
     const chans = {};
     const STATE_INBOX_CAP = 64;
     const STATE_BUFFER_CAP = 16384;   // outbound SCTP queue bytes before STATE sends drop
+    // EVENT is reliable/ordered: its outbound cap sits ABOVE STATE so a burst of
+    // strategy/LAP/retire spam is shed before the SCTP queue grows without bound,
+    // while GO/START/RESULT/BYE (and other race-flow criticals) still deliver.
+    const EVENT_BUFFER_CAP = 65536;
     const EVENT_INBOX_CAP = 256;
     const INBOX_BYTE_CAP = 1024 * 1024;
+    // Types whose loss breaks race flow — queue in order when the buffer is full
+    // rather than drop. Non-critical (LAP/STRATEGY/HELLO/…) may be dropped.
+    const EVENT_CRITICAL = {
+      go: 1, start: 1, result: 1, bye: 1,
+      armed: 1, left: 1, caution: 1, model: 1,
+    };
     let inbox = [];
     let queuedState = 0;
     let queuedEvents = 0;
     let queuedBytes = 0;
     let openCount = 0;
+    let eventOut = [];   // critical EVENT payloads waiting for bufferedAmount to drain
 
     function messageBytes(data) {
       if (typeof data === "string") return data.length * 2; // conservative JS heap cost
@@ -465,10 +476,28 @@ const NetTransport = (function () {
       ep.status = "closed";
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
       inbox.length = 0;
+      eventOut.length = 0;
       queuedState = queuedEvents = queuedBytes = 0;
       for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
       try { pc.close(); } catch (e) { /* already closing */ }
       ep._emit("close", reason);
+    }
+
+    function peekEventType(data) {
+      if (typeof data !== "string") return "";
+      try {
+        const o = JSON.parse(data);
+        return (o && typeof o.t === "string") ? o.t : "";
+      } catch (e) { return ""; }
+    }
+
+    function flushEventOut() {
+      const ch = chans[EVENT];
+      if (!ch || ch.readyState !== "open") return;
+      while (eventOut.length && ch.bufferedAmount <= EVENT_BUFFER_CAP) {
+        const data = eventOut.shift();
+        try { ch.send(data); } catch (e) { eventOut.unshift(data); break; }
+      }
     }
 
     // WHAT KIND of candidates we found, which is the difference between two
@@ -492,6 +521,11 @@ const NetTransport = (function () {
     function adopt(ch, kind) {
       chans[kind] = ch;
       ch.binaryType = "arraybuffer";
+      if (kind === EVENT) {
+        // Drain queued critical EVENTs once the SCTP send buffer falls.
+        try { ch.bufferedAmountLowThreshold = EVENT_BUFFER_CAP >> 1; } catch (e) { /* optional */ }
+        ch.onbufferedamountlow = () => { flushEventOut(); };
+      }
       ch.onopen = () => {
         if (++openCount === CHANNELS.length) {
           ep.status = "open";
@@ -578,6 +612,18 @@ const NetTransport = (function () {
       // instead of lost, inverting the design. Refusing the send drops THIS
       // frame's snapshot so the next fresh one goes out into a drained queue.
       if (channel === STATE && ch.bufferedAmount > STATE_BUFFER_CAP) return false;
+      if (channel === EVENT) {
+        // Prefer draining any queued criticals before accepting a fresh send so
+        // order on the reliable channel stays FIFO across the backpressure seam.
+        if (eventOut.length && ch.bufferedAmount <= EVENT_BUFFER_CAP) flushEventOut();
+        const backed = eventOut.length > 0 || ch.bufferedAmount > EVENT_BUFFER_CAP;
+        if (backed) {
+          const t = peekEventType(data);
+          if (!EVENT_CRITICAL[t]) return false;   // drop non-critical under pressure
+          eventOut.push(data);                    // critical: keep order, deliver on drain
+          return true;
+        }
+      }
       try { ch.send(data); return true; } catch (e) { return false; }
     };
     ep.pump = function () {
