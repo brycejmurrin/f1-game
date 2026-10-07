@@ -268,7 +268,9 @@ const Parts = (function () {
         { id: "sig_williams_tyre", label: "Grove Compound", cost: 0, teams: ["williams"], tag: "SIGNATURE", equivalent: "hard",
           desc: "Williams signature compound — Hard performance with a 12-vane wheel cover", speed: 1.02, accel: 0.97, cornering: 0.92, braking: 1.02, life: 1.06, visual: {sidewall: 2, band: [0.15, 0.42, 0.95], grooves: 0, bandWidth: 0.082, coverVanes: 6, shoulder: 2}, visualTier: 0 },
         { id: "sig_audi_tyre", label: "Neuburg Compound", cost: 55, teams: ["audi"], tag: "SIGNATURE", equivalent: "compound_c4",
-          desc: "Audi signature compound — Compound C4 performance with a 4-vane wheel cover", speed: 0.98, accel: 1.02, cornering: 1.08, braking: 1.06, life: 0.76, visual: {sidewall: 1, band: [0.75, 0.1, 0.3], grooves: 0, bandWidth: 0.135, coverVanes: 11, shoulder: 1}, visualTier: 2 },
+          // Band = Teams.audi.color2 (Audi red-orange #FA470D). Was [0.75,0.1,0.3]
+          // (supersoft magenta) — pink tyre walls on the titanium/black/red car.
+          desc: "Audi signature compound — Compound C4 performance with an Audi-red sidewall band", speed: 0.98, accel: 1.02, cornering: 1.08, braking: 1.06, life: 0.76, visual: {sidewall: 1, band: [0.98, 0.28, 0.05], grooves: 0, bandWidth: 0.135, coverVanes: 11, shoulder: 1}, visualTier: 2 },
         { id: "sig_astonmartin_tyre", label: "Silverstone Compound", cost: 80, teams: ["astonmartin"], tag: "SIGNATURE", equivalent: "soft",
           desc: "Aston Martin signature compound — Soft performance with a 3-vane wheel cover", speed: 0.97, accel: 1.04, cornering: 1.12, braking: 1.06, life: 0.67, visual: {sidewall: 2, band: [0.72, 0.88, 0.11], grooves: 0, bandWidth: 0.072, coverVanes: 4, shoulder: 2}, visualTier: 2 },
       ],
