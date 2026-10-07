@@ -793,7 +793,8 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
   assert.equal(D.els["#hud-gearbox"].props["--hl-x"], String(D.H.SHIPPED.standard.helmet.gearbox.x));
   const T = load3({ classes: [], live: false });   // a touch screen: no body.desktop
   assert.deepEqual(plain(T.H.get("energy", "helmet")), plain(T.H.TOUCH_SHIPPED.helmet.energy));
-  assert.ok(T.H.get("energy", "helmet").y <= -25, "ENERGY lifts above the wheel's top edge");
+  assert.ok(T.H.get("energy", "helmet").y >= -10 && T.H.get("energy", "helmet").y <= -2,
+    "ENERGY stays in the bottom strip beside TYRES, not mid-visor over the wheel");
   assert.ok(T.H.get("tyre", "helmet").x === 0 && T.H.get("tyre", "helmet").y < 0, "TYRES stays in the left corner, lifted off the steer buttons");
   assert.deepEqual(plain(T.H.get("gearbox", "helmet")), { x: 0, y: 0, s: 100 }, "GEAR takes the LCD's place: the row's own centre");
   assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y === 0, "SPEED moves right of GEAR");

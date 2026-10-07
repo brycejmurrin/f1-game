@@ -746,6 +746,8 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   .hud-gaps {
     top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   }
+  /* Helmet touch: the PLAN row under TYRES read as a plate on GEAR (390×844). */
+  body[data-hl-set="helmet"]:not(.desktop) #hud-plan:not(:empty) { display: none; }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -1946,6 +1948,16 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   body:not(.desktop) #hud-tyre {
     position: absolute;
     position-anchor: --apex-dock-left;
+    left: anchor(left);
+    bottom: calc(anchor(top) + var(--gap));
+    margin: 0;
+  }
+  /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
+     it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
+  body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
+  body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
+    position: absolute;
+    position-anchor: --apex-hud-tyre;
     left: anchor(left);
     bottom: calc(anchor(top) + var(--gap));
     margin: 0;
