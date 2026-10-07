@@ -491,12 +491,13 @@ const LED_OPTS = { emissive: 0.62, roughness: 1.0, specular: 0, noAlphaWrite: tr
 // Stride-15 records: [x,y,z, r,g,b, rad, dirX,dirY,dirZ, cosInner, cosOuter,
 // bleed, volW, glareW] — see js/render/gfx.js. volW stays 0 (godrays are off).
 const _rig = [];
-let _rigKey = "";
+let _rigK0 = NaN, _rigK1 = NaN, _rigK2 = NaN;
 function lights(liv) {
   const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
-  const key = c1.join(",");
-  if (_rig.length && key === _rigKey) return _rig;
+  // Numeric key — avoid c1.join(",") string alloc every live() frame.
+  if (_rig.length && c1[0] === _rigK0 && c1[1] === _rigK1 && c1[2] === _rigK2) return _rig;
   _rig.length = 0;
+  _rigK0 = c1[0]; _rigK1 = c1[1]; _rigK2 = c1[2];
   for (let i = 0; i < FIXTURES.length; i++) {
     const F = FIXTURES[i], e = F[4] * E, t = F[3];
     _rig.push(F[0], F[1], F[2], t[0] * e, t[1] * e, t[2] * e, F[5],
@@ -513,7 +514,6 @@ function lights(liv) {
     _rig.push(gx, 3.6, PIT_Z1 + 0.2, 0, 0, 0, 9, 0, -0.85, -0.53, 0.80, 0.45, 0.10, 0, 0);
   // The inspection LAMP, aimed by spot(); off until a preset asks for it.
   _rig.push(0, 1.7, 0, 0, 0, 0, 7, 0, -1, 0, 0.92, 0.70, 0.05, 0, 0);
-  _rigKey = key;
   return _rig;
 }
 // ── the animated layer ─────────────────────────────────────────────────────
@@ -536,7 +536,10 @@ const SPOTS = {
   side: [2.6, 4.3, 0.8, 0.4, 0.6], front: [-3.4, 4.6, 0, 0.5, 2.4], wingFront: [-2.6, 4.4, 0, 0.5, 2.9],
 };
 const PARK = [-4.0, 2.2];
-let lampAim = [PARK[0], 0, PARK[1], 0, 0, 0, 0];   // x, z, yaw, on, ax, ay, az
+const lampAim = [PARK[0], PARK[1], 0, 0, PARK[0], 0, PARK[1]];   // x, z, yaw, on, ax, ay, az
+const _chase = [];   // pulse chase reuses this; never allocate a fresh copy of the rig
+const LIVE_DECAL_SIDES = ["mid", "nx", "px", "door"];
+const _inside = { nx: true, px: true, back: true, door: true, mid: true, shutter: true, barrier: true };
 // The live records: gantry by hour, the lamp by preset, one washer that
 // flickers, and the truss chase that runs the length of the bay for two
 // seconds after a part is fitted. Returns the rig, plus the chase while it runs.
@@ -558,7 +561,8 @@ function live(liv, now, ctx) {
   const lx = sp ? sp[0] : PARK[0], lz = sp ? sp[1] : PARK[1];
   const ax = sp ? sp[2] : lx, ay = sp ? sp[3] : 0, az = sp ? sp[4] : lz;
   const yaw = Math.atan2(ax - lx, az - lz);
-  lampAim = [lx, lz, yaw, sp ? 1 : 0, ax, ay, az];
+  lampAim[0] = lx; lampAim[1] = lz; lampAim[2] = yaw; lampAim[3] = sp ? 1 : 0;
+  lampAim[4] = ax; lampAim[5] = ay; lampAim[6] = az;
   {
     const o = LAMP_AT * 15, hx = lx + Math.sin(yaw) * 0.18, hz = lz + Math.cos(yaw) * 0.18, hy = 1.72;
     const dx = ax - hx, dy = ay - hy, dz = az - hz, dl = Math.hypot(dx, dy, dz) || 1;
@@ -579,9 +583,12 @@ function live(liv, now, ctx) {
   if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return rig;
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
-  const z = Z_BACK + (Z_DOOR - Z_BACK) * u, chase = rig.slice();
-  for (const sx of [-4.6, 4.6])
-    chase.push(sx, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
+  const z = Z_BACK + (Z_DOOR - Z_BACK) * u;
+  const chase = _chase;
+  for (let i = 0; i < rig.length; i++) chase[i] = rig[i];
+  chase.length = rig.length;
+  chase.push(-4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
+  chase.push(4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
   return chase;
 }
 // Column-major T * Ry(ay) * Rz(az), written into `out`.
@@ -849,8 +856,17 @@ function seatDriverAt(team, idx) {
     ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
   return (seats && seats[i]) || (seats && seats[0]) || null;
 }
+// boardInfo used to run Parts.resolveSetup + two .map()s on EVERY garage draw
+// (rebuild early-returns after the key check, but the key needs boardInfo first).
+// Cache on a cheap stamp: team, seat, store.rev (parts/livery), career budget.
+let _boardInfo = null, _boardInfoKey = "";
 function boardInfo(team, getParts, driverIdx) {
   if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
+  const rev = (typeof GameStore !== "undefined" && GameStore.store) ? GameStore.store.rev : 0;
+  const capStamp = (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
+    ? ("C" + Career.budget()) : "F";
+  const stamp = (team && team.id) + "|" + (driverIdx | 0) + "|" + rev + "|" + capStamp;
+  if (_boardInfo && stamp === _boardInfoKey) return _boardInfo;
   try {
     // ONE resolveSetup call carries everything: it already returns the stat
     // `mods`, the total `cost`, and `options` (the RESOLVED option per category,
@@ -877,10 +893,13 @@ function boardInfo(team, getParts, driverIdx) {
     // over 780 on the factory build alone, and MY TEAM is 900.
     const cap = (typeof Career !== "undefined" && Career.owned && Career.owned(team.id))
       ? Career.budget() : Parts.BUDGET;
-    return { stats, spec, driver: drv, budget: cap,
+    _boardInfo = { stats, spec, driver: drv, budget: cap,
              left: Math.max(0, cap - (r.cost || 0)) };
+    _boardInfoKey = stamp;
+    return _boardInfo;
   } catch (e) {
     Log.warn("game", `GarageScene boardInfo failed: ${e && e.message}`);
+    _boardInfo = null; _boardInfoKey = "";
     return null;
   }
 }
@@ -1525,7 +1544,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   if (studio) return;   // car studio: floor + ghost, no room dressing
   // Room after the ghost so props/shell depth-write over it.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
-  const inside = { nx: ex > -HALF_W, px: ex < HALF_W, back: ez > Z_BACK, door: ez < Z_DOOR, mid: true, shutter: ez < Z_DOOR, barrier: ez < Z_DOOR && !arrival };
+  const inside = _inside;
+  inside.nx = ex > -HALF_W; inside.px = ex < HALF_W; inside.back = ez > Z_BACK;
+  inside.door = ez < Z_DOOR; inside.mid = true; inside.shutter = ez < Z_DOOR;
+  inside.barrier = ez < Z_DOOR && !arrival;
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // TOP looks down through the ceiling: hide the truss and the ceiling LED
   // housings so their beams do not stripe the car. Other presets restore them.
@@ -1583,8 +1605,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   }
   if (liveTex) {
     if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
-    for (const k of ["mid", "nx", "px", "door"])
+    for (let i = 0; i < LIVE_DECAL_SIDES.length; i++) {
+      const k = LIVE_DECAL_SIDES[i];
       if (inside[k] && liveMesh[k] && !(arrival && k === "door")) _gfx.drawDecal(liveMesh[k], MAT_I, liveTex, LIVE_OPTS);
+    }
   }
 }
 
@@ -1774,6 +1798,8 @@ function release() {
   previewMeshes.clear(); previewHulls.clear();
   dressCanvas = null; liveCanvas = null; lastSpec = null;
   cacheKey = ""; geomKey = ""; dressFail = 0; dressRetryAt = 0; traceFail = 0; lastTrace = -1e9;
+  _boardInfo = null; _boardInfoKey = "";
+  _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rig.length = 0; _chase.length = 0;
   return n;
 }
 
