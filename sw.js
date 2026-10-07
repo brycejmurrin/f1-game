@@ -682,6 +682,9 @@ self.addEventListener("message", (event) => {
   })());
 });
 
+// Unversioned same-origin assets (no ?v= on the wire): network-first with cache
+// fallback. Used for assets/pack/ (MAT layer index) and assets/voice/ (.json +
+// .bin pairs from voice-pack.js).
 function packNetworkFirst(event, req) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
@@ -843,6 +846,15 @@ self.addEventListener("fetch", (event) => {
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
+    packNetworkFirst(event, req);
+    return;
+  }
+
+  // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
+  // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
+  // serve a stale index with a fresh bin (or the reverse) after a deploy and
+  // corrupt clip offsets for the whole cache generation. Same strategy as pack.
+  if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
     packNetworkFirst(event, req);
     return;
   }
