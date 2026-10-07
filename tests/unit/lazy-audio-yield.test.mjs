@@ -87,6 +87,7 @@ test("ensureAudio source yields before load and before onAudioReady; skips under
   assert.match(bundles, /apex-game-vm/, "UA mark matches startRaceBody / game-vm");
   assert.match(bundles, /scheduler\.yield/, "Scheduler API when present");
   assert.match(bundles, /setTimeout\(r, 0\)/, "Safari / no-scheduler fallback");
+  assert.match(bundles, /setTimeout\(r, 16\)/, "paint yield waits one frame of wall time, not rAF");
   assert.doesNotMatch(bundles, /audioYieldToMain[\s\S]{0,400}requestAnimationFrame/,
     "paint yield must not wait on rAF (garage WebGL stalls frames)");
   assert.match(bundles, /await audioYieldToMain\("paint"\);\s*const ok = await loadBackendScripts\(AUDIO_FILES/,
@@ -114,7 +115,7 @@ test("await ensureAudio resolves after onAudioReady; yields once on real UA", as
   assert.ok(!ctx.GameAudio._stub, "real engine bound");
   assert.ok(bag.inits >= 1, "restoreOnEngine called GameAudio.init under hasBeenActive");
   assert.deepEqual(bag.yields, ["sched", "timer", "sched"],
-    "paint = yield+macrotask; task = yield before onAudioReady");
+    "paint = yield+16ms timer; task = yield before onAudioReady");
 });
 
 test("game-vm UA skips yields but still completes ensureAudio", async () => {

@@ -239,10 +239,14 @@ function audioYieldToMain(kind) {
   // stubs it as a no-op and would hang awaiters.
   const macrotask = () => new Promise((r) => setTimeout(r, 0));
   if (kind === "paint") {
+    // One frame of wall time (not rAF): lets the tap's next paint commit
+    // before script eval. rAF would wait on garage WebGL; a 0-delay task
+    // often resumes at ~2 ms, still inside the same vsync as the click.
+    const afterFrame = () => new Promise((r) => setTimeout(r, 16));
     if (typeof scheduler !== "undefined" && typeof scheduler.yield === "function") {
-      return scheduler.yield().then(macrotask);
+      return scheduler.yield().then(afterFrame);
     }
-    return macrotask();
+    return afterFrame();
   }
   if (typeof scheduler !== "undefined" && typeof scheduler.yield === "function") {
     return scheduler.yield();
