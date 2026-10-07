@@ -119,6 +119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and the DIFF[difficulty] family, one door further out: three readers
   // that took a stored index or object on trust. Executes the shipped source
   // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
+  "tests/unit/boot-idle-prefetch.test.mjs",
   "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/bootstrap-doctor.test.mjs",
   "tests/unit/brake-cue.test.mjs",

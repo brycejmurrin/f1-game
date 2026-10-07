@@ -159,7 +159,23 @@ const TrackDesigner = (function () {
       return Object.assign({}, z, { s0: wrap01(a), s1: wrap01(b) });
     };
     const each = (list, fn) => (Array.isArray(list) ? list : []).map(fn).filter(Boolean);
-    return { hwZones: each(d.hwZones, range), bankZones: each(d.bankZones, pt("frac")), elevations: each(d.elevations, pt("s")), bridges: each(d.bridges, pt("s")) };
+    // Authored scenery props (slice H) are arc-fraction keyed like elevations —
+    // reverse / START HERE / insert·delete·stamp must carry them or they strand.
+    const out = {
+      hwZones: each(d.hwZones, range),
+      bankZones: each(d.bankZones, pt("frac")),
+      elevations: each(d.elevations, pt("s")),
+      bridges: each(d.bridges, pt("s")),
+    };
+    if (Array.isArray(d.props)) out.props = each(d.props, pt("s"));
+    return out;
+  }
+  /** Apply zoneMap and drop an emptied props list (absent, like look defaults). */
+  function withZones(d, extra, at, flip) {
+    const zm = zoneMap(d, at, flip);
+    const next = Object.assign({}, d, extra || {}, zm);
+    if (Array.isArray(zm.props) && !zm.props.length) delete next.props;
+    return next;
   }
   /** After an insert / delete / stamp: a zone BEFORE the edited span keeps its
    *  arc distance from the start, one AFTER it its distance to the finish, one
@@ -195,7 +211,7 @@ const TrackDesigner = (function () {
       const span = A[k + 1][0] - A[k][0];
       return (A[k][1] + (span > 0 ? (x - A[k][0]) / span : 0) * (A[k + 1][1] - A[k][1])) / LP;
     };
-    return Object.assign({}, d, zoneMap(d, at, false), { heights: remapHeights(d, oldPts, newPts) });
+    return withZones(d, { heights: remapHeights(d, oldPts, newPts) }, at, false);
   }
   /** Keep per-node heights on shared control points; new points start flat. */
   function remapHeights(d, oldPts, newPts) {
@@ -320,7 +336,10 @@ const TrackDesigner = (function () {
     if (p.length > CustomTracks.LIMITS.ptsMax) p = S.rdp(p, 2);
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined }), "draw");   // a new circuit: SAVE adds, never replaces
+    // A new loop: clear cosine elevations and authored props (stale fractions).
+    const drawn = Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined });
+    delete drawn.props;
+    commit(drawn, "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -338,7 +357,9 @@ const TrackDesigner = (function () {
     const base = Object.assign({}, design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined }), "randomise");   // a new circuit, as DRAW
+    const rolled = Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined });
+    delete rolled.props;
+    commit(rolled, "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
@@ -348,10 +369,10 @@ const TrackDesigner = (function () {
     if (pts.length < 3) return false;
     // The start point stays; every arc fraction f is 1 − f on the reversed loop.
     const hs = Array.isArray(design.heights) ? design.heights : flatHeights(pts);
-    const next = Object.assign({}, design, {
+    const next = withZones(design, {
       pts: [pts[0]].concat(pts.slice(1).reverse()),
       heights: [hs[0] || 0].concat(hs.slice(1).reverse()),
-    }, zoneMap(design, (f) => 1 - f, true));
+    }, (f) => 1 - f, true);
     commit(next, "reverse");
     message("Direction reversed");
     return true;
@@ -363,10 +384,10 @@ const TrackDesigner = (function () {
     for (let k = 0; k < N; k++) { const a = pts[k], b = pts[(k + 1) % N]; const d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (k < i) upto += d; L += d; }
     const f = L ? upto / L : 0;
     const hs = Array.isArray(design.heights) ? design.heights.slice() : flatHeights(pts);
-    const next = Object.assign({}, design, {
+    const next = withZones(design, {
       pts: S.rotate(pts, i),
       heights: hs.length === pts.length ? hs.slice(i).concat(hs.slice(0, i)) : flatHeights(pts),
-    }, zoneMap(design, (v) => v - f, false));
+    }, (v) => v - f, false);
     sel = 0; span = -1;
     commit(next, "start");
     message("Start line moved");
@@ -471,7 +492,12 @@ const TrackDesigner = (function () {
   function canvasTool() {
     if (!cv) return;
     if (mode === "draw") { cv.setTool("draw"); return; }
-    if (mode === "elevation" || mode === "scenery" || mode === "test") { cv.setTool("select"); return; }
+    // Scenery / elevation / test: pick a point only — no road-insert, drag or
+    // double-tap delete (PLACE AT POINT / strip / CHECKS own the edits).
+    if (mode === "elevation" || mode === "scenery" || mode === "test") {
+      cv.setTool("select", null, { pickOnly: true });
+      return;
+    }
     if (TrackStamps.KINDS[tool]) cv.setTool(tool, ghost); else cv.setTool(tool);
   }
   function setTool(name) {

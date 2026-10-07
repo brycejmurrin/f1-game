@@ -271,6 +271,47 @@ test("SPEED: setHeat fills one COL.spd* polygon per run of a speed bucket (the w
   assert.equal(spdFills().length, 0); assert.ok(!h.rec.texts.includes("SLOW → FAST"));
 });
 
+test("pickOnly: tap selects; drag / insert / long-press / Delete do not edit geometry", () => {
+  const h = boot();
+  h.cv.setTool("select", null, { pickOnly: true });
+  const i = 5;
+  const before = plain(h.pts.map((p) => p.slice()));
+  const a = h.scr(h.pts[i]);
+  // Tap selects.
+  h.fire("pointerdown", a, 1, { pointerType: "mouse" });
+  h.fire("pointerup", a, 1, { pointerType: "mouse" });
+  assert.equal(h.cv.selection().sel, i);
+  assert.deepEqual(h.ev.picks, [i]);
+  assert.equal(h.ev.changes.length, 0, "tap does not move");
+  // Deliberate drag past threshold: still no move in pickOnly.
+  h.fire("pointerdown", a, 2, { pointerType: "mouse" });
+  h.fire("pointermove", h.off(a, 40, 0), 2, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(a, 40, 0), 2, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 0, "pickOnly blocks drag");
+  assert.deepEqual(plain(h.pts), before);
+  // Road hit would insert under select — not in pickOnly.
+  const mid = {
+    clientX: (h.scr(h.pts[0]).clientX + h.scr(h.pts[1]).clientX) / 2,
+    clientY: (h.scr(h.pts[0]).clientY + h.scr(h.pts[1]).clientY) / 2,
+  };
+  h.fire("pointerdown", mid, 3, { pointerType: "mouse" });
+  h.fire("pointerup", mid, 3, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 0, "pickOnly blocks road insert");
+  assert.equal(h.pts.length, before.length);
+  // Long-press never opens context.
+  h.fire("pointerdown", a, 4, { pointerType: "touch" });
+  assert.equal(h.timers.size, 0, "no hold timer when pickOnly");
+  h.fire("pointerup", a, 4, { pointerType: "touch" });
+  assert.equal(h.ev.contexts.length, 0);
+  // Leaving pickOnly restores drag.
+  h.cv.setTool("select");
+  h.fire("pointerdown", a, 5, { pointerType: "mouse" });
+  h.fire("pointermove", h.off(a, 30, 0), 5, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(a, 30, 0), 5, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 1);
+  assert.equal(h.ev.changes[0].kind, "move");
+});
+
 test("thumb(): one fitted outline in the asked colour and the start tick; nothing for a missing road", () => {
   const h = boot();
   const V = h.ctx.TrackValidate;
