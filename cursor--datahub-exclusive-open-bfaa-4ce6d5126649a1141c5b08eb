@@ -1,1 +1,0 @@
-1791283730	Cursor Agent	Data Hub exclusive-open: skip open when blocking title sheets visible; close hub on How to Play door. OWNED js/data/hub.js tests/unit/data-hub-picker.test.mjs; FORBIDDEN js/game.js css/** js/ui/**. Do not enable auto-merge or merge.  [cursor/datahub-exclusive-open-bfaa; session 4ce6d5126649a1141c5b08eb]
