@@ -219,10 +219,17 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
     document.getElementById("sel-car").click();
   });
+  // openSetup() unhides #carsetup and sets aria-busy, then buildSetup() runs
+  // after two rAFs (so Change Car never freezes on the click stack). Pair /
+  // density can classify while busy is still set and #cs-tabs is empty —
+  // CI 37680910253 (#1243 tip) hit tabs.count === 0 at the tall assert below
+  // because this wait returned one frame early. Wait out busy + real tabs.
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
-    return setup && !setup.hidden && inner?.dataset.pair === "off" && inner.dataset.density === "compact";
+    return setup && !setup.hidden && !setup.hasAttribute("aria-busy")
+      && inner?.dataset.pair === "off" && inner.dataset.density === "compact"
+      && document.querySelectorAll('#cs-tabs [role="tab"]').length > 10;
   }, null, { polling: 100, timeout: 10_000 });
   const compactWideGarage = await page.evaluate(() => {
     const tabsEl = document.getElementById("cs-tabs");
@@ -258,11 +265,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // "off" in the compact-wide state above, so a pair-only wait passes before
   // SheetShape's ResizeObserver reclassifies — and the measure below then
   // still sees the compact 7×2 grid (overflow hidden) instead of the strip.
+  // Also require tabs still present: a shape-only wait can win the same
+  // openSetup rAF race if the compact wait above ever regresses.
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");
     const inner = document.getElementById("cs-inner");
-    return setup && !setup.hidden && inner && inner.dataset.pair !== "on" &&
-      inner.dataset.shape === "tall";
+    return setup && !setup.hidden && !setup.hasAttribute("aria-busy")
+      && inner && inner.dataset.pair !== "on" && inner.dataset.shape === "tall"
+      && document.querySelectorAll('#cs-tabs [role="tab"]').length > 10;
   }, null, { polling: 100, timeout: 10_000 });
   const tabs = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#cs-tabs [role="tab"]')];
