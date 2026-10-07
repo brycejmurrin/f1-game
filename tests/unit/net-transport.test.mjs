@@ -206,8 +206,9 @@ test("a congested outbound STATE queue drops the snapshot instead of buffering i
     close() {}
   }
   // maxRetransmits:0 only drops on the network — the local SCTP queue still
-  // buffers, so a backed-up channel must refuse STATE sends (stale beats late)
-  // while reliable EVENTs keep queueing.
+  // buffers, so a backed-up channel must refuse STATE sends (stale beats late).
+  // EVENT here stays under its own (higher) outbound cap so this test isolates
+  // STATE behaviour; EVENT backpressure has its own cases below.
   const channel = (label, buffered) => ({
     label, readyState: "open", bufferedAmount: buffered, sent: [],
     send(d) { this.sent.push(d); }, close() {},
@@ -217,19 +218,82 @@ test("a congested outbound STATE queue drops the snapshot instead of buffering i
   try {
     const fresh = load("js/net/transport.js", "NetTransport");
     const ep = fresh.rtc({ role: "guest" });
-    const state = channel("state", 999999), event = channel("event", 999999);
+    const state = channel("state", 999999), event = channel("event", 0);
     ep.pc.ondatachannel({ channel: state });
     ep.pc.ondatachannel({ channel: event });
     state.onopen(); event.onopen();
 
     assert.equal(ep.send(fresh.STATE, "snap"), false, "backed-up STATE send must drop");
     assert.equal(state.sent.length, 0);
-    assert.equal(ep.send(fresh.EVENT, "ev"), true, "reliable events still deliver");
+    assert.equal(ep.send(fresh.EVENT, JSON.stringify({ t: "lap", d: 1 })), true,
+      "EVENT under its own cap still delivers while STATE is backed up");
     assert.equal(event.sent.length, 1);
 
     state.bufferedAmount = 0;
     assert.equal(ep.send(fresh.STATE, "snap2"), true, "a drained queue accepts again");
     assert.equal(state.sent.length, 1);
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive in order", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  // EVENT used to call ch.send with no outbound backpressure (STATE alone had
+  // a bufferedAmount cap). Strategy/LAP/retire spam could grow the SCTP queue
+  // without limit. Above EVENT_BUFFER_CAP, non-critical types drop; critical
+  // types (GO/START/RESULT/BYE/…) queue and flush on bufferedamountlow, in order.
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    bufferedAmountLowThreshold: 0,
+    onbufferedamountlow: null,
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 0), event = channel("event", 999999);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+    assert.ok(typeof event.onbufferedamountlow === "function",
+      "EVENT channel must listen for bufferedamountlow to drain criticals");
+    assert.ok(event.bufferedAmountLowThreshold > 0,
+      "EVENT bufferedAmountLowThreshold must be set above zero");
+
+    const lap = JSON.stringify({ t: "lap", d: { retired: "mechanical" } });
+    const strategy = JSON.stringify({ t: "strategy", d: { epoch: 1 } });
+    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical LAP drops above EVENT cap");
+    assert.equal(ep.send(fresh.EVENT, strategy), false, "non-critical STRATEGY drops above EVENT cap");
+    assert.equal(event.sent.length, 0, "dropped non-criticals must not hit the wire");
+
+    const go = JSON.stringify({ t: "go", d: { track: "monza" } });
+    const start = JSON.stringify({ t: "start", d: { at: 1, hold: 0 } });
+    const result = JSON.stringify({ t: "result", d: { order: [1] } });
+    const bye = JSON.stringify({ t: "bye", d: null });
+    assert.equal(ep.send(fresh.EVENT, go), true, "critical GO queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, start), true, "critical START queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, result), true, "critical RESULT queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, bye), true, "critical BYE queues under pressure");
+    assert.equal(event.sent.length, 0, "criticals wait for the buffer to drain");
+
+    // Still backed up: another LAP must keep dropping (not jump the critical queue).
+    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical stays dropped while criticals are queued");
+
+    event.bufferedAmount = 0;
+    event.onbufferedamountlow();
+    assert.deepEqual(event.sent, [go, start, result, bye],
+      "critical EVENTs must flush in send order once bufferedAmount drains");
   } finally {
     delete global.RTCPeerConnection;
     delete global.localStorage;
