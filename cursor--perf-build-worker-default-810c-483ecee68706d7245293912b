@@ -1,1 +1,1 @@
-1791350136	Cursor Agent	perf #1175: fix montreal-foundation null props.pos under default buildWorker idleWarm  [cursor/perf-build-worker-default-810c; session 483ecee68706d7245293912b]
+1791350598	Cursor Agent	perf #1175: stamp _keepPositions on worker replay when Tracks.keepGeometry  [cursor/perf-build-worker-default-810c; session 483ecee68706d7245293912b]
