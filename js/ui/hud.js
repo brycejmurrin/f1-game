@@ -1047,10 +1047,28 @@ function fitHud() {
   const dockRW = Number.isFinite(dockLeft)
     ? Math.max(0, (window.innerWidth - dockLeft) / zTop - 10 - sarPx / zTop)
     : 0;
-  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
+  let dockPad = dockRW > 0 ? dockRW + 8 : 0;
+  hStyle(root, "--dock-r-w", dockPad.toFixed(1) + "px");
   // Flush #hud-sectors after --dock-r-w so announceLane / radioTopSlot clip
   // the post-reflow plate (Pages: #hud-sectors+#announce).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
+  // Under load (parallel hud-layout workers) the leftmost-control inset can
+  // land 1–2 px short and #hud-sectors still rects onto BOOST. Measure once
+  // after the flush and widen --dock-r-w in top-band units until clear.
+  if (els.hudSectors && _dockR && dockPad > 0) {
+    const secR = els.hudSectors.getBoundingClientRect();
+    let ctrlLeft = Infinity;
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (r.width && r.height) ctrlLeft = Math.min(ctrlLeft, r.left);
+    }
+    if (secR.width && Number.isFinite(ctrlLeft) && secR.right > ctrlLeft - 4) {
+      const needPx = secR.right - (ctrlLeft - 4);
+      dockPad += needPx / zTop;
+      hStyle(root, "--dock-r-w", dockPad.toFixed(1) + "px");
+      void els.hudSectors.offsetHeight;
+    }
+  }
   radioTopSlot(root, bcast);   // after the dock cap: it stands off the docks as painted
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.

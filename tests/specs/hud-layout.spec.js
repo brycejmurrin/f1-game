@@ -178,6 +178,25 @@ async function race(page, steer, manual, ins, opts) {
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
       return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
     }, null, { polling: 100, timeout: 5_000 });
+    // fitHud publishes --dock-r-w after the top/dock zoom caps (2026-10-07:
+    // #hud-sectors+#announce fix). Under CI parallel load the tower wait alone
+    // was enough for --hud-top-h but sectors still measured on BOOST
+    // (notched-landscape buttons, 4 workers, APEX_FAIL_ON_FLAKY=1).
+    await page.waitForFunction(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (document.body.classList.contains("desktop")) return true;
+      const boost = document.getElementById("btn-boost");
+      const sectors = document.getElementById("hud-sectors");
+      if (!boost || boost.hidden || !sectors) return false;
+      const sec = sectors.getBoundingClientRect();
+      const br = boost.getBoundingClientRect();
+      if (!(sec.width > 0 && br.width > 0)) return false;
+      const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+      const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
+        && sec.top < br.bottom - 0.5 && br.top < sec.bottom - 0.5;
+      return !hit;
+    }, null, { polling: 100, timeout: 15_000 });
   }
 }
 
