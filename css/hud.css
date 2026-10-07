@@ -1149,8 +1149,23 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    beside-the-mirror and top-row slots outweigh this. Desktop (.desktop:
    empty docks) is untouched. */
 body:not(.desktop) #announce {
-  min-width: min(200px, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+  /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
+     --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
+  min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+  width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+}
+/* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
+   #announce-num kept a painted box at width:0; hide the card so it cannot
+   clash with #hud-sectors after a large --dock-r-w (oversize CI workers=2). */
+#announce[data-lane-collapsed] {
+  width: 0 !important;
+  max-width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  visibility: hidden;
 }
 body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));

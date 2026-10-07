@@ -118,10 +118,12 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
   assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
-  // Dock inset is published AFTER zoom caps (zTop), from the leftmost right-
-  // dock control — not pre-cap dockR.width/chromeZ (#1191/#1212 Pages gate).
-  assert.match(hud, /const zTop = \+root\.style\.getPropertyValue\("--hud-z-top"\) \|\| scale \|\| 1;/);
-  assert.match(hud, /const dockRW = Number\.isFinite\(dockLeft\)\s*\?\s*Math\.max\(0, \(window\.innerWidth - dockLeft\) \/ zTop - 10 - sarPx \/ zTop\)\s*:\s*0;/);
+  // Dock inset is published AFTER zoom caps, from BOOST / leftmost dock
+  // control, using the plate's painted zoom + screen-px air, then one
+  // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
+  assert.match(hud, /btn-boost/);
+  assert.match(hud, /DOCK_AIR \/ z/);
+  assert.match(hud, /secR\.right > left - DOCK_AIR/);
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {

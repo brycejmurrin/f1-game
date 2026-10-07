@@ -195,26 +195,51 @@ async function race(page, steer, manual, ins, opts) {
       if (!tower) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
-    }, null, { polling: 100, timeout: 5_000 });
-    // fitHud publishes --dock-r-w after the top/dock zoom caps (2026-10-07:
-    // #hud-sectors+#announce fix). Under CI parallel load the tower wait alone
-    // was enough for --hud-top-h but sectors still measured on BOOST
-    // (notched-landscape buttons, 4 workers, APEX_FAIL_ON_FLAKY=1).
-    await page.waitForFunction(async () => {
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
+      // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
       if (document.body.classList.contains("desktop")) return true;
+      const phoneSteer = document.body.classList.contains("steer-buttons")
+        || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
-      const sectors = document.getElementById("hud-sectors");
-      if (!boost || boost.hidden || !sectors) return false;
-      const sec = sectors.getBoundingClientRect();
-      const br = boost.getBoundingClientRect();
-      if (!(sec.width > 0 && br.width > 0)) return false;
-      const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
-      const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
-        && sec.top < br.bottom - 0.5 && br.top < sec.bottom - 0.5;
-      return !hit;
+      if (phoneSteer && (!boost || boost.hidden)) return false;
+      const sec = document.getElementById("hud-sectors");
+      if (!sec || sec.hidden || !sec.childElementCount) return false;
+      const s = sec.getBoundingClientRect();
+      if (!(s.width > 0)) return false;
+      // BOOST clearance only when BOOST sits on the RIGHT (buttons/touch).
+      // Tilt parks BOOST on the left — using that edge as the dock target
+      // blew --dock-r-w to midCap (CI: dockRW 907, sectors under --sal).
+      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      const boostOnRight = !!(b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2);
+      if (boostOnRight) {
+        const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+        if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+        if (s.right > b.left + 0.5) return false;
+      } else if (!boost || boost.hidden) {
+        /* desktop / no BOOST — tower wait above is enough */
+      }
+      const ann = document.getElementById("announce");
+      if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
+        const a = ann.getBoundingClientRect();
+        if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
+            && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) return false;
+      }
+      // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
+      // for one tick. Require both inside the injected safe insets.
+      const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
+      const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
+      if (s.left < sal - 0.5 || s.right > window.innerWidth - sar + 0.5) return false;
+      const map = document.getElementById("minimap");
+      if (map && !map.hidden) {
+        const m = map.getBoundingClientRect();
+        if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
+      }
+      // Freeze in the same turn that saw clearance. updateHud still ticks
+      // while frozen, but fitHud's painted-clash path re-opens the same-key
+      // backoff if wrap-reverse crawls BOOST back onto S3.
+      try { window.__apex.freeze(true); } catch (_) { /* */ }
+      return true;
     }, null, { polling: 100, timeout: 30_000 });
   }
 }
@@ -339,8 +364,32 @@ for (const v of VIEWS) {
           // it was in the array the whole time. The dump also carries the fit
           // pass's own state, because "which elements" and "why did the cap not
           // stop it" are the same question.
-          const dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
+          let dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
                                               unsafe: r.unsafe, fit: r.fit || null });
+          if (r.hudClash.length) {
+            const geo = await page.evaluate(() => {
+              const root = document.documentElement;
+              const box = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { l:+r.left.toFixed(1), r:+r.right.toFixed(1), t:+r.top.toFixed(1), b:+r.bottom.toFixed(1),
+                  w:+r.width.toFixed(1), h:+r.height.toFixed(1), hidden: !!el.hidden,
+                  vis: getComputedStyle(el).visibility, collapsed: el.hasAttribute("data-lane-collapsed") };
+              };
+              return {
+                dockRW: root.style.getPropertyValue("--dock-r-w"),
+                laneX: root.style.getPropertyValue("--announce-lane-x"),
+                laneW: root.style.getPropertyValue("--announce-lane-w"),
+                radioTop: document.body.classList.contains("hud-radio-top"),
+                radioTopW: root.style.getPropertyValue("--radio-top-w"),
+                radioTopX: root.style.getPropertyValue("--radio-top-x"),
+                body: document.body.className,
+                sec: box("hud-sectors"), ann: box("announce"), boost: box("btn-boost"),
+              };
+            });
+            dump += " geo=" + JSON.stringify(geo);
+          }
           // No control may sit on another — every one of these is a tap target.
           expect(r.overlaps, "controls must not sit on each other" + dump).toEqual([]);
           // And no READOUT may sit on a tap target, which is the failure that
@@ -553,9 +602,15 @@ test.describe("tilt steer high HUD scale", () => {
       const a = rel.getBoundingClientRect(), b = brake.getBoundingClientRect();
       if (!(a.width && b.width)) return false;
       // fitRows must have slid/capped the card clear of BRAKE (TILT left column).
-      return !(a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
+      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) return false;
+      // jump() + REL unhide re-fits; wait until S3 has cleared BOOST again.
+      const sec = document.getElementById("hud-sectors");
+      const boost = document.getElementById("btn-boost");
+      if (!sec || !boost || sec.hidden || boost.hidden || !sec.childElementCount) return false;
+      const s = sec.getBoundingClientRect(), g = boost.getBoundingClientRect();
+      if (!(s.width > 0 && g.width > 0)) return false;
+      return s.right <= g.left + 0.5;
     }, null, { polling: 100, timeout: 30_000 });
-    await waitTouchSectorsClearBoost(page);
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },
