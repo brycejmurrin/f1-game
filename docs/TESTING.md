@@ -117,8 +117,10 @@ A routed spec that loses the budget to smaller ones rides as **overflow** —
 up to six more `TARGET_SHARD_SEC` jobs' worth, packed with everything else —
 instead of being skipped. A routed spec that declares a per-test timeout at or
 over the gate's 180 s runs in the **over-budget pool** (`overbudget-<k>` jobs,
-up to eight jobs' worth, each capped from its own declaration). What is still
-left is dropped by name, and a dropped spec turns `Selected specs (verdict)`
+up to eight jobs' worth, each capped from its own declaration). When the
+overflow is full, leftovers ride a bounded **spill** leg (`spill-<k>` jobs,
+`MAX_SPILL_SHARDS` = two jobs' worth, logged as `SPILL`). What is still
+left is dropped by name as an error, and a dropped spec turns `Selected specs (verdict)`
 red on a pull request (2026-10-04). The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with a 60-minute budget, twelve
