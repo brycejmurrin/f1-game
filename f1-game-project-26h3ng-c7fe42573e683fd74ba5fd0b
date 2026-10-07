@@ -1,0 +1,1 @@
+1791369088	Cursor Agent	perf(sw): stop precaching default-off payloads: sw.js + tests/unit/service-worker.test.mjs + offline specs asserting those list entries  [claude/f1-game-project-26h3ng; session c7fe42573e683fd74ba5fd0b]
