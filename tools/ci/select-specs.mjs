@@ -142,7 +142,13 @@ export function specsOf(scriptNames, scripts) {
 // budgeted set, packed with the rest by measured time (shards(), below). Bounded,
 // so a helper edit that touches 59 specs cannot fan out into 59 runners — the
 // rest are named as skipped, which is the honesty contract this file has always had.
-export const MAX_OVERSIZE_SHARDS = 3;
+// Raised to 4 (2026-10-07): terrain-over-road billed at its real 56 tests
+// (select-budget.mjs auditTracks()) is ~767 s, so on a wide diff it takes an
+// oversize slot beside hud-layout and career — at 3, props-over-road (416 s,
+// too big for overflow) spilled to skipped and dropped=1 red the verdict on
+// the #1180 tip's plan (`--since 2f50ad2c`). 4 carries all four. The unit
+// test still bounds this at 4.
+export const MAX_OVERSIZE_SHARDS = 4;
 // A ROUTED spec that loses the budget to smaller ones is not dropped either: up
 // to this many TARGET_SHARD_SEC jobs' worth of them ride as OVERFLOW, which
 // shards() packs with everything else. Before this, "SKIPPED (over budget)"
