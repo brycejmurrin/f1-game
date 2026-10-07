@@ -81,6 +81,7 @@ test("a Home photo uses manual distance and aim while the background retains aut
       setupPreviewOrbit: [0, .45, .245], setupPreviewTgt: [0, .45, .245], setupPreviewPan: [.5, 0, -.4],
       arriving: null, _spHull: [], getSetupPreviewMesh() {}, SP_FIT_DIST_MAX: 11, SP_FIT_HALF_W: 3.10, SP_DIST_MIN: 4.6, SP_DIST_MAX: 15,
       clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), _spAim: [], _spProj: [], _spView: [], _spVP: [], _spInvProj: [],
+      _spEye: [0, 0, 0], _spUp: [0, 1, 0],
       M4: { perspectiveTo() {}, lookAtTo() {}, mulTo() {}, invertTo() {} },
       GarageExperience: { fitHome() { fitCalls++; return { dist: 11, shiftX: .5, shiftY: 0 }; } },
       GarageScene: { recentre(_p, _v, _vp, _frac, enabled) { recentre = enabled; } } };
@@ -129,12 +130,14 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   const def = presentOpts({
     exposureMul: 1, bloomMul: 1, threshOff: 0, sunShaftMul: 1, glareStr: 0.12,
   });
-  assert.ok(def.exposure > 0.92 && def.exposure < 1.12,
-    `default garage exposure ${def.exposure} should sit near 1, not the old 1.28 wash`);
-  assert.ok(def.bloom > 0.10 && def.bloom < 0.32,
-    `default garage bloom ${def.bloom} should be a studio amount, not the old 0.70`);
-  assert.ok(def.threshold >= 0.75,
-    `threshold ${def.threshold} must sit above mid-grey so fixtures do not bloom the bay`);
+  // presentOpts returns a per-frame scratch — capture scalars before the next call.
+  const defExposure = def.exposure, defBloom = def.bloom, defThreshold = def.threshold;
+  assert.ok(defExposure > 0.92 && defExposure < 1.12,
+    `default garage exposure ${defExposure} should sit near 1, not the old 1.28 wash`);
+  assert.ok(defBloom > 0.10 && defBloom < 0.32,
+    `default garage bloom ${defBloom} should be a studio amount, not the old 0.70`);
+  assert.ok(defThreshold >= 0.75,
+    `threshold ${defThreshold} must sit above mid-grey so fixtures do not bloom the bay`);
   assert.equal(def.contact, 0);
   assert.ok(def.tune && Number.isFinite(def.tune.sunShaftMul));
   // A closed bay has no sun disc — screen sun-shafts from the roof fill wash
@@ -144,8 +147,8 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   const hot = presentOpts({
     exposureMul: 1.5, bloomMul: 2, threshOff: 0, sunShaftMul: 2.5, glareStr: 0.24,
   });
-  assert.ok(Math.abs(hot.exposure - def.exposure * 1.5) < 1e-9);
-  assert.ok(Math.abs(hot.bloom - def.bloom * 2) < 1e-9);
+  assert.ok(Math.abs(hot.exposure - defExposure * 1.5) < 1e-9);
+  assert.ok(Math.abs(hot.bloom - defBloom * 2) < 1e-9);
   assert.equal(hot.tune.sunShaftMul, 0,
     "hot race sunShaftMul must not reopen garage shafts");
   assert.equal(glareScale({ glareStr: 0.12 }), 1);
@@ -169,7 +172,7 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
     "paint must not be matted to hide a present wash");
   // The bay sky fill is not a sun disc — presentOpts must zero screen shafts
   // (a scale factor left enough energy to wash Ferrari/RBR/AM after orbit).
-  assert.match(cam, /wrapped\.sunShaftMul\s*=\s*0/);
+  assert.match(cam, /_presentTune\.sunShaftMul\s*=\s*0/);
   assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
   const game = read("js/game.js");
   assert.match(game, /po\.exposure = frame\.exposure \* LT\.exposureMul/);

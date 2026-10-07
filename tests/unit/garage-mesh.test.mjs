@@ -473,6 +473,28 @@ test("pit kit stays off the FRONT and REAR sight lines", () => {
     "trackside lite bay keeps its own front jack (pit-complex vertex pin)");
 });
 
+test("garage orbit path reuses lampAim, chase buffer, and boardInfo cache", () => {
+  // Per-frame alloc cuts for title↔garage / orbit (perf(garage)): live() must
+  // not mint a new lampAim array, pulse must not rig.slice(), and boardInfo
+  // must short-circuit on an unchanged stamp so draw()'s early-return rebuild
+  // does not re-run Parts.resolveSetup every frame.
+  const src = read("js/garage/scene.js");
+  assert.match(src, /const lampAim = \[/, "lampAim is a module scratch, not let");
+  assert.match(src, /lampAim\[0\] = lx/, "live() writes lampAim in place");
+  assert.doesNotMatch(src, /lampAim = \[lx/, "live() must not allocate a new lampAim");
+  assert.match(src, /const _chase = \[\]/, "pulse chase buffer is reused");
+  assert.match(src, /const chase = _chase/, "pulse copies into _chase");
+  assert.doesNotMatch(src, /chase = rig\.slice/, "no per-pulse chase = rig.slice");
+  assert.match(src, /_boardInfo && stamp === _boardInfoKey/, "boardInfo is stamped-cached");
+  assert.match(src, /const inside = _inside/, "wall culling flags reuse _inside");
+  const cam = read("js/garage/setup-camera.js");
+  assert.match(cam, /const lightsRig = GarageScene\.live/, "live() once per garage frame");
+  assert.match(cam, /gfx\.drawGlow\(lightsRig,/, "drawGlow reuses the same lightsRig");
+  assert.match(cam, /const eye = _spEye/, "orbit eye vector is a scratch");
+  assert.match(cam, /Object\.setPrototypeOf\(_presentTune/, "presentOpts avoids Object.create");
+  assert.match(cam, /const ctx = _garageCtx/, "garageCtx mutates one object");
+});
+
 test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
   // The Legends row keeps team id "legends" across all twelve legends, and two
   // tribute liveries can share every colour (Schumacher's and Senna's reds):
