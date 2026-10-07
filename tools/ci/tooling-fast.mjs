@@ -115,6 +115,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
+  "tests/unit/blip-voice-pool.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
