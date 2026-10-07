@@ -1880,7 +1880,7 @@ function redFlagRestart() {
     // gravel trap; otT/otE held a move that ended when the flag flew.
     // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
     // strategy and the ERS state legitimately carry through a red flag.
-    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; OvertakeMode.reset(c);
     c.kerbGripSm = 1; c.kerbCueT = 0; c.brakeStab = null; c.axEstSm = 0;   // stationary: no brake-stability or longitudinal-accel history (flatSpot stays: same tyres)
     // A STOP IN FLIGHT IS SCRATCH, not strategy: the grid boxes sit INSIDE the
@@ -1955,7 +1955,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
-    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0; c.flatSpot = 0; c.brakeStab = null; c.axEstSm = 0;   // flatSpot: last race's tyre (car-draw wobble); brakeStab null = brakeBeta's cold seed, as apex.js reset() leaves it
@@ -4608,7 +4608,10 @@ function updateCar(c, dt, ranked) {
   if (c.retired) { c._prevS = c.s; return; }
   // A net-owned rival takes no local motion, finished or not: coasting it here
   // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c._prevS = c.s; return; }
+  // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
+  // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
+  // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4617,8 +4620,13 @@ function updateCar(c, dt, ranked) {
   // Same contract for a networked rival: its owner is integrating it on their
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
-  if (netPlay.owns(c)) { c._prevS = c.s; return; }
-  if (realRace.owns(c)) { c._prevS = c.s; return; }   // a REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js)
+  // ...but its ENGINE is heard here: rpm is never on the wire (poseRemote writes gear and
+  // speed), and RivalAudio / setEngine read c.rpm, so a skipped car droned at makeCars'
+  // IDLE_RPM all race. rpmFor is pure — the owner's own gear at the posed speed.
+  if (netPlay.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
+  // A REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js). Its gear is
+  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead.
+  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -6145,7 +6153,10 @@ function updateCar(c, dt, ranked) {
     // car it was waiting for — unless dig-out has already failed (laneX
     // overwrite makes lateral dig-out useless in the pit), in which case the
     // escalate path still fires onto laneX below.
-    const digEsc = AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street);
+    // Escalation is HELD while dig-out stays on (AiDrive.digOutHeld): a partial
+    // yank that dips stuckT under the line must not re-veto the rescue.
+    c.digEscHeld = AiDrive.digOutHeld(c.digEscHeld, AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street), unstuckActive);
+    const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
     const aiStuck = c.pitState !== "box" && (beachedAt(c) ||
       (c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));
@@ -6174,7 +6185,7 @@ function updateCar(c, dt, ranked) {
         // Pace-scaled restore floor (same shape as coast()); never above vTop().
         c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
       }
-      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
   }
   // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes
@@ -9054,8 +9065,13 @@ if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurf
 lazyBundles.raceAssets();
 // First pointerdown also kicks LAZY_AUDIO so a later SOUND click still has a
 // chance to unlock AudioContext on the same gesture chain (iOS).
+// ...and the first KEY: platform-session's firstGesture (init + startMusic) takes a
+// keydown too, but on the stub — with nothing pulling the bundle, restoreOnEngine's
+// replay never ran and a keyboard-first title stayed silent. Escape is no activation.
 if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", () => { ensureAudio(); }, { once: true, capture: true });
+  const keyKick = (e) => { if (e && e.key === "Escape") return; window.removeEventListener("keydown", keyKick, true); ensureAudio(); };
+  window.addEventListener("keydown", keyKick, true);
 }
 
 // Lobby buttons + the #vs= invite-link handler. Last, so every element it
