@@ -571,9 +571,18 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   const CAP = lampCap(cars.length, mobileTier);
   // scale may be a scalar (uniform dim) or a [r,g,b] vector (time-of-day brightness
   // + warmth: dim & warm at twilight, full & neutral at deep night).
-  const sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
-  const sg = Array.isArray(scale) ? scale[1] : sr;
-  const sb = Array.isArray(scale) ? scale[2] : sr;
+  let sr = Array.isArray(scale) ? scale[0] : (scale == null ? 1 : scale);
+  let sg = Array.isArray(scale) ? scale[1] : sr;
+  let sb = Array.isArray(scale) ? scale[2] : sr;
+  // Always-on subset (Monaco tunnel): game.js passes srcSet with lampLevel
+  // already applied; day stamps keep lampLevel at 0 so masts stay off while
+  // these fixtures still need a floor (alwaysLampFloor from *|day|* stamps).
+  if (srcSet) {
+    const floor = LT.alwaysLampFloor > 0 ? LT.alwaysLampFloor : 0;
+    if (floor > sr) sr = floor;
+    if (floor > sg) sg = floor;
+    if (floor > sb) sb = floor;
+  }
   const count = src.length / 15;
   const out = _lightScaleBuf;
   // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy

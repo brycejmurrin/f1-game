@@ -202,6 +202,7 @@ window.LightPresets = {
     "wetDark": 1.15,
     "tint": -0.15,
     "lampLevel": 0,
+    "alwaysLampFloor": 0.13,
     "floodEmitMul": 0.08
   },
   // Shared day|dry authenticity: clear daylight baseline (crisp sun, blue sky,
@@ -219,6 +220,7 @@ window.LightPresets = {
     "fogTint": -0.04,
     "exposureMul": 1.04,
     "lampLevel": 0,
+    "alwaysLampFloor": 0.13,
     "floodEmitMul": 0.08
   },
   "abudhabi|dawn|dry": {
