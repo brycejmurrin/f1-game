@@ -75,20 +75,6 @@
   #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn { background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start; justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap); }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-secondary .bigbtn { transform: none; font-style: normal; }
-  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
-    align-self: end;
-    position: relative;
-    z-index: 1;
-    isolation: isolate;
-    overflow: hidden;
-    padding: var(--gap);
-    border-radius: var(--r-md);
-    background: var(--scrim-heavy);
-  }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#soundbtn, #disclaimer) {
     background: var(--carbon);
     color: var(--text);
@@ -106,31 +92,16 @@
      layout and the static title already place it, and the buttons own the whole
      right column: centred when they fit, scrolling only when the window is
      shorter than the column. */
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-content: stretch; align-items: start; gap: var(--gap); }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand {
-    grid-column: 1; grid-row: 1; align-self: start; text-align: start; align-items: flex-start;
-  }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #title { font-size: clamp(var(--fs-6), calc(5 * var(--vwz)), calc(var(--fs-6) * 4)); }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { grid-column: 2; grid-row: 1; width: 100%; max-height: 100%; align-self: center; align-content: start; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; min-height: 0; }
-  /* Just above the compact threshold (body --compact-at 600px) the full column
-     is ~605px in a ~576px slot: close the tier gaps and the plate padding a
-     little so the rooms row clears the fold instead of sitting 30px under it. */
-  @media (max-height: 660px) {
-    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { gap: calc(var(--gap) * 0.5); }
-    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) .bigbtn { padding-block: calc(var(--gap) * 0.7); }
-    :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.65); }
-  }
   /* Live wide docks ANIMATE bottom-left. Classic/static stays top-left
      on desktop (title-desktop golden). Compact-wide and tall Classic
      have their own docks; an unscoped wide Classic rule moved the
      chip on 1440 (menu-baseline 6%, CI 37371854254). */
   :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; }
-  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) :is(#menu-primary, #menu-explore) { --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap)); }
   /* INSTALL APP lift lives in css/overlays.css, scoped to tall / compact-wide
      / live-scene wide so desktop Classic (title-desktop golden) is untouched. */
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim)); grid-template-rows: auto minmax(0, 1fr); }
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: stretch; align-content: start; min-height: 0; max-height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) {
+    background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim));
+  }
   /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
      above), but menus.css still places it in grid row 3, an implicit ~235 px
      row on a 390x844 phone, so the button column stopped two-thirds down with
@@ -143,9 +114,6 @@
   /* Same dock on tall Classic: :not(static) hid INSTALL/ANIMATE under
      APEX 26 on a ~500px portrait (survey apex6). */
   :where(body[data-shape="tall"]) #home-motion { top: auto; bottom: var(--safe-b); }
-  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * 0.5); }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) { grid-template-columns: minmax(0, 1fr) min(46%, 400px); }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons { align-self: start; }
   :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); max-width: min(calc(50% - var(--safe-l) - var(--gap)), 22rem); }
   /* #menu-brand / #menu-buttons cap geometry at --ui-compact-brand/scale
      (menus.css, max-width 899 / max-height 699). #home-motion is a SIBLING,
@@ -163,7 +131,5 @@
      phone portrait, 2026-10-02) — the readability remainder never reached the
      rendered scene's buttons. The shared compact size scales; this only trims
      the height. */
-  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons .bigbtn { min-height: var(--tap); padding-block: calc(var(--gap) / 2); }
-  :where(body[data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#disclaimer, #audiostate) { display: none; }
   :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
 }
