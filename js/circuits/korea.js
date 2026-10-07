@@ -57,7 +57,8 @@
       ambientGround: [0.26, 0.26, 0.24],
       fogColor:      [0.64, 0.66, 0.66],
       fogDensity:    0.0022,
-      grass:         [0.26, 0.42, 0.22],
+      grass:         [0.47, 0.49, 0.39],
+      runoff:        [0.40, 0.41, 0.42],
       sunDir:        [0.56, 0.62, 0.40],
     },
 
@@ -72,7 +73,7 @@
     turns: [0.0653, 0.0823, 0.2998, 0.4298, 0.4572, 0.4748, 0.5487, 0.5893, 0.6292, 0.6627, 0.7103, 0.7228, 0.7378, 0.7602, 0.7973, 0.8387, 0.8642, 0.8848],
     // tree "none": the brief's identity is bare salt fill. "broad" asked the
     // generic scatter for a tree line the engine then dropped (131 of them).
-    furniture: { tree: "none", fol: [0.24, 0.40, 0.22], lamp: "post", lc: [0.90, 0.96, 1.0] },
+    furniture: { tree: "none", fol: [0.24, 0.40, 0.22], lamp: "none", lc: [0.90, 0.96, 1.0] },
     kit: { marshal: "kiosk", rail: "wArmco", fence: "panelled", tyre: "stack", board: "monopole", gantry: "truss", camera: "monopole", hoarding: "panel" },
     standSet: ["alu", "steel", "darkSteel"],
     // Colinear sample 40 m before the 682 m chord into Turn 4. Clears the fold
