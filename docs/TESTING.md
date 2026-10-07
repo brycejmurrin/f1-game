@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 500+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 501+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1738,6 +1738,7 @@ what it covers.
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
 | `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. The four COUNTS are `tree` entries in `tests/data/ratchets.json` (`subFloorFontSize`, `rawSpacing`, `rawColor`, `rawColorDistinct`, all at `slack: 0` — exact equality, so a migration lowers them rather than banking headroom); this file keeps the POLICY that says which literals legitimately stay, and the list of sheets that read no spacing token at all and so cannot respond to the density ladder. Breakdown behind a failure: `node tools/check/tree-counts.mjs --offenders` |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
+| `light-presets-knob-range.test.mjs` | every shipped preset value sits inside its knob's `[min, max]` (and every key names a real knob) — out-of-range pins are clamped at runtime in `profiles.js`, so the tuner slider cannot show the shipped value |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
 | `light-store-perchunk-pin.test.mjs` | perChunkLights track pins survive a lower condLayer (`*|<tod>`) via `Math.max(pin, cond)` without reordering layers; cond still raises unpinned tracks; other knobs keep cond-over-track order; Monaco `roadChunkLamps` unchanged |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
