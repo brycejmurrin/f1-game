@@ -1201,6 +1201,7 @@
     "test:lifecycle-unit": {
       "files": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "kind": "node"
