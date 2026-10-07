@@ -543,7 +543,12 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
-  if ((home.active ? home.moving : setupPreviewSpin && !reducedMotion()) && !(arriving && arriving.active)) setupPreviewAz += dt * (home.active ? 0.035 : 0.35);   // slow turntable
+  // Title Home ambient is already gated by home.moving (respects OS / Menu
+  // motion: reduce). The #carsetup turntable is an EXPLICIT inspection control
+  // (SPIN / RESET / openGarage) — gating it on prefers-reduced-motion left the
+  // SPIN chip lit while the bay sat frozen (Playwright pins reduce; so do many
+  // macOS "Reduce motion" users). Decorative bay props still freeze via ctx.ambient.
+  if ((home.active ? home.moving : setupPreviewSpin) && !(arriving && arriving.active)) setupPreviewAz += dt * (home.active ? 0.035 : 0.35);   // slow turntable
   if (!home.active) stepSetupAero(dt);
   // The orbit radius is horizontal, so raising the camera does not walk it away
   // from the car: at el 0 this is the turntable ring, at el 1.2 it is overhead.

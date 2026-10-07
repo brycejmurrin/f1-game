@@ -8629,13 +8629,9 @@ function openGarage(from) {
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
     from === "pit" ? "RETURN TO RACE" : from === "career" ? "RETURN TO CAREER" :
     from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
-  // Fresh camera every visit: a garage that reopened on the last angle someone
-  // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
-  // as remembered. The turntable is the front door; the controls are there for
-  // anyone who wants off it.
-  // ONE reset, shared with #cs-view-reset, so the two doors to "fresh camera"
-  // agree on all five fields.
-  resetSetupCam();
+  // Fresh camera every visit (shared with #cs-view-reset). Claim setupPreviewOn
+  // before vt(openSetup): renderHome then yields so the turntable can run.
+  setupPreviewOn = true; resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
   // the module cannot hold the helper itself. The build runs inside the

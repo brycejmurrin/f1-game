@@ -355,7 +355,9 @@ const UiExperience = (function () {
       s = _sceneScratch;
       s.mode = (varied && varied.mode) || selected.mode;
       s.shot = (varied && varied.shot) || selected.shot;
-      s.motion = (varied && varied.motion) || selected.motion;
+      // Motion is AppearanceStudio's alone — homeVariation._values is mode/shot
+      // only. Never read varied.motion (a stale own-property would freeze ambient).
+      s.motion = selected.motion;
       const motion = s.motion === "ambient" && TitleFx.mode() !== "reduce" && !photoOpen ? "ambient" : "still";
       // Scene ownership only — never viewport size or menu pane (those settle
       // via onHomeViewportChange → gfx.resize / homeViewGen).
@@ -392,17 +394,24 @@ const UiExperience = (function () {
       elapsed += Math.max(0, dt || 0);
       if (painted && ((!photoOpen && motion === "still") || (dt !== 0 && elapsed < 1 / 24))) return true;
       try {
-        if (deps.setupCam.renderHome(elapsed)) {
+        const drew = deps.setupCam.renderHome(elapsed);
+        if (drew) {
           painted = true; overlay.dataset.homeReady = "1";
           const c = $("game"), soft = $("game-soft"); c.style.visibility = ""; if (soft) soft.style.visibility = "";
+          elapsed = 0;
+          return true;
         }
         elapsed = 0;
+        // setupCam session ended out-of-band (openGarage → resetSetupCam during
+        // vt). A stale `home` flag used to make us return true without drawing,
+        // so the game loop never reached renderSetupPreview and the bay froze.
+        if (home && !deps.setupCam.homeState()) { home = false; signature = ""; }
+        return false;
       } catch (e) {
         failure = true; stopHome(); Log.warn("ui", "Home garage unavailable; static menu retained", e);
         overlay.dataset.homeScene = "static";
         return false;
       }
-      return true;
     }
     let previewGeneration = 0, previewBusy = false, previewMode = "", previewQueued = null;
     async function previewScene(preview) {

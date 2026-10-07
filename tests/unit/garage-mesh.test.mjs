@@ -47,6 +47,18 @@ const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
 const LIV = { c1: [0.95, 0.45, 0.05], c2: [0.05, 0.05, 0.06], accent: [0.1, 0.7, 0.9] };
 
+test("setup turntable spins even when reduced motion is on; Home ambient stays gated", () => {
+  const cam = read("js/garage/setup-camera.js");
+  assert.match(cam,
+    /if \(\(home\.active \? home\.moving : setupPreviewSpin\) && !\(arriving && arriving\.active\)\) setupPreviewAz \+= dt/,
+    "#carsetup SPIN is an explicit inspection control — OS reduce must not freeze it");
+  assert.doesNotMatch(cam,
+    /setupPreviewSpin && !reducedMotion\(\)/,
+    "the turntable increment must not AND reducedMotion (Playwright + macOS Reduce motion left SPIN lit)");
+  assert.match(cam, /home\.active \? home\.moving/,
+    "title Home still uses home.moving (ambient && !reduced)");
+});
+
 test("garage ambient clock freezes fans and light time without a resume jump", () => {
   const { ctx } = harness();
   const clock = vm.runInContext("GarageExperience.clock(1000)", ctx);

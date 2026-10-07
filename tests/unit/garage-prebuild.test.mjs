@@ -307,6 +307,10 @@ test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePre
   assert.match(game, /const renderSetupPreview = garagePre\.timed\(setupCam\.renderSetupPreview\);/, "every garage frame render() draws is measured");
   assert.match(game, /function openGarage\(from\) \{\n  garagePre\.markOpen\(from\);/, "the clock starts at the tap");
   assert.match(game, /garagePre\.start\(\);/, "the title poll is armed at boot");
+  const openAt = game.indexOf("function openGarage(from)");
+  const open = game.slice(openAt, game.indexOf("$(\"mb-garage\").onclick", openAt));
+  assert.match(open, /setupPreviewOn = true; resetSetupCam\(\);[\s\S]*else vt\(openSetup\);/,
+    "openGarage claims the canvas before vt(openSetup) so Home cannot freeze the turntable");
 });
 
 // ── the real room: GarageScene.prepare() is the rebuild draw() runs first ──
