@@ -203,9 +203,16 @@ const NetLobby = (function () {
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
-        if (!sessions.size) {
+        // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
+        // sessions map to NetPlay and clears it, but leaves transports up for
+        // the race. Gating on !sessions.size made every mid-race drop look like
+        // an empty room ("Connection closed." / "Your friend left the room.",
+        // _peers wiped) even when another guest's transport was still live —
+        // the multi-peer branch below was unreachable once the race started.
+        // Room-phase behaviour is unchanged: sessions and transports agree.
+        if (!transports.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
+          // In the race (finishStart emptied sessions) the rival is now AI; in the ROOM the room is simply over.
           const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
           // Relayed profiles ("g2", "g3"…) are keyed by the host's ids, not
           // this transport's, so the delete above missed them. Clear them in
@@ -233,6 +240,8 @@ const NetLobby = (function () {
           // only the host can tell them one is gone: their roster kept the
           // leaver forever — the quali gate waited on a lap that never came,
           // and the start seated a net-owned car no packet would ever move.
+          // Mid-race NetPlay already owns race-phase LEFT (wire id); this
+          // lobby-phase LEFT is for the waiting room / friend quali roster.
           if (role === "host") {
             for (const sess of sessions.values()) {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
@@ -1171,7 +1180,7 @@ const NetLobby = (function () {
     // SEAL THE ROOM before the race owns the connections. close() only clears the
     // lobby's own timers, so the room-code subscription reopened by onConnected()
     // (codeHost({quiet:true}) — a fresh pending transport plus live relay sockets)
-    // survived into the race for the whole 120 s JOIN_TIMEOUT. A second guest
+    // survived into the race for the whole HOST_TIMEOUT_MS (~120 s). A second guest
     // arriving on that still-live code drove onJoiner -> onConnected mid-race:
     // the lobby's 25 ms pump restarted alongside NetPlay, a session NetPlay never
     // adopts was built, and openRoom()'s setNetRoom(true) sent later garage /
@@ -1522,8 +1531,8 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
-            // onConnected() reopens the code for the next arrival; its expiry two minutes
-            // later is not a failure of a room that is already full.
+            // onConnected() reopens the code for the next arrival; its expiry
+            // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
             if (r.error === "expired" && sessions.size) {
               say("The room code has expired — INVITE ANOTHER makes a new one.");
               return;
@@ -1679,6 +1688,13 @@ const NetLobby = (function () {
       // `transport !== pending` is also SUCCESS now: onConnected() may have adopted it.
       if (!operationCurrent(gen)) return cancelledResult();
       if (transport !== pending && !transports.has(pid)) return cancelledResult();
+      // Belt-and-braces with nostr clearExpire(): if the 12 s guest deadline
+      // still races the answer re-post, an adopted transport means we joined —
+      // do not paint "Nobody answered…" over a live connection.
+      if (!done.ok && done.error === "expired" && transports.has(pid)) {
+        watch();
+        return { ok: true, code };
+      }
       if (!done.ok) {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);

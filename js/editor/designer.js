@@ -30,18 +30,18 @@ const TrackDesigner = (function () {
   const HOWTO = Object.freeze({
     STEPS: Object.freeze([
       { n: 1, title: "Start", text: "Pick a MODE (DRAW / EDIT / ELEVATION / SCENERY / TEST), then RANDOMISE, TRACK OF THE DAY, START FROM…, or DRAW one closed loop." },
-      { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); tap the road to add one, double-tap or DELETE POINT to remove. UNDO / REDO sit on the canvas toolbar (Ctrl/⌘Z · Shift+Ctrl/⌘Z)." },
-      { n: 3, title: "Corners", text: "Still in EDIT, choose CORNER / HAIRPIN / CHICANE / S-BEND, set radius and angle, then tap where it should begin — UNDO takes a stamp back." },
-      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select then drag vertically (or POINT m / Flat / Rolling / Hilly); bank a turn (BANK °), pick KERB flat/sausage/rumble, and keep BERMS on banked corners." },
+      { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); Shift-tap or SELECT END for a SPAN so the group moves together. Tap the road to add one; double-tap or DELETE POINT to remove — UNDO / REDO sit on the canvas toolbar." },
+      { n: 3, title: "Corners", text: "Still in EDIT, choose STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND, set the shape, then tap where it should begin — or REPLACE THE SELECTED SPAN when a group is selected. UNDO takes a stamp back." },
+      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select then drag vertically (or POINT m / Flat / Rolling / Hilly); a SPAN offsets every grip in the group together. Bank a turn (BANK °), pick KERB flat/sausage/rumble, and keep BERMS on banked corners." },
       { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD; optionally place a few capped props (stand, gantry, trees, water, flood, billboard), then name the circuit." },
       { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
     GESTURES: Object.freeze([
-      { input: "Touch", text: "Tap a point to select · drag a selected point (or hold briefly then drag) to move it · tap the road to add one · double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap to select then drag vertically (≥44 px targets)." },
-      { input: "Mouse", text: "Click a point to select · drag past a short threshold to move it · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point 1 m (10 m with Shift) · Delete removes it · Enter stamps the active shape · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height." },
-      { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point selected, the d-pad nudges it on the canvas; B lets go of the point, and B again closes the designer." },
+      { input: "Touch", text: "Tap a point to select · SELECT END then tap a second for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
+      { input: "Mouse", text: "Click a point to select · drag past a short threshold to move it (a SPAN moves as a group) · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
+      { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
+      { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point or SPAN selected, the d-pad nudges it on the canvas; B lets go of the selection, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
   });
@@ -51,6 +51,8 @@ const TrackDesigner = (function () {
   let cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
+  // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
+  let spanArm = false;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
   let propKind = "stand";
@@ -76,6 +78,7 @@ const TrackDesigner = (function () {
     return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
   }
   const KERB_STYLES = (typeof CustomTracks !== "undefined" && CustomTracks.KERB_STYLES) || ["flat", "sausage", "rumble"];
+  const hasSpan = () => !!design && sel >= 0 && span >= 0 && sel !== span && sel < design.pts.length && span < design.pts.length;
   function kerbOf(d) {
     const v = d && d.kerbStyle;
     return KERB_STYLES.includes(v) ? v : "flat";
@@ -106,13 +109,13 @@ const TrackDesigner = (function () {
   function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
-    if (mode === "elevation") return "ELEVATION: tap a grip to select · drag vertically · Flat / Rolling / Hilly · bank a turn (BANK °) · KERB flat/sausage/rumble · BERMS on banked corners";
+    if (mode === "elevation") return "ELEVATION: tap a grip to select · drag vertically · shift-tap (or SELECT END) a second for a SPAN · Flat / Rolling / Hilly · bank a turn (BANK °) · KERB / BERMS";
     if (mode === "scenery") return "SCENERY: theme + TIME / TREES / CROWD · pick a PROP then PLACE AT POINT (or REMOVE LAST)";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
-    return kind ? kind.label + ": tap a point to stamp it after that point (shift-tap a second point to replace the span between them)"
-      : "SELECT: tap a point to select · drag to move · tap the road to add one · double-tap to delete · empty-space drag pans";
+    return kind ? kind.label + ": tap a point to stamp it after that point (or REPLACE THE SELECTED SPAN when a group is selected)"
+      : "SELECT: tap a point · SELECT END / shift-tap a second for a SPAN · drag or arrows move the group · tap the road to add · double-tap to delete";
   }
   /** "CORNER R 45 m × 90° LEFT" — what STAMP will lay down with the stepper values. */
   function stampExample() {
@@ -231,12 +234,14 @@ const TrackDesigner = (function () {
   function pushUndo(snap) { undo.push(snap); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
   const REMAP = /^(insert|delete|stamp:)/;
   /** Replace the design (geometry edits go through here so UNDO sees them). A
-   *  run of arrow nudges on one point inside NUDGE_MS of each other is ONE entry. */
+   *  run of arrow nudges on one point (or one span) inside NUDGE_MS is ONE entry. */
   function commit(next, kind) {
     const now = Date.now();
-    if (kind === "nudge" && nudge && nudge.sel === sel && now - nudge.t < NUDGE_MS && undo.length) redo.length = 0;
+    const nudgeKind = kind === "nudge" || kind === "nudge-span";
+    const sameNudge = nudge && nudge.sel === sel && nudge.span === span && nudge.kind === kind && now - nudge.t < NUDGE_MS && undo.length;
+    if (nudgeKind && sameNudge) redo.length = 0;
     else pushUndo(snapshot());
-    nudge = kind === "nudge" ? { sel, t: now } : null;
+    nudge = nudgeKind ? { sel, span, kind, t: now } : null;
     next.pts = lattice(next.pts);
     if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
     ensureHeights(next);
@@ -408,11 +413,22 @@ const TrackDesigner = (function () {
     const N = design.pts.length;
     const d = dir < 0 ? -1 : 1;
     sel = sel < 0 ? (d > 0 ? 0 : N - 1) : (sel + d + N) % N;
-    span = -1;
+    span = -1; spanArm = false;
     if (cv) cv.setSelection(sel, span);
-    if (prof && mode === "elevation") prof.select(sel);
+    if (prof && mode === "elevation") {
+      if (prof.setSelection) prof.setSelection(sel, span);
+      else prof.select(sel);
+    }
     refreshControls();
     return true;
+  }
+  /** Arm the next tap as the span end (touch-friendly group select). */
+  function armSpanEnd() {
+    if (!design || sel < 0) { message("Select a start point first, then SELECT END", true); return false; }
+    spanArm = !spanArm;
+    if (spanArm) message("Tap the end point for the SPAN (group move · elevate · replace)");
+    refreshControls();
+    return spanArm;
   }
   function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = ensureHeights(JSON.parse(undo.pop())); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
   function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = ensureHeights(JSON.parse(redo.pop())); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
@@ -611,9 +627,9 @@ const TrackDesigner = (function () {
     const stage = el("div", "td-stage");
     canvas = el("canvas");
     canvas.tabIndex = 0;
-    canvas.setAttribute("aria-label", "Circuit design. Tap a point to select it, then drag to move. Tap the road to add one; double-tap a point to delete it. Arrow keys nudge the selected point.");
+    canvas.setAttribute("aria-label", "Circuit design. Tap a point to select it, then drag to move. Shift-tap or SELECT END picks a SPAN so the group moves together. Tap the road to add one; double-tap a point to delete it. Arrow keys nudge the selection.");
     ui.stats = el("div", "td-stats");
-    ui.hint = el("div", "td-hint", "Tap to select · drag to move · tap the road to add one · shift-tap a second point for a span");
+    ui.hint = el("div", "td-hint", "Tap to select · SELECT END / shift-tap a SPAN · drag moves the group · tap the road to add one");
     // The canvas's press-and-hold row (hooks.onContext): absolute over the
     // stage at the press, acting on one point; any new press on the canvas hides it.
     ui.ctx = el("div", "td-chips td-ctx"); ui.ctx.hidden = true; ui.ctx.setAttribute("role", "group");
@@ -670,11 +686,25 @@ const TrackDesigner = (function () {
     cv = DesignerCanvas.create(canvas, {
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
-      onSelect: (i) => { sel = Number.isInteger(i) ? i : -1; if (sel < 0) span = -1; refreshControls(); },
+      onSelect: (i, j) => {
+        sel = Number.isInteger(i) ? i : -1;
+        span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;
+        if (sel < 0) { span = -1; spanArm = false; }
+        refreshControls();
+      },
       onPick: (i, ev) => {
-        if (TrackStamps.KINDS[tool]) { if (ev.shiftKey && sel >= 0 && sel !== i) applyStamp(sel, i); else applyStamp(i, i); return; }
-        if (ev.shiftKey && sel >= 0 && sel !== i) span = i; else { sel = i; span = -1; }
-        cv.setSelection(sel, span); refreshControls();
+        const extend = !!(ev && (ev.shiftKey || spanArm));
+        if (TrackStamps.KINDS[tool]) {
+          if (extend && sel >= 0 && sel !== i) applyStamp(sel, i);
+          else applyStamp(i, i);
+          spanArm = false;
+          return;
+        }
+        if (extend && sel >= 0 && sel !== i) { span = i; spanArm = false; }
+        else { sel = i; span = -1; }
+        cv.setSelection(sel, span);
+        if (prof && mode === "elevation" && prof.setSelection) prof.setSelection(sel, span);
+        refreshControls();
       },
       onDelete: (i) => deletePoint(i),
       onDraw: (path) => freehand(path),
@@ -747,7 +777,7 @@ const TrackDesigner = (function () {
   /** The canvas's press-and-hold: DELETE · START HERE · CLOSE for point i, anchored at the press. */
   function showCtx(i, at) {
     if (!ui.ctx || !design || !(i >= 0 && i < design.pts.length)) return;
-    ctxAt = i; sel = i; span = -1;
+    ctxAt = i; sel = i; span = -1; spanArm = false;
     if (cv) cv.setSelection(sel, span);
     refreshControls();
     const x = Math.max(0, +(at && at.x) || 0), y = Math.max(0, +(at && at.y) || 0);
@@ -906,9 +936,12 @@ const TrackDesigner = (function () {
     ui.del = btn("DELETE POINT", "sel-chip", () => deletePoint(sel));
     ui.prevPt = btn("PREV POINT", "sel-chip", () => cyclePoint(-1));
     ui.nextPt = btn("NEXT POINT", "sel-chip", () => cyclePoint(1));
+    ui.spanEnd = btn("SELECT END", "sel-chip", () => armSpanEnd());
     ui.prevPt.setAttribute("aria-label", "Select previous control point");
     ui.nextPt.setAttribute("aria-label", "Select next control point");
-    actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt);
+    ui.spanEnd.setAttribute("aria-label", "Next tap sets the end of a selected span (group move, elevate, or replace)");
+    ui.spanEnd.setAttribute("aria-pressed", "false");
+    actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt, ui.spanEnd);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
     ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
     actions.appendChild(ui.testHere);
@@ -922,7 +955,7 @@ const TrackDesigner = (function () {
       b.dataset.elev = name;
       ui.elevPresets.appendChild(b);
     }
-    ui.elevHint = el("div", "td-hint", "Tap a grip to select (height stays) · drag vertically to edit · POINT m nudges · Flat / Rolling / Hilly presets");
+    ui.elevHint = el("div", "td-hint", "Tap a grip to select (height stays) · drag vertically · SELECT END / shift-tap a SPAN to raise a group · POINT m · Flat / Rolling / Hilly");
     ui.elevNode = stepper("POINT m", () => {
       if (!design || sel < 0 || !design.heights) return 0;
       return design.heights[sel] || 0;
@@ -1121,8 +1154,21 @@ const TrackDesigner = (function () {
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
     if (ui.prevPt) ui.prevPt.disabled = !(design && design.pts && design.pts.length);
     if (ui.nextPt) ui.nextPt.disabled = !(design && design.pts && design.pts.length);
+    if (ui.spanEnd) {
+      ui.spanEnd.disabled = !(sel >= 0);
+      ui.spanEnd.classList.toggle("active", !!spanArm);
+      ui.spanEnd.setAttribute("aria-pressed", spanArm ? "true" : "false");
+      ui.spanEnd.textContent = hasSpan() ? ("SPAN " + (sel + 1) + "–" + (span + 1)) : (spanArm ? "TAP END…" : "SELECT END");
+    }
     ui.hint.textContent = ui.toolHint.textContent = toolHint();
-    if (ui.elevNode) { ui.elevNode.hidden = !(showElev && sel >= 0); if (!ui.elevNode.hidden) ui.elevNode._refresh(); }
+    if (ui.elevNode) {
+      ui.elevNode.hidden = !(showElev && sel >= 0);
+      if (!ui.elevNode.hidden) {
+        // SPAN: label shows the group so POINT m reads as a group offset.
+        if (ui.elevNode._label) ui.elevNode._label.textContent = hasSpan() ? ("SPAN m · " + (sel + 1) + "–" + (span + 1)) : "POINT m";
+        ui.elevNode._refresh();
+      }
+    }
     if (ui.kerbChips) for (const b of ui.kerbChips.children) {
       const on = b.dataset.kerb === kerbOf(design);
       b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1311,7 +1357,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, pending: !!previewT, propKind,
+      open: openFlag, tool, mode, sel, span, spanArm: !!spanArm, pending: !!previewT, propKind,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1505,7 +1551,6 @@ const TrackDesigner = (function () {
   // SPAN WIDTH: the span sel → span in driving order (REPLACE's span), as
   // control-polygon arc fractions — the frame remapZones keeps and toRaw maps
   // to the engine's index fractions (CustomTracks.arcToIndexFrac).
-  const hasSpan = () => !!design && sel >= 0 && span >= 0 && sel !== span && sel < design.pts.length && span < design.pts.length;
   function spanFracs() {
     const c = cumArc(design.pts), L = c[design.pts.length];
     return L > 0 ? [c[sel] / L, c[span] / L] : null;
@@ -1613,30 +1658,76 @@ const TrackDesigner = (function () {
     // Under the main canvas, above stats — always mounted (CSS keeps it on phone).
     stage.insertBefore(ui.profile, ui.stats);
     prof = DesignerProfile.create(ui.profile, {
-      onChange: (i, h, live) => { if (!live) setNodeHeight(i, h); },
-      onSelect: (i) => {
-        if (i >= 0) { sel = i; span = -1; if (cv) cv.setSelection(sel, span); }
+      onChange: (i, h, live, all) => {
+        if (live) return;
+        if (Array.isArray(all)) setHeights(all, i);
+        else setNodeHeight(i, h);
+      },
+      onSelect: (i, j) => {
+        if (i >= 0) {
+          sel = i;
+          span = (Number.isInteger(j) && j !== i) ? j : -1;
+          if (cv) cv.setSelection(sel, span);
+        } else {
+          sel = -1; span = -1;
+          if (cv) cv.setSelection(sel, span);
+        }
         refreshControls();
       },
     });
   }
+  /** Per-node height lattice (same as ElevPresets.clampH / the strip). */
+  function elevH(h) {
+    return typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4;
+  }
+  /** Replace the whole heights[] array (group elev from the strip). Keeps sel/span. */
+  function setHeights(list, anchor) {
+    if (!design || !Array.isArray(list)) return false;
+    ensureHeights(design);
+    const next = design.pts.map((_, k) => elevH(k < list.length ? list[k] : 0));
+    let same = next.length === design.heights.length;
+    if (same) for (let k = 0; k < next.length; k++) if (next[k] !== design.heights[k]) { same = false; break; }
+    if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length) sel = anchor;
+    if (same) {
+      if (cv) cv.setSelection(sel, span);
+      if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(sel); }
+      refreshControls();
+      return false;
+    }
+    commit(Object.assign({}, design, { heights: next, elevations: [] }), hasSpan() ? "elev:span" : "elev:node");
+    if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(sel); }
+    return true;
+  }
   function setNodeHeight(i, h) {
     if (!design || !(i >= 0 && i < design.pts.length)) return false;
     ensureHeights(design);
+    const v = elevH(h);
+    const keepSpan = hasSpan() && typeof TrackShape !== "undefined" && TrackShape.inSpan(i, sel, span, design.pts.length);
+    // POINT m / single-node edit: when a SPAN is selected and the anchor is in
+    // it, offset every grip in the group by the same delta (relative hills stay).
+    if (keepSpan) {
+      const dh = v - elevH(design.heights[i] || 0);
+      if (dh === 0) { refreshControls(); return false; }
+      const group = TrackShape.spanIndices(sel, span, design.pts.length);
+      const next = design.heights.slice();
+      for (const j of group) next[j] = elevH((next[j] || 0) + dh);
+      commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:span");
+      if (prof && prof.setSelection) prof.setSelection(sel, span);
+      return true;
+    }
     const next = design.heights.slice();
-    const v = typeof ElevPresets !== "undefined" ? ElevPresets.clampH(h) : Math.round((+h || 0) * 4) / 4;
     // Keep the screen selection on this node so POINT m / strip stay in sync.
-    sel = i; span = -1;
+    sel = i; span = -1; spanArm = false;
     if (next[i] === v) {
       if (cv) cv.setSelection(sel, span);
-      if (prof) prof.select(i);
+      if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(i); }
       refreshControls();
       return false;
     }
     next[i] = v;
     // Clear legacy cosine hills so they do not stack on node heights.
     commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:node");
-    if (prof) prof.select(i);
+    if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(i); }
     return true;
   }
   function applyElevPreset(style) {
@@ -1656,7 +1747,10 @@ const TrackDesigner = (function () {
     let at = null;
     if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }
     prof.setCursor(at);
-    if (sel >= 0 && mode === "elevation") prof.select(sel);
+    if (sel >= 0 && mode === "elevation") {
+      if (prof.setSelection) prof.setSelection(sel, span);
+      else prof.select(sel);
+    }
   }
   function renderProfile() {
     if (!prof) return;
@@ -2002,7 +2096,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, undo: doUndo, redo: doRedo, setTheme, setLook, setPropKind, placeProp, removeProp, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setPropKind, placeProp, removeProp, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };

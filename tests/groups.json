@@ -387,6 +387,7 @@
     "tests/unit/import-models-workflow.test.mjs",
     "tests/unit/import-models.test.mjs",
     "tests/unit/incident-gate.test.mjs",
+    "tests/unit/incident-rpm.test.mjs",
     "tests/unit/input-ghost.test.mjs",
     "tests/unit/key-binds.test.mjs",
     "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -677,6 +678,7 @@
     "// blur/reset belongs in the edit loop rather than in a browser group.",
     "tests/unit/throttle-latch.test.mjs",
     "tests/unit/title-art.test.mjs",
+    "tests/unit/title-home-scene-prepaint.test.mjs",
     "tests/unit/title-menu-even.test.mjs",
     "tests/unit/tlx-chunked-lifecycle.test.mjs",
     "// TLX's instanced cull reuses its resident pack by surviving CELL SET",
@@ -753,6 +755,9 @@
     "// the axle shares average to 1. Pure numbers in a VM, ~0.25 s.",
     "tests/unit/tyre-model.test.mjs",
     "tests/unit/ui-experience.test.mjs",
+    "// ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to",
+    "// Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.",
+    "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
     "tests/unit/ui-improve-pass.test.mjs",
     "tests/unit/ui-journey-career.test.mjs",
     "tests/unit/ui-journey-race.test.mjs",
@@ -784,7 +789,11 @@
     "tests/unit/xr-phase0.test.mjs",
     "// ...and XRPlan / XROpts (task 20): pure path selection table + bootPick",
     "// never writes apex26.gfxBackend. ~0.1 s.",
-    "tests/unit/xr-plan.test.mjs"
+    "tests/unit/xr-plan.test.mjs",
+    "// Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer",
+    "// overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off",
+    "// unchanged. createGame once, ~2.5 s.",
+    "tests/unit/yaw-damp-speed.test.mjs"
   ],
   "groups": {
     "test": {
@@ -814,6 +823,7 @@
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/engine-revs-replay-vm.test.mjs",
         "tests/unit/finish-coast-rev-vm.test.mjs",
+        "tests/unit/incident-rpm.test.mjs",
         "tests/unit/keyboard-first-audio-vm.test.mjs",
         "tests/unit/lazy-audio-firstbind-vm.test.mjs",
         "tests/unit/net-audio-revs-vm.test.mjs",

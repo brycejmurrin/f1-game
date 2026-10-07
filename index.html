@@ -520,6 +520,25 @@
         de.dataset.titleLayout = "on";
       }
     } catch (e) { /* TitleLayout answers at eval */ }
+    // Home scene: apex26.homeScene — first answer only (js/ui/experience.js
+    // stamp() + AppearanceStudio.scene() + homeVariation.peek for "auto").
+    // html[data-home-scene] lets blocking css/menus.css pick the live grid
+    // before deferred experience.css and before #overlay gets the same stamp.
+    try {
+      var hsRaw = null;
+      try { hsRaw = JSON.parse(localStorage.getItem("apex26.homeScene")); } catch (e4) { /* unset */ }
+      var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
+      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
+      if (hsMode === "auto") {
+        // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
+        // only once renderHome calls enter(), after the first paint).
+        var envs = ["garage", "track", "night", "pitlane", "studio"];
+        hsMode = envs[0];
+      }
+      document.documentElement.setAttribute("data-home-scene", hsMode);
+      if (hsMode === "static") document.documentElement.removeAttribute("data-home-live");
+      else document.documentElement.setAttribute("data-home-live", "1");
+    } catch (e) { /* Experience stamp() answers at eval */ }
   })();
 </script>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
