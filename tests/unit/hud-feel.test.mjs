@@ -320,14 +320,15 @@ test("the race gap readout is smoothed: braking halves the divisor, the tenths d
   G.ranked = [rival, player]; player.rank = 2; player.speed = 80; G.timeTrial = false;
   tick();
   const read = () => parseFloat((els.gapA.textContent || "").replace(/[^0-9.]/g, ""));
-  assert.equal(read(), 1.3, "100 m at 80 m/s reads 1.3 s on the first tick (no history)");
+  // Standard profile: two decimals under ~10 s (Overtake unlock ~1.0 s).
+  assert.equal(read(), 1.25, "100 m at 80 m/s reads 1.25 s on the first tick (no history)");
   player.speed = 30; tick();
-  assert.ok(read() < 2.2, `one braking tick must not jump to 3.3 s — read ${read()}`);
+  assert.ok(read() < 2.2, `one braking tick must not jump to 3.33 s — read ${read()}`);
   for (let i = 0; i < 40; i++) tick();
-  assert.equal(read(), 3.3, "…but converges to the true 3.3 s within a few seconds");
+  assert.equal(read(), 3.33, "…but converges to the true 3.33 s within a few seconds");
   const other = { code: "LEC", prog: player.prog + 100, speed: 30, rank: 1 };
   G.ranked = [other, player]; tick();
-  assert.equal(read(), 3.3, "a new rival starts from its own raw gap, not the old rival's history");
+  assert.equal(read(), 3.33, "a new rival starts from its own raw gap, not the old rival's history");
 });
 
 test("the gap widget's DROP rule follows the viewport in a time trial as well as a race", () => {

@@ -412,6 +412,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  "tests/unit/hud-gap-decimals.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
