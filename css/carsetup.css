@@ -468,6 +468,14 @@
    is nothing left to be scoped away from.) */
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
+/* UI Fit (layout-audit ios-iphone-landscape-safari@100): SAVE / LOAD / RESET
+   GARAGE FILE are plain <button>s in #cs-garage-file (no .sel-edit), so the
+   components.css tap / chip floors never reach them — painted h=46 against
+   tapFloor 52 (3× tapSoft). Floor at --tap-paint in this sheet only. */
+#cs-garage-file > button {
+  min-height: var(--tap-paint);
+  min-block-size: var(--tap-paint);
+}
 /* The garage team card is the only .team-card in a ~260px option pane; the
    select-screen ellipsis ("MCL · Mercedes en…") hides the engine. Wrap the
    name/sub spans (not a second .tm-name/.tm-sub definition — that coupling
