@@ -62,6 +62,12 @@ const MULTI_GLOBAL = {
     "GameAudioRadioFx", "GameAudioSignal", "GameAudioSoundtrack", "GameAudioToneModel",
     "RadioVoice", "RecordedAnnouncer", "RivalAudio", "VoicePack",
   ],
+  // Title-boot race-session stub; ensureRaceSession() reinjects via `var`.
+  "js/race/session-stub.js": [
+    "Damage", "Duel", "FlyingStart", "MarshalPanels", "PitLane", "RaceEngineer",
+    "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
+    "Spotter", "StartLights",
+  ],
 };
 
 // Globals deliberately written by MANY files (accumulator idiom:
@@ -76,6 +82,10 @@ const SHARED_GLOBALS = {
   GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
   GameAudioToneModel: 2, CarSfx: 2, RivalAudio: 2, VoicePack: 2,
   RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
+  // LAZY_RACE_SESSION reinjection: session-stub.js then the real module (cap 2).
+  Damage: 2, Duel: 2, FlyingStart: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
+  RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
+  Spotter: 2, StartLights: 2,
 };
 
 // Accumulator globals that are PRODUCT DATA designed to grow — no writer-count
@@ -126,6 +136,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts
+  "js/workers/bitmap-decode-client.js": ["__APEX_BUILD"], // stamps the bitmap decode Worker's URL like build-client
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
   "js/render/three/tlx.js": ["__apexReportError", "XRWebGLLayer"], // shell error card; WebXR immersive layer (browser API)
   "js/render/glx/glx.js": ["__apexReportError"], // shell error card: the third visible context loss says so, like TLX

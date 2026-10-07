@@ -1,5 +1,5 @@
 // The track build Worker (js/track/build-worker.js + js/track/build-client.js),
-// PROTOTYPE behind apex26.buildWorker. Its promise is the stepped build's:
+// behind apex26.buildWorker (default ON when multi-core). Its promise is the stepped build's:
 // NOTHING changes. The worker runs the unchanged Tracks.build against a
 // recording gfx, its message crosses a structured clone (what postMessage
 // does), and TrackBuildClient.replay issues the recorded uploads against the
@@ -102,6 +102,24 @@ for (const id of ["monza", "vegas"]) {
   });
 }
 
+test("replay stamps _keepPositions when the page asked for trackGeometry", async () => {
+  const def = Tracks.LIST.find((d) => d.id === "monza");
+  worker.posted.length = 0;
+  await worker.send({ type: "build", seq: 91, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  const msg = worker.posted[0];
+  assert.equal(msg.type, "built", msg.message);
+  // Foundation specs call __apex.trackGeometry(true) before race; the worker's
+  // own Tracks copy never sees that flag — replay must stamp it.
+  assert.equal(typeof main.Tracks.keepGeometry, "function");
+  assert.equal(main.Tracks.setKeepGeometry(true), true);
+  const b = recorder();
+  const tB = await main.TrackBuildClient.replay(msg, def, b.gfx);
+  assert.ok(tB.propsGeo && tB.propsGeo.pos && tB.propsGeo.pos.length > 0,
+    "props.pos survives createChunkedMesh when keepGeometry is on");
+  assert.equal(tB.propsGeo._keepFullGeometry, true);
+  main.Tracks.setKeepGeometry(false);
+});
+
 test("a ribbon the backend did not chunk is re-seated as tracks.js does it", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;
@@ -129,8 +147,13 @@ test("a worker error answers an error message, never a throw", async () => {
 test("BUILD IN BACKGROUND's write flips exactly what enabled() (and loadTrackStepped) reads", () => {
   const mem = new Map();
   main.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
+  main.Worker = main.Worker || class {};
+  main.navigator = { hardwareConcurrency: 4 };
   const C = main.TrackBuildClient;
-  assert.equal(C.enabled(), false, "unset reads OFF");
+  assert.equal(C.enabled(), true, "unset reads ON when Worker + multi-core");
+  main.navigator = { hardwareConcurrency: 1 };
+  assert.equal(C.enabled(), false, "unset reads OFF on a single logical core");
+  main.navigator = { hardwareConcurrency: 4 };
   C.set(false); assert.equal(mem.get("apex26.buildWorker"), "0"); assert.equal(C.enabled(), false);
   mem.set("apex26.buildWorker", "1"); assert.equal(C.enabled(), true, "\"1\" is on");
   mem.set("apex26.buildWorker", "0"); assert.equal(C.enabled(), false);

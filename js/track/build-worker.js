@@ -1,6 +1,6 @@
-/* Apex 26 — the track build in a Worker. PROTOTYPE: apex26.buildWorker = "1",
-   default OFF, until a real-hardware A/B (gpu-census, docs/notes/
-   MULTITHREADING-PLAN-2026-09-16.md §7) says it pays on a phone.
+/* Apex 26 — the track build in a Worker. Ships ON by default when the page
+   reports a spare core (apex26.buildWorker "1"/"0" forces on/off); see
+   TrackBuildClient.enabled and MULTITHREADING-PLAN-2026-09-16.md.
 
    A classic worker, not a module: it importScripts the SAME files the page
    runs (ApexRoster.TRACK_VM, the tools/manifest.cjs TRACK_VM list the Node VM

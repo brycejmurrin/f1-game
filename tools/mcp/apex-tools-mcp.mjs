@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
-import { createExtras, JOB_KINDS, processTree, killTreeAndWait } from "./apex-extras.mjs";
+import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets,
@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.12.0";
+const SERVER_VERSION = "1.13.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -427,23 +427,23 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot track survey: ≤4 shots sync (~1–2 min); ≥5 shots, tracks:[…], or async:true → apex_job_start shot_survey (jobId at once; poll apex_job_status). One Chromium — not parallel. Presets scenery/lap/dual/inspect. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader, progress/findings JSON. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
-        track: { type: "string", description: "Circuit id (required unless tracks)." },
+        track: { type: "string", description: "Circuit id (or use tracks[])." },
         tracks: {
           type: "array",
           items: { type: "string" },
           minItems: 1,
-          maxItems: 16,
-          description: "Queue circuits sequentially under one lock (always async/job).",
+          maxItems: 12,
+          description: "Queue several circuits sequentially (one lock). Implies async job by default.",
         },
         preset: {
           type: "string",
-          enum: ["scenery", "lap", "dual", "inspect", "custom"],
-          description: "scenery = 12 orbit cells (default); dual/inspect use two cams.",
+          enum: ["quick", "dual_lite", "night_pass", "scenery", "full", "lap", "dual", "inspect", "custom"],
+          description: "quick=4 orbit; dual_lite=4×2; night_pass=6 night orbit; scenery/full=12; dual/inspect=16.",
         },
         label: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$", description: "Shot name prefix (default survey)." },
         count: { type: "integer", minimum: 1, maximum: 32, description: "Evenly spaced fracs when fracs omitted." },
@@ -481,10 +481,11 @@ const CATALOG = [
         sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
         panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
-        async: { type: "boolean", description: "Force job route (default when >4 shots or multi-track)." },
-        sync: { type: "boolean", description: "Force sync MCP call (host may timeout past ~2 min)." },
+        resume: { type: "boolean", description: "Skip cells whose PNG already exists under out/." },
+        async: { type: "boolean", description: "true=jobId via shot_survey; false=sync; default=job when estimate≥60s or multi-track." },
+        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack (default llvmpipe when Mesa dri present)." },
         closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
-        keepSession: { type: "boolean", description: "When true, leave session open (sync path)." },
+        keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
         image: { type: "boolean", description: "Attach panel JPEG thumbnail (default true; sync path)." },
         dryRun: { type: "boolean" },
@@ -664,14 +665,13 @@ const CATALOG = [
   {
     name: "apex_hud_shot",
     kind: "browser",
-    description: "Browser (lock first) — ONE race-HUD cell (~2 min SwiftShader). Default: apex_job_start hud_shot (jobId; poll apex_job_status). Pass sync:true only if the host will hold the MCP call. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / pageError). ~2 min on SwiftShader (one boot), past the host's ~60–120 s MCP limit, so by default it runs as apex_job_start hud_shot and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns structuredContent {shot, findings, measurements} + a resource_link to the PNG. Local tree only. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
         track: { type: "string", description: "Circuit id (default monza)." },
         frac: { type: "number", description: "Lap fraction to park at (default 0.18)." },
-        async: { type: "boolean", description: "Force job route (default)." },
-        sync: { type: "boolean", description: "Force sync MCP call (~2 min; host may timeout)." },
+        async: { type: "boolean", description: "Default true = background hud_shot job (jobId); false = block on the cell (~2 min; host may time out)." },
         device: { type: "string", enum: HUD_ENUMS.device },
         cam: { type: "string", enum: HUD_ENUMS.cam, description: "CamModes id (default chase)." },
         profile: { type: "string", enum: HUD_ENUMS.profile },
@@ -694,7 +694,7 @@ const CATALOG = [
         uiScale: { type: "number", description: "UI SIZE percent (40..200)." },
         btnScale: { type: "number", description: "BUTTON SIZE percent (40..300; touch devices)." },
         off: { type: "array", items: { type: "string", enum: Object.keys(HUD_TOGGLES) }, description: "HudElements ids switched OFF." },
-        inlineImage: { type: "boolean", description: "Also return the PNG as image content (≤ 1.5 MB)." },
+        inlineImage: { type: "boolean", description: "Also return the PNG as image content (≤ 1.5 MB; async:false only)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer the cell boots (default three = TLX; webgl2 = GLX)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
         dryRun: { type: "boolean" },
@@ -706,7 +706,7 @@ const CATALOG = [
   {
     name: "apex_hud_survey",
     kind: "browser",
-    description: "Browser (lock first) — race-HUD matrix: quick ~10 min, leads ~25, full ~45, exhaustive needs shard. Default: apex_job_start hud_survey (jobId). Pass sync:true only for a host that will hold minutes. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — the race-HUD survey over a matrix: quick (13 cells, 3 boots, ~10 min), leads (static-audit repros with numeric checks, ~25 min), full (pairwise, ~33 cells / 20 boots, ~45 min), exhaustive (~470 cells, shard required) or a matrix JSON under scratch/ or artifacts/. By default it runs as apex_job_start hud_survey and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
@@ -715,8 +715,7 @@ const CATALOG = [
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
-        async: { type: "boolean", description: "Force job route (default)." },
-        sync: { type: "boolean", description: "Force sync MCP call (host may timeout)." },
+        async: { type: "boolean", description: "Default true = background hud_survey job (jobId); false = block for the whole matrix (minutes; host may time out)." },
         track: { type: "string" },
         frac: { type: "number" },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
@@ -776,28 +775,24 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once. Browser kinds (survey_track, shot_survey, hud_*, ui_*, flicker_gate) hold the lock until exit — not parallel. Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey). Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
         track: { type: "string", description: "survey_track / shot_survey: circuit id." },
-        tracks: { type: "string", description: "shot_survey: comma list of circuit ids (sequential queue)." },
-        preset: { type: "string", description: "shot_survey: scenery|lap|dual|inspect." },
+        tracks: { type: "string", description: "shot_survey: comma-separated circuit ids (sequential)." },
+        preset: { type: "string", description: "shot_survey: quick|dual_lite|night_pass|scenery|full|lap|dual|inspect|custom." },
         label: { type: "string", description: "shot_survey: shot name prefix." },
-        count: { type: "number", description: "shot_survey: evenly spaced fracs." },
-        fracs: { type: "array", items: { type: "number" }, description: "shot_survey: lap fractions." },
-        cam: { type: "string", description: "shot_survey: camera id." },
-        cams: { type: "array", items: { type: "string" }, description: "shot_survey: camera list." },
-        tod: { type: "string", description: "shot_survey: day|dusk|dawn|night." },
-        el: { type: "number" },
-        dist: { type: "number" },
-        az: { type: "number" },
-        cols: { type: "number", description: "shot_survey: panel columns." },
-        out: { type: "string", description: "shot_survey / hud_*: artifacts/ or scratch/ dir." },
-        panel: { type: "boolean" },
-        index: { type: "boolean" },
+        out: { type: "string", description: "shot_survey: output dir under artifacts/ or scratch/." },
+        resume: { type: "boolean", description: "shot_survey: skip existing PNGs." },
+        panel: { type: "boolean", description: "shot_survey: contact sheet (default true)." },
+        index: { type: "boolean", description: "shot_survey: index.html (default true)." },
+        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "shot_survey: software GL." },
+        tod: { type: "string", enum: ["day", "dusk", "dawn", "night"], description: "shot_survey: time of day override." },
+        count: { type: "integer", description: "shot_survey: frac count override." },
+        fracs: { type: "array", items: { type: "number" }, description: "shot_survey: explicit fracs." },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
         viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
@@ -1048,13 +1043,13 @@ bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
 bound("apex_shot_survey", "track", { enum: knownCircuits() });
-bound("apex_shot_survey", "tracks", { items: { type: "string", enum: knownCircuits() }, maxItems: 16 });
+bound("apex_shot_survey", "tracks", { maxItems: 12 });
 bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
 bound("apex_shot_survey", "fracs", { maxItems: 32 });
 bound("apex_shot_survey", "shots", { maxItems: 32 });
 bound("apex_shot_survey", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_shot_survey", "el", { minimum: -90, maximum: 90 });
-schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }];
+bound("apex_shot_survey", "gl", { enum: ["llvmpipe", "swiftshader"] });
 bound("apex_agent", "at", { minimum: 0, maximum: 1 });
 bound("apex_agent", "speed", { minimum: 0, maximum: 300 });
 bound("apex_agent", "lateral", { minimum: -10000, maximum: 10000 });
@@ -1635,6 +1630,39 @@ function mockSuccess(name, argv, env = {}) {
   });
 }
 
+function statusNext(lock, playwright, loadavg) {
+  const load = Array.isArray(loadavg) ? loadavg[0] : 0;
+  if (lock?.held) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: `browser lock held by ${lock.tool || "pid " + lock.pid}`,
+      hint: "Wait for the owner to finish, or apex_job_status if it is a job; do not start a second browser apex_*.",
+    };
+  }
+  if (playwright?.busy || playwright?.suite) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: "Playwright suite or busy Chromium occupancy",
+      hint: "Finish or stop the suite before apex_shot_survey / apex_track.",
+    };
+  }
+  if (load >= 3) {
+    return {
+      action: "wait",
+      tool: "apex_status",
+      reason: `loadavg ${load.toFixed?.(2) ?? load} ≥ 3`,
+      hint: "Box is busy; delay browser surveys (test-bg also refuses at this load).",
+    };
+  }
+  return {
+    action: "ready",
+    tool: "apex_shot_survey",
+    reason: "lock free; occupancy clear",
+    hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
+  };
+}
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -1646,25 +1674,33 @@ function handleStatus(args = {}) {
     });
   }
   if (mockMode()) {
+    const loadavg = os.loadavg();
+    const lock = { held: false };
+    const playwright = emptyPlaywright();
     return toolResult({
       ok: true,
       mock: true,
-      lock: { held: false },
+      lock,
       chromeDaemon: { up: false, port: null },
       testBg: { recorded: false, running: [] },
-      playwright: emptyPlaywright(),
-      loadavg: os.loadavg(),
+      playwright,
+      loadavg,
+      next: statusNext(lock, playwright, loadavg),
       knownGap: KNOWN_GAP,
     });
   }
   const chromePort = daemonPort();
+  const lock = lockInfo();
+  const playwright = playwrightLive();
+  const loadavg = os.loadavg();
   return toolResult({
     ok: true,
-    lock: lockInfo(),
+    lock,
     chromeDaemon: { up: chromePort != null, port: chromePort },
     testBg: testBgStatus(),
-    playwright: playwrightLive(),
-    loadavg: os.loadavg(),
+    playwright,
+    loadavg,
+    next: statusNext(lock, playwright, loadavg),
     knownGap: KNOWN_GAP,
   });
 }
@@ -2012,22 +2048,17 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const hud = name === "apex_hud_shot" || name === "apex_hud_survey";
   if (mockMode()) return hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
 
+  if (hud && args.async !== false) {
+    // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
+    // ~10 min. Default to a background job (pinned argv above) unless async:false.
+    const kind = name === "apex_hud_shot" ? "hud_shot" : "hud_survey";
+    const r = extras().handlers.apex_job_start({ kind, [HUD_JOB_ARGV]: argv });   // sync: returns the jobId at once
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: HUD_TIMEOUT_MS(name, args),
+      hint: "Runs in the background: apex_job_status {jobId} until state is done; findings land in out / the log. async:false blocks instead." });
+  }
   if (hud) {
-    // Host MCP CallDynamicTool often dies at ~60–120 s; a cell is ~2 min and
-    // quick matrix ~10 min. Default to a background job unless sync:true.
-    const forceSync = args.sync === true || args.async === false;
-    if (!forceSync) {
-      const kind = name === "apex_hud_shot" ? "hud_shot" : "hud_survey";
-      const jr = extras().handlers.apex_job_start({ kind, _argv: argv, dryRun: args.dryRun });
-      const body = JSON.parse(jr.content[0].text);
-      if (body.ok === false) return jr;
-      return toolResult({
-        ...body,
-        routed: `apex_job_start ${kind}`,
-        estimateMs: HUD_TIMEOUT_MS(name, args),
-        hint: "Poll apex_job_status {jobId}. Pass sync:true only when the host will hold the MCP call for minutes.",
-      });
-    }
     const took = acquireLock(name);
     if (took) return took;
     return runSpawn(argv, { timeoutMs: HUD_TIMEOUT_MS(name, args), env, signal })

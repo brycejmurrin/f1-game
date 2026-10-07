@@ -120,6 +120,32 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
     "ScrollFade watches #cs-tabs so the compact pan strip gets sf-l / sf-r");
 });
 
+/* UI Fit (layout-audit ios-iphone-landscape-safari@100): SAVE/LOAD/RESET
+ * GARAGE FILE painted h=46 vs tapFloor 52 — plain <button>s in #cs-garage-file
+ * (no .sel-edit), so components.css never floored them. Also pin that the
+ * play-shape strip stays column 1: .sheet-foot (CLOSE GARAGE) owns column 2
+ * on the same row, so a blind grid-column: 1 / -1 span would collide. */
+it("#cs-garage-file buttons floor at --tap-paint; play-shape tabs stay col 1", () => {
+  const css = fs.readFileSync(path.join(REPO, "css/carsetup.css"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(
+    css,
+    /#cs-garage-file\s*>\s*button\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "SAVE/LOAD/RESET GARAGE FILE must floor min-height at --tap-paint");
+  assert.match(
+    css,
+    /#cs-garage-file\s*>\s*button\s*\{[^}]*min-block-size:\s*var\(--tap-paint\)/s,
+    "logical min-block-size also floors at --tap-paint");
+  assert.match(
+    css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #cs-tabs\s*\{[^}]*grid-column:\s*1\s*;/s,
+    "compact play-shape #cs-tabs stays in column 1 beside .sheet-foot");
+  assert.match(
+    css,
+    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\]:not\(\[data-shape="tall"\]\) > \.sheet-foot\s*\{[^}]*grid-column:\s*2\s*;/s,
+    "compact play-shape .sheet-foot keeps column 2 on the tab row");
+});
+
 it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
   const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
   const sheet = rd("js/garage/setup-sheet.js");

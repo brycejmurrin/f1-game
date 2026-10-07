@@ -959,7 +959,7 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     assert.equal(made.length, 1);
     made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
     made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
-    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "relayed guest is in the roster");
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
     made[0].deliver("go", {});
     assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
     assert.equal(closers.length, 1);
@@ -968,6 +968,60 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     assert.match(h.status.textContent, /rivals are now AI/i);
     assert.equal(h.lobby.roomState().peers.length, 0,
       "relayed guest must die with the host — otherwise QualiNet.waiting() stays locked");
+  } finally { h.lobby.cancel(); }
+});
+
+test("mid-race one guest leaving of two keeps the other — occupancy is transports, not lobby sessions", async () => {
+  // finishStart() hands sessions to NetPlay and clears the lobby sessions map,
+  // but leaves transports populated. onClose used to gate "anyone left?" on
+  // !sessions.size — always true after the handoff — so one guest dropping in
+  // a 3p race took the empty-room path: "Connection closed." / "Your friend
+  // left the room.", _peers cleared, and the multi-peer "A player left…"
+  // branch (plus lobby LEFT relay) was unreachable. NetPlay still kept the
+  // race; the lobby lied. 2p hides it (the only guest leaving DOES empty the
+  // room). Live smoke covered 2p disconnect + 3p lobby READY, not 3p mid-race.
+  const made = [], closers = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.startRace = async () => ({ ok: true });
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1, "guest 1 bound");
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2, "guest 2 bound");
+    assert.equal(closers.length, 2, "two close handlers");
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    made[1].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), true, "host starts the race");
+    // finishStart is async (awaits startRace); wait for the handoff.
+    for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    // After finishStart, lobby sessions are empty but both transports remain.
+    assert.equal(h.lobby.status().guests, 2, "transports still hold both guests");
+    closers[0]("peer_closed");                       // guest 1 drops mid-race
+    assert.match(h.status.textContent, /player left/i,
+      "remaining guest is still in — not the empty-room copy");
+    assert.doesNotMatch(h.status.textContent, /left the room|Connection closed/i);
+    assert.equal(h.lobby.status().guests, 1, "one transport remains");
+    assert.equal(h.lobby.roomState().peers.length, 1,
+      "the surviving guest's profile must stay — finishStart keeps _peers on purpose");
   } finally { h.lobby.cancel(); }
 });
 

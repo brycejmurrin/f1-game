@@ -22,6 +22,9 @@
     15  end of the apron: sheds, concrete gives way            (§4 0.820 +1)
     16  Turn 7 — off the runway, the corridor narrows          (§4 0.860 -1)
     17  Turn 8: long banked final corner onto the pit straight (§4 0.920 -1)
+    18  Anderstorpsån bog strip + reeds (-1, s≈0.11–0.28)
+    19  Flight Straight offset runway pavement (+1 apron clearance band)
+    20  paddock helipad (16×16 m, ESMP medevac pad)
 
    Nothing taller than a treetop, nothing grand: low timber and corrugated.
    Depth comes from RANKS — front row, second rank, then pine receding into
@@ -36,7 +39,8 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, place, addBox, addCyl, vadd,
+        motorhome, groundPatch, runoffApron, waterBand,
+        place, addBox, addCyl, addFrustum, vadd,
         modelGroup, seat, MAT } = api;
 
       // ---------------------------------------------------------------- 0.
@@ -56,6 +60,8 @@
       const SCRUB     = [0.24, 0.33, 0.18];   // thin birch/scrub in the infield
       const BUSH      = [0.16, 0.26, 0.14];
       const JUNIPER   = [0.20, 0.28, 0.20];
+      const REED      = [0.35, 0.42, 0.26];
+      const BOG_WATER = [0.26, 0.36, 0.32];   // Anderstorpsån / bog pool
       const GRASS     = [0.31, 0.41, 0.22];   // mown airfield grass
       const GRASS_M   = [0.35, 0.45, 0.24];   // freshly cut, lighter
       const GRASS_S   = [0.40, 0.43, 0.27];   // sandy grass at the field edge
@@ -466,6 +472,20 @@
         farPine(k, 1, 96 + h * 30, 16 + h * 9, PINE_B);
         if (h > 0.45) farPine(k, 1, 134 + h * 40, 17 + h * 8, PINE_F);
       }
+      // ESMP medevac helipad (16×16 m) on existing paddock hardstanding — no
+      // extra groundPatch (coplanar with the shed rank); seated disc + H bars.
+      {
+        const hs = 0.108, side = 1, gap = 28;
+        if (clear(K(hs), side, gap, 12)) {
+          seatBox(K(hs), side, gap, [16, 0.12, 16], CONC_W, 0.11);
+          const a = anchor(K(hs), side, gap), b = [a.r, a.u, a.t];
+          addFrustum(out, vadd(a.c, a.u, 0.22), 7.2, 7.2, 0.08, PAINT, 14, b);
+          seatBox(K(hs), side, gap - 2.4, [6, 0.06, 1.0], PAINT, 0.14);
+          seatBox(K(hs), side, gap + 2.4, [6, 0.06, 1.0], PAINT, 0.14);
+          seatBox(K(hs), side, gap, [1.0, 0.06, 5.2], PAINT, 0.14);
+          seatBox(K(hs), side, gap + 8, [0.22, 0.55, 0.22], PAINT_Y, 0.12);
+        }
+      }
 
       // ---------------------------------------------------------------- 6.
       // 0.150 -1 — PINE RIGHT UP TO THE ARMCO. No run-off worth the name; the
@@ -533,6 +553,18 @@
         const h = hash(k * 67 + 31);
         pine(k, -1, 27 + h * 5, 18 + h * 9, h < 0.45 ? PINE : PINE_O);
         if (h > 0.55) farPine(k, -1, 24 + h * 9, 16 + h * 9, SPRUCE);
+      }
+
+      // Anderstorpsån bog — flat marsh water + reeds beside the south loop.
+      // waterBand follows terrain; reeds on the near bank (no extra groundPatch).
+      waterBand(0.108, 0.278, -1, 44, 50, 4, BOG_WATER, { id: "anderstorp-aan-bog" });
+      for (let i = 0; i < 14; i++) {
+        const s = 0.116 + i * 0.011;
+        const k = K(s);
+        const h = hash(k * 157 + 11);
+        if (h < 0.20) continue;
+        bush(k, -1, 38 + h * 7, h < 0.55 ? REED : JUNIPER);
+        if (h > 0.68) bush(k, -1, 46 + h * 5, BUSH);
       }
 
       // ---------------------------------------------------------------- 9.
@@ -639,6 +671,12 @@
         // No weathering overlays: they co-planed with the parent on shared
         // patchSeq lift slots (flatCoplanar 570×573/574).
         groundPatch(k, 1, 6, [Math.min(22, 20 * f), 0.18, ln], CONCRETE);
+      }
+      // ESMP: 30 m pavement, 20 m runway — ~10 m clearance offset on the apron
+      // side; seated slabs avoid a second groundPatch row (flatCoplanar on fold).
+      for (let i = 0; i < 22; i++) {
+        const s = RW0 + 0.006 + (i / 21) * (RW1 - RW0 - 0.012);
+        seatBox(K(s), 1, 34 + (i % 2), [10, 0.12, 13], CONC_W, 0.11 + (i % 3) * 0.008);
       }
       // Faded painted runway edge markings — seatBox, not place(): place()
       // sinks 0.8 m so a 0.06 m slab vanishes whole (ground-audit buried 125

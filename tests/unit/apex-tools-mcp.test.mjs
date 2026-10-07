@@ -254,37 +254,50 @@ test("apex_shot_survey dryRun plans a multi-shot session", () => {
   assert.equal(body.ok, true);
   assert.equal(body.dryRun, true);
   assert.equal(body.shots.length, 4);
-  assert.equal(body.willRouteToJob, false);
   assert.match(body.out, /artifacts\/track-survey\/monza-survey/);
+  assert.equal(typeof body.estimateMs, "number");
+  // lap (4 shots) estimates past the MCP cancel window → async job by default
+  assert.equal(body.asyncDefault, true);
 });
 
-test("apex_shot_survey scenery dryRun would route to a job", () => {
-  const r = callCli("apex_shot_survey", { track: "monza", preset: "scenery", dryRun: true });
+test("apex_shot_survey dryRun multi-track prefers async job", () => {
+  const r = callCli("apex_shot_survey", { tracks: ["monza", "spa"], preset: "quick", dryRun: true });
   assert.equal(r.status, 0, r.stderr);
   const body = JSON.parse(r.stdout);
-  assert.equal(body.willRouteToJob, true);
-  assert.ok(body.estShots > 4);
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.tracks, ["monza", "spa"]);
+  assert.equal(body.asyncDefault, true);
+  assert.equal(body.shots.length, 4);
 });
 
-test("apex_job_start shot_survey dryRun builds track-shot-survey argv", () => {
+test("apex_shot_survey dryRun single-shot stays sync by default", () => {
+  const r = callCli("apex_shot_survey", {
+    track: "monza",
+    preset: "custom",
+    shots: [{ name: "only", frac: 0.5, cam: "orbit", tod: "day" }],
+    dryRun: true,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.asyncDefault, false);
+});
+
+test("apex_job_start shot_survey dryRun builds shot-survey.mjs argv", () => {
   const r = callCli("apex_job_start", {
-    kind: "shot_survey", track: "spa", preset: "dual", label: "spa-dual", dryRun: true,
+    kind: "shot_survey",
+    tracks: "monza,spa",
+    preset: "dual_lite",
+    label: "q",
+    dryRun: true,
   });
   assert.equal(r.status, 0, r.stderr);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
-  assert.ok(body.argv.some((a) => String(a).endsWith("track-shot-survey.mjs")), body.argv);
-  assert.ok(body.argv.includes("--preset") && body.argv.includes("dual"), body.argv);
-  assert.equal(body.browser, true);
-});
-
-test("apex_job_start shot_survey accepts multi tracks", () => {
-  const r = callCli("apex_job_start", {
-    kind: "shot_survey", tracks: "monza,spa", preset: "lap", dryRun: true,
-  });
-  assert.equal(r.status, 0, r.stderr);
-  const body = JSON.parse(r.stdout);
-  assert.ok(body.argv.includes("--tracks") && body.argv.includes("monza,spa"), body.argv);
+  assert.equal(body.kind, "shot_survey");
+  assert.ok(body.browser);
+  assert.ok(body.argv.some((a) => String(a).endsWith("shot-survey.mjs")), body.argv);
+  assert.ok(body.argv.includes("monza,spa"), body.argv);
+  assert.ok(body.argv.includes("dual_lite"), body.argv);
 });
 
 test("apex_pick_tests argv never contains --bg; includes --json", () => {
@@ -1395,6 +1408,33 @@ test("a job's reported log is the file holding its output, and status tails it",
     const gp = body(x.handlers.apex_job_start({ kind: "graph_parity_all", base: "HEAD~1" }));
     assert.match((await settle(gp.jobId)).tail, /BASE=HEAD~1 args=--all/);
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// 2026-10-07 (#1192): apex_hud_shot / apex_hud_survey outlast the host's
+// ~60–120 s MCP call, so they default to hud_* jobs. Those kinds run only the
+// argv the server built and pinned — never one a JSON caller supplies.
+test("hud_shot / hud_survey jobs take a server-pinned argv only", async () => {
+  const body = (r) => JSON.parse(r.stdout);
+  for (const kind of ["hud_shot", "hud_survey"]) {
+    const bare = body(callCli("apex_job_start", { dryRun: true, kind }));
+    assert.equal(bare.error, "bad_args", `${kind} without a pinned argv must refuse`);
+    const smuggled = body(callCli("apex_job_start", { dryRun: true, kind, _argv: ["/bin/sh", "-c", "id"] }));
+    assert.equal(smuggled.error, "bad_args", `${kind} must reject a caller argv`);
+  }
+  const { createExtras, HUD_JOB_ARGV, JOB_KINDS } = await import("../../tools/mcp/apex-extras.mjs");
+  assert.ok(JOB_KINDS.includes("hud_shot") && JOB_KINDS.includes("hud_survey"));
+  assert.equal(typeof HUD_JOB_ARGV, "symbol");
+  const toolResult = (b, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(b) }], ...(isError || b.ok === false ? { isError: true } : {}) });
+  const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+  const x = createExtras({ ROOT, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+    assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut: () => ({}), log() {}, mockMode: () => false });
+  const argv = [process.execPath, "tools/shot/hud-survey.mjs", "--device", "desktop-1280", "--cam", "chase"];
+  const planned = JSON.parse(x.handlers.apex_job_start({ kind: "hud_shot", dryRun: true, [HUD_JOB_ARGV]: argv }).content[0].text);
+  assert.equal(planned.ok, true, JSON.stringify(planned));
+  assert.deepEqual(planned.argv, argv);
+  assert.equal(planned.browser, true, "hud jobs hold the browser lock");
+  const viaString = JSON.parse(x.handlers.apex_job_start({ kind: "hud_shot", dryRun: true, "Symbol(apex.hudJobArgv)": argv }).content[0].text);
+  assert.equal(viaString.error, "bad_args", "a string key never stands in for the Symbol");
 });
 
 test("apex_graph_parity all:true routes to the graph_parity_all job, never the 180 s spawn", () => {

@@ -19,7 +19,7 @@
  * READ-ONLY. It reads cars and the G façade and writes nothing but its own
  * state; no car field is touched, no sim RNG is drawn.
  */
-const RaceFacts = (function () {
+var RaceFacts = (function () {
   "use strict";
 
   const K = 32;              // timing checkpoints per lap

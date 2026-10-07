@@ -90,6 +90,8 @@ var RadioVoice = (function () {
    * speech synthesis, for a player who chose a system voice. */
   const PACK_VOICE = Object.freeze({ radio: "george", announcer: "fable", control: "emma", coach: "heart" });
 
+  let primed = false;   // module scope: survives re-create; LAZY_AUDIO may bind after the first gesture
+
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
   const RATE_MAX = 1.35;
@@ -520,8 +522,18 @@ var RadioVoice = (function () {
      * with its own cancel() before it speaks anyway. */
     function unlock() {
       if (!api) return;
-      try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); }
+      try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); primed = true; }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
+    }
+    if (api && !primed && typeof document !== "undefined" && document.addEventListener) {
+      const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
+      const prime = (e) => {
+        if (e && (e.type === "keydown" ? e.key === "Escape" : e.type === "pointerdown" ? e.pointerType !== "mouse"
+          : e.type === "pointerup" ? e.pointerType === "mouse" : false)) return;
+        for (const t of EVTS) document.removeEventListener(t, prime, true);
+        if (!primed) unlock();
+      };
+      for (const t of EVTS) document.addEventListener(t, prime, true);
     }
     if (typeof document !== "undefined") {
       // The card leaving the screen is the invariant, so observing it beats

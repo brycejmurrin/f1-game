@@ -96,6 +96,7 @@ function boot(opts) {
       { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
+    createMediaElementSource: (el) => Object.assign(node("mediaSrc", counts), { mediaElement: el }),
     resume: () => Promise.resolve(), close() {},
   };
   const sb = {
@@ -116,6 +117,7 @@ function boot(opts) {
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
   if (opts && opts.realWatch) sb.RealRace = { status: () => ({ watch: true }) };
+  if (opts && opts.Audio) sb.Audio = opts.Audio;
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
@@ -130,7 +132,7 @@ function boot(opts) {
   // Sources are excluded: a STOPPED BufferSource/Oscillator is collected without
   // a disconnect, so counting them would report a leak this file cannot fix.
   const liveNodes = () => [...live].filter((n) => n.kind !== "src" && n.kind !== "osc").length;
-  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx };
+  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx, vctx };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -259,7 +261,7 @@ test("a fresh engine carries the shipped voice, and an identity trim reduces to 
   // JSON round-trip: values come back from the vm realm with that realm's
   // Object prototype, and strict deepEqual compares prototypes.
   assert.deepEqual(JSON.parse(JSON.stringify(A.tuneDefaults())), Object.assign({}, TUNE_IDENTITY, {
-    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.5,
+    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.62, boost: 1.12,
   }), "the shipped ENGINE voice");
   A.setTune(TUNE_IDENTITY);
   // The pre-tune formula: IDLE and CURVE at 1 must reduce the four-knob curve
@@ -1046,6 +1048,38 @@ test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", 
   assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
   h.stop();
   for (const fn of pendingTimers.splice(0)) fn();
+});
+
+test("playWatchMedia ducks music and routes media elements through the radio band", async () => {
+  const b = boot({
+    Audio: function AudioMock() {
+      this.crossOrigin = "";
+      this.preload = "";
+      this.src = "";
+      this.volume = 1;
+      this.paused = false;
+      this.ended = false;
+      this.play = () => Promise.resolve();
+      this.pause = () => {};
+    },
+  });
+  const gains = [];
+  const mk = b.ctx.createGain;
+  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  b.GameAudio.init();
+  b.GameAudio.startMusic();
+  await b.release();
+  const musicGain = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
+  assert.ok(musicGain, "precondition: music gain");
+  const full = musicGain.gain.value;
+  const GameAudioRadioFx = vm.runInContext("GameAudioRadioFx", b.vctx);
+  const h = GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.9 });
+  assert.ok(h && h.chained, "media element path chains into WebAudio");
+  assert.ok(Math.abs(musicGain.gain.value - full * 0.35) < 1e-9, "music ducks for the clip");
+  assert.ok((b.counts.mediaSrc || 0) >= 1, "createMediaElementSource ran");
+  assert.ok((b.counts.biquad || 0) >= 2, "radio band filters are in the graph");
+  h.stop();
+  assert.ok(Math.abs(musicGain.gain.value - full) < 1e-9, "stop releases the duck");
 });
 
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
@@ -1857,6 +1891,61 @@ test("a steady setEngine and a quiet setSkid schedule nothing after the first fr
     frame(0);
     assert.equal(GameAudio.skidLevel(), 0, core + ": releasing the slide lands an exact 0");
   }
+});
+
+test("a sustained skid wobbles on the audio thread, not with a main-thread filter aim every frame", async () => {
+  const { GameAudio: A, release, ctx, ctxTime } = boot();
+  const biquads = [];
+  const mkFilt = ctx.createBiquadFilter;
+  ctx.createBiquadFilter = () => { const n = mkFilt(); biquads.push(n); return n; };
+  A.init();
+  await release();
+  A.startEngine();
+  const skidFilt = () => biquads.find((n) => Math.abs(n.Q.value - 1.4) < 1e-9);
+  const settle = () => {
+    for (let i = 0; i < 5; i++) { ctxTime(1 / 60); A.setSkid(0.8, false); }
+  };
+  settle();
+  const filt = skidFilt();
+  assert.ok(filt, "precondition: skid bandpass (Q 1.4) exists");
+  const before = filt.frequency.sets;
+  for (let i = 0; i < 30; i++) { ctxTime(1 / 60); A.setSkid(0.8, false); }
+  const added = filt.frequency.sets - before;
+  assert.ok(added <= 2,
+    `steady slide at 0.8 re-aimed the filter centre ${added} times in 30 frames (want <= 2 after settle)`);
+});
+
+test("the reverb send is dry when SPACE is off or the reverb layer is disabled", async () => {
+  const { GameAudio: A, release, ctx } = boot();
+  let revSendGain = null;
+  const mkConv = ctx.createConvolver;
+  ctx.createConvolver = () => {
+    const c = mkConv();
+    const mkGain = ctx.createGain;
+    ctx.createGain = () => {
+      const g = mkGain();
+      if (!revSendGain) revSendGain = g.gain;
+      ctx.createGain = mkGain;
+      return g;
+    };
+    return c;
+  };
+  A.init();
+  await release();
+  A.startEngine();
+  assert.ok(revSendGain, "precondition: revSend gain is captured");
+  A.setVenue({ street: true, theme: "street_day" });
+  A.setTune({ reverb: 1 });
+  A.setLayer("reverb", true);
+  assert.ok(revSendGain.value > 0, "precondition: send open when SPACE is on");
+  A.setLayer("reverb", false);
+  assert.equal(revSendGain.value, 0, "layer off must gate the convolver send, not only the return");
+  A.setLayer("reverb", true);
+  assert.ok(revSendGain.value > 0, "layer on restores the send");
+  A.setTune({ reverb: 0 });
+  assert.equal(revSendGain.value, 0, "SPACE trim at zero must gate the send");
+  A.setTune({ reverb: 1 });
+  assert.ok(revSendGain.value > 0, "non-zero SPACE restores the send");
 });
 
 test("on a TV camera the rev limiter's swing scales with the engine: the gain never inverts", async () => {

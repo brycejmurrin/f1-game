@@ -6,17 +6,23 @@ const CarWheels = (function () {
     const { SURFACES, TYRE, INTAKE } = context;
     const { addTri, addQuad, addBox, addSpan } = context.geometry;
 
-    // Wheel-cover profile. The three tones have to SEPARATE — 0.28 and 0.15 of
-    // the same neutral wash into one flat disc under a studio key.
-    // Value ORDER matters more than the values: a covered F1 wheel is a bright
-    // machined rim around a DARK dish; the other way up — a pale face with a
-    // dark ring — reads as a hubcap off a road car.
+    // Wheel face profile. 2026 regs dropped the aero dish: the DEFAULT wheel is
+    // an open rim (lip + spokes + centre-lock nut, brake disc visible through
+    // the gaps). The 2022–25 three-ring COVER is opt-in only — `tyreStyle.cover`
+    // or `wheelStyle.cover` (truthy). `coverVanes` alone must NOT build a cover;
+    // vanes only dress a face that is already covered.
+    // Value ORDER on a covered face: bright machined rim around a DARK dish —
+    // the other way up reads as a road-car hubcap under a studio key.
     const LIP      = [0.40, 0.41, 0.44];     // machined rim, the brightest ring
-    const COVER    = [0.24, 0.245, 0.27];    // dish wall
+    const COVER    = [0.24, 0.245, 0.27];    // dish wall (cover path only)
     const COVER_IN = [0.14, 0.14, 0.16];     // its floor, deepest in shadow
     const LIP_R  = 0.90;    // rim lip runs rimR*0.90 .. rimR
     const DISH_R = 0.40;    // dish wall ends here, where the hubcap starts
     const DISH_D = 0.050;   // recessed inboard — 50 mm so the bowl reads in the garage
+    // Default open spoke count when recipe leaves spokes:0. Must stay well below
+    // catalog 6-spoke options (spoked, sig_racingbulls_rim) so parts-sweep's
+    // WEAK_MM (20 mm) Hausdorff still separates them from standard.
+    const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                       grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
@@ -37,6 +43,8 @@ const CarWheels = (function () {
       const x0 = cx - w/2, x1 = cx + w/2;
       const rimR = r * 0.68;
       const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
+      // Explicit cover flag only — never infer from coverVanes / dish / spokes.
+      const useCover = !!(tyreStyle && tyreStyle.cover) || !!(wheelStyle && wheelStyle.cover);
       const rotorScale = brakeStyle && brakeStyle.rotorScale || 1;
       const tyreShoulder = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.shoulder) || 0)));
       // The DEFAULT profile was [[0,1],[1,1]] — a perfectly cylindrical tread
@@ -123,22 +131,23 @@ const CarWheels = (function () {
         addQuad(out, B0, B1, R1, R0, TYRE, SURFACES.rubber);
         const L0=[x0,rya0,rza0], L1=[x0,rya1,rza1];
         addQuad(out, A0, A1, L1, L0, TYRE, SURFACES.rubber);
-        // The COVER, in three rings instead of one flat fan from the rim to a
-        // point. A 2022-on covered wheel is a dark rim lip, a face dished
-        // INWARD behind it, and a raised hub boss. Two segments at the
-        // caliper clock stay open so the rotor and a duct/caliper peek
-        // through — a solid disc hid them completely.
+        // Rim face. Cover path: three rings (lip / dish / floor) with coverOpen
+        // and caliper-clock peeks so brakes show through. Open path (default):
+        // lip annulus only — spokes + hub nut fill the face; coverOpen is a
+        // no-op when there is no cover to open.
         const aMid = (i + 0.5) / SEG * Math.PI * 2;
         const calClock = brakeStyle && brakeStyle.caliperPos || 0;
         const peekCal = Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
-        if ((!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal) {
+        const coverSeg = useCover && (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
+        if (coverSeg || !useCover) {
           for (const sd of [[x1, 1], [x0, -1]]) {
             const xw = sd[0], dir = sd[1];
             const P = (rad, a, dx) => [xw + dir * dx,
               cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
-            // 1. rim lip: a dark annulus at the wall plane, framing the cover.
+            // 1. rim lip: bright annulus at the wall plane (both paths).
             addQuad(out, P(rimR, a0, 0), P(rimR, a1, 0),
                          P(rimR * LIP_R, a1, 0), P(rimR * LIP_R, a0, 0), LIP, SURFACES.metal);
+            if (!useCover) continue;
             // 2. dish: falls INBOARD as it goes in, so the light gradient across it
             //    reads as a bowl rather than a disc.
             addQuad(out, P(rimR * LIP_R, a0, 0), P(rimR * LIP_R, a1, 0),
@@ -151,10 +160,10 @@ const CarWheels = (function () {
           }
         }
       }
-      // Five raised spoke ribs across each dish. Proud of the floor by a third of
-      // the dish depth, so they catch the key and give the face something to
-      // rotate against — a wheel with no angular feature looks stationary.
-      for (const sd of [[x1, 1], [x0, -1]]) {
+      // Cover-only: five raised spoke ribs across each dish. Proud of the floor
+      // by a third of the dish depth so they catch the key. Open rims use real
+      // extruded spokes instead (below).
+      if (useCover) for (const sd of [[x1, 1], [x0, -1]]) {
         const xw = sd[0], dir = sd[1];
         for (let k = 0; k < 5; k++) {
           const a = (k / 5) * Math.PI * 2 + 0.31, hw = 0.13;
@@ -251,8 +260,13 @@ const CarWheels = (function () {
         }
       }
 
+      // Cover vanes dress a covered face only. On an open rim they densify into
+      // a fake dish (factory tyre recipes still set coverVanes:4–12); coverVanes
+      // alone never opts the three-ring COVER back in — useCover does.
       const VANE = [0.26, 0.26, 0.30];
-      const coverVanes = tyreStyle && tyreStyle.coverVanes || 6;
+      const coverVanes = useCover
+        ? (tyreStyle && tyreStyle.coverVanes != null ? tyreStyle.coverVanes : 6)
+        : 0;
       for (const ss of [[x0, -1], [x1, 1]]) {
         const xs = ss[0] + ss[1] * 0.014;
         for (let k = 0; k < coverVanes; k++) {
@@ -277,8 +291,11 @@ const CarWheels = (function () {
       }
       const HUBCAP = RC;                   // raised boss: lighter than the dish floor
       const NUT = caliperColor || bandColor || [0.85, 0.72, 0.10];
+      // Open hub is smaller so the rotor shows through the spoke gaps; cover
+      // keeps the wide boss that sat on the old dish floor.
+      const hubFrac = useCover ? 0.46 : 0.22;
       for (const ss of [[x0, -1], [x1, 1]]) {
-        const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * 0.46, ctr = [xc0, cy, cz];
+        const dir = ss[1], xc0 = ss[0] - dir * 0.014, hcR = rimR * hubFrac, ctr = [xc0, cy, cz];
         for (let i = 0; i < SEG; i++) {
           const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
@@ -287,10 +304,10 @@ const CarWheels = (function () {
         const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
         const gunNut = wheelStyle && wheelStyle.gunNut ? 1 : 0;
         if (!gunNut) {
-          addBox(out, ss[0] - dir * 0.002, cy, cz, 0.026, hcR * 0.42, hcR * 0.42, nutCol, SURFACES.metal);
+          addBox(out, ss[0] - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
         } else {
           const nx = ss[0] - dir * 0.001;
-          const nR = hcR * 0.38;
+          const nR = Math.max(hcR * 0.55, rimR * 0.10);
           const nDeep = 0.018;
           const HEX = 6;
           for (let h = 0; h < HEX; h++) {
@@ -313,7 +330,10 @@ const CarWheels = (function () {
           }
         }
         // Rim SPOKES: extruded blades (front + back + long edges) from hub to rim.
-        const spokeN = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
+        // Open default fills spokes:0 with OPEN_SPOKES so factory cars are not
+        // bare hoops; cover path keeps recipe spokes (often 0 — ribs dress the dish).
+        const spokeReq = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
+        const spokeN = useCover ? spokeReq : (spokeReq > 0 ? spokeReq : OPEN_SPOKES);
         for (let k = 0; k < spokeN; k++) {
           const a = (k / spokeN) * Math.PI * 2 + 0.4;
           const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
@@ -347,7 +367,12 @@ const CarWheels = (function () {
         if (dish > 0) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
-          const dxIn = ss[0] + dir * (0.014 - 0.012 * dish);
+          // Cover path keeps the old shallow bowl (cover already fills the face).
+          // Open path: deeper rim recess only — NO floor fan to the hub, so
+          // factory dish:1 cars (mercedes/ferrari/…) stay open-spoked with the
+          // brake disc visible. 0.024*dish → 24 / 48 mm for parts-sweep WEAK_MM.
+          const dishStep = useCover ? 0.012 * dish : 0.024 * dish;
+          const dxIn = ss[0] + dir * (0.014 - dishStep);
           const DISH_SEG = 16;
           for (let k = 0; k < DISH_SEG; k++) {
             const a0 = (k / DISH_SEG) * Math.PI * 2, a1 = ((k + 1) / DISH_SEG) * Math.PI * 2;
@@ -355,15 +380,29 @@ const CarWheels = (function () {
             const oy1 = cy + rimR * 0.98 * Math.cos(a1), oz1 = cz + rimR * 0.98 * Math.sin(a1);
             const iy0 = cy + dr * Math.cos(a0), iz0 = cz + dr * Math.sin(a0);
             const iy1 = cy + dr * Math.cos(a1), iz1 = cz + dr * Math.sin(a1);
-            addQuad(out,
-              [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
-              HUBCAP, SURFACES.metal);
-            addQuad(out,
-              [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
-              RC_DEEP, SURFACES.metal);
-            addTri(out, [dxIn, cy, cz],
-                   [dxIn, iy0, iz0],
-                   [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+            if (useCover) {
+              addQuad(out,
+                [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, iy1, iz1], [dxOut, iy0, iz0],
+                HUBCAP, SURFACES.metal);
+              addQuad(out,
+                [dxOut, iy0, iz0], [dxOut, iy1, iz1], [dxIn, iy1, iz1], [dxIn, iy0, iz0],
+                RC_DEEP, SURFACES.metal);
+              addTri(out, [dxIn, cy, cz],
+                     [dxIn, iy0, iz0],
+                     [dxIn, iy1, iz1], HUBCAP, SURFACES.metal);
+            } else {
+              // Open: narrow rim lip + recess wall only (inner radius stays near
+              // the lip — not the old hub-reaching floor). Spokes / rotor show.
+              const lipInner = rimR * (dish === 2 ? 0.86 : 0.90);
+              const ly0 = cy + lipInner * Math.cos(a0), lz0 = cz + lipInner * Math.sin(a0);
+              const ly1 = cy + lipInner * Math.cos(a1), lz1 = cz + lipInner * Math.sin(a1);
+              addQuad(out,
+                [dxOut, oy0, oz0], [dxOut, oy1, oz1], [dxOut, ly1, lz1], [dxOut, ly0, lz0],
+                HUBCAP, SURFACES.metal);
+              addQuad(out,
+                [dxOut, ly0, lz0], [dxOut, ly1, lz1], [dxIn, ly1, lz1], [dxIn, ly0, lz0],
+                RC_DEEP, SURFACES.metal);
+            }
           }
         }
       }
