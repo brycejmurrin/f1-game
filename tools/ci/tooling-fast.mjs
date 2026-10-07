@@ -829,6 +829,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
   // never writes apex26.gfxBackend. ~0.1 s.
   "tests/unit/xr-plan.test.mjs",
+  // Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer
+  // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
+  // unchanged. createGame once, ~2.5 s.
+  "tests/unit/yaw-damp-speed.test.mjs",
   // @gen-test-groups:end
 ]);
 
