@@ -50,7 +50,7 @@
 }
 .td-stage { position: relative; min-height: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-stage canvas {
-  flex: 1 1 auto; min-height: 0; width: 100%; height: 100%;
+  flex: 1 1 auto; min-height: 72px; width: 100%;
   touch-action: none;                 /* one finger drags or pans, two pinch — the page never scrolls under it */
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
@@ -271,14 +271,24 @@
      need minmax(0,…) so the rail scrollport keeps a definite height. */
   .td-body {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.15fr) minmax(0, 1fr);
+    /* Bias height to the map row (minmax(0,1.15fr) starved the canvas to 2px, layout-audit 2026-10-07). */
+    grid-template-rows: minmax(0, 1.65fr) minmax(0, 1fr);
   }
-  .td-stage { overflow: hidden; min-height: 0; }
-  /* DOM builds toolbar before the canvases; flex order puts the map on top so
-     the chips stop clipping past td-body (layout-audit 2026-10-07). */
-  .td-stage > canvas:not([data-role="profile"]) { order: 1; }
-  .td-stage > canvas[data-role="profile"] { order: 2; }
-  .td-stage > .td-chips[data-role="toolbar"] { order: 3; }
+  .td-stage {
+    overflow: hidden; min-height: 0; position: relative;
+    /* Map + profile rows only; UNDO/REDO/FIT float on the map (saves ~52px, layout-audit 2026-10-07). */
+    display: grid;
+    grid-template-rows: minmax(72px, 1fr) auto;
+    align-content: stretch;
+  }
+  .td-stage > canvas:not([data-role="profile"]) { grid-row: 1; min-height: 0; width: 100%; height: auto; align-self: stretch; flex: unset; }
+  .td-stage > canvas[data-role="profile"] { grid-row: 2; flex: unset; }
+  .td-stage > .td-chips[data-role="toolbar"] {
+    position: absolute; z-index: 2; left: 0; right: 0; top: calc(var(--gap) / 4);
+    grid-row: unset; flex: unset; margin: 0;
+    pointer-events: none;
+  }
+  .td-stage > .td-chips[data-role="toolbar"] .sel-chip { pointer-events: auto; }
   .td-rail { min-height: 0; max-height: 100%; }
   .td-stage .td-hint { display: none; }   /* the rail's copy under 1 SHAPE stays */
   /* Stats duplicate the foot message on a narrow stack; hiding them buys canvas
@@ -301,11 +311,34 @@
 @media (min-width: 761px) and (orientation: landscape) and (min-height: 501px) {
   .td-rail .td-hint { display: none; }
 }
+/* Wide + short (852×344 safari): 2-column body — trim profile so map+toolbar fit one column. */
+@media (min-width: 761px) and (max-height: 500px) {
+  .td-stage > canvas[data-role="profile"] {
+    height: max(40px, calc(var(--chip-h) * 1.25));
+    min-height: 40px;
+  }
+}
 /* Short (a phone in landscape, 412px tall measured 2026-10-01): the canvas is
    the point of the screen, so the hint goes and the head and foot shrink. */
 @media (max-height: 500px) {
   .td-stage .td-hint { display: none; }
   .td-stage { gap: calc(var(--gap) / 4); }
+  /* Stats duplicate the foot on a short stack (incl. 852×344 safari 2-col); hiding buys map height. */
+  .td-stats { display: none; }
+  .td-stage {
+    position: relative;
+    display: grid;
+    grid-template-rows: minmax(72px, 1fr) auto;
+    align-content: stretch;
+  }
+  .td-stage > canvas:not([data-role="profile"]) { grid-row: 1; min-height: 0; width: 100%; height: auto; align-self: stretch; flex: unset; }
+  .td-stage > canvas[data-role="profile"] { grid-row: 2; flex: unset; }
+  .td-stage > .td-chips[data-role="toolbar"] {
+    position: absolute; z-index: 2; left: 0; right: 0; top: calc(var(--gap) / 4);
+    grid-row: unset; flex: unset; margin: 0;
+    pointer-events: none;
+  }
+  .td-stage > .td-chips[data-role="toolbar"] .sel-chip { pointer-events: auto; }
   /* Keep the elevation strip on short phones (Bryce mobile pain); shrink, don't hide. */
   .td-stage > canvas[data-role="profile"] {
     display: block;
@@ -332,10 +365,13 @@
    Do NOT restack wide short (852×344 safari): its 2-column body already fits
    (0 clipped); stacking it regressed to 146. */
 @media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
-  /* Stage gets the larger share: equal 1fr/42% left the main canvas ~20px
-     (under WCAG 24) once .td-stats claimed the column. */
-  .td-body { grid-template-rows: minmax(0, 62%) minmax(0, 1fr); }
+  /* Short stacked landscape: give the stage ~¾ of td-body (62% left map ~20px tall). */
+  .td-body { grid-template-rows: minmax(0, 3fr) minmax(0, 1fr); }
   .td-foot { display: flex; flex-wrap: wrap; }
-  .td-stage > canvas:not([data-role]) { min-height: 72px; }
+  .td-stage > canvas:not([data-role="profile"]) { min-height: 72px; }
+  .td-stage > canvas[data-role="profile"] {
+    height: max(40px, calc(var(--chip-h) * 1.25));
+    min-height: 40px;
+  }
 }
 }
