@@ -455,6 +455,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
@@ -682,6 +683,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~1 s — and it belongs in the edit loop because the file it guards is
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
+  // Lateral→longitudinal bicycle couple (v·r − Fyf·sin δ) in player-forces:
+  // straight coast bit-identical to tip; held-steer coast matches couple
+  // within tol; COUPLE_V_MIN=3; yaw damp untouched. createGame once, ~2.5 s.
+  "tests/unit/speed-coupling.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
@@ -692,6 +697,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
+  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
+  "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.

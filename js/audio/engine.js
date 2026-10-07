@@ -250,6 +250,11 @@ var GameAudio = (function () {
   let listenersAttached = false;
   let rebuildTries = 0;
   let lastFailedResume = 0;
+  let deviceRebuildTimer = null;
+  let deviceRebuildPending = false;
+  let deviceRebuildBusy = false;
+  let ctxSampleRate = 0;
+  const DEVICE_REBUILD_DEBOUNCE_MS = 280;
   let resumeMusic = false;
   let resumeEngine = false;
   let resumeRain = false;
@@ -331,12 +336,22 @@ var GameAudio = (function () {
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
     // suspend() only runs while hidden, so a visible stop is never ours.
+    ctxSampleRate = ctx.sampleRate;
     ctx.onstatechange = () => {
+      if (deviceRebuildBusy || !ctx) return;
       // "interrupted" is iOS taking the audio session — a call answered from the
       // compact banner keeps Safari VISIBLE, so nothing else tells the game
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
-      if (ctx && ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
-      if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
+      if (ctx.state === "closed") return;
+      if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
+        scheduleOutputDeviceRebuild("sampleRate");
+      }
+      if (ctx.state === "running") ctxSampleRate = ctx.sampleRate;
+      if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
+        scheduleOutputDeviceRebuild("state-" + ctx.state);
+      }
+      if (ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
     };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
@@ -416,6 +431,60 @@ var GameAudio = (function () {
     return { buf: out, loop: { start: 0, end: (b - a) / sr }, win: { start: a / sr, end: b / sr } };
   }
 
+  function stickyUserActivation() {
+    try {
+      const ua = typeof navigator !== "undefined" && navigator.userActivation;
+      return !!(ua && (ua.isActive || ua.hasBeenActive));
+    } catch (e) { return false; }
+  }
+
+  function scheduleOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (deviceRebuildTimer) clearTimeout(deviceRebuildTimer);
+    deviceRebuildTimer = setTimeout(() => {
+      deviceRebuildTimer = null;
+      requestOutputDeviceRebuild(why);
+    }, DEVICE_REBUILD_DEBOUNCE_MS);
+  }
+
+  function requestOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (!stickyUserActivation()) {
+      deviceRebuildPending = true;
+      Log.debug("audio", "output-device rebuild deferred (" + why + ") until the next gesture");
+      return;
+    }
+    performOutputDeviceRebuild(why);
+  }
+
+  function performOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    deviceRebuildPending = false;
+    deviceRebuildBusy = true;
+    Log.info("audio", "rebuilding AudioContext after " + why);
+    try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
+  }
+
+  function onMediaDeviceChange() {
+    scheduleOutputDeviceRebuild("devicechange");
+  }
+
+  function attachOutputDeviceListeners() {
+    try {
+      const md = typeof navigator !== "undefined" && navigator.mediaDevices;
+      if (!md || typeof md.addEventListener !== "function") return;
+      md.addEventListener("devicechange", onMediaDeviceChange);
+    } catch (e) { /* absent in game-vm and some WebViews */ }
+  }
+
+  function reapplyContextState() {
+    if (!ctx) return;
+    applyTuneNodes();
+    applyVenue();
+    applyMusicDuck();
+    setSfxEnabled(sfxEnabled);
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
@@ -434,6 +503,7 @@ var GameAudio = (function () {
       window.addEventListener("pointerdown", resumeIfNeeded, true);
       window.addEventListener("keydown", resumeIfNeeded, true);
       document.addEventListener("visibilitychange", onVisibility);
+      attachOutputDeviceListeners();
     }
   }
 
@@ -448,6 +518,11 @@ var GameAudio = (function () {
   function resumeIfNeeded(gestureEv) {
     if (!ctx) return;
     const isGesture = !!gestureEv;
+    if (isGesture && deviceRebuildPending) {
+      deviceRebuildPending = false;
+      performOutputDeviceRebuild("deferred-gesture");
+      return;
+    }
     if (ctx.state === "running") {
       rebuildTries = 0;
       lastFailedResume = 0;
@@ -491,7 +566,12 @@ var GameAudio = (function () {
     // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
     // i.e. with the context in exactly the state close() refuses. Same shape as
     // the resume() sites below, which chain .catch.
-    try { const p = ctx.close(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); }); } catch (e) { /* already closed */ }
+    try {
+      const dying = ctx;
+      if (dying) dying.onstatechange = null;
+      const p = dying && dying.close();
+      if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); });
+    } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -513,6 +593,7 @@ var GameAudio = (function () {
                             // survive and centroidHz() would read a dead node (latent: only
                             // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
+    reapplyContextState();
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
     if (rainWanted) startRain();

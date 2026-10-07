@@ -431,6 +431,20 @@ export function createExtras(ctx) {
         );
         return { browser: true, argv };
       }
+      // apex_hud_shot / apex_hud_survey route here by default (host MCP calls
+      // die at ~60-120 s; a cell is ~2 min). The server builds and pins the
+      // argv (buildArgv + pinOk) and hands it over under a Symbol key, which no
+      // JSON caller can set, so apex_job_start never runs a caller-chosen argv.
+      case "hud_shot":
+      case "hud_survey": {
+        const argv = a[HUD_JOB_ARGV];
+        if (!Array.isArray(argv) || !argv.length) {
+          throw Object.assign(new Error(kind), {
+            refuse: refuse("bad_args", `${kind} jobs start from apex_${kind} (its default route)`, `Call apex_${kind}; it returns a jobId unless async:false.`),
+          });
+        }
+        return { browser: true, argv };
+      }
       case "ui_gallery": {
         const s = list(a.screens, "screens"), v = list(a.viewports, "viewports");
         return { browser: true, argv: nodeArgv("ui/layout-audit.mjs", "--gallery", "--jobs=1", ...(s ? [`--screens=${s}`] : []), ...(v ? [`--viewports=${v}`] : [])) };
@@ -708,4 +722,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+/** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
+export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");
