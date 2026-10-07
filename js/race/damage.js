@@ -31,7 +31,7 @@
  * Reset by game.js gridUp (a new race) and on a completed pit stop (PitLane's
  * release() sets pitOutT; observe() repairs on that edge).
  */
-const Damage = (function () {
+var Damage = (function () {
   "use strict";
 
   const LCAR = 4.8, WCAR = 2.0;    // car box (same numbers as js/physics/collide.js; copied, not read)

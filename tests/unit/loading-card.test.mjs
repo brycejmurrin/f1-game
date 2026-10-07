@@ -322,8 +322,8 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRace closes the settings dialog so #loading is not under a top-layer sheet");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(sheet\) sheet\.hidden = true;\s*if \(loadingScreen\.phase\(\)\) return;/,
-    "Start Race / Practice Start hide the dialog first, then refuse a second intro");
+  assert.match(game, /if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\);/,
+    "race settings covers prep with the sheet — race card waits until after the garage leave");
   assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
     "title return skips the view-transition snapshot that held a blank page");
 });

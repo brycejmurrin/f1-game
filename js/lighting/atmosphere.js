@@ -36,6 +36,7 @@ const CLEAR_FOG_SCALE = 0.45;
 // values so a strike restores to the look in flight, not the target.
 // Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
 // strength, ambient and fog stepped (the second graphics-detail survey, item 11).
+// Until 2026-10-07 cityGlow and moon stepped with the sky while LT knobs faded.
 //
 // THE KNOBS FADE TOO (2026-10-04). A stage flip changes the LightStore key
 // (track|tod|WEATHER), and LightStore.apply() used to land every LT knob of the
@@ -52,7 +53,7 @@ const CLEAR_FOG_SCALE = 0.45;
 // the fade at once rather than being dragged back each frame.
 const WX_BLEND_S = 25;
 const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure", "groundMist"];
-const WX_SKY = ["sunColor", "cloud", "zenith", "horizon"];
+const WX_SKY = ["sunColor", "cloud", "zenith", "horizon", "cityGlow", "moon"];
 let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
 let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
@@ -645,7 +646,17 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S };
+// Capture / regression read of the sky vectors GLX uploads (post cityGlowMul + wx blend).
+function skyGlowProbe() {
+  const sky = G.frameSky || {};
+  const out = { cityGlow: null, moon: null, horizon: null, wxBlend: wxBlend() };
+  if (sky.cityGlow) out.cityGlow = sky.cityGlow.slice();
+  if (sky.moon != null) out.moon = sky.moon;
+  if (sky.horizon) out.horizon = sky.horizon.slice();
+  return out;
+}
+if (typeof window !== "undefined") window.__apexAtmoSkyProbe = skyGlowProbe;
+return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S, skyGlowProbe };
 }
 
 return { create };
