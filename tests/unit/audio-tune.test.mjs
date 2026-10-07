@@ -115,6 +115,7 @@ function boot(opts) {
     AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
+  if (opts && opts.realWatch) sb.RealRace = { status: () => ({ watch: true }) };
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
@@ -1413,6 +1414,23 @@ test("the braking cue is silent on the pace, tightens with urgency, and banks no
   assert.equal(fired() - t0, 1, "exactly one blip on resume, not a banked burst");
 });
 
+test("assist brake cues stay silent during a real-race WATCH", async () => {
+  const { GameAudio, release, ctxTime } = boot({ realWatch: true });
+  GameAudio.init();
+  await release();
+  GameAudio.startEngine();
+  const fired = () => GameAudio.brakeCueState().fired;
+  const before = fired();
+  for (let i = 0; i < 120; i++) { GameAudio.brakeCue(1); ctxTime(0.016); }
+  assert.equal(fired(), before, "brake cue does not fire while watching a replay");
+  const d0 = GameAudio.driveCueState().brakeFired;
+  for (let i = 0; i < 80; i++) { GameAudio.driveBrakeTone(1); ctxTime(0.016); }
+  assert.equal(GameAudio.driveCueState().brakeFired, d0, "audio driving-cue tone stays off in WATCH");
+  const c0 = GameAudio.driveCueState().callFired;
+  GameAudio.cornerCall("L");
+  assert.equal(GameAudio.driveCueState().callFired, c0, "corner call stays off in WATCH");
+});
+
 /* ── TEAM RADIO FX ──────────────────────────────────────────────────────────
  *
  * The one thing this chain must never become is a filter on the voice, because
@@ -1606,6 +1624,29 @@ test("car SFX levels follow the car's own state, never the road's curvature", ()
   // A new race's car starting mid-state does not fire a phantom gun.
   S.update({ speed: 0, pitState: "box" });
   assert.equal(guns.length, 2, "a fresh car resets the edge");
+});
+
+test("a rewind that jumps the race clock across a pit edge re-seeds wheel guns silently", () => {
+  const sb = { Math, Number, Object, GameAudio: {} };
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/car-sfx.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "car-sfx.js" });
+  const guns = [];
+  sb.GameAudio.setCarSfx = () => {};
+  sb.GameAudio.pitGun = (t) => guns.push(t);
+  const G = { vTop: () => 100, isWetRoad: () => false, raceT: 50 };
+  const S = vm.runInContext("CarSfx", vctx).create(G);
+  const car = { speed: 10, pitState: "none" };
+  S.update(car);
+  G.raceT = 51; car.pitState = "lane"; S.update(car);
+  G.raceT = 52; car.pitState = "box"; S.update(car);
+  assert.deepEqual(guns, [false], "forward into the box loosens once");
+  // Coach rewind: race clock steps back while pitState jumps to before the stop.
+  G.raceT = 48; car.pitState = "none"; S.update(car);
+  G.raceT = 49; car.pitState = "lane"; S.update(car);
+  assert.equal(guns.length, 1, "rewind across edges does not replay wheel guns");
+  G.raceT = 53; car.pitState = "box"; S.update(car);
+  G.raceT = 54; car.pitState = "out"; S.update(car);
+  assert.deepEqual(guns, [false, false, true], "forward stop edges after a rewind still fire once each");
 });
 
 test("setCarSfx and pitGun are safe with the engine off, and drive their layers with it on", async () => {

@@ -947,6 +947,10 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   line-height: 1.6;
   border-left: 3px solid var(--accent-dim);
 }
+/* EMPTY PLATE: index.html ships <div id="hud-sectors"></div> and buildSecRows
+   fills it on the first HUD tick. Until then padding + background left a junk
+   gap under the pause column (same class of bug as empty .hud-gaps above). */
+#hud-sectors:empty { display: none; }
 body.steer-touch #hud-sectors {
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
 }

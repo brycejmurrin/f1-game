@@ -159,9 +159,11 @@ test("a marshal post carries a dark, still panel — no waving flag in a hash co
   for (const [i, nrec] of notes.entries()) {
     const p = nrec.panel;
     assert.ok(Array.isArray(p) && p.length === 3, "the post's record carries its panel point");
-    // The board: off the pole 1.4 m behind the hut (x = 10 + 1.4), 3.3-3.92 m up, 1.05 m along +z.
+    // The board: off the pole 1.12 m behind the hut (against the back face;
+    // x = 10 + 1.12), 3.3-3.92 m up, 1.05 m along +z. Panel point is 0.12 m
+    // trackward of the board.
     assert.ok(Math.abs(p[1] - 3.61) < 1e-6 && Math.abs(p[2] - (ks[i] * 4 + 0.525)) < 1e-6, `panel ${p} is the board's centre`);
-    assert.ok(p[0] < 11.4 && p[0] > 11.2, `panel x ${p[0]} sits just proud of the board on the track side`);
+    assert.ok(p[0] < 11.05 && p[0] > 10.95, `panel x ${p[0]} sits just proud of the board on the track side`);
     const c = P.calls.find((call) => Math.abs(call[2] - p[2]) < 1e-9);
     assert.ok(c && c[0] === p[0] && c[1] === p[1], "the glow is on the board, not above the hut");
   }

@@ -694,7 +694,9 @@ const GLXPost = (function () {
         // Lamp beams alone (no sun shafts) take ONE pair: the stripes the second
         // pair removes come from the sun march's shadow slices, which a lamp cone
         // does not have. apex26.grLite=0 restores two (same knob as TLX).
-        const grPairs = (!sunGR && _grLite) ? 1 : 2;
+        // opts.grLite (GRAPHICS MEDIUM/LOW / mid autoShed) forces one pair even
+        // with sun shafts — avoidable day cost at lower tiers.
+        const grPairs = ((opts && opts.grLite) || (!sunGR && _grLite)) ? 1 : 2;
         for (let bp = 0; bp < grPairs; bp++) {
           bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
@@ -716,7 +718,9 @@ const GLXPost = (function () {
       // with postEnabled still true. Treat that exactly like bloom-off — without the
       // nLv gate present() dereferenced bloomLv[0] and threw every frame.
       const nLv = bloomLv.length;
-      const doBloom = bloomAmt > 0 && nLv > 0;
+      // opts.bloomLevels>0 truncates the widest octaves (MEDIUM/LOW / mid shed).
+      const useLv = (opts && opts.bloomLevels > 0) ? Math.min(nLv, opts.bloomLevels | 0) : nLv;
+      const doBloom = bloomAmt > 0 && useLv > 0;
       if (doBloom) {
         // 1) bright-pass scene -> bloom level 0 (half res)
         gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
@@ -734,7 +738,7 @@ const GLXPost = (function () {
         //    octave of blur, so bright sources get a tight core AND a wide soft halo.
         useProg(downProg);
         gl.uniform1i(downU.uTex, 0);
-        for (let i = 1; i < nLv; i++) {
+        for (let i = 1; i < useLv; i++) {
           bindOverwrite(bloomLv[i].fbo);
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
@@ -749,7 +753,7 @@ const GLXPost = (function () {
         gl.uniform1i(upU.uTex, 0);
         // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
         gl.uniform1f(upU.uSpread, PostCommon.knob(opts && opts.tune, "bloomSpread"));
-        for (let i = nLv - 1; i >= 1; i--) {
+        for (let i = useLv - 1; i >= 1; i--) {
           // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
           // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
           // unblurred bright-pass, and adding onto it would re-inject the scene's
@@ -794,10 +798,10 @@ const GLXPost = (function () {
       // frame — bind the 1×1 black source so the composite reads zero contribution.
       gl.bindTexture(gl.TEXTURE_2D, doBloom ? bloomLv[0].tex : blackTex);
       gl.uniform1i(compU.uBloom, 1);
-      // Normalise the mip-chain accumulation (level 0 holds nLv-1 summed blur
+      // Normalise the mip-chain accumulation (level 0 holds useLv-1 summed blur
       // octaves) so the hand-tuned per-time-of-day bloom amounts keep their overall
       // energy — same brightness budget, spread over a wider, smoother halo.
-      gl.uniform1f(compU.uBloomAmt, bloomAmt * 1.25 / Math.max(nLv - 1, 1));
+      gl.uniform1f(compU.uBloomAmt, bloomAmt * 1.25 / Math.max(useLv - 1, 1));
       // AO: post-blur result is in ssaoTex; when AO is off bind a white 1×1
       // so the unused sampler still has a complete texture (shader skips
       // the fetch via uAOTexel == 0; aoV stays 1.0).

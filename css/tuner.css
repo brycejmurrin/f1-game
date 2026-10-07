@@ -268,7 +268,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   /* No explicit height before: padding + 10px text came to ~24, which is ON the
      floor and therefore under it at any scale below 100%. 225 cells of the
      1900-cell matrix failed on this one selector. */
-  min-height: var(--tap-min);
+  /* --tap-paint on touch (52 painted px); desktop keeps --tap-min via tokens. */
+  min-height: var(--tap-paint);
   display: inline-flex; align-items: center; justify-content: center;
   width: auto; margin: 0; min-width: 0;
   padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
@@ -312,6 +313,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
    100% layout is untouched. Height was already floored. */
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: calc(var(--gap) / 3) calc(var(--gap) * 0.25); font-size: var(--fs-micro); }
+#lt-spread .opt-btn { min-height: var(--tap-paint); }
 .lt-preview-row .opt-btn.active,
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
@@ -743,7 +745,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
 }
 #flyby-inner[data-density="compact"] #fb-ops button {
-  min-height: var(--tap-min); padding: calc(var(--gap) / 3) calc(var(--gap) / 6);
+  min-height: var(--tap-paint); padding: calc(var(--gap) / 3) calc(var(--gap) / 6);
   font-size: var(--fs-micro);
 }
 /* Static foot: sticky was covering the shot strip on short docks (the same
@@ -863,8 +865,9 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
      precisely where they get tapped. 24 is the floor, and the row has the pixel
      to give — the panel does not get shorter for it. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
-    padding: 3px 2px; font-size: var(--fs-micro); min-width: max(34px, var(--tap-min)); min-height: var(--tap-min);
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: max(34px, var(--tap-min)); min-height: var(--tap-paint);
   }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-spread .opt-btn { min-height: var(--tap-paint); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { display: none; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-help { display: none; }
   /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
@@ -883,7 +886,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
   /* The floor applies to the shrunken foot too: 12px text in 6px padding comes to
      ~27 own px, which is 21-23 ACTUAL px at UI SIZE 80% — RESET, COPY VALUES and
      DONE were the last three controls under the WCAG floor in the 1900-cell run. */
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-min); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-paint); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-json, #ct-json) { height: 96px; }
 
@@ -1268,9 +1271,11 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
    @container rule below, the :is() prefix that raises it above hud.css's
    bare #pc-toggle) decides the winner. */
 @layer hud {
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: var(--fs-micro); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle {
+    padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-paint);
+  }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #pc-toggle {
-    min-height: var(--tap-min); padding: 0 var(--gap);
+    min-height: var(--tap-paint); padding: 0 var(--gap);
     font-size: var(--fs-micro);
   }
   @container sheet (max-width: 220px) {

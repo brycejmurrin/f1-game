@@ -192,6 +192,38 @@ test("Escape on the Data Hub itself still presses its door", () => {
   assert.equal(e.defaultPrevented, true);
 });
 
+test("Escape with a disabled data-esc-close door still consumes the key", () => {
+  // Photo Studio used to disable #ps-close during CAPTURE/CLOSING; onEscape
+  // returned without preventDefault and Escape leaked to pause/resume.
+  let clicks = 0;
+  const btn = { disabled: true, click() { clicks++; } };
+  const layer = {
+    id: "photo-studio",
+    getAttribute: (a) => (a === "data-esc-close" ? "ps-close" : null),
+    contains: () => true,
+  };
+  const context = {
+    window: { UiLayers: { top: () => layer } },
+    document: {
+      readyState: "loading",
+      addEventListener() {},
+      getElementById: (id) => (id === "ps-close" ? btn : null),
+      querySelectorAll: () => [],
+    },
+    WeakSet, WeakMap,
+    Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context);
+  const e = { key: "Escape", defaultPrevented: false, stopped: false,
+    preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+  context.window.TopModal.onEscape(e);
+  assert.equal(clicks, 0, "a disabled door is not clicked");
+  assert.equal(e.defaultPrevented, true, "Escape is still consumed");
+  assert.equal(e.stopped, true);
+});
+
 // ── A STALE close event must not shut a reopened screen ─────────────────────
 // `close` is dispatched as a queued task, so on a busy page the event for a close
 // the app made can land AFTER the screen was reopened. The close listener read

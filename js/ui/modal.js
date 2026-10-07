@@ -158,7 +158,14 @@ window.TopModal = (function () {
     const via = layer.getAttribute("data-esc-close");
     if (!via) return;
     const btn = document.getElementById(via);
-    if (!btn || btn.disabled) return;
+    // A named door that is missing or disabled still owns Escape (mirror
+    // data-esc="none"): otherwise the key falls through to pause/resume while
+    // the sheet stays up. Only click when the control can run.
+    if (!btn || btn.disabled) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     btn.click();

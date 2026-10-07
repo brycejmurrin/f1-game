@@ -125,6 +125,10 @@ const Car3D = (function () {
 
   // A BODY span: rounded when CarShade is on for this build (js/car/car-shade.js), else trapezoid + crease.
   let _round = false;
+  // Engine-cover loft detail: garage / player / near (hi) densifies the cross-
+  // section and adds rear COVER_Z rings; field body and silhouette (mid/far)
+  // keep the cheap 4-point / COVER_Z table so track LOD budgets do not grow.
+  let _coverHi = true;
   function bodySpan(out, a, b, col, bevel) { if (_round) CarShade.loft(out, a, b, col, addTri); else { addSpan(out, a, b, col, col); addTopBevel(out, a, b, bevel, col); } }
 
   // Halo hoop centreline, matched to the real halo's front view: the top bar
@@ -796,14 +800,19 @@ const Car3D = (function () {
   // than a single-trapezoid box ("less squared off"). The shoulder x is the
   // trapezoid's crown x, so the flank plane matches it and coverAt(z).top is
   // the crown centre.
+  // Garage/near (`dense`): CarShade.densifyCoverPts samples shoulder→crown as
+  // a quarter-ellipse (mid/far keep the four-point polyline). pts[0]/pts[1]
+  // stay foot/shoulder so coverFlankX and car-mesh drapes do not move.
   const COVER_SHOULDER = 0.72, COVER_CROWN = 0.32, COVER_DROP = 0.18;
-  function coverProfile(c) {
+  function coverProfile(c, dense) {
     const h = c.top - c.bottom, d = h * COVER_DROP;
     const ck = Math.max(-0.04, Math.min(0.06, c.k || 0));
     const cr = Math.max(0.20, COVER_CROWN - ck * 2.4);
-    return { x: c.x, bottom: c.bottom, top: c.top, shoulder: c.top - d, d,
-             pts: [[c.xb != null ? c.xb : c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],   // xb: the rounded car's coke-bottle foot (CarShade.cokeFoot)
-                   [c.x * 0.55, c.top - d * 0.32], [c.x * cr, c.top]] };
+    const keys = [[c.xb != null ? c.xb : c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],
+                  [c.x * 0.55, c.top - d * 0.32], [c.x * cr, c.top]];
+    const pts = (dense && typeof CarShade !== "undefined" && CarShade.densifyCoverPts)
+      ? CarShade.densifyCoverPts(keys) : keys;
+    return { x: c.x, bottom: c.bottom, top: c.top, shoulder: keys[1][1], d, pts, keys };
   }
   // x of the flank skin at height y (clamped to the flank) — where a side-
   // mounted detail (panel, louvre, cable, pinstripe) actually touches the car.
@@ -1465,10 +1474,20 @@ const Car3D = (function () {
     // The loft is three stacked blocks over coverProfile — flank, lower facet,
     // upper facet + crown — at the two anchor stations (the same numbers as
     // `front`/`rear` above, which other parts still read for their datums).
+    // Flat path always uses the four KEYS (3 stacked blocks). Rounded garage/
+    // near densifies the CROSS-SECTION only — COVER_Z stays shared with the
+    // flank-decal drape (car-mesh) so mid rings never leave the band floating.
     const pf = coverProfile(anchors.coverAt(front.z)), pr = coverProfile(anchors.coverAt(rear.z));
-    if (_round) CarShade.coverLoft(out, anchors, coverProfile, front.z, rear.z, c1, addTri); else for (let k = 0; k < 3; k++) {   // rounded: one skin at CarShade.COVER_Z
-      const ring = (p, z) => [[-p.pts[k][0], p.pts[k][1], z], [p.pts[k][0], p.pts[k][1], z],
-                              [p.pts[k + 1][0], p.pts[k + 1][1], z], [-p.pts[k + 1][0], p.pts[k + 1][1], z]];
+    const loftKeys = (c) => { const p = coverProfile(c); return { pts: p.keys || p.pts }; };
+    if (_round) {
+      CarShade.coverLoft(out, anchors, _coverHi ? ((c) => coverProfile(c, true)) : loftKeys,
+        front.z, rear.z, c1, addTri);
+    } else for (let k = 0; k < 3; k++) {
+      const ring = (p, z) => {
+        const q = p.keys || p.pts;
+        return [[-q[k][0], q[k][1], z], [q[k][0], q[k][1], z],
+                [q[k + 1][0], q[k + 1][1], z], [-q[k + 1][0], q[k + 1][1], z]];
+      };
       addBlock(out, ring(pf, front.z).concat(ring(pr, rear.z)), c1, c1);
     }
     // The accent pinstripe runs the flank just under the crease, across the
@@ -1507,6 +1526,9 @@ const Car3D = (function () {
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
+    // Field body / silhouette = mid & far track LODs: keep the cheap cover.
+    // Player, garage, and painted rivals get the dense garage/near cover.
+    _coverHi = !(opts && (opts.field || opts.silhouette));
     Log.info("car", "build" + (teamId ? " " + teamId : ""));
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     const sections = [];
@@ -1898,16 +1920,22 @@ const Car3D = (function () {
       // tail plate below (which every non-cockpit car carries). Body-colour
       // plate with an accent crest line — a strong per-team silhouette tell
       // from chase and TV cameras. Starts behind the snorkel zone (z −0.95)
-      // so the two never intersect.
+      // so the two never intersect. Garage/near: rounded loft so the ridge
+      // is not a square plank where it meets the rear wing (Cadillac et al.).
       if (teamStyle.fin) {
         const finH = teamStyle.fin >= 2 ? 0.19 : 0.095;
         const ff = anchors.coverAt(-0.95), fr = anchors.coverAt(-1.85);
-        addSpan(out,
-          { z: ff.z, y: ff.top + finH * 0.5, w: 0.016, h: finH },
-          { z: fr.z, y: fr.top + finH * 0.33, w: 0.014, h: finH * 0.66 }, c1);
-        addSpan(out,
-          { z: ff.z, y: ff.top + finH + 0.006, w: 0.020, h: 0.014 },
-          { z: fr.z, y: fr.top + finH * 0.66 + 0.005, w: 0.018, h: 0.012 }, accentC);
+        const bladeF = { z: ff.z, y: ff.top + finH * 0.5, w: 0.016, h: finH };
+        const bladeR = { z: fr.z, y: fr.top + finH * 0.33, w: 0.014, h: finH * 0.66 };
+        const crestF = { z: ff.z, y: ff.top + finH + 0.006, w: 0.020, h: 0.014 };
+        const crestR = { z: fr.z, y: fr.top + finH * 0.66 + 0.005, w: 0.018, h: 0.012 };
+        if (_round && _coverHi) {
+          CarShade.loft(out, bladeF, bladeR, c1, addTri, { n: 10 });
+          CarShade.loft(out, crestF, crestR, accentC, addTri, { n: 8 });
+        } else {
+          addSpan(out, bladeF, bladeR, c1);
+          addSpan(out, crestF, crestR, accentC);
+        }
       }
       // Engine-spec identification dots across the airbox intake lip.
       const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
@@ -3516,6 +3544,7 @@ const Car3D = (function () {
     }
 
     _round = false;
+    _coverHi = true;
     if (shade && !sil) CarShade.smooth(out, { skip: [SURFACES.emissive] });   // a shadow caster keeps the shape; depth never reads normals
     // Close the last section and measure each from the vertices it emitted.
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;

@@ -362,6 +362,12 @@ test("empty .hud-gaps collapses — no junk chip when both gap lines are empty",
   assert.equal(decl(cssRules(src), ".hud-gaps > div:first-child", "min-height"), "1.3em");
 });
 
+test("empty #hud-sectors collapses — no junk plate before buildSecRows fills it", () => {
+  const src = read("css/hud.css");
+  assert.match(src, /#hud-sectors:empty\s*\{\s*display:\s*none/,
+    "bare #hud-sectors (index.html) must not reserve padding/background gap");
+});
+
 
 test("the POS box flashes on a position change and the gap chips carry the neighbour's team colour", () => {
   const { els, G, tick, player } = boot();
