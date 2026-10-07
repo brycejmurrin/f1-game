@@ -232,6 +232,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
   "tests/unit/data-hub-picker.test.mjs",
@@ -303,6 +304,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
+  "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
@@ -316,6 +319,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
+  "tests/unit/finish-coast-rev-vm.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
@@ -426,6 +430,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
+  "tests/unit/keyboard-first-audio-vm.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
@@ -503,6 +508,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
+  "tests/unit/net-audio-revs-vm.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
