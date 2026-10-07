@@ -356,15 +356,22 @@
         capCol: [0.70, 0.74, 0.78], mast: 6,
       });
 
-      // Mid-distance backdrop skyline — further back, sparser (city second)
-      every(42, (k) => {
+      // Mid-distance skyline — sparse low ochre/terracotta band; Popo/Iztaccíhuatl read above.
+      every(96, (k) => {
+        if (hash(k * 81) > 0.62) return;
         for (const side of [-1, 1]) {
-          const d = 280 + hash(k * 82 + side) * 140 + (k & 1) * 24;
-          const h = 26 + hash(k * 83 + side) * 40;
-          const tone = 0.62 + hash(k * 84 + side) * 0.10;
+          const d = 460 + hash(k * 82 + side) * 90 + (k & 1) * 12;
+          const h = 8 + hash(k * 83 + side) * 14;
+          const warm = hash(k * 84 + side);
+          const col = [
+            0.70 + warm * 0.08,
+            0.50 + warm * 0.07,
+            0.36 + warm * 0.05,
+          ];
+          const w = 28 + hash(k * 85 + side) * 14;
           const p = anchor(k, side, d);
-          if (onTrack(p.c[0], p.c[2], 60)) continue;   // would straddle another leg
-          backdrop(k, side, d, [100, h, 45], [tone * 0.98, tone, tone * 1.02]);
+          if (onTrack(p.c[0], p.c[2], 55)) continue;
+          backdrop(k, side, d, [w, h, 16], col);
         }
       });
 
@@ -792,13 +799,7 @@
         [0.60, 0.72,  1], [0.60, 0.72, -1],
         [0.86, 1.00,  1], [0.86, 1.00, -1],
       ]) fence(s0, s1, side, 5.5, 3.4, FENCE_M);
-      for (const [s0, s1, side] of [
-        // +1 is the pit side: the complex (0.951-0.046) supersedes a hedge base
-        // there but not its lump, which floated 1 m (float-audit).
-        [0.05, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
-        [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 0.95,  1],
-        [0.10, 0.30, -1], [0.48, 0.60, -1], [0.86, 1.00, -1],
-      ]) hedge(s0, s1, side, 2.4, 1.4, side < 0 ? PARKGRN : TREEGRN);
+      // Perimeter hedge loop removed: ~1202/1248 segments were guard-suppressed (build cost only).
       for (let i = 0; i < 44; i++) {
         const sf = i / 44;
         if (sf > 0.72 && sf < 0.87) continue;      // Foro Sol bowl is dressed already
