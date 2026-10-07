@@ -419,7 +419,9 @@ test("game.js: FX emit ball and env-probe cadence ride the governor", () => {
   assert.match(game, /_fxCullR = 110 \/ \(1 \+ /, "emit ball shrinks with autoShed");
   assert.match(game, /fdx \* fdx \+ fdz \* fdz < _fxCullR2/, "emitters use the shed-scaled squared radius");
   assert.doesNotMatch(game, /fdx \* fdx \+ fdz \* fdz < 110 \* 110/, "fixed 110 m ball is gone");
-  assert.match(game, /_envMask = \(!frozen && gfx\.getRenderScale && gfx\.getRenderScale\(\) < 0\.98\) \? 7 : 3/,
-    "probe cadence softens when render scale is already cut");
+  // Scale drop OR autoShed>0 → every 8th frame (perf frame r2).
+  assert.match(game, /_envMask = \(!frozen && \(/, "probe cadence softens under load");
+  assert.match(game, /getRenderScale\(\) < 0\.98/, "scale-drop arm of the env mask");
+  assert.match(game, /autoShed\(\) > 0/, "autoShed arm of the env mask");
   assert.match(game, /\(_frameNo & _envMask\) === 0/, "live probe faces use the scale-aware mask");
 });

@@ -2042,6 +2042,10 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "pan-x");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overscroll-behavior-x"), "contain");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots .lt-tab', "min-height"), "var(--tap-paint)");
+  assert.equal(decl(tuner, "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "min-height"), "var(--tap-paint)",
+    "lighting/camera/flyby category chips floor at painted --tap on touch");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-ops button', "min-height"), "var(--tap-paint)",
+    "compact flyby row ops floor at --tap-paint");
   assert.equal(decl(css("css/hud.css"), '#flyby-inner[data-density="compact"] #fb-freecam', "min-height"), "var(--tap-paint)",
     "freecam floor lives in @layer hud (beats components)");
   assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rail', "display"), "flex");

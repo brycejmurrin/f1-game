@@ -87,6 +87,11 @@ var DrivingCues = (function () {
 
   let inst = null;
 
+  /** Real-race WATCH (js/race/real-race.js): nobody is driving — same gate as the spotter. */
+  function watchPlayback() {
+    return typeof RealRace !== "undefined" && RealRace.status && !!RealRace.status().watch;
+  }
+
   function create(G) {
     Log.info("audio", "DrivingCues.create");
     let level = 1;
@@ -127,7 +132,7 @@ var DrivingCues = (function () {
 
     function tick() {
       // OFF path: no curvature reads, no audio. Assists-off contract.
-      if (!cfg.on || !G || G.paused || G.state !== "race") {
+      if (!cfg.on || !G || G.paused || G.state !== "race" || watchPlayback()) {
         nextBrakeT = 0; lastU = 0; lastMs = 0;
         lastCallS = null; lastCallSide = 0; callArmed = true; callExitM = 0;   // a new race (or a resume) starts with no call pending
         lastCallMs = -Infinity;

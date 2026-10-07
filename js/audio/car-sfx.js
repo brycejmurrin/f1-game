@@ -14,7 +14,7 @@ var CarSfx = (() => {
   const SFX = { scrub: 0, lock: 0, surface: 0, pitLim: 0, wet: false };
 
   function create(G) {
-    let lastPit = "none", lastCar = null;
+    let lastPit = "none", lastCar = null, lastRaceT = NaN;
 
     /** Pure: the levels for car `c`, where v01 is |speed| / vTop. Exposed for tests. */
     function levels(c, v01, out) {
@@ -40,6 +40,12 @@ var CarSfx = (() => {
       // The wheel guns fire on the stop's edges: loosen as the car drops into
       // the box, tighten as it is released. A new car (a new race) resets the edge.
       const ps = c.pitState || "none";
+      const rt = G.raceT;
+      // A rewind / flashback restores an older raceT: re-seed the edge silently
+      // so crossing a stop boundary in the jump does not replay the guns.
+      if (Number.isFinite(rt) && Number.isFinite(lastRaceT) && rt + 0.02 < lastRaceT) {
+        lastCar = c; lastPit = ps;
+      } else if (Number.isFinite(rt)) lastRaceT = rt;
       if (c !== lastCar) { lastCar = c; lastPit = ps; }
       if (ps !== lastPit) {
         if (ps === "box") GameAudio.pitGun(false);

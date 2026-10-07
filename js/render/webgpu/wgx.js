@@ -4557,9 +4557,10 @@ const WGX = (function () {
         p.setPipeline(pGodray); p.setBindGroup(0, godrayBG); p.draw(3, 1, 0, 0); p.end();
         if (pBlurHDR && godrayBlurView && godrayBlurSrcBG && godrayBlurDstBG) {
           // Lamp beams alone take ONE pair (GLX post.js / TLX tlx-post.js parity;
-          // apex26.grLite=0 restores two).
+          // apex26.grLite=0 restores two). opts.grLite (MEDIUM/LOW) forces one
+          // pair even with sun shafts — avoidable day cost at lower tiers.
           _blurSep(pBlurHDR, godrayView, godrayBlurView, godrayBlurSrcBG, godrayBlurDstBG,
-            1 / halfW, 1 / halfH, (!sunGR && _grLite) ? 1 : 2);
+            1 / halfW, 1 / halfH, (o.grLite || (!sunGR && _grLite)) ? 1 : 2);
         }
       }
 
@@ -4567,10 +4568,12 @@ const WGX = (function () {
       const threshold = o.threshold != null ? o.threshold : 0.75;
       const spread = PostCommon.knob(T, "bloomSpread");
       const nLv = bloomLv.length;
-      if (bloomAmt > 0) {
+      // opts.bloomLevels>0 truncates the widest octaves (MEDIUM/LOW / mid shed).
+      const useLv = (o.bloomLevels > 0) ? Math.min(nLv, o.bloomLevels | 0) : nLv;
+      if (bloomAmt > 0 && useLv > 0) {
         // Downsample (GLX post.js / TLX order): mip0 = the bright pass (mode 2),
         // mip1 = Karis 13-tap of it (mode 1), mips 2..N plain 13-tap (mode 0).
-        for (let i = 0; i < nLv; i++) {
+        for (let i = 0; i < useLv; i++) {
           const src = i === 0 ? { w: tw, h: th } : bloomLv[i - 1];
           const s = postScratch;
           s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = i === 0 ? 2 : i === 1 ? 1 : 0;
@@ -4584,7 +4587,7 @@ const WGX = (function () {
         // mip0 OVERWRITES (clear) — mip0 still holds the sharp bright-pass,
         // and adding onto it re-injects lamp-lit surfaces at full sharpness
         // (GLX glx/post.js last===overwrite, TLX upFinal).
-        for (let i = nLv - 2; i >= 0; i--) {
+        for (let i = useLv - 2; i >= 0; i--) {
           const s = postScratch;
           s[0] = 1 / bloomLv[i + 1].w; s[1] = 1 / bloomLv[i + 1].h; s[2] = spread; s[3] = 0;
           device.queue.writeBuffer(bloomUpUBO[i], 0, s, 0, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
@@ -4602,7 +4605,7 @@ const WGX = (function () {
       {
         const s = postScratch;
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
-        const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(nLv - 1, 1) : 0;
+        const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(useLv - 1, 1) : 0;
         const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
