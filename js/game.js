@@ -4629,7 +4629,7 @@ function updateCar(c, dt, ranked) {
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
   // fallback-guarded; outside the window this early-out is never taken.
-  if (incidentSim.owns(c)) { c._prevS = c.s; return; }
+  if (incidentSim.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // Same contract for a networked rival: its owner is integrating it on their
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
