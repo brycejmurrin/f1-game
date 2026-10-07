@@ -280,7 +280,17 @@ const PlayerForces = (function () {
     // high-speed stop. Scale yaw damping up with braking effort so the rotation is
     // arrested at the limit; gentle/trail braking (small decel) is barely affected,
     // preserving the rotation that helps the car turn in.
-    const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
+    // COAST_YAW_*: same idea for a mid-corner lift-off — engine braking + forward
+    // transfer unload the rear while BRAKE_STAB only gates the pedal share, so
+    // yaw used to run away (1.66× in 0.75 s). Extra damp only while coasting
+    // near the rear's limit; throttle and brake paths are untouched.
+    const coastYaw = (!onThrottle && !braking)
+      ? (PC.COAST_YAW_DAMP || 0) * clamp(
+          ((c.rearUtil || 0) - (PC.COAST_YAW_LO || 0.65)) /
+            Math.max((PC.COAST_YAW_HI || 1.1) - (PC.COAST_YAW_LO || 0.65), 1e-3),
+          0, 1)
+      : 0;
+    const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
     const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * (c.yawRateCur || 0);
     c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
     // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both

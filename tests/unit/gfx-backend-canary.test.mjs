@@ -5490,7 +5490,12 @@ test("godray: lamp beams alone take one blur pair, sun shafts keep two, on TLX a
   // passes. One backend-neutral knob, apex26.grLite=0, restores two pairs.
   const tlx = code("js/render/three/tlx-post.js"), glx = code("js/render/glx/post.js");
   for (const [name, src] of [["tlx-post", tlx], ["glx/post", glx]]) {
-    assert.match(src, /const grPairs = \(!sunGR && _grLite\) \? 1 : 2;/, name + ": one pair only without sun shafts");
+    // opts.grLite (MEDIUM/LOW) OR (!sunGR && _grLite) → one pair; sun shafts on
+    // HIGH/ULTRA still take two unless apex26.grLite=0 is unset (default on).
+    assert.match(src, /const grPairs = /, name + ": grPairs local");
+    assert.match(src, /grLite/, name + ": opts.grLite or _grLite in the pair gate");
+    assert.match(src, /!sunGR && _grLite/, name + ": lamp-only one-pair arm");
+    assert.match(src, /\? 1 : 2/, name + ": one pair vs two");
     assert.match(src, /for \(let bp = 0; bp < grPairs; bp\+\+\)/, name + ": the blur loop runs grPairs");
     assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, name + ": the shared knob");
   }
@@ -5606,7 +5611,7 @@ test("an already-claimed canvas reloads once only with a durable session skip", 
 }
 test("godray: WGX takes the same one-pair lamp-only blur as TLX/GLX", () => {
   const src = code("js/render/webgpu/wgx.js");
-  assert.match(src, /1 \/ halfW, 1 \/ halfH, \(!sunGR && _grLite\) \? 1 : 2\)/, "wgx: one pair only without sun shafts");
+  assert.match(src, /1 \/ halfW, 1 \/ halfH, \(o\.grLite \|\| \(!sunGR && _grLite\)\) \? 1 : 2\)/, "wgx: one pair without sun shafts or when o.grLite");
   assert.match(src, /_grLite = localStorage\.getItem\("apex26\.grLite"\) !== "0"/, "wgx: the shared knob");
 });
 

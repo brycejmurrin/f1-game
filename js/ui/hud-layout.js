@@ -393,6 +393,37 @@ const HudLayout = (function () {
     }
   }
 
+  /** Force the rear-view on when the player places it in MOVE & SIZE.
+   *  MirrorPass owns el.hidden; CSS data-hl-user alone cannot unhide it, so a
+   *  place must flip the setting to ON (and clear a session collapse). */
+  function revealMirror() {
+    try {
+      const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance && MirrorPass.instance();
+      if (mp) {
+        const st = typeof mp.state === "function" ? mp.state() : null;
+        if (st && st.collapsed) {
+          const chip = doc && doc.getElementById && doc.getElementById("hud-mirror-chip");
+          if (chip && typeof chip.click === "function") chip.click();
+        }
+        if (typeof mp.mode === "function" && mp.mode() !== "on" && typeof mp.setMode === "function") mp.setMode("on");
+      } else if (store) {
+        store.set("hudMirror", "on");
+      }
+      const e = doc && doc.querySelector && doc.querySelector("#hud-mirror");
+      if (e) e.hidden = false;
+      if (doc && doc.body && doc.body.classList && doc.body.classList.add) doc.body.classList.add("hud-mirror-on");
+    } catch (_) { /* harness / boot order */ }
+  }
+  /** Current HUD › MIRROR setting (auto|on|off). Prefers the live MirrorPass. */
+  function mirrorMode() {
+    try {
+      const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance && MirrorPass.instance();
+      if (mp && typeof mp.mode === "function") return mp.mode();
+    } catch (_) { /* fall through */ }
+    const v = store ? store.get("hudMirror", "auto") : "auto";
+    return v === "off" || v === "on" ? v : "auto";
+  }
+
   /** Write one element's values into set `setName` of style `pn`; returns the stored {x, y, s}. */
   function set(id, v, setName, pn) {
     if (IDS.indexOf(id) < 0) return null;
@@ -402,6 +433,12 @@ const HudLayout = (function () {
     st[p][sn][id] = e;   // save() drops it again when it equals the shipped layout
     save(st);
     apply();
+    // A place on MIRROR (data-hl-user) cures the soft hide — same contract as
+    // the touch-cockpit chips / SPEED wheel-LCD rule.
+    if (id === "mirror") {
+      const el = doc && doc.querySelector && doc.querySelector("#hud-mirror");
+      if (el && el.hasAttribute && el.hasAttribute("data-hl-user")) revealMirror();
+    }
     return e;
   }
   function resetEl(id, setName, pn) {
@@ -504,7 +541,11 @@ const HudLayout = (function () {
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
     [["announce"], () => true, "shows with a race message", true],
-    [["mirror"], (h, a, off, el) => !!(el && el.hidden), "MIRROR is off or not needed now (DISPLAY › HUD › MIRROR)", true],
+    // MIRROR: DISPLAY › HUD › MIRROR off greys the sliders (hard). AUTO / a
+    // chase cam / a session collapse soft-hides the frame — like SPEED's wheel
+    // LCD rule, a place (data-hl-user) turns it ON via revealMirror().
+    [["mirror"], (h, a) => !a && mirrorMode() === "off", "MIRROR is off (DISPLAY › HUD › MIRROR)"],
+    [["mirror"], (h, a, off, el) => !a && !!(el && el.hidden), "MIRROR is not needed now — move it to show it", true],
   ].map(Object.freeze));
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
   const TOGGLE = Object.freeze({ gearbox: "gear", speed: "speed", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
@@ -696,7 +737,7 @@ const HudLayout = (function () {
     host.addEventListener("change", (ev) => { if (!fold.contains(ev.target)) setTimeout(refresh, 0); });
     // SettingRow.wire stops `change` propagation and the chevrons fire none, so
     // the bubbling listener above misses those rows: follow their store keys.
-    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis"];
+    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror"];
     if (store && store.subscribe) store.subscribe((c) => {
       if (c && (ROW_KEYS.indexOf(c.key) >= 0 || (Array.isArray(c.keys) && c.keys.some((k) => ROW_KEYS.indexOf(k) >= 0)))) setTimeout(refresh, 0);
     });

@@ -328,18 +328,18 @@
         }, { required: true });
       })();
 
-      // ── Sakhir Tower — wave-2 hero over T1 braking (flat cap, no sail) ────
-      // Research + aerial: multi-layered cylindrical shaft at the inside of T1,
-      // wrapped full-height in bright LED video bands. Flat capped roof — the
-      // cone/sail silhouette is wrong. required:true so a missing emit fails
+      // ── Sakhir Tower — VIP / LED shaft on the pit straight (flat cap, no sail)
+      // OSM way 187123438 + Wikipedia (2024 imagery): the eight-storey Sakhir
+      // Tower sits on the paddock side of the REAL start/finish straight, not
+      // inside Turn 1 (Turn 1 has its own covered grandstand). Flat capped roof —
+      // the cone/sail silhouette is wrong. required:true so a missing emit fails
       // the foundation spec (wave-1 Monaco pattern).
       (function sakhirTower() {
-        // Inside (right) of the real T1, over its braking zone.
-        const kT = K(T1F - 0.012);
-        // 40 m, not 50: at 50 m the 18.7 m AABB reaches 13 m of the T2/T4
-        // arm (racing 0.117) and the onTrack(18) guard skipped the required
-        // model — bahrain-foundation, #878. 40 m leaves 19 m of extra.
-        const a = anchor(kT, 1, 40), b = [a.r, a.u, a.t];
+        // Paddock side (+1) of the pit straight, between race control (38 m)
+        // and the hospitality kit (100 m). Side 1 gap 62: 19 m past control,
+        // clear of motorhomes at 26–34 m.
+        const kT = K(SF + 0.020);
+        const a = anchor(kT, 1, 62), b = [a.r, a.u, a.t];
         const BASE = a.c;
         const TOWER_H = 42;   // ~10–11 storeys
         const TOWER_R = 7.2;
@@ -381,7 +381,8 @@
           // Plaza on terrainYAt: BASE is road height, infield is ~0.1 m up.
           const plaza = terrainYAt(BASE[0], BASE[2]);
           const plazaLift = (plaza != null ? plaza - BASE[1] : 0) + 0.15;
-          addBox(stage, vadd(BASE, b[1], plazaLift), [18.0, 0.30, 18.0], POOL, b);
+          addBox(stage, vadd(BASE, b[1], plazaLift), [18.0, 0.30, 18.0],
+            [0.78, 0.74, 0.66], b);
         }, { required: true });
       })();
 
@@ -499,6 +500,9 @@
       }
       billboard(K(0.15), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
       floodMast(K(0.16), 1, 34, 39);
+      // University / Turn-4 DRS straight: Musco forest is denser along this
+      // uphill than the 55 m ring alone reads (bahrain.gp University stand map).
+      lightBank(K(0.185), 1, 28);
 
       // Perimeter ring (below) owns lap density; keep a few corner heroes only.
       // The left-hand hero sits at 0.195/18 m, not 0.20/30 m: the lap folds back
@@ -803,14 +807,23 @@
 
       {
         const SAND_RUNOFF = [0.69, 0.59, 0.40];
-        for (const [s0, s1] of [[0.10, 0.20], [0.60, 0.70]]) {
+        const SAND_ROCK   = [0.58, 0.48, 0.32];
+        for (const [s0, s1, side, gapBase, maxCnt] of [
+          [0.10, 0.20, -1, 20, 6],
+          [0.22, 0.30, -1, 18, 5],
+          [0.60, 0.70, -1, 20, 6],
+        ]) {
           let cnt = 0;
           for (let sf = s0; sf < s1; sf += 0.020) {
             const kk = K(sf);
-            const a = anchor(kk, -1, 20 + hash(kk * 5) * 12), b = [a.r, a.u, a.t];
+            const a = anchor(kk, side, gapBase + hash(kk * 5) * 12), b = [a.r, a.u, a.t];
+            if (onTrack(a.c[0], a.c[2], 6)) continue;
             addBox(out, vadd(a.c, a.u, 0.12), [5.5, 0.25, 9.5], SAND_RUNOFF, b);
+            if (hash(kk * 11) > 0.55) {
+              addBox(out, vadd(a.c, a.u, 0.28), [2.2, 0.35, 2.0], SAND_ROCK, b);
+            }
             cnt++;
-            if (cnt > 6) break;
+            if (cnt > maxCnt) break;
           }
         }
       }
@@ -1048,8 +1061,9 @@
       // 0.978-1.002 LEFT, the paddock side of the old 0.2250 diagonal, ~500 m
       // west of the real paddock. Gap 120-136: the inner loop's road is ~185 m
       // right of the pit straight here. Irregular rows, ~1 in 4 slots empty.
-      for (let c = 0; c < 4; c++) {
-        for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 5; c++) {
+        const rowPalms = c < 4 ? 3 : 2;
+        for (let r = 0; r < rowPalms; r++) {
           const sf = SF + 0.004 + c * 0.008 + (hash(c * 5.3 + r * 1.9) - 0.5) * 0.003;
           const k = K(sf % 1), hv = hash(k * 61 + r * 7);
           if (hv < 0.25) continue;

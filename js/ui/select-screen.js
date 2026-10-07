@@ -329,7 +329,9 @@ function toggleFav(id) {
   const next = on ? list.concat(id) : list.filter((x) => x !== id);
   if (next.length) store.set("favTracks", next);
   else {
-    store.rawDel("favTracks");
+    // undefined removes the key through write() (rev + notify). rawDel skipped
+    // both, so subscribers / rev-memoized UI never heard "favourites emptied".
+    store.set("favTracks", undefined);
     if (trackFilter === "fav") { trackFilter = "all"; store.set("trackFilter", "all"); }
   }
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();

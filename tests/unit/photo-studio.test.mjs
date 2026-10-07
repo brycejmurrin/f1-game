@@ -177,7 +177,7 @@ test("pre-existing photo mode keeps its pose on normal exit", () => {
   const b = boot({ priorPhoto: true }); b.api.open(); b.G.photoCam.pos[0] = 99; b.api.close(true);
   assert.equal(b.G.photoMode, true); assert.deepEqual(b.G.photoCam.pos, [1, 2, 3]);
 });
-test("DONE paints a busy/disabled state before restoring the scene", () => {
+test("DONE paints a busy state before restoring the scene (Escape door stays live)", () => {
   const frames = [], events = [];
   const b = boot({ requestAnimationFrame: (fn) => frames.push(fn) });
   b.api.open({ source: "garage", back: () => {
@@ -187,13 +187,16 @@ test("DONE paints a busy/disabled state before restoring the scene", () => {
   } });
   b.api.close(true);
   assert.equal(b.api.state().busy, true);
-  assert.equal(b.dom.byId("ps-close").disabled, true);
+  assert.equal(b.dom.byId("ps-close").disabled, false, "DONE stays the Escape door while CLOSING… paints");
   assert.equal(b.dom.byId("ps-close").textContent, "CLOSING…");
   assert.equal(b.dom.byId("ps-panel").getAttribute("aria-busy"), "true");
   assert.equal(b.dom.byId("photo-studio").hidden, false, "studio stays up so CLOSING… can paint");
   assert.ok(b.dom.document.body.classList.contains("photo-studio-open"));
   assert.deepEqual(events, []);
   assert.equal(b.order.includes("restore"), false);
+  // A second DONE/Escape during CLOSING… must no-op (st.closing guard), not hang.
+  b.api.close(true);
+  assert.equal(frames.length, 1, "a second close while closing does not queue another restore");
   frames.shift()();
   assert.equal(b.order.includes("restore"), true);
   assert.deepEqual(events, ["class-off", "hidden", "restored"], "portrait rotate-device can read display after photo-studio-open is gone");

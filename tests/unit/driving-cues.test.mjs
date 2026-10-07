@@ -298,3 +298,47 @@ test("a race-pace chicane still gets both calls (1.4 s / 69 m apart)", () => {
   for (let i = 0; i < 400; i++) { ctx._t = i * 1000 / 60; G.player.s = 800 + i * 50 / 60; ctx.DrivingCues.tick(); }
   assert.deepEqual(ctx._calls, ["L", "R"], "both chicane calls, got " + JSON.stringify(ctx._calls));
 });
+
+test("audio driving cues stay silent during a real-race WATCH (same gate as the spotter)", () => {
+  const curvatureCalls = [];
+  const ctx = {
+    Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
+    M4: { clamp: (v, a, b) => (v < a ? a : v > b ? b : v) },
+    PhysicsConsts: { FIXED_DT: 1 / 60, LAT_MAX: 22, BRAKE: 22, VMAX: 72 },
+    RealRace: { status: () => ({ watch: true }) },
+    Tracks: {
+      curvature(track, s) {
+        curvatureCalls.push(s);
+        const L = track.total || 200;
+        const u = ((s % L) + L) % L;
+        if (u > 30 && u < 55) return 0.04;
+        return 0.001;
+      },
+    },
+    BrakeCue: { on: () => false, debug: () => ({ urgency: 0 }) },
+    GameAudio: {
+      driveBrakeTone() { ctx._brakeN = (ctx._brakeN || 0) + 1; },
+      cornerCall(side) { ctx._calls = (ctx._calls || []).concat([side]); },
+    },
+    performance: { now: () => ctx._t },
+    document: undefined,
+    window: {},
+    _t: 0,
+    _brakeN: 0,
+    _calls: [],
+    curvatureCalls,
+  };
+  vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
+  const G = {
+    paused: false, state: "race", soundOn: true,
+    player: { s: 40, speed: 70, axEstSm: 0, finished: false, retired: false },
+    track: { total: 200 },
+    vTop: () => 72,
+  };
+  ctx.DrivingCues.create(G);
+  ctx.DrivingCues.setLevel(7);
+  for (let i = 0; i < 200; i++) { ctx._t = i * 50; G.player.s = 35 + i; ctx.DrivingCues.tick(); }
+  assert.equal(ctx._brakeN, 0, "no brake tone while watching");
+  assert.deepEqual(ctx._calls, [], "no corner calls while watching");
+  assert.equal(curvatureCalls.length, 0, "watch path must not read curvature");
+});

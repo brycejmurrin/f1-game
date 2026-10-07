@@ -193,6 +193,7 @@ let audioLoad = null;
 // the title's LAZY_CIRCUIT + scenery fetches widen it. Restore the persisted
 // master and levels (the setters clamp to 0..1) as soon as the engine lands.
 let audioRestored = false;
+let audioStub = null;   // the title stub, captured before reinjection replaces it
 function restoreOnEngine() {
   if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
   audioRestored = true;
@@ -203,6 +204,19 @@ function restoreOnEngine() {
     GameAudio.setMusicVolume(store.get("volMusic"));
     GameAudio.setSfxVolume(store.get("volSfx"));
   } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }
+  // EVERYTHING ELSE BOOT SAID TO THE STUB. PlatformSession.firstGesture ran
+  // GameAudio.init() + startMusic(-1) on the noop (the gesture is what pulls
+  // this bundle), so no AudioContext existed and the title AND the first race
+  // were silent: startEngine/startMusic return without one. The saved camera's
+  // mix (mode-switch.js boot call) and the iOS interruption pause hook
+  // (platform-session.js) went to the stub as well.
+  try {
+    const hook = audioStub && audioStub._interruptHook ? audioStub._interruptHook() : null;
+    if (hook && GameAudio.onInterrupted) GameAudio.onInterrupted(hook);
+    if (typeof CamModes !== "undefined" && CamModes.CAM_MODES && CamModes.CAM_MODES[G.camMode]) GameAudio.setCameraMix(CamModes.CAM_MODES[G.camMode].id);
+    const ua = typeof navigator !== "undefined" ? navigator.userActivation : null;
+    if (G.soundOn && (!ua || ua.hasBeenActive)) GameAudio.init();   // AudioPanel.init's setSound then starts the title loop on it
+  } catch (e) { Log.warn("audio", "first-gesture replay failed: " + (e && e.message)); }
   return true;
 }
 function ensureAudio() {
@@ -212,6 +226,7 @@ function ensureAudio() {
     audioLoad = Promise.resolve(true);
     return audioLoad;
   }
+  audioStub = typeof GameAudio !== "undefined" ? GameAudio : null;
   audioLoad = loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, { ready: restoreOnEngine }).then(() => {
     if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");

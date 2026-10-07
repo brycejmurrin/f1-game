@@ -578,8 +578,10 @@ test("two entrance lamps stand on the wall corners either side of the entry line
     // verge + 0.25) and beside the outer wall on the garage line (workOut +
     // 0.02 → + 0.32). BESIDE, not on top: a post standing on a wall's top has
     // only swept geometry under it and reads as a floating cluster
-    // (scenery-grounding caught exactly that on five circuits), so each stands
-    // on its own floor — the platform for one, the lane for the other.
+    // (scenery-grounding caught exactly that on five circuits). Both posts
+    // rise from the LANE FLOOR (y=0): the 0.35 m platform is a sweep the
+    // ground-audit support BFS cannot see, so a platform foot left suzuka/
+    // mexico entry lamps unsupported (2026-10-07).
     assert.ok(Math.abs(lats[0] - (p.bands.verge + 0.55)) < 0.2,
               `${id}: the track-side lamp is at the platform wall (${lats[0].toFixed(2)} vs ${(p.bands.verge + 0.55).toFixed(2)} m out)`);
     assert.ok(Math.abs(lats[1] - (p.off.workOut - 0.45)) < 0.2,

@@ -525,21 +525,22 @@ const SceneryPits = (function () {
         // BETWEEN the posts, on the lane, so neither reaches the racing line.
         const kAim = kOf(p.sIn + 10);
         const aim = at(kAim, laneCentreAt(kAim), 0);
-        // Each post stands ON ITS OWN FLOOR beside its wall, never on the
-        // wall's top: a box whose underside is 1.4 m up with only swept wall
-        // beneath it is a FLOATING CLUSTER, and float-audit named all four
-        // prims of the far one on five circuits when they were placed that way
-        // (estoril, imola, interlagos, istanbul, portimao). The fix is to give
-        // a prop ground, not to raise a baseline. The track-side post stands on
-        // the PLATFORM, 0.35 m up — the floor the exit signal's own post uses —
-        // just behind its wall; the far post on the lane floor just inside the
-        // outer wall. Both clear their wall's 0.30 m thickness.
+        // Each post stands on the LANE FLOOR, never on the wall top and never
+        // on the 0.35 m platform slab alone. A box whose underside is 1.4 m up
+        // with only swept wall beneath it is a FLOATING CLUSTER (float-audit
+        // named all four prims of the far one on estoril/imola/interlagos/
+        // istanbul/portimao). Footing the track-side post on the platform at
+        // 0.35 m fixed float-audit (threshold 1.2 m) but left ground-audit
+        // unsupported — the platform is a `sweep()` strip the prop support
+        // BFS cannot see, so the post + head + aspects read as 0.38-2.5 m
+        // gaps (suzuka 4, mexico 4 — 2026-10-07). Both posts now rise from
+        // y=0 through the platform; the head stays at HEAD_Y.
         const HEAD_Y = 2.55;                       // above the lane floor, the same on both
-        const posts = [{ lat: v0 + 0.55, foot: 0.35, toLane: 1 },        // the platform wall's nose, track side
-                       { lat: o.workOut - 0.45, foot: 0, toLane: -1 }];  // the outer wall opposite
+        const posts = [{ lat: v0 + 0.55, toLane: 1 },        // the platform wall's nose, track side
+                       { lat: o.workOut - 0.45, toLane: -1 }];  // the outer wall opposite
         for (const q of posts) {
-          const c = at(kGate, sd * (hw[kGate] + q.lat), q.foot), bs = basisAt(kGate);
-          const rise = HEAD_Y - q.foot;
+          const c = at(kGate, sd * (hw[kGate] + q.lat), 0), bs = basisAt(kGate);
+          const rise = HEAD_Y;
           rawBox(out, [c[0], c[1] + rise / 2, c[2]], [0.14, rise, 0.14], POST, bs);
           rawBox(out, [c[0], c[1] + rise, c[2]], [0.5, 0.9, 0.34], DARK, bs);
           const red = night ? [1.45, 0.22, 0.16] : [0.95, 0.14, 0.10];

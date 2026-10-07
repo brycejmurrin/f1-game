@@ -148,9 +148,14 @@ function create(G, deps) {
     const closing = !!st.closing;
     panel.setAttribute("aria-busy", value || closing ? "true" : "false");
     root.setAttribute("aria-busy", value || closing ? "true" : "false");
-    for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background", "ps-close"]) {
-      E[id].disabled = value || closing || (id !== "ps-capture" && id !== "ps-close" && !last);
+    // Keep #ps-close enabled: it is the data-esc-close / Start door. close()
+    // already no-ops while st.closing, and TopModal.onEscape skips a disabled
+    // door — so disabling DONE during CAPTURE/CLOSING trapped Escape until the
+    // async restore finished (~10s on software GL).
+    for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background"]) {
+      E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
+    E["ps-close"].disabled = false;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
   }

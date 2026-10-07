@@ -44,6 +44,16 @@ window.PhysicsConsts = {
   BRAKE_STAB_LO: 0.55,
   BRAKE_STAB_HI: 0.8,
   BRAKE_STAB_SHIFT: 0.5,
+  // COAST YAW DAMP (lift-off snap mid-corner). BRAKE_STAB only eases the
+  // PEDAL's rear share; pure coast still charges the rear via engine braking
+  // and forward weight transfer, so a near-limit lift-off grew yaw 1.66× in
+  // 0.75 s (pinned Monza straight, lock 0.8, 45 m/s — scratch/steer-feel-audit).
+  // Extra yaw damping while coasting (not throttle, not brake) once rearUtil
+  // clears COAST_YAW_LO, full by _HI. Keeps intentional lift-off rotation
+  // (player-dynamics >1.05×) without the snap. Evidence in PR / audit JSON.
+  COAST_YAW_DAMP: 1.5,
+  COAST_YAW_LO: 0.65,
+  COAST_YAW_HI: 1.10,
   // TYRE PEAK: the lateral curve (peak, plateau, floor) lives in
   // js/physics/tyre-model.js as TyreModel.lateralCurve — see there.
   // LOAD SENSITIVITY. Friction linear in axle load would let weight transfer
