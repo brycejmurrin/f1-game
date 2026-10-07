@@ -1153,6 +1153,56 @@ function fitHud() {
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
+  // fit() can undo the dock inset; shrink the sector plate before any extra
+  // inset widen (widening slides the plate left into #minimap).
+  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR) {
+    const margin = DOCK_AIR;
+    const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
+    const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
+    const secEl = els.hudSectors;
+    if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
+    for (let pass = 0; pass < 4; pass++) {
+      const secR = secEl.getBoundingClientRect();
+      if (!secR.width) break;
+      let worst = 0;
+      for (const g of _dockR.children) {
+        const r = g.getBoundingClientRect();
+        if (!(r.width && r.height)) continue;
+        if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+      }
+      if (!(worst > 0.5)) break;
+      const zSec = secEl.currentCSSZoom || 1;
+      const curW = secR.width / zSec;
+      secEl.style.maxWidth = Math.max(48, curW - worst / zSec).toFixed(1) + "px";
+      void secEl.offsetHeight;
+    }
+    let secR = secEl.getBoundingClientRect();
+    let worst = 0;
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (!(r.width && r.height)) continue;
+      if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+    }
+    if (worst > 0.5) {
+      const brLeft = boostRightLeft();
+      const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
+      if (Number.isFinite(left) && !(mapClear && secR.left - worst < mapClear)) {
+        zTop = zPaint();
+        if (zTop > 0) {
+          dockRW = insetFor(left, zTop);
+          hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+          void secEl.offsetHeight;
+        }
+      }
+    }
+    secR = secEl.getBoundingClientRect();
+    let onDock = false;
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (r.width && r.height && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
+    }
+    if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
+  }
   // Radio top slot AFTER HudLayout.fit — a pre-fit slot used the shipped tower
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
   // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
@@ -1182,6 +1232,8 @@ function fitHud() {
       void annPaint.offsetHeight;
     }
   }
+  radioTopSlot(root, bcast);
+  mirrorClear(root);
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.

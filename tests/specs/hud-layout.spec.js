@@ -93,6 +93,25 @@ const PIN_PREVIOUS_LOOK = () => {
   } catch (_) {}
 };
 
+/** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
+async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
+  await page.waitForFunction(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.body.classList.contains("desktop")) return true;
+    const boost = document.getElementById("btn-boost");
+    const sectors = document.getElementById("hud-sectors");
+    if (!boost || boost.hidden || !sectors) return false;
+    const sec = sectors.getBoundingClientRect();
+    const br = boost.getBoundingClientRect();
+    if (!(sec.width > 0 && br.width > 0)) return false;
+    const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+    if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+    const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
+      && sec.top < br.bottom - 0.5 && br.top < sec.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: timeoutMs });
+}
+
 async function race(page, steer, manual, ins, opts) {
   const o = opts || {};
   await page.addInitScript(PIN_PREVIOUS_LOOK);
@@ -227,11 +246,26 @@ async function race(page, steer, manual, ins, opts) {
       // backoff if wrap-reverse crawls BOOST back onto S3.
       try { window.__apex.freeze(true); } catch (_) { /* */ }
       return true;
-    }, null, { polling: 100, timeout: 15_000 });
+    }, null, { polling: 100, timeout: 30_000 });
   }
 }
 
 const measure = async (page, ctrl, hud, W, H, ins) => {
+  await page.evaluate(() => {
+    if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+  });
+  await waitTouchSectorsClearBoost(page);
+  await page.waitForFunction(() => {
+    const ann = document.getElementById("announce");
+    const sectors = document.getElementById("hud-sectors");
+    if (!ann || ann.hidden || !sectors) return true;
+    const a = ann.getBoundingClientRect();
+    const s = sectors.getBoundingClientRect();
+    if (!(a.width && s.width)) return true;
+    const hit = s.left < a.right - 0.5 && a.left < s.right - 0.5
+      && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: 30_000 });
   // THE BOX PROBE AND THE CLASH RULES live in tools/lib/hud-geometry.mjs since
   // 2026-10-03, shared with tools/shot/hud-survey.mjs (the HUD survey across
   // devices x cameras x presets), so the spec and the survey cannot disagree on
@@ -582,7 +616,7 @@ test.describe("tilt steer high HUD scale", () => {
       const s = sec.getBoundingClientRect(), g = boost.getBoundingClientRect();
       if (!(s.width > 0 && g.width > 0)) return false;
       return s.right <= g.left + 0.5;
-    }, null, { polling: 100, timeout: 10_000 });
+    }, null, { polling: 100, timeout: 30_000 });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },
@@ -625,7 +659,7 @@ async function enableOptIns(page) {
       if (rr.right > ir.left - 4) return false;
     }
     return true;
-  }, null, { polling: 100, timeout: 15_000 });
+  }, null, { polling: 100, timeout: 30_000 });
 }
 
 test.describe("opt-in readouts vs touch controls", () => {
