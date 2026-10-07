@@ -187,11 +187,6 @@ async function race(page, steer, manual, ins, opts) {
       if (!boost || boost.hidden) return true;
       const sec = document.getElementById("hud-sectors");
       if (!sec || sec.hidden || !sec.childElementCount) return false;
-      // Force one HUD fit on this turn (jump → updateHud) so --dock-r-w and
-      // the announce lane converge before we freeze. freeze does not stop
-      // updateHud; measuring a pre-grow plate was how S3×#announce slipped
-      // through under APEX_WORKERS=2.
-      try { window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
       const b = boost.getBoundingClientRect(), s = sec.getBoundingClientRect();
       if (!(b.width > 0 && s.width > 0)) return false;
       const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
@@ -204,6 +199,16 @@ async function race(page, steer, manual, ins, opts) {
         const a = ann.getBoundingClientRect();
         if (a.width > 0 && s.left < a.right - 0.5 && a.left < s.right - 0.5
             && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) return false;
+      }
+      // Notch safe box: a mid-fit #minimap can sit under --sal for one tick
+      // (full-suite w2: unsafe ["#minimap"] on buttons/manual). Require the
+      // map inside the injected safe insets before freezing.
+      const map = document.getElementById("minimap");
+      if (map && !map.hidden) {
+        const m = map.getBoundingClientRect();
+        const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
+        const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
+        if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
       }
       // Freeze in the same turn that saw clearance. updateHud still ticks
       // while frozen, but fitHud's painted-clash path re-opens the same-key
