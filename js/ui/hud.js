@@ -1110,33 +1110,33 @@ function fitHud() {
     // Cap so S3 cannot walk past mid into #minimap / #announce.
     return Math.min(need, midCap);
   };
-  // Publish from the current leftmost / BOOST edge, then painted-overlap
-  // corrections. Wrap-reverse can leave dockLeftOf() ~10px right of the BOOST
-  // disc during the same call (CI oversize workers=2: dockRW from 597 while
-  // BOOST sat at 587). Growing from the painted S3×BOOST gap closes that;
-  // midCap stops the plate walking into #announce / #minimap.
+  // Publish from the current leftmost / BOOST edge, then at most one painted
+  // correction. Under load a multi-pass += grow could fire while #hud-sectors
+  // had not yet taken the inset (offsetHeight flush lagged), stacking up to
+  // midCap (~half the viewport) and shoving S3 onto #announce (oversize CI
+  // workers=2: dockRW 607 with BOOST still at 587).
   let zTop = zPaint();
   let dockRW = insetFor(dockLeftOf(), zTop);
   hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
   if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
-    // Up to three painted corrections: wrap-reverse can reflow after each grow
-    // (oversize-hud-layout APEX_WORKERS=2: #hud-sectors+btn-boost).
-    for (let pass = 0; pass < 3; pass++) {
-      const secR = els.hudSectors.getBoundingClientRect();
-      const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-      const br = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
-      const left = (br && br.width) ? br.left : dockLeftOf();
-      if (!(secR.width && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5)) break;
+    const secR = els.hudSectors.getBoundingClientRect();
+    const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
+    const br = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+    const left = (br && br.width) ? br.left : dockLeftOf();
+    if (secR.width && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5) {
       zTop = zPaint();
-      if (!(zTop > 0)) break;
-      const grow = (secR.right - left + DOCK_AIR) / zTop;
-      const midCap = Math.max(0, (window.innerWidth / 2) / zTop - 10 - sarPx / zTop);
-      dockRW = Math.min((parseFloat(root.style.getPropertyValue("--dock-r-w")) || 0) + Math.max(grow, 0.5), midCap);
-      hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
-      void els.hudSectors.offsetHeight;
-      if (_dockR) void _dockR.offsetHeight;
+      if (zTop > 0) {
+        const overlapPx = secR.right - (left - DOCK_AIR);
+        const midCap = Math.max(0, (window.innerWidth / 2) / zTop - 10 - sarPx / zTop);
+        // Absolute clear from the BOOST edge — do not stack a second += grow
+        // on a stale plate (that is how dockRW hit midCap).
+        dockRW = Math.min(insetFor(left, zTop) + Math.max(overlapPx / zTop, 0), midCap);
+        hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+        void els.hudSectors.offsetHeight;
+        if (_dockR) void _dockR.offsetHeight;
+      }
     }
   }
   radioTopSlot(root, bcast);   // after the dock cap: it stands off the docks as painted
@@ -1148,6 +1148,23 @@ function fitHud() {
   // #hud-sectors+#announce on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   announceLane(root);
+  // Painted guarantee: if the card still rects onto S3 (lane vars computed
+  // against a pre-grow plate, or flex min-content ignored width:0), collapse.
+  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  if (annPaint && !annPaint.hidden && els.hudSectors && !els.hudSectors.hidden) {
+    const a = annPaint.getBoundingClientRect();
+    const s = els.hudSectors.getBoundingClientRect();
+    if (a.width > 0 && s.width > 0
+        && s.left < a.right - 0.5 && a.left < s.right - 0.5
+        && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) {
+      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
+      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
+      hStyle(root, "--announce-lane-shift", "0%");
+      hStyle(root, "--announce-lane-w", "0px");
+      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
+      void annPaint.offsetHeight;
+    }
+  }
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.

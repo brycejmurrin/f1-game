@@ -187,6 +187,11 @@ async function race(page, steer, manual, ins, opts) {
       if (!boost || boost.hidden) return true;
       const sec = document.getElementById("hud-sectors");
       if (!sec || sec.hidden || !sec.childElementCount) return false;
+      // Force one HUD fit on this turn (jump → updateHud) so --dock-r-w and
+      // the announce lane converge before we freeze. freeze does not stop
+      // updateHud; measuring a pre-grow plate was how S3×#announce slipped
+      // through under APEX_WORKERS=2.
+      try { window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
       const b = boost.getBoundingClientRect(), s = sec.getBoundingClientRect();
       if (!(b.width > 0 && s.width > 0)) return false;
       const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
@@ -314,8 +319,32 @@ for (const v of VIEWS) {
           // it was in the array the whole time. The dump also carries the fit
           // pass's own state, because "which elements" and "why did the cap not
           // stop it" are the same question.
-          const dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
+          let dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
                                               unsafe: r.unsafe, fit: r.fit || null });
+          if (r.hudClash.length) {
+            const geo = await page.evaluate(() => {
+              const root = document.documentElement;
+              const box = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { l:+r.left.toFixed(1), r:+r.right.toFixed(1), t:+r.top.toFixed(1), b:+r.bottom.toFixed(1),
+                  w:+r.width.toFixed(1), h:+r.height.toFixed(1), hidden: !!el.hidden,
+                  vis: getComputedStyle(el).visibility, collapsed: el.hasAttribute("data-lane-collapsed") };
+              };
+              return {
+                dockRW: root.style.getPropertyValue("--dock-r-w"),
+                laneX: root.style.getPropertyValue("--announce-lane-x"),
+                laneW: root.style.getPropertyValue("--announce-lane-w"),
+                radioTop: document.body.classList.contains("hud-radio-top"),
+                radioTopW: root.style.getPropertyValue("--radio-top-w"),
+                radioTopX: root.style.getPropertyValue("--radio-top-x"),
+                body: document.body.className,
+                sec: box("hud-sectors"), ann: box("announce"), boost: box("btn-boost"),
+              };
+            });
+            dump += " geo=" + JSON.stringify(geo);
+          }
           // No control may sit on another — every one of these is a tap target.
           expect(r.overlaps, "controls must not sit on each other" + dump).toEqual([]);
           // And no READOUT may sit on a tap target, which is the failure that
