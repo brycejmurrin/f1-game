@@ -683,6 +683,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~1 s — and it belongs in the edit loop because the file it guards is
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
+  // Lateral→longitudinal bicycle couple (v·r − Fyf·sin δ) in player-forces:
+  // straight coast bit-identical to tip; held-steer coast matches couple
+  // within tol; COUPLE_V_MIN=3; yaw damp untouched. createGame once, ~2.5 s.
+  "tests/unit/speed-coupling.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
