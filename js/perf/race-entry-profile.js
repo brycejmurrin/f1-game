@@ -29,6 +29,9 @@ const RaceEntryProfile = (() => {
   let sawReady = false;
   let endAfterReady = 0;
   let generation = 0, presentationEnabled = true;
+  // True after beginUi until continueWindow/begin consumes it — keeps cover marks
+  // for one tap→startRace handoff without suppressing a superseding startRace begin().
+  let uiPending = false;
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -79,6 +82,7 @@ const RaceEntryProfile = (() => {
   function begin(tag) {
     disarmObserver();
     generation++; presentationEnabled = true;
+    uiPending = false;
     legs = [];
     marks = [];
     longTasks = [];
@@ -90,6 +94,41 @@ const RaceEntryProfile = (() => {
     armed = true;
     armObserver();
     if (tag) pushMark("begin:" + tag);
+  }
+
+  /** Arm on the UI Start Race tap so cover→paint marks survive until startRace.
+   *  startRace's runSession uses continueWindow once; a later startRace still
+   *  calls begin() so generation bumps and old observers are dropped. */
+  function beginUi(tag) {
+    if (armed) { mark("ui:tap"); return; }
+    begin(tag || "uiStart");
+    uiPending = true;
+  }
+
+  function continueWindow(tag) {
+    if (armed && uiPending) {
+      uiPending = false;
+      if (tag) pushMark("begin:" + tag);
+      presentationEnabled = false;
+      return;
+    }
+    begin(tag);
+  }
+
+  /** Yield so #loading can paint before ensure* / intro sync work.
+   *  https://developer.chrome.com/blog/use-scheduler-yield — Safari: rAF+timeout. */
+  function afterPaint() {
+    mark("ui:cover");
+    const done = () => { mark("ui:painted"); };
+    if (typeof scheduler !== "undefined" && scheduler.yield) {
+      return scheduler.yield().then(done, done);
+    }
+    if (typeof requestAnimationFrame === "function") {
+      return new Promise((r) => {
+        requestAnimationFrame(() => { setTimeout(r, 0); });
+      }).then(done, done);
+    }
+    return Promise.resolve().then(done);
   }
 
   function end() {
@@ -175,7 +214,8 @@ const RaceEntryProfile = (() => {
     let owner = 0;
     const owns = () => owner !== 0 && owner === generation;
     const request = sessionEntry.begin("race", key, async () => {
-      begin("startRace"); owner = generation; presentationEnabled = false;
+      // Keep ui:cover / ui:painted from the Start Race tap when present.
+      continueWindow("startRace"); owner = generation; presentationEnabled = false;
       mark("ensureScenery:start");
       try { return await scenery(); }
       finally { if (owns()) mark("ensureScenery:end"); }
@@ -217,7 +257,7 @@ const RaceEntryProfile = (() => {
   }
 
   return {
-    begin, end, lap, mark, notePresent, tickFrame,
+    begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession,
     snapshot,
     legs: () => legs.slice(),

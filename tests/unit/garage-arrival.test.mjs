@@ -379,15 +379,19 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   };
   const free = await run('free');
   assert.deepEqual(free.events[0], ['card'], 'the plate is up before the intro so the dialog drop is never black');
-  assert.deepEqual(free.events[1], ['intro', true, true, 'PREPARING…', true], 'no warm: the intro starts at once under #loading, not the settings dialog');
-  assert.deepEqual(free.events[2], ['sync', true, false, 'START RACE', false], 'the car moving keeps the sheet down and gives both buttons back');
+  // afterPaint yields a microtask so the plate can paint before intro sync work.
+  assert.deepEqual(free.events[1], ['sync', true, true, 'PREPARING…', true], 'sync return: sheet dismissed, PREPARING…, intro not yet (paint yield)');
+  assert.ok(free.events.some((e) => e[0] === 'intro'), 'no warm: intro runs under #loading after the paint yield');
+  const freeIntro = free.events.find((e) => e[0] === 'intro');
+  assert.deepEqual(freeIntro, ['intro', true, true, 'PREPARING…', true], 'intro under #loading, not the settings dialog');
+  assert.deepEqual([free.sheet.hidden, free.btn.disabled, free.btn.textContent, free.back.disabled], [true, false, 'START RACE', false], 'the car moving keeps the sheet down and gives both buttons back');
   assert.equal(free.ctx._menuGate.generation, 1, 'the menu\'s own build and warms stand down, as when the sheet closed on the tap');
   assert.equal(free.ctx.cleared, 1);
   const ends = await run('ends');
   assert.deepEqual(ends.events[0], ['card'], 'Start Race raises the card immediately');
   assert.deepEqual(ends.events[1], ['sync', true, true, 'PREPARING…', true], 'a warm compiling at the tap: the dialog is already hidden so #loading is visible');
-  assert.deepEqual(ends.events[2], ['held', true, true, 'PREPARING…', true]);
-  assert.deepEqual(ends.events[3], ['intro', true, true, 'PREPARING…', true], 'the warm over, the intro runs under the card');
+  assert.ok(ends.events.some((e) => e[0] === 'held'), 'warm wait samples while PREPARING…');
+  assert.ok(ends.events.some((e) => e[0] === 'intro'), 'the warm over, the intro runs under the card');
   assert.deepEqual([ends.sheet.hidden, ends.btn.disabled, ends.btn.textContent, ends.back.disabled], [true, false, 'START RACE', false]);
   for (const mode of ['quit', 'setting']) {
     const r = await run(mode);
@@ -400,7 +404,8 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   assert.equal(stuck.events.some(e => e[0] === 'intro'), false, 'a warm that never ends cannot hand off');
   assert.deepEqual([stuck.sheet.hidden, stuck.btn.disabled, stuck.back.disabled], [false, false, false], 'timed-out preparation releases the sheet for retry');
   const thrown = await run('throw');
-  assert.deepEqual(thrown.events.slice(2), [['failed'], ['sync', false, false, 'START RACE', false]], 'a throwing intro brings the sheet back for retry');
+  assert.ok(thrown.events.some((e) => e[0] === 'failed'), 'a throwing intro announces failure');
+  assert.deepEqual([thrown.sheet.hidden, thrown.btn.disabled, thrown.btn.textContent, thrown.back.disabled], [false, false, 'START RACE', false], 'a throwing intro brings the sheet back for retry');
   // The cold paths' cover: the card only when the sheet is not already covering.
   const cover = {}; const cv = { _introSheet: null, loadingScreen: { building: () => { cover.card = (cover.card || 0) + 1; } }, studioSkip() {} };
   vm.createContext(cv); vm.runInContext(helpers + ';globalThis.setSheet = (v) => { _introSheet = v; };', cv);
@@ -417,8 +422,11 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
   const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
   assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');
-  assert.ok(go.indexOf('sheet.hidden = true') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
+  assert.match(go, /const dismissSheet = \(\) => \{/, 'rs-go sync-dismisses the :modal dialog so #loading is not trapped under top layer');
+  assert.ok(go.indexOf('dismissSheet();') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
   assert.match(game, /buildStandings, raceIntro: raceIntroFromSheet,/, 'game.js wires the sheet-covering intro into race settings');
+  assert.match(wrapper, /sheet\.close\(\)/, 'raceIntroFromSheet sync-closes the dialog (MutationObserver is too late)');
+  assert.match(wrapper, /afterPaint|yieldPaint/, 'and yields so #loading paints before intro / warm work');
 });
 
 const introGameSource = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
@@ -829,6 +837,7 @@ test('duplicate race-settings presses share preparation and enter the intro once
   const owner = h.ctx.sheetOwner();
   h.ctx.raceIntroFromSheet(() => view.goes++, view.sheet, view.btn);
   assert.strictEqual(h.ctx.sheetOwner(), owner);
+  await h.drain(); // paint-yield microtask, then the warm wait is armed
   assert.equal(h.waits.length, 1, 'no second wait or preparation owner');
   h.assertBusy(view);
   h.ready(); h.waits[0].resolve(); await h.drain();
@@ -839,8 +848,10 @@ test('duplicate race-settings presses share preparation and enter the intro once
 
 test('settlement of an abandoned warm wait cannot unlock the newer sheet owner', async () => {
   const h = sheetRecoveryHarness({ manual: true }), old = h.start();
+  await h.drain();
   const oldWait = h.waits[0]; h.ctx.cancelIntro(); h.assertRetry(old);
-  const newer = h.start(), owner = h.ctx.sheetOwner(), newWait = h.waits[1];
+  const newer = h.start(); await h.drain();
+  const owner = h.ctx.sheetOwner(), newWait = h.waits[1];
   oldWait.reject(new Error('old owner failed after cancellation')); await h.drain();
   assert.strictEqual(h.ctx.sheetOwner(), owner);
   h.assertBusy(newer);
@@ -853,6 +864,7 @@ test('settlement of an abandoned warm wait cannot unlock the newer sheet owner',
 
 test('a successful warm handoff leaves cold preparation covered until the garage boundary', async () => {
   const h = sheetRecoveryHarness({ manual: true, deferredCold: true }), view = h.start();
+  await h.drain();
   const owner = h.ctx.sheetOwner(); h.ready(); h.waits[0].resolve(); await h.drain();
   assert.equal(h.intros.length, 1);
   assert.equal(h.intros[0].stillWarming, false);
@@ -894,6 +906,7 @@ test('a synchronous intro exception restores retry instead of starting the race'
 
 test('a settings change abandons the warm wait and restores its owner', async () => {
   const h = sheetRecoveryHarness({ manual: true }), view = h.start();
+  await h.drain();
   h.ctx.settings = 'two';
   h.waits[0].resolve();
   await h.drain();

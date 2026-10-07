@@ -107,6 +107,28 @@ test("PerformanceObserver longtask entries are recorded when supported", () => {
   assert.equal(P.armed(), false);
 });
 
+test("beginUi + afterPaint + continueWindow keep UI cover marks into startRace", async () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("uiStart");
+  assert.equal(P.armed(), true);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "begin:uiStart"));
+  t = 10;
+  const painted = P.afterPaint();
+  await painted;
+  const names = P.snapshot().marks.map((m) => m.n);
+  assert.ok(names.includes("ui:cover"));
+  assert.ok(names.includes("ui:painted"));
+  t = 20;
+  P.continueWindow("startRace");
+  const after = P.snapshot().marks.map((m) => m.n);
+  assert.ok(after.includes("begin:uiStart"), "UI window not wiped");
+  assert.ok(after.includes("ui:painted"), "cover→paint marks survive into startRace");
+  assert.ok(after.includes("begin:startRace"));
+  P.beginUi("uiStart");
+  assert.ok(P.snapshot().marks.some((m) => m.n === "ui:tap"), "second tap while armed marks ui:tap");
+});
+
 test("manifest lists the module before quality-preset (load order)", () => {
   const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   const a = man.indexOf('"js/perf/race-entry-profile.js"');

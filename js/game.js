@@ -2594,6 +2594,18 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  // Plate already raised in startRace() / raceIntroFromSheet. Yield BEFORE
+  // ensureAudio / resets so #loading can paint (TopModal's MutationObserver
+  // close and the first frame) instead of sitting under a frozen dialog for
+  // the whole LAZY_AUDIO + scenery task. game-vm has no frame pump.
+  // https://developer.chrome.com/blog/use-scheduler-yield
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) {
+    if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.mark) RaceEntryProfile.mark("body:yield");
+    await yieldMain();
+  }
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   await ensureAudio();   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine
@@ -2617,9 +2629,6 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2651,10 +2660,7 @@ async function startRaceBody() {
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
-  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
-  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
-    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
   if (!vmNoFramePump) await yieldMain();
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
@@ -2821,7 +2827,13 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
-  const rs = $("race-settings"); if (rs) rs.hidden = true;   // dialog top-layer covers #loading
+  // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
+  // so #loading is not trapped under :modal for the rest of this long task.
+  const rs = $("race-settings");
+  if (rs) {
+    rs.hidden = true;
+    try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
+  }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
@@ -3946,28 +3958,49 @@ function startRaceCovered() {
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
 // START RACE / PRACTICE START FROM RACE SETTINGS. The sheet is a <dialog> in the
-// top layer, so #loading cannot paint over it — hide it first, then raise the plate.
+// top layer, so #loading cannot paint over it — hide + sync-close first, raise
+// the plate, THEN yield one frame before intro / warm work (otherwise the
+// MutationObserver close and the first paint never run and the player sees a
+// frozen Race Settings dialog for the whole long task).
 function raceIntroFromSheet(go, sheet, btn) {
   if (_introSheet) return;   // already preparing (START is disabled: a synthetic second press)
-  if (sheet) sheet.hidden = true;
+  if (sheet) {
+    sheet.hidden = true;
+    try { if (sheet.open && typeof sheet.close === "function") sheet.close(); } catch (_) { /* already closed */ }
+  }
   if (loadingScreen.phase()) return;
   loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race");
-  if (!btn) { raceIntro(go); return; }
-  const back = $("rs-cancel"), owner = _introSheet = { sheet, btn, back, label: btn.textContent };
-  btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true;
+  if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.beginUi) RaceEntryProfile.beginUi("uiStart");
+  const back = btn ? $("rs-cancel") : null;
+  const owner = btn ? (_introSheet = { sheet, btn, back, label: btn.textContent }) : null;
+  if (btn) { btn.disabled = true; btn.textContent = "PREPARING…"; if (back) back.disabled = true; }
   clearTimeout(flybyBuildTimer); _menuGate.generation++;
   const failed = (e) => {
-    if (_introSheet !== owner) return;
+    if (owner && _introSheet !== owner) return;
     Log.warn("game", "pre-race preparation failed", e); cancelIntro(); loadingScreen.stop();
     announce("PREPARATION FAILED — please retry", 5, "info");
   };
   const intro = () => { try { raceIntro(go); } catch (e) { failed(e); } };
-  try { if (!(gfx.warming && gfx.warming())) { intro(); return; } } catch (e) { failed(e); return; }
-  const n = ++_introRun, settings = entrySettings();
-  const live = () => n === _introRun && state === "menu" && settings === entrySettings();
-  (async () => { try {
-    if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) sheetRelease(false);
-  } catch (e) { failed(e); } })();
+  const yieldPaint = (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint)
+    ? () => RaceEntryProfile.afterPaint()
+    : () => Promise.resolve();
+  (async () => {
+    try {
+      // Paint #loading (and finish dialog.close) before menuGridCars / warm / ensure*.
+      await yieldPaint();
+      if (owner && _introSheet !== owner) return;
+      try {
+        if (gfx.warming && gfx.warming()) {
+          const n = ++_introRun, settings = entrySettings();
+          const live = () => n === _introRun && state === "menu" && settings === entrySettings();
+          if (await awaitIntroWarm(live)) intro();
+          else if (owner && _introSheet === owner) sheetRelease(false);
+          return;
+        }
+      } catch (e) { failed(e); return; }
+      intro();
+    } catch (e) { failed(e); }
+  })();
 }
 function raceIntro(go) {
   // The card is the whole screen: the Data Hub's JUMP IN closes a dialog that sat OVER the title, which then showed round the card.
