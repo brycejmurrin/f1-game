@@ -203,9 +203,16 @@ const NetLobby = (function () {
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
         Log.info("net", "peer leave " + id);
         session = [...sessions.values()][0] || null;
-        if (!sessions.size) {
+        // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
+        // sessions map to NetPlay and clears it, but leaves transports up for
+        // the race. Gating on !sessions.size made every mid-race drop look like
+        // an empty room ("Connection closed." / "Your friend left the room.",
+        // _peers wiped) even when another guest's transport was still live —
+        // the multi-peer branch below was unreachable once the race started.
+        // Room-phase behaviour is unchanged: sessions and transports agree.
+        if (!transports.size) {
           clearInterval(pumpTimer); pumpTimer = null;
-          // In the race (finishStart emptied this map) the rival is now AI; in the ROOM the room is simply over.
+          // In the race (finishStart emptied sessions) the rival is now AI; in the ROOM the room is simply over.
           const racing = friendQualifying || (typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace());
           // Relayed profiles ("g2", "g3"…) are keyed by the host's ids, not
           // this transport's, so the delete above missed them. Clear them in
@@ -233,6 +240,8 @@ const NetLobby = (function () {
           // only the host can tell them one is gone: their roster kept the
           // leaver forever — the quali gate waited on a lap that never came,
           // and the start seated a net-owned car no packet would ever move.
+          // Mid-race NetPlay already owns race-phase LEFT (wire id); this
+          // lobby-phase LEFT is for the waiting room / friend quali roster.
           if (role === "host") {
             for (const sess of sessions.values()) {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
