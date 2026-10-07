@@ -205,7 +205,7 @@
       // The chicane bowl walls (bowlSeatWall 0.700–0.730 L, 0.742–0.775 R, gap
       // 24) stand where the 22/26 m hedges run: the hedge chunks were built
       // straight through the seating mass. The dune grass stops at the bowl.
-      const HEDGE_SKIP = [[0.695, 0.735, -1], [0.737, 0.780, 1]];
+      const HEDGE_SKIP = [[0.683, 0.738, -1], [0.737, 0.822, 1], [0.773, 0.822, -1]];
       const marramHedge = (s0, s1, side, gap, h, col) => {
         const step = 5 / track.total;
         let i = 0;
@@ -318,16 +318,18 @@
         { rows: 7, fascia: [0.96, 0.42, 0.02] });   // Tarzan hairpin R
       grandstandEx(0.09, -1,  14, 26, null, orange,
         { livery: "orange", roof: "flat" }); // Tarzan exit L
-      grandstandEx(0.135,-1,  28, 40, null, orange,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked L (gap 22→28: steeply banked, roof must clear)
+      grandstandEx(0.132, 1,   26, 38, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked — outside (+1) of the L bowl (Arena/Hugenholtz guide: grandstands on outer rim)
       duneDeck("zandvoort-deck-hugenholtz", 0.18, 1, 16, 5,
         { rows: 6, fascia: [0.92, 0.90, 0.86] });   // Hugenholtz exit R
+      duneDeck("zandvoort-deck-arena-exit", 0.798, -1, 18, 5,
+        { rows: 6, fascia: [0.96, 0.44, 0.04] });   // Arena 1–3 temp decks outside T12 R exit (dutchgp Arena bowl)
       grandstandEx(0.48, -1,  28, 34, null, orange,
         { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
       grandstandEx(0.53,  1,  18, 28, null, orange,
         { livery: "alu", roof: "none", endWalls: true });
-      grandstandEx(0.60, -1,  16, 44, null, orange,
-        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // Masterbocht L
+      grandstandEx(0.588, 1,  14, 42, null, orange,
+        { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true, pylons: true }); // T9 Mastersbocht — outside (+1) of fast L (was inside −1)
       grandstandEx(0.865, 1,  42, 36, null, orange,
         { livery: "alu", roof: "none" }); // Luyendyk approach R (gap 36→42: banked corner clearance) — uncovered temporary bleacher
       grandstandEx(0.915, 1,  28, 80, null, orange,
@@ -347,14 +349,18 @@
       // another (2.0 m deep). Left wall: the straight approach (curv ~0.001,
       // ends on the right-hander's OUTSIDE). Right wall: the left-hander's
       // outside, from its turn-in.
-      bowlSeatWall(0.700, 0.730, -1, 24, {
+      bowlSeatWall(0.688, 0.732, -1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
-      });
-      bowlSeatWall(0.742, 0.775, 1, 24, {
+      });   // Arena-In braking / T10 R outside (−1)
+      bowlSeatWall(0.742, 0.802, 1, 24, {
         h: 5.0, thick: 2.0, shell: sand, step: 9,
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
-      });
+      });   // T11 L outside (+1) through Arena exit kink
+      bowlSeatWall(0.778, 0.818, -1, 22, {
+        h: 4.8, thick: 2.0, shell: sandDk, step: 9,
+        crowdCols: [orange, [1.00, 0.58, 0.08], [0.88, 0.24, 0.02]],
+      });   // T12 R long-radius outside — completes the facing Arena bowl
 
       for (const [idx, s, dist] of [[0, 0.34, 112], [1, 0.675, 118]]) {
         const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
@@ -415,7 +421,7 @@
         });
       }
 
-      for (const [s0, s1, side] of [[0.255, 0.365, -1], [0.615, 0.728, -1]]) {   // 0.728: the chicane bowl wall (gap 24) begins at 0.700; bushes sit behind it
+      for (const [s0, s1, side] of [[0.255, 0.365, -1], [0.615, 0.688, -1]]) {   // stop marram before Arena bowl walls (from ~0.688)
         along(s0, s1, 34, (k) => {
           const seed = k * 137 + side;
           // 32+: the -1 marram hedge runs at 28 m (2.4 m wide, +-0.8 jitter);
@@ -665,15 +671,19 @@
       // Catch / debris fencing in front of grandstands
       fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
       fence(0.04, 0.09, -1, 8.0, 4.2, fenceCol);
-      fence(0.11, 0.19, -1, 8.0, 4.2, fenceCol);
-      fence(0.15, 0.19, 1,  8.0, 4.0, fenceCol);
+      fence(0.11, 0.19, 1,  8.0, 4.2, fenceCol);   // Hugenholtz outer-rim GA fence (stand now +1)
+      fence(0.26, 0.54, 1,  10.0, 3.8, fenceCol); // seaward GA / dune crest — beach-side spectator line
       fence(0.48, 0.54, -1, 9.0, 4.0, fenceCol);
+      fence(0.688, 0.822, -1, 8.5, 4.0, fenceCol);
+      fence(0.695, 0.805, 1,  8.5, 4.0, fenceCol);
       fence(0.86, 0.99, 1,  8.0, 4.4, fenceCol);
       fence(0.94, 1.00, -1, 8.0, 4.2, fenceCol);
       recordBarrier(0.00, 0.10, 1, 8.0);
       recordBarrier(0.04, 0.09, -1, 8.0);
-      recordBarrier(0.11, 0.19, -1, 8.0);
-      recordBarrier(0.15, 0.19, 1, 8.0);
+      recordBarrier(0.11, 0.19, 1, 8.0);
+      recordBarrier(0.26, 0.54, 1, 10.0);
+      recordBarrier(0.688, 0.822, -1, 8.5);
+      recordBarrier(0.695, 0.805, 1, 8.5);
       recordBarrier(0.48, 0.54, -1, 9.0);
       recordBarrier(0.86, 0.99, 1, 8.0);
       recordBarrier(0.94, 1.00, -1, 8.0);
@@ -715,7 +725,7 @@
       gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
       gantry(0.99,  6.5, [0.14, 0.14, 0.18]);
 
-      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.135, -1, 28], [0.915, 1, 28], [0.60, -1, 16]]) {
+      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.132, 1, 26], [0.915, 1, 28], [0.588, 1, 14]]) {
         const a = anchor(K(s), side, buntDist);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
@@ -762,9 +772,9 @@
         // Pit straight main stand (s≈0.01, side=1, gap=12, len=36)
         for (const [s, side, gap, len] of [
           [0.01,  1,  16, 36],   // pit straight main R
-          [0.135,-1,  28, 40],   // Hugenholtz banked L (gap updated to match grandstand)
+          [0.132, 1,   26, 38],   // Hugenholtz banked (+1)
           [0.915, 1,  28, 80],   // Arie Luyendyk massive R (gap updated to match grandstand)
-          [0.60, -1,  16, 44],
+          [0.588, 1,  14, 42],
         ]) {
           const k = K(s), a = anchor(k, side, gap + 5);
           const b = [a.r, a.u, a.t];
