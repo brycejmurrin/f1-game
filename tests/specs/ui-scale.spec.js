@@ -344,6 +344,13 @@ test.describe("UI scale", () => {
       await page.evaluate(() => window.__apex.uiScale(200));
       await page.waitForFunction(() => document.body.dataset.density === "compact",
         null, { polling: 100, timeout: 5_000 });
+      // Density flips before the compact brand zoom always recomputes: CI once
+      // sampled getComputedStyle(#menu-brand).zoom as the coarse default 1.09
+      // while --ui-scale was already 2 (oversize-ui-scale-3of3 @ 76f1c6b9).
+      await page.waitForFunction(() => {
+        const brand = document.getElementById("menu-brand");
+        return !!brand && Math.abs(+getComputedStyle(brand).zoom - 1) < 0.001;
+      }, null, { polling: 100, timeout: 5_000 });
 
       const scale = await page.evaluate(() => ({
         requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
