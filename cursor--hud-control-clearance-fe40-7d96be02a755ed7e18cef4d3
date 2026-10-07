@@ -1,1 +1,1 @@
-1791362777	Cursor Agent	fix(hud): landscape clearance for rel/inputs/sectors vs touch controls — css/hud.css js/ui/hud-layout.js js/ui/hud-relative.js tests  [cursor/hud-control-clearance-fe40; session 7d96be02a755ed7e18cef4d3]
+1791369257	Cursor Agent	URGENT Pages gate: hud-layout notched-landscape #hud-sectors+#announce — css/hud.css js/ui/hud-layout.js tests; may touch hud.js announceLane only  [cursor/hud-control-clearance-fe40; session 7d96be02a755ed7e18cef4d3]
