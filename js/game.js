@@ -2141,11 +2141,15 @@ async function loadTrackStepped(idx, live) {
   let built = null;
   try {
     dropTrackWorld();
-    // apex26.buildWorker (default ON when multi-core): built off the main thread
-    // and replayed here; null (off, failed) falls back to the stepped build.
-    // startRaceBody may already have kicked the same key — build() dedupes.
+    // apex26.buildWorker (default ON when multi-core): off the main thread for
+    // IN-SESSION track switches only (state race/count). Cold race entry from
+    // the menu stays on the paced build — quiet A/B showed worker+replay
+    // regressing race-entry maxBlock/loadTrack wall while cutting track-switch
+    // longtasks (see PR #1175 table). null (off/failed) → stepped build.
     const opts = trackBuildOpts(sessionDark, wantSlots);
-    const msg = typeof TrackBuildClient !== "undefined" && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
+    const switchInSession = (state === "race" || state === "count");
+    const msg = switchInSession && typeof TrackBuildClient !== "undefined"
+      && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
     if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
@@ -2616,21 +2620,6 @@ async function startRaceBody() {
   // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
   // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
   const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
-  // Kick the build worker BEFORE session resets so geometry runs off-thread while
-  // we clear race state (~resets leg). loadTrackStepped awaits the same promise
-  // (TrackBuildClient.build dedupes on circuit|night|slots|chunk|mobile).
-  if (!vmNoFramePump && typeof TrackBuildClient !== "undefined" && TrackBuildClient.enabled()) {
-    try {
-      const def = Tracks.LIST[trackIdx];
-      if (def && !def.custom) {
-        const sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
-        if (!(builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots)) {
-          TrackBuildClient.build(trackIdx, def, trackBuildOpts(sessionDark, wantSlots), gfx,
-            sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
-        }
-      }
-    } catch (_) { /* kick is best-effort; loadTrackStepped builds or paces */ }
-  }
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
