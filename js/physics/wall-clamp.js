@@ -158,15 +158,26 @@ const WallClamp = (function () {
                           * clamp(Math.abs(c.speed) / 8, 0, 1);
           c.head -= rel * wallAlign;
           if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
-          // THIS screen's car only: a VS FRIEND is c.human too (setCarRole), so
-          // shake / collision SFX / vibrate / rumble must gate on isPlayer —
-          // otherwise a remote friend's wall scrape shakes our camera (ad915f8ea).
-          if (c.isPlayer && track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
-            if (addShake) addShake(0.1 + incidence * 0.3);
-            c.collideT = 0.35;
-            if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
-            Input.vibrate(15 + incidence * 35);
-            Input.rumble(0.35 + incidence * 0.5, 100, "handles");
+        }
+        // THIS screen's car only: a VS FRIEND is c.human too (setCarRole), so
+        // shake / collision SFX / vibrate / rumble must gate on isPlayer —
+        // otherwise a remote friend's wall scrape shakes our camera (ad915f8ea).
+        // Barrier SFX on every circuit (street gate was v35 street-FX only); shake /
+        // pad haptics stay street-only. Throttled scrape re-arm while grinding.
+        const WALL_SFX_REARM = 0.35;
+        const WALL_SCRAPE_SPEED = 2;   // m/s — stopped against the barrier stays quiet
+        if (c.isPlayer && c.collideT <= 0 && soundOn) {
+          const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
+          const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
+          if (firstStrike || grindScrape) {
+            const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
+            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45);
+            c.collideT = WALL_SFX_REARM;
+            if (firstStrike && track.street) {
+              if (addShake) addShake(0.1 + incidence * 0.3);
+              Input.vibrate(15 + incidence * 35);
+              Input.rumble(0.35 + incidence * 0.5, 100, "handles");
+            }
           }
         }
         // Steering held INTO the barrier while pinned = the wall denies that turn,

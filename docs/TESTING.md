@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 500+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 550+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1501,6 +1501,7 @@ what it covers.
 | `audio-panel-settings-ui.test.mjs` | `js/audio/panel.js` MUSIC & SOUND UX: opening a `<details>` fold inside `#audioset-inner` scrolls its body into view and refreshes ScrollFade; ENGINE TONE PITCH CURVE help matches TEAM factory readouts (not “100 on every slider”) |
 | `audio-recovery.test.mjs` | fake-AudioContext harness: an undecodable track advances the playlist (and a list where nothing decodes stops), and SOUND EFFECTS turned on mid-race starts the rain the race asked for |
 | `lazy-audio-firstbind-vm.test.mjs` | full game VM: boot-time `GameAudio.init()`, saved camera mix, and stored AUDIO DRIVING CUES level that hit the LAZY_AUDIO stub are replayed when the real engine binds (contexts, engineOn, onboard mix, cue level and fired counts) |
+| `lazy-audio-yield.test.mjs` | `ensureAudio` yields before LAZY_AUDIO eval and before `onAudioReady`; awaiting still gets a ready engine; game-vm skips the yield; no `GameAudio.init` without user activation |
 | `keyboard-first-audio-vm.test.mjs` | full game VM: the first title keydown (not Escape) pulls LAZY_AUDIO so keyboard-first sessions get an AudioContext and title music, not only pointerdown |
 | `net-audio-revs-vm.test.mjs` | full game VM: VS FRIEND guest — net-owned rivals at speed derive `c.rpm` from wire gear/speed (rival voice Hz > idle, none stay at IDLE_RPM >30 m/s) |
 | `finish-coast-rev-vm.test.mjs` | full game VM: after the chequered flag the player's rpm winds down with `coast()` (solo and while waiting for a VS FRIEND human) |
@@ -1739,6 +1740,7 @@ what it covers.
 | `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. The four COUNTS are `tree` entries in `tests/data/ratchets.json` (`subFloorFontSize`, `rawSpacing`, `rawColor`, `rawColorDistinct`, all at `slack: 0` — exact equality, so a migration lowers them rather than banking headroom); this file keeps the POLICY that says which literals legitimately stay, and the list of sheets that read no spacing token at all and so cannot respond to the density ladder. Breakdown behind a failure: `node tools/check/tree-counts.mjs --offenders` |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
+| `light-store-perchunk-pin.test.mjs` | perChunkLights track pins survive a lower condLayer (`*|<tod>`) via `Math.max(pin, cond)` without reordering layers; cond still raises unpinned tracks; other knobs keep cond-over-track order; Monaco `roadChunkLamps` unchanged |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
 | `lighting-reapply.test.mjs` | every tuner knob consumed only inside `applyRaceSettings()` is listed in `APPLY_RACE_IDS`, or its slider silently does nothing until an unrelated TIME/WEATHER change |
 | `weather-blend.test.mjs` | a weather-arc step cross-fades the session lighting (`applyRaceSettings(true)` → `tick(dt)`): the fade starts on the old look, walks sun colour, cloud cover, ambient and fog, lands exactly on the new one and keeps the lightning's saved base on the blended values; a chip, a slider or `__apex.weather()` still cuts and a cut ends a fade; the arc's two call sites pass the flag and game.js ticks the fade after the arc (atmosphere.js in a VM) |
