@@ -58,7 +58,7 @@
  * geometry-free arithmetic below survives as the fallback for a track built
  * without a model (the VM tests build centrelines by hand).
  */
-const PitLane = (function () {
+var PitLane = (function () {
   "use strict";
 
   const clamp = M4.clamp;

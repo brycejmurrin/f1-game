@@ -22,7 +22,7 @@
    G.cautionInfo (the sector; polled at 4 Hz under a local yellow only).
    Read by js/game.js: MarshalPanels.create(G).update(dt) each frame before
    Particles.draw. */
-const MarshalPanels = (function () {
+var MarshalPanels = (function () {
   "use strict";
   const GAIN = 1.14;        // the pooled glow's additive sum at 60 Hz (life 0.05 s), now one disc
   const NEAREST_N = 16;     // panels lit per frame — inside Particles' LAMP_RESERVE with the start lights' 5

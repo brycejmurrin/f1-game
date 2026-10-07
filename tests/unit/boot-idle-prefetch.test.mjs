@@ -32,11 +32,13 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
       LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
       // Avoid CIRCUITS_DIR + runInContext in this file (load-order scenery roster guard).
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
       LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
     },
     window: { __APEX_BUILD: "test", LightPresets: null },
+    PitLane: { _stub: true },
     Tracks: {
       LIST: [{ id: "monza", custom: true, scenery: () => {} }],
       circuitPayloadResident: () => true,
@@ -73,12 +75,14 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
   `, ctx);
   ctx.__raceAssets();
   assert.equal(warmCalls, 0, "microtask not yet drained");
-  assert.equal(idles.length, 1, "only lights on idle");
-  assert.equal(idles[0].opts.timeout, 2500);
+  assert.equal(idles.length, 2, "lights + race-session on idle");
+  const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 2500);
+  assert.ok(lightIdle, "lights idle at 2500ms");
+  assert.ok(idles.some((i) => i.opts && i.opts.timeout === 2800), "race-session idle at 2800ms");
   await new Promise((r) => queueMicrotask(r));
   assert.equal(warmCalls, 1, "idleWarm from scenery microtask");
   assert.equal(lightLoads, 0, "lights not yet");
-  await idles[0].fn();
+  await lightIdle.fn();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(lightLoads, 1, "LAZY_RACE injected on idle");
   assert.ok(ctx.window.LightPresets, "presets global set after inject");

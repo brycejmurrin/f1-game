@@ -23,7 +23,7 @@
    until 2026-10-04 the fallback was no lights at all, and 22 of 52 circuits
    started in the dark. Positions are memoised per track. Read by js/game.js:
    StartLights.create(G).update() each frame before Particles.draw. */
-const StartLights = (function () {
+var StartLights = (function () {
   "use strict";
   const LAMPS = 5;          // COUNTDOWN_S in js/game.js lights one a second
   const SPACING = 0.9;      // metres between lamp centres

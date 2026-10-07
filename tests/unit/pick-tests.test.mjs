@@ -16,7 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // Every file the manifest loads, across all rosters — the selector's input space.
 const manifestFiles = () => [
   ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
-  ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_CIRCUIT || []), ...MANIFEST.LAZY_SCENERY, ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+  ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_CIRCUIT || []), ...MANIFEST.LAZY_SCENERY, ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
   ...(MANIFEST.LAZY_EDITOR || []), ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
   ...(MANIFEST.LAZY_CAREER_UI || []),
 ];

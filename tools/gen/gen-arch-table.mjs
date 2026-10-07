@@ -109,6 +109,7 @@ export function rosterOf() {
   for (const [k, v] of Object.entries(MANIFEST.DEFERRED)) add(v, `DEFERRED:${k}`);
   add(MANIFEST.LAZY_AGENT, "LAZY_AGENT");
   add(MANIFEST.LAZY_RACE, "LAZY_RACE");
+  add(MANIFEST.LAZY_RACE_SESSION || [], "LAZY_RACE_SESSION");
   add(MANIFEST.LAZY_CIRCUIT || [], "LAZY_CIRCUIT");
   add(MANIFEST.LAZY_SCENERY, "LAZY_SCENERY");
   add(MANIFEST.LAZY_DATA, "LAZY_DATA");

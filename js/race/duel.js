@@ -9,7 +9,7 @@
  * makeCars(), so nothing downstream needs a field-size case: grid order,
  * classification and the results sheet all read cars.length.
  */
-const Duel = (function () {
+var Duel = (function () {
   "use strict";
 
   // NOT A SPEED MULTIPLIER. Bumping pace alone makes a rival that drives like a

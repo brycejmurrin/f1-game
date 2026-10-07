@@ -12,7 +12,7 @@
  * Reads car positions in the TRACK frame (arc s, lateral x) and nothing about
  * the track's curvature — the same frame js/audio/rivals.js uses.
  */
-const Spotter = (() => {
+var Spotter = (() => {
   /** key → the text the voice pack records for it (tools/gen/voicepack.mjs). */
   const KEYS = Object.freeze({
     "car left": "Car left.", "car right": "Car right.", "three wide": "Three wide.",
