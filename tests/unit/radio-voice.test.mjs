@@ -579,6 +579,62 @@ test("unlock() primes with an audible-volume utterance, not a muted one", () => 
     "has no phonemes so it stays inaudible whatever the volume says");
 });
 
+test("LAZY_AUDIO: after the inert stub, create() re-primes on the next valid gesture only", () => {
+  /* Title boots G.radio as inert(); firstGesture() calls unlock() on the stub (noop). When LAZY_AUDIO
+   * binds the real module, WebKit still needs a speak() inside a user gesture — platform-session will
+   * not fire again. RadioVoice.create() must arm one-shot listeners with the same activation filters. */
+  const docListeners = new Map();
+  const doc = {
+    hidden: false,
+    getElementById: () => null,
+    addEventListener(type, fn) {
+      if (!docListeners.has(type)) docListeners.set(type, []);
+      docListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn) {
+      const arr = docListeners.get(type);
+      if (!arr) return;
+      const i = arr.indexOf(fn);
+      if (i >= 0) arr.splice(i, 1);
+    },
+  };
+  const dispatch = (type, extra = {}) => {
+    const e = Object.assign({ type }, extra);
+    for (const fn of [...(docListeners.get(type) || [])]) fn(e);
+  };
+  const primingSpeaks = (calls) => calls.filter((c) => c.m === "speak" && c.text === " ");
+
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  const synth = synthStub();
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.document = doc;
+  ctx.MutationObserver = function () { this.observe = () => {}; };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = { soundOn: true, state: "race", store: { get: (_k, d) => d, set: () => {} } };
+
+  RV.inert().unlock();
+  assert.equal(primingSpeaks(synth.calls).length, 0, "the inert stub must not prime speechSynthesis");
+
+  RV.create(G);
+  assert.equal(primingSpeaks(synth.calls).length, 0, "create() must not speak until the next gesture");
+
+  dispatch("keydown", { key: "Escape" });
+  assert.equal(primingSpeaks(synth.calls).length, 0, "Escape is not activation-triggering");
+
+  dispatch("click");
+  assert.equal(primingSpeaks(synth.calls).length, 1,
+    "the first valid gesture after LAZY bind must run unlock()'s priming speak");
+
+  const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
+  for (const t of EVTS) assert.equal((docListeners.get(t) || []).length, 0, `${t} listener must be removed after priming`);
+
+  dispatch("click");
+  assert.equal(primingSpeaks(synth.calls).length, 1, "already primed — no second priming speak");
+});
+
 /* ── ASKED vs STARTED: the counter that ends the guessing ────────────────────
  *
  * Three rounds of "still isn't working" came from one gap: a speech engine that
