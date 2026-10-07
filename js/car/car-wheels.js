@@ -19,7 +19,10 @@ const CarWheels = (function () {
     const LIP_R  = 0.90;    // rim lip runs rimR*0.90 .. rimR
     const DISH_R = 0.40;    // dish wall ends here, where the hubcap starts
     const DISH_D = 0.050;   // recessed inboard — 50 mm so the bowl reads in the garage
-    const OPEN_SPOKES = 5;  // default spoke count when open and recipe leaves spokes:0
+    // Default open spoke count when recipe leaves spokes:0. Must stay well below
+    // catalog 6-spoke options (spoked, sig_racingbulls_rim) so parts-sweep's
+    // WEAK_MM (20 mm) Hausdorff still separates them from standard.
+    const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
                       grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
@@ -257,9 +260,13 @@ const CarWheels = (function () {
         }
       }
 
-      // Cover vanes only dress a covered face. coverVanes alone never opts in.
+      // Radial vanes: on a covered face they dress the dish; on an open rim they
+      // are thin blades in the spoke plane (tyre recipes still vary coverVanes).
+      // coverVanes alone never opts the three-ring COVER back in — useCover does.
       const VANE = [0.26, 0.26, 0.30];
-      const coverVanes = useCover ? (tyreStyle && tyreStyle.coverVanes || 6) : 0;
+      const coverVanes = tyreStyle && tyreStyle.coverVanes != null
+        ? tyreStyle.coverVanes
+        : (useCover ? 6 : 0);
       for (const ss of [[x0, -1], [x1, 1]]) {
         const xs = ss[0] + ss[1] * 0.014;
         for (let k = 0; k < coverVanes; k++) {
@@ -360,7 +367,12 @@ const CarWheels = (function () {
         if (dish > 0) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
-          const dxIn = ss[0] + dir * (0.014 - 0.012 * dish);
+          // Open-path dish step used to piggy-back on the 50 mm cover bowl for
+          // optical depth; without a cover, 0.012*dish (12 mm at dish:1) falls
+          // under parts-sweep WEAK_MM. 0.024*dish → 24 / 48 mm keeps dish:1/2
+          // distinct from taped / flat open rims.
+          const dishStep = useCover ? 0.012 * dish : 0.024 * dish;
+          const dxIn = ss[0] + dir * (0.014 - dishStep);
           const DISH_SEG = 16;
           for (let k = 0; k < DISH_SEG; k++) {
             const a0 = (k / DISH_SEG) * Math.PI * 2, a1 = ((k + 1) / DISH_SEG) * Math.PI * 2;
