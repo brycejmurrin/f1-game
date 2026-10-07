@@ -619,25 +619,41 @@ test("recorded engineer and spotter packs do not depend on speechSynthesis exist
 
 test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announcer on a cold cache", async () => {
   const order = [];
-  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const pending = new Map();
   const man = { clips: { hello: [0, 4, 0.5] } };
+  const packResponse = () => ({
+    ok: true,
+    json: async () => man,
+    arrayBuffer: async () => new ArrayBuffer(4),
+  });
+  const deferFetch = (url) => {
+    order.push(url);
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+    pending.set(url, () => resolve(packResponse()));
+    return promise;
+  };
+  const resolveFetch = (url) => {
+    const go = pending.get(url);
+    assert.ok(go, "unexpected resolve: " + url);
+    pending.delete(url);
+    go();
+  };
+  const drain = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
   const sb = sandbox(["js/audio/voice-pack.js"], {
     GameAudio: { now: () => 0 },
-    fetch: (url) => {
-      order.push(url);
-      const slow = url.includes("george.");
-      return delay(slow ? 40 : 5).then(() => Promise.resolve({
-        ok: true,
-        json: async () => man,
-        arrayBuffer: async () => new ArrayBuffer(4),
-      }));
-    },
+    fetch: deferFetch,
   });
   const P = sb.VoicePack.create({});
   P.ensureStaged([["george"], ["heart", "fable"]]);
-  const deadline = Date.now() + 2000;
-  while (Date.now() < deadline && order.length < 6) await delay(10);
-  assert.equal(order.length, 6, "every pack fetched once");
+  await drain();
+  assert.equal(order.length, 2, "tier 0 alone before engineer loads settle");
+  assert.ok(order.every((u) => u.includes("george.")), "only engineer fetches started");
+  resolveFetch("assets/voice/george.json");
+  resolveFetch("assets/voice/george.bin");
+  await drain();
+  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("george")) break; }
+  assert.equal(order.length, 6, "every pack fetch started once engineer tier settled");
   const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
   assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
   const coachStart = Math.min(idx("heart", "json"), idx("heart", "bin"));
@@ -646,6 +662,13 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.ok(annStart > idx("george", "bin"), "announcer waits until engineer tier finishes");
   assert.equal(P.ready("george"), true, "engineer ready while lower tiers were still fetching");
   assert.equal(P.ready("heart"), false, "coach still pending when engineer is ready");
+  assert.equal(P.ready("fable"), false, "announcer still pending when engineer is ready");
+  assert.equal(pending.size, 4, "tier-1 fetches still in flight");
+  for (const url of [...pending.keys()]) resolveFetch(url);
+  await drain();
+  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("heart") && P.ready("fable")) break; }
+  assert.equal(P.ready("heart"), true, "coach ready after tier 1 settles");
+  assert.equal(P.ready("fable"), true, "announcer ready after tier 1 settles");
   assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
     "assets/voice/george.bin", "assets/voice/george.json", "assets/voice/heart.bin", "assets/voice/heart.json"]);
 });

@@ -14,11 +14,11 @@
     "js/game.js": {
       "codeLines": 4911,
       "gMembers": 288,
-      "lines": 9106,
+      "lines": 9104,
       "topLets": 155
     },
     "js/lighting/presets.js": {
-      "lines": 8371
+      "lines": 8332
     },
     "js/net/lobby.js": {
       "lines": 2071
