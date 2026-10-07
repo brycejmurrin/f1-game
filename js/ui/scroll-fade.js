@@ -44,6 +44,9 @@ window.ScrollFade = (function () {
     // sideways scroller is #cs-tabs itself. Without this id the strip had no
     // sf-l / sf-r edge fade on play-shape phones (852×344, 2026-10-05).
     "#cs-tabs",
+    // Career hub body and Track Designer tool rail: overflow scrollers with
+    // native bars hidden — need fade + thumb like other menu panes.
+    "#cr-body", ".td-rail",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the

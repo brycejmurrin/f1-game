@@ -379,6 +379,38 @@
   gap: 0;
   padding: calc(var(--gap) / 6) 0 0;
 }
+/* HUD element checklist (js/ui/hud-elements.js): checklist markup lives in
+   #pm-hud-details; tap floors and disabled readouts are styled here so
+   css/hud.css can stay race-HUD-only. Labels are the hit target. */
+#pm-hud-details #pm-hud-elements-list label {
+  min-height: var(--tap-paint);
+  cursor: pointer;
+}
+#pm-hud-details #pm-hud-elements-list input[type="checkbox"] {
+  width: max(20px, 1.15em);
+  height: max(20px, 1.15em);
+  min-width: 20px;
+  min-height: 20px;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent, var(--red));
+}
+/* HUD ON/OFF is greyed outside a race (#pm-hidehud select disabled by game.js).
+   Dashed plate + stronger help copy — no JS. */
+#pm-hud-details #pm-hidehud:has(select:disabled) > div > :is(select, button) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#pm-hud-details #pm-hidehud:has(select:disabled) > div > select {
+  border-style: dashed;
+  color: var(--dim);
+  background: color-mix(in oklab, var(--plate) 55%, transparent);
+}
+#pm-hud-details #pm-hidehud:has(select:disabled) + .adv-help {
+  color: var(--text);
+  font-weight: 600;
+  opacity: 0.85;
+}
 #pm-metrics-details > [role="group"] > button {
   width: 100%;
   margin: 0;
