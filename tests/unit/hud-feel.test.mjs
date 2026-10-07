@@ -1020,6 +1020,13 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.els.hudSectors._rect = { left: 500, top: 8, right: 640, bottom: 80, width: 140, height: 72 };
   h.refit();
   assert.equal(lane(), (500 - 8 - 158).toFixed(1) + "px", "SECTORS in the hanging band end the lane");
+  // #1191 --dock-r-w on buttons can shove the plate's centre left of mid; a
+  // mid-based clip then filed it as LEFT chrome and left the lane spanning
+  // into S1–S3 (Pages trains: #hud-sectors+#announce, notched-landscape).
+  h.els.hudSectors._rect = { left: 300, top: 80, right: 440, bottom: 160, width: 140, height: 80 };
+  h.refit();
+  assert.equal(lane(), (300 - 8 - 158).toFixed(1) + "px",
+    "sectors whose centre is left of mid still end the RIGHT of the lane");
   h.els.hudSectors._rect = { left: 650, top: 130, right: 790, bottom: 202, width: 140, height: 72 };
   h.els.minimap._rect = { left: 10, top: 8, right: 220, bottom: 148, width: 210, height: 140 };
   h.refit();

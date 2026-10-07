@@ -505,8 +505,14 @@ function announceLane(root) {
     else left = Math.max(left, r.right);
   };
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
+  // SECTORS always end the RIGHT of the lane. After #1191 the plate takes
+  // --dock-r-w on buttons (and #1212 on every phone steer); a wide wrap-reverse
+  // dock can push its centre left of mid, so the mid-based clip() above would
+  // treat it as LEFT chrome and leave --announce-lane-w spanning into S1–S3
+  // (Pages gate: #hud-sectors+#announce on notched-landscape buttons).
   const sec = els.hudSectors;
-  clip(sec && !sec.hidden ? sec.getBoundingClientRect() : null, false, true);
+  const secR = sec && !sec.hidden ? sec.getBoundingClientRect() : null;
+  if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
   clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false, true);
   const gaps = document.querySelector(".hud-gaps");
   clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false, true);
@@ -890,14 +896,11 @@ function fitHud() {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
   }
-  // Publish whenever the right dock has a box — not only when LIMITS would hit
-  // it. Touch #hud-sectors sits ABOVE the limits chip and was under BOOST at
-  // SIZE 150% until css/hud.css consumed --dock-r-w on steer-touch and
-  // steer-buttons (2026-10-05 / 2026-10-07). Limits/damage always used it;
-  // limits that move left (:root[data-limits-left]) ignore `right`. Empty dock
-  // → 0 → desktop unchanged.
-  const dockRW = (dockR && dockR.width) ? dockR.width / chromeZ : 0;
-  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
+  // --dock-r-w is published AFTER the zoom caps below: publishing it here
+  // with the pre-cap chromeZ left the inset in z=1 space while #hud-sectors
+  // painted at the capped --hud-z-top (notched-landscape buttons: S3 on
+  // BOOST). #1191's max(anchor(left)) papered over that and then overshot
+  // into #announce.
   // THE DOCK CAP IS ASKED OF FIXED LAYOUTS, NOT OF THE ONE ON SCREEN. A dock is
   // a wrap-reverse row, so its height depends on the zoom: at HUD 150% on a
   // 734x343 phone BUTTONS mode's right dock (pedals + BOOST/OT/AERO) wrapped
@@ -1020,6 +1023,34 @@ function fitHud() {
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
   set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
+  // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
+  // Use the LEFTMOST painted right-dock control — wrap-reverse #dock-right
+  // width can under-measure content left (Pages #hud-sectors+#announce when
+  // #1191's anchor max compensated). Flush the dock first so dockLeft matches
+  // the post-cap paint.
+  if (_dockR) void _dockR.offsetHeight;
+  const zTop = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  let dockLeft = Infinity;
+  if (_dockR) {
+    for (const g of _dockR.children) {
+      const r = g.getBoundingClientRect();
+      if (r.width && r.height) dockLeft = Math.min(dockLeft, r.left);
+    }
+  }
+  if (!Number.isFinite(dockLeft) && _dockR) {
+    const dr = _dockR.getBoundingClientRect();
+    if (dr.width) dockLeft = dr.left;
+  }
+  let sarPx = 0;
+  try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
+  const dockRW = Number.isFinite(dockLeft)
+    ? Math.max(0, (window.innerWidth - dockLeft) / zTop - 10 - sarPx / zTop)
+    : 0;
+  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
+  // Flush #hud-sectors after --dock-r-w so announceLane / radioTopSlot clip
+  // the post-reflow plate (Pages: #hud-sectors+#announce).
+  if (els.hudSectors) void els.hudSectors.offsetHeight;
   radioTopSlot(root, bcast);   // after the dock cap: it stands off the docks as painted
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.

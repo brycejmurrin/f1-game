@@ -528,15 +528,21 @@ async function enableOptIns(page) {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const rel = document.getElementById("hud-rel");
     const inp = document.getElementById("hud-inputs");
-    const steerR = document.getElementById("btn-steer-right");
-    if (!rel || !inp || !steerR || rel.hidden || inp.hidden || steerR.hidden) return false;
-    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect(), sr = steerR.getBoundingClientRect();
-    if (!(rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0 && sr.width > 0)) return false;
-    const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
-    if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
-    // INPUTS must sit in the right column (under sectors), not over the steer pair.
-    if (ir.left < sr.right + 4) return false;
-    if (rr.right > ir.left - 4) return false;
+    if (!rel || !inp || rel.hidden || inp.hidden) return false;
+    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect();
+    if (!(rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0)) return false;
+    // Phone: wait until INPUTS has cleared the steer column (desktop docks stay
+    // empty / steer hidden, so the box-size check above is enough there).
+    if (!document.body.classList.contains("desktop")) {
+      const steerR = document.getElementById("btn-steer-right");
+      if (!steerR || steerR.hidden) return false;
+      const sr = steerR.getBoundingClientRect();
+      if (!(sr.width > 0)) return false;
+      const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+      if (ir.left < sr.right + 4) return false;
+      if (rr.right > ir.left - 4) return false;
+    }
     return true;
   }, null, { polling: 100, timeout: 15_000 });
 }

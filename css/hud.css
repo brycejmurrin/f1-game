@@ -1993,20 +1993,13 @@ body.desktop #hud-inputs:not([data-hl-user]) {
     bottom: calc(anchor(top) + var(--gap));
     margin: 0;
   }
-  /* TOUCH SECTORS ↔ RIGHT DOCK. Same CSS Anchor Positioning pattern as TYRES
-     on the left dock (Modern Web Guidance css-layout §5: tether floating
-     chrome to its trigger, do not guess offsets). All phone steer modes
-     (tilt is unmarked on body): #hud-sectors is fixed and zoomed (--hud-z),
-     so anchor() is divided like --sar; max() keeps the measured --dock-r-w
-     floor when the engine's inset is smaller. */
-  body:not(.desktop) #dock-right { anchor-name: --apex-dock-right; }
-  body:not(.desktop) #hud-sectors {
-    position-anchor: --apex-dock-right;
-    right: max(
-      calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px)),
-      calc((anchor(left) + var(--gap)) / var(--hud-z))
-    );
-  }
+  /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
+     painted inset from the leftmost right-dock control (fitHud), so the
+     phone right: rule already clears BOOST. Do NOT max() with
+     anchor(left): wrap-reverse #dock-right can leave the box left edge
+     past the content, and that max shoved #hud-sectors into #announce
+     (Pages gate notched-landscape buttons, trains 37597421040 /
+     37605440474; culprit #1191). TYRES still uses the left-dock anchor. */
   /* RELATIVE / INPUTS: do NOT set position-anchor here. `left: auto` on
      INPUTS then resolved against the dock and dumped the trace onto the
      steer arrows (844×390 buttons 150%). Height caps stay on the home

@@ -24,15 +24,17 @@ test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => 
   // game.js only toggles body.steer-touch / body.steer-buttons — tilt is the
   // unmarked phone mode. body:not(.desktop) covers tilt + touch + buttons;
   // --dock-r-w is 0 on desktop so the home right: calc stays put there.
+  // Do NOT max() with anchor(left): #1191's tether overshot into #announce
+  // when wrap-reverse under-measured --dock-r-w (Pages notched-landscape).
   assert.match(CSS,
     /body:not\(\.desktop\) #hud-sectors\s*\{[\s\S]*?--dock-r-w/,
     "phone #hud-sectors takes --dock-r-w (tilt has no steer-* class)");
-  assert.match(CSS,
-    /@supports \(anchor-name: --a\)[\s\S]*body:not\(\.desktop\) #dock-right\s*\{[^}]*anchor-name:\s*--apex-dock-right/,
-    "phone right dock is the sectors anchor");
-  assert.match(CSS,
+  assert.doesNotMatch(CSS,
     /body:not\(\.desktop\) #hud-sectors\s*\{[^}]*position-anchor:\s*--apex-dock-right/,
-    "phone sectors tether to the right dock");
+    "phone sectors must not tether via max(anchor(left)) — that shoved S1–S3 into #announce");
+  assert.doesNotMatch(CSS,
+    /#hud-sectors\s*\{[^}]*max\(\s*calc\(10px \+ var\(--sar\)[^}]*anchor\(left\)/,
+    "no max(dock-r-w, anchor(left)) on sectors");
 });
 
 test("CSS: touch #hud-rel is capped above the left dock (steer / BRAKE)", () => {
