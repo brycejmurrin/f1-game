@@ -392,6 +392,10 @@ const UiExperience = (function () {
         return !world.needsFrame(dt, { interactive: photoOpen, force: photoOpen && dt === 0 });
       }
       elapsed += Math.max(0, dt || 0);
+      // setupCam session ended out-of-band (openGarage → resetSetupCam during
+      // vt). Check before the painted/still throttle — under reduce-motion that
+      // path returns true without calling renderHome, which used to freeze the bay.
+      if (home && !deps.setupCam.homeState()) { home = false; signature = ""; return false; }
       if (painted && ((!photoOpen && motion === "still") || (dt !== 0 && elapsed < 1 / 24))) return true;
       try {
         const drew = deps.setupCam.renderHome(elapsed);
@@ -402,9 +406,6 @@ const UiExperience = (function () {
           return true;
         }
         elapsed = 0;
-        // setupCam session ended out-of-band (openGarage → resetSetupCam during
-        // vt). A stale `home` flag used to make us return true without drawing,
-        // so the game loop never reached renderSetupPreview and the bay froze.
         if (home && !deps.setupCam.homeState()) { home = false; signature = ""; }
         return false;
       } catch (e) {
