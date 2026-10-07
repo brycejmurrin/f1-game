@@ -617,6 +617,80 @@ test("recorded engineer and spotter packs do not depend on speechSynthesis exist
   assert.equal(calls.length, 2);
 });
 
+test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announcer on a cold cache", async () => {
+  const order = [];
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const man = { clips: { hello: [0, 4, 0.5] } };
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: { now: () => 0 },
+    fetch: (url) => {
+      order.push(url);
+      const slow = url.includes("george.");
+      return delay(slow ? 40 : 5).then(() => Promise.resolve({
+        ok: true,
+        json: async () => man,
+        arrayBuffer: async () => new ArrayBuffer(4),
+      }));
+    },
+  });
+  const P = sb.VoicePack.create({});
+  P.ensureStaged([["george"], ["heart", "fable"]]);
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline && order.length < 6) await delay(10);
+  assert.equal(order.length, 6, "every pack fetched once");
+  const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
+  assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
+  const coachStart = Math.min(idx("heart", "json"), idx("heart", "bin"));
+  const annStart = Math.min(idx("fable", "json"), idx("fable", "bin"));
+  assert.ok(coachStart > idx("george", "bin"), "coach waits until engineer tier finishes");
+  assert.ok(annStart > idx("george", "bin"), "announcer waits until engineer tier finishes");
+  assert.equal(P.ready("george"), true, "engineer ready while lower tiers were still fetching");
+  assert.equal(P.ready("heart"), false, "coach still pending when engineer is ready");
+  assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
+    "assets/voice/george.bin", "assets/voice/george.json", "assets/voice/heart.bin", "assets/voice/heart.json"]);
+});
+
+test("ensureStaged does not refetch a pack that is already ready", async () => {
+  let calls = 0;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GameAudio: { now: () => 0 },
+    fetch: () => { calls++; return Promise.resolve({ ok: true, json: async () => ({ clips: { a: [0, 4, 1] } }), arrayBuffer: async () => new ArrayBuffer(4) }); },
+  });
+  const P = sb.VoicePack.create({});
+  P.ensureStaged([["george"]]);
+  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("george")) break; }
+  assert.equal(calls, 2);
+  P.ensureStaged([["george"], ["heart"]]);
+  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("heart")) break; }
+  assert.equal(calls, 4, "only the not-yet-loaded pack is fetched");
+});
+
+test("RadioVoice ensureVoices stages the engineer pack ahead of coach and announcer", async () => {
+  const order = [];
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const man = { clips: { hello: [0, 4, 0.5] } };
+  const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js"], {
+    window: { speechSynthesis: { speak() {}, cancel() {}, resume() {}, getVoices: () => [] }, SpeechSynthesisUtterance: function (t) { this.text = t; } },
+    GameAudio: { setRadioDuck() {}, radioStingStop() {} },
+    fetch: (url) => {
+      order.push(url);
+      return delay(url.includes("george.") ? 40 : 5).then(() => Promise.resolve({
+        ok: true, json: async () => man, arrayBuffer: async () => new ArrayBuffer(4),
+      }));
+    },
+  });
+  const G = { soundOn: true, state: "race", announcer: { enabled: () => true }, store: { get: (k, d) => d, set() {} } };
+  const v = sb.RadioVoice.create(G);
+  v.setEnabled(true);
+  v.say("P3. NICE MOVE", 3, "info");
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline && !order.some((u) => u.includes("heart."))) await delay(10);
+  assert.ok(order.some((u) => u.includes("heart.")), "coach pack fetch started");
+  const coachJson = order.findIndex((u) => u.endsWith("heart.json"));
+  const engBin = order.findIndex((u) => u.endsWith("george.bin"));
+  assert.ok(engBin >= 0 && coachJson > engBin, "first-race ensure starts engineer before coach");
+});
+
 test("loading a selected pack is shared and never fetches the alternatives", async () => {
   const requested = [];
   const sb = sandbox(["js/audio/voice-pack.js"], { fetch: (url) => {

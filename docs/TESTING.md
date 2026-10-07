@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 502+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 550+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1501,6 +1501,7 @@ what it covers.
 | `audio-panel-settings-ui.test.mjs` | `js/audio/panel.js` MUSIC & SOUND UX: opening a `<details>` fold inside `#audioset-inner` scrolls its body into view and refreshes ScrollFade; ENGINE TONE PITCH CURVE help matches TEAM factory readouts (not “100 on every slider”) |
 | `audio-recovery.test.mjs` | fake-AudioContext harness: an undecodable track advances the playlist (and a list where nothing decodes stops), and SOUND EFFECTS turned on mid-race starts the rain the race asked for |
 | `lazy-audio-firstbind-vm.test.mjs` | full game VM: boot-time `GameAudio.init()`, saved camera mix, and stored AUDIO DRIVING CUES level that hit the LAZY_AUDIO stub are replayed when the real engine binds (contexts, engineOn, onboard mix, cue level and fired counts) |
+| `lazy-audio-yield.test.mjs` | `ensureAudio` yields before LAZY_AUDIO eval and before `onAudioReady`; awaiting still gets a ready engine; game-vm skips the yield; no `GameAudio.init` without user activation |
 | `keyboard-first-audio-vm.test.mjs` | full game VM: the first title keydown (not Escape) pulls LAZY_AUDIO so keyboard-first sessions get an AudioContext and title music, not only pointerdown |
 | `net-audio-revs-vm.test.mjs` | full game VM: VS FRIEND guest — net-owned rivals at speed derive `c.rpm` from wire gear/speed (rival voice Hz > idle, none stay at IDLE_RPM >30 m/s) |
 | `finish-coast-rev-vm.test.mjs` | full game VM: after the chequered flag the player's rpm winds down with `coast()` (solo and while waiting for a VS FRIEND human) |

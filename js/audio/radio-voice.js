@@ -363,7 +363,15 @@ var RadioVoice = (function () {
     function ensureVoices() {
       if (!pack) return;
       const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
-      for (const sp of Object.keys(PACK_VOICE)) if (sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn) pack.ensure(recordedPack(sp));
+      const lap1 = [];
+      const rest = [];
+      for (const sp of Object.keys(PACK_VOICE)) {
+        const on = sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn;
+        if (!on) continue;
+        (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
+      }
+      if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
+      else for (const id of lap1.concat(rest)) pack.ensure(id);
     }
     /** EVERY channel, the spotter's too: the race stopped (pause card, hidden
      *  tab, the pit garage). stop() alone spares a spotter call mid-word.
