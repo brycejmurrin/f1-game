@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
-import { createExtras, JOB_KINDS, processTree, killTreeAndWait } from "./apex-extras.mjs";
+import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets,
@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.12.0";
+const SERVER_VERSION = "1.13.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -665,12 +665,13 @@ const CATALOG = [
   {
     name: "apex_hud_shot",
     kind: "browser",
-    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / pageError). Returns structuredContent {shot, findings, measurements} and a resource_link to the PNG. ~2 min on SwiftShader (one boot). Local tree only. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / pageError). ~2 min on SwiftShader (one boot), past the host's ~60–120 s MCP limit, so by default it runs as apex_job_start hud_shot and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns structuredContent {shot, findings, measurements} + a resource_link to the PNG. Local tree only. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
         track: { type: "string", description: "Circuit id (default monza)." },
         frac: { type: "number", description: "Lap fraction to park at (default 0.18)." },
+        async: { type: "boolean", description: "Default true = background hud_shot job (jobId); false = block on the cell (~2 min; host may time out)." },
         device: { type: "string", enum: HUD_ENUMS.device },
         cam: { type: "string", enum: HUD_ENUMS.cam, description: "CamModes id (default chase)." },
         profile: { type: "string", enum: HUD_ENUMS.profile },
@@ -693,7 +694,7 @@ const CATALOG = [
         uiScale: { type: "number", description: "UI SIZE percent (40..200)." },
         btnScale: { type: "number", description: "BUTTON SIZE percent (40..300; touch devices)." },
         off: { type: "array", items: { type: "string", enum: Object.keys(HUD_TOGGLES) }, description: "HudElements ids switched OFF." },
-        inlineImage: { type: "boolean", description: "Also return the PNG as image content (≤ 1.5 MB)." },
+        inlineImage: { type: "boolean", description: "Also return the PNG as image content (≤ 1.5 MB; async:false only)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer the cell boots (default three = TLX; webgl2 = GLX)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
         dryRun: { type: "boolean" },
@@ -705,7 +706,7 @@ const CATALOG = [
   {
     name: "apex_hud_survey",
     kind: "browser",
-    description: "Browser (lock first) — the race-HUD survey over a matrix: quick (13 cells, 3 boots, ~10 min), leads (static-audit repros with numeric checks, ~25 min), full (pairwise, ~33 cells / 20 boots, ~45 min — prefer the CLI in the background), exhaustive (~470 cells, shard required) or a matrix JSON under scratch/ or artifacts/. Returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — the race-HUD survey over a matrix: quick (13 cells, 3 boots, ~10 min), leads (static-audit repros with numeric checks, ~25 min), full (pairwise, ~33 cells / 20 boots, ~45 min), exhaustive (~470 cells, shard required) or a matrix JSON under scratch/ or artifacts/. By default it runs as apex_job_start hud_survey and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns the findings summary + resource_links to findings.md / index.html / report.json. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
@@ -714,6 +715,7 @@ const CATALOG = [
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
+        async: { type: "boolean", description: "Default true = background hud_survey job (jobId); false = block for the whole matrix (minutes; host may time out)." },
         track: { type: "string" },
         frac: { type: "number" },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
@@ -773,7 +775,7 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey). Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -2046,6 +2048,16 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const hud = name === "apex_hud_shot" || name === "apex_hud_survey";
   if (mockMode()) return hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
 
+  if (hud && args.async !== false) {
+    // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
+    // ~10 min. Default to a background job (pinned argv above) unless async:false.
+    const kind = name === "apex_hud_shot" ? "hud_shot" : "hud_survey";
+    const r = extras().handlers.apex_job_start({ kind, [HUD_JOB_ARGV]: argv });   // sync: returns the jobId at once
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: HUD_TIMEOUT_MS(name, args),
+      hint: "Runs in the background: apex_job_status {jobId} until state is done; findings land in out / the log. async:false blocks instead." });
+  }
   if (hud) {
     const took = acquireLock(name);
     if (took) return took;

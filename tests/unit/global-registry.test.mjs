@@ -130,6 +130,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
+  "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield on UI Start Race (Chrome 129+); typeof-guarded, else rAF+setTimeout / Promise.resolve
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)

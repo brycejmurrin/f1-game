@@ -250,6 +250,11 @@ var GameAudio = (function () {
   let listenersAttached = false;
   let rebuildTries = 0;
   let lastFailedResume = 0;
+  let deviceRebuildTimer = null;
+  let deviceRebuildPending = false;
+  let deviceRebuildBusy = false;
+  let ctxSampleRate = 0;
+  const DEVICE_REBUILD_DEBOUNCE_MS = 280;
   let resumeMusic = false;
   let resumeEngine = false;
   let resumeRain = false;
@@ -331,12 +336,22 @@ var GameAudio = (function () {
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
     // suspend() only runs while hidden, so a visible stop is never ours.
+    ctxSampleRate = ctx.sampleRate;
     ctx.onstatechange = () => {
+      if (deviceRebuildBusy || !ctx) return;
       // "interrupted" is iOS taking the audio session — a call answered from the
       // compact banner keeps Safari VISIBLE, so nothing else tells the game
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
-      if (ctx && ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
-      if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
+      if (ctx.state === "closed") return;
+      if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
+        scheduleOutputDeviceRebuild("sampleRate");
+      }
+      if (ctx.state === "running") ctxSampleRate = ctx.sampleRate;
+      if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
+        scheduleOutputDeviceRebuild("state-" + ctx.state);
+      }
+      if (ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
     };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
@@ -416,6 +431,60 @@ var GameAudio = (function () {
     return { buf: out, loop: { start: 0, end: (b - a) / sr }, win: { start: a / sr, end: b / sr } };
   }
 
+  function stickyUserActivation() {
+    try {
+      const ua = typeof navigator !== "undefined" && navigator.userActivation;
+      return !!(ua && (ua.isActive || ua.hasBeenActive));
+    } catch (e) { return false; }
+  }
+
+  function scheduleOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (deviceRebuildTimer) clearTimeout(deviceRebuildTimer);
+    deviceRebuildTimer = setTimeout(() => {
+      deviceRebuildTimer = null;
+      requestOutputDeviceRebuild(why);
+    }, DEVICE_REBUILD_DEBOUNCE_MS);
+  }
+
+  function requestOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (!stickyUserActivation()) {
+      deviceRebuildPending = true;
+      Log.debug("audio", "output-device rebuild deferred (" + why + ") until the next gesture");
+      return;
+    }
+    performOutputDeviceRebuild(why);
+  }
+
+  function performOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    deviceRebuildPending = false;
+    deviceRebuildBusy = true;
+    Log.info("audio", "rebuilding AudioContext after " + why);
+    try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
+  }
+
+  function onMediaDeviceChange() {
+    scheduleOutputDeviceRebuild("devicechange");
+  }
+
+  function attachOutputDeviceListeners() {
+    try {
+      const md = typeof navigator !== "undefined" && navigator.mediaDevices;
+      if (!md || typeof md.addEventListener !== "function") return;
+      md.addEventListener("devicechange", onMediaDeviceChange);
+    } catch (e) { /* absent in game-vm and some WebViews */ }
+  }
+
+  function reapplyContextState() {
+    if (!ctx) return;
+    applyTuneNodes();
+    applyVenue();
+    applyMusicDuck();
+    setSfxEnabled(sfxEnabled);
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
@@ -434,6 +503,7 @@ var GameAudio = (function () {
       window.addEventListener("pointerdown", resumeIfNeeded, true);
       window.addEventListener("keydown", resumeIfNeeded, true);
       document.addEventListener("visibilitychange", onVisibility);
+      attachOutputDeviceListeners();
     }
   }
 
@@ -448,6 +518,11 @@ var GameAudio = (function () {
   function resumeIfNeeded(gestureEv) {
     if (!ctx) return;
     const isGesture = !!gestureEv;
+    if (isGesture && deviceRebuildPending) {
+      deviceRebuildPending = false;
+      performOutputDeviceRebuild("deferred-gesture");
+      return;
+    }
     if (ctx.state === "running") {
       rebuildTries = 0;
       lastFailedResume = 0;
@@ -491,7 +566,12 @@ var GameAudio = (function () {
     // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
     // i.e. with the context in exactly the state close() refuses. Same shape as
     // the resume() sites below, which chain .catch.
-    try { const p = ctx.close(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); }); } catch (e) { /* already closed */ }
+    try {
+      const dying = ctx;
+      if (dying) dying.onstatechange = null;
+      const p = dying && dying.close();
+      if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); });
+    } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -513,6 +593,7 @@ var GameAudio = (function () {
                             // survive and centroidHz() would read a dead node (latent: only
                             // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
+    reapplyContextState();
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
     if (rainWanted) startRain();
@@ -810,6 +891,8 @@ var GameAudio = (function () {
     rivalPeak = usingSamples ? 0.28 : 0.055;
     RIVAL_VOICES = lowPower() ? RIVAL_VOICES_MOBILE : RIVAL_VOICES_DESKTOP;
     rivalVoices = [];
+    _rivalRevSm.length = 0;
+    _rivalRevSmT = 0;
     if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
         const filt = ctx.createBiquadFilter();
@@ -1932,10 +2015,11 @@ var GameAudio = (function () {
     return key;
   }
 
-  /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
-   * Each entry: { lat, arc, rev, approach, voice, slot }
-   *   lat      metres to the RIGHT (negative = your left)
-   *   arc      metres AHEAD (negative = behind)
+  /* setRivals(list) — the field around you.
+   * Each entry: { lat, arc, wx?, wz?, rev, approach, voice, slot, net?, key? }
+   *   lat      metres to the RIGHT of the player (negative = your left)
+   *   arc      metres AHEAD of the player (negative = behind)
+   *   wx, wz   rival world position (optional; camera-relative pan when external)
    *   rev      0..1, their engine speed
    *   approach metres/second of LINE-OF-SIGHT closing (positive = coming at
    *            you; 0 when level with you — js/audio/rivals.js)
@@ -1952,9 +2036,46 @@ var GameAudio = (function () {
   // slot AND rank voice are both taken gets the first free voice: on a phone's
   // two voices a car bound to slot 3 would otherwise go mute beside an idle one.
   const _rivalRow = [];
+  // VS FRIEND net snapshots step speed/gear ~10 Hz; solo AI revs every physics tick.
+  // Two cascaded poles (~48 ms each) on net-owned rows only — peak frame jump < 25 Hz
+  // on a ~175 Hz pitch step without lagging local AI downshifts.
+  const RIVAL_REV_NET_TAU = 0.048;
+  const _rivalRevSm = [];
+  let _rivalRevSmT = 0;
+  let _rivalPanExternal = null;
+  function rivalPanPlayerFrame(lat, arc) {
+    return 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+  }
+  function rivalPanFromCamera(basis, wx, wz) {
+    const dx = wx - basis.x, dz = wz - basis.z;
+    const lat = dx * basis.rightX + dz * basis.rightZ;
+    const arc = dx * basis.fwdX + dz * basis.fwdZ;
+    return rivalPanPlayerFrame(lat, arc);
+  }
+  function rivalSmoothedRev(vi, raw, net, key, dt) {
+    let s = _rivalRevSm[vi];
+    if (!s) s = _rivalRevSm[vi] = { key: null, a: raw, b: raw };
+    const k = key != null ? key : vi;
+    if (k !== s.key) { s.key = k; s.a = raw; s.b = raw; return raw; }
+    if (!net) return raw;
+    const alpha = 1 - Math.exp(-dt / RIVAL_REV_NET_TAU);
+    s.a += alpha * (raw - s.a);
+    s.b += alpha * (s.a - s.b);
+    return s.b;
+  }
   function setRivals(list) {
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
+    const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
+    _rivalRevSmT = t;
+    const basis = typeof GameCams !== "undefined" && GameCams.getListenerBasis ? GameCams.getListenerBasis() : null;
+    const panExternal = !!(basis && basis.external);
+    if (_rivalPanExternal !== null && panExternal !== _rivalPanExternal) {
+      for (let i = 0; i < rivalVoices.length; i++) {
+        if (rivalVoices[i].pan && rivalVoices[i].pan.pan) rivalVoices[i].pan.pan._apexPanTgt = undefined;
+      }
+    }
+    _rivalPanExternal = panExternal;
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
     for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
     let unvoiced = 0;
@@ -1985,7 +2106,9 @@ var GameAudio = (function () {
       // entirely, which on headphones reads as detached from the scene rather
       // than beside you. 0.85 keeps a little of it in the far ear, which is
       // what having two of them is for.
-      const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+      let pan;
+      if (panExternal && basis && r.wx != null && r.wz != null) pan = rivalPanFromCamera(basis, r.wx, r.wz);
+      else pan = rivalPanPlayerFrame(lat, arc);
       // Same threshold, same reason (see aimGain): exact inequality against a
       // continuously varying angle re-scheduled the pan every physics step.
       // 0.004 of the -1..1 image is inaudible and well under the 0.06 s tau.
@@ -2031,7 +2154,9 @@ var GameAudio = (function () {
       // speeds sampled a frame apart and one bad frame must not chirp.
       const closing = Math.max(-90, Math.min(90, +r.approach || 0));
       const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
-      v.setPitch(t, clamp01(r.rev), dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
+      const rawRev = clamp01(r.rev);
+      const rev01 = rivalSmoothedRev(i, rawRev, !!r.net, r.key, dt);
+      v.setPitch(t, rev01, dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
     }
   }
 

@@ -22,7 +22,13 @@ var RivalAudio = (() => {
   // collector's edge instead of fading out. Kept equal to it.
   const RANGE = 150;             // metres; past this a rival is inaudible anyway
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
+    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
+  const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  function worldXZ(track, s, x) {
+    if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
+    Tracks.sample(track, s, _wScratch);
+    return [_wScratch.p[0] + _wScratch.r[0] * (x || 0), _wScratch.p[2] + _wScratch.r[2] * (x || 0)];
+  }
   const out = [];
 
   function create(G) {
@@ -55,12 +61,18 @@ var RivalAudio = (() => {
         let at = n < SLOTS ? n++ : SLOTS - 1;
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
-          cur.lat = prev.lat; cur.arc = prev.arc; cur.rev = prev.rev;
+          cur.lat = prev.lat; cur.arc = prev.arc; cur.wx = prev.wx; cur.wz = prev.wz; cur.rev = prev.rev;
           cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
+          cur.net = prev.net; cur.key = prev.key;
           at--;
         }
         const slot = slots[at];
         slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.car = c;
+        if (c.px != null && c.pz != null) { slot.wx = c.px; slot.wz = c.pz; }
+        else {
+          const w = worldXZ(track, c.s, c.x);
+          slot.wx = w ? w[0] : null; slot.wz = w ? w[1] : null;
+        }
         // Their power unit's voice (engine.js ENGINE_VOICES key): a Ferrari
         // passing you should not sound like your own Mercedes.
         slot.voice = (c.team && c.team.engine) || "";
@@ -72,6 +84,12 @@ var RivalAudio = (() => {
         // arc 0 stepped the pitch by ~300 cents across 0.2 m of arc as a car
         // came past. Lateral speed is not tracked (track-frame x is a position).
         slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
+        // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
+        const np = G.netPlay;
+        slot.net = !!(np && np.active && np.active() && np.owns && np.owns(c));
+        // Index in G.cars — read-only. Do not call G.wireId here: it caches c._wireId and
+        // episode-transients.test.mjs expects that field absent after reset().
+        slot.key = G.cars.indexOf(c);
       }
       // Bind voices. A car already bound keeps its voice; a voice whose car left
       // the set is freed; a newcomer takes the lowest free voice.

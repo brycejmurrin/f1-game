@@ -2606,6 +2606,18 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  // Plate already raised in startRace() / raceIntroFromSheet. Yield BEFORE
+  // ensureAudio / resets so #loading can paint (TopModal's MutationObserver
+  // close and the first frame) instead of sitting under a frozen dialog for
+  // the whole LAZY_AUDIO + scenery task. game-vm has no frame pump.
+  // https://developer.chrome.com/blog/use-scheduler-yield
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) {
+    if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.mark) RaceEntryProfile.mark("body:yield");
+    await yieldMain();
+  }
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   await ensureRaceSession();   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
@@ -2630,9 +2642,6 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2664,10 +2673,7 @@ async function startRaceBody() {
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
-  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
-  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
-    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
   if (!vmNoFramePump) await yieldMain();
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
@@ -2834,7 +2840,13 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
-  const rs = $("race-settings"); if (rs) rs.hidden = true;   // dialog top-layer covers #loading
+  // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
+  // so #loading is not trapped under :modal for the rest of this long task.
+  const rs = $("race-settings");
+  if (rs) {
+    rs.hidden = true;
+    try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
+  }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
@@ -3007,6 +3019,7 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  GameAudio.stopMusic();   // the race loop must not play under the results sheet
   // quitToMenu hides the rain field; endRace must too — otherwise it keeps
   // drawing into every frame behind the results sheet (audio alone stopped).
   // Particles.rainActive() is the seed gate, not the audio flag.
@@ -5681,12 +5694,10 @@ function updateCar(c, dt, ranked) {
     // taper reaches the same place at every pace. The slider's own mapping
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
-    // HYPERBOLIC, not clamped-linear: `1 - v/ref` goes negative at any real
-    // racing speed, so a Math.max(0.4, …) floor becomes the operating point —
-    // every notch from 1 to 9 bit-for-bit identical at 72 m/s
-    // (docs/research/PHASE-C-SLIDER-DESIGN.md §2). 1/(1+x) is never negative by
-    // construction, so it needs no floor; do not add one.
-    const lockTaper = 1 / (1 + vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
+    // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
+    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
+    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively

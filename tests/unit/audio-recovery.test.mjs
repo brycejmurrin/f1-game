@@ -35,7 +35,10 @@ function boot(opts = {}) {
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
-    setTimeout: () => 0, clearTimeout() {}, navigator: {}, AudioContext: function () { return createContext(); },
+    setTimeout: (fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; },
+    clearTimeout: (id) => { if (id) clearTimeout(id); },
+    navigator: opts.userActivation ? { userActivation: opts.userActivation } : {},
+    AudioContext: function () { return createContext(); },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
   if (opts.Audio) sb.Audio = opts.Audio;
   if (opts.perf) sb.performance = opts.perf;
@@ -45,7 +48,18 @@ function boot(opts = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), v);
   vm.runInContext(SRC, v);
   const blipFires = () => vm.runInContext("GameAudioSignal.blipFireTotal()", v);
-  return { A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts, document: sb.document, listeners, blipFires };
+  const deviceListeners = {};
+  if (opts.mediaDevices !== false) {
+    sb.navigator.mediaDevices = {
+      addEventListener(type, fn) { if (type === "devicechange") deviceListeners[type] = fn; },
+      removeEventListener() {},
+    };
+  }
+  return {
+    A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts,
+    document: sb.document, listeners, blipFires, sandbox: sb,
+    fireDeviceChange: () => { if (deviceListeners.devicechange) deviceListeners.devicechange(); },
+  };
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
 
@@ -364,6 +378,52 @@ test("with no media element at all, the cap falls back to the file size", async 
 // keyed it off G.raceWeather (the grid's weather), so a dry race the weather arc
 // turned wet came back with no rain after a SOUND toggle, and a wet race that
 // dried out came back raining. Every other startRain caller asks isRaining().
+const DEVICE_REBUILD_DEBOUNCE_MS = 280;
+
+test("devicechange debounces to one context rebuild and restores the camera mix", async () => {
+  let now = 5000;
+  class ClockDate extends Date { static now() { return now; } }
+  const { A, contexts, fireDeviceChange } = boot({ Date: ClockDate, userActivation: { isActive: true, hasBeenActive: true } });
+  A.init(); await flush();
+  A.setCameraMix("helmet");
+  assert.equal(A.cameraMix().kind, "onboard");
+  A.setTune({ reverb: 0.42 });
+  const gen0 = A.ctxGen();
+  for (let i = 0; i < 5; i++) fireDeviceChange();
+  now += DEVICE_REBUILD_DEBOUNCE_MS + 50;
+  await new Promise((r) => setTimeout(r, DEVICE_REBUILD_DEBOUNCE_MS + 40));
+  await flush();
+  assert.equal(contexts.length, 2, "one rebuild after a burst of devicechange events");
+  assert.equal(A.ctxGen(), gen0 + 1);
+  assert.equal(A.cameraMix().kind, "onboard", "camera mix re-applied on the new context");
+  assert.equal(A.tune().reverb, 0.42, "tune / cue trims re-applied on the new context");
+});
+
+test("devicechange without sticky user activation defers rebuild until the next gesture", async () => {
+  let now = 8000;
+  class ClockDate extends Date { static now() { return now; } }
+  const { A, contexts, fireDeviceChange } = boot({
+    Date: ClockDate,
+    userActivation: { isActive: false, hasBeenActive: false },
+  });
+  A.init(); await flush();
+  const gen0 = A.ctxGen();
+  fireDeviceChange();
+  now += DEVICE_REBUILD_DEBOUNCE_MS + 50;
+  await new Promise((r) => setTimeout(r, DEVICE_REBUILD_DEBOUNCE_MS + 40));
+  await flush();
+  assert.equal(contexts.length, 1, "no rebuild without user activation");
+  assert.equal(A.ctxGen(), gen0);
+  A.init(); await flush();
+  assert.equal(contexts.length, 2, "gesture performs the deferred rebuild");
+});
+
+test("init does not throw when navigator.mediaDevices is absent", async () => {
+  const { A } = boot({ mediaDevices: false });
+  assert.doesNotThrow(() => A.init());
+  await flush();
+});
+
 test("the SOUND toggle restarts rain from the live weather, not the grid's raceWeather", () => {
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
   const on = panel.slice(panel.indexOf('else if ((G.state === "race" || G.state === "count") && !G.paused) {'));

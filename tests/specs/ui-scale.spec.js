@@ -344,21 +344,27 @@ test.describe("UI scale", () => {
       await page.evaluate(() => window.__apex.uiScale(200));
       await page.waitForFunction(() => document.body.dataset.density === "compact",
         null, { polling: 100, timeout: 5_000 });
-      // SETTLE BOTH ZOOMS before reading them. Every spec pins reduced motion,
-      // and responsive.css answers it with a 0.01ms transition-duration on every
-      // #overlay descendant, where transition-property is the initial `all` -
-      // so zoom itself TRANSITIONS on #menu-brand and #menu-buttons. Until the
-      // next frame services that transition, getComputedStyle().zoom returns
-      // its START value, i.e. the zoom from before uiScale(200). On a coarse
-      // pointer that is the 1.09 default (tokens.css), which is exactly what
-      // ship CI 37689983772 on 76f1c6b93 read twice ("brand geometry" 1.09 vs
-      // 1): density was already compact and --ui-scale already 2, the zoom
-      // transition still pending. Waiting for the brand alone is not enough;
-      // the buttons' zoom (1.25 cap) races the same way.
-      await page.waitForFunction(() => ["menu-brand", "menu-buttons"].every((id) => {
-        const el = document.getElementById(id);
-        return !!el && !el.getAnimations().some((a) => a.pending || a.playState === "running");
-      }), null, { polling: 100, timeout: 10_000 });
+      // SETTLE BOTH ZOOMS before reading them (one wait for both elements).
+      // Every spec pins reduced motion, and responsive.css answers it with a
+      // 0.01ms transition-duration on every #overlay descendant, where
+      // transition-property is the initial `all` - so zoom itself TRANSITIONS
+      // on #menu-brand and #menu-buttons. Until the next frame services that
+      // transition, getComputedStyle().zoom returns its START value, i.e. the
+      // zoom from before uiScale(200). On a coarse pointer that is the 1.09
+      // default (tokens.css): ship CI 37689983772 on 76f1c6b93 read it twice
+      // ("brand geometry" 1.09 vs 1) with density already compact and
+      // --ui-scale already 2. #1256 waited for the brand's zoom alone; the
+      // buttons' zoom (the 1.25 cap asserted below) races the same way, so
+      // this waits until neither element has a pending or running animation,
+      // and keeps #1256's brand-at-compact check in the same predicate.
+      await page.waitForFunction(() => {
+        const idle = ["menu-brand", "menu-buttons"].every((id) => {
+          const el = document.getElementById(id);
+          return !!el && !el.getAnimations().some((a) => a.pending || a.playState === "running");
+        });
+        const brand = document.getElementById("menu-brand");
+        return idle && Math.abs(+getComputedStyle(brand).zoom - 1) < 0.001;
+      }, null, { polling: 100, timeout: 10_000 });
 
       const scale = await page.evaluate(() => ({
         requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),

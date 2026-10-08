@@ -1341,3 +1341,78 @@ test("once guest connected, status never regresses and no expiry error", async (
     h.lobby.cancel();
   }
 });
+
+// Host room-code expiry / courier fail (onFail) must close the half-built
+// pending RTCPeerConnection + transport. Leaving it leaked blocked a retry
+// from the same guest (stale pending offer / PC) after #1237's longer host
+// timeout window.
+test("host onFail during a half-built join closes that peer PC and clears pending", async () => {
+  const made = [], rooms = [], ts = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: { acceptAnswer: async () => ({ ok: true, peer: null }) },
+    rendezvous: {
+      usingPrivateRelay: () => false, makeCode: () => "ABC234",
+      hostRoom: async (o) => {
+        const room = {
+          code: o.code, onJoiner: o.onJoiner, onFail: o.onFail,
+          stopped: 0, stop() { room.stopped++; }, rotate() {},
+        };
+        rooms.push(room);
+        return { ok: true, stop: () => room.stop(), rotate: () => {} };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    const pc = {
+      signalingState: "have-local-offer",
+      connectionState: "new",
+      closed: 0,
+      close() { pc.closed++; pc.connectionState = "closed"; pc.signalingState = "closed"; },
+    };
+    const t = {
+      status: "new", pc, closers: [],
+      onClose(fn) { t.closers.push(fn); },
+      close() {
+        if (t.status === "closed") return;
+        t.status = "closed";
+        try { pc.close(); } catch (e) { /* already gone */ }
+        for (const fn of t.closers) fn("local");
+      },
+    };
+    ts.push(t);
+    return t;
+  });
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(rooms.length, 1);
+    assert.equal(typeof rooms[0].onFail, "function", "hostRoom received onFail");
+    const pending = ts[0];
+    assert.equal(pending.status, "new", "half-built transport is waiting for an answer");
+    assert.equal(h.lobby.status().pending, true);
+    assert.equal(pending.pc.closed, 0);
+
+    // Courier expiry with nobody connected — the primary leak path.
+    rooms[0].onFail({
+      ok: false, error: "expired",
+      message: "Nobody answered that code. Check the six characters, or ask "
+        + "your friend for a fresh one.",
+    });
+
+    assert.equal(pending.status, "closed", "onFail must close the half-built transport");
+    assert.equal(pending.pc.closed, 1, "…and its RTCPeerConnection");
+    assert.equal(h.lobby.status().pending, false, "no pending entry left behind");
+    assert.equal(h.lobby.status().guests, 0);
+
+    // Same guest can retry: a fresh codeHost must mint a new transport/PC.
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(ts.length, 2, "retry minted a fresh host transport");
+    assert.notEqual(ts[1], pending);
+    assert.equal(ts[1].status, "new");
+    assert.equal(ts[1].pc.closed, 0);
+    assert.equal(h.lobby.status().pending, true);
+  } finally {
+    h.lobby.cancel();
+  }
+});

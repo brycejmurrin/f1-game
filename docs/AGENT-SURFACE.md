@@ -321,7 +321,9 @@ Pins the wrap always applies (you cannot override them):
   point on `orbit` — frames a prop far overhead); `el` on `eye` is the pitch
 - `apex_job_start` → `kind` from a fixed list (includes `shot_survey`), each with
   its own argv builder; callers pass values (ids, comma lists), never flags; at
-  most two jobs run; browser kinds hold the lock until they exit;
+  most two jobs run; browser kinds hold the lock until they exit; `hud_shot` /
+  `hud_survey` start only from the HUD tools (their pinned argv rides a Symbol
+  key no JSON caller can set; a direct call is refused);
   `apex_job_cancel` kills the group.
   The reported `log` is the CLI's stdout (its report; the status `tail` reads it),
   `stderr` the file beside it, both in `artifacts/logs/apex-jobs/`
@@ -333,9 +335,12 @@ Pins the wrap always applies (you cannot override them):
   enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
   under `artifacts/` or `scratch/`) are validated by the CLI's own pure
   validators before the lock; `matrix: exhaustive` (~4 h) is refused without
-  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). Results carry `structuredContent`, its
-  serialized copy as the first text block, and `resource_link`s (PNG /
-  findings.md / index.html / report.json)
+  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). A cell is ~2 min
+  and the quick matrix ~10, past the host's ~60–120 s MCP call, so both default
+  to `apex_job_start` kinds `hud_shot` / `hud_survey` and return a `jobId`
+  (poll `apex_job_status`). `async: false` blocks instead; only that path's
+  results carry `structuredContent`, its serialized copy as the first text
+  block, and `resource_link`s (PNG / findings.md / index.html / report.json)
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 
