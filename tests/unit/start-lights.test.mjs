@@ -125,7 +125,7 @@ test("a record that names its lamp row (a startLights span) places the lamps the
 
 test("game.js wires StartLights and the particle pool exposes the lamp flare", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /const startLights = StartLights\.create\(G\)/);
+  assert.match(game, /let startLights = StartLights\.create\(G\)/);
   assert.match(game, /startLights\.update\(\);[^\n]*\n(?:\s*marshalPanels\.update\(dt\);[^\n]*\n)?\s*Particles\.update\(dt\);\s*\n\s*Particles\.draw\(\);/, "lamps are issued before this frame's draw (the posts' panels may sit between)");
   const particles = fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8");
   assert.match(particles, /function flare\(x, y, z, size, r, g, b, alpha, lamp\)/);

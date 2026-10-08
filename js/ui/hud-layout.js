@@ -82,7 +82,7 @@ const HudLayout = (function () {
     ["damage", "DAMAGE", "#hud-damage", "top right"],
     ["rel", "RELATIVE", "#hud-rel", "top right"],
     ["strat", "STRATEGY", "#hud-strat", "top left"],
-    ["inputs", "INPUTS", "#hud-inputs", "bottom left"],
+    ["inputs", "INPUTS", "#hud-inputs", "top right"],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "helmet", "other"]);
@@ -389,6 +389,59 @@ const HudLayout = (function () {
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
         if (dy) m.el.style.setProperty("--hl-y", String(+(m.e.y + dy / H * 100).toFixed(2)));
+      }
+    }
+    // READOUT-ON-CONTROL: a MOVE & SIZE offset chosen on a wide desktop can
+    // land RELATIVE / INPUTS / SECTORS on a phone's touch discs. After the
+    // edge clamp, nudge those three left/up off any visible .touchbtn (and
+    // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
+    clearControls(W, H);
+  }
+
+  const CLEAR_CTRL = Object.freeze({ rel: 1, inputs: 1, sectors: 1 });
+  function clearControls(W, H) {
+    if (!doc || !doc.querySelectorAll) return;
+    const btns = [];
+    const nodes = doc.querySelectorAll(".touchbtn, #hud-gearbox, #hud-speed");
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      if (!el || el.hidden) continue;
+      const cs = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
+      const r = el.getBoundingClientRect();
+      if (!(r.width && r.height)) continue;
+      // Desktop: ignore touch discs that stay in the tree but are not the
+      // player's controls; keep SPEED & GEAR so INPUTS still clears them.
+      if (el.classList && el.classList.contains("touchbtn") && doc.body && doc.body.classList.contains("desktop")) continue;
+      btns.push(r);
+    }
+    if (!btns.length) return;
+    const a = all()[shown()];
+    for (const [id, , sel] of ELEMENTS) {
+      if (!CLEAR_CTRL[id]) continue;
+      const e = a[id];
+      if (!e || isDefEl(e)) continue;
+      const el = doc.querySelector(sel);
+      if (!el || !el.hasAttribute("data-hl")) continue;
+      let r = el.getBoundingClientRect();
+      if (!(r.width && r.height)) continue;
+      let dx = 0, dy = 0;
+      for (let n = 0; n < 4; n++) {
+        let hit = null;
+        for (let i = 0; i < btns.length; i++) {
+          const b = btns[i];
+          if (r.left < b.right - 0.5 && b.left < r.right - 0.5 && r.top < b.bottom - 0.5 && b.top < r.bottom - 0.5) { hit = b; break; }
+        }
+        if (!hit) break;
+        // Prefer sliding left (away from the right dock) or up (away from the
+        // pedal row); fall back to the smaller of the two escapes.
+        const left = r.right - hit.left;
+        const up = r.bottom - hit.top;
+        if (left <= up) dx -= left + 4;
+        else dy -= up + 4;
+        el.style.setProperty("--hl-x", String(+(e.x + dx / W * 100).toFixed(2)));
+        el.style.setProperty("--hl-y", String(+(e.y + dy / H * 100).toFixed(2)));
+        r = el.getBoundingClientRect();
       }
     }
   }

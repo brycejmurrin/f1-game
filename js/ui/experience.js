@@ -241,6 +241,9 @@ const UiExperience = (function () {
     }
     function stamp() {
       const s = scene();
+      document.documentElement.dataset.homeScene = s.mode;
+      if (s.mode === "static") delete document.documentElement.dataset.homeLive;
+      else document.documentElement.dataset.homeLive = "1";
       overlay.dataset.homeScene = s.mode;
       overlay.dataset.homeShot = s.shot;
       const photoButton = $("mb-photo"), waiting = ["track", "pitlane"].includes(s.mode) && !deps.trackReady();
@@ -410,6 +413,8 @@ const UiExperience = (function () {
         return false;
       } catch (e) {
         failure = true; stopHome(); Log.warn("ui", "Home garage unavailable; static menu retained", e);
+        document.documentElement.dataset.homeScene = "static";
+        delete document.documentElement.dataset.homeLive;
         overlay.dataset.homeScene = "static";
         return false;
       }

@@ -169,7 +169,6 @@ const TrackDesignerProps = (function () {
     if (p.kind === "flood") {
       if (!api.floodMast) return false;
       api.floodMast(k, side, Math.max(18, gap), { h: 24, cool: true, pool: true });
-      api.floodMast(k, -side, Math.max(18, gap), { h: 24, cool: true, pool: true });
       return true;
     }
     if (p.kind === "billboard") {

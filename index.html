@@ -520,6 +520,25 @@
         de.dataset.titleLayout = "on";
       }
     } catch (e) { /* TitleLayout answers at eval */ }
+    // Home scene: apex26.homeScene — first answer only (js/ui/experience.js
+    // stamp() + AppearanceStudio.scene() + homeVariation.peek for "auto").
+    // html[data-home-scene] lets blocking css/menus.css pick the live grid
+    // before deferred experience.css and before #overlay gets the same stamp.
+    try {
+      var hsRaw = null;
+      try { hsRaw = JSON.parse(localStorage.getItem("apex26.homeScene")); } catch (e4) { /* unset */ }
+      var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
+      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
+      if (hsMode === "auto") {
+        // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
+        // only once renderHome calls enter(), after the first paint).
+        var envs = ["garage", "track", "night", "pitlane", "studio"];
+        hsMode = envs[0];
+      }
+      document.documentElement.setAttribute("data-home-scene", hsMode);
+      if (hsMode === "static") document.documentElement.removeAttribute("data-home-live");
+      else document.documentElement.setAttribute("data-home-live", "1");
+    } catch (e) { /* Experience stamp() answers at eval */ }
   })();
 </script>
 <!-- shown by CSS when body.in-race + portrait orientation — works on iOS too -->
@@ -1810,7 +1829,7 @@
         </div>
         <p id="as-p-note" class="as-note"></p>
         <h3 class="adv-sec">PITCH CURVE</h3>
-        <p class="as-note">How the note climbs with the revs. Every value here is a percentage of your team&rsquo;s engine, 100 leaving it unchanged. IDLE is the bottom, PITCH shifts the whole note, REV RANGE the spread to the limiter, CURVE how early it rises.</p>
+        <p class="as-note">How the note climbs with the revs. Each readout is a trim percentage on that control (100&nbsp;=&nbsp;1&times;). TEAM profile is your manufacturer&rsquo;s factory mix, so the numbers are not all 100&nbsp;&mdash; PITCH, REV&nbsp;RANGE, SUB and DEPTH follow the team sound. RESET&nbsp;TO&nbsp;TEAM&nbsp;SOUND restores that profile. IDLE is the bottom, PITCH shifts the whole note, REV&nbsp;RANGE the spread to the limiter, CURVE how early it rises.</p>
         <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
           <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
         <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
@@ -3509,7 +3528,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/build-props.js?v=dev"></script>
 <!-- circuit meta (picker fields) — full defs hydrate via LAZY_CIRCUIT -->
 <script defer crossorigin="anonymous" src="js/track/circuit-meta.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
@@ -3541,10 +3560,8 @@
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/input-ghost.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/session-records.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-insights.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/duel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/track-lights.js?v=dev"></script>
@@ -3570,19 +3587,12 @@
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/damage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/grip-steer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/radio-lines.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/race-facts.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/spotter.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/race-radio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-sight.js?v=dev"></script>
@@ -3621,10 +3631,7 @@
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/flying-start.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/start-lights.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/marshal-panels.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>

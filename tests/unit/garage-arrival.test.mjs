@@ -414,7 +414,8 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
   const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
   assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');
-  assert.ok(go.indexOf('sheet.hidden = true') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
+  assert.match(go, /const dismissSheet = \(\) => \{/, 'rs-go sync-dismisses the :modal dialog so #loading is not trapped under top layer');
+  assert.ok(go.indexOf('dismissSheet();') > go.indexOf('if (netRoom) {'), 'and does not close the sheet before routing');
   assert.match(game, /buildStandings, raceIntro: raceIntroFromSheet,/, 'game.js wires the sheet-covering intro into race settings');
 });
 
@@ -826,6 +827,7 @@ test('duplicate race-settings presses share preparation and enter the intro once
   const owner = h.ctx.sheetOwner();
   h.ctx.raceIntroFromSheet(() => view.goes++, view.sheet, view.btn);
   assert.strictEqual(h.ctx.sheetOwner(), owner);
+  await h.drain(); // paint-yield microtask, then the warm wait is armed
   assert.equal(h.waits.length, 1, 'no second wait or preparation owner');
   h.assertBusy(view);
   h.ready(); h.waits[0].resolve(); await h.drain();
@@ -836,8 +838,10 @@ test('duplicate race-settings presses share preparation and enter the intro once
 
 test('settlement of an abandoned warm wait cannot unlock the newer sheet owner', async () => {
   const h = sheetRecoveryHarness({ manual: true }), old = h.start();
+  await h.drain();
   const oldWait = h.waits[0]; h.ctx.cancelIntro(); h.assertRetry(old);
-  const newer = h.start(), owner = h.ctx.sheetOwner(), newWait = h.waits[1];
+  const newer = h.start(); await h.drain();
+  const owner = h.ctx.sheetOwner(), newWait = h.waits[1];
   oldWait.reject(new Error('old owner failed after cancellation')); await h.drain();
   assert.strictEqual(h.ctx.sheetOwner(), owner);
   h.assertBusy(newer);
@@ -850,6 +854,7 @@ test('settlement of an abandoned warm wait cannot unlock the newer sheet owner',
 
 test('a successful warm handoff leaves cold preparation covered until the garage boundary', async () => {
   const h = sheetRecoveryHarness({ manual: true, deferredCold: true }), view = h.start();
+  await h.drain();
   const owner = h.ctx.sheetOwner(); h.ready(); h.waits[0].resolve(); await h.drain();
   assert.equal(h.intros.length, 1);
   assert.equal(h.intros[0].stillWarming, false);
@@ -891,6 +896,7 @@ test('a synchronous intro exception restores retry instead of starting the race'
 
 test('a settings change abandons the warm wait and restores its owner', async () => {
   const h = sheetRecoveryHarness({ manual: true }), view = h.start();
+  await h.drain();
   h.ctx.settings = 'two';
   h.waits[0].resolve();
   await h.drain();

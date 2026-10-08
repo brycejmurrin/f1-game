@@ -93,6 +93,25 @@ const PIN_PREVIOUS_LOOK = () => {
   } catch (_) {}
 };
 
+/** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
+async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
+  await page.waitForFunction(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.body.classList.contains("desktop")) return true;
+    const boost = document.getElementById("btn-boost");
+    const sectors = document.getElementById("hud-sectors");
+    if (!boost || boost.hidden || !sectors) return false;
+    const sec = sectors.getBoundingClientRect();
+    const br = boost.getBoundingClientRect();
+    if (!(sec.width > 0 && br.width > 0)) return false;
+    const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+    if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+    const hit = sec.left < br.right - 0.5 && br.left < sec.right - 0.5
+      && sec.top < br.bottom - 0.5 && br.top < sec.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: timeoutMs });
+}
+
 async function race(page, steer, manual, ins, opts) {
   const o = opts || {};
   await page.addInitScript(PIN_PREVIOUS_LOOK);
@@ -176,12 +195,77 @@ async function race(page, steer, manual, ins, opts) {
       if (!tower) return false;
       const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
       const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
-    }, null, { polling: 100, timeout: 5_000 });
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
+      // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
+      if (document.body.classList.contains("desktop")) return true;
+      const phoneSteer = document.body.classList.contains("steer-buttons")
+        || document.body.classList.contains("steer-touch");
+      const boost = document.getElementById("btn-boost");
+      if (phoneSteer && (!boost || boost.hidden)) return false;
+      const sec = document.getElementById("hud-sectors");
+      if (!sec || sec.hidden || !sec.childElementCount) return false;
+      const s = sec.getBoundingClientRect();
+      if (!(s.width > 0)) return false;
+      // BOOST clearance only when BOOST sits on the RIGHT (buttons/touch).
+      // Tilt parks BOOST on the left — using that edge as the dock target
+      // blew --dock-r-w to midCap (CI: dockRW 907, sectors under --sal).
+      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      const boostOnRight = !!(b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2);
+      if (boostOnRight) {
+        const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+        if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+        if (s.right > b.left + 0.5) return false;
+      } else if (!boost || boost.hidden) {
+        /* desktop / no BOOST — tower wait above is enough */
+      }
+      const ann = document.getElementById("announce");
+      if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
+        const a = ann.getBoundingClientRect();
+        const hit = (el) => {
+          if (!el || el.hidden) return false;
+          const r = el.getBoundingClientRect();
+          return a.width > 0 && r.width > 0
+            && r.left < a.right - 0.5 && a.left < r.right - 0.5
+            && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5;
+        };
+        if (hit(sec) || hit(document.querySelector(".hud-top"))) return false;
+      }
+      // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
+      // for one tick. Require both inside the injected safe insets.
+      const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
+      const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
+      if (s.left < sal - 0.5 || s.right > window.innerWidth - sar + 0.5) return false;
+      const map = document.getElementById("minimap");
+      if (map && !map.hidden) {
+        const m = map.getBoundingClientRect();
+        if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
+      }
+      // Freeze in the same turn that saw clearance. updateHud still ticks
+      // while frozen, but fitHud's painted-clash path re-opens the same-key
+      // backoff if wrap-reverse crawls BOOST back onto S3.
+      try { window.__apex.freeze(true); } catch (_) { /* */ }
+      return true;
+    }, null, { polling: 100, timeout: 30_000 });
   }
 }
 
 const measure = async (page, ctrl, hud, W, H, ins) => {
+  await page.evaluate(() => {
+    if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+  });
+  await waitTouchSectorsClearBoost(page);
+  await page.waitForFunction(() => {
+    const ann = document.getElementById("announce");
+    const sectors = document.getElementById("hud-sectors");
+    if (!ann || ann.hidden || !sectors) return true;
+    const a = ann.getBoundingClientRect();
+    const s = sectors.getBoundingClientRect();
+    if (!(a.width && s.width)) return true;
+    const hit = s.left < a.right - 0.5 && a.left < s.right - 0.5
+      && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: 30_000 });
   // THE BOX PROBE AND THE CLASH RULES live in tools/lib/hud-geometry.mjs since
   // 2026-10-03, shared with tools/shot/hud-survey.mjs (the HUD survey across
   // devices x cameras x presets), so the spec and the survey cannot disagree on
@@ -286,8 +370,32 @@ for (const v of VIEWS) {
           // it was in the array the whole time. The dump also carries the fit
           // pass's own state, because "which elements" and "why did the cap not
           // stop it" are the same question.
-          const dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
+          let dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
                                               unsafe: r.unsafe, fit: r.fit || null });
+          if (r.hudClash.length) {
+            const geo = await page.evaluate(() => {
+              const root = document.documentElement;
+              const box = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { l:+r.left.toFixed(1), r:+r.right.toFixed(1), t:+r.top.toFixed(1), b:+r.bottom.toFixed(1),
+                  w:+r.width.toFixed(1), h:+r.height.toFixed(1), hidden: !!el.hidden,
+                  vis: getComputedStyle(el).visibility, collapsed: el.hasAttribute("data-lane-collapsed") };
+              };
+              return {
+                dockRW: root.style.getPropertyValue("--dock-r-w"),
+                laneX: root.style.getPropertyValue("--announce-lane-x"),
+                laneW: root.style.getPropertyValue("--announce-lane-w"),
+                radioTop: document.body.classList.contains("hud-radio-top"),
+                radioTopW: root.style.getPropertyValue("--radio-top-w"),
+                radioTopX: root.style.getPropertyValue("--radio-top-x"),
+                body: document.body.className,
+                sec: box("hud-sectors"), ann: box("announce"), boost: box("btn-boost"),
+              };
+            });
+            dump += " geo=" + JSON.stringify(geo);
+          }
           // No control may sit on another — every one of these is a tap target.
           expect(r.overlaps, "controls must not sit on each other" + dump).toEqual([]);
           // And no READOUT may sit on a tap target, which is the failure that
@@ -479,6 +587,177 @@ test.describe("buttons steer high HUD scale", () => {
     expect(sectorHits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
   });
 });
+
+// TILT was left out of #1191's steer-buttons dock standoff: at HUD 150% the
+// sector strip still sat on BOOST (844×390 survey). Same --dock-r-w + anchor
+// tether, without regressing the buttons/touch cases above.
+test.describe("tilt steer high HUD scale", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("sector plate clears BOOST (phone landscape, 150%)", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150 });
+    await page.evaluate(() => {
+      if (typeof HudElements !== "undefined") HudElements.set("rel", true);
+      window.__apex.jump(0.15, 60, 0);
+    });
+    await page.waitForFunction(() => {
+      const rel = document.getElementById("hud-rel");
+      const brake = document.getElementById("btn-brake");
+      if (!rel || rel.hidden || !brake) return false;
+      const a = rel.getBoundingClientRect(), b = brake.getBoundingClientRect();
+      if (!(a.width && b.width)) return false;
+      // fitRows must have slid/capped the card clear of BRAKE (TILT left column).
+      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) return false;
+      // jump() + REL unhide re-fits; wait until S3 has cleared BOOST again.
+      const sec = document.getElementById("hud-sectors");
+      const boost = document.getElementById("btn-boost");
+      if (!sec || !boost || sec.hidden || boost.hidden || !sec.childElementCount) return false;
+      const s = sec.getBoundingClientRect(), g = boost.getBoundingClientRect();
+      if (!(s.width > 0 && g.width > 0)) return false;
+      return s.right <= g.left + 0.5;
+    }, null, { polling: 100, timeout: 30_000 });
+    const targets = [
+      { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
+      { key: "hud-rel", sel: "#hud-rel", role: "hud" },
+      { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+      { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
+      { key: "btn-throttle", sel: "btn-throttle", role: "ctrl" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const hits = r.hudClash.filter((p) => p.includes("hud-sectors") || p.includes("hud-rel"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+// Opt-in RELATIVE / INPUTS ship off; the 2026-10-07 survey turned them on and
+// measured readout-on-control (REL×steer/BRAKE, INPUTS×BOOST column / gear box).
+async function enableOptIns(page) {
+  await page.evaluate(() => {
+    if (typeof HudElements === "undefined") throw new Error("HudElements missing");
+    for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
+  });
+  await page.waitForFunction(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const rel = document.getElementById("hud-rel");
+    const inp = document.getElementById("hud-inputs");
+    if (!rel || !inp || rel.hidden || inp.hidden) return false;
+    const rr = rel.getBoundingClientRect(), ir = inp.getBoundingClientRect();
+    if (!(rr.width > 0 && rr.height > 0 && ir.width > 0 && ir.height > 0)) return false;
+    // Phone: wait until INPUTS has cleared the steer column (desktop docks stay
+    // empty / steer hidden, so the box-size check above is enough there).
+    if (!document.body.classList.contains("desktop")) {
+      const steerR = document.getElementById("btn-steer-right");
+      if (!steerR || steerR.hidden) return false;
+      const sr = steerR.getBoundingClientRect();
+      if (!(sr.width > 0)) return false;
+      const dockRW = parseFloat(document.documentElement.style.getPropertyValue("--dock-r-w"));
+      if (!(Number.isFinite(dockRW) && dockRW > 0)) return false;
+      if (ir.left < sr.right + 4) return false;
+      if (rr.right > ir.left - 4) return false;
+    }
+    return true;
+  }, null, { polling: 100, timeout: 30_000 });
+}
+
+test.describe("opt-in readouts vs touch controls", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("RELATIVE clears left steer / BRAKE; INPUTS clears right dock (buttons 150%)", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { hudScale: 150, btnScale: 150, cam: "cockpit" });
+    await enableOptIns(page);
+    const targets = [
+      { key: "hud-rel", sel: "#hud-rel", role: "hud" },
+      { key: "hud-inputs", sel: "#hud-inputs", role: "hud" },
+      { key: "btn-steer-left", sel: "btn-steer-left", role: "ctrl" },
+      { key: "btn-steer-right", sel: "btn-steer-right", role: "ctrl" },
+      { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
+      { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+      { key: "btn-aero", sel: "btn-aero", role: "ctrl" },
+      { key: "btn-throttle", sel: "btn-throttle", role: "ctrl" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const hits = r.hudClash.filter((p) => p.includes("hud-rel") || p.includes("hud-inputs"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+test.describe("desktop INPUTS vs gear box", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+  test("INPUTS clears SPEED & GEAR at HUD 150% chase", async ({ page }) => {
+    const v = { name: "desktop", w: 1280, h: 720, sal: 0, sar: 0, sat: 0, sab: 0 };
+    await race(page, "tilt", false, v, { hudScale: 150, cam: "chase" });
+    await enableOptIns(page);
+    const targets = [
+      { key: "hud-inputs", sel: "#hud-inputs", role: "hud" },
+      { key: "hud-gearbox", sel: "#hud-gearbox", role: "hud" },
+      { key: "hud-speed", sel: "#hud-speed", role: "hud" },
+    ];
+    const recs = await page.evaluate(probeHudElements, { targets });
+    const r = analyzeOverlap(recs, v.w, v.h, v);
+    const hits = r.hudClash.filter((p) => p.includes("hud-inputs"));
+    expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+// PORTRAIT RACE-ANYWAY (body.rotate-ok): the bottom cluster must not pile
+// TYRES / #hud-plan onto GEAR, or grow the gear box into AERO/OT. Tip before
+// this fix (61e0a644 survey): gearbox×tyre 12499px² and gearbox×btn-aero at
+// 390×844 chase HUD 150%. Pages-gate only — run locally; say so in the PR.
+for (const v of [
+  { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
+  { name: "phone-portrait-360", w: 360, h: 740, sal: 0, sar: 0, sat: 0, sab: 0 },
+]) {
+  test.describe(`portrait bottom cluster (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("tilt HUD 150%: tyre/plan clear gear; gear clears AERO/OT", async ({ page }) => {
+      await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150, cam: "chase" });
+      await page.evaluate(() => {
+        document.body.classList.add("rotate-ok");
+        localStorage.setItem("apex26.portraitOk", "1");
+        if (window.__apex && window.__apex.tyres) window.__apex.tyres({ level: "real" });
+        const plan = document.getElementById("hud-plan");
+        if (plan && !plan.textContent) plan.textContent = "PLAN NO STOP";
+        const tyre = document.getElementById("hud-tyre");
+        if (tyre) tyre.hidden = false;
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        window.__apex.jump(0.15, 60, 0);
+      });
+      await page.waitForFunction(() => {
+        const gear = document.getElementById("hud-gearbox");
+        const tyre = document.getElementById("hud-tyre");
+        const aero = document.getElementById("btn-aero");
+        if (!gear || !tyre || tyre.hidden || !aero || aero.hidden) return false;
+        const g = gear.getBoundingClientRect(), t = tyre.getBoundingClientRect(), a = aero.getBoundingClientRect();
+        if (!(g.width && t.width && a.width)) return false;
+        const gearTyre = g.left < t.right - 0.5 && t.left < g.right - 0.5
+          && g.top < t.bottom - 0.5 && t.top < g.bottom - 0.5;
+        const gearAero = g.left < a.right - 0.5 && a.left < g.right - 0.5
+          && g.top < a.bottom - 0.5 && a.top < g.bottom - 0.5;
+        return !gearTyre && !gearAero;
+      }, null, { polling: 100, timeout: 30_000 });
+      const targets = [
+        { key: "hud-gearbox", sel: "#hud-gearbox", role: "hud" },
+        { key: "hud-tyre", sel: "#hud-tyre", role: "hud" },
+        { key: "btn-aero", sel: "btn-aero", role: "ctrl" },
+        { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+        { key: "btn-boost", sel: "btn-boost", role: "ctrl" },
+      ];
+      const recs = await page.evaluate(probeHudElements, { targets });
+      const r = analyzeOverlap(recs, v.w, v.h, v);
+      const hits = r.hudClash.filter((p) =>
+        p.includes("hud-gearbox") || p.includes("hud-tyre"));
+      expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+    });
+  });
+}
 
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);

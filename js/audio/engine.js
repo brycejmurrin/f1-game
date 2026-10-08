@@ -40,6 +40,7 @@ var GameAudio = (function () {
   let lockFilter = null, lockGain = null;                    // locked-wheel squeal (rides scrubSrc)
   let surfSrc = null, surfFilter = null, surfGain = null;    // grass / gravel rumble off the road
   let pitLimOsc = null, pitLimGain = null;                   // pit-limiter chop: square AM into engGain.gain
+  let cylCutOsc = null, cylCutGain = null;                   // ERS/part-throttle ignition-cut texture (2026 PU)
   let revFlare = 0, revFlareT = 0;                           // downshift throttle-blip overshoot (see shift)
   let carSfxLast = { scrub: 0, lock: 0, surface: 0, pitLim: 0 };   // test hook
   let pitGunFired = 0, surfSched = 0;
@@ -216,7 +217,7 @@ var GameAudio = (function () {
       killNodes(batch);
     }, 450);
   }
-  let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
+  let lastSpeed = 0, lastEngT = 0, harvLevel = 0, harvBrakeLevel = 0, harvCoastLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
   let overrunT = 0;                    // when the next overrun crackle is due
   let overrunFired = 0;                // crackles emitted this session (test hook)
@@ -249,6 +250,11 @@ var GameAudio = (function () {
   let listenersAttached = false;
   let rebuildTries = 0;
   let lastFailedResume = 0;
+  let deviceRebuildTimer = null;
+  let deviceRebuildPending = false;
+  let deviceRebuildBusy = false;
+  let ctxSampleRate = 0;
+  const DEVICE_REBUILD_DEBOUNCE_MS = 280;
   let resumeMusic = false;
   let resumeEngine = false;
   let resumeRain = false;
@@ -330,12 +336,22 @@ var GameAudio = (function () {
     // iOS drops a VISIBLE page to "interrupted" for an alarm or Siri; a gamepad
     // player never makes the gesture the listeners below wait for. Our own
     // suspend() only runs while hidden, so a visible stop is never ours.
+    ctxSampleRate = ctx.sampleRate;
     ctx.onstatechange = () => {
+      if (deviceRebuildBusy || !ctx) return;
       // "interrupted" is iOS taking the audio session — a call answered from the
       // compact banner keeps Safari VISIBLE, so nothing else tells the game
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
-      if (ctx && ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
-      if (ctx && ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
+      if (ctx.state === "closed") return;
+      if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
+        scheduleOutputDeviceRebuild("sampleRate");
+      }
+      if (ctx.state === "running") ctxSampleRate = ctx.sampleRate;
+      if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
+        scheduleOutputDeviceRebuild("state-" + ctx.state);
+      }
+      if (ctx.state !== "running" && ctx.state !== "closed" && !document.hidden) resumeIfNeeded();
     };
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
@@ -415,6 +431,60 @@ var GameAudio = (function () {
     return { buf: out, loop: { start: 0, end: (b - a) / sr }, win: { start: a / sr, end: b / sr } };
   }
 
+  function stickyUserActivation() {
+    try {
+      const ua = typeof navigator !== "undefined" && navigator.userActivation;
+      return !!(ua && (ua.isActive || ua.hasBeenActive));
+    } catch (e) { return false; }
+  }
+
+  function scheduleOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (deviceRebuildTimer) clearTimeout(deviceRebuildTimer);
+    deviceRebuildTimer = setTimeout(() => {
+      deviceRebuildTimer = null;
+      requestOutputDeviceRebuild(why);
+    }, DEVICE_REBUILD_DEBOUNCE_MS);
+  }
+
+  function requestOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (!stickyUserActivation()) {
+      deviceRebuildPending = true;
+      Log.debug("audio", "output-device rebuild deferred (" + why + ") until the next gesture");
+      return;
+    }
+    performOutputDeviceRebuild(why);
+  }
+
+  function performOutputDeviceRebuild(why) {
+    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    deviceRebuildPending = false;
+    deviceRebuildBusy = true;
+    Log.info("audio", "rebuilding AudioContext after " + why);
+    try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
+  }
+
+  function onMediaDeviceChange() {
+    scheduleOutputDeviceRebuild("devicechange");
+  }
+
+  function attachOutputDeviceListeners() {
+    try {
+      const md = typeof navigator !== "undefined" && navigator.mediaDevices;
+      if (!md || typeof md.addEventListener !== "function") return;
+      md.addEventListener("devicechange", onMediaDeviceChange);
+    } catch (e) { /* absent in game-vm and some WebViews */ }
+  }
+
+  function reapplyContextState() {
+    if (!ctx) return;
+    applyTuneNodes();
+    applyVenue();
+    applyMusicDuck();
+    setSfxEnabled(sfxEnabled);
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
@@ -433,6 +503,7 @@ var GameAudio = (function () {
       window.addEventListener("pointerdown", resumeIfNeeded, true);
       window.addEventListener("keydown", resumeIfNeeded, true);
       document.addEventListener("visibilitychange", onVisibility);
+      attachOutputDeviceListeners();
     }
   }
 
@@ -447,6 +518,11 @@ var GameAudio = (function () {
   function resumeIfNeeded(gestureEv) {
     if (!ctx) return;
     const isGesture = !!gestureEv;
+    if (isGesture && deviceRebuildPending) {
+      deviceRebuildPending = false;
+      performOutputDeviceRebuild("deferred-gesture");
+      return;
+    }
     if (ctx.state === "running") {
       rebuildTries = 0;
       lastFailedResume = 0;
@@ -490,7 +566,12 @@ var GameAudio = (function () {
     // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
     // i.e. with the context in exactly the state close() refuses. Same shape as
     // the resume() sites below, which chain .catch.
-    try { const p = ctx.close(); if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); }); } catch (e) { /* already closed */ }
+    try {
+      const dying = ctx;
+      if (dying) dying.onstatechange = null;
+      const p = dying && dying.close();
+      if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); });
+    } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -512,6 +593,7 @@ var GameAudio = (function () {
                             // survive and centroidHz() would read a dead node (latent: only
                             // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
+    reapplyContextState();
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
     if (rainWanted) startRain();
@@ -661,6 +743,12 @@ var GameAudio = (function () {
     pitLimGain = ctx.createGain(); pitLimGain.gain.value = 0;
     pitLimOsc.connect(pitLimGain).connect(engGain.gain);
     pitLimOsc.start();
+    // Hybrid harvest clip / part-throttle ICE: a faster, shallower chop than the
+    // rev limiter — full pack regen and trailing-throttle harvest, not redline.
+    cylCutOsc = ctx.createOscillator(); cylCutOsc.type = "square"; cylCutOsc.frequency.value = 24;
+    cylCutGain = ctx.createGain(); cylCutGain.gain.value = 0;
+    cylCutOsc.connect(cylCutGain).connect(engGain.gain);
+    cylCutOsc.start();
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
@@ -803,6 +891,8 @@ var GameAudio = (function () {
     rivalPeak = usingSamples ? 0.28 : 0.055;
     RIVAL_VOICES = lowPower() ? RIVAL_VOICES_MOBILE : RIVAL_VOICES_DESKTOP;
     rivalVoices = [];
+    _rivalRevSm.length = 0;
+    _rivalRevSmT = 0;
     if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
         const filt = ctx.createBiquadFilter();
@@ -1006,7 +1096,7 @@ var GameAudio = (function () {
 
     lastSpeed = 0;
     lastEngT = 0;
-    harvLevel = 0;
+    harvLevel = 0; harvBrakeLevel = 0; harvCoastLevel = 0;
     shiftDuck = 0;
     shiftDuckT = 0;
     pullT = 0;
@@ -1076,6 +1166,9 @@ var GameAudio = (function () {
     if (pitLimGain) pitLimGain.gain.setTargetAtTime(0, t0, 0.02);
     const deadPitLim = pitLimGain;                     // feeds a param: buried by name
     if (pitLimOsc) { stopAt(pitLimOsc, t0 + 0.35); pitLimOsc = null; pitLimGain = null; }
+    if (cylCutGain) cylCutGain.gain.setTargetAtTime(0, t0, 0.02);
+    const deadCylCut = cylCutGain;
+    if (cylCutOsc) { stopAt(cylCutOsc, t0 + 0.35); cylCutOsc = null; cylCutGain = null; }
     stopAt(scrubSrc, t0 + 0.35);
     stopAt(surfSrc, t0 + 0.35);
     scrubSrc = surfSrc = null;
@@ -1114,7 +1207,7 @@ var GameAudio = (function () {
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, skidLfo, skidLfoGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
                   deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
-                  revSend, convolver, revReturn, deadPitLim, scrubFilter, scrubGain, lockFilter, lockGain,
+                  revSend, convolver, revReturn, deadPitLim, deadCylCut, scrubFilter, scrubGain, lockFilter, lockGain,
                   surfFilter, surfGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
@@ -1352,13 +1445,14 @@ var GameAudio = (function () {
       aimGain(gravGain, Math.min(want, Math.max(0, engBase - limSwing - pitDepth)), t, 0.05);
     }
 
-    // Turbo whine: in low gears (1-3) mechanical supercharger character — the
-    // frequency climbs faster but levels off earlier than at high speed.
+    // Turbo / MGU-K whine: low gears keep supercharger character; deploy and
+    // speed lift the 2026 electric layer so BOOST reads as half the power unit.
+    const deploy01 = clamp01(ph.deploy != null ? ph.deploy : b);
     const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
-    aimParam(whineOsc.frequency, (voice.whineHz + rev * 2000) * lowGearFactor, t, 0.05, 1e-4);
+    aimParam(whineOsc.frequency, (voice.whineHz + rev * 2000 + deploy01 * 700 + s * deploy01 * 900) * lowGearFactor, t, 0.05, 1e-4);
     aimGain(whineGain,
-      layers.whine ? (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
-        * voice.whineLvl * tune.whine : 0, t, 0.08);
+      layers.whine ? (0.004 + rev * 0.013 + deploy01 * 0.011 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
+        * voice.whineLvl * tune.whine * (1 + 0.55 * deploy01 * (0.3 + 0.7 * s)) : 0, t, 0.08);
 
     // SUB-OCTAVE, an octave under the engine's own fundamental. That
     // fundamental is sampleRate*rate/period on both sample cores — the same
@@ -1404,19 +1498,45 @@ var GameAudio = (function () {
     }
 
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
-    let target = 0;
+    const thr = clamp01(ph.throttle != null ? ph.throttle : 1);
+    const brkDem = clamp01(ph.brake != null ? ph.brake : 0);
+    const deploy = deploy01;
+    const energy = ph.energy != null ? clamp01(ph.energy) : 1;
+    let decelTarget = 0;
     if (dt > 0) {
       const decel = (lastSpeed - s) / dt;   // speed01 units shed per second
-      target = clamp01(decel * 5) * Math.min(1, s * 3);
+      decelTarget = clamp01(decel * 5) * Math.min(1, s * 3);
+    }
+    if (brkDem > 0.08 && s > 0.06) {
+      decelTarget = Math.max(decelTarget, clamp01(brkDem * 0.9) * Math.min(1, s * 2.6));
+    }
+    const coastActive = thr < 0.06 && brkDem < 0.06 && deploy < 0.05 && s > 0.16;
+    const regenK = clamp01(ph.regen != null ? ph.regen : 0.55);
+    const packFull = energy > 0.97;
+    let coastTarget = 0;
+    if (coastActive) {
+      coastTarget = clamp01((s - 0.14) / 0.86) * regenK;
+      if (packFull) coastTarget *= 0.22;
     }
     lastEngT = t;
     lastSpeed = s;
-    harvLevel += (target - harvLevel) * Math.min(1, (dt || 0.016) / 0.12);
-    // MGU-K harvest is audible on BOTH cores now. It was created and started on
-    // the sample path too but gated silent here — quieter over the recording,
-    // which already carries some off-throttle character of its own.
-    aimGain(harvGain, layers.harvest ? harvLevel * (usingSamples ? 0.035 : 0.06) * tune.harvest : 0, t, 0.06);
-    aimParam(harvFilter.frequency, 700 + s * 1600, t, 0.08, 1e-4);
+    const harvTau = 0.12;
+    harvBrakeLevel += (decelTarget - harvBrakeLevel) * Math.min(1, (dt || 0.016) / harvTau);
+    const coastSmooth = coastActive ? harvTau * 1.35 : harvTau * 0.45;
+    harvCoastLevel += (coastTarget - harvCoastLevel) * Math.min(1, (dt || 0.016) / coastSmooth);
+    const coastW = 0.52;
+    harvLevel = harvBrakeLevel + harvCoastLevel * coastW;
+    const harvGainScale = usingSamples ? 0.035 : 0.06;
+    const coastMix = harvLevel > 1e-6 ? (harvCoastLevel * coastW) / harvLevel : 0;
+    // MGU-K harvest: braking decel stays loud; lift-and-coast is softer and brighter.
+    aimGain(harvGain, layers.harvest ? harvLevel * harvGainScale * tune.harvest : 0, t, 0.06);
+    aimParam(harvFilter.frequency, 680 + s * 1500 + coastMix * 420, t, 0.08, 1e-4);
+    if (harvFilter._apexQ == null) harvFilter._apexQ = harvFilter.Q.value;
+    const harvQ = 6 - coastMix * 2.4;
+    if (Math.abs((harvFilter._apexHarvQ ?? -1) - harvQ) > 0.08) {
+      aimParam(harvFilter.Q, harvQ, t, 0.12, 0.05);
+      harvFilter._apexHarvQ = harvQ;
+    }
 
     // ERS deploy whine: only while the battery is actually deploying (game.js
     // passes deploy/energy through the physics arg). Level scales with charge —
@@ -1431,12 +1551,11 @@ var GameAudio = (function () {
     // inaudible, so re-scheduling buys nothing and costs a cross-thread
     // timeline insertion per physics step.
     soundtrack.duckForEngine(rev, t);
-    const deploy = clamp01(ph.deploy || 0);
-    const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     const low = energy < 0.2 ? energy / 0.2 : 1;
     const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
     const ersLvl = (deploy > 0 && layers.ers)
-      ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
+      ? (0.012 + 0.026 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
+        * (0.42 + 0.58 * Math.max(s, 0.04))
       : 0;
     // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
     // the car isn't deploying. The time constant varies with deploy>0, but a
@@ -1447,7 +1566,17 @@ var GameAudio = (function () {
       ersGain._apexErsTgt = ersLvl;
     }
     if (deploy > 0)
-      aimParam(ersOsc.frequency, (2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
+      aimParam(ersOsc.frequency, (2600 + rev * 1100 + s * 1500) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
+
+    // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition cut.
+    const partThr = thr > 0.1 && thr < 0.72 && deploy < 0.05 && s > 0.08;
+    const packClip = packFull && deploy < 0.05 && (coastTarget > 0.04 || decelTarget > 0.08 || brkDem > 0.12);
+    const cylOn = layers.ers && (partThr || packClip);
+    const cylDepth = cylOn ? Math.min(engBase * 0.07, 0.011) * mult : 0;
+    if (cylCutGain && cylCutGain._apexCylTgt !== cylDepth) {
+      cylCutGain.gain.setTargetAtTime(cylDepth, t, 0.04);
+      cylCutGain._apexCylTgt = cylDepth;
+    }
 
     // AIRFLOW. Quadratic in speed (drag goes with v^2, and it keeps the layer
     // out of the way at pit-lane pace while it swells down a straight), gated
@@ -1886,10 +2015,11 @@ var GameAudio = (function () {
     return key;
   }
 
-  /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
-   * Each entry: { lat, arc, rev, approach, voice, slot }
-   *   lat      metres to the RIGHT (negative = your left)
-   *   arc      metres AHEAD (negative = behind)
+  /* setRivals(list) — the field around you.
+   * Each entry: { lat, arc, wx?, wz?, rev, approach, voice, slot, net?, key? }
+   *   lat      metres to the RIGHT of the player (negative = your left)
+   *   arc      metres AHEAD of the player (negative = behind)
+   *   wx, wz   rival world position (optional; camera-relative pan when external)
    *   rev      0..1, their engine speed
    *   approach metres/second of LINE-OF-SIGHT closing (positive = coming at
    *            you; 0 when level with you — js/audio/rivals.js)
@@ -1906,9 +2036,46 @@ var GameAudio = (function () {
   // slot AND rank voice are both taken gets the first free voice: on a phone's
   // two voices a car bound to slot 3 would otherwise go mute beside an idle one.
   const _rivalRow = [];
+  // VS FRIEND net snapshots step speed/gear ~10 Hz; solo AI revs every physics tick.
+  // Two cascaded poles (~48 ms each) on net-owned rows only — peak frame jump < 25 Hz
+  // on a ~175 Hz pitch step without lagging local AI downshifts.
+  const RIVAL_REV_NET_TAU = 0.048;
+  const _rivalRevSm = [];
+  let _rivalRevSmT = 0;
+  let _rivalPanExternal = null;
+  function rivalPanPlayerFrame(lat, arc) {
+    return 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+  }
+  function rivalPanFromCamera(basis, wx, wz) {
+    const dx = wx - basis.x, dz = wz - basis.z;
+    const lat = dx * basis.rightX + dz * basis.rightZ;
+    const arc = dx * basis.fwdX + dz * basis.fwdZ;
+    return rivalPanPlayerFrame(lat, arc);
+  }
+  function rivalSmoothedRev(vi, raw, net, key, dt) {
+    let s = _rivalRevSm[vi];
+    if (!s) s = _rivalRevSm[vi] = { key: null, a: raw, b: raw };
+    const k = key != null ? key : vi;
+    if (k !== s.key) { s.key = k; s.a = raw; s.b = raw; return raw; }
+    if (!net) return raw;
+    const alpha = 1 - Math.exp(-dt / RIVAL_REV_NET_TAU);
+    s.a += alpha * (raw - s.a);
+    s.b += alpha * (s.a - s.b);
+    return s.b;
+  }
   function setRivals(list) {
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
+    const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
+    _rivalRevSmT = t;
+    const basis = typeof GameCams !== "undefined" && GameCams.getListenerBasis ? GameCams.getListenerBasis() : null;
+    const panExternal = !!(basis && basis.external);
+    if (_rivalPanExternal !== null && panExternal !== _rivalPanExternal) {
+      for (let i = 0; i < rivalVoices.length; i++) {
+        if (rivalVoices[i].pan && rivalVoices[i].pan.pan) rivalVoices[i].pan.pan._apexPanTgt = undefined;
+      }
+    }
+    _rivalPanExternal = panExternal;
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
     for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
     let unvoiced = 0;
@@ -1939,7 +2106,9 @@ var GameAudio = (function () {
       // entirely, which on headphones reads as detached from the scene rather
       // than beside you. 0.85 keeps a little of it in the far ear, which is
       // what having two of them is for.
-      const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+      let pan;
+      if (panExternal && basis && r.wx != null && r.wz != null) pan = rivalPanFromCamera(basis, r.wx, r.wz);
+      else pan = rivalPanPlayerFrame(lat, arc);
       // Same threshold, same reason (see aimGain): exact inequality against a
       // continuously varying angle re-scheduled the pan every physics step.
       // 0.004 of the -1..1 image is inaudible and well under the 0.06 s tau.
@@ -1985,7 +2154,9 @@ var GameAudio = (function () {
       // speeds sampled a frame apart and one bad frame must not chirp.
       const closing = Math.max(-90, Math.min(90, +r.approach || 0));
       const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
-      v.setPitch(t, clamp01(r.rev), dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
+      const rawRev = clamp01(r.rev);
+      const rev01 = rivalSmoothedRev(i, rawRev, !!r.net, r.key, dt);
+      v.setPitch(t, rev01, dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
     }
   }
 
@@ -2313,6 +2484,9 @@ var GameAudio = (function () {
     limiterCents() { return limPitch ? +limPitch.gain.value.toFixed(3) : 0; },
     ersLevel() { return ersGain ? +ersGain.gain.value : 0; },
     harvestLevel() { return harvGain ? +harvGain.gain.value : 0; },
+    harvestCoastLevel() { return +harvCoastLevel.toFixed(5); },
+    harvestBrakeLevel() { return +harvBrakeLevel.toFixed(5); },
+    cylCutDepth() { return cylCutGain ? +cylCutGain.gain.value : 0; },
     skidLevel() { return skidGain ? +skidGain.gain.value : 0; },
     boostState() { return { fired: boostFired, peak: +boostPeak.toFixed(4) }; },
     // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling

@@ -87,8 +87,20 @@ const lazyBundles = LazyBundles.create({
     if (audioPanel && audioPanel.init) audioPanel.init();
     if (typeof DrivingCues !== "undefined" && DrivingCues.create) DrivingCues.create(G);
   },
+  // Recreate race-session instances after LAZY_RACE_SESSION reinjects real `var`s.
+  onRaceSessionReady: () => {
+    pits = PitLane.create(G);
+    engineer = RaceEngineer.create(G);
+    startLights = StartLights.create(G);
+    marshalPanels = MarshalPanels.create(G);
+    records = SessionRecords.create(G);
+    raceRadio = RaceRadio.create(G);
+    flyingStart = FlyingStart.create(G, {
+      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
+    });
+  },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2594,8 +2606,21 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  // Plate already raised in startRace() / raceIntroFromSheet. Yield BEFORE
+  // ensureAudio / resets so #loading can paint (TopModal's MutationObserver
+  // close and the first frame) instead of sitting under a frozen dialog for
+  // the whole LAZY_AUDIO + scenery task. game-vm has no frame pump.
+  // https://developer.chrome.com/blog/use-scheduler-yield
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) {
+    if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.mark) RaceEntryProfile.mark("body:yield");
+    await yieldMain();
+  }
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
+  await ensureRaceSession();   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   await ensureAudio();   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -2617,9 +2642,6 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2651,10 +2673,7 @@ async function startRaceBody() {
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
-  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
-  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
-    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
   if (!vmNoFramePump) await yieldMain();
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
@@ -2821,7 +2840,13 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
-  const rs = $("race-settings"); if (rs) rs.hidden = true;   // dialog top-layer covers #loading
+  // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
+  // so #loading is not trapped under :modal for the rest of this long task.
+  const rs = $("race-settings");
+  if (rs) {
+    rs.hidden = true;
+    try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
+  }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
@@ -2994,6 +3019,7 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  GameAudio.stopMusic();   // the race loop must not play under the results sheet
   // quitToMenu hides the rain field; endRace must too — otherwise it keeps
   // drawing into every frame behind the results sheet (audio alone stopped).
   // Particles.rainActive() is the seed gate, not the audio flag.
@@ -3529,9 +3555,9 @@ tyres = TyreModel.create(G);
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
-pits = PitLane.create(G);
-const startLights = StartLights.create(G);   // the start gantry's lamps (js/race/start-lights.js); a const — game.js's top-level lets are ratcheted
-const marshalPanels = MarshalPanels.create(G);   // the posts' light panels follow race control (js/race/marshal-panels.js)
+pits = PitLane.create(G);   // stub until ensureRaceSession; recreated in onRaceSessionReady
+let startLights = StartLights.create(G);   // LAZY_RACE_SESSION — recreated when the real bundle lands
+let marshalPanels = MarshalPanels.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
@@ -3543,12 +3569,12 @@ radioVoice = RadioVoice.create(G);
 // the loading screen's flyby. After the radio: it borrows that module's
 // speakable() and per-channel tune, and nothing else.
 announcer = Announcer.create(G);
-const records = SessionRecords.create(G);
-const coach = DrivingCoach.create(G);
-const raceRadio = RaceRadio.create(G);    // the engineer's race awareness + TV commentary (js/race/race-radio.js)
+let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
+const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
+let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on ensure
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
-const flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // qualifying + time trial start at speed (js/race/flying-start.js)
+let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4305,7 +4331,7 @@ const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comp
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
 const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
-                  deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
+                  deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
@@ -4527,6 +4553,8 @@ function update(dt) {
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
+    _engArg.throttle = player.throttleDemand ?? 0; _engArg.brake = player.brakeDemand ?? 0;
+    _engArg.regen = player.ersRegen ?? 0.5;
     GameAudio.setEngine(revFrac, player.deploying ? 1 : 0, player.offroad,
       clamp(player.speed / vTop(), 0, 1), player.gear, _engArg);
     // Squeal from the CAR's slip, via the same skidIntensity the marks and smoke
@@ -4614,7 +4642,7 @@ function updateCar(c, dt, ranked) {
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
   // fallback-guarded; outside the window this early-out is never taken.
-  if (incidentSim.owns(c)) { c._prevS = c.s; return; }
+  if (incidentSim.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // Same contract for a networked rival: its owner is integrating it on their
   // machine and we replicate the result, so running the driving model here
   // would only fight the pose NetPlay writes. See js/net/netplay.js.
@@ -5666,12 +5694,10 @@ function updateCar(c, dt, ranked) {
     // taper reaches the same place at every pace. The slider's own mapping
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
-    // HYPERBOLIC, not clamped-linear: `1 - v/ref` goes negative at any real
-    // racing speed, so a Math.max(0.4, …) floor becomes the operating point —
-    // every notch from 1 to 9 bit-for-bit identical at 72 m/s
-    // (docs/research/PHASE-C-SLIDER-DESIGN.md §2). 1/(1+x) is never negative by
-    // construction, so it needs no floor; do not add one.
-    const lockTaper = 1 / (1 + vStd(Math.abs(c.speed)) / STEER_SPEED_REF);
+    // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
+    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
+    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
