@@ -1110,9 +1110,18 @@ function fitHud() {
   // sectors so dockLeft matches the post-cap paint.
   if (_dockR) void _dockR.offsetHeight;
   if (els.hudSectors) void els.hudSectors.offsetHeight;
-  // Always the published --hud-z-top (just written). Never prefer a lagging
-  // currentCSSZoom — that was the other half of the compact-minimap flip.
-  const zPaint = () => +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  // Painted dock / max-width clearance only. Caps still measure with zTopPub
+  // (published). When live currentCSSZoom lags BELOW the just-written
+  // --hud-z-top, published-only inset under-clears BOOST (tilt @150%:
+  // sectors r 724 vs BOOST l 704). Prefer min(pub, live) so a low live
+  // widens --dock-r-w / shrink; never prefer live ABOVE pub (that half of
+  // the compact-minimap flip).
+  const zPaint = () => {
+    const pub = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+    const probe = _hudTop || els.minimap || els.hudSectors;
+    const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : pub;
+    return Math.min(pub, live);
+  };
   // BOOST only anchors --dock-r-w when it sits in the RIGHT half. Tilt parks
   // BOOST on the left column; using that left as the inset target blew midCap
   // (CI: dockRW 907, #hud-sectors unsafe under --sal).

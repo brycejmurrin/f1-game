@@ -225,8 +225,8 @@ test("fitHud measures top-band intrinsics from the published --hud-z-top, not cu
     "fitHud must name zTopPub as the published top-zoom measurement source");
   assert.match(fit, /wide\(els\.minimap,\s*zTopPub\)/,
     "minimap intrinsic must divide by zTopPub, not currentCSSZoom");
-  assert.match(fit, /const zPaint = \(\) => \+root\.style\.getPropertyValue\("--hud-z-top"\)/,
-    "zPaint must be published-only (no live currentCSSZoom preference)");
+  assert.match(fit, /const zPaint = \(\) => \{[\s\S]*?Math\.min\(pub,\s*live\)/,
+    "zPaint for painted dock clearance must be min(published, live), not published-only");
   const css = read("css/hud.css");
   assert.match(css, /#minimap[\s\S]*?transition-property:/,
     "top-band zoom group must not transition zoom (default all desyncs under load)");
