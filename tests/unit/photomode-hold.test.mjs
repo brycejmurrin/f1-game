@@ -48,7 +48,10 @@ test('online Photo camera input integrates while shared physics continues; solo 
       // preparation; stub both so this fixture stays about Photo / shared-physics.
       director: { tick() {}, reset() {} },
       mirrorPass: { preparing: () => false },
-      replayBuf: { isScrubbing: () => false, tickScrub() {}, onTick() {} }, feedReplayScrubAudio() {}, raceT: 0,
+      replayBuf: { isScrubbing: () => false, tickScrub() {}, onTick() {} }, raceT: 0,
+      // The paused branch's return line hands the frame to GameAudio.feedReplayScrub.
+      GameAudio: { feedReplayScrub() {} }, soundOn: false, player: null, rivalAudio: null,
+      naturalGear() { return 1; }, rpmFor() { return 0; }, isWetRoad() { return false; }, vTop() { return 1; },
       _poseAt: null, photoMode: photo, setupPreviewOn: false,
       els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
       announceT: 0, hitStop: 0, frozen: false, physAcc: 0, PHYS_DT: 1 / 60, cars: [], renderAlpha: 0,

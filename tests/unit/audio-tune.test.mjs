@@ -2220,3 +2220,51 @@ test("the countdown drives the player's engine at idle, not silence until lights
   assert.ok(A.engineLevel() > 0, "a stationary idle setGridIdle opens the note");
   assert.equal(A.windLevel(), 0, "and keeps the wind gated on the grid");
 });
+
+// INSTANT REPLAY (#1262). tickBody's paused branch returns before the race
+// block, so a pause-menu replay scrub played in silence with every car's rpm
+// pinned at the pause frame. The feed lives in GameAudio.feedReplayScrub (the
+// #972 setGridIdle pattern: game.js keeps one call on its existing return line,
+// +0 lines) and uses game.js's own gear/rpm helpers so revs match the live note.
+test("feedReplayScrub: replay scrub drives engine + rivals from replayed speed, silences once on exit", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const tick = src.slice(src.indexOf("function tickBody(now) {"));
+  const paused = tick.slice(0, tick.indexOf("replayBuf.onTick(raceT, cars, state);"));
+  assert.match(paused, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
+    "the paused branch's return line hands the frame to GameAudio.feedReplayScrub (hoisted refs, no per-frame {})");
+  assert.doesNotMatch(paused, /GameAudio\.setEngine\(/, "the scrub engine pack lives in GameAudio, not inline in game.js");
+  assert.match(src, /paused = p; GameAudio\.resetReplayScrub\(\);/, "setPaused clears the scrub one-shot");
+  const rb = fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8");
+  assert.match(rb, /GameAudio\.syncReplayRpms\(cars\)/, "applyPose re-revs the field from the replayed speeds");
+
+  const { GameAudio: A } = boot();
+  A.init();
+  const gearOf = (v) => (v < 30 ? 2 : 6);
+  const rpmFor = (g, v) => Math.min(15000, 5000 + v * 1000 / g);
+  const rivalAudio = { collect: () => [{ lat: 3, arc: 4, rev: 0.7, approach: 0 }] };
+  const player = { speed: 20, rpm: 5000, energy: 1, offroad: false };
+  const cars = [player, { speed: 60, rpm: 5000 }];
+  const feed = (p, scrubbing) => A.feedReplayScrub(p, scrubbing, cars, gearOf, rpmFor, rivalAudio, () => false, () => 90);
+
+  feed(null, true);
+  assert.equal(A.debug().engineOn, false, "SOUND off / no player: untouched");
+  feed(player, false);
+  assert.equal(A.debug().engineOn, false, "paused, not scrubbing: stays silent");
+  feed(player, true);
+  assert.equal(A.debug().engineOn, true, "scrubbing starts the engine voice");
+  assert.ok(A.engineLevel() > 0, "and opens the note");
+  assert.equal(player.rpm, rpmFor(2, 20), "player rpm = rpmFor(naturalGear(v), v)");
+  assert.equal(cars[1].rpm, rpmFor(6, 60), "every car re-revs from its replayed speed");
+  assert.ok(A.rivalState().some((v) => v.gain > 0), "the field is fed to the rival voices");
+  // A seek (applyPose) re-revs at once through syncReplayRpms.
+  player.speed = 50; A.syncReplayRpms(cars);
+  assert.equal(player.rpm, rpmFor(6, 50), "syncReplayRpms follows a seek without waiting for a frame");
+  feed(player, false);
+  assert.equal(A.debug().engineOn, false, "leaving the scrub silences the engine once");
+  A.startEngine();
+  feed(player, false);
+  assert.equal(A.debug().engineOn, true, "the exit is a one-shot: later paused frames leave the engine alone");
+  A.stopEngine();
+  feed(player, true); A.resetReplayScrub(); feed(player, false);
+  assert.equal(A.debug().engineOn, true, "resetReplayScrub (setPaused) drops the pending exit");
+});

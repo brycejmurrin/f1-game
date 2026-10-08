@@ -648,12 +648,6 @@ function rpmFor(gear, speed) {
   const rpm = MAX_RPM * (speed / Math.max(hi, 1));
   return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
-function syncReplayCarRpms() {
-  for (const c of cars) {
-    const v = Math.max(0, c.speed || 0);
-    c.rpm = rpmFor(naturalGear(v), v);
-  }
-}
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js/race/flying-start.js)
 // Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
@@ -983,7 +977,7 @@ let restartPending = false;   // a red-flag standing restart: lights-out resumes
 // construction — so js/net/netplay.js needs this number too, via G.countdownS.
 // Three private copies of it is exactly how that drifts back apart.
 const COUNTDOWN_S = 5;
-let paused = false, _replayScrubWasActive = false;
+let paused = false;
 // Player racing-line assist, set by the pause-menu slider. -1..1: 0 = pure
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
@@ -3421,7 +3415,6 @@ const G = {
   ltKey: (...a) => ltKey(...a),
   // (setLightTune is a hoisted function, exposed as a plain shorthand below.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),
-  replaySyncRpms: () => syncReplayCarRpms(),
   openWatchPhoto: () => openExperiencePhoto("watch"),   // const initialised below — defer
   // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
@@ -3586,8 +3579,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
-G.replayBuf = replayBuf;   // tests + pause UI (not on the typed façade — internal handle)
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8210,26 +8202,6 @@ function tick(now) {
     throw e;
   }
 }
-function feedReplayScrubAudio() {
-  if (!soundOn || !player) return;
-  if (!replayBuf.isScrubbing()) {
-    if (_replayScrubWasActive) {
-      GameAudio.stopEngine(); GameAudio.setRivals([]);
-      _replayScrubWasActive = false;
-    }
-    return;
-  }
-  _replayScrubWasActive = true;
-  syncReplayCarRpms();
-  if (!GameAudio.debug().engineOn) GameAudio.startEngine();
-  const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-  const gear = naturalGear(Math.max(0, player.speed || 0));
-  _engArg.slip = 1; _engArg.ax = 0; _engArg.onKerb = false; _engArg.wet = isWetRoad(); _engArg.tow = 0;
-  _engArg.deploy = 0; _engArg.energy = player.energy ?? 1; _engArg.ersDeploy = 0;
-  _engArg.throttle = 0; _engArg.brake = 0; _engArg.regen = player.ersRegen ?? 0.5;
-  GameAudio.setEngine(revFrac, 0, player.offroad, clamp(player.speed / vTop(), 0, 1), gear, _engArg);
-  GameAudio.setRivals(rivalAudio.collect(player));
-}
 function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
@@ -8276,8 +8248,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       render(Math.min(dt, 1 / 20));
     }
-    feedReplayScrubAudio();   // instant-replay engine/rivals while scrubbing; silence on scrub exit
-    return;
+    GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
@@ -8859,7 +8830,7 @@ function setPaused(p, why) {
   // expires and DONE then charges nothing. Its own DONE/BACK are the only way out.
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
-  paused = p; _replayScrubWasActive = false; replayBuf.onPause(!!p); // REPLAY overlay while paused
+  paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); }   // a paused screen may sleep; a networked race runs on under the card
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
