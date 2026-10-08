@@ -809,6 +809,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // is a usable strategy range, the thermal layer warms/grains/blisters, and
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
+  // Front peak slip abscissa (CURVE_PEAK_X_F): 6–9° at CS_FRONT, rear path frozen.
+  "tests/unit/tyre-peak-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
