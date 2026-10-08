@@ -420,10 +420,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  // fitHud zTop/#minimap zoom idempotence (Pages compact mm flip).
+  "tests/unit/hud-fit-idempotent.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
+  // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
+  "tests/unit/hud-portrait-cluster.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-strategy.test.mjs",

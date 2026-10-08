@@ -53,7 +53,14 @@
    THAT rather than by --hud-scale: the compensation has to use the number the
    element is actually zoomed by, or a capped band double-counts its notch. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
-#lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+#lights, #announce {
+  --hud-z: var(--hud-z-top, var(--hud-scale));
+  zoom: var(--hud-z);
+  /* zoom must track --hud-z-top in the same frame. Default transition:all
+     (even at reduced-motion 0.01ms) left the map's live CSS zoom a frame
+     behind the published cap under CI load → fitHud flipped caps. */
+  transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
+}
 /* THE CAM AND PAUSE BUTTONS FOLLOW HUD SIZE TOO — by size, not by `zoom`,
    because they are tap targets: --hud-btn-z is the top band's zoom floored at
    1, so HUD SIZE can grow them beside the timing tower but never shrink them
@@ -748,6 +755,34 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   }
   /* Helmet touch: the PLAN row under TYRES read as a plate on GEAR (390×844). */
   body[data-hl-set="helmet"]:not(.desktop) #hud-plan:not(:empty) { display: none; }
+  /* BOTTOM CLUSTER vs SIDE COLUMNS. Portrait keeps the ladder buttons
+     position:fixed; the landscape #hud-dock flex bar never sizes the
+     cluster. TYRES parks ABOVE the centred stack (absolute, out of flow)
+     so PLAN cannot sit on the gear numeral AND the stack does not rise
+     into INPUTS (in-flow TYRES did — buttons @150%). fitHud caps
+     --hud-z-bot so GEAR fits between the columns (390×844 @150%:
+     gearbox×AERO). Landscape / desktop untouched. */
+  body:not(.desktop) #hud-tyre {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 4px);
+    margin: 0;
+    width: min(130px, 42vw);
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body:not(.desktop) #hud-gearbox,
+  body:not(.desktop) #hud-energy {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body:not(.desktop) #hud-gear {
+    font-size: min(58px, 14vw);
+  }
+  body:not(.desktop) #hud-tach {
+    width: min(132px, 100%);
+  }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -1981,32 +2016,38 @@ body.desktop #hud-inputs:not([data-hl-user]) {
   bottom: auto;
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
 }
-/* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
-   the car) to the left column, sitting on top of the left dock (the steer
-   group, whatever the STEERING INPUT sized it to, wherever DOCK EDIT dragged
-   it). CSS anchor positioning, because the dock's height is per input mode and
-   no fixed offset can know it; #hud-dock is the containing block of both (the
-   touch .hud-bottom is a static flex child). An engine without anchor
-   positioning keeps TYRES in the stack, as before. A placed TYRES still moves
-   from here (MOVE & SIZE `translate`). */
+/* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
+   GEAR / ERS, on the car) to the left column, sitting on top of the left dock
+   (the steer group, whatever the STEERING INPUT sized it to, wherever DOCK
+   EDIT dragged it). CSS anchor positioning, because the dock's height is per
+   input mode and no fixed offset can know it; #hud-dock is the containing
+   block of both (the touch .hud-bottom is a static flex child). An engine
+   without anchor positioning keeps TYRES in the stack, as before. A placed
+   TYRES still moves from here (MOVE & SIZE `translate`).
+   PORTRAIT keeps TYRES in the column stack: the ladder buttons are
+   position:fixed (not flex items that size #dock-left), so the same anchor
+   resolved to a collapsed dock and painted TYRES + #hud-plan on the gear
+   numeral (390×844 / 360×740 @150%, HUD Desk 2026-10-07). */
 @supports (anchor-name: --a) {
-  body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
-  body:not(.desktop) #hud-tyre {
-    position: absolute;
-    position-anchor: --apex-dock-left;
-    left: anchor(left);
-    bottom: calc(anchor(top) + var(--gap));
-    margin: 0;
-  }
-  /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
-     it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
-  body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
-  body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
-    position: absolute;
-    position-anchor: --apex-hud-tyre;
-    left: anchor(left);
-    bottom: calc(anchor(top) + var(--gap));
-    margin: 0;
+  @media (orientation: landscape) {
+    body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+    body:not(.desktop) #hud-tyre {
+      position: absolute;
+      position-anchor: --apex-dock-left;
+      left: anchor(left);
+      bottom: calc(anchor(top) + var(--gap));
+      margin: 0;
+    }
+    /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
+       it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
+    body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
+      position: absolute;
+      position-anchor: --apex-hud-tyre;
+      left: anchor(left);
+      bottom: calc(anchor(top) + var(--gap));
+      margin: 0;
+    }
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
      painted inset from the leftmost right-dock control (fitHud), so the
@@ -2014,7 +2055,8 @@ body.desktop #hud-inputs:not([data-hl-user]) {
      anchor(left): wrap-reverse #dock-right can leave the box left edge
      past the content, and that max shoved #hud-sectors into #announce
      (Pages gate notched-landscape buttons, trains 37597421040 /
-     37605440474; culprit #1191). TYRES still uses the left-dock anchor. */
+     37605440474; culprit #1191). TYRES still uses the left-dock anchor
+     in landscape only (above). */
   /* RELATIVE / INPUTS: do NOT set position-anchor here. `left: auto` on
      INPUTS then resolved against the dock and dumped the trace onto the
      steer arrows (844×390 buttons 150%). Height caps stay on the home
