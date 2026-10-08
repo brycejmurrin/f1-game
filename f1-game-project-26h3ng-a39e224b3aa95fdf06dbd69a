@@ -1,1 +1,0 @@
-1791359505	Cursor Agent	fix(hud): standard profile gapDecimals to 2dp near Overtake threshold; OWNED hud.js gapDecimals/formatters + hud-readouts + unit tests  [claude/f1-game-project-26h3ng; session a39e224b3aa95fdf06dbd69a]
