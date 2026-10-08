@@ -839,10 +839,34 @@ function vantage(track, mode, s, x, spd, now, extra) {
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
   _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  publishListenerBasis(mode, eye, tgt);
   _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;
 }
 
+// Read-only listener basis for rival panning (js/audio/engine.js setRivals). Refreshed
+// at the end of every vantage() solve — including TV director shots that call
+// camVantage before render. Player-track pan when external is false (onboard + chase).
+const _listener = { external: false, x: 0, z: 0, fwdX: 0, fwdZ: 1, rightX: 1, rightZ: 0, valid: false };
+function playerFrameRivalPan(modeId) {
+  if (typeof CamGroups !== "undefined" && CamGroups.isOnboard(modeId)) return true;
+  return modeId === "chase";
+}
+function publishListenerBasis(modeId, eye, tgt) {
+  _listener.external = !playerFrameRivalPan(modeId);
+  _listener.valid = !!(eye && tgt);
+  if (!_listener.valid) return;
+  _listener.x = eye[0];
+  _listener.z = eye[2];
+  let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
+  const fl = Math.hypot(fx, fz);
+  if (fl < 1e-4) { _listener.fwdX = 0; _listener.fwdZ = 1; _listener.rightX = 1; _listener.rightZ = 0; return; }
+  fx /= fl; fz /= fl;
+  _listener.fwdX = fx; _listener.fwdZ = fz;
+  _listener.rightX = -fz; _listener.rightZ = fx;
+}
+function getListenerBasis() { return _listener.valid ? _listener : null; }
+
 return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
-  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT };
+  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, getListenerBasis, playerFrameRivalPan };
 })();
