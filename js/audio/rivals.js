@@ -22,7 +22,13 @@ var RivalAudio = (() => {
   // collector's edge instead of fading out. Kept equal to it.
   const RANGE = 150;             // metres; past this a rival is inaudible anyway
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
+    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
+  const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+  function worldXZ(track, s, x) {
+    if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
+    Tracks.sample(track, s, _wScratch);
+    return [_wScratch.p[0] + _wScratch.r[0] * (x || 0), _wScratch.p[2] + _wScratch.r[2] * (x || 0)];
+  }
   const out = [];
 
   function create(G) {
@@ -55,13 +61,18 @@ var RivalAudio = (() => {
         let at = n < SLOTS ? n++ : SLOTS - 1;
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
-          cur.lat = prev.lat; cur.arc = prev.arc; cur.rev = prev.rev;
+          cur.lat = prev.lat; cur.arc = prev.arc; cur.wx = prev.wx; cur.wz = prev.wz; cur.rev = prev.rev;
           cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
           cur.net = prev.net; cur.key = prev.key;
           at--;
         }
         const slot = slots[at];
         slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.car = c;
+        if (c.px != null && c.pz != null) { slot.wx = c.px; slot.wz = c.pz; }
+        else {
+          const w = worldXZ(track, c.s, c.x);
+          slot.wx = w ? w[0] : null; slot.wz = w ? w[1] : null;
+        }
         // Their power unit's voice (engine.js ENGINE_VOICES key): a Ferrari
         // passing you should not sound like your own Mercedes.
         slot.voice = (c.team && c.team.engine) || "";

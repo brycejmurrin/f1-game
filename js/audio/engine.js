@@ -2056,10 +2056,11 @@ var GameAudio = (function () {
     return key;
   }
 
-  /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
-   * Each entry: { lat, arc, rev, approach, voice, slot, net?, key? }
-   *   lat      metres to the RIGHT (negative = your left)
-   *   arc      metres AHEAD (negative = behind)
+  /* setRivals(list) — the field around you.
+   * Each entry: { lat, arc, wx?, wz?, rev, approach, voice, slot, net?, key? }
+   *   lat      metres to the RIGHT of the player (negative = your left)
+   *   arc      metres AHEAD of the player (negative = behind)
+   *   wx, wz   rival world position (optional; camera-relative pan when external)
    *   rev      0..1, their engine speed
    *   approach metres/second of LINE-OF-SIGHT closing (positive = coming at
    *            you; 0 when level with you — js/audio/rivals.js)
@@ -2082,6 +2083,16 @@ var GameAudio = (function () {
   const RIVAL_REV_NET_TAU = 0.048;
   const _rivalRevSm = [];
   let _rivalRevSmT = 0;
+  let _rivalPanExternal = null;
+  function rivalPanPlayerFrame(lat, arc) {
+    return 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+  }
+  function rivalPanFromCamera(basis, wx, wz) {
+    const dx = wx - basis.x, dz = wz - basis.z;
+    const lat = dx * basis.rightX + dz * basis.rightZ;
+    const arc = dx * basis.fwdX + dz * basis.fwdZ;
+    return rivalPanPlayerFrame(lat, arc);
+  }
   function rivalSmoothedRev(vi, raw, net, key, dt) {
     let s = _rivalRevSm[vi];
     if (!s) s = _rivalRevSm[vi] = { key: null, a: raw, b: raw };
@@ -2098,6 +2109,14 @@ var GameAudio = (function () {
     const t = now();
     const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
     _rivalRevSmT = t;
+    const basis = typeof GameCams !== "undefined" && GameCams.getListenerBasis ? GameCams.getListenerBasis() : null;
+    const panExternal = !!(basis && basis.external);
+    if (_rivalPanExternal !== null && panExternal !== _rivalPanExternal) {
+      for (let i = 0; i < rivalVoices.length; i++) {
+        if (rivalVoices[i].pan && rivalVoices[i].pan.pan) rivalVoices[i].pan.pan._apexPanTgt = undefined;
+      }
+    }
+    _rivalPanExternal = panExternal;
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
     for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
     let unvoiced = 0;
@@ -2128,7 +2147,9 @@ var GameAudio = (function () {
       // entirely, which on headphones reads as detached from the scene rather
       // than beside you. 0.85 keeps a little of it in the far ear, which is
       // what having two of them is for.
-      const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+      let pan;
+      if (panExternal && basis && r.wx != null && r.wz != null) pan = rivalPanFromCamera(basis, r.wx, r.wz);
+      else pan = rivalPanPlayerFrame(lat, arc);
       // Same threshold, same reason (see aimGain): exact inequality against a
       // continuously varying angle re-scheduled the pan every physics step.
       // 0.004 of the -1..1 image is inaudible and well under the 0.06 s tau.
