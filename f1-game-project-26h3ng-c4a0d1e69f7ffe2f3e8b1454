@@ -1,1 +1,0 @@
-1791345268	Cursor Agent	fix(hud): MIRROR unhide + empty #hud-sectors: js/ui/hud*.js js/ui/survey-hud.js css/overlays.css(css HUD) css/hud*.css tests/unit/hud*.test.mjs tests/specs/hud*.spec.js  [claude/f1-game-project-26h3ng; session c4a0d1e69f7ffe2f3e8b1454]

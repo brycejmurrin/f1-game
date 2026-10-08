@@ -1,1 +1,0 @@
-1791353504	Cursor Agent	Handling discovery REPORT-ONLY: measure tip; OWNED js/physics/{tyre-model,consts,body-attitude,aero-zones,brake-cue,wall-clamp}.js + js/input/steer-tuning.js (narrowed: live claim still on grip-steer/player-forces from player-steer-feel-4471)  [claude/f1-game-project-26h3ng; session daeaef827fd187f2933bfb3d]

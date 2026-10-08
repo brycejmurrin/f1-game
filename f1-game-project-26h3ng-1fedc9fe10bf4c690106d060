@@ -1,1 +1,0 @@
-1791345243	Cursor Agent	perf(frame) round 2: js/render/**(excl boot/assets/gltf) js/perf/{governor,loop-health,metrics-overlay,quality-preset}.js js/camera/** js/game.js(race-loop hot)  [claude/f1-game-project-26h3ng; session 1fedc9fe10bf4c690106d060]
