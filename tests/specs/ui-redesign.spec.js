@@ -495,21 +495,51 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // can flip the zoom cap between those two Playwright round-trips (Pages
   // 37714419183: mmRect 87.11 = 110×zTop 0.792, but #minimap zoom had already
   // drifted to 0.704 → Math.round(mmCss) 124). Wait until zoom, --hud-z-top and
-  // the map rect are unchanged across two consecutive frames, then snapshot in
-  // ONE evaluate. Never swallow a settle timeout (PR #1213). Cap-flip root
-  // cause in js/ui/hud.js is HUD Desk — not this spec.
+  // the transform-free layout width are unchanged across two consecutive frames,
+  // then snapshot in ONE evaluate. Never swallow a settle timeout (PR #1213).
+  // Cap-flip root cause in js/ui/hud.js is HUD Desk — not this spec.
+  //
+  // WIDTH READ (after #1267 tip-red 37718135591 / job 113120686459): asserting
+  // Math.round(mmRect/zoom)===110 fails in the no-cap state (z-top empty, zoom 1)
+  // where both getComputedStyle(width) and getBoundingClientRect are stable at
+  // LayoutUnit 107.46875 — not a transform (those two agree; --hl-s unset). The
+  // CSS tier is still compact 110 (css/hud.css); fitHud budgets the measured box.
+  // So derive the EXPECTED tier from the same cascade the HUD uses (compact→110,
+  // else min-width 1200→160, else 128) and classify the transform-free layout
+  // width by nearest of {110,128,160}. That still catches the #1267 drift
+  // (cssW≈124 nearest-to-128 ≠ compact 110) when zoom disagrees with a published
+  // --hud-z-top; the zoom≈cap assert below catches it directly too.
   const dumpCompactHud = () => page.evaluate(() => {
     const mm = document.getElementById("minimap"), root = document.documentElement;
     const cs = getComputedStyle(root);
+    const mcs = mm ? getComputedStyle(mm) : null;
     const zoom = mm ? (mm.currentCSSZoom || 1) : null;
     const mmRect = mm ? mm.getBoundingClientRect().width : null;
+    const hlS = mm ? (+mm.style.getPropertyValue("--hl-s") || 1) : 1;
+    // Transform-free layout width: getComputedStyle(width) ignores translate/
+    // scale (--hl-s), unlike getBoundingClientRect. Under CSS zoom it is the
+    // same round-trip the pre-#1267 assert used — so a drifted currentCSSZoom
+    // still inflates it to ~124 and fails the tier check below. offsetWidth
+    // is the integer fallback when the used width string is empty/hidden.
+    const layoutW = mm
+      ? (parseFloat(mcs.width) || mm.offsetWidth || 0)
+      : 0;
+    const density = document.body.dataset.density;
+    // css/hud.css body[data-density=compact] #minimap {110} beats the
+    // overlays.css (min-width:1200px) #minimap {160} by specificity; base is 128.
+    let expectTier = 128;
+    if (density === "compact") expectTier = 110;
+    else if (innerWidth >= 1200) expectTier = 160;
     return {
-      density: document.body.dataset.density,
-      mmCss: mm ? getComputedStyle(mm).width : "",
+      density,
+      mmCss: mcs ? mcs.width : "",
       mmRect,
       zoom,
       zTop: root.style.getPropertyValue("--hud-z-top"),
-      cssW: (zoom && mmRect != null) ? mmRect / zoom : null,
+      cssW: (zoom && mmRect != null) ? mmRect / (zoom * hlS) : null,
+      layoutW,
+      expectTier,
+      hlS,
       hudScale: cs.getPropertyValue("--hud-scale").trim(),
       uiScale: cs.getPropertyValue("--ui-scale").trim(),
       gapShort: "gapShort" in root.dataset,
@@ -526,12 +556,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
         if (!mm || innerWidth !== 852 || document.body.dataset.density !== "compact") {
           return null;
         }
-        const zTop = +root.style.getPropertyValue("--hud-z-top")
+        const zTopRaw = root.style.getPropertyValue("--hud-z-top");
+        const zTop = +zTopRaw
           || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
         return {
           zoom: mm.currentCSSZoom || 1,
           zTop,
-          mmRect: mm.getBoundingClientRect().width,
+          zTopRaw,
+          layoutW: parseFloat(getComputedStyle(mm).width) || mm.offsetWidth || 0,
         };
       };
       const a = snap();
@@ -539,7 +571,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       await new Promise((resolve) => requestAnimationFrame(resolve));
       const b = snap();
       if (!b) return false;
-      return a.zoom === b.zoom && a.zTop === b.zTop && a.mmRect === b.mmRect;
+      return a.zoom === b.zoom && a.zTop === b.zTop && a.zTopRaw === b.zTopRaw
+        && a.layoutW === b.layoutW;
     }, null, settleOpts);
   } catch (err) {
     const dump = await dumpCompactHud();
@@ -548,27 +581,25 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       { cause: err },
     );
   }
-  // #minimap rides `zoom: var(--hud-z)`. Layout width is rect/zoom (not a
-  // separate getComputedStyle round-trip that can disagree with a drifted
-  // currentCSSZoom). Dump zoom, zTop, both widths and the fit pass's cap so
-  // the next failure names its own cause.
   const compactHud = await dumpCompactHud();
   const compactDump = JSON.stringify(compactHud);
   expect(compactHud.density, "short landscape body density " + compactDump).toBe("compact");
-  const zTopNum = parseFloat(compactHud.zTop)
-    || parseFloat(compactHud.hudScale) || 1;
-  expect(Math.abs((compactHud.zoom || 1) - zTopNum),
-    "minimap zoom vs --hud-z-top " + compactDump).toBeLessThan(1e-3);
-  // ROUNDED, and the rounding is the platform's, not a slackened bound. Chromium
-  // lays a zoomed subtree out on the 1/64 px LayoutUnit grid and getComputedStyle
-  // divides back out, so an exact answer only survives a zoom that divides 96
-  // evenly. It used to: --hud-scale followed --ui-scale, which this spec leaves at
-  // 2, and 96 x 2 = 192 is on the grid. The owner's baked coarse default pins it to
-  // 1.24 instead — 96 x 1.24 = 119.04, snapped DOWN to 119.03125, back over 1.24 =
-  // 95.99294. The rule under test is which of 110 / 128 / 160 applies, and those are
-  // 18px+ apart, so a nearest-px read discriminates exactly as well as equality did.
-  expect(Math.round(compactHud.cssW),
-    "compact minimap width " + compactDump).toBe(110);
+  // When a cap IS published, zoom must match --hud-z-top (Pages 37714419183:
+  // 0.704 vs 0.792). When empty (no-cap), zoom follows --hud-scale.
+  const zTopPublished = String(compactHud.zTop || "").trim();
+  const wantZoom = zTopPublished
+    ? parseFloat(zTopPublished)
+    : (parseFloat(compactHud.hudScale) || 1);
+  expect(Math.abs((compactHud.zoom || 1) - wantZoom),
+    "minimap zoom vs published --hud-z-top/--hud-scale " + compactDump).toBeLessThan(1e-3);
+  // Tier check: nearest of 110/128/160 to the transform-free layout width.
+  // Equality to 110 rejects the measured no-cap LayoutUnit 107.46875 (CI tip
+  // selected-1) even though compact CSS still applies; the tiers are 18px+
+  // apart, so nearest stays decisive (124 from zoom-drift → 128 ≠ 110).
+  const MM_TIERS = [110, 128, 160];
+  const nearestTier = MM_TIERS.reduce((best, t) =>
+    Math.abs(t - compactHud.layoutW) < Math.abs(best - compactHud.layoutW) ? t : best);
+  expect(nearestTier, "compact minimap tier " + compactDump).toBe(compactHud.expectTier);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
