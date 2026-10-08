@@ -815,3 +815,66 @@ test.describe("desktop", () => {
 // Rank-0 pin for PR #1077: Home resize + UiLayers 0-box :modal ranking
 // likewise routes this file; overflow 8 dropped it (run 37438922786). Same
 // lever — touch the spec, do not skip it. Overflow was also raised 8→9.
+
+// fitHud IDEMPOTENCE (Pages compact-minimap flake). Two invalidate+tick passes
+// on a settled compact viewport must publish the same --hud-z-top, and that
+// value must equal #minimap's effective zoom. This file runs in the Pages gate
+// only (not the PR fast tier) — say so in the PR body when this case lands.
+test.describe("fitHud zoom determinism", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("two fits publish the same zTop and #minimap zoom matches it", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v);
+    await page.evaluate(() => {
+      if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(200);
+      if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+    });
+    // Two ~10 Hz HUD ticks + a settled zoom (no transition on the top band).
+    await page.waitForFunction(() => {
+      const root = document.documentElement;
+      const mm = document.getElementById("minimap");
+      if (!mm || innerWidth !== 852) return false;
+      const zTop = root.style.getPropertyValue("--hud-z-top");
+      const want = +zTop || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
+      const zoom = mm.currentCSSZoom || 1;
+      const anims = mm.getAnimations().filter((a) => a.playState === "running" || a.pending);
+      return anims.length === 0 && Math.abs(zoom - want) < 1e-3;
+    }, null, { polling: 100, timeout: 10_000 });
+    const snap = () => page.evaluate(() => {
+      const root = document.documentElement;
+      const mm = document.getElementById("minimap");
+      const zTop = root.style.getPropertyValue("--hud-z-top");
+      const want = +zTop || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
+      return {
+        zTop,
+        want,
+        zoom: mm ? mm.currentCSSZoom : null,
+        dockRW: root.style.getPropertyValue("--dock-r-w"),
+      };
+    });
+    const a = await snap();
+    await page.evaluate(() => {
+      if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+    });
+    await page.waitForFunction((prev) => {
+      const root = document.documentElement;
+      const mm = document.getElementById("minimap");
+      if (!mm) return false;
+      const zTop = root.style.getPropertyValue("--hud-z-top");
+      const want = +zTop || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
+      const zoom = mm.currentCSSZoom || 1;
+      // A re-fit has run (dock inset re-published) and zoom still matches.
+      const dockRW = root.style.getPropertyValue("--dock-r-w");
+      return dockRW !== "" && Math.abs(zoom - want) < 1e-3
+        && (zTop === prev.zTop || zTop !== undefined);
+    }, a, { polling: 100, timeout: 10_000 });
+    const b = await snap();
+    expect(b.zTop, "second fit must not flip --hud-z-top " + JSON.stringify({ a, b }))
+      .toBe(a.zTop);
+    expect(b.dockRW, "second fit must not flip --dock-r-w " + JSON.stringify({ a, b }))
+      .toBe(a.dockRW);
+    expect(Math.abs((b.zoom || 1) - b.want) < 1e-3,
+      "published zTop must equal #minimap zoom " + JSON.stringify(b)).toBe(true);
+  });
+});
