@@ -1,1 +1,0 @@
-1791402591	Cursor Agent	Radio audio device recovery + desktop boot bind: js/audio/engine.js (ctx lifecycle), js/core/lazy-bundles.js (LAZY_AUDIO desktop path), desktop/main.js, js/ui/platform-session.js, audio-recovery + lazy-audio-firstbind tests  [claude/f1-game-project-26h3ng; session ef4812b63d9859b3d64ac513]
