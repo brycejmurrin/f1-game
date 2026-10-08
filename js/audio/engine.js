@@ -891,6 +891,8 @@ var GameAudio = (function () {
     rivalPeak = usingSamples ? 0.28 : 0.055;
     RIVAL_VOICES = lowPower() ? RIVAL_VOICES_MOBILE : RIVAL_VOICES_DESKTOP;
     rivalVoices = [];
+    _rivalRevSm.length = 0;
+    _rivalRevSmT = 0;
     if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
         const filt = ctx.createBiquadFilter();
@@ -2014,7 +2016,7 @@ var GameAudio = (function () {
   }
 
   /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
-   * Each entry: { lat, arc, rev, approach, voice, slot }
+   * Each entry: { lat, arc, rev, approach, voice, slot, net?, key? }
    *   lat      metres to the RIGHT (negative = your left)
    *   arc      metres AHEAD (negative = behind)
    *   rev      0..1, their engine speed
@@ -2033,9 +2035,28 @@ var GameAudio = (function () {
   // slot AND rank voice are both taken gets the first free voice: on a phone's
   // two voices a car bound to slot 3 would otherwise go mute beside an idle one.
   const _rivalRow = [];
+  // VS FRIEND net snapshots step speed/gear ~10 Hz; solo AI revs every physics tick.
+  // Two cascaded poles (~48 ms each) on net-owned rows only — peak frame jump < 25 Hz
+  // on a ~175 Hz pitch step without lagging local AI downshifts.
+  const RIVAL_REV_NET_TAU = 0.048;
+  const _rivalRevSm = [];
+  let _rivalRevSmT = 0;
+  function rivalSmoothedRev(vi, raw, net, key, dt) {
+    let s = _rivalRevSm[vi];
+    if (!s) s = _rivalRevSm[vi] = { key: null, a: raw, b: raw };
+    const k = key != null ? key : vi;
+    if (k !== s.key) { s.key = k; s.a = raw; s.b = raw; return raw; }
+    if (!net) return raw;
+    const alpha = 1 - Math.exp(-dt / RIVAL_REV_NET_TAU);
+    s.a += alpha * (raw - s.a);
+    s.b += alpha * (s.a - s.b);
+    return s.b;
+  }
   function setRivals(list) {
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
+    const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
+    _rivalRevSmT = t;
     const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
     for (let i = 0; i < rivalVoices.length; i++) _rivalRow[i] = -1;
     let unvoiced = 0;
@@ -2112,7 +2133,9 @@ var GameAudio = (function () {
       // speeds sampled a frame apart and one bad frame must not chirp.
       const closing = Math.max(-90, Math.min(90, +r.approach || 0));
       const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
-      v.setPitch(t, clamp01(r.rev), dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
+      const rawRev = clamp01(r.rev);
+      const rev01 = rivalSmoothedRev(i, rawRev, !!r.net, r.key, dt);
+      v.setPitch(t, rev01, dop * v.detune * rv.rateTrim);   // their manufacturer's note, not yours
     }
   }
 
