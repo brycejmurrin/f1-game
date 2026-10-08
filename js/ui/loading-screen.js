@@ -806,6 +806,10 @@ const LoadingScreen = (function () {
       if (!r) return false;
       const title = (typeof label === "string" && label.trim()) ? label.trim() : "Loading";
       applyCard();
+      // Unhide synchronously so a Start Race tap can paint this plate in the
+      // same turn (after the race-settings <dialog> is sync-closed). Callers
+      // must still yield (RaceEntryProfile.afterPaint) before heavy work, or
+      // the browser never paints and the player sees a frozen dialog.
       r.hidden = false;
       if (typeof r.setAttribute === "function") r.setAttribute("aria-label", title);
       const name = $("ld-name"); if (name) name.textContent = title.toUpperCase();
