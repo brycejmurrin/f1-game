@@ -341,30 +341,88 @@ test.describe("UI scale", () => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
         null, { polling: 100, timeout: BOOT_MS });
-      await page.evaluate(() => window.__apex.uiScale(200));
-      await page.waitForFunction(() => document.body.dataset.density === "compact",
-        null, { polling: 100, timeout: 5_000 });
-      // SETTLE BOTH ZOOMS before reading them (one wait for both elements).
-      // Every spec pins reduced motion, and responsive.css answers it with a
-      // 0.01ms transition-duration on every #overlay descendant, where
-      // transition-property is the initial `all` - so zoom itself TRANSITIONS
-      // on #menu-brand and #menu-buttons. Until the next frame services that
-      // transition, getComputedStyle().zoom returns its START value, i.e. the
-      // zoom from before uiScale(200). On a coarse pointer that is the 1.09
-      // default (tokens.css): ship CI 37689983772 on 76f1c6b93 read it twice
-      // ("brand geometry" 1.09 vs 1) with density already compact and
-      // --ui-scale already 2. #1256 waited for the brand's zoom alone; the
-      // buttons' zoom (the 1.25 cap asserted below) races the same way, so
-      // this waits until neither element has a pending or running animation,
-      // and keeps #1256's brand-at-compact check in the same predicate.
-      await page.waitForFunction(() => {
-        const idle = ["menu-brand", "menu-buttons"].every((id) => {
-          const el = document.getElementById(id);
-          return !!el && !el.getAnimations().some((a) => a.pending || a.playState === "running");
-        });
-        const brand = document.getElementById("menu-brand");
-        return idle && Math.abs(+getComputedStyle(brand).zoom - 1) < 0.001;
-      }, null, { polling: 100, timeout: 10_000 });
+      // DENSITY AND ZOOM SETTLE ARE FRAME CONTRACTS, NOT WALL-CLOCK ONES.
+      //
+      // Density: body[data-density] is written by SheetShape's --ui-scale
+      // MutationObserver, which reclassifies in the NEXT animation frame
+      // (js/ui/sheet-shape.js watchScale). Only the first shape ever waits on
+      // it: that is the cold profile, where --ui-scale is still unset and the
+      // body is "normal"; later shapes boot with the stored 200% and are
+      // already compact.
+      //
+      // Zoom settle (#1256/#1270): every spec pins reduced motion, and
+      // responsive.css answers it with a 0.01ms transition-duration on every
+      // #overlay descendant, where transition-property is the initial `all` -
+      // so zoom itself TRANSITIONS on #menu-brand and #menu-buttons. Until the
+      // next frame services that transition, getComputedStyle().zoom returns
+      // its START value, i.e. the zoom from before uiScale(200). On a coarse
+      // pointer that is the 1.09 default (tokens.css): ship CI 37689983772 on
+      // 76f1c6b93 read it twice ("brand geometry" 1.09 vs 1), and the buttons'
+      // 1.25 cap asserted below races the same way.
+      //
+      // Both answers land within a frame or two of the write, but under load
+      // the FRAMES are late, not the answers. Probed on this box (loadavg
+      // 55-130): density flipped in the first frame after the write every time
+      // (read as compact on frame 2 of the count below), yet that frame arrived
+      // 13-39 s later - uiScale(200)'s own 200% relayout is a 3-12 s long
+      // task, and the cold boot's tail adds a 9-26 s one behind it. The old
+      // 5 s density wait and 10 s settle wait (their setTimeout polls starve the
+      // same way) measured that backlog, not the code; with the first fixed,
+      // the second timed out next, in the desktop shape.
+      //
+      // So write and count frames in ONE evaluate: compact, both elements
+      // free of pending/running animations, and the brand at its compact zoom
+      // within SETTLE_FRAMES rendered frames of the write is the contract,
+      // with no wall clock in it. BOOT_MS caps only the wait for frames to
+      // arrive at all (it is the cold-boot backlog being waited out), and that
+      // case reports itself as starvation rather than as a wrong answer. The
+      // cap is PER FRAME, measured from when that frame was requested: a
+      // budget counted from before uiScale(200) let the synchronous relayout
+      // spend it (157-335 s at loadavg 200-500), after which setTimeout(0)
+      // beat every requestAnimationFrame and "starved" fired one frame in.
+      const SETTLE_FRAMES = 6;
+      const settle = await page.evaluate(async ({ frames, capMs }) => {
+        const t0 = performance.now();
+        window.__apex.uiScale(200);
+        const snap = () => {
+          const anims = ["menu-brand", "menu-buttons"].flatMap((id) => {
+            const el = document.getElementById(id);
+            if (!el) return [id + ":missing"];
+            return el.getAnimations().filter((a) => a.pending || a.playState === "running")
+              .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
+          });
+          const brand = document.getElementById("menu-brand");
+          const brandZoom = brand ? +getComputedStyle(brand).zoom : NaN;
+          const density = document.body.dataset.density;
+          return { density, anims, brandZoom,
+            ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 };
+        };
+        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
+        if (s.density === "compact") compactAt = 0;
+        while (!s.ok && n < frames) {
+          const asked = performance.now();
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          maxFrameMs = Math.max(maxFrameMs, Math.round(performance.now() - asked));
+          if (!framed) { starved = true; break; }
+          n++;
+          s = snap();
+          if (compactAt < 0 && s.density === "compact") compactAt = n;
+        }
+        return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
+          uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
+      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      const settleDump = JSON.stringify(settle);
+      expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(200) `
+        + "(main thread starved, not a layout answer) " + settleDump).toBe(false);
+      expect(settle.density, `${name}: body is compact within ${SETTLE_FRAMES} frames of uiScale(200) `
+        + settleDump).toBe("compact");
+      expect(settle.anims, `${name}: brand/buttons zoom transitions retire within ${SETTLE_FRAMES} frames `
+        + settleDump).toEqual([]);
 
       const scale = await page.evaluate(() => ({
         requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
