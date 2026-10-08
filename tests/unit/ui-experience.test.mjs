@@ -332,3 +332,66 @@ test("Home stamp survives game-vm's detached querySelector stub", () => {
   assert.doesNotThrow(() => local.api.create(G, { trackReady: () => true }));
   assert.equal(btn.textContent, "PHOTO STUDIO");
 });
+
+test("renderHome yields the game loop when setupCam Home ended out-of-band", () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let owned = false, begins = 0;
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { begins++; owned = true; return true; },
+    endHome() { owned = false; },
+    homeState: () => owned ? { motion: "ambient" } : null,
+    renderHome() { return owned; },
+  };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'ambient' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, setTimeout, clearTimeout, Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false }, { setupCam, trackReady: () => true });
+  assert.equal(ui.renderHome(1 / 24), true);
+  assert.equal(begins, 1);
+  setupCam.endHome();
+  assert.equal(ui.renderHome(1 / 24), false, "dead setupCam session must not swallow the garage turntable");
+});
+
+test("renderHome yields under still/reduce when setupCam Home ended out-of-band", () => {
+  // Reduce-motion paints once then hits the still throttle without calling
+  // renderHome — homeState must be checked before that early return.
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let owned = false;
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { owned = true; return true; },
+    endHome() { owned = false; },
+    homeState: () => owned ? { motion: "still" } : null,
+    renderHome() { return owned; },
+  };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'reduce' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'ambient' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, setTimeout, clearTimeout, Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false }, { setupCam, trackReady: () => true });
+  assert.equal(ui.renderHome(1 / 60), true, "first still frame paints");
+  assert.equal(ui.renderHome(1 / 60), true, "painted still throttle holds the title");
+  setupCam.endHome();
+  assert.equal(ui.renderHome(1 / 60), false, "still throttle must not swallow after endHome");
+});
+
+test("Home ambient motion comes from AppearanceStudio, never a stale variation own-property", () => {
+  assert.match(code, /s\.motion = selected\.motion;/);
+  assert.doesNotMatch(code, /s\.motion = \(varied && varied\.motion\) \|\| selected\.motion;/);
+});
