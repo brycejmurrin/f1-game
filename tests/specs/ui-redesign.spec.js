@@ -494,38 +494,78 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // Reading straight after the resize caught the map BETWEEN the two (CI
   // 37245582225, PR #904): --hud-z-top already gone from :root, the map still
   // styled at the old 0.864 cap, so the resolved width came back as its laid-out
-  // 110px over that stale zoom — 127.315px. Same shape as hud-layout.spec.js's
-  // broadcast wait: published inputs can precede Chromium's style invalidation of
-  // the zoomed band. So wait (two frames, then the map's zoom equal to the zoom
-  // fitHud published) and THEN assert; the expectation below is unchanged, and
-  // on a timeout it still fails with the dump.
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const mm = document.getElementById("minimap"), root = document.documentElement;
-    if (!mm || innerWidth !== 852 || document.body.dataset.density !== "compact") return false;
-    const want = +root.style.getPropertyValue("--hud-z-top")
-      || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
-    return Math.abs((mm.currentCSSZoom || 1) - want) < 1e-3;
-  }, null, { polling: 100, timeout: 5_000 });
+  // 110px over that stale zoom — 127.315px.
+  //
+  // A ZOOM TRANSITION IS THE OTHER HALF. This project pins reduced motion, and
+  // css/hud.css gives every #hud descendant `transition-duration: 0.01ms` under
+  // :root[data-motion="reduce"]; transition-property stays at its default
+  // `all`, which includes `zoom`. So each --hud-z-top write starts a CSSTransition
+  // on #minimap's zoom, and until it retires (the next frame or two) the map lays
+  // out at the NEW zoom while currentCSSZoom / getComputedStyle still answer
+  // with the OLD one: Pages 37714419183 selected-4 (f9cda6b52) read mmCss
+  // 123.735px = rect 87.109 (110 x zTop 0.792) / stale zoom 0.704, and earlier
+  // 102 = 44 / 0.433 against a 0.4 fit. The fit also republishes the cap after
+  // the map first matches (measured locally: 0.714 -> 0.4 -> 0.709 -> 0.4 inside
+  // ~0.4 s, then 0.4 -> 0.709 again ~3 s later), so a wait that passes and a
+  // SEPARATE evaluate that reads afterwards can straddle a fresh transition.
+  //
+  // So check and read in ONE turn: after a frame, the map's zoom must equal the
+  // zoom fitHud published, no transition/animation may be pending or running on
+  // the map, and the computed width must round-trip through that zoom to the
+  // laid-out rect. Only then is the snapshot taken as the measurement. The 110
+  // expectation below is unchanged; if the map never settles inside 10 s the
+  // spec fails here, loudly, with the last snapshot. Polled IN the page (a
+  // frame, then 100 ms, 10 s cap) so the settled check and the read that gets
+  // asserted are the same synchronous snapshot.
+  //
   // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
-  // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
-  // and the fit pass's cap alongside it, so the next failure names its own
-  // cause instead of leaving a bare number to bisect (this one cost a day).
-  const compactHud = await page.evaluate(() => {
-    const mm = document.getElementById("minimap"), root = document.documentElement;
-    const cs = getComputedStyle(root);
-    return {
-      density: document.body.dataset.density,
-      mmCss: mm ? getComputedStyle(mm).width : "",
-      mmRect: mm ? mm.getBoundingClientRect().width : null,
-      zoom: mm ? mm.currentCSSZoom : null,
-      zTop: root.style.getPropertyValue("--hud-z-top"),
-      hudScale: cs.getPropertyValue("--hud-scale").trim(),
-      uiScale: cs.getPropertyValue("--ui-scale").trim(),
-      gapShort: "gapShort" in root.dataset,
-      gapDrop: "gapDrop" in root.dataset,
+  // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales,
+  // the fit pass's cap and any live animation alongside it, so the next failure
+  // names its own cause instead of leaving a bare number to bisect (this one
+  // cost a day).
+  const compactHud = await page.evaluate(async () => {
+    const snap = () => {
+      const mm = document.getElementById("minimap"), root = document.documentElement;
+      const cs = getComputedStyle(root);
+      const mmCs = mm ? getComputedStyle(mm) : null;
+      const mmCss = mmCs ? mmCs.width : "";
+      const mmRect = mm ? mm.getBoundingClientRect().width : null;
+      const anims = mm ? mm.getAnimations()
+        .filter((a) => a.playState === "running" || a.pending)
+        .map((a) => (a.transitionProperty || a.animationName || "?") + ":" + a.playState) : [];
+      const zoom = mm ? mm.currentCSSZoom : null;
+      const zTop = root.style.getPropertyValue("--hud-z-top");
+      const want = +zTop || +cs.getPropertyValue("--hud-scale") || 1;
+      const density = document.body.dataset.density;
+      const settled = !!mm && innerWidth === 852 && density === "compact"
+        && anims.length === 0
+        && Math.abs((zoom || 1) - want) < 1e-3
+        && Math.abs(parseFloat(mmCss) * (zoom || 1) - mmRect) < 0.5;
+      return {
+        settled,
+        density,
+        mmCss,
+        mmRect,
+        zoom,
+        zTop,
+        hudScale: cs.getPropertyValue("--hud-scale").trim(),
+        uiScale: cs.getPropertyValue("--ui-scale").trim(),
+        gapShort: "gapShort" in root.dataset,
+        gapDrop: "gapDrop" in root.dataset,
+        anims,
+      };
     };
+    const t0 = performance.now();
+    for (;;) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const s = snap();
+      if (s.settled || performance.now() - t0 > 10_000) return s;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   });
+  expect(compactHud.settled,
+    "compact minimap zoom never settled on the published HUD zoom within 10 s "
+    + JSON.stringify(compactHud)).toBe(true);
   const compactDump = JSON.stringify(compactHud);
   expect(compactHud.density, "short landscape body density " + compactDump).toBe("compact");
   // ROUNDED, and the rounding is the platform's, not a slackened bound. Chromium
