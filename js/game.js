@@ -2612,6 +2612,18 @@ function raceProfile() { return RaceEntryProfile.legs(); }
 // promise instead of starting a second race build on top of the first.
 async function startRaceBody() {
   const rlap = (n) => RaceEntryProfile.lap(n);
+  // Plate already raised in startRace() / raceIntroFromSheet. Yield BEFORE
+  // ensureAudio / resets so #loading can paint (TopModal's MutationObserver
+  // close and the first frame) instead of sitting under a frozen dialog for
+  // the whole LAZY_AUDIO + scenery task. game-vm has no frame pump.
+  // https://developer.chrome.com/blog/use-scheduler-yield
+  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
+    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
+  if (!vmNoFramePump) {
+    if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.mark) RaceEntryProfile.mark("body:yield");
+    await yieldMain();
+  }
   if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
   await ensureRaceSession();   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
@@ -2636,9 +2648,6 @@ async function startRaceBody() {
     buildSelect(); els.select.hidden = false;
     return false;
   }
-  // game-vm captures rAF and never pumps it (tools/lib/game-vm.cjs) — a paced
-  // build would hang with track=null. UA mark: apex-game-vm. Real browsers pace.
-  const vmNoFramePump = typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
   resultsCam.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
@@ -2670,10 +2679,7 @@ async function startRaceBody() {
   else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost()))) { loadingScreen.stop(); quitToMenu(); return false; }
   rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
-  // https://developer.chrome.com/blog/use-scheduler-yield — Safari: setTimeout(0).
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
-  const yieldMain = () => (typeof scheduler !== "undefined" && scheduler.yield)
-    ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
   if (!vmNoFramePump) await yieldMain();
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
@@ -2840,7 +2846,13 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 function startRace() {
-  const rs = $("race-settings"); if (rs) rs.hidden = true;   // dialog top-layer covers #loading
+  // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
+  // so #loading is not trapped under :modal for the rest of this long task.
+  const rs = $("race-settings");
+  if (rs) {
+    rs.hidden = true;
+    try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
+  }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;

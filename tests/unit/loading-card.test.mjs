@@ -318,12 +318,16 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   const game = read("js/game.js");
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
     "startRace raises the card before ensureScenery / stopHome");
-  assert.match(game, /const rs = \$\("race-settings"\); if \(rs\) rs\.hidden = true;/,
+  assert.match(game, /const rs = \$\("race-settings"\);\s*if \(rs\) \{\s*rs\.hidden = true;/,
     "startRace closes the settings dialog so #loading is not under a top-layer sheet");
+  assert.match(game, /rs\.open && typeof rs\.close === "function"\) rs\.close\(\)/,
+    "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
   assert.match(game, /if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\);/,
     "race settings covers prep with the sheet — race card waits until after the garage leave");
+  assert.match(game, /body:yield/,
+    "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
     "title return skips the view-transition snapshot that held a blank page");
 });

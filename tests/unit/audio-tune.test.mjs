@@ -872,6 +872,66 @@ test("four fallback voices are four cars as well", () => {
   assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
 });
 
+test("net-owned rival rev steps (~10 Hz) keep maxRivalHzJump under 25 Hz", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  assert.equal(A.debug().usingSamples, false);
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  const lo = 0.35, hi = 0.60;
+  for (let w = 0; w < 12; w++) {
+    A.setRivals([{ ...rival, rev: lo, net: true, key: 42 }]);
+    ctxTime(1 / 60);
+  }
+  const rivalHz = () => A.rivalState()[0].hz;
+  let maxJump = 0, prev = rivalHz();
+  for (let f = 0; f < 360; f++) {
+    const rev = Math.floor(f / 6) % 2 === 0 ? lo : hi;
+    A.setRivals([{ ...rival, rev, net: true, key: 42 }]);
+    ctxTime(1 / 60);
+    const hz = rivalHz();
+    maxJump = Math.max(maxJump, Math.abs(hz - prev));
+    prev = hz;
+  }
+  assert.ok(maxJump < 25, `net rival pitch must not zipper (max frame jump ${maxJump.toFixed(1)} Hz)`);
+});
+
+test("solo AI rival rev step reaches 90% within 200 ms", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  const from = 0.25, to = 0.85;
+  A.setRivals([{ ...rival, rev: from, net: false, key: 7 }]);
+  ctxTime(1 / 60);
+  const rivalHz = () => A.rivalState()[0].hz;
+  const hz0 = rivalHz();
+  A.setRivals([{ ...rival, rev: to, net: false, key: 7 }]);
+  ctxTime(1 / 60);
+  const target = rivalHz();
+  const need = hz0 + 0.9 * (target - hz0);
+  let reached = -1;
+  for (let f = 1; f <= 14; f++) {
+    A.setRivals([{ ...rival, rev: to, net: false, key: 7 }]);
+    ctxTime(1 / 60);
+    if (rivalHz() >= need - 0.5) { reached = f * (1000 / 60); break; }
+  }
+  assert.ok(reached >= 0 && reached <= 200, `solo rival must hit 90% within 200 ms (got ${reached} ms)`);
+});
+
+test("rival voice slot reassignment snaps pitch to the new car", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  A.setRivals([{ ...rival, rev: 0.2, net: true, key: 1 }]);
+  ctxTime(1 / 60);
+  const lowHz = A.rivalState()[0].hz;
+  A.setRivals([{ ...rival, rev: 0.92, net: true, key: 2 }]);
+  ctxTime(1 / 60);
+  assert.ok(A.rivalState()[0].hz > lowHz + 300, "reassigned slot must snap, not glide");
+});
+
 test("a voice stays with its car when two rivals swap places", async () => {
   // js/audio/rivals.js binds each car to a voice (row.slot) for as long as it
   // stays in the voiced set. setRivals must play a row on ITS voice, not on
