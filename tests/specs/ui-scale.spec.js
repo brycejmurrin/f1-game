@@ -375,7 +375,11 @@ test.describe("UI scale", () => {
       // within SETTLE_FRAMES rendered frames of the write is the contract,
       // with no wall clock in it. BOOT_MS caps only the wait for frames to
       // arrive at all (it is the cold-boot backlog being waited out), and that
-      // case reports itself as starvation rather than as a wrong answer.
+      // case reports itself as starvation rather than as a wrong answer. The
+      // cap is PER FRAME, measured from when that frame was requested: a
+      // budget counted from before uiScale(200) let the synchronous relayout
+      // spend it (157-335 s at loadavg 200-500), after which setTimeout(0)
+      // beat every requestAnimationFrame and "starved" fired one frame in.
       const SETTLE_FRAMES = 6;
       const settle = await page.evaluate(async ({ frames, capMs }) => {
         const t0 = performance.now();
@@ -393,20 +397,23 @@ test.describe("UI scale", () => {
           return { density, anims, brandZoom,
             ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 };
         };
-        let n = 0, starved = false, compactAt = -1, s = snap();
+        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
         if (s.density === "compact") compactAt = 0;
         while (!s.ok && n < frames) {
-          const left = Math.max(0, capMs - (performance.now() - t0));
+          const asked = performance.now();
+          let timer = 0;
           const framed = await Promise.race([
             new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
-            new Promise((resolve) => setTimeout(() => resolve(false), left)),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
           ]);
+          clearTimeout(timer);
+          maxFrameMs = Math.max(maxFrameMs, Math.round(performance.now() - asked));
           if (!framed) { starved = true; break; }
           n++;
           s = snap();
           if (compactAt < 0 && s.density === "compact") compactAt = n;
         }
-        return { ...s, frames: n, compactAt, starved, ms: Math.round(performance.now() - t0),
+        return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
           uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
       }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
       const settleDump = JSON.stringify(settle);
