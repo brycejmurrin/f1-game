@@ -688,13 +688,25 @@ function fitHud() {
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
   _fitKey = key; _fitWait = 30;
-  const wide = (el) => {
+  // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
+  // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
+  // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
+  // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
+  // zoom over/under-estimates intrinsics and the next pass flips between
+  // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
+  // When currentCSSZoom is absent (mini-dom fixtures paint unscaled rects),
+  // fall back to 1 so those harnesses keep measuring in layout px.
+  const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
+  const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
+  const zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(1, btnScale);
+  const zoomDiv = (el, pub) => (el && el.currentCSSZoom > 0 ? (pub || 1) : 1);
+  const wide = (el, pub) => {
     if (!el) return 0;
     const r = layoutRect(el);
     if (!r.width) return 0;
-    return r.width / (el.currentCSSZoom || 1);
+    return r.width / zoomDiv(el, pub);
   };
-  const span = (el) => {
+  const span = (el, pub) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
     for (const c of el.children) {
@@ -703,10 +715,10 @@ function fitHud() {
       if (r.left < lo) lo = r.left;
       if (r.right > hi) hi = r.right;
     }
-    return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
+    return hi > lo ? (hi - lo) / zoomDiv(el, pub) : wide(el, pub);
   };
   if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
-  const top = wide(_hudTop);
+  const top = wide(_hudTop, zTopPub);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
   // 10×/s for as long as the layout stayed empty, i.e. the entire countdown.
@@ -716,12 +728,12 @@ function fitHud() {
   // with NOTHING laid out returns; an empty tower budgets as zero and falls
   // through, still retrying (bounded) in case it is merely not populated yet.
   let retry = !top;
-  if (!top && !wide(els.minimap) && !wide(els.hudSectors) && !span(_hudBottom) && !wide(_dockL) && !wide(_dockR)) {
+  if (!top && !wide(els.minimap, zTopPub) && !wide(els.hudSectors, zTopPub) && !span(_hudBottom, zBotPub) && !wide(_dockL, zDockPub) && !wide(_dockR, zDockPub)) {
     if (++_fitRetry <= 30) _fitKey = "";
     return;
   }
   const half = window.innerWidth / 2;
-  const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
+  const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
   // pushed right by `--sal` (and `#hud-sectors` left by `--sar`) in UNSCALED
   // screen px — `calc(10px + var(--sal) / var(--hud-z))` — while `.hud-top` is
@@ -750,8 +762,7 @@ function fitHud() {
   // whose notch is symmetric in landscape and never worse than 0.
   const mmR = els.minimap ? layoutRect(els.minimap) : null;
   const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
-  const mz = (els.minimap && els.minimap.currentCSSZoom) || 1;
-  const sz = (els.hudSectors && els.hudSectors.currentCSSZoom) || 1;
+  const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
   const sarM = scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null;
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
@@ -762,7 +773,7 @@ function fitHud() {
   // every notched phone. Only when it does not fit even without the strip
   // does the cap actually bite.
   const leftN = (map ? 10 + map : 0) + FIT_AIR;
-  const right = wide(els.hudSectors) + 10 + FIT_AIR;
+  const right = wide(els.hudSectors, zTopPub) + 10 + FIT_AIR;
   // WHERE IS THE TOWER? The model below splits the viewport at the centre and
   // charges each half its own cluster plus HALF the band — which is only true
   // while `.hud-top` is `left: 50%; translateX(-50%)`. The BROADCAST profile
@@ -833,7 +844,7 @@ function fitHud() {
   // content and the cap came out permissive enough to leave #hud-gearbox and
   // #hud-aero off-screen at 1280x800 @175% — with the cap in place and no overlap
   // reported anywhere, which is how a wrong measurement hides.
-  const bottom = span(_hudBottom);
+  const bottom = span(_hudBottom, zBotPub);
   let capBot = bottom ? (window.innerWidth - 2 * FIT_AIR) / bottom : Infinity;
   // THE DOCKS GET THE SAME TREATMENT — they were the one cluster outside the
   // fit budget (this comment block's own "bottom: one centred row" never
@@ -844,18 +855,20 @@ function fitHud() {
   // y=-216, GAS 96px into the notch). Height, not width, is the binding
   // axis: cap = the viewport height less top air over the tallest column's
   // intrinsic (zoom-invariant) height.
-  const tall = (el) => {
+  const tall = (el, pub) => {
     if (!el) return 0;
     const r = layoutRect(el);
     if (!r.height) return 0;
-    return r.height / (el.currentCSSZoom || 1);
+    return r.height / zoomDiv(el, pub);
   };
   // THE TOWER'S HEIGHT, for the broadcast stack. `.hud-top` and `#minimap`
   // share --hud-z-top, so dividing the rect by that same zoom gives a length
   // the map's own `top: calc(...)` can add without double-counting the zoom.
   // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
   // and a var that is only sometimes present is a var that is sometimes 0.
-  hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
+  // Same published divisor as wide() — do not re-read currentCSSZoom here.
+  const topHPub = tall(_hudTop, zTopPub);
+  hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
   // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
   // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
   // where the BOOST pedal is on a touch phone, so a track-limits warning painted
@@ -871,9 +884,9 @@ function fitHud() {
   // profile) left the chip hanging in mid-air below an empty corner, reported
   // from a phone as "LIMITS floats in the middle of the screen". Measured, in
   // the chip's own zoom units, it is 0 exactly when the box is gone.
-  const secH = tall(els.hudSectors);
+  const secH = tall(els.hudSectors, zTopPub);
   hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
-  const chromeZ = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
   // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
   // Standing off unconditionally dragged a top-right chip halfway across the
   // screen on any viewport tall enough for the two never to meet (the second
@@ -954,7 +967,7 @@ function fitHud() {
   const hudDockEl = _dockL ? _dockL.parentNode : null;
   const groups = (d) => {
     if (!d) return { h: 0, w: 0, stack: 0 };
-    const z = d.currentCSSZoom || 1;
+    const z = zoomDiv(d, zDockPub);
     let h = 0, w = 0, stack = 0, n = 0;
     for (const g of d.children) {
       const r = g.getBoundingClientRect();
@@ -1000,7 +1013,7 @@ function fitHud() {
     // not chase itself. Hidden TYRES (TIMING, COMPACT, cockpit) leave the cap.
     // The unit harness has no visible #hud-tyre, so this stays a no-op there.
     if (!document.body.classList.contains("desktop") && _hudBottom && _hudBottom.children) {
-      const zNow = _hudBottom.currentCSSZoom || 1;
+      const zNow = zoomDiv(_hudBottom, zBotPub);
       let lo = Infinity, hi = -Infinity;
       const kids = _hudBottom.children;
       for (let i = 0; i < kids.length; i++) {
@@ -1078,17 +1091,14 @@ function fitHud() {
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
-  // --hud-top-h is consumed in the tower's own zoom space. Publishing it
-  // before the cap write left the CSS var one pass behind --hud-z-top, so a
-  // probe that required |rect/zoom − published| ≤ 0.1px could miss for the
-  // whole same-key backoff after a camera class change. Flush so currentCSSZoom
-  // matches the cap we just wrote, then publish. Flush the map too: under a
-  // heavy post-cap pass Chromium can leave #minimap.currentCSSZoom on the
-  // previous tick's cap while --hud-z-top is already new (selected-2
-  // ui-redesign: mmCss 142 = 110×0.862/0.666 while zTop was 0.862).
+  // --hud-top-h is consumed in the tower's own zoom space. Re-publish AFTER
+  // the cap write so CSS sees --hud-z-top and --hud-top-h in the same pass.
+  // The length itself was measured with zTopPub (pre-cap published zoom that
+  // matches the rects this pass read) — never re-divide by a lagging
+  // currentCSSZoom (ui-redesign: mmCss 142 = 110×staleZoom/zTop).
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
-  hStyle(root, "--hud-top-h", tall(_hudTop).toFixed(1) + "px");
+  hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
   // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
   // cap between BUTTON SIZE and 1 still has to be written.
   set("--hud-z-dock", capDock, Math.max(1, btnScale));
@@ -1097,20 +1107,12 @@ function fitHud() {
   // Use the LEFTMOST painted right-dock control / BOOST — wrap-reverse
   // #dock-right width can under-measure content left (Pages
   // #hud-sectors+#announce when #1191's anchor max compensated). Flush dock +
-  // sectors so dockLeft and the plate's currentCSSZoom match the post-cap
-  // paint (CI oversize workers=2 otherwise published in the wrong z → S3×BOOST).
+  // sectors so dockLeft matches the post-cap paint.
   if (_dockR) void _dockR.offsetHeight;
   if (els.hudSectors) void els.hudSectors.offsetHeight;
-  // Prefer the --hud-z-top we just wrote. currentCSSZoom can still read 1 for
-  // a frame after set(), which under-insets S3 onto BOOST (CI oversize:
-  // dockRW 211 at z≈1 while the plate paints at ~0.55).
-  const zPaint = () => {
-    const pub = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
-    const live = els.hudSectors && els.hudSectors.currentCSSZoom;
-    if (!(live > 0)) return pub;
-    if (pub < 0.95 && live > pub + 0.15) return pub;
-    return live;
-  };
+  // Always the published --hud-z-top (just written). Never prefer a lagging
+  // currentCSSZoom — that was the other half of the compact-minimap flip.
+  const zPaint = () => +root.style.getPropertyValue("--hud-z-top") || scale || 1;
   // BOOST only anchors --dock-r-w when it sits in the RIGHT half. Tilt parks
   // BOOST on the left column; using that left as the inset target blew midCap
   // (CI: dockRW 907, #hud-sectors unsafe under --sal).
@@ -1201,7 +1203,7 @@ function fitHud() {
         if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
       }
       if (!(worst > 0.5)) break;
-      const zSec = secEl.currentCSSZoom || 1;
+      const zSec = zPaint() || 1;
       const curW = secR.width / zSec;
       secEl.style.maxWidth = Math.max(48, curW - worst / zSec).toFixed(1) + "px";
       void secEl.offsetHeight;

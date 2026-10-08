@@ -53,7 +53,14 @@
    THAT rather than by --hud-scale: the compensation has to use the number the
    element is actually zoomed by, or a capped band double-counts its notch. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
-#lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+#lights, #announce {
+  --hud-z: var(--hud-z-top, var(--hud-scale));
+  zoom: var(--hud-z);
+  /* zoom must track --hud-z-top in the same frame. Default transition:all
+     (even at reduced-motion 0.01ms) left the map's live CSS zoom a frame
+     behind the published cap under CI load → fitHud flipped caps. */
+  transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
+}
 /* THE CAM AND PAUSE BUTTONS FOLLOW HUD SIZE TOO — by size, not by `zoom`,
    because they are tap targets: --hud-btn-z is the top band's zoom floored at
    1, so HUD SIZE can grow them beside the timing tower but never shrink them
