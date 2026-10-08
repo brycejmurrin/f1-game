@@ -491,43 +491,74 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   // SETTLE BEFORE MEASURING. The race HUD was fitted at 734x343 a moment ago,
   // and fitHud re-caps --hud-z-top on its next 10 Hz tick at the new size.
-  // Reading straight after the resize caught the map BETWEEN the two (CI
-  // 37245582225, PR #904): --hud-z-top already gone from :root, the map still
-  // styled at the old 0.864 cap, so the resolved width came back as its laid-out
-  // 110px over that stale zoom — 127.315px. Same shape as hud-layout.spec.js's
-  // broadcast wait: published inputs can precede Chromium's style invalidation of
-  // the zoomed band. So wait (two frames, then the map's zoom equal to the zoom
-  // fitHud published) and THEN assert; the expectation below is unchanged, and
-  // on a timeout it still fails with the dump.
-  await page.waitForFunction(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const mm = document.getElementById("minimap"), root = document.documentElement;
-    if (!mm || innerWidth !== 852 || document.body.dataset.density !== "compact") return false;
-    const want = +root.style.getPropertyValue("--hud-z-top")
-      || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
-    return Math.abs((mm.currentCSSZoom || 1) - want) < 1e-3;
-  }, null, { polling: 100, timeout: 5_000 });
-  // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
-  // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
-  // and the fit pass's cap alongside it, so the next failure names its own
-  // cause instead of leaving a bare number to bisect (this one cost a day).
-  const compactHud = await page.evaluate(() => {
+  // A zoom==zTop wait then a later evaluate still races: under CI load fitHud
+  // can flip the zoom cap between those two Playwright round-trips (Pages
+  // 37714419183: mmRect 87.11 = 110×zTop 0.792, but #minimap zoom had already
+  // drifted to 0.704 → Math.round(mmCss) 124). Wait until zoom, --hud-z-top and
+  // the map rect are unchanged across two consecutive frames, then snapshot in
+  // ONE evaluate. Never swallow a settle timeout (PR #1213). Cap-flip root
+  // cause in js/ui/hud.js is HUD Desk — not this spec.
+  const dumpCompactHud = () => page.evaluate(() => {
     const mm = document.getElementById("minimap"), root = document.documentElement;
     const cs = getComputedStyle(root);
+    const zoom = mm ? (mm.currentCSSZoom || 1) : null;
+    const mmRect = mm ? mm.getBoundingClientRect().width : null;
     return {
       density: document.body.dataset.density,
       mmCss: mm ? getComputedStyle(mm).width : "",
-      mmRect: mm ? mm.getBoundingClientRect().width : null,
-      zoom: mm ? mm.currentCSSZoom : null,
+      mmRect,
+      zoom,
       zTop: root.style.getPropertyValue("--hud-z-top"),
+      cssW: (zoom && mmRect != null) ? mmRect / zoom : null,
       hudScale: cs.getPropertyValue("--hud-scale").trim(),
       uiScale: cs.getPropertyValue("--ui-scale").trim(),
       gapShort: "gapShort" in root.dataset,
       gapDrop: "gapDrop" in root.dataset,
+      innerWidth,
     };
   });
+  const settleOpts = { polling: 100, timeout: 5_000 };
+  try {
+    await page.waitForFunction(async () => {
+      const snap = () => {
+        const mm = document.getElementById("minimap");
+        const root = document.documentElement;
+        if (!mm || innerWidth !== 852 || document.body.dataset.density !== "compact") {
+          return null;
+        }
+        const zTop = +root.style.getPropertyValue("--hud-z-top")
+          || +getComputedStyle(root).getPropertyValue("--hud-scale") || 1;
+        return {
+          zoom: mm.currentCSSZoom || 1,
+          zTop,
+          mmRect: mm.getBoundingClientRect().width,
+        };
+      };
+      const a = snap();
+      if (!a) return false;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const b = snap();
+      if (!b) return false;
+      return a.zoom === b.zoom && a.zTop === b.zTop && a.mmRect === b.mmRect;
+    }, null, settleOpts);
+  } catch (err) {
+    const dump = await dumpCompactHud();
+    throw new Error(
+      `compact minimap HUD did not stabilize within ${settleOpts.timeout}ms: ${JSON.stringify(dump)}`,
+      { cause: err },
+    );
+  }
+  // #minimap rides `zoom: var(--hud-z)`. Layout width is rect/zoom (not a
+  // separate getComputedStyle round-trip that can disagree with a drifted
+  // currentCSSZoom). Dump zoom, zTop, both widths and the fit pass's cap so
+  // the next failure names its own cause.
+  const compactHud = await dumpCompactHud();
   const compactDump = JSON.stringify(compactHud);
   expect(compactHud.density, "short landscape body density " + compactDump).toBe("compact");
+  const zTopNum = parseFloat(compactHud.zTop)
+    || parseFloat(compactHud.hudScale) || 1;
+  expect(Math.abs((compactHud.zoom || 1) - zTopNum),
+    "minimap zoom vs --hud-z-top " + compactDump).toBeLessThan(1e-3);
   // ROUNDED, and the rounding is the platform's, not a slackened bound. Chromium
   // lays a zoomed subtree out on the 1/64 px LayoutUnit grid and getComputedStyle
   // divides back out, so an exact answer only survives a zoom that divides 96
@@ -536,7 +567,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // 1.24 instead — 96 x 1.24 = 119.04, snapped DOWN to 119.03125, back over 1.24 =
   // 95.99294. The rule under test is which of 110 / 128 / 160 applies, and those are
   // 18px+ apart, so a nearest-px read discriminates exactly as well as equality did.
-  expect(Math.round(parseFloat(compactHud.mmCss)),
+  expect(Math.round(compactHud.cssW),
     "compact minimap width " + compactDump).toBe(110);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
