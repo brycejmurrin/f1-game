@@ -496,27 +496,36 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // styled at the old 0.864 cap, so the resolved width came back as its laid-out
   // 110px over that stale zoom — 127.315px.
   //
-  // A ZOOM TRANSITION IS THE OTHER HALF. This project pins reduced motion, and
+  // A TRANSITION IS THE OTHER HALF. This project pins reduced motion, and
   // css/hud.css gives every #hud descendant `transition-duration: 0.01ms` under
   // :root[data-motion="reduce"]; transition-property stays at its default
-  // `all`, which includes `zoom`. So each --hud-z-top write starts a CSSTransition
-  // on #minimap's zoom, and until it retires (the next frame or two) the map lays
-  // out at the NEW zoom while currentCSSZoom / getComputedStyle still answer
-  // with the OLD one: Pages 37714419183 selected-4 (f9cda6b52) read mmCss
-  // 123.735px = rect 87.109 (110 x zTop 0.792) / stale zoom 0.704, and earlier
-  // 102 = 44 / 0.433 against a 0.4 fit. The fit also republishes the cap after
-  // the map first matches (measured locally: 0.714 -> 0.4 -> 0.709 -> 0.4 inside
-  // ~0.4 s, then 0.4 -> 0.709 again ~3 s later), so a wait that passes and a
-  // SEPARATE evaluate that reads afterwards can straddle a fresh transition.
+  // `all`, which includes `zoom` and `width`. So each --hud-z-top write starts
+  // CSSTransitions on #minimap, and until they retire the map's rect,
+  // currentCSSZoom and getComputedStyle can disagree. Three widths seen against
+  // 110 on 2026-10-07:
+  //   124 - Pages 37714419183 selected-4 (f9cda6b52): mmCss 123.735 = rect
+  //         87.109 (110 x zTop 0.792) / stale zoom 0.704 (also 102 = 44 / 0.433
+  //         against a 0.4 fit, and 122);
+  //   107 - ship CI 37718135591 on 73648b665 (#1267): mmCss = rect = 107.469 at
+  //         zoom 1 with --hud-z-top unset, consistent with a width transition
+  //         still holding 110 x the previous ~0.977 cap after the cap dropped.
+  // The fit also republishes the cap after the map first matches (measured
+  // locally: 0.714 -> 0.4 -> 0.709 -> 0.4 inside ~0.4 s, then 0.4 -> 0.709
+  // again ~3 s later), and a transition's start value can sit still for more
+  // than one frame, so neither "zoom == cap, then read in a later evaluate" nor
+  // #1267's "unchanged across two frames" is enough (locally #1267's wait passed
+  // with a zoom transition still running, zoom 0.53 vs zTop 0.806, 4 of 4 runs).
   //
-  // So check and read in ONE turn: after a frame, the map's zoom must equal the
-  // zoom fitHud published, no transition/animation may be pending or running on
-  // the map, and the computed width must round-trip through that zoom to the
-  // laid-out rect. Only then is the snapshot taken as the measurement. The 110
-  // expectation below is unchanged; if the map never settles inside 10 s the
-  // spec fails here, loudly, with the last snapshot. Polled IN the page (a
-  // frame, then 100 ms, 10 s cap) so the settled check and the read that gets
-  // asserted are the same synchronous snapshot.
+  // So check and read in ONE synchronous snapshot, polled IN the page (a frame,
+  // then 100 ms, 10 s cap): the map's zoom must equal the zoom fitHud published
+  // (--hud-z-top when the fit caps the band, --hud-scale when it does not), no
+  // transition/animation of any property may be pending or running on the map,
+  // and the computed width must round-trip through that zoom to the laid-out
+  // rect. CAPPED OR NOT, the rule under test is the same: compact density makes
+  // the map 110 CSS px, painted at 110 x that effective zoom. Both are asserted
+  // below from the settled snapshot; the 110 expectation is unchanged, and if
+  // the map never settles inside 10 s the spec fails here, loudly, with the
+  // last snapshot.
   //
   // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
   // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales,
@@ -543,6 +552,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
         && Math.abs(parseFloat(mmCss) * (zoom || 1) - mmRect) < 0.5;
       return {
         settled,
+        want,
+        capped: !!zTop,
         density,
         mmCss,
         mmRect,
@@ -578,6 +589,13 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // 18px+ apart, so a nearest-px read discriminates exactly as well as equality did.
   expect(Math.round(parseFloat(compactHud.mmCss)),
     "compact minimap width " + compactDump).toBe(110);
+  // And the PAINTED size follows whichever zoom applies: 110 x --hud-z-top when
+  // the fit caps the band, 110 x --hud-scale when it does not. Half a px is
+  // the LayoutUnit (1/64 px) snap with room to spare, not slack: the competing
+  // rule sizes (128 / 160) are 18 x zoom px away.
+  expect(Math.abs(compactHud.mmRect - 110 * compactHud.want),
+    `compact minimap painted width = 110 x ${compactHud.capped ? "--hud-z-top" : "--hud-scale"} `
+    + compactDump).toBeLessThan(0.5);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
