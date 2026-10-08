@@ -208,6 +208,113 @@ test("net-owned rivals are flagged for heavier engine pitch smoothing", () => {
   assert.equal(byArc[10].key, 1);
 });
 
+// ── camera-relative pan (Radio r6 f3) ─────────────────────────────────────
+
+const CHASE_PAN_FIXTURES = [
+  { lat: -3, arc: 0, pan: -0.85 },
+  { lat: 4, arc: 0, pan: 0.85 },
+  { lat: 0, arc: 40, pan: 0 },
+  { lat: 3, arc: 1, pan: 0.85 * (3 / 4) },
+  { lat: -2, arc: 50, pan: 0.85 * (-2 / 53) },
+];
+
+const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+  .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n").replace(/^const\b/gm, "var");
+
+function bootRivalPanEngine(basisRef) {
+  const param = (v) => ({
+    value: v, sets: 0,
+    setTargetAtTime(x) { this.value = x; this.sets++; },
+    setValueAtTime(x) { this.value = x; },
+    exponentialRampToValueAtTime(x) { this.value = x; },
+    cancelScheduledValues() {},
+  });
+  const node = (kind) => ({
+    kind, connect: () => node(kind), disconnect() {},
+    gain: param(1), frequency: param(8000), Q: param(1), detune: param(0), playbackRate: param(1),
+    pan: param(0), threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25),
+    type: "", loop: false, start() {}, stop() {},
+  });
+  const ctx = {
+    currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
+    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"),
+    createOscillator: () => node("osc"), createBufferSource: () => node("src"),
+    createStereoPanner: () => node("panner"), createDynamicsCompressor: () => node("comp"),
+    createAnalyser: () => node("analyser"), createWaveShaper: () => node("shaper"),
+    createConvolver: () => node("convolver"),
+    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
+    decodeAudioData: (_a, ok) => ok({ sampleRate: 44100, length: 44100, duration: 1, numberOfChannels: 1, getChannelData: () => new Float32Array(44100) }),
+    resume: () => Promise.resolve(), close() {}, onstatechange: null,
+  };
+  const sb = {
+    Math, console, Object, Array, Number, JSON, parseFloat, isFinite, Float32Array,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: { addEventListener() {}, hidden: false }, addEventListener() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {} },
+    setTimeout: (fn) => { fn(); return 1; }, clearTimeout() {},
+    AudioContext: function () { return ctx; },
+    fetch: () => new Promise(() => {}),
+    GameCams: { getListenerBasis: () => basisRef.current },
+  };
+  sb.window = sb;
+  const vctx = vm.createContext(sb);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx);
+  vm.runInContext(ENGINE_SRC, vctx, { filename: "engine.js" });
+  const GameAudio = vm.runInContext("GameAudio", vctx);
+  GameAudio.init();
+  GameAudio.startEngine();
+  return GameAudio;
+}
+
+function rivalPan(row, basis) {
+  const A = bootRivalPanEngine({ current: basis });
+  A.setRivals([row]);
+  return A.rivalState()[0].pan;
+}
+
+test("external camera: rival on the visual left pans negative; 180° yaw flips the sign", () => {
+  const leftBasis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  const flipBasis = { external: true, x: 0, z: 0, fwdX: -1, fwdZ: 0, rightX: 0, rightZ: 1, valid: true };
+  const row = { lat: 0, arc: 10, wx: 0, wz: 12, rev: 0.5, approach: 0, slot: 0 };
+  const panLeft = rivalPan(row, leftBasis);
+  const panFlip = rivalPan(row, flipBasis);
+  assert.ok(panLeft < -0.2, `visual left should pan negative, got ${panLeft}`);
+  assert.ok(panFlip > 0.2, `flipped camera should pan positive, got ${panFlip}`);
+  assert.ok(Math.sign(panLeft) !== Math.sign(panFlip), "pan sign follows the camera, not the car frame");
+});
+
+test("external camera: rival ahead or behind the line of sight pans near centre", () => {
+  const basis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  const ahead = rivalPan({ lat: 0, arc: 0, wx: 40, wz: 0, rev: 0.5, approach: 0, slot: 0 }, basis);
+  const behind = rivalPan({ lat: 0, arc: 0, wx: -30, wz: 0, rev: 0.5, approach: 0, slot: 0 }, basis);
+  assert.ok(Math.abs(ahead) < 0.05, `ahead pan ${ahead} should be near 0`);
+  assert.ok(Math.abs(behind) < 0.05, `behind pan ${behind} should be near 0`);
+});
+
+test("chase and missing camera basis keep the pre-fix player-track pan law", () => {
+  for (const f of CHASE_PAN_FIXTURES) {
+    const row = { lat: f.lat, arc: f.arc, rev: 0.6, approach: 0, slot: 0 };
+    const chase = rivalPan(row, { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1 });
+    const missing = rivalPan(row, null);
+    assert.ok(Math.abs(chase - f.pan) < 1e-4, `chase ${f.lat},${f.arc} expected ${f.pan}, got ${chase}`);
+    assert.ok(Math.abs(missing - f.pan) < 1e-4, `fallback ${f.lat},${f.arc} expected ${f.pan}, got ${missing}`);
+  }
+});
+
+test("onboard → TV external flag clears cached pan targets so the next aim reschedules", () => {
+  const row = { lat: 3, arc: 5, wx: 50, wz: 53, rev: 0.6, approach: 0, slot: 0 };
+  const basisRef = {
+    current: { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1 },
+  };
+  const A = bootRivalPanEngine(basisRef);
+  A.setRivals([row]);
+  const st0 = A.rivalState()[0];
+  basisRef.current = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  A.setRivals([row]);
+  const st1 = A.rivalState()[0];
+  assert.notEqual(st1.pan, st0.pan, "camera-relative pan differs from player-track pan for the same row");
+  assert.ok(Math.abs(st1.pan) <= 0.85 && Math.abs(st0.pan) <= 0.85, "both laws stay inside the hard-pan clamp");
+});
+
 test("Doppler closing speed is the line-of-sight component: zero when level, full when in line", () => {
   // -(arc/dist)·Δv, not -sign(arc)·Δv: the old form flipped the full Δv across
   // arc = 0 — a ~300-cent pitch step in 0.2 m as a car came past.
