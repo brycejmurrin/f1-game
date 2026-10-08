@@ -380,6 +380,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // driving-model gate runs here in seconds rather than in a browser job.
   "tests/unit/game-vm.test.mjs",
   "tests/unit/garage-arrival.test.mjs",
+  // Garage before GitHub API: retry on 5xx/429/network + ?name= filter (mocked fetch).
+  "tests/unit/garage-before-api.test.mjs",
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
