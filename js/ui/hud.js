@@ -1021,6 +1021,32 @@ function fitHud() {
           if (zClear > 0) capBot = Math.min(capBot, zClear);
         }
       }
+      // PORTRAIT PHONE: the ladder buttons are position:fixed, so #hud-dock's
+      // flex width never budgets the cluster. Cap --hud-z-bot so GEAR clears
+      // the AERO/OT column (390×844 @150%: gearbox×btn-aero, HUD Desk 2026-10-07).
+      // Landscape keeps the dock flex bar; this path is a no-op there.
+      // Read discs via the dock trees (no dynamic getElementById — ratchet).
+      if (typeof window !== "undefined" && window.matchMedia
+          && window.matchMedia("(orientation: portrait)").matches && bottom > 0) {
+        let leftEdge = 0, rightEdge = window.innerWidth;
+        const mid = window.innerWidth / 2;
+        for (const dock of [_dockL, _dockR]) {
+          if (!dock) continue;
+          const nodes = dock.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn");
+          for (let i = 0; i < nodes.length; i++) {
+            const el = nodes[i];
+            if (!el || el.hidden) continue;
+            const r = el.getBoundingClientRect();
+            if (!(r.width && r.height)) continue;
+            const cx = (r.left + r.right) / 2;
+            if (cx >= mid) rightEdge = Math.min(rightEdge, r.left);
+            else leftEdge = Math.max(leftEdge, r.right);
+          }
+        }
+        // `bottom` is zoom-invariant (span / currentCSSZoom); room is screen px.
+        const room = rightEdge - leftEdge - 2 * FIT_AIR;
+        if (room > 0) capBot = Math.min(capBot, room / bottom);
+      }
     }
     const zBot = Math.min(scale, capBot);
     const barW = barR ? barR.width : window.innerWidth;
