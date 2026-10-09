@@ -35,8 +35,10 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
+| **lib/changed-files.mjs** | `git diff` path lists naming BOTH ends of a rename, so a file moved out of a watched directory still routes its rules. | — |
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
+| **lib/conflict-cure.mjs** | Pure resolvers for deploy/sync-pr conflict cures: keep both sides' hand edits in index.html and package.json. | — |
 | **lib/css-source.mjs** | Reads logical stylesheet families in manifest order for source audits and ratchets. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
@@ -56,6 +58,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
+| **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
 
 ### `tools/ci/`
 
