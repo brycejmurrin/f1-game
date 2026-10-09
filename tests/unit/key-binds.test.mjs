@@ -368,7 +368,7 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
 // `disk`, when given, backs the store (reads and writes land in it).
-function bootUi(desktop, helpSlots = {}, disk = null) {
+function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = (tag = "div") => {
@@ -392,6 +392,7 @@ function bootUi(desktop, helpSlots = {}, disk = null) {
   sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
   sb.GameAudio = null;
+  if (pre) pre(sb);   // extra globals the module reads at create() time
   sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
@@ -567,6 +568,27 @@ test("the wheel wizard never maps an axis it already took (bug-hunt 5.2)", () =>
   pad.axes[3] = 0.9; Input.poll();      // BRAKE -> axis 3
   assert.deepEqual([disk.padAxes.steer, disk.padAxes.throttle, disk.padAxes.brake], [0, 2, 3],
     "three distinct axes, the steering axis never re-offered to a pedal");
+});
+
+test("leaving the CONTROLS page aborts the wheel wizard via SettingsNav.onLeave (bug-hunt 5.3)", () => {
+  let leave = null;
+  const { Input, $, fire, sb } = bootUi(true, {}, {}, (g) => { g.SettingsNav = { onLeave: (fn) => { leave = fn; } }; });
+  assert.equal(typeof leave, "function", "key-binds subscribes to the page-leave hook");
+  const { press } = fakePad(sb, fire);
+  $("pm-pad-wheel").onclick();
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL");
+  leave("display");
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "another page hiding is not the CONTROLS page");
+  leave("controls");
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "BACK from CONTROLS stops the wizard");
+  press(7, 1);
+  Input.poll();
+  assert.equal(Input.debugState().pad.throttle, true, "the pad drives again");
+});
+
+test("without SettingsNav.onLeave the wheel wizard is unchanged (hook not landed yet)", () => {
+  assert.doesNotThrow(() => bootUi(true, {}, {}, (g) => { g.SettingsNav = {}; }));
+  assert.doesNotThrow(() => bootUi(true));
 });
 
 test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map", () => {
