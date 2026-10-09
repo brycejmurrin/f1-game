@@ -20,7 +20,12 @@
 const TrackBuildClient = (function () {
   "use strict";
   const KEY = "apex26.buildWorker";
-  let _w = null, _ready = null, _seq = 0;
+  let _w = null, _ready = null, _readyOk = null, _seq = 0;
+  // A worker that never answers (a wedged build, a heap that died quietly) must not
+  // hold the track load for ever: past this the round trip is dropped and the page
+  // builds in steps. Generous: a cold TRACK_VM parse plus the biggest circuit's build
+  // is ~3-8 s on a phone, well over that under SwiftShader.
+  const ROUND_TRIP_MS = 20000;
   const _pending = new Map();
 
   // Explicit "1"/"0" wins; unset → ON when a Worker exists and there is a spare
@@ -73,8 +78,10 @@ const TrackBuildClient = (function () {
   function drop(why) {
     for (const p of _pending.values()) p.resolve(null);
     _pending.clear();
+    // A post() still awaiting readiness (a worker that was booting) settles false too.
+    if (_readyOk) _readyOk(false);
     try { if (_w) _w.terminate(); } catch (_) { /* already gone */ }
-    _w = null; _ready = null;
+    _w = null; _ready = null; _readyOk = null;
     Log.warn("track", "build worker off: " + why);
   }
 
@@ -97,7 +104,7 @@ const TrackBuildClient = (function () {
     if (!enabled() || typeof Worker === "undefined" || !files) return null;
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
-    const worker = _w, ready = _ready = new Promise((res) => { ok = res; });
+    const worker = _w, ready = _ready = new Promise((res) => { ok = _readyOk = res; });
     const failed = (why) => { if (_w === worker) { ok(false); drop(why); } };
     worker.onmessage = (e) => {
       if (_w !== worker) return;
@@ -109,7 +116,9 @@ const TrackBuildClient = (function () {
       const p = _pending.get(m.seq);
       if (!p) return;
       _pending.delete(m.seq);
-      const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
+      let lack = [];
+      try { if (m.type === "built") lack = missingModels(p.def, m.models); }
+      catch (err) { Log.warn("track", "build worker: model check failed: " + (err && err.message || err)); p.resolve(null); return; }
       if (lack.length) {
         Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
         p.resolve(null);
@@ -146,18 +155,23 @@ const TrackBuildClient = (function () {
   async function post(idx, def, opts, gfx, sceneryFile) {
     if (opts && opts.retainGraph && !_graphNoted) { _graphNoted = true; Log.info("track", "build worker: scenery graph not retained (__apex.trackGraph is null)"); }
     const r = spawn();
-    if (!r || !(await r) || !_w) return null;
-    const seq = ++_seq;
-    return new Promise((resolve) => {
-      _pending.set(seq, { resolve, def });
-      _w.postMessage({
-        type: "build", seq, idx, id: def.id,
-        opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
-        mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
-        scenery: sceneryFile ? url(sceneryFile) : null,
-        team: myTeam(),
+    if (!r) return null;
+    // The watchdog covers readiness and the round trip: drop() settles both.
+    const worker = _w, dog = setTimeout(() => { if (_w === worker) drop("timeout"); }, ROUND_TRIP_MS);
+    try {
+      if (!(await r) || !_w) return null;
+      const seq = ++_seq;
+      return await new Promise((resolve) => {
+        _pending.set(seq, { resolve, def });
+        _w.postMessage({
+          type: "build", seq, idx, id: def.id,
+          opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
+          mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
+          scenery: sceneryFile ? url(sceneryFile) : null,
+          team: myTeam(),
+        });
       });
-    });
+    } finally { clearTimeout(dog); }
   }
   // The MY TEAM entry of the PAGE's Teams.LIST (custom-team.js splices the
   // player's saved team in from localStorage), as plain data: the garage row

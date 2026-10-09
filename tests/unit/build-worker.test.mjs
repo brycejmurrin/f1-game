@@ -300,6 +300,17 @@ test("worker world == main-thread world WITH baked models, pit signs and MY TEAM
   assert.notDeepEqual(c.log, a.log, "premise: the baked models change the uploads");
 });
 
+test("the worker's reply carries no terrain lookup cache (bug-hunt 6.7)", async () => {
+  const { T, page } = pageWithWorker();
+  const id = "monza", def = T.LIST.find((d) => d.id === id);
+  await page.Assets.loadModels();
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true, retainGraph: false }, recorder().gfx, MANIFEST.sceneryPath(id));
+  assert.ok(msg, "the worker answered a world");
+  // terrainGrid() (tracks.js) rebuilds this on first use: the cell lists were structured-cloned for nothing.
+  assert.ok(!msg.track._terrGrid, "no _terrGrid in the post");
+  console.log("props.list size on " + id + ": " + (msg.track.props && msg.track.props.list ? msg.track.props.list.length : "n/a"));
+});
+
 test("a worker holding fewer models than the page answers null (build in steps)", async () => {
   const { T, page } = pageWithWorker({ workerPack: false });
   await page.Assets.loadModels();
@@ -416,6 +427,59 @@ test("synchronous init post failure and unreadable replies also settle readiness
     assert.equal(c.busy(), false);
     assert.equal(worker.terminated, true);
   }
+});
+
+// A settle probe: "pending" when `p` has not settled after a few ticks (never hangs the suite).
+const settleOf = async (p) => { let out = "pending"; p.then((v) => { out = v; }); for (let i = 0; i < 5; i++) await tick(); return out; };
+
+test("turning BUILD IN BACKGROUND off while the worker boots settles the awaiting build (bug-hunt 6.3)", async () => {
+  let worker;
+  const c = smallClient({ Worker: class { constructor() { worker = this; } postMessage() { /* boots slowly: never answers */ } terminate() { this.terminated = true; } } });
+  const build = c.build(0, { id: "monza" }, {}, {}, null);
+  await tick();
+  assert.equal(c.busy(), true);
+  c.set(false);
+  assert.equal(await settleOf(build), null, "the build resolves null so loadTrackStepped builds in steps");
+  assert.equal(c.busy(), false);
+  assert.equal(worker.terminated, true);
+});
+
+test("a worker that never answers a build is dropped after the watchdog (bug-hunt 6.4)", async () => {
+  const timers = [];
+  let worker;
+  const c = smallClient({
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
+    Worker: class {
+      constructor() { worker = this; }
+      postMessage(m) { if (m.type === "init") queueMicrotask(() => this.onmessage({ data: { type: "ready" } })); /* a build is never answered */ }
+      terminate() { this.terminated = true; }
+    } });
+  const build = c.build(0, { id: "monza" }, {}, {}, null);
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  const dog = timers.filter((t) => t.live && t.ms >= 10000 && t.ms <= 60000);
+  assert.equal(dog.length, 1, "one watchdog timer of 10-60 s is armed: " + JSON.stringify(timers.map((t) => t.ms)));
+  dog[0].fn();
+  assert.equal(await settleOf(build), null);
+  assert.equal(c.busy(), false);
+  assert.equal(worker.terminated, true);
+});
+
+test("a throw while reading the worker's reply settles the build instead of stranding it (bug-hunt 6.4)", async () => {
+  let thrown = null;
+  const c = smallClient({
+    Assets: { modelIds() { throw new Error("scenery source unreadable"); }, modelSync() { return true; } },
+    Worker: class {
+      postMessage(m) {
+        const reply = m.type === "init" ? { type: "ready" } : { type: "built", seq: m.seq, id: m.id, models: [] };
+        queueMicrotask(() => { try { this.onmessage({ data: reply }); } catch (e) { thrown = e; } });
+      }
+      terminate() {}
+    } });
+  const build = c.build(0, { id: "monza" }, {}, {}, null);
+  assert.equal(await settleOf(build), null);
+  assert.equal(thrown, null, "the reply handler does not throw");
+  assert.equal(c.busy(), false);
 });
 
 for (const failure of ["fallback", "surface", null]) {
