@@ -5049,6 +5049,8 @@ test("TLX defers resize during compilation and applies the latest requested size
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
   const post = { resize(w, h) { calls.push(["post", w, h]); } };
+  let _postRebuild = false;              // a retired post chain owes a rebuild at the next realloc
+  const buildPost = () => post;
   const src = code("js/render/three/tlx.js");
   const applyResize = eval("(function(){" + fnBody(src, "applyResize") + "})");
   const resize = eval("(function(){" + fnBody(src, "resize") + "})");
@@ -6062,4 +6064,47 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
   eval(loop[1]);
   assert.equal(new Set(seen).size, 16, "16 distinct source texels at 2048 -> 512");
   assert.equal(d, 16);
+});
+
+// M15: headed GLX has no #game-soft and no preserved drawing buffer, so #game.toDataURL()
+// after an await returned the cleared buffer: a black PNG reported SAVED. The picker now
+// asks GLX for a frame that resolves from inside present() and reports NO LIVE FRAME
+// when none comes (paused) rather than saving black.
+test("SAVE SCREENSHOT on headed GLX reads only a live frame and never saves a black one (M15)", async () => {
+  const fn = span(read("js/perf/renderer-picker.js"), "function saveScreenshot()", "function ensureAdvHost()", "saveScreenshot");
+  const run = async (answer) => {
+    const button = { textContent: "SAVE SCREENSHOT" };
+    const calls = { await: [], dataUrl: 0, saved: 0 };
+    const ctx = vm.createContext({
+      document: { getElementById: (id) => id === "pm-save-shot" ? button : id === "game" ? { toDataURL: () => { calls.dataUrl++; return "data:image/png;base64,AQID"; } } : null,
+        createElement: () => ({ click() { calls.saved++; } }) },
+      GLX: { softPresent: () => false, awaitSoftPresent: (ms, mode) => { calls.await.push([ms, mode]); return Promise.resolve(answer); } },
+      NativeDownload: { viable: () => false }, readBackend: () => "webgl2", setTimeout() {},
+    });
+    vm.runInContext(fn + "\nsaveScreenshot();", ctx);
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    return { button, calls };
+  };
+  const stale = await run("stale");
+  assert.deepEqual(stale.calls.await, [[1500, "frame"]], "headed GLX asks for the next presented frame");
+  assert.equal(stale.calls.dataUrl, 0, "no frame presented: the cleared #game buffer is not read");
+  assert.equal(stale.calls.saved, 0);
+  assert.match(stale.button.textContent, /NO LIVE FRAME$/);
+  const live = await run("frame");
+  assert.equal(live.calls.dataUrl, 1);
+  assert.match(live.button.textContent, /SAVED$/);
+  // GLX gives the "frame" mode meaning only while it is not soft-presenting.
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /if \(_frameWaiters\.length\) _frameWaiters\.splice\(0\)\.forEach/, "present() wakes frame waiters");
+  assert.match(glx, /if \(!_softPresent\) return arguments\[1\] === "frame" \? _awaitFrame\(/);
+});
+
+// M16: SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its own list.
+test("the GLX mirror pass runs with the lamp shadow off — the forward slot names another lamp there (M16)", () => {
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /const _lampOn = SHD\.lampArmed && !PST\.mirror\.active\(\);/);
+  assert.match(glx, /uf1\(litU\.uLampShadowOn, _litUf, "lampShadowOn", _lampOn \? 1\.0 : 0\.0\);/);
+  assert.match(glx, /LampBake\.shadowCol\(frame, _lampOn \? SHD\.lampIdx \| 0 : -1, _bakeShScr\)/);
+  const chunked = read("js/render/glx/chunked.js");
+  assert.match(chunked, /SH\.lampArmed && SH\.lampIdx >= 0 && F\.lights && !core\.post\.mirror\.active\(\)/);
 });
