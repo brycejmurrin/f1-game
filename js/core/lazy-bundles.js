@@ -391,7 +391,11 @@ function raceAssets() {
   const kickScenery = () => {
     // Selected circuit (persisted trackIdx / default): most likely RACE! and
     // the __apex no-track fallback — fetch scenery (and its path payload) here.
-    ensureScenery(deps.getContext().trackIdx);
+    // ensureCircuit rejects by design and nothing awaits this idle call, so an
+    // unhandled rejection here is the full-screen crash overlay on the title.
+    ensureScenery(deps.getContext().trackIdx).catch((e) => {
+      Log.warn("track", "idle scenery prefetch failed: " + (e && e.message));
+    });
     // Opt-in build worker: parse TRACK_VM off the main thread while the menu
     // idles so RACE! does not pay worker importScripts on the critical path.
     if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
@@ -408,7 +412,9 @@ function raceAssets() {
   }, 2500);
   // Prefetch the session stub's real modules on idle so startRace's await is
   // usually a no-op. Do not put them on the title paint path (microtask).
-  scheduleIdle(() => { ensureRaceSession(); }, 2800);
+  scheduleIdle(() => {
+    ensureRaceSession().catch((e) => { Log.warn("race", "idle race-session prefetch failed: " + (e && e.message)); });
+  }, 2800);
   scheduleIdle(() => { prefetchAudio(); }, 4500);
   bootDesktopAudio();
 }
