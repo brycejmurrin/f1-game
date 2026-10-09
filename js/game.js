@@ -7186,8 +7186,8 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // frame.wetness: WeatherArc.syncWetness (also from wxArc.tick for headless
-  // look=drive). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  // frame.wetness: WeatherArc.syncWetness (wxArc.tick stands in only when
+  // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
   if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
