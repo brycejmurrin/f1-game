@@ -91,7 +91,8 @@ test("rowLabel says it in words (no colour-only meaning)", () => {
 
 test("tick: off hides the box; on, it fills rows and never writes a car", () => {
   const mk = () => {
-    const el = { hidden: true, attrs: {}, children: [], textContent: "", style: { setProperty(k, v) { el.style[k] = v; } },
+    const el = { hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
       setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
       appendChild(c) { el.children.push(c); return c; } };
     return el;
@@ -121,6 +122,37 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   G.timeTrial = true;
   R.tick(G, p);
   assert.equal(root.hidden, true, "no relative in a time trial");
+});
+
+test("fitRows caps max-height above an overlapping BRAKE", () => {
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 40;
+  root.scrollHeight = 160;
+  root.currentCSSZoom = 1;
+  root.getBoundingClientRect = () => ({ left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 });
+  const brake = mk();
+  brake.hidden = false;
+  brake.getBoundingClientRect = () => ({ left: 60, right: 140, top: 180, bottom: 260, width: 80, height: 80 });
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const a1 = car("A1", 1100, 3, { speed: 60, rank: 1 });
+  const a2 = car("A2", 1400, 3, { speed: 60, rank: 0 });
+  const b1 = car("B1", 900, 3, { speed: 60, rank: 3 });
+  const b2 = car("B2", 600, 3, { speed: 60, rank: 4 });
+  R.tick({ cars: [p, a1, a2, b1, b2], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+  const cap = String(root.style.maxHeight || root.style["max-height"] || "");
+  const left = String(root.style.left || "");
+  assert.ok(/74/.test(cap) || parseFloat(left) > 50,
+    "either height-cap (brake below) or slide right of a left pedal: cap=" + cap + " left=" + left);
 });
 
 test("never reads track curvature (the arc must not reach the driver)", () => {

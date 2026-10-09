@@ -96,6 +96,7 @@ function boot(opts) {
       { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
+    createMediaElementSource: (el) => Object.assign(node("mediaSrc", counts), { mediaElement: el }),
     resume: () => Promise.resolve(), close() {},
   };
   const sb = {
@@ -116,6 +117,7 @@ function boot(opts) {
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
   if (opts && opts.realWatch) sb.RealRace = { status: () => ({ watch: true }) };
+  if (opts && opts.Audio) sb.Audio = opts.Audio;
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
@@ -130,7 +132,7 @@ function boot(opts) {
   // Sources are excluded: a STOPPED BufferSource/Oscillator is collected without
   // a disconnect, so counting them would report a leak this file cannot fix.
   const liveNodes = () => [...live].filter((n) => n.kind !== "src" && n.kind !== "osc").length;
-  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx };
+  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx, vctx };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -259,7 +261,7 @@ test("a fresh engine carries the shipped voice, and an identity trim reduces to 
   // JSON round-trip: values come back from the vm realm with that realm's
   // Object prototype, and strict deepEqual compares prototypes.
   assert.deepEqual(JSON.parse(JSON.stringify(A.tuneDefaults())), Object.assign({}, TUNE_IDENTITY, {
-    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.5,
+    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.62, boost: 1.12,
   }), "the shipped ENGINE voice");
   A.setTune(TUNE_IDENTITY);
   // The pre-tune formula: IDLE and CURVE at 1 must reduce the four-knob curve
@@ -870,6 +872,66 @@ test("four fallback voices are four cars as well", () => {
   assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
 });
 
+test("net-owned rival rev steps (~10 Hz) keep maxRivalHzJump under 25 Hz", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  assert.equal(A.debug().usingSamples, false);
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  const lo = 0.35, hi = 0.60;
+  for (let w = 0; w < 12; w++) {
+    A.setRivals([{ ...rival, rev: lo, net: true, key: 42 }]);
+    ctxTime(1 / 60);
+  }
+  const rivalHz = () => A.rivalState()[0].hz;
+  let maxJump = 0, prev = rivalHz();
+  for (let f = 0; f < 360; f++) {
+    const rev = Math.floor(f / 6) % 2 === 0 ? lo : hi;
+    A.setRivals([{ ...rival, rev, net: true, key: 42 }]);
+    ctxTime(1 / 60);
+    const hz = rivalHz();
+    maxJump = Math.max(maxJump, Math.abs(hz - prev));
+    prev = hz;
+  }
+  assert.ok(maxJump < 25, `net rival pitch must not zipper (max frame jump ${maxJump.toFixed(1)} Hz)`);
+});
+
+test("solo AI rival rev step reaches 90% within 200 ms", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  const from = 0.25, to = 0.85;
+  A.setRivals([{ ...rival, rev: from, net: false, key: 7 }]);
+  ctxTime(1 / 60);
+  const rivalHz = () => A.rivalState()[0].hz;
+  const hz0 = rivalHz();
+  A.setRivals([{ ...rival, rev: to, net: false, key: 7 }]);
+  ctxTime(1 / 60);
+  const target = rivalHz();
+  const need = hz0 + 0.9 * (target - hz0);
+  let reached = -1;
+  for (let f = 1; f <= 14; f++) {
+    A.setRivals([{ ...rival, rev: to, net: false, key: 7 }]);
+    ctxTime(1 / 60);
+    if (rivalHz() >= need - 0.5) { reached = f * (1000 / 60); break; }
+  }
+  assert.ok(reached >= 0 && reached <= 200, `solo rival must hit 90% within 200 ms (got ${reached} ms)`);
+});
+
+test("rival voice slot reassignment snaps pitch to the new car", () => {
+  const { GameAudio: A, ctxTime } = boot();
+  A.init();
+  A.startEngine();
+  const rival = { lat: 3, arc: 8, approach: 0, voice: "", slot: 0 };
+  A.setRivals([{ ...rival, rev: 0.2, net: true, key: 1 }]);
+  ctxTime(1 / 60);
+  const lowHz = A.rivalState()[0].hz;
+  A.setRivals([{ ...rival, rev: 0.92, net: true, key: 2 }]);
+  ctxTime(1 / 60);
+  assert.ok(A.rivalState()[0].hz > lowHz + 300, "reassigned slot must snap, not glide");
+});
+
 test("a voice stays with its car when two rivals swap places", async () => {
   // js/audio/rivals.js binds each car to a voice (row.slot) for as long as it
   // stays in the voiced set. setRivals must play a row on ITS voice, not on
@@ -1046,6 +1108,38 @@ test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", 
   assert.ok(Math.abs(r.music.gain.value - full) < 1e-9, `radio fx must not double-duck from radioVoice, got ${r.music.gain.value}`);
   h.stop();
   for (const fn of pendingTimers.splice(0)) fn();
+});
+
+test("playWatchMedia ducks music and routes media elements through the radio band", async () => {
+  const b = boot({
+    Audio: function AudioMock() {
+      this.crossOrigin = "";
+      this.preload = "";
+      this.src = "";
+      this.volume = 1;
+      this.paused = false;
+      this.ended = false;
+      this.play = () => Promise.resolve();
+      this.pause = () => {};
+    },
+  });
+  const gains = [];
+  const mk = b.ctx.createGain;
+  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
+  b.GameAudio.init();
+  b.GameAudio.startMusic();
+  await b.release();
+  const musicGain = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
+  assert.ok(musicGain, "precondition: music gain");
+  const full = musicGain.gain.value;
+  const GameAudioRadioFx = vm.runInContext("GameAudioRadioFx", b.vctx);
+  const h = GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.9 });
+  assert.ok(h && h.chained, "media element path chains into WebAudio");
+  assert.ok(Math.abs(musicGain.gain.value - full * 0.35) < 1e-9, "music ducks for the clip");
+  assert.ok((b.counts.mediaSrc || 0) >= 1, "createMediaElementSource ran");
+  assert.ok((b.counts.biquad || 0) >= 2, "radio band filters are in the graph");
+  h.stop();
+  assert.ok(Math.abs(musicGain.gain.value - full) < 1e-9, "stop releases the duck");
 });
 
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
@@ -1859,6 +1953,61 @@ test("a steady setEngine and a quiet setSkid schedule nothing after the first fr
   }
 });
 
+test("a sustained skid wobbles on the audio thread, not with a main-thread filter aim every frame", async () => {
+  const { GameAudio: A, release, ctx, ctxTime } = boot();
+  const biquads = [];
+  const mkFilt = ctx.createBiquadFilter;
+  ctx.createBiquadFilter = () => { const n = mkFilt(); biquads.push(n); return n; };
+  A.init();
+  await release();
+  A.startEngine();
+  const skidFilt = () => biquads.find((n) => Math.abs(n.Q.value - 1.4) < 1e-9);
+  const settle = () => {
+    for (let i = 0; i < 5; i++) { ctxTime(1 / 60); A.setSkid(0.8, false); }
+  };
+  settle();
+  const filt = skidFilt();
+  assert.ok(filt, "precondition: skid bandpass (Q 1.4) exists");
+  const before = filt.frequency.sets;
+  for (let i = 0; i < 30; i++) { ctxTime(1 / 60); A.setSkid(0.8, false); }
+  const added = filt.frequency.sets - before;
+  assert.ok(added <= 2,
+    `steady slide at 0.8 re-aimed the filter centre ${added} times in 30 frames (want <= 2 after settle)`);
+});
+
+test("the reverb send is dry when SPACE is off or the reverb layer is disabled", async () => {
+  const { GameAudio: A, release, ctx } = boot();
+  let revSendGain = null;
+  const mkConv = ctx.createConvolver;
+  ctx.createConvolver = () => {
+    const c = mkConv();
+    const mkGain = ctx.createGain;
+    ctx.createGain = () => {
+      const g = mkGain();
+      if (!revSendGain) revSendGain = g.gain;
+      ctx.createGain = mkGain;
+      return g;
+    };
+    return c;
+  };
+  A.init();
+  await release();
+  A.startEngine();
+  assert.ok(revSendGain, "precondition: revSend gain is captured");
+  A.setVenue({ street: true, theme: "street_day" });
+  A.setTune({ reverb: 1 });
+  A.setLayer("reverb", true);
+  assert.ok(revSendGain.value > 0, "precondition: send open when SPACE is on");
+  A.setLayer("reverb", false);
+  assert.equal(revSendGain.value, 0, "layer off must gate the convolver send, not only the return");
+  A.setLayer("reverb", true);
+  assert.ok(revSendGain.value > 0, "layer on restores the send");
+  A.setTune({ reverb: 0 });
+  assert.equal(revSendGain.value, 0, "SPACE trim at zero must gate the send");
+  A.setTune({ reverb: 1 });
+  assert.ok(revSendGain.value > 0, "non-zero SPACE restores the send");
+});
+
 test("on a TV camera the rev limiter's swing scales with the engine: the gain never inverts", async () => {
   const A = await sampleEngine();
   for (const cam of ["chase", "heli", "cockpit"]) {
@@ -2070,4 +2219,52 @@ test("the countdown drives the player's engine at idle, not silence until lights
   A.setGridIdle(car, { soundOn: true, wet: false, step: true });
   assert.ok(A.engineLevel() > 0, "a stationary idle setGridIdle opens the note");
   assert.equal(A.windLevel(), 0, "and keeps the wind gated on the grid");
+});
+
+// INSTANT REPLAY (#1262). tickBody's paused branch returns before the race
+// block, so a pause-menu replay scrub played in silence with every car's rpm
+// pinned at the pause frame. The feed lives in GameAudio.feedReplayScrub (the
+// #972 setGridIdle pattern: game.js keeps one call on its existing return line,
+// +0 lines) and uses game.js's own gear/rpm helpers so revs match the live note.
+test("feedReplayScrub: replay scrub drives engine + rivals from replayed speed, silences once on exit", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const tick = src.slice(src.indexOf("function tickBody(now) {"));
+  const paused = tick.slice(0, tick.indexOf("replayBuf.onTick(raceT, cars, state);"));
+  assert.match(paused, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
+    "the paused branch's return line hands the frame to GameAudio.feedReplayScrub (hoisted refs, no per-frame {})");
+  assert.doesNotMatch(paused, /GameAudio\.setEngine\(/, "the scrub engine pack lives in GameAudio, not inline in game.js");
+  assert.match(src, /paused = p; GameAudio\.resetReplayScrub\(\);/, "setPaused clears the scrub one-shot");
+  const rb = fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8");
+  assert.match(rb, /GameAudio\.syncReplayRpms\(cars\)/, "applyPose re-revs the field from the replayed speeds");
+
+  const { GameAudio: A } = boot();
+  A.init();
+  const gearOf = (v) => (v < 30 ? 2 : 6);
+  const rpmFor = (g, v) => Math.min(15000, 5000 + v * 1000 / g);
+  const rivalAudio = { collect: () => [{ lat: 3, arc: 4, rev: 0.7, approach: 0 }] };
+  const player = { speed: 20, rpm: 5000, energy: 1, offroad: false };
+  const cars = [player, { speed: 60, rpm: 5000 }];
+  const feed = (p, scrubbing) => A.feedReplayScrub(p, scrubbing, cars, gearOf, rpmFor, rivalAudio, () => false, () => 90);
+
+  feed(null, true);
+  assert.equal(A.debug().engineOn, false, "SOUND off / no player: untouched");
+  feed(player, false);
+  assert.equal(A.debug().engineOn, false, "paused, not scrubbing: stays silent");
+  feed(player, true);
+  assert.equal(A.debug().engineOn, true, "scrubbing starts the engine voice");
+  assert.ok(A.engineLevel() > 0, "and opens the note");
+  assert.equal(player.rpm, rpmFor(2, 20), "player rpm = rpmFor(naturalGear(v), v)");
+  assert.equal(cars[1].rpm, rpmFor(6, 60), "every car re-revs from its replayed speed");
+  assert.ok(A.rivalState().some((v) => v.gain > 0), "the field is fed to the rival voices");
+  // A seek (applyPose) re-revs at once through syncReplayRpms.
+  player.speed = 50; A.syncReplayRpms(cars);
+  assert.equal(player.rpm, rpmFor(6, 50), "syncReplayRpms follows a seek without waiting for a frame");
+  feed(player, false);
+  assert.equal(A.debug().engineOn, false, "leaving the scrub silences the engine once");
+  A.startEngine();
+  feed(player, false);
+  assert.equal(A.debug().engineOn, true, "the exit is a one-shot: later paused frames leave the engine alone");
+  A.stopEngine();
+  feed(player, true); A.resetReplayScrub(); feed(player, false);
+  assert.equal(A.debug().engineOn, true, "resetReplayScrub (setPaused) drops the pending exit");
 });

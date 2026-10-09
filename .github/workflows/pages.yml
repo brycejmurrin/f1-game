@@ -160,9 +160,12 @@ jobs:
   # Skipped when nothing is new, or when rule 3 found the same tree gated.
   ci:
     needs: verdict
-    # Full gate when nothing is reusable. When verdict.reuse && ship_only, the
-    # deploy-branch push already passed the fast tier on THIS sha: one smoke
-    # shard, no 28-job re-gate. Tree-equal parent full gates skip ci entirely.
+    # Full gate when nothing is reusable. Tree-equal full gates (a prior run
+    # whose CI, sweeps, selected verdict and smoke jobs all concluded success)
+    # skip ci entirely. ship_only is always false since 2026-10-07: run 3112
+    # (37689226760) published 61e0a6442 on a smoke-only ship_only pass after
+    # dispatch 3110 (37687308660) had failed the full gate on that tree, so a
+    # green ship fast tier is no longer a gate (see pages-reuse-verdict.sh).
     if: needs.verdict.outputs.nothing_new != 'true' && (needs.verdict.outputs.reuse != 'true' || needs.verdict.outputs.ship_only == 'true')
     # A CALLED workflow may not request more than its caller passes, and the
     # check happens at startup for every job, skipped or not. ci.yml's

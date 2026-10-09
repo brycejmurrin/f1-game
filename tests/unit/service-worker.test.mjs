@@ -239,18 +239,74 @@ test("GLX fallback is required and deferred scripts use the runtime build pin", 
   } });
   await h.lifecycleEvent("install").done();
   const current = h.stores.get("apex26-321");
-  for (const family of ["glx", "three", "webgpu"]) {
+  // GLX (required) + TLX (critical optional) install-precache; WGX is
+  // runtime-only (explicit opt-in) and must not inflate first-title install.
+  for (const family of ["glx", "three"]) {
     const files = paths.filter((p) => p.startsWith(`/js/render/${family}/`));
     assert.ok(files.length > 0, `${family} deferred family was cached`);
     assert.ok(files.every((p) => p.endsWith("?v=321")), `${family} URLs match loadBackendScripts pins`);
     assert.ok(files.every((p) => current.has(ORIGIN + p)));
   }
+  const wgxInstall = paths.filter((p) => p.startsWith("/js/render/webgpu/"));
+  assert.deepEqual(wgxInstall, [], "WGX must not be install-precached (runtime-only opt-in)");
+  assert.ok(![...current.keys()].some((k) => k.includes("/js/render/webgpu/")),
+    "WGX keys must be absent from the settled install cache");
   const broken = createHarness({ fetchImpl: (request) => {
     const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
     return u.pathname.startsWith("/js/render/glx/") ? Promise.resolve(new Response("missing", { status: 404 })) : ordinary(request);
   } });
   await assert.rejects(broken.lifecycleEvent("install").done(), /essential|cache|precache|fetch/i);
   assert.equal(broken.skipped, 0, "missing offline fallback must not activate a new worker");
+});
+
+test("default-off vendors are omitted from the optional precache seed", () => {
+  // Rapier (debris opt-in), jsQR (QR scan), trystero (room code) used to ride
+  // the install pool (~2.5 MB). They stay reachable via fetch-miss cache.put.
+  assert.doesNotMatch(SW_SOURCE, /vendor\/rapier-[\d.]+\/rapier\.mjs/,
+    "Rapier must not be install-precached (default apex26.debris is off)");
+  assert.doesNotMatch(SW_SOURCE, /vendor\/jsqr-[\d.]+\/jsQR\.js/,
+    "jsQR must not be install-precached (QR scan path only)");
+  assert.doesNotMatch(SW_SOURCE, /vendor\/trystero-[\d.]+/,
+    "trystero must not be install-precached (room-code path only)");
+  assert.match(SW_SOURCE, /isRuntimeOnlyOptional/,
+    "WGX skip helper must exist (seeded for gen-shell, skipped at install)");
+  assert.match(SW_SOURCE, /OFF by default|default-off|apex26\.debris/i,
+    "Rapier comment must not claim ON by default");
+});
+
+test("runtime-only opt-ins still cache.put on first fetch miss", async () => {
+  const ordinary = installFetch();
+  const harness = createHarness({
+    hostname: "example.com", // not DEV_HOST — cache-first path
+    fetchImpl: async (request) => {
+      const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (u.pathname.includes("/js/render/webgpu/") ||
+          u.pathname.includes("/vendor/rapier-") ||
+          u.pathname.includes("/vendor/jsqr-") ||
+          u.pathname.includes("/vendor/trystero-")) {
+        return new Response("runtime-asset", { status: 200 });
+      }
+      return ordinary(request);
+    },
+  });
+  await harness.lifecycleEvent("install").done();
+  const name = "apex26-321";
+  const probes = [
+    `${ORIGIN}/js/render/webgpu/wgx.js?v=321`,
+    `${ORIGIN}/vendor/rapier-0.19.3/rapier.mjs`,
+    `${ORIGIN}/vendor/jsqr-1.4.0/jsQR.js`,
+    `${ORIGIN}/vendor/trystero-0.25.4/nostr/index.js`,
+  ];
+  for (const url of probes) {
+    assert.equal(harness.stores.get(name).has(url), false,
+      `${url} must not be present after install`);
+    const ev = harness.fetchEvent(new Request(url));
+    const res = await ev.responsePromise;
+    assert.equal(res.status, 200);
+    await Promise.all(ev.lifetimes);
+    assert.equal(harness.stores.get(name).has(url), true,
+      `${url} must be runtime-cached on first use`);
+  }
 });
 
 test("install bypasses the HTTP cache only for mutable shell/version essentials", async () => {
@@ -1113,6 +1169,70 @@ test("an ordinary ?v= asset stays cache-first (only the unversioned pack changed
   const ev = h.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=abc`));
   assert.equal(await (await ev.responsePromise).text(), "cached");
   assert.equal(fetched, 0);
+});
+
+// L8-c: assets/voice/ URLs carry no ?v= (voice-pack.js fetches bare .json + .bin
+// pairs). Cache-first could pair a stale index with a fresh bin after deploy.
+function voiceHarness({ net, immediateTimeoutMs } = {}) {
+  const h = createHarness({
+    immediateTimeoutMs,
+    fetchImpl: async (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+      return net(url);
+    },
+  });
+  h.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/assets/voice/george.json`, new Response('{"oldIndex":true}', { status: 200 })],
+    [`${ORIGIN}/assets/voice/george.bin`, new Response("old-bytes", { status: 200 })],
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+  ]));
+  return h;
+}
+
+test("voice json and bin are network-first: fetch runs before a stale cache can be the only answer", async () => {
+  const order = [];
+  const h = voiceHarness({
+    net: async (url) => {
+      order.push(`fetch:${url.pathname}`);
+      return new Response(url.pathname.endsWith(".json") ? '{"newIndex":true}' : "new-bytes", { status: 200 });
+    },
+  });
+  for (const path of ["/assets/voice/george.json", "/assets/voice/george.bin"]) {
+    order.length = 0;
+    const ev = h.fetchEvent(new Request(`${ORIGIN}${path}`));
+    const body = await (await ev.responsePromise).text();
+    assert.equal(order[0], `fetch:${path}`, `${path} must hit the network first`);
+    assert.notEqual(body, path.endsWith(".json") ? '{"oldIndex":true}' : "old-bytes");
+    await Promise.all(ev.lifetimes);
+    assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}${path}`).text(), body,
+      `${path} fresh copy is written to the current cache`);
+  }
+});
+
+test("offline, voice json and bin fall back to the cached pair", async () => {
+  const h = voiceHarness({ net: async () => { throw new TypeError("offline"); } });
+  const j = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.json`));
+  assert.equal(await (await j.responsePromise).text(), '{"oldIndex":true}');
+  const b = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`));
+  assert.equal(await (await b.responsePromise).text(), "old-bytes");
+});
+
+test("a slow voice fetch loses the race to cache, and its late answer is still cached", async () => {
+  let release;
+  const late = new Promise((r) => { release = r; });
+  const h = voiceHarness({ immediateTimeoutMs: 3000, net: () => late });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"oldIndex":true}');
+  release(new Response('{"newIndex":true}', { status: 200 }));
+  await Promise.all(ev.lifetimes);
+  assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/assets/voice/george.json`).text(), '{"newIndex":true}');
+});
+
+test("pack routing is unchanged when voice is network-first", async () => {
+  const h = packHarness({ net: async () => new Response('{"new":true}', { status: 200 }) });
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/pack/manifest.json`));
+  assert.equal(await (await ev.responsePromise).text(), '{"new":true}');
 });
 
 for (const cached of [false, true]) {

@@ -640,6 +640,41 @@ test("a malformed custom livery cannot reach the garage screen", () => {
   }
 });
 
+// M26: the import was shape-checked but not BOUNDED, and enum-typed fields index plain objects.
+const garageLiveries = (b, list) => {
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": list } });
+  assert.equal(r.ok, true);
+  return JSON.parse(b.disk.get("apex26.livery.custom.mclaren") || "[]");
+};
+const sound = (id, extra = {}) => Object.assign({ id, c1: [1, 0, 0], c2: [0, 0, 1] }, extra);
+
+test("M26: an enum pill that names an Object.prototype member is dropped, not stored", () => {
+  // Car3D finOf / FINISH_SURFACE and LiveryTex NUM_FONTS index plain tables: "constructor" resolved to an
+  // inherited function and threw in every build of that team.
+  const kept = garageLiveries(boot(), [sound("custom_1", { finShape: "constructor", numFont: "__proto__", finish: "toString", stripe: [1, 1, 1] })]);
+  assert.equal(kept.length, 1, "the livery itself survives");
+  for (const k of ["finShape", "numFont", "finish"]) assert.equal(Object.hasOwn(kept[0], k), false, k + " is dropped");
+  assert.deepEqual(kept[0].stripe, [1, 1, 1], "its colours are untouched");
+});
+
+test("M26: a team keeps at most 32 liveries", () => {
+  const list = Array.from({ length: 33 }, (_, i) => sound("custom_" + i));
+  const kept = garageLiveries(boot(), list);
+  assert.equal(kept.length, 32);
+  assert.equal(kept.some((l) => l.id === "custom_32"), false, "the 33rd is dropped");
+});
+
+test("M26: a livery id longer than 64 characters is dropped", () => {
+  const kept = garageLiveries(boot(), [sound("a".repeat(64)), sound("a".repeat(65))]);
+  assert.deepEqual(kept.map((l) => l.id.length), [64]);
+});
+
+test("M26: livery colours are clamped to 0..1", () => {
+  const kept = garageLiveries(boot(), [sound("custom_1", { c1: [2.0, -5, 0.5], stripe: [1e9, 0, 1] })]);
+  assert.deepEqual(kept[0].c1, [1, 0, 0.5]);
+  assert.deepEqual(kept[0].stripe, [1, 0, 1]);
+});
+
 test("a garage value of the wrong shape is skipped, not written", () => {
   const b = boot();
   const r = b.loadGarage({
@@ -1023,7 +1058,7 @@ test("unsupported and rejected persistence APIs retain an actionable backup remi
   assert.match(broken.status.textContent, /separate backup/);
 });
 
-test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, OFF by default", () => {
+test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker reads, ON by default", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
@@ -1031,5 +1066,5 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
   assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
-  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "0",/, "exported and imported with the other settings, default OFF");
+  assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
 });

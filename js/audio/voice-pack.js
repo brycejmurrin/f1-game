@@ -137,6 +137,32 @@ var VoicePack = (() => {
         .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); });
       return v.state;
     }
+    /** Lap-1 radio: the engineer and spotter share one pack; it must win bandwidth
+     *  over the coach and announcer on a cold cache. Each tier's fetches start only
+     *  after the previous tier's loads settle (ready, failed, or already cached).
+     *  Idempotent; never throws; callers do not await it. */
+    function ensureStaged(tiers) {
+      if (!tiers || !tiers.length || typeof fetch !== "function") return;
+      const uniq = [];
+      const seen = new Set();
+      for (const tier of tiers) {
+        const ids = [];
+        for (const id of tier || []) {
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          ids.push(id);
+        }
+        if (ids.length) uniq.push(ids);
+      }
+      if (!uniq.length) return;
+      const run = async () => {
+        for (const tier of uniq) {
+          for (const id of tier) ensure(id);
+          await Promise.all(tier.map((id) => (voice(id).loading || Promise.resolve())));
+        }
+      };
+      run();
+    }
     const ready = (id) => !!(voices[id] && voices[id].state === "ready");
     const hasKey = (v) => (k) => Object.prototype.hasOwnProperty.call(v.man.clips, k);
 
@@ -247,7 +273,7 @@ var VoicePack = (() => {
     }
 
     return {
-      ensure, ready, plan, speak, stop, remaining,
+      ensure, ensureStaged, ready, plan, speak, stop, remaining,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,

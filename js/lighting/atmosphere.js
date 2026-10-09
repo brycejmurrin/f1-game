@@ -36,6 +36,7 @@ const CLEAR_FOG_SCALE = 0.45;
 // values so a strike restores to the look in flight, not the target.
 // Until 2026-10-01 only wetness and the rain overlay ramped; cloud cover, sun
 // strength, ambient and fog stepped (the second graphics-detail survey, item 11).
+// Until 2026-10-07 cityGlow and moon stepped with the sky while LT knobs faded.
 //
 // THE KNOBS FADE TOO (2026-10-04). A stage flip changes the LightStore key
 // (track|tod|WEATHER), and LightStore.apply() used to land every LT knob of the
@@ -52,12 +53,18 @@ const CLEAR_FOG_SCALE = 0.45;
 // the fade at once rather than being dragged back each frame.
 const WX_BLEND_S = 25;
 const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure", "groundMist"];
-const WX_SKY = ["sunColor", "cloud", "zenith", "horizon"];
+const WX_SKY = ["sunColor", "cloud", "zenith", "horizon", "cityGlow", "moon"];
 let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
 let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
 const _snapLt = () => { const r = {}; for (const d of TUNE_DEFS) if (typeof LT[d.id] === "number") r[d.id] = LT[d.id]; return r; };
-const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() });
+// A strike spikes frame.ambient*/exposure IN PLACE (game.js lightning block) on top of
+// G._ltBase, so mid-strike the fade's SOURCE look is that base, not the spiked frame.
+function _snapWx() {
+  const f = _pick(G.frame, WX_FRAME), b = G._ltFlash > 0 && G._ltBase;
+  if (b) { f.ambientSky = b.ambientSky.slice(); f.ambientGround = b.ambientGround.slice(); f.exposure = b.exposure; }
+  return { frame: f, sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() };
+}
 const _mixv = (a, b, s) => {
   if (b == null) return a; if (a == null) return b;
   if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
@@ -556,7 +563,7 @@ function floodEmit(sunY) {
   const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));
   if (sunY == null) sunY = night ? -1 : 1;
   return Math.min(1, LT.floodEmitMul * (night ? 0.78
-    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - sunY * 6, 0, 1)))
+    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(LT.twilightFloor ?? 0.30, clamp(1 - sunY * (LT.twilightRamp ?? 6), 0, 1)))
     : 0));
 }
 
@@ -645,7 +652,17 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S };
+// Capture / regression read of the sky vectors GLX uploads (post cityGlowMul + wx blend).
+function skyGlowProbe() {
+  const sky = G.frameSky || {};
+  const out = { cityGlow: null, moon: null, horizon: null, wxBlend: wxBlend() };
+  if (sky.cityGlow) out.cityGlow = sky.cityGlow.slice();
+  if (sky.moon != null) out.moon = sky.moon;
+  if (sky.horizon) out.horizon = sky.horizon.slice();
+  return out;
+}
+if (typeof window !== "undefined") window.__apexAtmoSkyProbe = skyGlowProbe;
+return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S, skyGlowProbe };
 }
 
 return { create };

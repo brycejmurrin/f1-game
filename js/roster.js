@@ -158,6 +158,35 @@
     LAZY_RACE: [
     "js/lighting/presets.js"
   ],
+    LAZY_RACE_SESSION: [
+    "js/race/reliability.js",
+    "js/race/damage.js",
+    "js/race/duel.js",
+    "js/race/session-records.js",
+    "js/race/pit-lane.js",
+    "js/race/engineer.js",
+    "js/race/radio-lines.js",
+    "js/race/race-facts.js",
+    "js/race/spotter.js",
+    "js/race/race-radio.js",
+    "js/race/start-lights.js",
+    "js/race/marshal-panels.js",
+    "js/race/flying-start.js"
+  ],
+    LAZY_RACE_SESSION_EDGES: [
+    [
+      "js/race/radio-lines.js",
+      "js/race/race-radio.js"
+    ],
+    [
+      "js/race/race-facts.js",
+      "js/race/race-radio.js"
+    ],
+    [
+      "js/race/spotter.js",
+      "js/race/race-radio.js"
+    ]
+  ],
     CIRCUITS_DIR: "js/circuits",
     LAZY_CIRCUIT: [
     "js/circuits/bahrain.js",
@@ -467,7 +496,8 @@
     ]
   ],
     LAZY_WORKER: [
-    "js/track/build-worker.js"
+    "js/track/build-worker.js",
+    "js/workers/bitmap-decode-worker.js"
   ],
     LAZY_EDITOR: [
     "js/editor/shape.js",

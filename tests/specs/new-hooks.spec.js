@@ -400,7 +400,7 @@ test.describe("__apex.trackProfile()", () => {
   test("works on the default track loaded at startup (no race() call)", async ({ page }) => {
     // The game pre-loads a track on startup; trackProfile() should work immediately.
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null && Array.isArray(window.__apex.trackProfile(10)), null, { polling: 100, timeout: BOOT_MS });
     const pts = await page.evaluate(() => window.__apex.trackProfile(10));
     expect(Array.isArray(pts)).toBe(true);
     expect(pts.length).toBe(10);

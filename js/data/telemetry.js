@@ -238,6 +238,7 @@ const DataTelemetry = (function () {
     }
 
     let telGen = 0;
+    let telLanes = 0;                   // lane fetches in flight (loadTelemetrySet): what closeTelemPopup(true) aborts
     let telView = null;                 // the live telemetry view (for animation cleanup)
     let telemPopup = null;              // the full-screen player popup <dialog>
     let telemReturnFocus = null;
@@ -253,7 +254,11 @@ const DataTelemetry = (function () {
       }
     }
 
-    function closeTelemPopup() {
+    // `leavingTab === true` (hub showTab; a click handler passes an Event, never
+    // true): a COMPARE still fetching is aborted too, so the next tab does not
+    // queue behind it in F1API's serialized OpenF1 lane (M24). Returns true when
+    // it aborted anything, so the hub drops this tab's now half-failed node.
+    function closeTelemPopup(leavingTab) {
       ++telGen;   // a lap load in flight must not resurrect the popup after close
       const restore = telemPopup ? telemReturnFocus : null;
       stopTelAnim();
@@ -268,6 +273,9 @@ const DataTelemetry = (function () {
       }
       telemReturnFocus = null;
       if (restore && restore.isConnected && restore.focus) restore.focus();
+      if (leavingTab !== true || !telLanes) return false;
+      F1API.cancelAll();
+      return true;
     }
 
     function openTelemPopup(tels, returnFocus) {
@@ -364,10 +372,15 @@ const DataTelemetry = (function () {
       clear(detail);
       detail.appendChild(spinner());
       Promise.all(lanes.map(function (e, i) {
+        telLanes++;
+        // The lane count drops inside this ONE then-stage (both arms), not a
+        // trailing .finally(): that is an extra microtask hop per lane, and the
+        // popup then opens one tick later than the harness drains for.
         return fetchDriverTel(e.sessionKey, e.d, i === 0).then(function (tel) {
+          telLanes--;
           tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
           return tel;
-        });
+        }, function (err) { telLanes--; throw err; });
       }))
         .then(function (tels) {
           if (myGen !== telGen) return;
