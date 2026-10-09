@@ -500,7 +500,7 @@
       // T1 basin: grassy amphitheatre floor (no standing water — satellite/OSM
       // show grass banking in the Valley of the Three Springs at Mogyoród).
       groundPatch(K(0.08), 1, 75, [40, 0.14, 32], AMPH,
-                  { id: "hungaroring-basin-grass", required: true, samples: 8 });
+                  { id: "hungaroring-basin-grass", samples: 8 });
       tree(K(0.074), 1, 84, 11, TREE);
       tree(K(0.092), 1, 70, 10, TREE2);
       hedge(0.035, 0.055, 1, 42, 3, TREE);

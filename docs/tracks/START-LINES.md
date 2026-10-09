@@ -236,7 +236,7 @@ are racing fractions, so moving the line drags the whole dressed world round the
 lap. Measured with `tools/track/track-verts.cjs`: COTA −6 583 prop vertices, Istanbul
 +34 318, and **seven circuits failed `verify-track --all`** outright on required
 landmarks pushed off their footprints and into the road — Marina Bay Sands, the
-Katara Towers, the Pudong skyline, the KLIA skyline, the Hungaroring T1 basin dressing, the
+Katara Towers, the Pudong skyline, the KLIA skyline, the Hungaroring lake, the
 Miami Turnpike overpass, the Silverstone Wing facade.
 
 The dressing is not re-derivable from the line. It was placed circuit by circuit

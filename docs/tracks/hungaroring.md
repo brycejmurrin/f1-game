@@ -25,7 +25,7 @@ climbs through the middle sector before rolling home.
 | 0.02 | L | near | Pit wall + garage row: thin white box strip with red kerb trim |
 | 0.07 | R | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
 | 0.090–0.098 | R | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
-| 0.08 | R | far | Grass amphitheatre slope below T1 banking (no infield water) |
+| 0.08 | R | far | Dry-grass colour patch (40 x 32 m, 0.14 m skin) on the valley floor below T1 banking; no infield water |
 | 0.12 | L | mid | Grass amphitheatre hill, sun-bleached green, dotted dark tree-cube clumps |
 | 0.18 | R | mid | Low grandstand bleacher: pale tiered box facing the slow complex |
 | 0.30 | L | far | Tree line mass: cluster of dark green cubes along ridge |
