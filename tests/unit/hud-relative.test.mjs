@@ -70,13 +70,21 @@ test("select: a short field leaves empty slots; the same row objects every call"
   assert.equal(R.rows, rows);
 });
 
-test("fmtGap: sign carries ahead/behind; tenths under 10 s, whole to 99, then 99+", () => {
+test("fmtGap: sign carries ahead/behind; hundredths under 10 s (the chip's spelling), tenths to 99, then 99+", () => {
+  // Deliberate re-pin (hud-gap-decimals): REL used to print tenths / whole seconds, so one
+  // gap read "0.94s" on the chip and "-0.9" here. Both paths -- HudReadouts present or not -- must agree.
+  const HR = (() => { const c = {}; vm.createContext(c); vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-readouts.js"), "utf8") + "; this.HudReadouts = HudReadouts;", c); return c.HudReadouts; })();
+  for (const R of [load(), load({ HudReadouts: HR })]) {
+    assert.equal(R.fmtGap(1.234, true), "-1.23");
+    assert.equal(R.fmtGap(0.94, true), "-0.94");
+    assert.equal(R.fmtGap(0.04, false), "+0.04");
+    assert.equal(R.fmtGap(12.6, false), "+12.6");
+    assert.equal(R.fmtGap(250, true), "-99+");
+    assert.equal(R.fmtGap(NaN, true), "---");
+    assert.equal(R.fmtGap(0.94, true), "-" + HR.fmtGapSec(0.94), "REL = the chip's magnitude");
+    assert.equal(R.fmtGap(12.6, false), "+" + HR.fmtGapSec(12.6), "REL = the chip's magnitude above 10 s");
+  }
   const R = load();
-  assert.equal(R.fmtGap(1.234, true), "-1.2");
-  assert.equal(R.fmtGap(0.04, false), "+0.0");
-  assert.equal(R.fmtGap(12.6, false), "+13");
-  assert.equal(R.fmtGap(250, true), "-99+");
-  assert.equal(R.fmtGap(NaN, true), "---");
   assert.equal(R.lapText(1), "+1L");
   assert.equal(R.lapText(-2), "-2L");
   assert.equal(R.lapText(0), "");
@@ -113,10 +121,10 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   const rows = root.children;
   assert.equal(rows.length, R.ROWS);
   assert.equal(rows[1].children[1].textContent, "AHD");
-  assert.equal(rows[1].children[2].textContent, "-1.0", "60 m at 60 m/s");
+  assert.equal(rows[1].children[2].textContent, "-1.00", "60 m at 60 m/s");
   assert.equal(rows[1].children[0].textContent, "P1");
   assert.equal(rows[2].attrs["data-self"], "");
-  assert.match(rows[1].attrs["aria-label"], /AHD, 1\.0 seconds ahead/);
+  assert.match(rows[1].attrs["aria-label"], /AHD, 1\.00 seconds ahead/);
   assert.equal(rows[0].hidden, true, "no second car ahead");
   assert.equal(JSON.stringify([p.s, p.prog, p.speed, a.s, a.prog, a.speed]), snap, "the HUD reads only");
   G.timeTrial = true;

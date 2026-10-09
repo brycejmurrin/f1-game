@@ -344,6 +344,9 @@ test("broadcast HUD profile keeps two-decimal gaps", () => {
   assert.match(src, /function gapDecimals\(/);
   // Standard shares hundredths under ~10 s via HudReadouts; broadcast stays at 2 always.
   assert.match(src, /_ro\.fmtGapSec|_ro\.gapDecimals/);
+  // The two-decimal broadcast rule itself now lives in HudReadouts.gapDecimals (and hud.js's boot fallback).
+  assert.match(fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8"), /p === "broadcast"\) return 2/);
+  assert.match(src, /=== "broadcast" \? 2 :/);
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   assert.match(css, /body\.hud-prof-broadcast \.hud-top/);
   assert.match(css, /body\.hud-prof-broadcast\.hud-bcam \.hud-bottom/);

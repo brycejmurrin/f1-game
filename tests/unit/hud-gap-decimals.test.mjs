@@ -57,6 +57,22 @@ test("fmtGapSec length is stable under 10 s (tabular / no chip wobble)", () => {
   assert.equal(R.fmtGapSec(10.4, "standard").length, R.fmtGapSec(9.94, "standard").length);
 });
 
+test("REL and the WATCH tower spell a gap exactly like the chip (one rule, no 1-dp copy)", () => {
+  const R = load();
+  const rel = read("js/ui/hud-relative.js"), bc = read("js/race/broadcast.js");
+  assert.match(rel, /HudReadouts\.fmtGap\(/, "REL delegates to HudReadouts.fmtGap");
+  assert.match(bc, /HudReadouts\.fmtGapSec\(/, "the tower delegates to HudReadouts.fmtGapSec");
+  assert.doesNotMatch(bc, /"\+" \+ v\.toFixed\(1\)/);
+  const tower = vm.createContext({ console, Math, Number, HudReadouts: R });
+  const fn = bc.match(/function fmtGap\(r, mode\) \{[\s\S]*?\n  \}\n/);
+  assert.ok(fn, "broadcast.js fmtGap(r, mode) found");
+  vm.runInContext(fn[0] + "; this.fmtGap = fmtGap;", tower);
+  const row = (gap) => ({ gap, interval: gap, pos: 2, down: 0 });
+  assert.equal(tower.fmtGap(row(0.94), "gap"), "+" + R.fmtGapSec(0.94));
+  assert.equal(tower.fmtGap(row(0.94), "gap"), "+0.94");
+  assert.equal(tower.fmtGap(row(12.6), "gap"), "+12.6");
+});
+
 test("hud.js gapSec routes through HudReadouts (no private 1-dp ternary)", () => {
   const src = read("js/ui/hud.js");
   assert.match(src, /function gapDecimals\(/);
