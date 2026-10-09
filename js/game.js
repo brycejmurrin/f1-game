@@ -6639,9 +6639,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
     // frame.mirrorFreezeInstanced (audit #8, full quality): reuse the last mirror
     // pack via updateInstances — skip AABB sweep + CPU pack; cars still redraw.
+    // `rec`: only the MIRROR's own cull is recorded (mirrorLite is a boolean only
+    // inside mirror-pass; the main pass would replay the forward pack at ~30 Hz).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
-      const freeze = !!frame.mirrorFreezeInstanced;
+      const freeze = !!frame.mirrorFreezeInstanced, rec = frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
         if (freeze && b._mirN > 0 && b._mirMats && gfx.updateInstances) {
@@ -6649,13 +6651,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         } else {
           if (planes && gfx.cullInstances) gfx.cullInstances(b, planes);
           const n = b.visible | 0;
-          if (n > 0 && b.packMatrices) {
+          if (rec && n > 0 && b.packMatrices) {
             if (!b._mirMats || b._mirMats.length < n * 16) b._mirMats = new Float32Array(n * 16);
             b._mirMats.set(b.packMatrices.subarray(0, n * 16));
             b._mirN = n;
-          } else {
-            b._mirN = 0;
-          }
+          } else if (rec) b._mirN = 0;
         }
         gfx.drawInstanced(b, m);
       }

@@ -684,3 +684,38 @@ test("the mirror re-measures on a 500 ms clock and leaves <body> alone when the 
   assert.ok(reads > r, "re-shown: measured at once");
   assert.ok(h.classes.has("hud-mirror-side"), "hiding cleared the class; showing re-applies it");
 });
+
+// L4: drawWorldMeshes recorded `b._mirMats` on EVERY non-frozen draw, the MAIN camera
+// pass included. Per game frame the mirror pass runs first and the main pass second,
+// so the next frame's frozen mirror pass replayed the FORWARD camera's cull pack
+// (rear scenery alternating right/wrong at ~30 Hz) and the main pass copied every
+// visible matrix for nothing. The block is executed straight from game.js's source.
+test("a frozen mirror frame replays the MIRROR pass's pack, never the main camera's (L4)", () => {
+  const src = read("js/game.js");
+  const a = src.indexOf("const _pb = track.meshes.propBatches;");
+  const z = src.indexOf("if (!envProbe) gfx.drawChunked(track.meshes.props", a);
+  assert.ok(a > 0 && z > a, "the instanced-batch block is still where the test slices it");
+  const run = new Function("frame", "gfx", "track", "_pbPlanes", "m", "envProbe", src.slice(a, z));
+  const updates = [];
+  const gfx = {
+    drawInstanced() {},
+    makeFrustumPlanes: (vp) => ({ tag: vp[0] }),
+    // The cull packs ONE matrix whose first lane names the camera that culled it.
+    cullInstances(b, planes) { b.visible = 1; b.packMatrices[0] = planes.tag; },
+    updateInstances(b, mats, n) { updates.push({ tag: mats[0], n }); },
+  };
+  const b = { visible: 0, packMatrices: new Float32Array(16 * 4) };
+  const track = { meshes: { propBatches: [b] } };
+  const MIRROR = 2, MAIN = 1;
+  const mirrorFrame = (freeze) => ({ viewProj: [MIRROR], mirrorLite: false, mirrorFreezeInstanced: freeze });
+  const mainFrame = () => ({ viewProj: [MAIN] });   // mirror-pass leaves both flags undefined here
+  run(mirrorFrame(false), gfx, track, [], {}, false);   // frame 1: mirror refreshes its pack
+  run(mainFrame(), gfx, track, [], {}, false);          //          then the main camera culls
+  assert.equal(b._mirMats[0], MIRROR, "the main pass must not overwrite the mirror's recorded pack");
+  run(mirrorFrame(true), gfx, track, [], {}, false);    // frame 2: the mirror is frozen
+  assert.deepEqual(updates, [{ tag: MIRROR, n: 1 }], "the frozen frame replays the mirror pass's pack");
+  // A main pass alone records nothing (no per-frame memcpy with the mirror off).
+  const solo = { visible: 0, packMatrices: new Float32Array(16) };
+  run(mainFrame(), gfx, { meshes: { propBatches: [solo] } }, [], {}, false);
+  assert.equal(solo._mirMats, undefined, "the main pass does not copy into _mirMats");
+});
