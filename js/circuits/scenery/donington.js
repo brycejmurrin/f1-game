@@ -45,7 +45,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT } = api;
+        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT, lapBounds, pyMin } = api;
 
       // 1. PALETTE + LOCAL HELPERS
       //    Overcast English green: desaturated, cool, low contrast. Nothing
@@ -379,7 +379,7 @@
       guardrail(0.310, 0.380, 1, 12, ARMCO);
       marshalPost(K(0.3342), 1, 13);
       for (let i = 0; i < 4; i++) specimen(K(0.330 + i * 0.016), 1, 46, 200 + i * 9);
-      // --- behind the viewing bank: a small terrace, the marshals' hut and a
+      // --- behind the viewing bank: a small terrace, a pit-side shed and a
       //     field boundary with a rank of hedgerow oaks beyond it.
       terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
@@ -421,7 +421,7 @@
       guardrail(0.492, 0.556, -1, 12, ARMCO);
       marshalPost(K(0.5162), -1, 15);
       // --- deep wood: a third rank and scrub at the foot of it. No buildings,
-      //     by the brief; the only man-made thing here is the marshals' hut.
+      //     by the brief; the only man-made things here are the marshal post and the guardrail.
       rank(0.486, 0.562, -1, 64, 20, 1490, 10.0, 17.0);
       for (let i = 0; i < 7; i++) bush(K(0.494 + i * 0.010), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
 
@@ -606,47 +606,61 @@
       spectatorHill(0.660, 0.700, -1, 20, { h: 5.0, col: GRASS });
       spectatorHill(0.910, 0.935, -1, 28, { h: 5.5, col: GRASS });
 
+      // Continuous armco on the PUBLIC (+1) side so the whole edge reads as a
+      // circuit, not a lane. The side −1 lap-wide rail was dropped: the
+      // sectional −1 runs above already carry it, and the pair doubled up.
+      guardrail(0.10, 0.93, 1, 14.5, ARMCO);
+
       // Posts on the eighths, skipping the ones already placed above.
       for (let i = 0; i < 8; i++) {
         const s = i / 8;
         if (s > 0.30 && s < 0.40) continue;
         marshalPost(K(s), 1, 17);
       }
-      // ── RATCLIFFE-ON-SOAR, NE HORIZON ─────────────────────────────────────
+      // ── RATCLIFFE-ON-SOAR, ENE HORIZON ────────────────────────────────────
       // Donington Park (52.829° N, 1.376° W) → Ratcliffe station (52.861° N,
-      // 1.256° W): ~8.8 km on bearing 66.1° (OS/Wikipedia). Outboard normal at
-      // s≈0.32 / side −1 runs 64.8° — one anchor carries the cluster. Closed
-      // Sept 2024; cooling towers still standing, demolition not before 2029
-      // (Uniper / East Midlands CCA, 2025). Compressed to 3.4 km for fog.
+      // 1.256° W): ~8.8 km on a TRUE COMPASS BEARING of 66.1° (OS/Wikipedia),
+      // NOT any road's outboard normal — the normal tracks the road's heading
+      // and points 150° away from the station at every node of this lap. Same
+      // pattern as scenery/fuji.js: +X is WEST and +Z is NORTH, so a bearing θ
+      // clockwise from north is (x, z) = (-sin θ, cos θ), measured from the
+      // lap centroid. Closed Sept 2024; cooling towers still standing,
+      // demolition not before 2029 (Uniper / East Midlands CCA, 2025).
+      // Distance is compressed to 3.4 km for the fog; the towers keep their
+      // REAL size and proportions (114 m high, 87 m base, 55 m crown, 8 in two
+      // rows of four on ~150 m centres; chimney 199 m), so they subtend ~2.6x
+      // the real angle — they read as cooling towers, not silos.
       {
-        const RAT_DIST = 3400;
-        const aR = anchor(K(0.32), -1, RAT_DIST);
-        const bR = [aR.r, aR.u, aR.t];
-        const gy = terrainYAt(aR.c[0], aR.c[2]);
-        const footY = (gy === null ? aR.c[1] : gy);
+        const RAT_BEARING = 66.1 * Math.PI / 180, RAT_DIST = 3400;
+        const rx = -Math.sin(RAT_BEARING), rz = Math.cos(RAT_BEARING);   // toward the station
+        const sx = -rz, sz = rx;                                       // across the sightline
+        const { cx, cz } = lapBounds();
+        const hx = cx + rx * RAT_DIST, hz = cz + rz * RAT_DIST;
+        const hg = terrainYAt(hx, hz);
+        const hubY = hg === null ? pyMin : hg;
         const COOL = [0.60, 0.62, 0.64];
         const CHIM = [0.54, 0.56, 0.58];
-        const tower = (stage, foot, h, r0) => {
-          addFrustum(stage, foot, r0, r0 * 0.52, h * 0.46, COOL, 10, bR);
-          addFrustum(stage, vadd(foot, aR.u, h * 0.46), r0 * 0.52, r0 * 0.68, h * 0.54, COOL, 10, bR);
-        };
+        const UP = [[sx, 0, sz], [0, 1, 0], [rx, 0, rz]];
+        const at = (across, depth) => [hx + sx * across + rx * depth, hz + sz * across + rz * depth];
+        const floor = (x, z) => { const g = terrainYAt(x, z); return (g === null ? hubY : g) - 1; };
+        const TH = 114, TR0 = 43.5, TR_WAIST = 25, TR_TOP = 27.5;   // m; hyperbolic shell as two frusta
+        const CHIM_H = 199, CHIM_R0 = 11, CHIM_R1 = 6.5;
+        const CHIM_AT = [320, -60];
         modelGroup("donington-ratcliffe-power", {
-          center: vadd(aR.c, aR.u, 55),
-          size: [220, 120, 180],
-          basis: bR,
+          center: [at(31, 0)[0], hubY + 105, at(31, 0)[1]],
+          size: [604, 230, 244],
+          basis: UP,
         }, (stage) => {
-          const hub = [aR.c[0], footY, aR.c[2]];
-          const layouts = [
-            [-72, -38], [-24, -38], [24, -38], [72, -38],
-            [-72, 38], [-24, 38], [24, 38], [72, 38],
-          ];
-          for (const [along, lateral] of layouts) {
-            const foot = vadd(vadd(hub, aR.t, along), aR.r, lateral);
-            tower(stage, foot, 88, 14);
+          for (const across of [-225, -75, 75, 225]) {
+            for (const depth of [-75, 75]) {
+              const [x, z] = at(across, depth);
+              const y = floor(x, z);
+              addFrustum(stage, [x, y, z], TR0, TR_WAIST, TH * 0.46 + 1, COOL, 10, null);
+              addFrustum(stage, [x, y + TH * 0.46, z], TR_WAIST, TR_TOP, TH * 0.54 + 1, COOL, 10, null);
+            }
           }
-          const chimBase = vadd(vadd(hub, aR.t, 108), aR.r, -18);
-          addFrustum(stage, chimBase, 5.5, 4.2, 112, CHIM, 10, bR);
-          addCyl(stage, vadd(chimBase, aR.u, 112), 3.8, 18, CHIM, 8, bR);
+          const [cxp, czp] = at(CHIM_AT[0], CHIM_AT[1]);
+          addFrustum(stage, [cxp, floor(cxp, czp), czp], CHIM_R0, CHIM_R1, CHIM_H + 1, CHIM, 10, null);
         }, { required: true });
       }
 
