@@ -37,6 +37,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 /* CONTINUE + Daily: row+ellipsis is the desktop title (1440
    title-desktop golden). Stack only under 1366px so a ~500px / 1280
@@ -107,6 +108,7 @@
    changes height after boot. One line, always: the returning-player string is
    the long one and must not wrap. See docs/PERF-FINDINGS.md 4a. */
 #mb-career-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#menu-buttons .bigbtn > span { min-width: 0; max-width: 100%; }
 /* On the red hero the 72% mix measured under 4.5:1 against the gradient's
    light end; full ink passes. The dark plates keep the dim sub line. */
 #overlay #mb-career .mb-sub { color: var(--text); }
@@ -408,8 +410,9 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
   pointer-events: auto;
 }
+/* No group zoom: #menu-buttons zooms (ui-scale.spec 200% desktop). */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
-  zoom: var(--ui-scale); width: 100%; align-self: start; justify-self: stretch;
+  width: 100%; align-self: start; justify-self: stretch;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-column: 2; grid-row: 1; gap: calc(var(--gap) * 0.3); }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-column: 2; grid-row: 2; gap: calc(var(--gap) * 0.3); }
