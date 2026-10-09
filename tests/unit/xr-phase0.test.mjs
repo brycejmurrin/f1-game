@@ -731,3 +731,30 @@ test("mountUi on a flat session does not fetch LAZY_XR", () => {
   ctx.XrBoot.bind({ gfx: {}, tickBody() {}, windowTick() {}, getCamMode() { return 0; }, setCamMode() {} });
   assert.equal(ctx.XrBoot.isBound(), false);
 });
+
+// bug-hunt 2.6: a retry re-injected the XR files that had already evaluated; the
+// ones declaring script-level consts throw "Identifier has already been declared".
+// ensureXr passes a `loaded` Set (the ensureDataHub idiom) so only the missing file goes out.
+test("XrBoot.ensureXr: a retry after a failed load injects only the files not yet loaded", async () => {
+  const ctx = vm.createContext({ console, Math, performance: { now: () => 0 } });
+  seedLog(ctx);
+  const injected = [];
+  let failOnce = true;
+  ctx.ApexRoster = { LAZY_XR: ["xr1", "xr2"], LAZY_XR_EDGES: [] };
+  // The real loader's contract for `opts.loaded`: skip what is in it, add what lands.
+  ctx.ScriptLoader = { create: () => ({ load: async (files, _edges, opts) => {
+    let ok = true;
+    for (const f of files) {
+      if (opts && opts.loaded && opts.loaded.has(f)) continue;
+      injected.push(f);
+      if (f === "xr2" && failOnce) { failOnce = false; ok = false; continue; }
+      if (opts && opts.loaded) opts.loaded.add(f);
+    }
+    return ok;
+  } }) };
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  assert.equal(await ctx.XrBoot.ensureXr(), false);
+  assert.deepEqual(injected, ["xr1", "xr2"]);
+  assert.equal(await ctx.XrBoot.ensureXr(), true);
+  assert.deepEqual(injected, ["xr1", "xr2", "xr2"], "the retry injects only the missing file");
+});
