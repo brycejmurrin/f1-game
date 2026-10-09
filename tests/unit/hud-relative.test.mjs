@@ -155,6 +155,44 @@ test("fitRows caps max-height above an overlapping BRAKE", () => {
     "either height-cap (brake below) or slide right of a left pedal: cap=" + cap + " left=" + left);
 });
 
+test("fitRows drops its inline left / max-height once the overlap is gone (bug-hunt 5.7)", () => {
+  // A style bag that behaves like CSSStyleDeclaration: removeProperty takes the
+  // kebab-case name the code passes, the clearance writes the camelCase one.
+  const camel = (k) => k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { el.style[camel(k)] = v; }, removeProperty(k) { delete el.style[camel(k)]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 40;
+  root.scrollHeight = 40;
+  root.currentCSSZoom = 1;
+  root.getBoundingClientRect = () => ({ left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 });
+  const brake = mk();
+  brake.hidden = false;
+  const overlap = { left: 60, right: 140, top: 180, bottom: 260, width: 80, height: 80 };
+  const clear = { left: 600, right: 680, top: 500, bottom: 580, width: 80, height: 80 };
+  let box = overlap;
+  brake.getBoundingClientRect = () => box;
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const a1 = car("A1", 1100, 3, { speed: 60, rank: 1 });
+  const G = { cars: [p, a1], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);
+  assert.ok(root.style.left || root.style.maxHeight, "precondition: the overlap clamps the card");
+  box = clear;
+  G.store = { rev: 2 };   // a new frame's data: the next tick re-fits
+  a1.prog = 1110;
+  R.tick(G, p);
+  assert.equal(root.style.left, undefined, "left is released with the overlap");
+  assert.equal(root.style.maxHeight, undefined, "max-height is released with the overlap");
+});
+
 test("never reads track curvature (the arc must not reach the driver)", () => {
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });

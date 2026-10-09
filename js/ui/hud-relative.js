@@ -179,6 +179,10 @@ const HudRelative = (function () {
       return;
     }
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      // Start every fit from the CSS position: the clearance below only ever
+      // SETS left / max-height, so without this a clamp from an earlier overlap
+      // (a pedal since moved or hidden) stayed inline for the rest of the session.
+      if (root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
       const rootEl = doc.documentElement;
       let zPub = 1;
       if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {
