@@ -943,6 +943,22 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+/* …BUT NEVER ON GEOMETRY fitHud MEASURES. A duration on the initial
+   `transition-property: all` animates `zoom` and every var()-driven size too,
+   so under MOTION: REDUCED the dock's zoom and the buttons' --tap / --hold
+   trailed the --hud-z-dock fitHud had just written by a frame. The next fit
+   divided that STALE rect by the NEW published zoom (#dock-right "85px" tall
+   where 236 is true), read a cap above BUTTON SIZE and dropped it: BOOST / OT /
+   AERO painted uncapped up the right edge — onto #hud-sectors, the timing
+   tower and beside CAM / PAUSE, AERO off the top in the 844x390 survey (NEW-8)
+   — and --dock-r-w was taken off the same stale BOOST edge. The top band got
+   this fix first (`transition-property` on the --hud-z-top group above); the
+   dock, the bottom band and the two top-right buttons are measured the same
+   way. Paint-only properties keep their 0.01ms, so nothing that was instant
+   starts moving. */
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
    below it is the clearance the old pair of literals (62 / 132) encoded. */
 :root[data-gap-drop] #hud-flag {
