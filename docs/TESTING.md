@@ -1468,7 +1468,7 @@ what it covers.
 | `car-effects.spec.js` | brake heat, ERS deployment, throttle-lift after-fire |
 | `garage-aero.spec.js` | the GARAGE active-aero demo shows the real geometry at real angles |
 | `garage-first-frame.spec.js` | Home → GARAGE paints a non-black bay with zero panel input; reduce-motion on and off (vt path) |
-| `garage-out-before-card.spec.js` | Start Race: garage-out finishes before the race/session card on reduce-motion (short version), view-transition / Home vt race, and quick start; card never overlaps the animation |
+| `garage-out-before-card.spec.js` | Start Race: garage-out finishes before the race/session card on reduce-motion (same pace, ≥ 6 s, then the flyby), view-transition / Home vt race, and quick start; card never overlaps the animation |
 | `garage-prebuild.spec.js` | the idle title pre-builds the GARAGE (room, car, programs) so the tap opens on it; reports tap-to-first-frame |
 | `custom-team.spec.js` | the MY TEAM livery editor in the GARAGE's TEAM tab |
 
