@@ -2846,6 +2846,7 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
+  practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   const key = entrySettings(), idx = trackIdx;
@@ -4337,7 +4338,7 @@ function quitToMenu() {
   // session for itself, so this only stops a half-finished career leaking into the
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
-  setFlow("gp"); session = "race";
+  setFlow("gp"); session = "race"; practiceMode = false; tyres.setLevel(raceTyreWear);   // practice is per-session; a time trial / Daily left the tyre model "off" (gridUp)
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiNet.clearPeers();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
