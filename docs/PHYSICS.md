@@ -63,7 +63,12 @@ still use `CURVE_PEAK_X` (π/2), so `frontUtil` reads about 0.83 at the true pea
 the scrub SFX, the coach tip and the rear haptic cue all reference it. (3) The AI
 closing-speed margins of 1/2/3 m/s and the 72 m mirror cap in
 `js/physics/ai-drive.js` are raw, where `queueBrake`, `otFireRate` and `passReach`
-are pace-scaled. None of these is a defect to chase; a new reader of any of them
+are pace-scaled. (4) The speed-scaled yaw damp (`SPEED_YAW_LO`/`HI`, 50/65 m/s in
+`js/physics/player-forces.js`) compares the PACE-scaled world speed with raw
+literals; scaling it is bit-identical at pace 1 but moves three of the four
+characterization scenarios at the default slider (pace 0.84), so it stays as
+tuned (the verified patch is parked on `handover/bughunt-10.1-speedyawdamp`).
+None of these is a defect to chase; a new reader of any of them
 should treat the raw number as the intended tuning.
 
 **Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
