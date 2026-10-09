@@ -3995,6 +3995,21 @@ function startRaceCovered() {
   if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
   return startRace();
 }
+/** The same start for the sheets that sit over a FINISHED session (qualifying's TO THE GRID and DRIVE, a
+ *  championship NEXT RACE): the garage drive-out, then the flyby, as every other route plays. raceIntro's
+ *  paths gate on state "menu" and menuWorld(), so the sheet's state ("results" after a driven lap or a race)
+ *  becomes "menu" with qualifying's classification, the flow and the built circuit kept (quitToMenu would
+ *  clear them). Kept on startRaceCovered: agent / dev callers, a hidden or headless page, VS FRIEND. */
+function startRaceFromSheet() {
+  if (headlessMode || document.hidden || netPlay.active() || qualiNet.hasArmed()) return startRaceCovered();
+  try {
+    resultsCam.reset(); els.results.hidden = true; clearTimeout(flybyBuildTimer); _menuGate.generation++;
+    setState("menu", "sheet-start");
+    const def = Tracks.LIST[trackIdx];
+    if (track && def && builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize()) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
+    raceIntro(startRace);
+  } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); cancelIntro(); loadingScreen.stop(); return startRaceCovered(); }
+}
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
 // START RACE / PRACTICE START FROM RACE SETTINGS (_introSheet). The sheet stays up
@@ -8621,13 +8636,13 @@ function openQualiBody(fresh, netDone) {
 function closeQualiToGrid() {
   qualiSheet.close();
   session = "race";
-  startRaceCovered();             // gridUp() reads quali.order()
+  startRaceFromSheet();           // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   qualiSheet.close();
   session = "quali";
-  startRaceCovered();             // one out-lap + one flying lap, alone
+  startRaceFromSheet();           // one out-lap + one flying lap, alone
 };
 // FRIEND QUALIFYING WAITS FOR EVERY PLAYER'S TIME (qualiNet.waiting), and a
 // SIMULATE or a lap with no valid time sent none: the other sheet read "WAITING
@@ -8880,6 +8895,7 @@ els.resNext.onclick = () => {
   // weather plan — this solo race would have replayed the host's {to, dur}.
   wxArc.endSession();
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
+  else if (isChampionship()) startRaceFromSheet();   // RACE AGAIN / TRY AGAIN (one-offs, trials) stay quick restarts
   else startRaceCovered();
 };
 
