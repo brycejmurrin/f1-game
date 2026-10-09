@@ -3843,20 +3843,20 @@ async function studioDone(live, n) {
 // Plan while the garage animates, rather than holding its last pose to plan the
 // opening flyby. This only reads the circuit; shader work retains renderer ownership.
 async function introPlan(live, key, info, n) {
-  if (!live() || _introSkip === n) return null;
+  if (!live()) return null;   // a garage skip ends the drive-out only: the flyby still flies this plan
   reloadFlybyShots();
   if (!flybyShots && _menuFly && _menuFly.key === key && _menuFly.track === track) return _menuFly;
   FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
   const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   // Compilation can delay a yielded timer for seconds; budget only planner CPU.
-  for (let spent = 0, slice = 0; live() && _introSkip !== n && spent < 800;) {
+  for (let spent = 0, slice = 0; live() && spent < 800;) {
     const at = performance.now(), done = step(), elapsed = performance.now() - at;
     spent += elapsed; slice += elapsed;
     if (done || spent >= 800) break;
     // Cheap/cache-hit shots share a slice; one expensive shot still yields alone.
     if (slice >= 3) { await menuSlice(); slice = 0; }
   }
-  return live() && _introSkip !== n ? fly : null;
+  return live() ? fly : null;
 }
 // Prepare lamp inputs before compilation owns the scene; their CPU-only
 // slices and shot planning can then run alongside the hidden shader warm.
@@ -3890,7 +3890,7 @@ async function introPrepare(live, key, info, n, cold) {
   } catch (e) { failed = true; throw e; }
 }
 // A ready, warm world opens on the garage immediately; planning overlaps its motion.
-// Reduce-motion plays a short drive-out (setup-camera startDriveOut), never skips it.
+// Reduce-motion plays the same drive-out at its tuned pace (setup-camera startDriveOut), never skips it.
 // Await garage-out (studioDone) in parallel with prepare — never block the card on a
 // stuck prepare while the car has already left the bay.
 function introGarage(go) {
@@ -3916,7 +3916,7 @@ function introGarage(go) {
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
-  if (!(idx >= 0)) return false;   // reduce-motion still builds then plays a short garage-out before the card
+  if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
@@ -4029,7 +4029,7 @@ function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
-  if (!built && introGarage(go)) return;   // reduce-motion: short garage-out, then card (never skip)
+  if (!built && introGarage(go)) return;   // reduce-motion too: the garage-out at its tuned pace, then card + flyby (never skip)
   // Strict: never raise the race/session card while a garage-out is still live.
   if (_studio) {
     const n = _studio.n, key = menuKey(trackIdx);
@@ -4041,7 +4041,7 @@ function raceIntro(go) {
     return;
   }
   sheetRelease(true);   // no drive-out to give way to (or it was skipped): the flyby or the race does
-  if (built && _introSkip === _introRun) { _introSkip = 0; go(); return; }   // skipped in the garage: the race, not the flyby, is next
+  if (built && _introSkip === _introRun) _introSkip = 0;   // skipped in the garage: only the drive-out ends — the card and the flyby (skippable itself) always follow
   const world = menuWorld();
   if (world) menuGridCars();
   // A REAL RACE grids from its script at the lights (RealRace.arm), not in the

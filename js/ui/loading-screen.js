@@ -303,9 +303,10 @@ const LoadingScreen = (function () {
       try { return store && store.get ? store.get("flySkips", 0) : 0; } catch (_) { return 0; }
     }
     /** Record how the flyby ended. Only a FLYBY counts — the no-world card is
-     *  700 ms and nobody is choosing anything by letting it run. */
+     *  700 ms and nobody is choosing anything by letting it run, and a skip of the
+     *  garage leave is not a verdict on the flyby that still follows it. */
     function noteFlyby(skipped) {
-      if (phase !== "run" && phase !== "garage" && phase !== "build") return;   // preparation and drive-out skips both count toward the cinematic
+      if (phase !== "run") return;
       try { if (store && store.set) store.set("flySkips", nextSkips(readSkips(), skipped)); }
       catch (_) { /* storage refused: the streak just does not build */ }
     }
@@ -587,14 +588,14 @@ const LoadingScreen = (function () {
     // bubbled on into the race and paused it (or latched a boost) on frame one.
     function onSkip(e) {
       if (e && e.type === "keydown" && e.repeat) return;
-      // THE GARAGE PHASE skips too, straight to the race: the drive-out and the
-      // flyby are one cinematic, and a skip is a verdict on it (the streak counts it).
-      // "prep" is cold compilation before the garage leave — same skip contract as build.
+      // THE GARAGE PHASE skips too — to the card and the flyby, not past them: the
+      // flyby always runs (it is skippable itself, below), so this skip ends only the
+      // drive-out and the streak does not count it. "prep" is cold compilation before
+      // the garage leave — same skip contract as build.
       if (phase === "garage" || ((phase === "build" || phase === "prep") && skipCb)) {
         if (!skipCb || Date.now() - flyT0 < SKIP_GRACE_MS) return;
         if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
         const cb = skipCb; skipCb = null;
-        noteFlyby(true);
         cb();
         return;
       }
@@ -643,8 +644,11 @@ const LoadingScreen = (function () {
       paint(info);
       applyCard();
       r.hidden = false;
-      const reduced = (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)
-        || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");   // SETTINGS › MOTION: REDUCED
+      // REDUCED MOTION (the OS flag or SETTINGS › MOTION) no longer drops the flyby for a
+      // 700 ms card: after the garage leave the card, the flyby and the announcer always
+      // run, at their normal length — a tap skips them (2026-10-09; the letterbox bars and
+      // the title's CSS motion still honour the flag in css/).
+      const fly = !!info.hasWorld;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();
@@ -653,10 +657,10 @@ const LoadingScreen = (function () {
       flyT0 = Date.now();
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
-      setPhase(info.hasWorld && !reduced ? "run" : "card");
+      setPhase(fly ? "run" : "card");
       // readMs: a real race's read, which may need longer.
-      const life = info.hasWorld && !reduced ? flyMsFor(readSkips(), info.readMs, info.warmReady) : CARD_MS;
-      flyMs = info.hasWorld && !reduced ? life : FLY_MS;
+      const life = fly ? flyMsFor(readSkips(), info.readMs, info.warmReady) : CARD_MS;
+      flyMs = fly ? life : FLY_MS;
       // The letterbox (css/overlays.css) opens on the flyby's last beat, so it
       // needs the budget this run actually has, not the 24 s it usually is.
       if (r.style && typeof r.style.setProperty === "function") r.style.setProperty("--ld-fly", life + "ms");
@@ -669,7 +673,7 @@ const LoadingScreen = (function () {
        *
        * ONLY OVER THE FLYBY. The no-world path is a 700 ms fade, and 700 ms of
        * "Welcome to—" cut off mid-word is worse than silence. */
-      if (info.hasWorld && !reduced) {
+      if (fly) {
         const a = ann();
         if (a) { try { a.play(info, annLife(info, life)); } catch (e) { Log.warn("audio", "announcer failed", e); } }
       }
@@ -752,7 +756,7 @@ const LoadingScreen = (function () {
      * car's alone: no card, no scrim, no letterbox — the card arrives with the
      * flyby and the announcer. Up only to own the screen while game.js draws
      * the garage; no timer, and not active().
-     * A tap, key or pad press calls `onSkip` (the race, not the flyby, is next).
+     * A tap, key or pad press calls `onSkip` (the card and the flyby are next).
      * Painted now, so building() or run() only has to fade it in. */
     function garage(info, onSkipCb) {
       stop();
