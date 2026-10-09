@@ -182,6 +182,25 @@ test("wear reaches 1.0 after `life x lapsTarget` laps at load 1", () => {
     `ten laps of a 0.5-life set in a 20-lap race should be about spent, got ${c.tyreWear.toFixed(3)}`);
 });
 
+test("one NaN tick does not wipe a set's accumulated wear (bug-hunt 7.10)", () => {
+  const s = ctxFor({ laps: 20 });
+  s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  run(s, c, 4);
+  const w = c.tyreWear, wf = c.tyreWearF, wr = c.tyreWearR;
+  assert.ok(w > 0.1, "precondition: the set has real wear");
+  // aiLoad: M4.clamp passes NaN through. (accSm is read as `accSm || 0`, which
+  // already launders a NaN, so it is `consistency` that carries one in.)
+  c.consistency = NaN;
+  s.update(c, 1);
+  assert.equal(c.tyreWear, w, "a non-finite increment is skipped, not added");
+  assert.equal(c.tyreWearF, wf);
+  assert.equal(c.tyreWearR, wr);
+  c.consistency = 0.75;
+  s.update(c, 1);
+  assert.ok(c.tyreWear > w, "…and the next good tick carries on from the old wear, not from 0");
+});
+
 test("the SAME compound lasts proportionally longer in a longer race", () => {
   // This is the whole distance-fraction idea in one assertion. A soft is spent
   // at the same FRACTION of a 5-lap race and a 50-lap race; if this ever became
