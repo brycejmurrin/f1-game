@@ -1671,6 +1671,47 @@ var GameAudio = (function () {
     });
   }
 
+  // INSTANT REPLAY (pause menu). tickBody's paused branch returns before the
+  // race block that feeds setEngine/setRivals, so a scrubbed replay played in
+  // silence and every car's rpm stayed pinned at the pause frame. game.js calls
+  // feedReplayScrub on that return every paused frame and hands over its own
+  // pure gear/rpm helpers (naturalGear, rpmFor stay the one source of revs), so
+  // the replay note is the live note at the replayed speed. Leaving the scrub
+  // (back on the pause menu) silences engine + rivals once; setPaused calls
+  // resetReplayScrub so a resume never inherits that one-shot.
+  let _scrubWas = false, _scrubGear = null, _scrubRpm = null;
+  const _scrubArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1, ersDeploy: 0, throttle: 0, brake: 0, regen: 0.5 };
+  // Every car's rpm from its replayed speed in its natural gear (no ring field
+  // for revs). replay-buf's applyPose calls this so a seek re-revs at once.
+  function syncReplayRpms(cars) {
+    if (!_scrubGear || !_scrubRpm || !cars) return;
+    for (const c of cars) {
+      const v = Math.max(0, c.speed || 0);
+      c.rpm = _scrubRpm(_scrubGear(v), v);
+    }
+  }
+  function resetReplayScrub() { _scrubWas = false; }
+  function feedReplayScrub(player, scrubbing, cars, gearOf, rpmFor, rivalAudio, isWet, vTop) {
+    if (!player) return;   // SOUND off or no car: leave everything as it is
+    if (!scrubbing) {
+      if (_scrubWas) { stopEngine(); setRivals([]); _scrubWas = false; }
+      return;
+    }
+    _scrubWas = true;
+    if (typeof gearOf === "function" && typeof rpmFor === "function") { _scrubGear = gearOf; _scrubRpm = rpmFor; }
+    syncReplayRpms(cars);
+    if (!engineOn) startEngine();
+    const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
+    const max = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.MAX_RPM) || 15000;
+    const revFrac = clamp01((player.rpm - idle) / Math.max(1, max - idle));
+    const gear = _scrubGear ? _scrubGear(Math.max(0, player.speed || 0)) : (player.gear || 1);
+    _scrubArg.wet = typeof isWet === "function" ? !!isWet() : !!isWet;
+    _scrubArg.energy = player.energy ?? 1; _scrubArg.regen = player.ersRegen ?? 0.5;
+    const top = typeof vTop === "function" ? vTop() : vTop;
+    setEngine(revFrac, 0, player.offroad, clamp01(player.speed / Math.max(1e-6, top || 0)), gear, _scrubArg);
+    if (rivalAudio && rivalAudio.collect) setRivals(rivalAudio.collect(player));
+  }
+
   let rainSrc = null, rainGain = null, rainHp = null, rainLp = null, rainStopping = false;
   let rainPending = null;   // gain a start asked for while stopRain's teardown was running
   let rainWanted = false;   // wanted even when nodes are torn down (rebuildCtx / tab hide)
@@ -2386,6 +2427,9 @@ var GameAudio = (function () {
     stopEngine,
     setEngine,
     setGridIdle,
+    feedReplayScrub,
+    syncReplayRpms,
+    resetReplayScrub,
     setSkid,
     setCarSfx,
     pitGun,

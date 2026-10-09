@@ -3579,7 +3579,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -8248,7 +8248,7 @@ function tickBody(now) {
       if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
       render(Math.min(dt, 1 / 20));
     }
-    return;
+    GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
@@ -8830,7 +8830,7 @@ function setPaused(p, why) {
   // expires and DONE then charges nothing. Its own DONE/BACK are the only way out.
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
-  paused = p; replayBuf.onPause(!!p); // REPLAY overlay while paused
+  paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); }   // a paused screen may sleep; a networked race runs on under the card
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
