@@ -315,6 +315,35 @@ test("onboard → TV external flag clears cached pan targets so the next aim res
   assert.ok(Math.abs(st1.pan) <= 0.85 && Math.abs(st0.pan) <= 0.85, "both laws stay inside the hard-pan clamp");
 });
 
+function loadGameCams() {
+  const globals = { Math, JSON, Object, Array, Number, console, Tracks: null };
+  globals.CamTune = { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov };
+  const ctx = vm.createContext(globals);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/vantage.js"), "utf8"), ctx, { filename: "vantage.js" });
+  return vm.runInContext("GameCams", ctx);
+}
+
+test("free listener basis is replaced when chase vantage publishes after dbgCam clears", () => {
+  const GameCams = loadGameCams();
+  const eye = [0, 2, 0], tgt = [50, 2, 0];
+  GameCams.publishListenerBasis("free", eye, tgt);
+  assert.equal(GameCams.getListenerBasis().external, true);
+  GameCams.publishListenerBasis("chase", eye, tgt);
+  assert.equal(GameCams.getListenerBasis().external, false, "no stale external basis after chase solve");
+});
+
+test("render republishes listener basis from dbgCam after camVantage (TV director / free cam)", () => {
+  const body = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const renderStart = body.indexOf("function render(");
+  const dbgIdx = body.indexOf("if (dbgCam) {", renderStart);
+  const vantIdx = body.indexOf("const vant = camVantage(mode", renderStart);
+  assert.ok(vantIdx > renderStart && vantIdx < dbgIdx, "camVantage runs in render before dbgCam overrides the picture");
+  assert.match(body.slice(dbgIdx, dbgIdx + 520),
+    /publishListenerBasis\("free", dbgCam\.eye, dbgCam\.target\)/,
+    "dbgCam must be the last listener-basis write before audio reads it");
+});
+
 test("Doppler closing speed is the line-of-sight component: zero when level, full when in line", () => {
   // -(arc/dist)·Δv, not -sign(arc)·Δv: the old form flipped the full Δv across
   // arc = 0 — a ~300-cent pitch step in 0.2 m as a car came past.

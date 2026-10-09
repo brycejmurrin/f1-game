@@ -6927,6 +6927,7 @@ function render(dt) {
   if (dbgCam) {
     camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
     camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
+    GameCams.publishListenerBasis("free", dbgCam.eye, dbgCam.target);
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
