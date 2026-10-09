@@ -258,15 +258,31 @@ function harness(stored = {}, storeOverride = null, docEl = null) {
   };
 }
 
-test("SETTINGS › MOTION: REDUCED skips the flyby for the card, as the OS flag always did", () => {
+test("SETTINGS › MOTION: REDUCED still runs the card, the flyby and the announcer after the garage leave — a tap skips them", () => {
   const h = harness({}, null, { dataset: { motion: "reduce" } });
   h.run();
-  assert.equal(h.els.loading.dataset.phase, "card", "no flyby under the in-game REDUCED setting");
+  assert.equal(h.els.loading.dataset.phase, "run", "the flyby runs under the in-game REDUCED setting (2026-10-09: the 700 ms card read as a broken start)");
+  assert.equal(h.plays.at(-1), LS.FLY_MS, "the announcer reads over it, fitted to the full cut");
   h.tick(LS.CARD_MS);
-  assert.equal(h.races.length, 1, "the race starts after the card, not the flyby");
+  assert.equal(h.races.length, 0, "the race does not start after a 700 ms card");
+  h.tick(LS.FLY_MS - LS.CARD_MS);
+  assert.equal(h.races.length, 1, "the race starts when the flyby has run its length");
+  const skip = harness({}, null, { dataset: { motion: "reduce" } });
+  skip.run(); skip.tick(2000); skip.skip();
+  assert.equal(skip.races.length, 1, "still skippable: a tap after the grace window goes to the race");
   const on = harness({}, null, { dataset: {} });
   on.run();
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
+});
+
+test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
+  const note = src.slice(src.indexOf("function noteFlyby("), src.indexOf("const MAP_W"));
+  assert.match(note, /if \(phase !== "run"\) return;/, "only the run phase records a skip or a watch");
+  const skipBlock = src.slice(src.indexOf('if (phase === "garage" || ((phase === "build" || phase === "prep") && skipCb)) {'), src.indexOf("if (!(phase && build) || Date.now() - flyT0 < SKIP_GRACE_MS) return;"));
+  assert.ok(!/noteFlyby/.test(skipBlock), "the garage / prep / build skip calls the callback and nothing else");
+  const run = src.slice(src.indexOf("function run(info, go)"), src.indexOf("function stop()"));
+  assert.ok(!/prefers-reduced-motion/.test(run) && !/dataset\.motion/.test(run), "run() reads no motion flag: the flyby and the announcer always follow the garage leave");
 });
 
 test("three skips in a row shorten the next flyby — and its announcer budget — to SHORT_FLY_MS", () => {
@@ -936,7 +952,7 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   assert.match(css.match(/#ld-wordmark\s*\{([^}]*)\}/)[1], /font-size:\s*clamp\([^;]*\b3\.4vw\b/, "#loading is not zoomed: --vwz shrank the wordmark as UI SIZE grew");
 });
 
-test("the garage phase (the drive-out before the flyby): no card, no timer, and a tap skips to the race, counted as a skip", () => {
+test("the garage phase (the drive-out before the flyby): no card, no timer, and a tap skips to the card + flyby, not counted as a flyby skip", () => {
   const h = gridHarness({ radioOn: false });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
   let skips = 0;
@@ -952,7 +968,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   assert.equal(skips, 0, "a key auto-repeat is not a press");
   h.skip(); h.skip();
   assert.equal(skips, 1, "one skip, once");
-  assert.equal(h.saved.get("flySkips"), 1, "it counts toward the habitual skipper's short cut");
+  assert.equal(h.saved.get("flySkips"), undefined, "it is not a verdict on the flyby, which still follows: the streak does not count it");
   h.tick(60000);
   assert.equal(h.screen.phase(), "garage", "no timer: game.js ends the phase");
   // The card then comes up for the rest of a build (building) or with the flyby (run); both disarm the garage's skip.
@@ -966,7 +982,7 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   h.skip(); assert.equal(late, 0, "the preparation skip retains the double-click grace");
   h.tick(LS.SKIP_GRACE_MS + 10); h.skip(); h.skip();
   assert.equal(late, 1, "a preparation skip marks the cinematic once, without lowering its card");
-  assert.equal(h.saved.get("flySkips"), 2, "a preparation skip also counts toward the shorter cinematic");
+  assert.equal(h.saved.get("flySkips"), undefined, "a preparation skip does not count toward the shorter cinematic either");
   assert.equal(h.screen.phase(), "build", "preparation continues safely after the skip");
   h.screen.stop();
   assert.equal((h.listeners.keydown || new Set()).size, 0, "cancellation removes preparation skip listeners");

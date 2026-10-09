@@ -36,7 +36,7 @@ const DesignerProfile = (function () {
     let tr = null, speed = null, ticks = [];   // built lap, speeds, control arcs (m)
     let nodeH = [];                             // per-node heights (metres)
     let issues = [], cursor = null;
-    let sel = -1, span = -1, ptype = "mouse";
+    let sel = -1, span = -1, ptype = "mouse", viewStart = 0, viewSpan = 1;
     // Drag arms only after a deliberate vertical threshold (and on touch, a
     // prior selection or short hold). Horizontal motion is ignored.
     let drag = null;                            // { id, i, y0, h0, cur, moved, mpp, frame, wasSel, t0, touch, group, origins }
@@ -66,7 +66,7 @@ const DesignerProfile = (function () {
       return { lo: (lo + hi) / 2 - span / 2, span, min: lo, max: hi };
     }
     let hs = null, fr = null;
-    const X = (sM) => (tr ? sM / tr.total * W : 0);
+    const X = (sM) => (tr ? (sM / tr.total - viewStart) / viewSpan * W : 0);
     const Y = (h) => H - PAD - (h - fr.lo) / fr.span * (H - 2 * PAD);
     const hAt = (sM) => { const n = tr.n; return hs[((Math.round(sM / tr.total * n) % n) + n) % n]; };
     function grip(i) {
@@ -88,13 +88,13 @@ const DesignerProfile = (function () {
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
     if (ro) ro.observe(canvas);
 
-    function local(ev) { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+    function local(ev) { const r = canvas.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / (r.width || W), y: (ev.clientY - r.top) * H / (r.height || H) }; }
     function hit(x, y) {
       if (!tr || !hs || !ticks.length) return -1;
-      const r = ptype === "touch" ? HIT_TOUCH : HIT_PX;
-      let best = -1, bd = r * r;
+      let best = -1, bd = Infinity;
       for (let i = 0; i < ticks.length; i++) {
-        const p = grip(i), d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y);
+        const p = grip(i), d = Math.abs(p.x - x);
+        if (p.x < 0 || p.x > W) continue;
         if (d < bd) { bd = d; best = i; }
       }
       return best;
@@ -136,10 +136,16 @@ const DesignerProfile = (function () {
       try { canvas.setPointerCapture(ev.pointerId); } catch (_) { /* synthetic */ }
       const p = local(ev), i = hit(p.x, p.y);
       if (i < 0) return;
+      if (hooks.rangeSelect && hooks.rangeSelect()) {
+        const anchor = sel >= 0 && span < 0 ? sel : i;
+        choose(anchor, i);
+        drag = { id: ev.pointerId, range: true, anchor };
+        render(); return;
+      }
       // Select on press — height stays until a deliberate vertical drag arms.
       // A grip inside the selected span keeps the group (group elev).
       const wasSel = sel === i || inGroup(i);
-      const shift = !!ev.shiftKey;
+      const shift = !!(ev.shiftKey || (hooks.extendSelection && hooks.extendSelection()));
       if (shift && sel >= 0 && sel !== i) choose(sel, i);
       else if (!wasSel) choose(i, -1);
       const f = fr || { lo: 0, span: MIN_SPAN };
@@ -155,7 +161,9 @@ const DesignerProfile = (function () {
     function onMove(ev) {
       if (ev.pointerType) ptype = ev.pointerType;
       if (!drag || drag.id !== ev.pointerId || !tr) return;
-      const p = local(ev), dy = p.y - drag.y0;   // vertical only — ignore dx
+      const p = local(ev);
+      if (drag.range) { choose(drag.anchor, hit(p.x, p.y)); render(); return; }
+      const dy = p.y - drag.y0;   // vertical only — ignore dx
       if (!drag.moved) {
         const thresh = (drag.touch || ptype === "touch") ? DRAG_TOUCH : DRAG_MOUSE;
         if (Math.abs(dy) <= thresh) return;
@@ -175,6 +183,7 @@ const DesignerProfile = (function () {
       if (drag && drag.id === ev.pointerId) {
         try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* */ }
         const d = drag; drag = null;
+        if (d.range) { render(); return; }
         // Tap / below-threshold jitter: selection only — height unchanged.
         if (d.moved) hand(d.i, d.h0, d.cur);
         else liveH = null;
@@ -234,12 +243,12 @@ const DesignerProfile = (function () {
         const g = (span >= 0 && span !== sel) ? (" Span " + (sel + 1) + "–" + (span + 1) + " (" + groupOf(sel, span).length + " points).") : "";
         return "Elevation profile. Point " + (sel + 1) + " of " + n + ": " + fmtRise(h) + " m" + (tr && ticks[sel] != null ? " at " + fmtKm(ticks[sel]) : "") + "." + g + " " + KEYS;
       }
-      return "Elevation profile. " + n + " control points. Tap to select, then drag vertically to set height. Shift-tap a second grip for a span. " + KEYS;
+      return "Elevation profile. " + n + " control points. Tap anywhere in a point column to select, then drag vertically to set height. RANGE or shift-tap selects a section. " + KEYS;
     }
     function trace() {
       const n = tr.n;
       g.beginPath();
-      for (let k = 0; k <= n; k++) { const x = k / n * W, y = Y(hs[k % n]); k ? g.lineTo(x, y) : g.moveTo(x, y); }
+      for (let k = 0; k <= n; k++) { const x = X(k / n * tr.total), y = Y(hs[k % n]); k ? g.lineTo(x, y) : g.moveTo(x, y); }
     }
     function render() {
       const arrows = sel >= 0 ? "own" : "pass";
@@ -257,7 +266,7 @@ const DesignerProfile = (function () {
       g.strokeStyle = COL.ctrl || "rgba(154,154,168,0.75)"; g.lineWidth = 1;
       for (const t of ticks) { const x = X(t); g.beginPath(); g.moveTo(x, H - 5); g.lineTo(x, H); g.stroke(); }
       g.strokeStyle = COL.start || "#e10600"; g.lineWidth = 2;
-      g.beginPath(); g.moveTo(1, 0); g.lineTo(1, H); g.stroke();
+      if (viewStart === 0) { g.beginPath(); g.moveTo(1, 0); g.lineTo(1, H); g.stroke(); }
       if (cursor != null && Number.isFinite(cursor)) {
         const x = X(cursor); g.strokeStyle = COL.sel || "#ffd166"; g.lineWidth = 1;
         g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
@@ -270,6 +279,7 @@ const DesignerProfile = (function () {
       const touch = ptype === "touch";
       for (let i = 0; i < ticks.length; i++) {
         const p = grip(i), on = i === sel || inGroup(i);
+        if (p.x < 0 || p.x > W) continue;
         const r = (on ? GRIP_R + 2 : GRIP_R) * (touch ? GRIP_R_TOUCH / GRIP_R : 1);
         // Soft hit halo so touch targets read as ≥44 px.
         if (touch || on) {
@@ -350,6 +360,15 @@ const DesignerProfile = (function () {
       // Same path as a grip tap: update sel/span and tell the screen (POINT m stepper).
       select(i, j) { choose(i, j); render(); },
       setSelection(i, j) { choose(i, j); render(); },
+      zoom(factor) {
+        if (!(factor > 0)) return;
+        const center = tr && sel >= 0 && ticks[sel] != null ? ticks[sel] / tr.total : viewStart + viewSpan / 2;
+        viewSpan = Math.min(1, Math.max(1 / 16, viewSpan / factor));
+        viewStart = Math.max(0, Math.min(1 - viewSpan, center - viewSpan / 2)); render();
+      },
+      pan(delta) { viewStart = Math.max(0, Math.min(1 - viewSpan, viewStart + delta * viewSpan)); render(); },
+      fit() { viewStart = 0; viewSpan = 1; render(); },
+      view() { return { start: viewStart, span: viewSpan }; },
       resize, render, reset,
       destroy() { if (ro) ro.disconnect(); reset(); },
     };
