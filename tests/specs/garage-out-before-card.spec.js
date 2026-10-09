@@ -2,7 +2,10 @@
 // After Start Race, garage-out must finish before the race/session card appears
 // on every path: reduce-motion (short version), view-transition / Home vt race,
 // and quick start (warm race-settings). Card must never overlap the animation.
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+// Isolated `test` (not sharedTest): Start Race leaves async intro / track build
+// that poisons the worker-scoped shared page for the next file on the shard
+// (parts-ers track-build STALLED on CI). Own page per test avoids that.
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 
 async function clickId(page, id) {
