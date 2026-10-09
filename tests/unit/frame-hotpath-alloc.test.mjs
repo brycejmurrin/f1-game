@@ -9,6 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -146,4 +148,42 @@ test("iterator GC microbench: indexed cull packs with less young-gen pressure th
   assert.ok(dIdx <= dFor + 64 * 1024,
     `indexed retained ${dIdx} B should be ≤ for…of ${dFor} B (+64 KiB slack)`);
   console.log(`# microbench cells=${cells} forOfDelta=${dFor} indexedDelta=${dIdx}`);
+});
+
+// ---- bug-hunt 2026-10-09 4.2 (W5 game) --------------------------------------------------------
+test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage read per car per frame", () => {
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap, Date };
+  let reads = 0, on = "0";
+  ctx.localStorage = { getItem: (k) => { if (k === "apex26.aeroEdge") reads++; return on; } };
+  ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
+  ctx.Car3D = { aeroFlaps: () => [] };
+  vm.createContext(ctx);
+  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: "js/car/car-mesh.js" });
+  const CarMesh = vm.runInContext("CarMesh", ctx);
+  CarMesh.init({ createMesh: () => ({}), draw() {}, freeMesh() {} });
+  const mat = new Float32Array(16);
+  for (let i = 0; i < 2000; i++) CarMesh.drawAeroEdge(mat, 2, null, 0.2);   // Z-mode cars: most of a lap
+  assert.equal(reads, 0, "a car below the blend gate never reads the latch");
+  for (let i = 0; i < 2000; i++) CarMesh.drawAeroEdge(mat, 2, null, 0.9);   // X-mode cars on a straight
+  assert.ok(reads <= 1, `${reads} localStorage reads for 2000 X-mode draws (was one per draw)`);
+});
+
+test("CarMesh.getAeroFlapSet: a (record, pose) memo returns the same baked mesh and never hands back an evicted one", () => {
+  const M = loadParts();
+  const made = [], freed = [];
+  M.CarMesh.init({ createMesh: (d) => { const m = { id: made.length, d }; made.push(m); return m; }, freeMesh: (m) => freed.push(m), draw() {} });
+  const set = (col, open, only) => M.CarMesh.getAeroFlapSet(2, col, null, null, open, only);
+  const a = set([0.1, 0.2, 0.3], false), n = made.length;
+  assert.ok(a, "level 2 has flaps");
+  assert.equal(set([0.1, 0.2, 0.3], false), a, "a hit is the same mesh");
+  assert.equal(made.length, n, "…and builds nothing");
+  const poses = [set([0.1, 0.2, 0.3], true), set([0.1, 0.2, 0.3], false, "front"), set([0.1, 0.2, 0.3], false, "rear"), set([0.1, 0.2, 0.3], true, "front")];
+  assert.equal(new Set([a, ...poses]).size, 5, "closed / open / front / rear / open-front are five meshes, not one");
+  assert.equal(set([0.1, 0.2, 0.3], true), poses[0]);
+  assert.equal(set([0.1, 0.2, 0.3], false, "rear"), poses[2]);
+  for (let i = 0; i < 80; i++) set([i / 100, 0.5, 0.5], false);   // past FLAP_SET_MAX (64): the oldest is evicted and freed
+  assert.ok(freed.includes(a), "the first set was evicted");
+  const again = set([0.1, 0.2, 0.3], false);
+  assert.ok(!freed.includes(again), "the memo does not hand back a freed mesh");
+  assert.notEqual(again, a, "it is rebuilt");
 });
