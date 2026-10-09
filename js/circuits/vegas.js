@@ -25,9 +25,12 @@
     barrierGap: 1.0,
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
-      // Hand-built Strip canyon + landmarks — keep generic city/foliage off the Blvd.
-      { kinds: ["city", "foliage"], s0: 0.485, s1: 0.815 },
-      { kinds: ["city", "foliage"], s0: 0.22, s1: 0.34 },
+      // Windows are AUTHORED-frame like the row above (TrackSpace.sceneryRange adds
+      // _sceneryShift 0.8433); scenery/vegas.js sl(f) = f + 0.1567 is that same map.
+      // Hand-built Strip canyon, RACING 0.485-0.815 -> authored 0.642-0.972:
+      { kinds: ["city", "foliage"], s0: 0.642, s1: 0.972 },
+      // Sphere / Koval, RACING 0.22-0.34 -> authored 0.377-0.497 (overlaps the 0.36-0.47 row):
+      { kinds: ["city", "foliage"], s0: 0.377, s1: 0.497 },
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],

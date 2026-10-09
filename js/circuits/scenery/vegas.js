@@ -410,15 +410,20 @@
 
       building(K(sl(0.03)), -1, 58, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
       place(K(sl(0.03)), -1, 24, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
+      // The 90 m tower yields silently to a generic city unit (massBlocked; also dropped before this PR); every
+      // other slot within 100 m is blocked or over the Koval bend, so only the megascreen board below stands here.
       building(K(sl(0.062)), -1, 64, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
       place(K(sl(0.062)), -1, 48, [2.5, 16, 30], LED);                // giant LED megascreen
 
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
-      // Prominent hotel towers either side of the start/finish straight approach
-      building(K(sl(0.10)), -1, 58, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(sl(0.14)), 1, 55, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      // gap 58+ on the pit side: back-of-house row behind a forecourt band.
+      // Prominent hotel towers either side of the PIT straight / T1-T2 (RACING 0.096 / 0.136 via sl(); nudged ~25 m so the generic city rows do not take the footprint first; docs/tracks/vegas.md §4
+      // puts the tall towers at the pit, neon billboards on the final straight). Bare K(0.10) had drifted ~0.16 lap
+      // onto the Harmon approach when startFrac moved (7a173519); the S/F approach keeps its billboards, grandstand and low rows.
+      building(K(sl(0.096)), -1, 58, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(sl(0.136)), 1, 55, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // gap 58+: low back-of-house rows behind a forecourt band. cityFront takes AUTHORED fracs (not sl()): 0.12-0.20
+      // lands on RACING 0.963-0.04, the S/F approach, on purpose - the hotels above stay at the pit.
       cityFront(0.12, 0.20, -1, 58, { minH: 6, maxH: 14, depth: 18, step: 32,
         palette: [[0.18, 0.18, 0.20], [0.19, 0.19, 0.20]], lit: true, windowCol: BOH_WIN });
       cityFront(0.12, 0.20,  1, 52, { minH: 6, maxH: 12, depth: 16, step: 32,
@@ -533,12 +538,15 @@
       // (racing ~0.49 / T12). Re-keyed 2026-10-05; bare 0.49 sat on Sands Ave.
       building(K(sl(0.49)), -1, 68, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
       building(K(sl(0.505)), -1, 78, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
-      tower(K(sl(0.492)), -1, 82, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      // Campanile beside the hotel, not inside it: the twin's second slab spans lateral 69-106 and
+      // 3-17 m along (75 m tall), so the tower stands ~31 m further along, clear of both slabs.
+      tower(K(sl(0.495)), -1, 82, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
       place(K(sl(0.49)), -1, 14, [28, 1.8, 8], [1.0, 0.85, 0.25]);
 
-      ferrisWheel(K(sl(0.55)), -1, 92, 65);
+      // Wheel plane lateral 127-137: clear of the screen building (38-68) and of Strip tower j=1 (68-96).
+      ferrisWheel(K(sl(0.55)), -1, 132, 65);
       billboard(K(sl(0.56)), -1, 16, 16, 10, CYAN);
-      building(K(sl(0.55)), -1, 72, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      building(K(sl(0.55)), -1, 38, 30, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
       place(K(sl(0.55)), -1, 14, [22, 0.65, 22], [0.12, 0.38, 0.58]);
       // Pedestrian skywalks over Las Vegas Blvd (Flamingo / mid-Strip).
       overheadSpan({
@@ -547,7 +555,7 @@
       });
       overheadSpan({
         id: "vegas-midstrip-ped-bridge", frac: sl(0.612), clearance: 6.4,
-        thickness: 0.36, depth: 2.6, span: 26, offset: 6,
+        thickness: 0.36, depth: 2.6, span: 26,
         color: [0.32, 0.33, 0.36], supportGap: 3,
       });
 
