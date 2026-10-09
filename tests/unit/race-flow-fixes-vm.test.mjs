@@ -370,3 +370,24 @@ test("7.6 the AI's mistake-roll key for a braking zone just past the start line 
     assert.ok(c.zoneKey < L, `the key is an arc position on THIS lap (${c.zoneKey} of ${L.toFixed(0)}), not one past the line: the first corner would get two rolls per lap`);
   } finally { g.close(); }
 });
+
+test("3.11 race, Daily, race: stopping the Daily resumes the sim stream where it was, instead of rewinding it to the seed", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop();
+    await G.startRace(); g.step(30);                 // race 1 spends draws off the stream
+    const seed = G.simSeed(), pos = G.simSeed(undefined, true);
+    assert.notEqual(pos, seed, "precondition: the stream has advanced past its start");
+    G.quitToMenu();                                  // (quitToMenu stops a daily; none is active yet)
+    assert.equal(G.simSeed(undefined, true), pos, "quitting the race does not touch the stream");
+    G.daily.select();
+    assert.notEqual(G.simSeed(), seed, "the Daily took the seed over");
+    assert.equal(G.simSeed(undefined, true), G.simSeed(), "...and restarted the stream at the day's seed (a fair, repeatable lights-out hold)");
+    G.daily.stop();
+    assert.equal(G.simSeed(), seed, "the session seed is back");
+    assert.equal(G.simSeed(undefined, true), pos, "...and so is the stream position: race 2 does not replay race 1's jitter");
+    G.seed = seed;   // the setter's own contract is unchanged: it restarts the stream
+    assert.equal(G.simSeed(undefined, true), seed);
+  } finally { g.close(); }
+});
