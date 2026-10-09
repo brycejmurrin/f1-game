@@ -193,7 +193,10 @@ async function handle(op) {
   const id = String(flag("--track", "monza"));
   const srv = await startStaticServer(ROOT);
   try {
-    const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
+    // APEX_GL=llvmpipe: Mesa GL via ANGLE (same pin as playwright.config.js) —
+    // ~2–3× faster software frames when Mesa dri is installed; SwiftShader default.
+    const angle = process.env.APEX_GL === "llvmpipe" ? "gl" : "swiftshader";
+    const browser = await launchChromium({ args: [`--use-angle=${angle}`, "--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
     page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });

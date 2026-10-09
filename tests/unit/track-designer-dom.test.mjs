@@ -794,7 +794,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.ok(hint && stageHint && hint !== stageHint);
   const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
-  assert.match(hint.textContent, /^SELECT: tap a point to select/);
+  assert.match(hint.textContent, /^SELECT: tap a point/);
   // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
   const css = read("css/editor.css");
   assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
@@ -803,8 +803,8 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   // 3-up foot grid — stacking ALL short heights (incl. 852×344 safari) made
   // clipped findings worse (layout-audit 2026-10-05).
   assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*62%\)\s*minmax\(0,\s*1fr\)/,
-    "narrow+short landscape drops the stage floor so stage+rail fit the body");
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*3fr\)\s*minmax\(0,\s*1fr\)/,
+    "narrow+short landscape biases height to the stage row");
   assert.match(css,
     /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?\.td-foot \{ display: flex/,
     "narrow+short landscape restores a single-row foot");
@@ -859,6 +859,19 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
   // Phone short: elevation strip stays reachable (not display:none).
   assert.match(css, /max-height: 500px[\s\S]*?data-role="profile"[\s\S]*?display:\s*block/, "profile strip kept on short phones");
+  assert.match(css, /\.td-stage canvas \{[^}]*min-height:\s*72px/, "main map canvas keeps a 72px floor in every layout");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1\.65fr\)/,
+    "portrait stack biases height to the stage row");
+  assert.match(css,
+    /@media \(max-height: 500px\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
+    "short viewports hide duplicate stage stats (852×344 safari 2-col included)");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(72px,\s*1fr\)\s*auto/,
+    "portrait stage grid: definite map row + profile");
+  assert.match(css,
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?\[data-role="toolbar"\][\s\S]*?position:\s*absolute/,
+    "portrait floats UNDO/REDO/FIT on the map to save stack height");
 });
 
 test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {
@@ -963,7 +976,7 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   const seedRow = chipsIn(design, "RANDOMISE")[0].parentNode;
   assert.deepEqual(seedRow.children.map((c) => c.textContent), ["RANDOMISE", "TRACK OF THE DAY", "START FROM…"]);
   const speed = chipsIn(design, "SPEED")[0], editRow = speed.parentNode;
-  assert.deepEqual(editRow.children.map((c) => c.textContent), ["REVERSE", "START HERE", "DELETE POINT", "PREV POINT", "NEXT POINT", "SPEED", "TEST HERE"]);
+  assert.deepEqual(editRow.children.map((c) => c.textContent), ["REVERSE", "START HERE", "DELETE POINT", "PREV POINT", "NEXT POINT", "SELECT END", "SPEED", "TEST HERE"]);
   // UNDO / REDO / FIT live on the stage toolbar (not buried under DETAILS).
   const toolbar = b.root.querySelector('.td-chips[data-role="toolbar"]');
   assert.ok(toolbar, "stage toolbar");
@@ -1723,4 +1736,44 @@ test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () =
   // RANDOMISE replaces the loop — authored props must not strand on the new shape.
   assert.equal(b.D.randomise(42), true);
   assert.equal(b.D.state().design.props, undefined, "RANDOMISE clears props");
+});
+
+test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev offsets the span", () => {
+  const b = bootHooked();
+  openGreen(b);
+  const end = chipsIn(b.root, "SELECT END")[0];
+  assert.ok(end, "SELECT END chip in 4 DETAILS");
+  assert.equal(end.disabled, true, "disabled with no selection");
+  // Tap point 4, arm SELECT END, tap point 8 → span.
+  b.hooks.onPick(4, {});
+  assert.equal(b.D.armSpanEnd(), true);
+  assert.equal(b.D.state().spanArm, true);
+  b.hooks.onPick(8, {});
+  assert.deepEqual([b.D.state().sel, b.D.state().span, b.D.state().spanArm], [4, 8, false]);
+  assert.equal(end.textContent, "SPAN 5–9", "chip names the selected group");
+  // Stamp REPLACE THE SELECTED SPAN with CORNER.
+  b.D.setTool("corner");
+  const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
+  assert.ok(replace, "2 CORNERS offers REPLACE for the group");
+  const pts0 = plain(b.D.state().design.pts);
+  assert.equal(b.D.applyStamp(4, 8), true);
+  assert.notDeepEqual(plain(b.D.state().design.pts), pts0, "REPLACE rewrites the span");
+  // Group elev on the restored loop (keep the hooked canvas — do not re-init).
+  assert.equal(b.D.undo(), true, "UNDO the stamp");
+  b.D.setTool("select");
+  b.hooks.onPick(5, {});
+  b.hooks.onPick(9, { shiftKey: true });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  b.D.setMode("elevation");
+  const hs0 = plain(b.D.state().design.heights);
+  for (let i = 5; i <= 9; i++) assert.equal(hs0[i], 0);
+  // Seed relative hills, then offset via POINT m.
+  const seeded = hs0.slice();
+  for (let i = 5; i <= 9; i++) seeded[i] = (i - 5);
+  assert.equal(b.D.setHeights(seeded, 5), true);
+  assert.equal(b.D.setNodeHeight(5, 3), true, "POINT m on a span offsets the group");
+  const hs = plain(b.D.state().design.heights);
+  for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
+  assert.equal(hs[0], 0, "outside the span stays flat");
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
 });

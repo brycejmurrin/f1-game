@@ -103,6 +103,42 @@ test("resolve bakes once per lights identity, and re-caps rather than re-baking"
   assert.notEqual(c, b, "a rebuilt lights array must re-bake (rebuild knobs null track._lights)");
 });
 
+// L5: js/lighting/frame-lights.js refills ONE buffer in place (`_allLightsBuf`), so
+// a rebuild:true tuner edit (LAMP DENSITY, POOL RADIUS) changes its length and
+// radii under the SAME identity. Keying on identity left the per-chunk tables
+// baked for the old set: a smaller set indexed past its end -> NaN uniforms.
+test("resolve re-bakes when the SAME array is refilled with a different lamp set (L5)", () => {
+  const chunks = [chunk([-1, -1, -1], [1, 1, 1]), chunk([100, -1, -1], [101, 1, 1])];
+  const buf = [];   // the producer's shape: a plain array, refilled in place
+  const fill = (recs) => {
+    buf.length = 0;
+    for (const [x, y, z, rad] of recs) buf.push(x, y, z, 1, 1, 1, rad, 0, 0, 0, 0, 0, 0, 0, 0);
+  };
+  fill([[0, 0, 0, 50], [1, 0, 0, 50], [2, 0, 0, 50], [100, 0, 0, 50], [101, 0, 0, 50]]);
+  const a = LampChunks.resolve(buf, chunks, 1);
+  assert.ok(Math.max(...a.concat) >= 3, "5 lamps: the far chunk lists lamp 3 or 4");
+  fill([[0, 0, 0, 50], [1, 0, 0, 50]]);   // same array, 2 lamps
+  const b = LampChunks.resolve(buf, chunks, 1);
+  assert.notEqual(b, a, "a refilled set must re-bake");
+  for (const idx of b.concat) assert.ok(idx < 2, "no table index past the new lamp count (was " + idx + ")");
+  // Radii move under the same identity too (POOL RADIUS): the far lamp no longer reaches its chunk.
+  fill([[0, 0, 0, 50], [100, 0, 0, 50]]);
+  const c = LampChunks.resolve(buf, chunks, 1);
+  assert.equal(c.counts[1], 1);
+  buf[21] = 0;   // lamp 1 radius goes dead in place (lane 6 of record 1)
+  const d = LampChunks.resolve(buf, chunks, 1);
+  assert.notEqual(d, c, "a radius change must re-bake");
+  assert.equal(d.counts[1], 0);
+});
+
+test("resolve does NOT re-bake for a colour-only refill (flicker moves every frame)", () => {
+  const chunks = [chunk([-1, -1, -1], [1, 1, 1])];
+  const buf = [0, 0, 0, 1, 1, 1, 50, 0, 0, 0, 0, 0, 0, 0, 0];
+  const a = LampChunks.resolve(buf, chunks, 1);
+  buf[3] = 0.4; buf[4] = 0.3; buf[5] = 0.2;
+  assert.equal(LampChunks.resolve(buf, chunks, 1), a, "rgb is not in the bake");
+});
+
 test("empty inputs stay well-formed", () => {
   const none = LampChunks.buildTable(new Float32Array(0), [chunk([0, 0, 0], [1, 1, 1])], 1);
   assert.equal(none.lists[0].length, 0);

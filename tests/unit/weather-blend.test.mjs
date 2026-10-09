@@ -279,6 +279,60 @@ test("the sun is keyed by track x time of day: a weather never moves it, and the
 // before the first day frame rendered — stars came from applyRaceSettings,
 // floodEmit only from the frame, so the day reported the night's 0.0858. The
 // resolve now writes floodEmit itself, from the same formula the frame calls.
+test("silverstone night dry→wet blends city skyglow, moon and the stamped knobs", () => {
+  const b = boot("silverstone");
+  b.G.raceTimeOfDay = "night";
+  b.G.raceWeather = "dry";
+  b.atmo.applyRaceSettings();
+  const cut = boot("silverstone");
+  cut.G.raceTimeOfDay = "night";
+  cut.G.raceWeather = "wet";
+  cut.atmo.applyRaceSettings();
+  const stamp = (lt) => ({
+    cityGlowMul: lt.cityGlowMul, keyMul: lt.keyMul, bloomMul: lt.bloomMul, moonBright: lt.moonBright,
+  });
+  const stampDry = stamp(b.LT), stampWet = stamp(cut.LT);
+  const glowLum = (g) => (g ? g[0] + g[1] + g[2] : 0);
+  const dryGlow = glowLum(b.G.frameSky.cityGlow);
+  const wetGlow = glowLum(cut.G.frameSky.cityGlow);
+  assert.ok(Math.abs(stampDry.cityGlowMul - 0.55) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
+    "endpoints use the shipped *|night|dry / *|night|wet stamps");
+  b.G.raceWeather = "wet";
+  b.atmo.applyRaceSettings(true);
+  const at = (s) => {
+    b.atmo.tick(s === 1 ? b.atmo.WX_BLEND_S + 1 : s * b.atmo.WX_BLEND_S);
+    return {
+      cityGlowMul: b.LT.cityGlowMul,
+      keyMul: b.LT.keyMul,
+      bloomMul: b.LT.bloomMul,
+      moonBright: b.LT.moonBright,
+      glow: glowLum(b.G.frameSky.cityGlow),
+      moon: b.G.frameSky.moon,
+      horizon: host(b.G.frameSky.horizon),
+    };
+  };
+  const p0 = at(0);
+  assert.deepEqual(p0.horizon, [0.04, 0.03, 0.06], "night horizon stays on the dry palette at blend start");
+  assert.equal(p0.cityGlowMul, stampDry.cityGlowMul, "cityGlowMul at 0%");
+  assert.equal(p0.keyMul, stampDry.keyMul);
+  assert.equal(p0.bloomMul, stampDry.bloomMul);
+  assert.ok(Math.abs(p0.glow - dryGlow) < 1e-6, "city skyglow starts on the dry look");
+  const p1 = at(0.5);
+  assert.ok(p1.cityGlowMul > stampDry.cityGlowMul && p1.cityGlowMul < stampWet.cityGlowMul, "cityGlowMul mid-fade");
+  assert.ok(p1.keyMul > stampWet.keyMul && p1.keyMul < stampDry.keyMul, "keyMul mid-fade");
+  assert.ok(p1.bloomMul > stampWet.bloomMul && p1.bloomMul < stampDry.bloomMul, "bloomMul mid-fade");
+  assert.ok(p1.glow > dryGlow && p1.glow < wetGlow, "city skyglow mid-fade");
+  if (stampDry.moonBright !== stampWet.moonBright)
+    assert.ok(p1.moonBright > Math.min(stampDry.moonBright, stampWet.moonBright) &&
+      p1.moonBright < Math.max(stampDry.moonBright, stampWet.moonBright), "moonBright mid-fade");
+  const p2 = at(1);
+  assert.equal(p2.cityGlowMul, stampWet.cityGlowMul);
+  assert.equal(p2.keyMul, stampWet.keyMul);
+  assert.equal(p2.bloomMul, stampWet.bloomMul);
+  assert.ok(Math.abs(p2.glow - wetGlow) < 1e-6, "city skyglow lands on wet");
+  assert.deepEqual(p2.horizon, p0.horizon, "night horizon unchanged across the fade");
+});
+
 test("applyRaceSettings resolves floodEmit with the session, not on the next frame", () => {
   const { G, atmo, LT } = boot("qatar");
   G.raceTimeOfDay = "night";

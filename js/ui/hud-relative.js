@@ -162,6 +162,65 @@ const HudRelative = (function () {
       }
       if (dirty) dom.el.setAttribute("aria-label", rowLabel(c.pos, car.code, i === SELF, c.gap, r.rel > 0, tyre, r.laps));
     }
+    // TOUCH clearance: css/hud.css caps #hud-rel above the left dock at high
+    // HUD SIZE. When that max-height clips, drop the farthest road neighbours
+    // first (never the player's row) so we never paint a half-row over BRAKE.
+    fitRows();
+  }
+  const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right"]);
+  /** Cap the card above any overlapping left-column control, then hide the
+   *  outermost occupied rows until it fits. CSS max-height can miss TILT
+   *  (no steer-* class; BRAKE sits in the map column). */
+  function fitRows() {
+    if (!root || !built) return;
+    const b = doc && doc.body;
+    if (b && b.classList && b.classList.contains("desktop")) {
+      if (root.style && root.style.removeProperty) root.style.removeProperty("max-height");
+      return;
+    }
+    if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      const rootEl = doc.documentElement;
+      let zPub = 1;
+      if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {
+        const inline = parseFloat(rootEl.style.getPropertyValue("--hud-z-top"));
+        if (Number.isFinite(inline) && inline > 0) zPub = inline;
+      } else if (rootEl && typeof getComputedStyle === "function") {
+        try {
+          const cs = parseFloat(getComputedStyle(rootEl).getPropertyValue("--hud-scale"));
+          if (Number.isFinite(cs) && cs > 0) zPub = cs;
+        } catch (_) { /* mini-dom / VM */ }
+      }
+      const live = root.currentCSSZoom > 0 ? root.currentCSSZoom : zPub;
+      const z = Math.min(zPub, live);
+      for (let pass = 0; pass < 3; pass++) {
+        const rr = root.getBoundingClientRect();
+        if (!(rr.width && rr.height)) break;
+        let cap = Infinity, slide = 0, hit = false;
+        for (let i = 0; i < CLEAR_IDS.length; i++) {
+          const el = doc.getElementById(CLEAR_IDS[i]);
+          if (!el || el.hidden) continue;
+          const box = el.getBoundingClientRect();
+          if (!(box.width && box.height)) continue;
+          const hitX = box.left < rr.right - 0.5 && rr.left < box.right - 0.5;
+          const hitY = box.top < rr.bottom - 0.5 && rr.top < box.bottom - 0.5;
+          if (!hitX || !hitY) continue;
+          hit = true;
+          // TILT parks BRAKE in the map column: slide past the pedal, else cap height.
+          if (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7)
+            slide = Math.max(slide, (box.right + 8) / z);
+          if (rr.top < box.top - 4) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+        }
+        if (!hit) break;
+        if (slide > 0) root.style.left = slide.toFixed(1) + "px";
+        if (Number.isFinite(cap) && cap > 28) root.style.maxHeight = cap.toFixed(1) + "px";
+      }
+    }
+    if (!(root.clientHeight > 0)) return;
+    const order = [0, 4, 1, 3];
+    for (let k = 0; k < order.length && root.scrollHeight > root.clientHeight + 1; k++) {
+      const dom = built[order[k]];
+      if (dom && !dom.el.hidden) dom.el.hidden = true;
+    }
   }
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
@@ -169,5 +228,5 @@ const HudRelative = (function () {
       + ", tyre " + tyre + (laps > 0 ? ", " + laps + " lap up" : laps < 0 ? ", " + -laps + " lap down" : "");
   }
 
-  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, rows });
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, rows });
 })();
