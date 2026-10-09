@@ -350,7 +350,7 @@ const CarDraw = (function () {
     // only, then requestIdleCallback (setTimeout fallback) swaps in the full
     // atlas. AI, mobile, and photo-mode rivals never schedule — atlasDiv has
     // no larger upload, and photo rivals stay on the preview.
-    const _hiResPending = new Set(), _hiResDone = new Set();
+    const _hiResPending = new Map(), _hiResDone = new Set();   // pending: key -> the kick that owns it
     const _hiResGrave = [];   // {key, tex} prev preview; free AFTER the next bind
     function reapHiResGrave() {
       if (!_hiResGrave.length) return;
@@ -363,12 +363,17 @@ const CarDraw = (function () {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
       if (_hiResDone.has(key) || _hiResPending.has(key)) return;
-      _hiResPending.add(key);
+      // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
+      // slot can fire after the garage moved on, and building from the livery selected
+      // THEN stored another livery's pixels under this key (A -> B -> A).
+      const livery = deps.resolveLivery(team);
       const kick = function () {
         try {
+          if (_hiResPending.get(key) !== kick) return;   // dropped, maybe re-scheduled: the newer kick owns the key
           if (!(key in _decalTexCache)) return;   // LRU / invalidate won the race
+          if (decalKeyFor(team, num, true) !== key) return;   // livery changed since: its next draw re-schedules
           if (!G.gfx || !G.gfx.createTexture) return;
-          const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, true, true);
+          const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
           const next = crispPlayerDecal(G.gfx.createTexture(canvas));
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
@@ -378,9 +383,10 @@ const CarDraw = (function () {
         } catch (e) {
           Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
         } finally {
-          _hiResPending.delete(key);
+          if (_hiResPending.get(key) === kick) _hiResPending.delete(key);
         }
       };
+      _hiResPending.set(key, kick);
       const enqueue = function () {
         if (typeof requestIdleCallback === "function") {
           requestIdleCallback(function (deadline) {

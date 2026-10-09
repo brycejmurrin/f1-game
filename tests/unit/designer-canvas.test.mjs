@@ -66,6 +66,29 @@ function boot(hooksExtra = {}, pts = null) {
   return { ctx, S, DC, dom, canvas, cv, ev, pts, scr, fire, off, rec, timers, runTimers };
 }
 
+test("range drag on the map selects a continuous section without moving the road", () => {
+  const h = boot({ rangeSelect: () => true });
+  const a = h.scr(h.pts[3]), b = h.scr(h.pts[8]);
+  h.fire("pointerdown", a, 1, { pointerType: "mouse" });
+  h.fire("pointermove", b);
+  h.fire("pointerup", b);
+  assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: 8 });
+  assert.equal(h.ev.changes.length, 0);
+  assert.equal(h.ev.picks.length, 0, "range release does not collapse back to one point");
+});
+
+test("armed end selection does not replace the map anchor on pointerdown", () => {
+  let picked;
+  const h = boot({ extendSelection: () => true, onPick: (i, e) => { picked = { i, shift: e.shiftKey }; } });
+  h.cv.setSelection(3, -1);
+  const p = h.scr(h.pts[8]);
+  h.fire("pointerdown", p);
+  assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: -1 });
+  h.fire("pointerup", p);
+  assert.deepEqual(picked, { i: 8, shift: true });
+  assert.equal(h.ev.changes.length, 0);
+});
+
 test("long-press: a handle held 500 ms fires onContext once, keeps it selected and never becomes a drag", () => {
   const h = boot();
   const a = h.scr(h.pts[5]);

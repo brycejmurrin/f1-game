@@ -87,8 +87,9 @@ const NetPlay = (function () {
     if (!(total > 0)) lap = Math.min(st.lap, prev);
     else if (st.lap === prev) lap = prev;
     // A fall re-arms the next rise, so it nets zero: needed when an
-    // extrapolated sample crossed early and the next real packet is short.
-    else if (st.lap < prev) { lap = st.lap; c._nMid = true; }
+    // extrapolated sample crossed early and the next real packet is short. The rise
+    // stamp goes too: kept, it refused the REAL crossing that follows (total / SPEED_LIMIT).
+    else if (st.lap < prev) { lap = st.lap; c._nMid = true; c._nRiseT = null; }
     else if (Number.isFinite(c.s) && c.s - st.s > total * 0.5 && (prev === 0 || c._nMid)
              && !(Number.isFinite(now) && Number.isFinite(c._nRiseT) && now - c._nRiseT < total / SPEED_LIMIT)) {
       lap = prev + 1;

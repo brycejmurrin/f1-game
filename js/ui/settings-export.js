@@ -431,6 +431,24 @@ function applySettings(file, G) {
 // start rejecting liveries the game itself would happily paint.
 const rgb3 = (a) => Array.isArray(a) && a.length >= 3 &&
   a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
+// A COLOUR IS 0..1: [1e9, -5, 3] used to be stored as sent.
+const clamp01 = (a) => a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n)));
+// BOUNDS. A shared garage file is the advertised way to hand a friend a livery, and nothing
+// else limited it: thousands of rows or megabyte strings fill the 5 MB localStorage quota
+// (later career saves then fail) and the LIVERY tab paints one canvas swatch per row.
+const GARAGE_MAX_BYTES = 1024 * 1024;   // the file, before JSON.parse; a real garage is a few KB (customLogo caps at 400 kB)
+const GARAGE_STR_MAX = 64;              // ids, names, enum pills
+const GARAGE_LIVERIES_MAX = 32;         // per team (the garage UI has no cap of its own)
+const GARAGE_KEYS_MAX = 64;             // fields per livery / entries per parts sheet
+// ENUM-TYPED FIELDS INDEX PLAIN OBJECTS (Car3D finOf / FINISH_SURFACE, LiveryTex NUM_FONTS), so a
+// kept "constructor" resolves to an inherited function and throws in every build of that team.
+// The three the garage offers as pills are checked against the tables that drive those pills
+// (an unknown id is dropped, and the livery falls back to its default); any other string is only
+// refused when it names an Object.prototype member. Teams.liveryEnumOk is the same rule for MY TEAM.
+function liveryEnumOk(k, v) {
+  if (typeof Teams !== "undefined" && Teams.liveryEnumOk) return Teams.liveryEnumOk(k, v);
+  return typeof v === "string" && !(v in Object.prototype);
+}
 // A livery must carry the two things every consumer reads unconditionally: an
 // id to key caches on and the two base colours. Those are what the crash was
 // about, so they are required; every other field is optional and additive, so
@@ -446,13 +464,17 @@ const rgb3 = (a) => Array.isArray(a) && a.length >= 3 &&
 // hand-corrupted file is the cheaper failure.
 function cleanLivery(l) {
   if (!l || typeof l !== "object" || Array.isArray(l)) return null;
-  if (typeof l.id !== "string" || !rgb3(l.c1) || !rgb3(l.c2)) return null;
-  const out = { id: l.id, c1: l.c1.slice(0, 3), c2: l.c2.slice(0, 3) };
-  if (typeof l.name === "string") out.name = l.name;
+  if (typeof l.id !== "string" || l.id.length > GARAGE_STR_MAX || !rgb3(l.c1) || !rgb3(l.c2)) return null;
+  const out = { id: l.id, c1: clamp01(l.c1), c2: clamp01(l.c2) };
+  if (typeof l.name === "string") out.name = l.name.slice(0, GARAGE_STR_MAX);
+  let n = 0;
   for (const k of Object.keys(l)) {
-    if (k === "id" || k === "c1" || k === "c2" || k === "name") continue;
-    if (rgb3(l[k])) out[k] = l[k].slice(0, 3);
-    else if (typeof l[k] === "string") out[k] = l[k];
+    if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
+    if (n >= GARAGE_KEYS_MAX) break;
+    if (rgb3(l[k])) out[k] = clamp01(l[k]);
+    else if (typeof l[k] === "string" && l[k].length <= GARAGE_STR_MAX && liveryEnumOk(k, l[k])) out[k] = l[k];
+    else continue;
+    n++;
   }
   return out;
 }
@@ -463,11 +485,28 @@ function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
-    return v.map(cleanLivery).filter(Boolean);
+    return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);
   }
-  if (k.indexOf("livery.") === 0) return typeof v === "string" ? v : undefined;
-  if (k.indexOf("parts.") === 0 || k.indexOf("setup.") === 0) {
-    return v && typeof v === "object" && !Array.isArray(v) ? v : undefined;
+  if (k.indexOf("livery.") === 0) return typeof v === "string" && v.length <= GARAGE_STR_MAX ? v : undefined;
+  if (k.indexOf("parts.") === 0) {
+    // {category: optionId}: scalar values only (ids are strings), bounded. NOT clamped to Parts.BUDGET here (lobby.js does
+    // that for a PEER): the shipped garage itself is over budget (10 of its 11 team sheets cost
+    // 675-2000 against 780) and RESET GARAGE re-applies it through this door.
+    if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+    const out = {};
+    let n = 0;
+    for (const c of Object.keys(v)) {
+      if (n >= GARAGE_KEYS_MAX) break;
+      const x = v[c];
+      if (c === "__proto__" || c.length > GARAGE_STR_MAX) continue;
+      if (!((typeof x === "string" && x.length <= GARAGE_STR_MAX) || typeof x === "boolean" || (typeof x === "number" && isFinite(x)))) continue;
+      out[c] = x; n++;
+    }
+    return out;
+  }
+  if (k.indexOf("setup.") === 0) {
+    // SetupTune clamps each field on read; here only the size is bounded.
+    return v && typeof v === "object" && !Array.isArray(v) && JSON.stringify(v).length <= 4096 ? v : undefined;
   }
   // THE FOUR SINGLES USED TO KEEP WHATEVER SHAPE THEY ARRIVED IN. The liveries
   // above are shape-checked because "A FILE IS PLAYER INPUT AND THE GARAGE DOES
@@ -677,7 +716,7 @@ function create(G) {
   // ONE hidden <input type="file">, retargeted per use: iOS re-uses the sheet
   // and a second input would open a second one. `value = ""` before every click so
   // choosing the SAME file twice still fires change.
-  function pick(onJson) {
+  function pick(onJson, maxBytes) {
     ++pickVersion;   // a new chooser supersedes pending reads
     if (!picker) {
       picker = document.createElement("input");
@@ -698,6 +737,7 @@ function create(G) {
         onJson(obj);
       };
       const fail = () => { if (version === pickVersion) onJson(null); };
+      if (maxBytes && f.size > maxBytes) { fail(); return; }   // refused before it is read, let alone parsed
       if (typeof f.text === "function") f.text().then(done, fail);
       else { const r = new FileReader(); r.onload = () => done(String(r.result || "")); r.onerror = fail; r.readAsText(f); }
     };
@@ -736,7 +776,7 @@ function create(G) {
     };
     return b;
   };
-  const loadBtn = (id, label, title, apply, what, snapshot) => {
+  const loadBtn = (id, label, title, apply, what, snapshot, maxBytes) => {
     const b = document.createElement("button");
     b.id = id; b.type = "button"; b.textContent = label; b.title = title;
     b.onclick = () => {
@@ -766,7 +806,7 @@ function create(G) {
         b.textContent = `${label} — ${r.applied} APPLIED, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
-      });
+      }, maxBytes);
       tick();
     };
     return b;
@@ -843,7 +883,7 @@ function create(G) {
         collectGarage, () => `apex26-garage-${stamp()}.json`),
       loadBtn("cs-garage-load", "LOAD GARAGE FILE",
         "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
-        applyGarage, "THE GARAGE"),
+        applyGarage, "THE GARAGE", null, GARAGE_MAX_BYTES),
       resetBtn);
     return wrap;
   }

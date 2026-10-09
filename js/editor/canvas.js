@@ -55,7 +55,7 @@ const DesignerCanvas = (function () {
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
     let scale = 0.1, cx = 0, cz = 0, fitted = false;
-    let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null;
+    let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     // Group drag: when a SPAN is selected, moving any member translates the whole
     // group by the same delta (origins snapshotted at beginDrag).
     let dragGroup = null, dragOrigins = null, drag0 = null;
@@ -260,11 +260,16 @@ const DesignerCanvas = (function () {
       if (tool === "draw") { mode = "draw"; path = [[toWX(p.x), toWZ(p.y)]]; render(); return; }
       const i = hitHandle(p.x, p.y);
       if (i >= 0) {
+        if (hooks.rangeSelect && hooks.rangeSelect()) {
+          rangeAnchor = sel >= 0 && span < 0 ? sel : i;
+          sel = rangeAnchor; span = i === sel ? -1 : i;
+          mode = "range"; taps = []; tellSelect(); render(); return;
+        }
         // Select first — never move on down. A later deliberate drag (threshold /
         // already-selected / short touch hold) promotes this press into a move.
         // Shift (or span-end arm): keep the anchor so onPick can set the span end.
         taps[taps.length - 1] = { kind: "pick", i };
-        const shift = !!ev.shiftKey;
+        const shift = !!(ev.shiftKey || (hooks.extendSelection && hooks.extendSelection()));
         const wasSel = sel === i || isInSpan(i);
         if (!shift) {
           if (wasSel && isInSpan(i)) {
@@ -304,6 +309,13 @@ const DesignerCanvas = (function () {
       pointers.set(ev.pointerId, p); last = p;
       if (hold && hold.id === ev.pointerId && Math.hypot(p.x - start.x, p.y - start.y) > HOLD_PX) cancelHold();
       if (mode === "held") return;
+      if (mode === "range") {
+        const i = hitHandle(p.x, p.y);
+        if (i >= 0 && (sel !== rangeAnchor || span !== (i === rangeAnchor ? -1 : i))) {
+          sel = rangeAnchor; span = i === sel ? -1 : i; tellSelect(); render();
+        }
+        return;
+      }
       if (mode === "pinch" && pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;

@@ -50,7 +50,7 @@ function walkJs(dir, out = []) {
  *  A body with a comment in it is allowed — it says why it swallows. */
 export function bareCatchSites(src) {
   const hits = [];
-  for (const m of src.matchAll(/catch\s*\([^)]*\)\s*\{/g)) {
+  for (const m of src.matchAll(/catch\s*(?:\([^)]*\))?\s*\{/g)) {
     const start = m.index + m[0].length;
     let depth = 1, j = start;
     while (j < src.length && depth > 0) {
