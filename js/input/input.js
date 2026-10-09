@@ -842,6 +842,12 @@ const Input = (function () {
       }
       return;
     }
+    /* A MODIFIER CHORD IS A BROWSER/OS SHORTCUT, NEVER A DRIVING PRESS. Cmd+D,
+       Cmd+S, Cmd+Left: on macOS the key-up of a key pressed under Command is
+       never delivered, so the latch below would stay on until the key was
+       pressed again (the release-all above only clears latches set BEFORE
+       Meta went down). Releases still fall through to the clear path. */
+    if (down && (e.metaKey || e.ctrlKey)) return;
     if (menuOverlayOpen() || typing) {
       if (down) return;
       if (act === "left") keyLeft = false;

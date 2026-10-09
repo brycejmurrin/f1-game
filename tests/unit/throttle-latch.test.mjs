@@ -73,7 +73,9 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners };
+  const key = (code, down, mods) => (listeners[down ? "keydown" : "keyup"] || [])
+    .forEach((f) => f(Object.assign({ key: code, code, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }, mods)));
+  return { Input, pedal, tap, blur, listeners, key };
 }
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
@@ -170,4 +172,28 @@ test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt ze
     assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /if \(steerMode !== "tilt" \|\| Input\.gyroSeen \|\| headlessMode\) return;/, "no reading in 1.5 s: buttons, said");
+});
+
+test("a plain driving key latches and its release clears it (bug-hunt 5.1 control)", () => {
+  const { Input, key } = boot();
+  key("KeyD", true);
+  assert.equal(Input.debugState().key.right, true);
+  key("KeyD", false);
+  assert.equal(Input.debugState().key.right, false);
+});
+
+test("Cmd/Ctrl + a driving key never latches: macOS eats the key-up (bug-hunt 5.1)", () => {
+  for (const mods of [{ metaKey: true }, { ctrlKey: true }]) {
+    const { Input, key } = boot();
+    key("KeyD", true, mods);
+    key("KeyS", true, mods);
+    key("ArrowLeft", true, mods);
+    const k = Input.debugState().key;
+    assert.deepEqual([k.left, k.right, k.brake, k.throttle], [false, false, false, false],
+      `a ${Object.keys(mods)[0]} chord must not be a driving press`);
+  }
+  const { Input, key } = boot();
+  key("KeyD", true);
+  key("KeyD", false, { metaKey: true });
+  assert.equal(Input.debugState().key.right, false, "a key-up under a modifier still clears the latch");
 });
