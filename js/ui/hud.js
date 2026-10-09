@@ -367,7 +367,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
-let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
+let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
 // all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
@@ -615,11 +615,21 @@ function phonePaintedClash() {
   const boost = _boostOnRightHalf();
   if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
   const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
-  if (rel && !rel.hidden && _dockL) {
+  if (rel && !rel.hidden) {
     const rr = rel.getBoundingClientRect();
-    for (const g of _dockL.children) {
-      if (g.hidden) continue;
-      const box = g.getBoundingClientRect();
+    // Pedals are #btn-* siblings, not #dock-left children (index.html).
+    if (_dockL) {
+      for (const g of _dockL.children) {
+        if (g.hidden) continue;
+        const box = g.getBoundingClientRect();
+        if (box.width && box.height && _hudRectsHit(rr, box)) return true;
+      }
+    }
+    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
+    for (let i = 0; i < pedalSteer.length; i++) {
+      const el = pedalSteer[i];
+      if (!el || el.hidden) continue;
+      const box = el.getBoundingClientRect();
       if (box.width && box.height && _hudRectsHit(rr, box)) return true;
     }
   }
@@ -647,10 +657,28 @@ function phoneFitStampSync(scale) {
     if (_dockR) void _dockR.offsetHeight;
     return true;
   };
+  const shrinkSectors = () => {
+    const secEl = els.hudSectors;
+    const boost = _boostOnRightHalf();
+    if (!secEl || secEl.hidden || !boost) return false;
+    const br = boost.getBoundingClientRect();
+    const secR = secEl.getBoundingClientRect();
+    if (!secR.width || !_hudRectsHit(secR, br)) return false;
+    const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
+    const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
+    const z = Math.min(zTop, live) || 1;
+    const worst = secR.right - (br.left - DOCK_AIR);
+    if (!(worst > 0.5)) return false;
+    const curW = secR.width / z;
+    secEl.style.maxWidth = Math.max(48, curW - worst / z).toFixed(1) + "px";
+    void secEl.offsetHeight;
+    return true;
+  };
   if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
   for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-    if (!bumpDock() && phonePaintedClash()) {
+    if (!bumpDock()) shrinkSectors();
+    if (phonePaintedClash()) {
       _fitKey = "";
       fitHud();
       if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
@@ -1471,6 +1499,11 @@ function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
+  // Headless layout probes freeze after a painted-clear frame; rAF still runs
+  // updateHud(false) and was moving REL/S3 before Playwright's probe (CI:
+  // stamp/wait green, identical S3×BOOST + REL×BRAKE on probe). jump/camera
+  // use refreshHud(true) to re-fit while frozen.
+  if (G.frozen && !force) return;
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
   if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {
