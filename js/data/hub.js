@@ -304,7 +304,12 @@ const DataHub = (function () {
       // on return, and prevent a pending tab load from recaching the old node.
       state.race = null; gen.race = (gen.race || 0) + 1;
     }
-    closeTelemPopup();   // close popup and pause any running lap replay when changing tabs
+    // Close the popup, pause any lap replay and, leaving TELEMETRY mid-COMPARE, abort its
+    // OpenF1 fetches (they hold the serialized lane); the aborted tab is rebuilt on return.
+    if (closeTelemPopup(id !== active)) {
+      for (const k in gen) gen[k] = (gen[k] || 0) + 1;
+      state.telemetry = null;
+    }
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
     for (const k in tabButtons) {
