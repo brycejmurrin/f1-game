@@ -74,7 +74,7 @@
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
     turns: [0.0705, 0.1095, 0.1526, 0.1780, 0.2101, 0.3402, 0.3723, 0.4199, 0.5229, 0.6140, 0.6324, 0.6612, 0.6838, 0.7105, 0.8556, 0.9384, 0.9507, 0.9802],  // Abbey Farm Village Loop Aintree Brooklands Luffield Woodcote Copse Maggotts Becketts(3) Chapel Stowe Vale Club(2) — curvature-peak apexes
-    furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none", treeCrown: "vase" },  // English oak copses, mid-green
+    furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "post", treeCrown: "vase" },  // English oak copses, mid-green
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "steel", "alu"],  // Silverstone blue
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
