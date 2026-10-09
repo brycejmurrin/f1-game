@@ -243,7 +243,7 @@ test("quitToMenu() during a race load cancels it: the body does not go on to cou
     const started = G.startRace();   // SessionEntry hands startRaceBody its own `current`
     for (let i = 0; i < 18; i++) await Promise.resolve();
     G.quitToMenu();
-    await started.catch(() => {});
+    assert.equal(await started, false, "a canceled race body resolves false without rejecting");
     await drain();
     assert.equal(G.state, "menu", "the abandoned load must not undo the quit");
     assert.equal(G.raceRound, round0, "and must not count a race that never started");
