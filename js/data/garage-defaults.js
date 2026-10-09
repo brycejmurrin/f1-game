@@ -73,6 +73,23 @@ const GarageDefaults = (function () {
   };
   // @gen-garage-defaults end
 
+  // THE SHIPPED TABLE IS NEVER HANDED OUT. get() used to return DEF[k] itself;
+  // the store returns that on a miss, the garage mutates it in place
+  // (p[cat] = opt.id), and file() then serialised the mutated table — so RESET
+  // GARAGE TO DEFAULTS restored the player's own edits. DEF is frozen here and
+  // every way out is a deep copy (a livery row holds c1/c2 arrays).
+  function deepFreeze(v) {
+    if (v && typeof v === "object" && !Object.isFrozen(v)) {
+      Object.freeze(v);
+      Object.keys(v).forEach((k) => deepFreeze(v[k]));
+    }
+    return v;
+  }
+  function copy(v) {
+    return v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v;
+  }
+  deepFreeze(DEF);
+
   function file() {
     return {
       format: META.format || "apex26-garage-v1",
@@ -80,13 +97,13 @@ const GarageDefaults = (function () {
       build: META.build,
       excluded: META.excluded,
       count: Object.keys(DEF).length,
-      garage: DEF,
+      garage: copy(DEF),
     };
   }
 
   return Object.freeze({
     has: (k) => Object.prototype.hasOwnProperty.call(DEF, k),
-    get: (k) => DEF[k],
+    get: (k) => copy(DEF[k]),
     keys: () => Object.keys(DEF),
     meta: () => META,
     file,

@@ -375,7 +375,7 @@ function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
   // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
   if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
-  const parts = getTeamParts(team.id);
+  const parts = Object.assign({}, getTeamParts(team.id));   // a copy: the remap below must not edit the stored object in place
 
   // Remap any saved exclusive option this team can't use onto its universal
   // equivalent (Parts._resolve's peer). Deleting fell through to DEFAULTS and
@@ -588,7 +588,7 @@ function buildSetup() {
         if (!Career.research(opt)) { reject(); return; }
         if (G.soundOn) { GameAudio.uiSelect(); _blipped = true; }
       }
-      const p = getTeamParts(team.id);
+      const p = Object.assign({}, getTeamParts(team.id));   // a copy: the fit below edits it, and a refused fit must leave the stored parts alone
       // The RESOLVED part's cost — what Parts.getCost counted — not the stored id's
       // (a locked signature costs as its fitted equivalent).
       const co = resolveOpt(activeCat);
