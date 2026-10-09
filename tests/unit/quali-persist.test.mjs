@@ -428,6 +428,22 @@ test("a player whose every lap was deleted (driven = Infinity) is NO TIME, last 
   for (const r of rows) if (!r.isPlayer) assert.ok(r.t < me.t);
 });
 
+test("NO TIME survives persist + restore: the reloaded sheet does not fabricate a +gap (bug-hunt 7.5)", () => {
+  const { q, G } = loadQuali({ cars: [
+    car("p1", "VER", "Verstappen", "rb", true),
+    car("p2", "HAM", "Hamilton", "me", false),
+    car("p3", "LEC", "Leclerc", "rb", false),
+  ] });
+  q.simulate(new Map([["p1", Infinity]]));
+  assert.equal(G.season.qualiOrder.find((r) => r.id === "p1").noTime, true, "the flag is persisted");
+  assert.equal(G.season.qualiOrder.find((r) => r.id === "p2").noTime, false);
+  q.clear();                                          // memory only: a reload
+  const rows = q.results();
+  assert.ok(rows, "the order is restored");
+  assert.equal(rows.find((r) => r.driverId === "p1").noTime, true, "…and still NO TIME");
+  assert.equal(rows.filter((r) => r.noTime).length, 1);
+});
+
 // ── THE ORDER BELONGS TO ITS MODE, not just its circuit ─────────────────────
 // Bug hunt 2026-09-27: a one-off GP and the standalone championship share ONE
 // season object, so a one-off GP's driven order at Monza passed the qualiTrack

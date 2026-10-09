@@ -255,7 +255,7 @@ const Quali = (function () {
       // overwrite the grid a season (or career) round is keeping for CONTINUE.
       if (modeId() === "gp" && s.qualiOrder && s.qualiMode !== "gp") return;
       s.qualiOrder = classification.map((r) => ({
-        id: r.driverId, t: r.t, human: !!r.human,
+        id: r.driverId, t: r.t, human: !!r.human, noTime: !!r.noTime,
       }));
       // Stamp the circuit: an order restored onto a different track is a
       // grid drawn from the wrong lap times.
@@ -302,6 +302,7 @@ const Quali = (function () {
           team: car && car.team ? (car.team.id || car.team) : null,
           isPlayer: !!(car && car.isPlayer),
           human: !!(obj && entry.human),
+          noTime: !!(obj && entry.noTime),   // else the sheet shows a fabricated +gap for it
         };
       });
       classTrack = G.season.qualiTrack || here;
