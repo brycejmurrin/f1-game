@@ -99,9 +99,15 @@ function startDriveOut() {
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
   endHome();
   driveOut = null;
-  if (!cfg.enabled || reducedMotion()) return 0;
-  driveOut = { t: 0, cfg };
-  return Math.round(GarageArrival.OUT_DURATION * 1000 / cfg.speed);
+  if (!cfg.enabled) return 0;
+  // Reduce-motion: short version (OUT_REDUCE_SPEED), never skip — Start Race
+  // awaits this before the race/session card (js/game.js studioDone → raceIntro).
+  const speed = reducedMotion()
+    ? Math.max(cfg.speed, 1) * GarageArrival.OUT_REDUCE_SPEED
+    : cfg.speed;
+  const play = Object.assign({}, cfg, { speed, enabled: true });
+  driveOut = { t: 0, cfg: play };
+  return Math.round(GarageArrival.OUT_DURATION * 1000 / play.speed);
 }
 // Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
 // stalled frame (a circuit build on the main thread) delays it rather than skipping it.

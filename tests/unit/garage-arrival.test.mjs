@@ -71,6 +71,16 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
 });
 
 // ── THE STUDIO DRIVE-OUT: every RACE! opens on it (js/game.js studioOpen) ──
+test('reduce-motion Start Race plays a short drive-out (OUT_REDUCE_SPEED), never returns 0 for enabled tuner', () => {
+  assert.ok(Arrival.OUT_REDUCE_SPEED >= 2 && Arrival.OUT_REDUCE_SPEED <= 8, 'short but still an animation');
+  const full = Math.round(Arrival.OUT_DURATION * 1000);
+  const short = Math.round(Arrival.OUT_DURATION * 1000 / Arrival.OUT_REDUCE_SPEED);
+  assert.ok(short < full && short >= 1000, `short ${short}ms is under full ${full}ms and at least 1s`);
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /reducedMotion\(\)\s*\n\s*\? Math\.max\(cfg\.speed, 1\) \* GarageArrival\.OUT_REDUCE_SPEED/, 'speed scales under reduce');
+  assert.ok(!/if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/.test(cam), 'reduce must not zero the drive-out');
+});
+
 test('studio drive-out (poseOut): shutter opens first, then parked beat, then nose first out', () => {
   for (const angle of ['cut', 'left', 'right']) {
     const cfg = Arrival.settings({ angle, fov: 58 });
@@ -120,19 +130,21 @@ test('once out of the door the car turns into the pit lane, away from the camera
 test('cold preparation settles before the drive-out; a warm world opens on the garage immediately', () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
-  assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the skippable cinematic card');
-  assert.match(game, /function introCover\(info, n\) \{ if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\); \}/);
+  assert.match(build, /introCover\(info0, n\);/, 'cold preparation is covered: by the race-settings sheet, else the prep scrim');
+  assert.match(game, /function introCover\(info, n\) \{ if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\); \}/);
   assert.ok(build.indexOf('await introPrepare(') >= 0 && build.indexOf('await introPrepare(') < build.indexOf('studioOpen(n, info0)'), 'preparation finishes before outgoing motion');
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
-  assert.match(game, /if \(!built && !motionReduced\(\) && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too');
+  assert.match(game, /if \(!built && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too (reduce-motion included)');
   assert.ok(warm.indexOf('await introPrepare(') >= 0 && warm.indexOf('await introPrepare(') < warm.indexOf('if (cold && _introSkip !== n) { studioOpen'), 'cold motion starts only after compilation settles');
   assert.match(game, /if \(built && _introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/, 'a skip in the garage goes to the race, not the flyby');
   assert.match(game, /\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   assert.match(cam, /const arriving = home\.active \? null : driveOut \? stepDriveOut\(holdDriveOut\) : preview \? stepPreview\(dt\) : arrival\.step\(dt\);/, 'the wall clock, not the 1\/20 s capped render dt; the PREVIEW between the two');
-  assert.match(cam, /if \(!cfg\.enabled \|\| reducedMotion\(\)\) return 0;/, 'the arrival tuner and reduced motion gate it');
+  assert.match(cam, /if \(!cfg\.enabled\) return 0;/, 'the arrival tuner can disable drive-out');
+  assert.match(cam, /GarageArrival\.OUT_REDUCE_SPEED/, 'reduce-motion plays a short drive-out, never skips it');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
+  assert.match(game, /function afterGarageOut\(n, key, go, prepared, live\)/, 'every intro path awaits garage-out then shows the card through one handoff');
 });
 
 test('the first presented garage frame takes over its preparation cover, then hands off after driving out', async () => {
@@ -146,7 +158,9 @@ test('the first presented garage frame takes over its preparation cover, then ha
       reloadFlybyShots() {}, FlybySeq: { DEFAULT: [], setDuration() {}, vary: () => [], planSteps: () => () => true },
       entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now },
       loadingInfo: () => ({ track: {}, real: mode === 'watched' ? { watch: true } : null }),
-      loadingScreen: { garage: (inf, onSkip) => { c._ph = 'garage'; c._skip = onSkip; events.push('garage'); }, building: (inf, onSkip) => { c._ph = 'build'; c._skip = onSkip; events.push('card'); },
+      loadingScreen: { garage: (inf, onSkip) => { c._ph = 'garage'; c._skip = onSkip; events.push('garage'); },
+        prep: (inf, onSkip) => { c._ph = 'prep'; c._skip = onSkip; events.push('prep'); },
+        building: (inf, onSkip) => { c._ph = 'build'; c._skip = onSkip; events.push('card'); },
         stop: () => { c._ph = ''; events.push('stop'); }, phase: () => c._ph || '', nextFlyMs: () => (mode === 'skipper' ? 12000 : 24000) },
       LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: mode === 'hidden' },
       gfx: { warming: () => mode === 'warming' && now < 2000 },
@@ -164,14 +178,14 @@ test('the first presented garage frame takes over its preparation cover, then ha
     }
     assert.equal(took, true, mode);
     if (mode === 'warming') {
-      assert.deepEqual(events.slice(0, 2), ['card', 'garage'], 'a warm pending at RACE! draws nothing: the card covers it, then the garage replaces it');
+      assert.deepEqual(events.slice(0, 2), ['prep', 'garage'], 'a warm pending at RACE! draws nothing: prep scrim covers it, then the garage replaces it');
       assert.ok(now >= 2000 + 3 * 5000, `a car whose clock never runs is capped at 3x its length from the garage's first frame, not from RACE! (${now})`);
       continue;
     }
-    assert.deepEqual(events.slice(0, 2), ['card', 'garage'], mode + ': cover stays until the first presented garage frame');
+    assert.deepEqual(events.slice(0, 2), ['prep', 'garage'], mode + ': prep cover stays until the first presented garage frame');
     assert.equal(c.setupPreviewOn, false, mode + ': the garage preview is down afterwards');
-    if (mode === 'ready' || mode === 'skipper') assert.deepEqual(events, ['card', 'garage', 'out', 'card', 'fly:world'], mode + ': the car out, then the card, then the flyby (a habitual skipper still gets the drive-out: the streak shortens the flyby only)');
-    else if (mode === 'skip') assert.deepEqual(events, ['card', 'garage', 'out', 'card', 'skip:world'], 'a tap ends the drive-out at once and marks the run skipped');
+    if (mode === 'ready' || mode === 'skipper') assert.deepEqual(events, ['prep', 'garage', 'out', 'card', 'fly:world'], mode + ': the car out, then the card, then the flyby (a habitual skipper still gets the drive-out: the streak shortens the flyby only)');
+    else if (mode === 'skip') assert.deepEqual(events, ['prep', 'garage', 'out', 'card', 'skip:world'], 'a tap ends the drive-out at once and marks the run skipped');
     else assert.ok(!events.some((e) => e.startsWith('fly')) && events.includes('stop'), 'a quit mid-drive-out lowers the screen and flies nothing');
   }
 });
@@ -331,7 +345,7 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 5000);
   assert.match(render, /const heldWarm = !!\(_studio && _studio\.held && track && _menuGate\.warm > 0\);/, 'a held warm frame takes the world path with the canvas left visible (TLX paints nothing while it kicks the warm)');
   assert.match(game, /FlybySeq\.reset\(\); warmPrograms\(\); _menuGate\.warm = 2;/, 'cold world frames run under the preparation card before motion');
-  assert.match(game, /studioClose\(n\);   \/\/ the held garage hands straight to the flyby\n\s*try \{ _introKey = key; raceIntro\(go\); \}/, 'introWarm closes the held garage at the handoff');
+  assert.match(game, /prepared = true;   \/\/ afterGarageOut closes the held garage, then the race\/session card/, 'introWarm hands off through afterGarageOut');
 });
 test('the drive-out coasts on past OUT_DURATION (the held garage), and settles without a jump', () => {
   const cfg = Arrival.DEFAULT, at = (t) => Arrival.poseOut(t, cfg);
@@ -398,19 +412,20 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
   assert.deepEqual([stuck.sheet.hidden, stuck.btn.disabled, stuck.back.disabled], [false, false, false], 'timed-out preparation releases the sheet for retry');
   const thrown = await run('throw');
   assert.deepEqual(thrown.events.slice(1), [['failed'], ['sync', false, false, 'START RACE', false]], 'a throwing intro keeps the sheet available for retry');
-  // The cold paths' cover: the card only when the sheet is not already covering.
-  const cover = {}; const cv = { _introSheet: null, loadingScreen: { building: () => { cover.card = (cover.card || 0) + 1; } }, studioSkip() {} };
+  // The cold paths' cover: prep scrim (card hidden) only when the sheet is not already covering.
+  const cover = {}; const cv = { _introSheet: null, loadingScreen: { prep: () => { cover.card = (cover.card || 0) + 1; } }, studioSkip() {} };
   vm.createContext(cv); vm.runInContext(helpers + ';globalThis.setSheet = (v) => { _introSheet = v; };', cv);
-  cv.introCover({}, 1); assert.equal(cover.card, 1, 'Data Hub JUMP IN and the rest: the card, as before');
-  cv.setSheet({ sheet: {}, btn: {}, label: '' }); cv.introCover({}, 1); assert.equal(cover.card, 1, 'from race settings: no card, the sheet covers so the garage leave comes before the race card');
+  cv.introCover({}, 1); assert.equal(cover.card, 1, 'Data Hub JUMP IN and the rest: prep scrim, race card still hidden');
+  cv.setSheet({ sheet: {}, btn: {}, label: '' }); cv.introCover({}, 1); assert.equal(cover.card, 1, 'from race settings: no prep plate, the sheet covers so the garage leave comes before the race card');
   // Wiring: every exit from preparation releases the sheet.
-  assert.match(game, /if \(!built && !motionReduced\(\) && introGarage\(go\)\) return;\n  sheetRelease\(true\);/, 'so does the flyby (or a skipped garage) when there is no drive-out');
+  assert.match(game, /if \(!built && introGarage\(go\)\) return;   \/\/ reduce-motion: short garage-out, then card \(never skip\)\n  \/\/ Strict: never raise the race\/session card while a garage-out is still live\./, 'so does the flyby (or a skipped garage) when there is no drive-out; live studio waits');
   assert.match(game, /function titleIfBare\(\) \{ sheetRelease\(false\);/, 'an abandoned intro gives the buttons back');
   assert.match(game, /function cancelIntro\(\) \{[^}]*sheetRelease\(false\); \}/, 'so does a quit');
   const build = game.slice(game.indexOf('function introBuild(go)'), game.indexOf('function introWarm(go)'));
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
-  assert.match(build, /\n  introCover\(info0, n\);\n/, 'a cold build is covered by the sheet or the card');
+  assert.match(build, /\n  introCover\(info0, n\);\n/, 'a cold build is covered by the sheet or prep scrim');
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/, 'so is a cold warm');
+  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/, 'prep hides the race card until garage-out ends');
   const rs = readFileSync(new URL('../../js/race/race-settings.js', import.meta.url), 'utf8');
   const go = rs.slice(rs.indexOf('$("rs-go").onclick = () => {'), rs.indexOf('    }\n\n    return {'));
   assert.match(go, /raceIntro\(startRace, sheet, \$\("rs-go"\)\)/, 'race settings hands its sheet and button to the intro');
@@ -452,6 +467,7 @@ function garageEntryRegressionHarness() {
     FlybySeq: { DEFAULT: [], setDuration() {}, vary: () => [], planSteps: () => () => true, reset() {} },
     loadingScreen: {
       garage() { phase = 'garage'; events.push('garage-cover'); },
+      prep() { phase = 'prep'; events.push('prep-cover'); },
       building() { phase = 'build'; events.push('build-cover'); },
       stop() { phase = ''; events.push('stop-cover'); },
       phase: () => phase, active: () => false, nextFlyMs: () => 24000,

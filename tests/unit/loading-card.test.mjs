@@ -324,8 +324,8 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
     "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\);/,
-    "race settings covers prep with the sheet — race card waits until after the garage leave");
+  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
+    "race settings covers prep with the sheet — race card waits until after the garage leave (else prep scrim, card hidden)");
   assert.match(game, /body:yield/,
     "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
@@ -346,6 +346,22 @@ test("building(): the card over the scrim, no timer, no skip, not active — the
   h.tick(LS.FLY_MS);
   assert.equal(h.races.length, 1);
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+});
+
+test("prep(): scrim up, race card hidden, skip arms studioSkip — garage-out owns the leave", () => {
+  const h = harness();
+  let skips = 0;
+  assert.equal(h.screen.prep({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }, () => { skips++; }), true);
+  assert.equal(h.els.loading.dataset.phase, "prep");
+  assert.equal(h.els.loading.hidden, false, "prep owns the screen over a cold compile");
+  assert.equal(h.screen.active(), false);
+  assert.match(read("css/loading.css"), /#loading\[data-phase="prep"\] #ld-card \{ visibility: hidden; \}/,
+    "prep keeps #ld-card out of sight until garage-out ends");
+  h.tick(LS.SKIP_GRACE_MS + 1);
+  h.skip();
+  assert.equal(skips, 1, "prep skip reaches studioSkip like build");
+  assert.equal(h.screen.garage({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }), true);
+  assert.equal(h.els.loading.dataset.phase, "garage");
 });
 
 test("handoff(): the card stays up, disarmed, until render() lowers it with the race's first PRESENTED frame", () => {
