@@ -25,6 +25,7 @@ const ResultsCam = (function () {
     return {
       px: player && player.px, pz: player && player.pz,
       head: player && player.head, py: player && player.py,
+      lookBack: false,   // the player's latched rear view must not flip the cut
     };
   }
 

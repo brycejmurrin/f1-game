@@ -730,10 +730,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
      Mode-aware via CamFeel: reverse/rear already face aft, so a flip is skipped.
      Default is hold (mirror glance); SETTINGS › CAMERA FEEL can latch on press.
      After CamTune + free-look so trim and glance are part of what gets mirrored;
-     before the ground clamp (eye unchanged). */
+     before the ground clamp (eye unchanged). The player's own solve only:
+     the Director's TV shot and the results cut pass extra.lookBack === false,
+     so a latched rear view cannot flip a broadcast camera after the flag. */
   const _lbHeld = typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
   const _lb = typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld;
-  if (_lb) {
+  if (_lb && !(extra && extra.lookBack === false)) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }
