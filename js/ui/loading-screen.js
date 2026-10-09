@@ -29,6 +29,11 @@ const LoadingScreen = (function () {
   // came too late); not lower, or grid-mine's window (~12% of it) drops under
   // RADIO_MIN_S and the radio check never plays. Skippable with any pointer or key.
   const FLY_MS = 20000;
+  /** A harness-driven page (navigator.webdriver). Not a motion flag: a player's
+   *  reduced-motion setting still gets the card, the flyby and the announcer. */
+  function automated() {
+    try { return typeof navigator !== "undefined" && !!navigator && navigator.webdriver === true; } catch (_) { return false; }
+  }
   // With nothing to fly over, just long enough for the card's fade to land
   // before the build takes the main thread.
   const CARD_MS = 700;
@@ -648,7 +653,13 @@ const LoadingScreen = (function () {
       // 700 ms card: after the garage leave the card, the flyby and the announcer always
       // run, at their normal length — a tap skips them (2026-10-09; the letterbox bars and
       // the title's CSS motion still honour the flag in css/).
-      const fly = !!info.hasWorld;
+      // AUTOMATION (navigator.webdriver: Playwright, the Chrome MCP) keeps the 700 ms
+      // card, as game.js bootSeed keeps its fixed seed: a launch driven by a harness
+      // hands off to the grid promptly instead of sitting through a 20-60 s flyby and
+      // read on software GL (#1290 dropped the reduce-motion card the e2e suite's
+      // pinned reducedMotion relied on, and the quali/real-race specs timed out). The
+      // garage leave before it still plays at the tuner's pace on every path.
+      const fly = !!info.hasWorld && !automated();
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();
