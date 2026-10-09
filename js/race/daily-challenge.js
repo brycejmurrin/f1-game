@@ -38,7 +38,7 @@ const DailyChallenge = (function () {
     Log.info("game", "DailyChallenge.create");
     const { store } = G;
     let active = null;   // the plan of the session being driven, else null
-    let savedSeed;   // G.seed from before the Daily took it over (restored by stop)
+    let savedSeed, savedStream;   // G.seed and the sim stream's position from before the Daily took them over (restored by stop)
 
     function data() {
       const raw = store.get(KEY, null);
@@ -65,7 +65,7 @@ const DailyChallenge = (function () {
       // The day's seed replaces the session's for this run only: quali-model,
       // reliability and the launch hash draw from G.simSeed(), so leaving it
       // set made every later one-off GP grid depend on having played the Daily.
-      if (!active) savedSeed = G.seed;
+      if (!active) { savedSeed = G.seed; savedStream = G.simSeed ? G.simSeed(undefined, true) : undefined; }
       if (G.resetRaceDraft) G.resetRaceDraft();   // not a draft RACE SETTINGS should keep for this track
       G.seed = p.seed;
       active = p;
@@ -142,8 +142,10 @@ const DailyChallenge = (function () {
 
     function stop() {
       if (G.records) G.records.restoreDaily();
-      if (active && savedSeed !== undefined) G.seed = savedSeed;
-      savedSeed = undefined; active = null;
+      // The seed setter ALSO rewinds the draw stream to its start, so "race, Daily, race" repeated the
+      // first race's grid jitter and lights-out hold: resume the stream where the Daily found it.
+      if (active && savedSeed !== undefined) { if (savedStream !== undefined) G.simSeed(savedSeed, savedStream); else G.seed = savedSeed; }
+      savedSeed = savedStream = undefined; active = null;
     }
     function isActive() { return !!active; }
     function current() { return active; }

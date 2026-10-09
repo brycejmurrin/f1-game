@@ -593,12 +593,12 @@ function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
 // agent template. Cheap, seedable, and long-period enough for a race.
 let _simSeed = 1;
 let _simRngState = 1 >>> 0;
-function simSeed(v) {
+function simSeed(v, stream) {   // stream: a number resumes the draw stream there instead of at the seed; `true` reads its position (DailyChallenge hands both back on stop)
   if (v !== undefined) {
     _simSeed = (v >>> 0) || 1;
-    _simRngState = _simSeed;
+    _simRngState = typeof stream === "number" ? stream >>> 0 : _simSeed;
   }
-  return _simSeed;
+  return stream === true ? _simRngState : _simSeed;
 }
 // A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
 // every page load was the same race (retirements, weather arc, mistakes,
