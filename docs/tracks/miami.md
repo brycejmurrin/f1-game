@@ -6,11 +6,12 @@
 A purpose-built temporary circuit wrapping the Hard Rock Stadium (home of the Miami Dolphins) on a closed campus in Miami Gardens, Florida. The lap threads stadium parking lots, perimeter roads, and engineered sections, with the great stadium bowl as a constant visual anchor on the north side by the pit/paddock complex. Pure South Florida spectacle: yachts, palms, and bright pastels under a hazy tropical sky — not downtown South Beach Art Deco on-site.
 
 ## 2. Atmosphere & Palette
-Bright, high-sun daylight with a soft humid haze flattening the horizon. Lush palm greens, sun-bleached concrete, and vibrant Miami pastels (teal, coral, flamingo pink) against deep blue sky. Signature **Dolphins aqua runoff** under every heavy-brake apron.
+Bright, high-sun daylight with a soft humid haze flattening the horizon. Lush palm greens, sun-bleached concrete, and vibrant Miami pastels (teal, coral, flamingo pink) against deep blue sky. Signature **Dolphins aqua** `runoffApron` pads sit at the heavy-brake zones only; the terrain verge between them is neutral asphalt grey.
 - Sky: zenith `[0.22, 0.50, 0.88]`, haze horizon `[0.80, 0.86, 0.90]`
 - Asphalt: `[0.28, 0.28, 0.30]`
 - Palm green: `[0.20, 0.55, 0.25]`
-- Runoff (aqua): `[0.12, 0.72, 0.78]` (`COL.aquaRunoff`)
+- Brake-zone apron (aqua): `[0.12, 0.72, 0.78]` (`COL.aquaRunoff`, per-zone `runoffApron` calls)
+- Terrain verge (`pal.runoff`): `[0.34, 0.33, 0.32]` asphalt grey (was aqua terrain-wide)
 - Miami pastels: teal `[0.20, 0.80, 0.78]`, coral `[1.0, 0.55, 0.45]`, pink `[1.0, 0.65, 0.80]`
 
 ## 3. Elevation
@@ -48,7 +49,7 @@ Essentially flat (built on level reclaimed land). The only real change is the en
 ## 6. Modelling Notes
 - Hero landmark is the Hard Rock Stadium: oversize the curved bowl as a tiered box ring at S/F so the track reads as "Miami" instantly; downtown skyline stays far/hazed.
 - Sell the gimmick marina: a flat blue-tinted slab (no reflection) with one MSC multi-deck mass + a few large yacht boxes — the joke is they obviously aren't floating.
-- Aqua runoff under the car is the chase-cam identity cue — `pal.runoff` + `runoffApron` pads at brake zones.
+- Aqua runoff under the car is the chase-cam identity cue — carried by the per-zone `runoffApron` pads at brake zones only; `pal.runoff` (terrain verge) is asphalt grey so the aqua reads as a pad, not as the whole ground.
 - Beach Club belongs at T11–13 (not early infield).
 - Keep it bright and saturated: high-key daylight, pastel hospitality cubes, vivid palm greens; fade far boxes into the pale haze band for tropical depth.
 - Palms are cheap and everywhere: thin trunk box + green fan-blob, scattered in rows along straights and the marina.
