@@ -116,6 +116,11 @@ async function startRaceFromSettings(page) {
   });
   await armTimeline(page);
   await clickId(page, "rs-go");
+  return awaitGarageThenCard(page);
+}
+
+/** Wait until the armed timeline shows the garage-out and then the card (or the race), and return it. */
+async function awaitGarageThenCard(page) {
   try {
     await page.waitForFunction(() => {
       const tl = window.__garageOutTL || [];
@@ -219,5 +224,73 @@ test.describe("garage-out before race/session card", () => {
     }, null, { polling: 100, timeout: 60_000 });
     const tl = await startRaceFromSettings(page);
     assertGarageThenCard(tl, "quick");
+  });
+
+  // Bug-hunt 3.14: three routes used to call startRaceCovered (the card only, "no flyby") — qualifying's
+  // TO THE GRID and DRIVE and a championship NEXT RACE with qualifying off. They now go through the same
+  // pre-race screen as RACE SETTINGS' GO (startRaceFromSheet): garage-out, then the card.
+  test("after qualifying: TO THE GRID plays garage-out before the card", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 240_000);
+    await setMotion(page, true);
+    await openRaceSettings(page);
+    // GRID = QUALIFYING LAP: GO opens the sheet (no garage-out before it), SIMULATE takes the model's lap.
+    await page.evaluate(() => {
+      const sel = document.getElementById("rs-quali-sel");
+      if (!sel) throw new Error("garage-out-before-card: missing #rs-quali-sel");
+      const opt = [...sel.options].find((o) => o.value === "quali" || /QUALIFYING/i.test(o.textContent || ""));
+      if (!opt) throw new Error("garage-out-before-card: no QUALIFYING option in " + [...sel.options].map((o) => o.value));
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await clickId(page, "rs-go");
+    await page.waitForFunction(() => {
+      const q = document.getElementById("quali");
+      return !!(q && !q.hidden && document.getElementById("q-sim"));
+    }, null, { polling: 100, timeout: 120_000 });
+    await clickId(page, "q-sim");
+    await page.evaluate(() => {
+      try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (_) { /* sealed */ }
+    });
+    await armTimeline(page);
+    await clickId(page, "q-go");
+    const tl = await awaitGarageThenCard(page);
+    assertGarageThenCard(tl, "quali-grid");
+  });
+
+  test("season NEXT RACE with qualifying off: garage-out before the card", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 480_000);
+    await setMotion(page, true);
+    // Round 1 starts from RACE SETTINGS (already covered); the route under test is the results screen's NEXT ROUND.
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.seasonCfg", JSON.stringify({ quali: false }));
+      localStorage.setItem("apex26.reliability", JSON.stringify("off"));
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await clickId(page, "mb-season");
+    await clickId(page, "sel-go");
+    await page.waitForFunction(() => {
+      const rs = document.getElementById("race-settings");
+      const go = document.getElementById("rs-go");
+      return !!(rs && !rs.hidden && go && !go.disabled);
+    }, null, { polling: 100, timeout: 60_000 });
+    await page.evaluate(() => {
+      try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (_) { /* sealed */ }
+    });
+    await clickId(page, "rs-go");   // qualifying is off for this season: straight to the pre-race screen
+    // Win round 1 outright and land on #results (park() answers falsy until the player has a world pose).
+    await page.waitForFunction(() => {
+      const a = window.__apex, s = a && a.info().state;
+      return (s === "count" || s === "race") && !!a.park(0.9);
+    }, null, { polling: 100, timeout: 240_000 });
+    await page.evaluate(() => window.__apex.finishRace());
+    await page.waitForFunction(() => {
+      const r = document.getElementById("results");
+      return !!(r && !r.hidden);
+    }, null, { polling: 100, timeout: 60_000 });
+    await armTimeline(page);
+    await clickId(page, "res-next");
+    const tl = await awaitGarageThenCard(page);
+    assertGarageThenCard(tl, "season-next");
   });
 });

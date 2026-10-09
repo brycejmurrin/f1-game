@@ -415,3 +415,82 @@ test("3.10 pause-menu RESTART does not run the old race through the async start 
     assert.equal(G.frozen, false, "the body's own reset lifts the hold");
   } finally { g.close(); }
 });
+
+// 3.14 — the garage drive-out on the three routes that used to call startRaceCovered (card only, no garage-out, no flyby).
+// The VM has no frame pump and flushes its timer queue by hand: drive both to the first garage frame (setupPreviewOn is
+// what studioOpen raises for the drive-out) and assert that state is still "menu", i.e. before the countdown.
+async function untilGarageOrGrid(g, max = 3000) {
+  const G = g.G, seen = [];
+  let t = g.sandbox.performance.now() + 1000, garage = false;
+  for (let i = 0; i < max && !garage && G.state !== "count"; i++) {
+    seen.push(G.state);
+    await new Promise((r) => setImmediate(r));
+    if (i % 3 === 0) g.pumpFrame(t += 16);
+    g.flushTimers();
+    garage = !!G.setupPreviewOn;
+  }
+  return { garage, state: G.state, seen };
+}
+
+test("3.14 qualifying: TO THE GRID plays the garage drive-out before the countdown (state menu, then the garage), not the card straight up", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.quitToMenu();
+    G.raceGrid = "quali";
+    G.startRace();   // no classification yet: the sheet opens
+    await g.settle(() => !doc.getElementById("quali").hidden, 4000);
+    assert.equal(G.session, "quali");
+    doc.getElementById("q-sim").onclick();
+    doc.getElementById("q-go").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+    assert.equal(r.state, "menu", "…while the session is still in the menu, before the countdown");
+    assert.equal(G.session, "race", "TO THE GRID is the race, not another qualifying lap");
+  } finally { g.close(); }
+});
+
+test("3.14 qualifying: DRIVE plays the garage drive-out too, and stays the one-lap session", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.quitToMenu();
+    G.raceGrid = "quali";
+    G.startRace();
+    await g.settle(() => !doc.getElementById("quali").hidden, 4000);
+    doc.getElementById("q-drive").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+    assert.equal(r.state, "menu");
+    assert.equal(G.session, "quali");
+  } finally { g.close(); }
+});
+
+test("3.14 season NEXT RACE with qualifying off: the garage drive-out, then the race; a headless page still starts at once", async () => {
+  for (const headless of [false, true]) {
+    const g = await createGame({ track: "monza", storage: { seasonCfg: { quali: false } } });
+    try {
+      const G = g.G, doc = g.sandbox.document;
+      G.daily.stop(); G.timeTrial = false; G.practice = false;
+      G.quitToMenu();
+      G.seasonMode = true;
+      await G.startRace();
+      g.apex.go(); g.step(60);
+      g.apex.park(0.9); g.apex.finishRace();
+      assert.equal(G.state, "results");
+      if (headless) g.apex.headless(true);
+      doc.getElementById("res-next").onclick();
+      const r = await untilGarageOrGrid(g);
+      if (headless) {
+        assert.equal(r.garage, false, "a headless page has no frames: no garage-out");
+        assert.equal(r.state, "count", "…and starts at once, as the agent / dev callers always did");
+      } else {
+        assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+        assert.equal(r.state, "menu");
+        assert.equal(G.seasonMode, true, "the championship flow is kept (quitToMenu would have reset it)");
+      }
+    } finally { g.close(); }
+  }
+});
