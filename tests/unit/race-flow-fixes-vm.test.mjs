@@ -304,3 +304,32 @@ test("3.5 quitToMenu after a time trial restores the race tyre model", async () 
     assert.equal(G.tyres.on(), true);
   } finally { g.close(); }
 });
+
+test("3.6 the derived MIXED-weather plan is cached until a setting it reads changes; a host's assigned plan survives settings applied after it", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.raceChangeable = true; G.wxArcPlan = null;
+    const a = G.wxArcPlan;
+    assert.ok(a && a.to && a.dur > 0, "a changeable race has a plan");
+    assert.equal(G.wxArcPlan, a, "published twice, the same {to, dur} object (what startChangeable arms is what lobby published)");
+    G.raceLaps = G.raceLaps === 5 ? 3 : 5;
+    const b = G.wxArcPlan;
+    assert.notEqual(b, a, "a laps change re-derives (capPlanDur reads the laps)");
+    assert.equal(G.wxArcPlan, b);
+    G.raceWeather = G.raceWeather === "dry" ? "wet" : "dry";
+    assert.notEqual(G.wxArcPlan, b, "a weather change re-derives (the target is never the starting weather)");
+    G.trackIdx = G.trackIdx === 0 ? 1 : 0;
+    const c = G.wxArcPlan;
+    G.raceChangeable = false;
+    assert.equal(G.wxArcPlan, null, "no plan when the chip is not MIXED");
+    G.raceChangeable = true;
+    assert.notEqual(G.wxArcPlan, c, "toggling the chip re-derives");
+    // lobby.applySettings assigns the host's plan and THEN the weather / laps: it must not be wiped
+    G.wxArcPlan = { to: "rain", dur: 200 };
+    const host = G.wxArcPlan;
+    G.raceWeather = "dry"; G.raceLaps = 7; G.trackIdx = 2; G.raceChangeable = true;
+    assert.equal(G.wxArcPlan, host, "an assigned (host) plan is not a derived one");
+    assert.deepEqual({ ...G.wxArcPlan }, { to: "rain", dur: 200 });
+  } finally { g.close(); }
+});
