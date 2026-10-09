@@ -6679,7 +6679,19 @@ function render(dt) {
     if (loadingScreen.phase() === "handoff") loadingScreen.stop();
     return;
   }
-  if (gfx.warming && gfx.warming()) return;
+  // Warming used to return before the visibility pass. openGarage's Home→bay
+  // gap hides #game via menuBlank; if a program warm then latched, the lid
+  // stayed up until an unrelated present (a panel click) cleared warming.
+  // Intro staging (_studio.cardUp) must keep both canvases hidden under
+  // PREPARING until the first successful garage present (garage-arrival).
+  if (gfx.warming && gfx.warming()) {
+    if (setupPreviewOn && !(_studio && _studio.cardUp)) {
+      if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
+      if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+      if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
+    }
+    return;
+  }
   if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
   if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
   // The live Home garage returned above. Other menus hide undrawn canvases
@@ -8678,8 +8690,21 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  if (from === "pit") { openSetup(); setupCam.startArrival(); }
-  else vt(openSetup);
+  // ENTRY FRAME: endHome() runs before setupPreviewOn flips, so render()'s
+  // menuBlank path can hide #game for the Home→garage gap. startViewTransition
+  // then defers the game loop; the bay stayed black until a panel click pumped
+  // another present. Unhide and draw one garage frame inside the same vt
+  // callback as openSetup — not a timer mask, the frame entry owes the player.
+  const enterGarage = () => {
+    openSetup();
+    if (canvas) canvas.style.visibility = "";
+    if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+    if (_softEl) _softEl.style.visibility = "";
+    try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
+    try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
+  };
+  if (from === "pit") { enterGarage(); setupCam.startArrival(); }
+  else vt(enterGarage);
 }
 $("mb-garage").onclick = () => openGarage("menu");
 // ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
