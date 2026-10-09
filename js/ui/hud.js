@@ -14,7 +14,7 @@ const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null;
+let _invalidateFit = null, _syncPhoneFit = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -367,7 +367,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
-let _fitKey = "", _fitWait = 0, _fitRetry = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
+let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
 // all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
@@ -594,6 +594,107 @@ function mirrorClear(root) {
   const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
+/** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
+function _hudRectsHit(a, b) {
+  return !!(a && b && a.width > 0 && b.width > 0
+    && a.left < b.right - 0.5 && b.left < a.right - 0.5
+    && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
+}
+function _boostOnRightHalf() {
+  const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
+  if (!boost || boost.hidden) return null;
+  const br = boost.getBoundingClientRect();
+  if (!(br.width && br.height)) return null;
+  if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
+  return boost;
+}
+/** Painted phone readout-on-control clashes the spec measures (not budget math). */
+function phonePaintedClash() {
+  if (document.body.classList.contains("desktop")) return false;
+  const sectors = els.hudSectors;
+  const boost = _boostOnRightHalf();
+  if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
+  const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
+  if (rel && !rel.hidden) {
+    const rr = rel.getBoundingClientRect();
+    // Pedals are #btn-* siblings, not #dock-left children (index.html).
+    if (_dockL) {
+      for (const g of _dockL.children) {
+        if (g.hidden) continue;
+        const box = g.getBoundingClientRect();
+        if (box.width && box.height && _hudRectsHit(rr, box)) return true;
+      }
+    }
+    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
+    for (let i = 0; i < pedalSteer.length; i++) {
+      const el = pedalSteer[i];
+      if (!el || el.hidden) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
+    }
+  }
+  return false;
+}
+/** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
+function phoneFitStampSync(scale) {
+  if (document.body.classList.contains("desktop")) return;
+  const root = document.documentElement;
+  const DOCK_AIR = 12;
+  if (!_hudTop) {
+    _hudTop = document.querySelector(".hud-top");
+    _hudBottom = document.querySelector(".hud-bottom");
+    _dockL = document.getElementById("dock-left");
+    _dockR = document.getElementById("dock-right");
+  }
+  const bumpDock = () => {
+    const boost = _boostOnRightHalf();
+    if (!boost) return false;
+    const br = boost.getBoundingClientRect();
+    if (!(br.width && br.height)) return false;
+    const probe = els.hudSectors || _hudTop || els.minimap;
+    const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
+    const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : zTop;
+    const z = Math.min(zTop, live) || 1;
+    let sarPx = 0;
+    try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
+    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
+    const need = Math.min(
+      Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
+      midCap
+    );
+    hStyle(root, "--dock-r-w", (need > 0 ? need : 0).toFixed(1) + "px");
+    if (els.hudSectors) void els.hudSectors.offsetHeight;
+    if (_dockR) void _dockR.offsetHeight;
+    return true;
+  };
+  const shrinkSectors = () => {
+    const secEl = els.hudSectors;
+    const boost = _boostOnRightHalf();
+    if (!secEl || secEl.hidden || !boost) return false;
+    const br = boost.getBoundingClientRect();
+    const secR = secEl.getBoundingClientRect();
+    if (!secR.width || !_hudRectsHit(secR, br)) return false;
+    const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
+    const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
+    const z = Math.min(zTop, live) || 1;
+    const worst = secR.right - (br.left - DOCK_AIR);
+    if (!(worst > 0.5)) return false;
+    const curW = secR.width / z;
+    secEl.style.maxWidth = Math.max(48, curW - worst / z).toFixed(1) + "px";
+    void secEl.offsetHeight;
+    return true;
+  };
+  if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+  for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
+    if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+    bumpDock();
+    shrinkSectors();
+  }
+  if (!phonePaintedClash()) {
+    _fitClearSeq = (_fitClearSeq + 1) | 0;
+    hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
+  } else hStyle(root, "--hud-fit-stamp", "");
+}
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
@@ -665,11 +766,10 @@ function fitHud() {
     let clash = false;
     if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
       const s = els.hudSectors.getBoundingClientRect();
-      const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      const boost = _boostOnRightHalf();
+      const b = boost ? boost.getBoundingClientRect() : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2
-          && s.width && s.right > b.left - 8) clash = true;
+      if (b && b.width && s.width && s.right > b.left - 8) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
         if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
@@ -679,6 +779,7 @@ function fitHud() {
         }
       }
     }
+    if (!clash && phonePaintedClash()) clash = true;
     if (!clash) return;
     _fitWait = 0;
   }
@@ -1404,6 +1505,11 @@ function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
+  // Headless layout probes freeze after a painted-clear frame; rAF still runs
+  // updateHud(false) and was moving REL/S3 before Playwright's probe (CI:
+  // stamp/wait green, identical S3×BOOST + REL×BRAKE on probe). jump/camera
+  // use refreshHud(true) to re-fit while frozen.
+  if (G.frozen && !force) return;
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
   if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {
@@ -1782,6 +1888,10 @@ function updateHud(force, dtMs) {
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
+  // Stamp only after REL, sector rows and announce lane for this tick — fitHud
+  // runs at tick start and must not publish early (CI: stamp green, S3×BOOST).
+  syncComputedRootVars();
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
   drawMinimap();
 }
 
@@ -2072,13 +2182,25 @@ function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
+  hStyle(root, "--hud-fit-stamp", "");
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;
-return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit };
+function syncPhoneFit() {
+  syncComputedRootVars();
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
+  const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+  return !phonePaintedClash() && /^\d+$/.test(stamp);
+}
+_syncPhoneFit = syncPhoneFit;
+return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit };
 }
 
-return { create, invalidateFit: () => { if (_invalidateFit) _invalidateFit(); } };
+return {
+  create,
+  invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
+  syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+};
 })();
 Object.freeze(GameHud);

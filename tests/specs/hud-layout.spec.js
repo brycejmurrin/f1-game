@@ -93,6 +93,41 @@ const PIN_PREVIOUS_LOOK = () => {
   } catch (_) {}
 };
 
+/** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
+async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
+  const o = opts || {};
+  await page.waitForFunction(async ({ needRel, prevStamp }) => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (document.body.classList.contains("desktop")) return true;
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+    const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+    if (!stamp || !/^\d+$/.test(stamp)) return false;
+    if (prevStamp != null && prevStamp !== "" && stamp === prevStamp) return false;
+    const hit = (a, b) => a.width > 0 && b.width > 0
+      && a.left < b.right - 0.5 && b.left < a.right - 0.5
+      && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+    const boost = document.getElementById("btn-boost");
+    const sectors = document.getElementById("hud-sectors");
+    if (sectors && !sectors.hidden && boost && !boost.hidden) {
+      const br = boost.getBoundingClientRect();
+      if (br.width && (br.left + br.right) / 2 >= window.innerWidth / 2) {
+        const s = sectors.getBoundingClientRect();
+        if (s.width && hit(s, br)) return false;
+      }
+    }
+    if (needRel) {
+      const rel = document.getElementById("hud-rel");
+      const brake = document.getElementById("btn-brake");
+      if (!rel || rel.hidden || !brake) return false;
+      const rr = rel.getBoundingClientRect(), brk = brake.getBoundingClientRect();
+      if (!(rr.width && brk.width)) return false;
+      if (hit(rr, brk)) return false;
+    }
+    try { window.__apex.freeze(true); } catch (_) { /* */ }
+    return true;
+  }, { needRel: !!o.rel, prevStamp: o.prevStamp ?? null }, { polling: 100, timeout: timeoutMs });
+}
+
 /** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
   await page.waitForFunction(async () => {
@@ -241,6 +276,9 @@ async function race(page, steer, manual, ins, opts) {
         const m = map.getBoundingClientRect();
         if (m.width > 0 && (m.left < sal - 0.5 || m.right > window.innerWidth - sar + 0.5)) return false;
       }
+      // fitHud bumps --hud-fit-stamp only after painted phone clearance lands.
+      const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+      if (!stamp || !/^\d+$/.test(stamp)) return false;
       // Freeze in the same turn that saw clearance. updateHud still ticks
       // while frozen, but fitHud's painted-clash path re-opens the same-key
       // backoff if wrap-reverse crawls BOOST back onto S3.
@@ -254,6 +292,7 @@ const measure = async (page, ctrl, hud, W, H, ins) => {
   await page.evaluate(() => {
     if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
   });
+  await waitPhoneHudFitClearance(page);
   await waitTouchSectorsClearBoost(page);
   await page.waitForFunction(() => {
     const ann = document.getElementById("announce");
@@ -597,26 +636,19 @@ test.describe("tilt steer high HUD scale", () => {
   test("sector plate clears BOOST (phone landscape, 150%)", async ({ page }) => {
     const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
     await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150 });
+    const stampBefore = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
     await page.evaluate(() => {
+      try { window.__apex.freeze(false); } catch (_) { /* */ }
       if (typeof HudElements !== "undefined") HudElements.set("rel", true);
       window.__apex.jump(0.15, 60, 0);
     });
-    await page.waitForFunction(() => {
-      const rel = document.getElementById("hud-rel");
-      const brake = document.getElementById("btn-brake");
-      if (!rel || rel.hidden || !brake) return false;
-      const a = rel.getBoundingClientRect(), b = brake.getBoundingClientRect();
-      if (!(a.width && b.width)) return false;
-      // fitRows must have slid/capped the card clear of BRAKE (TILT left column).
-      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) return false;
-      // jump() + REL unhide re-fits; wait until S3 has cleared BOOST again.
-      const sec = document.getElementById("hud-sectors");
-      const boost = document.getElementById("btn-boost");
-      if (!sec || !boost || sec.hidden || boost.hidden || !sec.childElementCount) return false;
-      const s = sec.getBoundingClientRect(), g = boost.getBoundingClientRect();
-      if (!(s.width > 0 && g.width > 0)) return false;
-      return s.right <= g.left + 0.5;
-    }, null, { polling: 100, timeout: 30_000 });
+    await waitPhoneHudFitClearance(page, { rel: true, prevStamp: stampBefore });
+    await page.evaluate(() => {
+      if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit && !GameHud.syncPhoneFit()) {
+        throw new Error("phone layout not clear after wait");
+      }
+    });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },
