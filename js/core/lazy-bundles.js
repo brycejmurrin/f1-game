@@ -281,6 +281,8 @@ function restoreOnEngine() {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
     GameAudio.setSfxVolume(store.get("volSfx"));
+    const radio = G.radio;
+    if (radio && radio.setVolume) radio.setVolume(store.get("volRadio", 0.8));
   } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }
   // EVERYTHING ELSE BOOT SAID TO THE STUB. PlatformSession.firstGesture ran
   // GameAudio.init() + startMusic(-1) on the noop (the gesture is what pulls
