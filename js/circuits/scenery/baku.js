@@ -133,7 +133,7 @@
         backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
         backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
       }
-      // s 0.58–0.97: Caspian seafront — city skyline R, dark sea haze L
+      // s 0.58–0.97: Caspian seafront — city skyline R, open Caspian L (no backdrops)
       for (let i = 0; i < 12; i++) {
         const kS = K(0.58 + i / 12 * 0.39);
         backdrop(kS, 1,  150 + hash(i * 5 + 58) * 70, [28 + hash(i * 7 + 58) * 20, 38 + hash(i * 11 + 58) * 62, 22], DARK2);
@@ -424,17 +424,19 @@
       });
 
       // Castle squeeze (0.42–0.50): wall() drops every node in the narrowed
-      // hwZone (onTrack at gap 2.0) — one solid curtain per side + crenellated piers.
+      // hwZone (onTrack at gap 2.0) — one solid curtain per side, built per node
+      // at the REAL walk spacing (step*ds) so it follows the road, + crenellated
+      // piers. Curtain top sits 0.5 m under the pier tops (no coplanar faces).
       {
         const sqGap = 2.0, sqTh = 1.4, sqH = 11, sqTop = sqH + 0.4;
-        let sqSpan = 0;
-        along(0.42, 0.50, 999, (_k, spacing) => { sqSpan = spacing; });
-        const kSq = K(0.46);
-        for (const side of [-1, 1]) {
-          const a = anchor(kSq, side, sqGap);
-          const b = [a.r, a.u, a.t];
-          addBox(out, vadd(a.c, a.u, sqTop / 2 - 0.2), [sqTh, sqTop, sqSpan * 0.98], SAND, b);
-        }
+        // One node per box (step 4 ≈ ds): a 4 m tangent box barely leaves the
+        // road's curve, where the 8 m one was culled on the tight inner bends.
+        along(0.42, 0.50, 4, (k, spacing) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, sqGap);
+            addBox(out, vadd(a.c, a.u, 5.1), [sqTh, sqTop - 0.2, spacing * 0.98], SAND, [a.r, a.u, a.t]);
+          }
+        });
         along(0.42, 0.50, 7.2, (k) => {
           for (const side of [-1, 1]) {
             const a = anchor(k, side, sqGap);
