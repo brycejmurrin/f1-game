@@ -94,6 +94,18 @@ test("every bad code is refused with a reason, never an exception", async () => 
   assert.equal(CD.decodeBytes(null).reason, "bounds");
 });
 
+test("a well-formed code for a 2,000 km loop is refused as geometry (bug-hunt 6.2)", async () => {
+  const { CD, C } = bootEditor();
+  // 200 legal points over the +-10 km map: encodeBytes happily writes them, decode must not open them.
+  const star = Array.from({ length: 200 }, (_, i) => { const a = ((i * 37) % 200) / 200 * Math.PI * 2; return [Math.round(Math.cos(a) * 9990 * 4) / 4, Math.round(Math.sin(a) * 9990 * 4) / 4]; });
+  const it = Object.assign(C.sanitize(design()), { pts: star });
+  it.heights = star.map(() => 0);
+  const bytes = CD.encodeBytes(it, true);
+  const r = await CD.decode("APXT" + bytes[0] + ".p." + CD.b64url(bytes));
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "geometry");
+});
+
 test("URL fragment and file envelope helpers", () => {
   const { CD, ctx } = bootEditor();
   assert.equal(CD.shareUrl("APXT1.p.AAA", "https://x.test/f1/"), "https://x.test/f1/#track=APXT1.p.AAA");

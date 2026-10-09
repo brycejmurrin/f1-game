@@ -26,7 +26,11 @@ const CustomTracks = (function () {
     // control points closer than the editor's spacing (8 coincident points
     // registered as raceable with curvature NaN), and a control polygon no
     // shorter than this (validate.js's lap floor is 2.5 km on the BUILT road).
-    spacing: 8, loopMin: 1000,
+    // loopMax: the other end. A share code or file can carry 200 legal points
+    // spread over the whole ±10 km map (a 2,000 km loop = 500 k engine nodes: the
+    // designer froze building it). validate.js reds a lap over 7 km, so 14 km of
+    // polygon is already hopeless; a draft in progress gets a little more room.
+    spacing: 8, loopMin: 1000, loopMax: 14000, loopMaxLoose: 20000,
   });
   // Road-edge styles the designer authors (mesh.js buildKerbs). Default flat
   // matches the engine's historic ribbon so older saves keep their look + id.
@@ -150,16 +154,22 @@ const CustomTracks = (function () {
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
 
-  /** Control-polygon perimeter (the closing chord included), or -1 when two
-   *  consecutive points sit closer than LIMITS.spacing. */
-  function loopLength(pts) {
+  /** Control-polygon perimeter (the closing chord included). */
+  function polyLength(pts) {
     let L = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const a = pts[i], b = pts[(i + 1) % pts.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (d < LIMITS.spacing) return -1;
-      L += d;
-    }
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; L += Math.hypot(b[0] - a[0], b[1] - a[1]); }
     return L;
+  }
+  function sanitizeLength(v, poly) {
+    return Number.isFinite(v) && v >= poly * 0.75 && v <= poly * 1.25 ? Math.round(v) : Math.round(poly);
+  }
+  /** The perimeter, or -1 when two consecutive points sit closer than LIMITS.spacing. */
+  function loopLength(pts) {
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < LIMITS.spacing) return -1;
+    }
+    return polyLength(pts);
   }
 
   /** Repair rather than discard where the geometry is sound; null when it is not.
@@ -171,8 +181,9 @@ const CustomTracks = (function () {
     if (!raw || typeof raw !== "object") return null;
     const pts = sanitizePts(raw.pts);
     if (!pts) return null;
-    const L = loopLength(pts);
-    if (!(opts && opts.loose) && L < LIMITS.loopMin) return null;
+    const L = loopLength(pts), loose = !!(opts && opts.loose);
+    if (!loose && L < LIMITS.loopMin) return null;
+    if (polyLength(pts) > (loose ? LIMITS.loopMaxLoose : LIMITS.loopMax)) return null;
     const heights = sanitizeHeights(pts, raw.heights);
     const it = {
       name: sanitizeName(raw.name),
@@ -186,7 +197,10 @@ const CustomTracks = (function () {
       elevations: sanitizeZones(raw.elevations, BUMP),
       bridges: sanitizeZones(raw.bridges, BUMP),
       turns: Array.isArray(raw.turns) ? raw.turns.map(frac).filter((v) => v != null).slice(0, 40) : [],
-      lengthM: num(raw.lengthM, 0, 50000, 0),
+      // The designer stores the BUILT lap (a few % off the polygon: smoothing cuts corners);
+      // a figure outside that band is a lie (a file's 7 m reached gpLaps as 3,050 laps), so
+      // the polygon stands in.
+      lengthM: sanitizeLength(raw.lengthM, polyLength(pts)),
       created: num(raw.created, 0, 8.64e15, Date.now()),
       updated: num(raw.updated, 0, 8.64e15, Date.now()),
     };
@@ -202,7 +216,6 @@ const CustomTracks = (function () {
       const props = TrackDesignerProps.sanitize(raw.props);
       if (props) it.props = props;
     }
-    if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
   }
@@ -214,7 +227,9 @@ const CustomTracks = (function () {
     if (v && typeof v === "object" && Array.isArray(v.items)) {
       let dropped = 0;
       for (const raw of v.items.slice(0, LIMITS.items)) {
-        const it = sanitize(raw);
+        // One record's throw (a hostile field) must not take the rest, or the boot, with it.
+        let it = null;
+        try { it = sanitize(raw); } catch (e) { Log.warn("track", "customTracks: a design failed to load: " + (e && e.message || e)); }
         if (!it) { dropped++; continue; }
         // Two records with one content id: the newer edit wins.
         if (seen.has(it.id)) { const i = items.findIndex((x) => x.id === it.id); if (items[i].updated < it.updated) items[i] = it; continue; }
@@ -283,8 +298,11 @@ const CustomTracks = (function () {
     if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return -1;
     for (let i = Tracks.LIST.length - 1; i >= 0; i--) if (Tracks.LIST[i].custom) Tracks.LIST.splice(i, 1);
     const items = load().items;
-    for (const it of items) Tracks.LIST.push(TrackDef.fromRaw(toRaw(it)));
-    return items.length;
+    let n = 0;
+    for (const it of items) {
+      try { Tracks.LIST.push(TrackDef.fromRaw(toRaw(it))); n++; } catch (e) { Log.warn("track", "customTracks: " + it.id + " did not register: " + (e && e.message || e)); }
+    }
+    return n;
   }
 
   function list() { return load().items; }
@@ -424,7 +442,7 @@ const CustomTracks = (function () {
     return { ensureEditor, consumeTrackHash };
   }
 
-  sync();   // at EVAL: before game.js resolves the stored trackId
+  try { sync(); } catch (e) { Log.warn("track", "customTracks: sync failed: " + (e && e.message || e)); }   // at EVAL: before game.js resolves the stored trackId
 
   return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();

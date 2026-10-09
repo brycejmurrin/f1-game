@@ -270,6 +270,42 @@ test("sanitize refuses a loop the engine cannot build: coincident / sub-8 m poin
   assert.ok(C.sanitize(design({ pts: ellipse(36, 120, 80) }), { loose: true }));
 });
 
+test("sanitize refuses a loop thousands of km long (bug-hunt 6.2): loopMax strict, a looser ceiling for a draft", () => {
+  const { C } = boot();
+  // 200 points on a star inside the ±10 km map: every point legal, the polygon ~2,200 km.
+  const star = Array.from({ length: 200 }, (_, i) => { const a = ((i * 37) % 200) / 200 * Math.PI * 2; return [Math.round(Math.cos(a) * 9990 * 4) / 4, Math.round(Math.sin(a) * 9990 * 4) / 4]; });
+  assert.equal(C.sanitize(design({ pts: star })), null, "a 2,000 km polygon is not a circuit");
+  assert.equal(C.sanitize(design({ pts: star }), { loose: true }), null, "nor a draft");
+  assert.deepEqual(plain(C.upsert(design({ pts: star }))), { ok: false, reason: "geometry" });
+  assert.ok(C.LIMITS.loopMax >= 10000 && C.LIMITS.loopMax <= 20000, "loopMax sits above the 7 km lap cap, well below the map");
+  const mid = ellipse(120, 2800, 2600);   // ~17 km: past the strict ceiling, inside the draft's
+  assert.equal(C.sanitize(design({ pts: mid })), null);
+  assert.ok(C.sanitize(design({ pts: mid }), { loose: true }), "a draft too long is a (red) design, not garbage");
+  assert.ok(C.sanitize(design({ pts: ellipse(120, 2000, 1800) })), "~12 km still registers (RED on the lap cap, but storable)");
+});
+
+test("sanitize derives lengthM from the polygon, never from the file (bug-hunt 6.5)", () => {
+  const { C } = boot();
+  const poly = C.sanitize(design()).lengthM;
+  assert.ok(poly > 3000);
+  for (const lie of [7, 1, 49, 999999, -5, NaN, "9"]) assert.equal(C.sanitize(design({ lengthM: lie })).lengthM, poly, `lengthM: ${lie}`);
+  // The designer's own save stores the BUILT lap, a few % off the polygon: that stands.
+  assert.equal(C.sanitize(design({ lengthM: Math.round(poly * 0.96) })).lengthM, Math.round(poly * 0.96));
+});
+
+test("sync() isolates a throwing record instead of killing boot (bug-hunt 6.6)", () => {
+  const { C, Tracks, ctx } = boot({ customTracks: { v: 1, items: [design(), design({ name: "Two", pts: ellipse(36, 800, 500) })] } });
+  const before = Tracks.LIST.length;
+  assert.equal(before, 54, "52 shipped + 2 stored");
+  const real = ctx.TrackThemes;   // a var in this realm: swap in a copy whose scenery factory throws for one record
+  let n = 0;
+  ctx.TrackThemes = Object.assign({}, real, { sceneryFor: (it) => { if (n++ === 0) throw new Error("boom"); return real.sceneryFor(it); } });
+  try {
+    assert.doesNotThrow(() => C.sync());
+    assert.equal(Tracks.LIST.length, before - 1, "the throwing record is dropped, its neighbour registers");
+  } finally { ctx.TrackThemes = real; }
+});
+
 test("remove() / a replacing upsert re-resolve the selection by id and rewrite both stored keys", () => {
   const { Tracks, C, data } = boot();
   const G = { trackIdx: 0 };
