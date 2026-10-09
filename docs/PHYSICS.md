@@ -52,6 +52,20 @@ scale, so a ratio is its natural unit — which is also why the v2→v3 store re
 measures "nearest" in LOG space; in absolute pace the two fastest old settings
 collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
+**Known absolute-speed exceptions (decided 2026-10-09, not changed).** Three
+terms still read raw numbers where the rule above would scale them; each was
+reviewed and left as tuning. (1) `DEPLOY_A` (3.0 m/s², `js/physics/consts.js`) is
+not scaled by `PACE`, so the ERS boost is stronger relative to the engine's accel
+at low OVERALL SPEED (about +86 % at pace 0.5, +43 % at 1). (2) After #1266 moved
+the front tyre peak to `CURVE_PEAK_X_F`, `pastF` and `frontUtil`
+(`js/physics/player-forces.js`) and GripSteer's `alphaPk` (`js/physics/grip-steer.js`)
+still use `CURVE_PEAK_X` (π/2), so `frontUtil` reads about 0.83 at the true peak;
+the scrub SFX, the coach tip and the rear haptic cue all reference it. (3) The AI
+closing-speed margins of 1/2/3 m/s and the 72 m mirror cap in
+`js/physics/ai-drive.js` are raw, where `queueBrake`, `otFireRate` and `passReach`
+are pace-scaled. None of these is a defect to chase; a new reader of any of them
+should treat the raw number as the intended tuning.
+
 **Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
 each of the player's axles turns `x = cs·α/mu` into a normalised force —
 `sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
