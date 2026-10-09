@@ -514,7 +514,8 @@ const GOAL_KINDS = {
 const GOAL_BASE = ["champPos", "teamPos", "beatMate"];
 // Every declared kind, for the contract tests and anything enumerating them.
 const GOAL_ORDER = GOAL_BASE.concat(["beatRival"]);
-function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
+// Own keys only: a persisted `type` of "constructor" / "__proto__" resolved to a function and threw on the next call.
+function goalKind(type) { return Object.prototype.hasOwnProperty.call(GOAL_KINDS, type) ? GOAL_KINDS[type] : GOAL_KINDS.champPos; }
 // Drawn from the career seed and the YEAR, so a career is not the same promise
 // five seasons running and a reload cannot reroll it.
 // A FOURTH KIND MUST NOT RE-PROMISE THE OTHER THREE. This was
@@ -975,7 +976,7 @@ const OBJ_LABELS = {
   clean: () => "Clean race — no track limits, no penalty",
 };
 function objectiveLabel(o) {
-  const f = o && OBJ_LABELS[o.type];
+  const f = o && Object.prototype.hasOwnProperty.call(OBJ_LABELS, o.type) ? OBJ_LABELS[o.type] : null;   // own keys: "constructor" is not a label
   return f ? f(o.value) : "";
 }
 

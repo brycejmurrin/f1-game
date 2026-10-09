@@ -753,3 +753,50 @@ test("legacy slot migration cannot displace a newer current-layout mirror save",
     assert.equal(next.Career.data().money, 200, "another boot keeps the recovered save");
   }
 });
+
+// bug-hunt 1.7: write() stringified twice — once inside the try, once OUTSIDE it
+// for the mirror — so a BigInt / cyclic value threw out of write() after the
+// cache and `rev` had already moved.
+test("write() stringifies once and survives a value JSON cannot encode (bug-hunt 1.7)", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  let calls = 0;
+  store.write("career.driver.0", { money: 1, toJSON() { calls++; return { money: 1 }; } });
+  assert.equal(calls, 1, "one JSON.stringify per write, mirror key included");
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 1);
+
+  const cyclic = { money: 2 }; cyclic.self = cyclic;
+  const before = store.rev;
+  let r;
+  assert.doesNotThrow(() => { r = store.write("career.driver.0", cyclic); });
+  assert.equal(r.ok, true);
+  assert.equal(r.durable, false, "an unencodable value is a non-durable write, not an exception");
+  assert.equal(store.rev, before + 1);
+  assert.equal(store.get("career.driver.0").money, 2, "the session keeps the value");
+  assert.equal(store.mirror.pending, 0, "nothing is queued for the mirror, least of all a delete tombstone");
+  assert.doesNotThrow(() => store.write("career.driver.1", BigInt(5)));
+  assert.equal(store.writeFailed() !== null, true);
+});
+
+// bug-hunt 1.7: onversionchange closed the IDB handle but mirrorOpen() kept
+// resolving the memo to it, so every later flush failed its transaction.
+test("a versionchange drops the memoised mirror handle so the next flush reopens (bug-hunt 1.7)", async () => {
+  const base = fakeIndexedDb();
+  let opens = 0, handle = null;
+  const idb = { rows: base.rows, lsOk: base.lsOk, open() {
+    opens++;
+    const r = base.open();
+    handle = r.result;
+    return r;
+  } };
+  const { store } = loadMirrored({ idb });
+  await store.mirror.ready;
+  assert.equal(opens, 1);
+  assert.equal(typeof handle.onversionchange, "function", "the module arms onversionchange on its handle");
+  handle.onversionchange();
+  store.set("career.driver.0", { money: 3 });
+  await store.mirrorFlush();
+  assert.equal(opens, 2, "the flush after a versionchange opens a fresh handle");
+  assert.equal(JSON.parse(base.rows.get("apex26.career.driver.0")).money, 3);
+});

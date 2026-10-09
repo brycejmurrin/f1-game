@@ -186,7 +186,10 @@ const SaveMigrate = (function () {
     career.seats = objMap(career.seats);
     // An offer's salary is added to career.money on acceptance (a string was
     // concatenated); its years become the deal's.
-    career.offers = rows(career.offers).map((o) => { o.salary = finiteNumber(o.salary); o.years = finiteNumber(o.years); return o; });
+    career.offers = rows(career.offers).map((o) => {
+      for (const k of ["salary", "years"]) if (k in o) o[k] = finiteNumber(o[k]);   // present keys only: a partial row stays partial
+      return o;
+    });
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
     // absent reads as index 0, which is the kind the single dealt brief always

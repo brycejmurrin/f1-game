@@ -198,6 +198,9 @@ const CareerBackup = (function () {
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };
+    // build() writes each slot once. Two rows for one slot made apply() write
+    // the first and then return "conflict" on the second (a half-restore).
+    const seen = Object.create(null);
     for (let i = 0; i < raw.slots.length; i++) {
       const row = raw.slots[i];
       if (!isObj(row)) return { ok: false, reason: "slot-row-not-object" };
@@ -209,7 +212,9 @@ const CareerBackup = (function () {
       if (row.i != null && (row.i | 0) !== idx) return { ok: false, reason: "bad-index" };
       const chk = slotPayloadOk(row.data);
       if (!chk.ok) return chk;
-      void f;
+      const slotId = f + ":" + idx;
+      if (seen[slotId]) return { ok: false, reason: "duplicate-slot" };
+      seen[slotId] = true;
     }
     if (raw.season != null && !isObj(raw.season)) return { ok: false, reason: "season-not-object" };
     if (raw.badges != null && !isObj(raw.badges)) return { ok: false, reason: "badges-not-object" };

@@ -102,9 +102,17 @@ const GameStore = (function () {
     write(k, v, options) {
       const key = "apex26." + k;
       let durable = true;
+      // STRINGIFIED ONCE, INSIDE THE TRY: the mirror below used to stringify a
+      // second time outside it, so a value JSON cannot encode (BigInt, a cycle)
+      // threw out of write() AFTER the cache and `rev` had moved. Now it is a
+      // non-durable write like any other, and nothing is queued for the mirror.
+      let json = null, encoded = true;
       try {
         if (v === undefined) localStorage.removeItem(key);
-        else setRoomy(key, JSON.stringify(v));
+        else {
+          try { json = JSON.stringify(v); } catch (e) { encoded = false; throw e; }
+          setRoomy(key, json);
+        }
         _writeFails.delete(key);
       } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, (e && e.name) || "Error"); }
       this._cache.set(key, v);
@@ -112,7 +120,7 @@ const GameStore = (function () {
       this.rev++;
       // Mirrored even when the disk write failed: a quota-refused career save
       // is exactly the write the durable copy exists for.
-      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v), durable, options);
+      if (encoded && mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : json, durable, options);
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
@@ -282,7 +290,10 @@ const GameStore = (function () {
         if (settled) { if (db) { try { db.close(); } catch (e) { /* late open after timeout: nothing owns it */ } } return; }
         settled = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) db.onversionchange = () => { try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
+        // A closed handle must not stay memoised: every later flush would
+        // resolve to it, fail its transaction, and the mirror would be dead for
+        // the session. Dropping the memo lets the next flush reopen.
+        if (db) db.onversionchange = () => { _mirrorDb = null; try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
         res(db || null);
       };
       try {

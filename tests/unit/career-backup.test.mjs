@@ -941,3 +941,38 @@ test("real cached store preserves an unknown season through boot and menu loads"
   assert.equal(h.disk.get("apex26.season"), raw);
   assert.deepEqual(Array.from(h.store.get("season").config.trackIds), ["a", "missing"]);
 });
+
+// bug-hunt 1.7: two rows for one slot wrote the first, then apply() returned
+// "conflict" on the second (its revision had moved) — a half-restore.
+test("a backup with two rows for one slot is rejected whole (bug-hunt 1.7)", () => {
+  const h = loadHarness();
+  fillSix(h);
+  const before = slotSnap(h.disk);
+  const dup = { format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 1, data: save({ money: 1 }) },
+    { flavour: "driver", i: 1, data: save({ money: 2 }) },
+  ] };
+  const r = h.CareerBackup.validate(dup);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "duplicate-slot");
+  assert.equal(h.CareerBackup.apply(dup, { otherFlavourConfirmed: true }).ok, false);
+  assert.deepEqual(slotSnap(h.disk), before, "nothing was written");
+  // an omitted flavour/index means driver:0 — a real driver:0 row beside it is the same slot
+  assert.equal(h.CareerBackup.validate({ format: "apex26-career-backup-v1", slots: [
+    { data: save() }, { flavour: "driver", i: 0, data: save() }] }).reason, "duplicate-slot");
+  // distinct slots (and the same index in the other flavour) stay valid
+  assert.equal(h.CareerBackup.validate({ format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: save() }, { flavour: "myteam", i: 0, data: save({ flavour: "myteam" }) }] }).ok, true);
+});
+
+// bug-hunt 1.4 (career.js sites): persisted strings index plain-object tables.
+test("a persisted goal / objective type of 'constructor' or '__proto__' does not throw (bug-hunt 1.4)", () => {
+  const h = loadHarness();
+  for (const type of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+    assert.equal(h.Career.objectiveLabel({ type, value: 3 }), "", type + " is not an objective label");
+    assert.doesNotThrow(() => h.Career.goalLabel({ type, value: 3 }), type);
+    assert.equal(h.Career.goalLabel({ type, value: 3 }), h.Career.goalLabel({ type: "champPos", value: 3 }),
+      type + " falls back to the championship goal");
+  }
+  assert.notEqual(h.Career.objectiveLabel({ type: "finish", value: 3 }), "", "a real type still labels");
+});
