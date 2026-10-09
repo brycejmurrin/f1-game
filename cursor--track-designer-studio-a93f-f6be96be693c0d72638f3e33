@@ -1,0 +1,1 @@
+1791578203	Bryce Murrin	Track designer UI and scenery discovery: js/editor/designer.js, new scenery-panel.js, css/editor.css, designer tests. Bryce explicitly authorized proceeding on isolated branch despite bug-hunt overlap; no game.js or physics changes.  [cursor/track-designer-studio-a93f; session f6be96be693c0d72638f3e33]
