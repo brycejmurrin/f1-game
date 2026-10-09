@@ -391,3 +391,27 @@ test("3.11 race, Daily, race: stopping the Daily resumes the sim stream where it
     assert.equal(G.simSeed(undefined, true), seed);
   } finally { g.close(); }
 });
+
+test("3.10 pause-menu RESTART does not run the old race through the async start window", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);
+    g.apex.go(); g.step(120);
+    assert.equal(G.state, "race");
+    const carsBefore = G.cars, t0 = G.raceT;
+    assert.ok(t0 > 1, "precondition: the old race is running");
+    g.sandbox.document.getElementById("pm-restart").onclick();   // setPaused(false) + startRace(): the body is still awaiting
+    assert.equal(G.cars, carsBefore, "precondition: the new field is not built yet");
+    let t = g.sandbox.performance.now() + 1000;
+    for (let i = 0; i < 30; i++) g.pumpFrame(t += 1000 / 60);
+    assert.equal(G.cars, carsBefore, "still the old field (the body has not run a turn)");
+    assert.equal(G.raceT, t0, "the old race's clock did not advance while the restart was loading");
+    await g.settle(() => G.cars !== carsBefore && G.state === "count", 8000);
+    assert.equal(G.state, "count", "the restart lands on the grid");
+    assert.equal(G.raceT, 0);
+    assert.equal(G.paused, false);
+    assert.equal(G.frozen, false, "the body's own reset lifts the hold");
+  } finally { g.close(); }
+});
