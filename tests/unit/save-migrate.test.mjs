@@ -219,3 +219,51 @@ test("the career seat is clamped to the team's grid row (MY TEAM: seat 0)", () =
   const once = JSON.stringify(SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { seat: 9 })));
   assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
 });
+
+// bug-hunt 1.2: a slot with no string `team` migrated to `null`, and the title
+// menu's refreshCareerButton() calls team.toUpperCase() at boot — before the
+// slot picker — so one imported `{"money":100}` row stopped the game starting.
+// Default it the way Career.start does.
+test("a career with no usable team gets Career.start's default (bug-hunt 1.2)", () => {
+  const SM = load();
+  assert.equal(typeof SM.migrateCareer({ money: 5 }).team, "string");
+  assert.equal(SM.migrateCareer({ money: 5 }).team, "haas", "a driver career defaults to haas");
+  assert.equal(SM.migrateCareer({ flavour: "myteam" }).team, "custom", "MY TEAM defaults to the custom team");
+  assert.equal(SM.migrateCareer({ team: 7 }).team, "haas");
+  assert.equal(SM.migrateCareer({ team: "" , flavour: "myteam"}).team, "custom");
+  assert.equal(SM.migrateCareer({ team: "ferrari" }).team, "ferrari", "a real team id is kept");
+});
+
+// bug-hunt 1.3: SeasonCal.netPts prefers season.config and looped `round`
+// times; career never writes season.config, so an imported one + round 1e9
+// froze the tab.
+test("a career season never carries an imported config (bug-hunt 1.3)", () => {
+  const SM = load();
+  const c = SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas",
+    season: { round: 1e9, pts: { AAA: 5 }, config: { drop: 2, trackIds: ["x"] } } });
+  assert.equal(Object.hasOwn(c.season, "config"), false, "career.season.config is dropped");
+  assert.equal(c.season.round, 1e9);
+});
+test("remapPoints keeps the standalone season's frozen config", () => {
+  const SM = load();
+  const s = SM.remapPoints({ round: 2, pts: {}, config: { drop: 1, trackIds: ["a", "b", "c"] } });
+  assert.deepEqual(JSON.parse(JSON.stringify(s.config)), { drop: 1, trackIds: ["a", "b", "c"] });
+});
+
+// bug-hunt 1.5: sparse maps and the offer table were kept raw.
+test("tdev, dev, seats and offers are sanitised (bug-hunt 1.5)", () => {
+  const SM = load();
+  const c = SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas",
+    tdev: { haas: "abc", ferrari: 3, mclaren: 1e309 },
+    dev: { "haas:0": { pace: 1 }, "haas:1": "x", "ferrari:0": null, "mclaren:0": [1] },
+    seats: { "haas:0": { name: "A" }, "haas:1": 7, "ferrari:0": null },
+    offers: [{ teamId: "haas", years: "2", salary: "5000", goal: {} }, { teamId: "ferrari", years: 1, salary: 1e309 }] });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.tdev)), { haas: 0, ferrari: 3, mclaren: 0 });
+  assert.deepEqual(Object.keys(c.dev), ["haas:0"], "only object rows survive in dev");
+  assert.deepEqual(Object.keys(c.seats), ["haas:0"], "only object rows survive in seats");
+  assert.equal(c.offers[0].salary, 5000);
+  assert.equal(typeof c.offers[0].salary, "number");
+  assert.equal(c.offers[0].years, 2);
+  assert.equal(c.offers[1].salary, 0);
+  assert.equal(typeof c.tdev.haas, "number");
+});

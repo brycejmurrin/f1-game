@@ -138,7 +138,11 @@ const SaveMigrate = (function () {
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
     career.driver = career.driver && typeof career.driver === "object"
       ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
-    career.team = typeof career.team === "string" && career.team ? career.team : null;
+    // NEVER null: title-menu / career-ui call career.team.toUpperCase() at boot, so
+    // one imported row with no team stopped the game before the slot picker.
+    // The default is Career.start's.
+    career.team = typeof career.team === "string" && career.team ? career.team
+      : career.flavour === "myteam" ? "custom" : "haas";
     // THE SEAT IS AN INDEX INTO THE TEAM'S GRID ROW. game.js copies it straight
     // into driverIdx, and makeCars marks the player by `di === driverIdx`, so a
     // hand-edited or imported `seat: 5` / `-1` gridded a race with no player car.
@@ -151,6 +155,11 @@ const SaveMigrate = (function () {
     // and Career.load() runs at boot uncaught — one bad slot stopped the game.
     const sz = career.season;
     career.season = remapPoints(sz && typeof sz === "object" && !Array.isArray(sz) ? sz : { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
+    // Career always races Tracks.SEASON and never writes a frozen rule set into
+    // its season; SeasonCal.netPts prefers season.config, so an imported one with
+    // a huge `round` made it loop `round` times. (remapPoints keeps config: the
+    // standalone season stores its frozen rules there.)
+    delete career.season.config;
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
     // Only object rows: a null or a number in the ledger threw on the first
@@ -159,12 +168,25 @@ const SaveMigrate = (function () {
     const rows = (a) => (Array.isArray(a) ? a.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : []);
     career.results = rows(career.results);
     career.history = rows(career.history);
-    career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
-    career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
+    // Sparse maps keyed by seat / team: object rows only (a string row made
+    // DriverRatings.get read fields of a primitive), and tdev's numbers finite
+    // (`tdev:{haas:"abc"}` made tierV NaN).
+    const objMap = (m) => {
+      const out = {};
+      if (m && typeof m === "object" && !Array.isArray(m)) {
+        Object.keys(m).forEach((k) => { const r = m[k]; if (r && typeof r === "object" && !Array.isArray(r)) out[k] = r; });
+      }
+      return out;
+    };
+    career.dev = objMap(career.dev);
+    career.tdev = career.tdev && typeof career.tdev === "object" && !Array.isArray(career.tdev) ? career.tdev : {};
+    Object.keys(career.tdev).forEach((k) => { career.tdev[k] = finiteNumber(career.tdev[k]); });
     career.aiParts = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts)
       ? career.aiParts : {};
-    career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
-    career.offers = rows(career.offers);
+    career.seats = objMap(career.seats);
+    // An offer's salary is added to career.money on acceptance (a string was
+    // concatenated); its years become the deal's.
+    career.offers = rows(career.offers).map((o) => { o.salary = finiteNumber(o.salary); o.years = finiteNumber(o.years); return o; });
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
     // absent reads as index 0, which is the kind the single dealt brief always
