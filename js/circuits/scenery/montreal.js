@@ -603,8 +603,13 @@
         // https://en.wikipedia.org/wiki/Montreal_Casino — Île Notre-Dame beside
         // the Olympic Basin; defines the “casino straight” sight-line from the
         // existing plaza / footbridge cues (side +1, basin side of the island).
+        // DRY GROUND: the river band on this side (waterBand 72–180 m, s 5/16–11/16)
+        // begins at s≈0.3125, so the earlier (0.308, 138 m) site stood in the river
+        // (headless probe: 99 % of the footprint under water triangles). s 0.274 /
+        // 95 m keeps the whole footprint (gap 47–143, incl. the annex) on the
+        // terrain ribbon / grass floor with 0 water cells and ≥ 40 m to any road.
         {
-          const ca = anchor(K(0.308), 1, 138);
+          const ca = anchor(K(0.274), 1, 95);
           const cb = [ca.r, ca.u, ca.t];
           const foot = ca.c.slice();
           const gy = groundUnder(foot[0], foot[2]);
@@ -614,8 +619,8 @@
           const GLINT = [0.58, 0.72, 0.88];
           const GOLD = [0.82, 0.68, 0.32];
           modelGroup("montreal-casino", {
-            center: vadd(foot, ca.u, 28),
-            size: [95, 58, 75],
+            center: vadd(vadd(foot, ca.u, 28), ca.t, 9.5),
+            size: [76, 58, 82],   // x: plinth ±36; t: −30 (tiers) … +48 (annex)
             basis: cb,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
