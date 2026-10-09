@@ -121,7 +121,12 @@ test("two agent requests have distinct outcomes when the later mode supersedes",
     assert.equal(fresh.track, "monaco");
     assert.equal(g.G.track.def.id, "monaco");
     assert.equal(g.G.session, "tt");
-  } finally { b.restore(); if (m) m.restore(); }
+  } finally {
+    // The Monaco interceptor wraps Bahrain's: unwind in reverse order so a
+    // later failed Bahrain fetch can retry through the real script loader.
+    if (m) m.restore();
+    b.restore();
+  }
 });
 
 test("fire-and-forget start survives a delayed script failure without hiding awaiter rejection", async () => {
