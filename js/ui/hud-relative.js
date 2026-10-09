@@ -179,7 +179,19 @@ const HudRelative = (function () {
       return;
     }
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
-      const z = root.currentCSSZoom || 1;
+      const rootEl = doc.documentElement;
+      let zPub = 1;
+      if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {
+        const inline = parseFloat(rootEl.style.getPropertyValue("--hud-z-top"));
+        if (Number.isFinite(inline) && inline > 0) zPub = inline;
+      } else if (rootEl && typeof getComputedStyle === "function") {
+        try {
+          const cs = parseFloat(getComputedStyle(rootEl).getPropertyValue("--hud-scale"));
+          if (Number.isFinite(cs) && cs > 0) zPub = cs;
+        } catch (_) { /* mini-dom / VM */ }
+      }
+      const live = root.currentCSSZoom > 0 ? root.currentCSSZoom : zPub;
+      const z = Math.min(zPub, live);
       for (let pass = 0; pass < 3; pass++) {
         const rr = root.getBoundingClientRect();
         if (!(rr.width && rr.height)) break;

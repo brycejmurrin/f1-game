@@ -865,8 +865,15 @@ function publishListenerBasis(modeId, eye, tgt) {
   _listener.fwdX = fx; _listener.fwdZ = fz;
   _listener.rightX = -fz; _listener.rightZ = fx;
 }
+// Debug free camera (__apex.view): copy its eye/target into the render's
+// camera vectors and publish it as the external audio listener, in one call
+// so game.js render() stays at +0 lines.
+function applyFreeCam(cam, eyeOut, tgtOut) {
+  for (let i = 0; i < 3; i++) { eyeOut[i] = cam.eye[i]; tgtOut[i] = cam.target[i]; }
+  publishListenerBasis("free", cam.eye, cam.target);
+}
 function getListenerBasis() { return _listener.valid ? _listener : null; }
 
 return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
-  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, getListenerBasis, playerFrameRivalPan };
+  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, applyFreeCam, getListenerBasis, playerFrameRivalPan };
 })();

@@ -13,11 +13,23 @@ import { analyzeOverlap, overlapArea } from "../../tools/lib/hud-geometry.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+const HUD_JS = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
 
 const box = (key, role, x, y, w, h, round = false) => ({
   key, role, visible: true, exists: true,
   x, y, r: x + w, b: y + h, w, h,
   round, cx: x + w / 2, cy: y + h / 2, rr: w / 2, contains: [],
+});
+
+test("fitHud publishes --hud-fit-stamp after painted phone clearance", () => {
+  assert.match(HUD_JS, /--hud-fit-stamp/,
+    "fitHud bumps a published stamp specs can wait on");
+  assert.match(HUD_JS, /phonePaintedClash\(\)/,
+    "stamp must not advance while painted readout-on-control clashes remain");
+  assert.match(HUD_JS, /phoneFitStampSync/,
+    "stamp publishes at end of updateHud after REL/sectors land");
+  assert.match(HUD_JS, /syncPhoneFit/,
+    "specs can force one painted phone-fit pass before probe");
 });
 
 test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => {
