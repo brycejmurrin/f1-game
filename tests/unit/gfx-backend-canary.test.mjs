@@ -473,6 +473,13 @@ test("TLX aborts program warm on device loss so race-start cannot hang on warmin
   assert.match(src, /RendererPicker\.showUnavailable/);
 });
 
+test("WGX backendState carries ctxLost, the field game.js gfxContextLost() reads", () => {
+  // It exposed only `lost`, so on WebGPU every device-loss fail-fast (loadTrackStepped,
+  // render() top, the race-entry handoff card) was blind.
+  const src = code("js/render/webgpu/wgx.js");
+  assert.match(src, /backendState: \(\) => \(\{[^}]*lost: _lost, ctxLost: !!_lost,/);
+});
+
 test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () => {
   const src = code("js/game.js");
   assert.match(src, /function gfxContextLost\(\)/);
