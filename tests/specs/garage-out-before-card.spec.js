@@ -152,6 +152,23 @@ async function setMotion(page, on) {
 test.describe("garage-out before race/session card", () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
+  // Start Race leaves state === "menu" under the loading/garage plate, so
+  // shared-page toMenu() only hides .screen nodes and never runs quitToMenu /
+  // cancelIntro — the next sharedTest on the worker (parts-ers) then hits a
+  // wedged track build. Always click #pm-quit after each path.
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      if (window.__garageOutPoll) clearInterval(window.__garageOutPoll);
+      if (window.__garageOutRaf) cancelAnimationFrame(window.__garageOutRaf);
+      if (window.__garageOutMo) window.__garageOutMo.disconnect();
+      const q = document.getElementById("pm-quit");
+      if (q) { q.click(); if (q.classList.contains("armed")) q.click(); }
+      const L = document.getElementById("loading");
+      if (L) { L.hidden = true; delete L.dataset.phase; }
+    }).catch(() => {});
+    await toMenu(page).catch(() => {});
+  });
+
   test("reduce-motion: short garage-out completes before session card", async ({ page }) => {
     test.setTimeout(BOOT_MS + 240_000);
     await setMotion(page, false);
