@@ -259,7 +259,7 @@ const IncidentSim = (function () {
       promoted.push(i);
     }
     if (!promoted.length) return;
-    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, settle, gen, elapsed: 0 });
+    _incidents.push({ kind, cars: promoted, tick0: _tick, seq: _seq, snap, good, raw: new Map(), settle, gen, elapsed: 0 });
     _seq++; _promoted += promoted.length; _lastKind = kind;
     Log.info("game", "IncidentSim start " + kind + " cars=" + promoted.length);
   }
@@ -287,8 +287,12 @@ const IncidentSim = (function () {
         // Candidate world position + heading from the 6-DoF body.
         const px = pose.x, pz = pose.z;
         const head = yawOf(pose);
-        const lg = inc.good.get(i) || inc.snap.get(i);
-        // Teleport / non-finite guard against the last-good pose.
+        // The teleport test compares RAW with RAW: `good` holds the WALL-CLAMPED
+        // c.px/pz, and the Rapier world has no barrier colliders, so a car
+        // launched outward past wallAt would drift from it ~v_out*dt per tick
+        // and trip "teleport" (anomaly handback, no RETAIN band) at ~0.5 s.
+        const lg = inc.raw.get(i) || inc.snap.get(i);
+        // Teleport / non-finite guard against the last validated raw pose.
         if (!fin(px) || !fin(pz) || !fin(head) ||
             (lg && (Math.abs(px - lg.px) > stepBound || Math.abs(pz - lg.pz) > stepBound))) {
           handbackCar(inc, i, true); continue;
@@ -349,6 +353,7 @@ const IncidentSim = (function () {
         c.px = wx; c.pz = wz; c.vLat = fin(vSide) ? vSide : 0;   // Rapier's, inverted — not a stale one, and not discarded
         // Advance the last-good snapshot to this validated pose.
         inc.good.set(i, snapOf(c));
+        inc.raw.set(i, { px, pz });
         // Settle detection: sleeping OR both velocities below the settle bands.
         const settling = pose.sleeping ||
           (vHoriz < SETTLE_V && Math.hypot(pose.wx || 0, pose.wy || 0, pose.wz || 0) < SETTLE_W);
@@ -491,7 +496,7 @@ const IncidentSim = (function () {
     const c = G.cars && G.cars[i];
     if (c) c._incidentOwned = false;
     inc.cars = inc.cars.filter((k) => k !== i);
-    inc.snap.delete(i); inc.good.delete(i); inc.settle.delete(i);
+    inc.snap.delete(i); inc.good.delete(i); inc.raw.delete(i); inc.settle.delete(i);
   }
 
   function forceLaunch() { _forced = 1; return status(); }
