@@ -96,11 +96,12 @@ const PIN_PREVIOUS_LOOK = () => {
 /** Touch: fitHud painted clearance + published --hud-fit-stamp before probes. */
 async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   const o = opts || {};
-  await page.waitForFunction(async ({ needRel }) => {
+  await page.waitForFunction(async ({ needRel, prevStamp }) => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     if (document.body.classList.contains("desktop")) return true;
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
     if (!stamp || !/^\d+$/.test(stamp)) return false;
+    if (prevStamp != null && prevStamp !== "" && stamp === prevStamp) return false;
     const hit = (a, b) => a.width > 0 && b.width > 0
       && a.left < b.right - 0.5 && b.left < a.right - 0.5
       && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
@@ -123,7 +124,7 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
     }
     try { window.__apex.freeze(true); } catch (_) { /* */ }
     return true;
-  }, { needRel: !!o.rel }, { polling: 100, timeout: timeoutMs });
+  }, { needRel: !!o.rel, prevStamp: o.prevStamp ?? null }, { polling: 100, timeout: timeoutMs });
 }
 
 /** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
@@ -634,12 +635,14 @@ test.describe("tilt steer high HUD scale", () => {
   test("sector plate clears BOOST (phone landscape, 150%)", async ({ page }) => {
     const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
     await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150 });
+    const stampBefore = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
     await page.evaluate(() => {
       try { window.__apex.freeze(false); } catch (_) { /* */ }
       if (typeof HudElements !== "undefined") HudElements.set("rel", true);
       window.__apex.jump(0.15, 60, 0);
     });
-    await waitPhoneHudFitClearance(page, { rel: true });
+    await waitPhoneHudFitClearance(page, { rel: true, prevStamp: stampBefore });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },

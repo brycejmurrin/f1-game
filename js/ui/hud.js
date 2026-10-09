@@ -625,6 +625,42 @@ function phonePaintedClash() {
   }
   return false;
 }
+/** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
+function phoneFitStampSync(scale) {
+  if (document.body.classList.contains("desktop")) return;
+  const root = document.documentElement;
+  const DOCK_AIR = 12;
+  const bumpDock = () => {
+    const secEl = els.hudSectors;
+    const boost = _boostOnRightHalf();
+    if (!secEl || secEl.hidden || !boost) return false;
+    const secR = secEl.getBoundingClientRect();
+    const br = boost.getBoundingClientRect();
+    if (!_hudRectsHit(secR, br)) return false;
+    const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
+    const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
+    const z = Math.min(zTop, live) || 1;
+    let dockRW = parseFloat(root.style.getPropertyValue("--dock-r-w")) || 0;
+    dockRW += Math.max(0, (secR.right - br.left + DOCK_AIR) / z);
+    hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+    void secEl.offsetHeight;
+    if (_dockR) void _dockR.offsetHeight;
+    return true;
+  };
+  if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+  for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
+    if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+    if (!bumpDock() && phonePaintedClash()) {
+      _fitKey = "";
+      fitHud();
+      if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+    }
+  }
+  if (!phonePaintedClash()) {
+    _fitClearSeq = (_fitClearSeq + 1) | 0;
+    hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
+  } else hStyle(root, "--hud-fit-stamp", "");
+}
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
@@ -1310,35 +1346,6 @@ function fitHud() {
   }
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
-  // Published fit signal: specs wait on --hud-fit-stamp after PAINTED clearance
-  // (dock-r-w / max-width can land a frame before zoom — identical sub-pixel
-  // boxes under CI load). Never bump the stamp while a clash remains.
-  if (!document.body.classList.contains("desktop")) {
-    if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-    for (let pass = 0; pass < 5 && phonePaintedClash(); pass++) {
-      if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-      const secEl = els.hudSectors;
-      const boost = _boostOnRightHalf();
-      if (secEl && !secEl.hidden && boost) {
-        const secR = secEl.getBoundingClientRect();
-        const br = boost.getBoundingClientRect();
-        if (_hudRectsHit(secR, br)) {
-          const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
-          const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
-          const z = Math.min(zTop, live) || 1;
-          let dockRW = parseFloat(root.style.getPropertyValue("--dock-r-w")) || 0;
-          dockRW += Math.max(0, (secR.right - br.left + DOCK_AIR) / z);
-          hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
-          void secEl.offsetHeight;
-          if (_dockR) void _dockR.offsetHeight;
-        }
-      }
-    }
-    if (!phonePaintedClash()) {
-      _fitClearSeq = (_fitClearSeq + 1) | 0;
-      hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
-    }
-  }
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.
@@ -1842,6 +1849,10 @@ function updateHud(force, dtMs) {
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }
+  // Stamp only after REL, sector rows and announce lane for this tick — fitHud
+  // runs at tick start and must not publish early (CI: stamp green, S3×BOOST).
+  syncComputedRootVars();
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
   drawMinimap();
 }
 
