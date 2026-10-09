@@ -3765,8 +3765,15 @@ function sheetRelease(hide) {
   if (h.btn.textContent === "PREPARING…") h.btn.textContent = h.label;   // unless the sheet relabelled it meanwhile
   if (hide) h.sheet.hidden = true;
 }
-/** Cold preparation's cover: the build card, unless race settings already covers it. */
-function introCover(info, n) { if (!_introSheet) loadingScreen.building(info, () => studioSkip(n)); }
+/** Cold preparation's cover: prep scrim (card hidden), unless race settings already covers it. */
+function introCover(info, n) { if (!_introSheet) loadingScreen.prep(info, () => studioSkip(n)); }
+/** Garage-out finished → race/session card. Every intro path ends here (strict sequence). */
+function afterGarageOut(n, key, go, prepared, live) {
+  studioClose(n);
+  if (n !== _introRun) return;
+  if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); return; }
+  try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+}
 function studioOpen(n, info) {
   if (_studio) studioClose(_studio.n);
   const real = info && info.real;
@@ -3777,7 +3784,12 @@ function studioOpen(n, info) {
   // from exactly the players testing it).
   const off = (real && (real.watch || real.startLap > 1)) || headlessMode || document.hidden;
   const ms = off ? 0 : setupCam.startDriveOut();
-  if (ms > 0) { _studio = { at: performance.now(), ms, n, info, cardUp: true }; setupPreviewOn = true; }
+  if (ms > 0) {
+    const at = performance.now();
+    // openAt is never reset: absolute hang ceiling = prep + 3× drive from studioOpen.
+    _studio = { at, openAt: at, ms: Math.max(1, ms), n, info, cardUp: true };
+    setupPreviewOn = true;
+  }
   if (_studio && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent) {
     const studio = _studio; studio.softReady = false;
     if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent();   // discard readbacks from the previous camera
@@ -3807,13 +3819,19 @@ function studioClose(n) {
   if (loadingScreen.phase() === "garage") loadingScreen.building(info);   // the car is out and the build is not: the card covers the rest
 }
 async function studioDone(live, n) {
-  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway (bounded: 3x its length,
-  // from the garage's first frame — a card held for a pending warm is not the car's time, and has its own ceiling).
+  // The car's own clock, not the wall's: a build stall must not cut it off in the doorway.
+  // Safety fallback is bounded at 3× the animation's own duration (never shorter than ms),
+  // from the garage's first frame — prep cover time is not the car's time (30 s ceiling).
+  // Absolute ceiling from openAt still resolves if soft-present / prepare stalls the clock reset.
   while (_studio && _studio.n === n && !_studio.skip && live() && (_studio.cardUp || setupCam.driveOutLeft() > 0)) {
     if (_studio.error) throw _studio.error;
-    if (performance.now() - _studio.at >= (_studio.cardUp ? 30000 : _studio.ms * 3)) {
+    const driveCap = Math.max(_studio.ms, _studio.ms * 3);
+    const elapsed = performance.now() - _studio.at;
+    const sinceOpen = performance.now() - (_studio.openAt || _studio.at);
+    const cap = _studio.cardUp ? 30000 : driveCap;
+    if (elapsed >= cap || sinceOpen >= 30000 + driveCap) {
       if (_studio.cardUp) throw new Error("Garage preparation timed out");
-      break;
+      break;   // only after ≥ animation duration (or absolute openAt ceiling)
     }
     await menuSlice();
   }
@@ -3862,12 +3880,19 @@ async function introPrepare(live, key, info, n, cold) {
     })(), (async () => {
       await Promise.resolve();
       // Same resumable bake as menuLampBake; smaller slices preserve input responsiveness.
-      while (lamps && current() && !lamps(3)) await new Promise((r) => setTimeout(r, 8));
+      const lampAt = Date.now();
+      while (lamps && current() && !lamps(3)) {
+        if (Date.now() - lampAt >= 30000) break;   // never hang the Start Race sequence on a stuck bake
+        await new Promise((r) => setTimeout(r, 8));
+      }
     })()]);
     return current() ? { fly } : null;
   } catch (e) { failed = true; throw e; }
 }
 // A ready, warm world opens on the garage immediately; planning overlaps its motion.
+// Reduce-motion plays a short drive-out (setup-camera startDriveOut), never skips it.
+// Await garage-out (studioDone) in parallel with prepare — never block the card on a
+// stuck prepare while the car has already left the bay.
 function introGarage(go) {
   const key = menuKey(trackIdx), n = ++_introRun, settings = entrySettings(), info = loadingInfo();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
@@ -3875,22 +3900,23 @@ function introGarage(go) {
   if (!_studio) { loadingScreen.stop(); return false; }   // no drive-out (tuner off, a watched race): fly at once, as before
   let prepared = false;
   (async () => {
-    try { const ready = await introPrepare(live, key, info, n, false); if (!ready) return; await studioDone(live, n); if (live() && ready.fly) _menuFly = ready.fly; prepared = true; }
-    catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
-    finally {
-      studioClose(n);
-      if (n === _introRun) {
-        if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); }
-        else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
-      }
+    try {
+      const prepP = introPrepare(live, key, info, n, false);
+      await studioDone(live, n);   // garage-out first (or its 3× / openAt safety cap)
+      const ready = await prepP;
+      if (!ready) return;
+      if (live() && ready.fly) _menuFly = ready.fly;
+      prepared = true;
     }
+    catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
+    finally { afterGarageOut(n, key, go, prepared, live); }
   })();
   return true;
 }
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
-  if (!(idx >= 0) || motionReduced()) return false;
+  if (!(idx >= 0)) return false;   // reduce-motion still builds then plays a short garage-out before the card
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
@@ -3917,14 +3943,7 @@ function introBuild(go) {
     } catch (e) {
       if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
     }
-    finally {
-      // Only this request may hand over; a quit or newer request owns its own screen.
-      studioClose(n);
-      if (n === _introRun) {
-        if (!prepared || !live()) { loadingScreen.stop(); titleIfBare(); }
-        else try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
-      }
-    }
+    finally { afterGarageOut(n, key, go, prepared, live); }
   })();
   return true;
 }
@@ -3943,19 +3962,28 @@ function introWarm(go) {
   const live = () => n === _introRun && state === "menu" && settings === entrySettings() && key === menuKey(trackIdx);
   const info = loadingInfo(), cold = _warmKey !== key;
   if (cold) introCover(info, n); else studioOpen(n, info);
+  let prepared = false;
   (async () => { try {
-      const ready = await introPrepare(live, key, info, n, cold);
-      if (!ready) return;
-      const fly = ready.fly;
-      if (fly) _menuFly = fly;
-      _menuGate.warm = 0;
-      if (cold && _introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
-      else if (!cold) await studioDone(live, n);
+      if (cold) {
+        // Cold: compilation owns the renderer — prepare under the cover, then garage-out.
+        const ready = await introPrepare(live, key, info, n, true);
+        if (!ready) return;
+        if (ready.fly) _menuFly = ready.fly;
+        _menuGate.warm = 0;
+        if (_introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
+      } else {
+        // Warm world: garage-out and prepare overlap; never wait on prepare before studioDone.
+        const prepP = introPrepare(live, key, info, n, false);
+        await studioDone(live, n);
+        const ready = await prepP;
+        if (!ready) return;
+        if (ready.fly) _menuFly = ready.fly;
+        _menuGate.warm = 0;
+      }
       if (!live()) return;
-      studioClose(n);   // the held garage hands straight to the flyby
-      try { _introKey = key; raceIntro(go); } catch (e) { Log.warn("gfx", "loading screen failed", e); loadingScreen.stop(); go(); }
+      prepared = true;   // afterGarageOut closes the held garage, then the race/session card
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
-    finally { studioClose(n); if (n === _introRun && !live()) { loadingScreen.stop(); titleIfBare(); } }   // abandoned: "build" has no timer or skip, so never leave it up
+    finally { afterGarageOut(n, key, go, prepared, live); }
   })();
   return true;
 }
@@ -4001,7 +4029,17 @@ function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
-  if (!built && !motionReduced() && introGarage(go)) return;
+  if (!built && introGarage(go)) return;   // reduce-motion: short garage-out, then card (never skip)
+  // Strict: never raise the race/session card while a garage-out is still live.
+  if (_studio) {
+    const n = _studio.n, key = menuKey(trackIdx);
+    const live = () => n === _introRun && state === "menu";
+    (async () => {
+      try { await studioDone(live, n); afterGarageOut(n, key, go, true, live); }
+      catch (e) { if (live()) { Log.warn("gfx", "garage-out wait failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
+    })();
+    return;
+  }
   sheetRelease(true);   // no drive-out to give way to (or it was skipped): the flyby or the race does
   if (built && _introSkip === _introRun) { _introSkip = 0; go(); return; }   // skipped in the garage: the race, not the flyby, is next
   const world = menuWorld();
