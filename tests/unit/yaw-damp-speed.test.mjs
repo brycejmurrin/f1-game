@@ -117,3 +117,46 @@ test("fullLock yawMax and lift-off ratio stay on tip shapes", () => {
   assert.ok(ratio > 1.05, `lift-off still rotates (${ratio})`);
   assert.ok(ratio >= 1.12 && ratio <= 1.28, `lift-off ratio ~1.16–1.25 (got ${ratio})`);
 });
+
+// PACE scales world speed, never the band: the extra damping must engage at the
+// same STANDARD speed (vStd = v * VMAX / vTop), so the world-speed thresholds move
+// with PACE (AGENTS.md §Physics). The damp multiplier is read out of one tick:
+// the yaw-rate change with YAW_DAMP 0 vs 1 differs by exactly YAW_DAMP * mult * r * dt
+// (tyre moments identical for the same state), so the ratio is mult at that speed.
+function yawDampMult(b, vWorld) {
+  const { P, reset, step } = b;
+  const r0 = 0.5;
+  const oneTick = (yawDamp) => {
+    g.apex.setPhysics({ yawDamp });
+    reset(vWorld);
+    P.yawRateCur = r0;
+    step({ steer: 0, throttle: true });
+    return P.yawRateCur;
+  };
+  const free = oneTick(0);
+  const damped = oneTick(1);
+  g.apex.setPhysics({ yawDamp: 1 });
+  return (free - damped) / (r0 * DT);
+}
+
+test("speed-yaw band sits at the same STANDARD speeds at PACE 0.7 / 1 / 1.34", () => {
+  const b = pinStraight();
+  const stdSpeeds = [40, 50, 57.5, 65, 83.3];
+  const at = (pace) => {
+    g.apex.setPhysics({ pace });
+    return stdSpeeds.map((vs) => yawDampMult(b, vs * pace));
+  };
+  const ref = at(1);
+  // Sanity on the PACE 1 reference itself: identity <= 50, mid-smoothstep, full 6x.
+  assert.ok(Math.abs(ref[0] - 1) < 0.02 && Math.abs(ref[1] - 1) < 0.02, `identity below the band ${ref}`);
+  assert.ok(Math.abs(ref[2] - 3.5) < 0.1, `mid-band mult ${ref[2]} ~ 3.5`);
+  assert.ok(Math.abs(ref[3] - 6) < 0.1 && Math.abs(ref[4] - 6) < 0.1, `full band ${ref}`);
+  for (const pace of [0.7, 1.34]) {
+    const got = at(pace);
+    stdSpeeds.forEach((vs, i) => {
+      assert.ok(Math.abs(got[i] - ref[i]) < 0.1,
+        `PACE ${pace}, vStd ${vs}: damp mult ${got[i].toFixed(3)} vs PACE 1 ${ref[i].toFixed(3)}`);
+    });
+  }
+  g.apex.setPhysics({ pace: 1 });
+});

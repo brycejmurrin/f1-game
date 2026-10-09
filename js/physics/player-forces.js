@@ -296,7 +296,10 @@ const PlayerForces = (function () {
     // keeps the 220–300 km/h band near 8–12% without slowing ≤50 m/s turn-in
     // or touching COAST_YAW_*/the speed equation.
     const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
-    const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
+    // Band in STANDARD speed, not world speed: PACE scales ground speed, so the 50/65 m/s
+    // thresholds stay at the same fraction of top speed. Scale first, then multiply, so the
+    // factor is exactly 1 at PACE 1 and the baseline stays bit-identical (vAbs*72/72 is not).
+    const _syT = clamp((vAbs * ((PC.VMAX || 72) / Math.max(vTopNow, 0.05)) - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
     const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
     const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
     const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * (c.yawRateCur || 0);
