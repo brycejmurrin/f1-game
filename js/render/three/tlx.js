@@ -1081,6 +1081,11 @@ const TLX = (function () {
       // (three's setSize is a no-op under XRManager presenting; we likewise
       // must not fight the immersive layer's drawing-buffer size).
       let _xrActive = false;
+      // The post chain's factory, callable AGAIN: a one-off throw in present()
+      // retires the chain ("Post-only death") and the next render-target realloc
+      // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
+      function buildPost() {
+      let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
@@ -1112,6 +1117,10 @@ const TLX = (function () {
         try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
         post = null;
       }
+      return post;
+      }
+      post = buildPost();
+      let _postStrikes = 0, _postRebuild = false;   // post-only deaths so far; a rebuild is owed
 
       const ENV_SIZE = 64;
       const ENV_CULL_M = 150;
@@ -2784,6 +2793,7 @@ const TLX = (function () {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
           }
+          if (_postRebuild && !post) { _postRebuild = false; post = buildPost(); }
           if (post) post.resize(rw, rh);
         }
       }
@@ -4273,11 +4283,13 @@ const TLX = (function () {
           // retried the SAME render unwrapped, so a compile error became the
           // crash. Every paint below stays inside try; the pick is never
           // written to webgl2 (session skip + reload if even classic dies).
-          const persistFail = (e) => {
+          // postOnly: the failure may be the post chain alone and the canvas repaint
+          // below still paints on TLX — then the session stays bound to three.
+          const persistFail = (e, postOnly) => {
             const reason = (e && e.message) || String(e);
             _lastFailure = { reason, at: Date.now() };
             try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
-            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+            if (!postOnly) try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
             try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
@@ -4329,6 +4341,7 @@ const TLX = (function () {
             _drawMatMode = mode;
             const deadPost = post;
             post = null;
+            _postRebuild = false;   // lit/fx go too: no chain to rebuild for
             _cancelSoftBlits();
             try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
@@ -4412,12 +4425,14 @@ const TLX = (function () {
               paintCanvas();
             }
             painted = true;
-          } catch (e) { persistFail(e); }
-          // Post-only death: same materials, canvas (the 1269 intent).
+          } catch (e) { persistFail(e, !!post); }
+          // Post-only death: same materials, canvas (the 1269 intent). The chain is
+          // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
             const deadPost = post;
             post = null;
             _cancelSoftBlits();
+            _postRebuild = ++_postStrikes <= 3;
             try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
             finally {
               try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }

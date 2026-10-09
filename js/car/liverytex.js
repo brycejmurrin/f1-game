@@ -1145,11 +1145,14 @@ const LiveryTex = (function () {
   }
   function markChanged() { for (const cb of markReady) { try { cb(); } catch { /* one bad listener must not block the rest */ } } }
 
+  const logoGen = Object.create(null);   // per team: the newest setTeamLogo call; an older decode finishing late is ignored
   function setTeamLogo(id, src) {
+    const gen = logoGen[id] = (logoGen[id] || 0) + 1;
     if (!src) { delete LOGOS[id]; markChanged(); return; }
     if (typeof Image === "undefined") return;
     const img = new Image();
     img.onload = () => {
+      if (logoGen[id] !== gen) return;   // CLEARed or replaced while this one decoded: never reinstall the stale emblem
       img._avg = avgColour(img);
       LOGOS[id] = img;
       markChanged();
@@ -1158,7 +1161,7 @@ const LiveryTex = (function () {
     // place silently (the picker would look like it had done nothing). This is
     // the only image path in the file, so it is the whole failure mode of the
     // custom-emblem feature. Drop the stale mark and tell the caches.
-    img.onerror = () => { delete LOGOS[id]; markChanged(); };
+    img.onerror = () => { if (logoGen[id] !== gen) return; delete LOGOS[id]; markChanged(); };
     img.src = src;
   }
 

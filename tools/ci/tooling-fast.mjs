@@ -470,6 +470,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
+  "tests/unit/lighting-tuner-reset-weather.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   // GATE GAP (2026-09-10): these three garage files and the three steering
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
@@ -743,6 +744,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
+  // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
+  // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
+  // next realloc and a post-only death keeps the bound label.
+  "tests/unit/tlx-fail-scope.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
   "tests/unit/tlx-inst-cells.test.mjs",

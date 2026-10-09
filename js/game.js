@@ -6325,7 +6325,7 @@ function retireCar(c, reason) {
   // smears the car across the track from wherever it was a step ago.
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
   c.rPrevHead = c.head; c.rPrevYawVis = 0;
-  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0;
+  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0; c.skidIntensity = 0;   // a stale slip keeps the screech loop on
   c.gear = 1; c.rpm = IDLE_RPM;
   c.boostOn = false; c.deploying = false; OvertakeMode.reset(c);
   // The broadcast call. Every retirement is announced, not only the player's:
@@ -6639,9 +6639,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
     // frame.mirrorFreezeInstanced (audit #8, full quality): reuse the last mirror
     // pack via updateInstances — skip AABB sweep + CPU pack; cars still redraw.
+    // `rec`: only the MIRROR's own cull is recorded (mirrorLite is a boolean only
+    // inside mirror-pass; the main pass would replay the forward pack at ~30 Hz).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
-      const freeze = !!frame.mirrorFreezeInstanced;
+      const freeze = !!frame.mirrorFreezeInstanced, rec = frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
         if (freeze && b._mirN > 0 && b._mirMats && gfx.updateInstances) {
@@ -6649,13 +6651,11 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         } else {
           if (planes && gfx.cullInstances) gfx.cullInstances(b, planes);
           const n = b.visible | 0;
-          if (n > 0 && b.packMatrices) {
+          if (rec && n > 0 && b.packMatrices) {
             if (!b._mirMats || b._mirMats.length < n * 16) b._mirMats = new Float32Array(n * 16);
             b._mirMats.set(b.packMatrices.subarray(0, n * 16));
             b._mirN = n;
-          } else {
-            b._mirN = 0;
-          }
+          } else if (rec) b._mirN = 0;
         }
         gfx.drawInstanced(b, m);
       }
@@ -7186,8 +7186,8 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // frame.wetness: WeatherArc.syncWetness (also from wxArc.tick for headless
-  // look=drive). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  // frame.wetness: WeatherArc.syncWetness (wxArc.tick stands in only when
+  // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
   if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
