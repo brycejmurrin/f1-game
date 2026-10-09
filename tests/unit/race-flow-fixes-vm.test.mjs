@@ -33,6 +33,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -249,5 +254,24 @@ test("3.1 a race started on a portrait phone does not start the engine / rain un
     assert.equal(G.state, "count");
     assert.equal(G.paused, true, "the rotate blocker paused the race");
     assert.ok(!seen.some((e) => /:paused$/.test(e)), `engine / rain were started while paused: ${seen}`);
+  } finally { g.close(); }
+});
+
+test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying sheet when GRID = QUALIFYING LAP", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.raceGrid = "quali";
+    vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+    const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+    const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+    const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
+    const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+    Real.launch(script, { seat: "STR" });
+    await g.settle(() => G.track?.def?.id === "baku" && ["count", "race"].includes(G.state), 8000);
+    assert.equal(Real.status().active, true, "the real race is staged");
+    assert.ok(["count", "race"].includes(G.state), `the race started (state ${G.state})`);
+    assert.equal(G.session, "race", "the session is the race itself, not a qualifying lap");
   } finally { g.close(); }
 });

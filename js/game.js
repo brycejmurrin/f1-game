@@ -860,7 +860,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // GO button ask this, and they must agree — a race that qualified and then
 // gridded up P12 would throw the session away, and one that gridded from a
 // classification it never ran would read a stale one.
-const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (qualiGrid() && !isTimeTrial()));   // a one-off's rule never reaches a championship
+const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (qualiGrid() && !isTimeTrial() && !realRace.status().active));   // a one-off's rule never reaches a championship; a real race (Data Hub JUMP IN) has its own grid and never opens #quali (realRace: a later const, read at call time)
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
