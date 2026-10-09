@@ -76,8 +76,13 @@
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f *)",
+      "Bash(git push *--force*)",
+      "Bash(git push * -f)",
+      "Bash(git push * -f *)",
+      "Bash(git push *+*)",
       "Bash(git push * claude/f1-game-project-26h3ng*)",
       "Bash(git push *:claude/f1-game-project-26h3ng*)",
+      "Bash(git push *refs/heads/claude/f1-game-project-26h3ng*)",
       "Bash(node tools/ci/bump-cache.mjs --apply*)",
       "Bash(node tools/gen/assets.mjs bake*)",
       "Bash(node tools/track/rotate-markings.cjs --write*)"

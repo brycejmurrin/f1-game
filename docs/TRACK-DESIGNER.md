@@ -32,11 +32,11 @@ the browser loses nothing.
 | You want to… | Do this |
 |---|---|
 | Select a point | Tap (click) a white point — selecting never moves it. |
-| Select a group (SPAN) | Shift-tap a second point, or press **SELECT END** then tap the end. The road between them highlights; every white point on that stretch is in the group. Tap a **TURNS** row to select that corner as a span. |
+| Select a group (SPAN) | Choose **RANGE**, then tap or drag between points on the map or elevation profile; start/end point numbers also work. The range follows driving order and can cross the start line. Shift-tap, **SELECT END**, and **TURNS** rows also select spans. Switch to **POINT** to drag the selected group. |
 | Move the road | Drag a **selected** point (or drag past a short threshold on mouse). With a SPAN selected, drag any point in the group — the whole stretch moves together. Arrow keys nudge 1 m (10 m with Shift), the whole SPAN when one is selected. **UNDO** restores an accidental move. |
 | Add a point | Tap (click) the road between two points. |
 | Remove a point | Double-tap it, press and hold it and choose DELETE, or select it and press **DELETE POINT**. A loop keeps at least 8 points. |
-| Cycle points | **PREV POINT** / **NEXT POINT**, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. |
+| Cycle points | **PREV** / **NEXT** in Edit and Elevation, **PREV POINT** / **NEXT POINT** in other modes, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. Enter a point number to jump directly. |
 | Draw a new circuit | Pick **DRAW** and draw one closed loop in a single stroke. It closes, smooths and spaces itself, and the start goes on its longest straight. |
 | Look around | Pinch or use the wheel to zoom, drag empty space to pan, **FIT VIEW** to recentre. Pan and zoom never move points. |
 | Turn it around | **REVERSE** runs the circuit the other way; the start line stays put. |
@@ -79,10 +79,16 @@ start needs a long straight behind it: the grid and the pit entry stand there,
 and the pit exit needs some straight after it. The checks say how many metres
 are missing.
 
-## 3 LOOK — themes
+## SCENERY — themes and atmosphere
 
-A theme sets the scenery, the sky and the ground. There are sixteen; the line
-under the chips describes the one you picked.
+A theme sets the scenery, the sky and the ground. Browse 25 themes using
+**ALL**, **NATURE**, **COAST**, **CITY**, **DESERT** or **NIGHT**, or search by
+name and description. Search and category work together; **CLEAR** resets both.
+Browsing does not change the circuit until you choose a theme. The current
+theme and its description stay above the browser, even when filtered out.
+
+The mode bar stays above the canvas while the inspector scrolls. Select
+**SCENERY** from any inspector tab to return to these controls.
 
 | theme | what you get |
 |---|---|
@@ -102,8 +108,20 @@ under the chips describes the one you picked.
 | RED ROCK CANYON | Rust-red ground and towering sandstone buttes |
 | WINTER SNOW | Snow to the horizon, dark firs, white peaks |
 | TWILIGHT RESORT | Purple dusk, a floodlit lagoon, a hotel by the start |
+| RAINFOREST | Green hills, palms and emerald peaks in humid haze |
+| NORDIC LAKES | Fir forests, cold blue water and red timber houses |
+| HIGHLAND MOOR | Heather ridges, stone cottages and low cloud |
+| METROPOLIS | Glass towers and a downtown street circuit |
+| INDUSTRIAL DOCKS | Concrete quays, cranes and grey water |
+| SALT FLATS | Bright white ground, scrub and hard noon sun |
+| VINEYARD VALLEY | Golden rows, olive trees and warm afternoon sun |
+| STADIUM NIGHT | A floodlit bowl with packed steel grandstands |
+| TROPICAL ISLAND | Turquoise water, palms and bright sand |
 
-Three rows under the themes tune the scenery of this circuit:
+**ATMOSPHERE** offers three one-click presets. **THEME DEFAULT** restores the
+original sky and normal trees/crowd; **GOLDEN HOUR** combines dusk, many trees
+and few spectators; **RACE NIGHT** combines night, normal trees and a packed
+crowd. Each preset is one **UNDO** step. The three rows below can fine-tune it:
 
 - **TIME OF DAY** — AUTO keeps the theme's own sky. DAY, DUSK (a low orange
   sun) or NIGHT (floodlights and lamps along the lap) override it; a street
@@ -113,6 +131,21 @@ Three rows under the themes tune the scenery of this circuit:
 
 They are part of the circuit: a share link or exported file carries them, and
 changing one makes it a new circuit for time-trial boards.
+
+### Trackside props
+
+Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD** or **BOARD**, then
+select a control point on the map. Choose **LEFT** or **RIGHT** in driving
+direction and set **ROADSIDE GAP m** (distance from the road edge). Each prop
+kind remembers its spacing while the designer is open. Clearances match the
+renderer, up to 120 m; gantries span the road and have no side/gap controls.
+
+**PLACE AT POINT** adds at the selected point; with nothing selected the button
+explicitly says **PLACE AT START**. The list shows each object's type, lap
+position, side and spacing. **REMOVE** deletes that specific object; **REMOVE
+LAST** removes only the selected kind. Placement and removal support undo/redo,
+autosave, saved circuits and share links. Existing per-kind caps and the total
+limit of 16 props still apply.
 
 ## 4 DETAILS
 
@@ -150,14 +183,25 @@ Switch to **ELEVATION** mode. The strip under the canvas is the circuit's
 height profile (start line on the left), with one grip per control point. Amber
 dots mark slope, crest and dip warnings.
 
-- **Select** — tap a grip. Selecting never changes height. Shift-tap a second
-  grip (or **SELECT END** then tap) for a SPAN — every grip in the group
-  highlights.
-- **Edit height** — drag the **selected** grip vertically (horizontal motion
-  is ignored), or use **POINT m** in the rail. With a SPAN selected, a drag or
-  **POINT m** / Up/Down offsets the whole group by the same amount (relative
-  hills inside the span stay). Up/Down nudge 1 m (5 m with Shift); Delete /
-  Enter flatten that node (or every node in the SPAN).
+- **Select** — choose **POINT**, then tap a map point or anywhere in that
+  point's profile column. Both views highlight the same selection. **PREV** /
+  **NEXT** or the point-number field pick a precise point when grips are crowded.
+- **Select several** — choose **RANGE** and drag from a start point to an end
+  point on either view, or tap the two endpoints. You can also type the end
+  point number, shift-click, or use **SELECT END**. A range follows driving
+  order; an end before the start wraps across the start line. **SELECT ALL**
+  selects the whole loop; **CLEAR** deselects. Selection never edits the track.
+- **See crowded points** — **FOCUS** centers the map on the selection and zooms
+  its profile. **ZOOM IN / OUT**, **EARLIER / LATER**, and **FULL LAP** navigate
+  the profile without changing the track or undo history.
+- **Edit height** — in **POINT** mode, drag a selected profile grip vertically,
+  type metres into **POINT m / SPAN m**, or use its minus/plus buttons. Choose
+  **0.25 / 1 / 5 m STEP** for fine or large adjustments. A range moves by the
+  same height offset, preserving its hills within the height limits. Up/Down
+  nudge 1 m (5 m with Shift); Delete / Enter on the profile flatten the selection.
+- **Shape the selection** — **LEVEL** uses the first selected point's height;
+  **SMOOTH** softens heights while keeping a partial range's endpoints; **ZERO**
+  sets selected heights to zero. Points outside the range stay unchanged.
 - **Presets** — **Flat** clears heights; **Rolling** / **Hilly** write smooth
   per-node profiles (one UNDO each). Old saves without heights load flat.
 - **BANKING & KERBS** — in the same mode: pick **KERB** style (**FLAT** /

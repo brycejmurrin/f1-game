@@ -42,6 +42,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { workTreeId } from "../lib/work-tree-id.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
@@ -112,6 +113,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
+  "tests/unit/bash-guard-hardening.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
@@ -168,6 +170,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
+  "tests/unit/changed-files.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -208,6 +211,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
   "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
+  "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
@@ -398,6 +402,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/ghost-share.test.mjs",
@@ -809,6 +814,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
   "tests/unit/traffic-arc-buckets.test.mjs",
+  "tests/unit/tree-counts-catch.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
   // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
@@ -979,6 +985,16 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     lines.push(line);
   };
 
+  // The ready stamp names the tree this run MEASURED (tools/lib/work-tree-id.mjs),
+  // not HEAD read afterwards: the edit loop runs the suite on a dirty tree, and
+  // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
+  // Only a full suite stamps, so only a full suite pays for the tree hash.
+  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
+  const ran = new Set(files.map(rel));
+  const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
+  const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
+  const startTree = fullSuite ? workTreeId(ROOT) : null;
+
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
   emit(`suite start at=${startedAt} files=${files.length} concurrency=${jobs} ${loadavgLine()}`);
@@ -1094,24 +1110,28 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const ok = failed === 0;
   emit(`suite end at=${new Date().toISOString()} duration=${fmtDur(suiteDur)} ` +
     `passed=${passed} failed=${failed} ${loadavgLine()}`);
+  // The tree must be the same before and after the run: an edit made while
+  // the suite ran (the edit hook blocks only a live BROWSER run) means the
+  // verdict is about neither tree.
+  const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
+  const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
+  if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
-  // Full-suite green → stamp HEAD for ready-gate.mjs (draft→ready must not
-  // flip without tooling-fast evidence; #1111 designer-canvas). Subset / shard
-  // runs and failures leave any prior stamp alone so a partial re-run cannot
-  // bless a tip that never passed the full suite. Compare as a set: longest-
-  // first reorders `files` before this point.
-  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
-  const ran = new Set(files.map(rel));
-  const fullSuite = ran.size === TOOLING_FAST_FILES.length
-    && TOOLING_FAST_FILES.every((f) => ran.has(f));
-  if (ok && fullSuite) {
+  // Full-suite green on an UNCHANGED tree → stamp it for ready-gate.mjs
+  // (draft→ready must not flip without tooling-fast evidence; #1111
+  // designer-canvas). The stamp is the START head plus the tree hash the suite
+  // measured; ready-gate compares that hash with the tip commit's tree, and
+  // the `= tree` line above ties the log to the same run. Subset / shard runs
+  // and failures leave any prior stamp alone so a partial re-run cannot bless
+  // a tip that never passed the full suite. (`ran` is a set: longest-first
+  // reorders `files`.)
+  if (stampTree) {
     try {
       const { stampReadySha } = await import("./ready-gate.mjs");
-      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
-      if (head.status === 0) stampReadySha(head.stdout.trim());
+      if (startHead) stampReadySha(startHead, { tree: stampTree });
     } catch (_) { /* stamp is advisory for ready-gate; never fail the suite */ }
   }
   // Every run teaches the next one: the passing files' durations go to the

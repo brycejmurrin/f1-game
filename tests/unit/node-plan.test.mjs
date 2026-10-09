@@ -15,6 +15,7 @@ import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, to
 import { filesFor } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
+import { ADAPTED, ADAPTED_RUNNER } from "../../tools/ci/twinned-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -194,4 +195,19 @@ test("a spec edit: an ADAPTED spec runs vm-page; a twinned spec's group runs no 
   const twinned = plan(["tests/specs/collisions-deep.spec.js"]);
   assert.deepEqual(twinned.groups, ["audit"], "the owner route must not reach the VM planner");
   assert.deepEqual(twinned.run, []);
+});
+
+test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-10-09)", () => {
+  // The runner names no circuit — it spawns one child per ADAPTED spec — so
+  // circuitsOf() used to return an empty Set, scriptBuilds("test:vm-page",
+  // ["cota"]) was false, and cota-foundation.spec.js (VM-covered, so dropped
+  // from the browser gate) ran nowhere on a cota-only PR.
+  const runner = circuitsOf(ADAPTED_RUNNER);
+  for (const id of ["cota", "imola", "albert_park", "bahrain", "monza"]) assert.ok(runner.has(id), `${id} missing from the runner's circuits`);
+  for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) assert.ok(runner.has(id), `${spec} -> ${id}`);
+  assert.equal(scriptBuilds("test:vm-page", ["cota"]), true);
+  assert.equal(scriptBuilds("test:vm-page", ["dijon"]), false, "a circuit no ADAPTED spec builds still skips");
+  const cota = plan(["js/circuits/cota.js"]);
+  assert.ok(cota.run.includes("test:vm-page"), JSON.stringify(cota.skip));
+  assert.ok(!plan(["js/circuits/dijon.js"]).run.includes("test:vm-page"));
 });
