@@ -14,7 +14,7 @@ const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null;
+let _invalidateFit = null, _syncPhoneFit = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -640,20 +640,30 @@ function phoneFitStampSync(scale) {
   if (document.body.classList.contains("desktop")) return;
   const root = document.documentElement;
   const DOCK_AIR = 12;
+  if (!_hudTop) {
+    _hudTop = document.querySelector(".hud-top");
+    _hudBottom = document.querySelector(".hud-bottom");
+    _dockL = document.getElementById("dock-left");
+    _dockR = document.getElementById("dock-right");
+  }
   const bumpDock = () => {
-    const secEl = els.hudSectors;
     const boost = _boostOnRightHalf();
-    if (!secEl || secEl.hidden || !boost) return false;
-    const secR = secEl.getBoundingClientRect();
+    if (!boost) return false;
     const br = boost.getBoundingClientRect();
-    if (!_hudRectsHit(secR, br)) return false;
+    if (!(br.width && br.height)) return false;
+    const probe = els.hudSectors || _hudTop || els.minimap;
     const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
-    const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
+    const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : zTop;
     const z = Math.min(zTop, live) || 1;
-    let dockRW = parseFloat(root.style.getPropertyValue("--dock-r-w")) || 0;
-    dockRW += Math.max(0, (secR.right - br.left + DOCK_AIR) / z);
-    hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
-    void secEl.offsetHeight;
+    let sarPx = 0;
+    try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
+    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
+    const need = Math.min(
+      Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
+      midCap
+    );
+    hStyle(root, "--dock-r-w", (need > 0 ? need : 0).toFixed(1) + "px");
+    if (els.hudSectors) void els.hudSectors.offsetHeight;
     if (_dockR) void _dockR.offsetHeight;
     return true;
   };
@@ -677,12 +687,8 @@ function phoneFitStampSync(scale) {
   if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
   for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-    if (!bumpDock()) shrinkSectors();
-    if (phonePaintedClash()) {
-      _fitKey = "";
-      fitHud();
-      if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-    }
+    bumpDock();
+    shrinkSectors();
   }
   if (!phonePaintedClash()) {
     _fitClearSeq = (_fitClearSeq + 1) | 0;
@@ -2181,9 +2187,20 @@ function invalidateFit() {
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;
-return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit };
+function syncPhoneFit() {
+  syncComputedRootVars();
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
+  const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
+  return !phonePaintedClash() && /^\d+$/.test(stamp);
+}
+_syncPhoneFit = syncPhoneFit;
+return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit };
 }
 
-return { create, invalidateFit: () => { if (_invalidateFit) _invalidateFit(); } };
+return {
+  create,
+  invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
+  syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+};
 })();
 Object.freeze(GameHud);

@@ -99,6 +99,7 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
   await page.waitForFunction(async ({ needRel, prevStamp }) => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     if (document.body.classList.contains("desktop")) return true;
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
     if (!stamp || !/^\d+$/.test(stamp)) return false;
     if (prevStamp != null && prevStamp !== "" && stamp === prevStamp) return false;
@@ -643,6 +644,11 @@ test.describe("tilt steer high HUD scale", () => {
       window.__apex.jump(0.15, 60, 0);
     });
     await waitPhoneHudFitClearance(page, { rel: true, prevStamp: stampBefore });
+    await page.evaluate(() => {
+      if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit && !GameHud.syncPhoneFit()) {
+        throw new Error("phone layout not clear after wait");
+      }
+    });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },

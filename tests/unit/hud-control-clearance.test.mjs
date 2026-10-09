@@ -28,6 +28,8 @@ test("fitHud publishes --hud-fit-stamp after painted phone clearance", () => {
     "stamp must not advance while painted readout-on-control clashes remain");
   assert.match(HUD_JS, /phoneFitStampSync/,
     "stamp publishes at end of updateHud after REL/sectors land");
+  assert.match(HUD_JS, /syncPhoneFit/,
+    "specs can force one painted phone-fit pass before probe");
 });
 
 test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => {
