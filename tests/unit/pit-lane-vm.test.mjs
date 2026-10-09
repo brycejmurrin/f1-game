@@ -563,5 +563,25 @@ describe("a stale AI pit arm is cancelled (bug-hunt 7.4)", () => {
     c.lap = 1;
     g.G.pits.update(c, 1 / 60);
     assert.equal(c.pitArmed, true, "an AI that missed its entry comes in next time round");
+});
+});
+
+// ---- bug-hunt 2026-10-09 7.3 (W5 game) — its own game, so the load-bearing order above is untouched ----
+describe("retirement clears the pit state", () => {
+  test("a car that retires mid-stop in the box leaves no crew / jacks around it", async () => {
+    const g2 = await createGame({ track: "monza" });
+    try {
+      g2.step(60 * 3);
+      const G = g2.G, c = G.cars.find((x) => !x.human);
+      c.pitState = "box"; c.pitArmed = true; c.pitFitted = false; c.pitStops = 1; c.pitT = 1.5; c.pitCommitted = true;
+      g2.apex.retire(G.cars.indexOf(c), "engine");
+      assert.equal(c.retired, true);
+      assert.equal(c.pitState, "none", "the dead car is not a car in the box");
+      assert.equal(c.pitArmed, false);
+      assert.equal(c.pitT, 0);
+      assert.equal(c.pitStops, 0, "the unfitted stop is un-counted");
+      g2.step(5);
+      assert.equal(c.pitState, "none", "and PitLane.update (which skips a retirement) cannot leave it set");
+    } finally { g2.close(); }
   });
 });
