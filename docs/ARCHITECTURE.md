@@ -320,6 +320,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `elev-presets.js` | `ElevPresets` | LAZY_EDITOR | ElevPresets: Flat / Rolling / Hilly node-height profiles for the track designer. |
 | `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip under the main canvas. |
+| `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**

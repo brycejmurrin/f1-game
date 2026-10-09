@@ -24,7 +24,6 @@ const TrackDesigner = (function () {
   ]);
   const STEPS = { L: 10, R: 5, deg: 5 };
   const PARAM_LABEL = { L: "LENGTH m", R: "RADIUS m", deg: "ANGLE °" };
-  const LOOK_ROWS = [["time", "TIME OF DAY"], ["trees", "TREES"], ["crowd", "CROWD"]];
   /** The HOW TO tab's text, one table (docs/TRACK-DESIGNER.md is the long form):
    *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
   const HOWTO = Object.freeze({
@@ -55,7 +54,7 @@ const TrackDesigner = (function () {
   let spanArm = false;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand";
+  let propKind = "stand", scenery = null;
   const undo = [], redo = [];
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
@@ -110,7 +109,7 @@ const TrackDesigner = (function () {
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
     if (mode === "elevation") return "ELEVATION: tap a grip to select · drag vertically · shift-tap (or SELECT END) a second for a SPAN · Flat / Rolling / Hilly · bank a turn (BANK °) · KERB / BERMS";
-    if (mode === "scenery") return "SCENERY: theme + TIME / TREES / CROWD · pick a PROP then PLACE AT POINT (or REMOVE LAST)";
+    if (mode === "scenery") return "SCENERY: find a theme · choose an atmosphere · select a point to place scenery";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
@@ -448,6 +447,17 @@ const TrackDesigner = (function () {
     commit(next, "look");
     return true;
   }
+  /** Apply a complete atmosphere as one undoable edit, using the existing look schema. */
+  function setAtmosphere(id) {
+    const preset = DesignerScenery.PRESETS[id];
+    if (!preset || !design) return false;
+    const look = TrackThemes.sanitizeLook(preset);
+    if (JSON.stringify(look) === JSON.stringify(TrackThemes.sanitizeLook(design.look))) return false;
+    const next = Object.assign({}, design);
+    if (look) next.look = look; else delete next.look;
+    commit(next, "atmosphere");
+    return true;
+  }
   /** Scenery props palette: select which kind PLACE AT POINT will add. */
   function setPropKind(kind) {
     if (typeof TrackDesignerProps === "undefined" || !TrackDesignerProps.has(kind)) return false;
@@ -467,7 +477,7 @@ const TrackDesigner = (function () {
     }
     const i = sel >= 0 ? sel : 0;
     const s = TrackDesignerProps.pointFrac(design.pts, i);
-    const next = TrackDesignerProps.place(design.props, k, { s, side: 1 });
+    const next = TrackDesignerProps.place(design.props, k, Object.assign({ s }, scenery ? scenery.placement(k) : { side: 1 }));
     if (!next) return false;
     const d = Object.assign({}, design);
     if (next.length) d.props = next; else delete d.props;
@@ -475,18 +485,24 @@ const TrackDesigner = (function () {
     message("Placed " + (TrackDesignerProps.LABELS[k] || k) + " at point " + (i + 1));
     return true;
   }
-  /** Remove the last prop of the selected kind (or any last prop when none match). */
+  /** Remove only the chosen kind; never silently remove a different object. */
   function removeProp(kind) {
     if (typeof TrackDesignerProps === "undefined" || !design) return false;
     const list = design.props;
     if (!list || !list.length) { message("No props to remove", true); return false; }
     const k = kind || propKind;
-    let next = TrackDesignerProps.removeLast(list, k);
-    if (next.length === list.length) next = TrackDesignerProps.removeLast(list, null);
+    const next = TrackDesignerProps.removeLast(list, k);
     if (next.length === list.length) return false;
     const d = Object.assign({}, design);
     if (next.length) d.props = next; else delete d.props;
     commit(d, "prop");
+    return true;
+  }
+  function removePropAt(i) {
+    if (!design || !design.props || !Number.isInteger(i) || i < 0 || i >= design.props.length) return false;
+    const next = Object.assign({}, design), props = TrackDesignerProps.removeAt(design.props, i);
+    if (props.length) next.props = props; else delete next.props;
+    commit(next, "prop");
     return true;
   }
   function setWidth(hw) {
@@ -531,6 +547,7 @@ const TrackDesigner = (function () {
     const next = MODES.some((m) => m[0] === name) ? name : "edit";
     if (next === mode) { refreshControls(); return mode; }
     mode = next;
+    if (ui.rail) ui.rail.scrollTop = 0;
     if (mode === "draw") tool = "draw";
     else if (mode === "edit" && tool === "draw") tool = "select";
     else if (mode !== "edit" && mode !== "draw") tool = "select";
@@ -652,9 +669,9 @@ const TrackDesigner = (function () {
     ui.redo.setAttribute("aria-keyshortcuts", "Control+Shift+Z Meta+Shift+Z");
     ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
     ui.toolbar.append(ui.undo, ui.redo, ui.fitBtn);
-    stage.appendChild(ui.toolbar);
+    stage.insertBefore(ui.toolbar, canvas);
     // rail
-    const rail = el("div", "td-rail");
+    const rail = el("div", "td-rail"); ui.rail = rail;
     const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
     ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
     tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
@@ -666,7 +683,7 @@ const TrackDesigner = (function () {
     buildDesignPane(ui.paneDesign);
     ui.lib = el("div", "td-grid"); ui.paneLib.appendChild(ui.lib);
     buildHowTo(ui.paneHow);
-    body.append(stage, rail);
+    body.append(ui.modeGroup, stage, rail);
     // foot
     const foot = el("div", "td-foot");
     ui.save = btn("SAVE", "sel-edit", () => save(false));
@@ -680,7 +697,9 @@ const TrackDesigner = (function () {
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
     ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
-    foot.append(ui.save, ui.race, ui.tt, ui.share, ui.card, ui.export, ui.import, ui.file, ui.msg);
+    const files = el("div", "td-chips"); files.dataset.role = "file-actions";
+    files.append(ui.share, ui.card, ui.export, ui.import);
+    foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
 
     cv = DesignerCanvas.create(canvas, {
@@ -805,13 +824,14 @@ const TrackDesigner = (function () {
   }
   function buildDesignPane(pane) {
     // Mode tabs first — clear switch between draw / edit / elevation / scenery / test.
-    const modes = group("MODE");
+    const modes = el("div", "td-group");
+    modes.dataset.role = "mode-bar"; ui.modeGroup = modes;
     ui.modes = el("div", "td-chips");
-    ui.modes.setAttribute("role", "tablist");
+    ui.modes.setAttribute("role", "group");
     ui.modes.setAttribute("aria-label", "Designer mode");
     for (const [id, label] of MODES) {
-      const b = btn(label, "sel-chip", () => setMode(id));
-      b.dataset.mode = id; b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "tab");
+      const b = btn(label, "sel-chip", () => { showPane("design"); setMode(id); });
+      b.dataset.mode = id; b.setAttribute("aria-pressed", "false");
       ui.modes.appendChild(b);
     }
     modes.appendChild(ui.modes);
@@ -843,74 +863,12 @@ const TrackDesigner = (function () {
     // Always keep 2 CORNERS in the rail (hiding the whole group left 1 SHAPE → 3 LOOK).
     ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under 1 SHAPE to stamp.");
     ui.shape.append(ui.apply, ui.shapeHint);
-    // theme — colour swatch tiles (preset.swatch pair), not text-only chips
-    const theme = group("3 LOOK");
-    ui.themeGroup = theme;
-    ui.themes = el("div", "td-chips");
-    ui.themes.dataset.role = "themes";
-    ui.themes.setAttribute("role", "group");
-    ui.themes.setAttribute("aria-label", "Theme");
-    for (const id of TrackThemes.ORDER) {
-      const p = TrackThemes.get(id);
-      const label = p.label || id.toUpperCase();
-      const b = btn("", "sel-chip", () => setTheme(id));
-      b.dataset.theme = id;
-      b.setAttribute("aria-label", label);
-      b.setAttribute("aria-pressed", "false");
-      if (p.blurb) b.title = p.blurb;
-      // Reuse .swatch (select.css); editor.css sizes it as a dual-colour tile.
-      const sw = el("span", "swatch");
-      sw.setAttribute("aria-hidden", "true");
-      sw.style.background = TrackThemes.swatchCss(id);
-      const name = el("span", "", label);
-      name.dataset.role = "theme-label";
-      b.append(sw, name);
-      ui.themes.appendChild(b);
-    }
-    theme.appendChild(ui.themes);
-    ui.themeBlurb = el("div", "td-hint", "");
-    ui.themeBlurb.dataset.role = "theme-blurb";
-    ui.themeBlurb.setAttribute("aria-live", "polite");
-    theme.appendChild(ui.themeBlurb);
-    // Scenery options (TrackThemes.LOOK): one chip row per knob, under its theme.
-    ui.look = {};
-    for (const [key, label] of LOOK_ROWS) {
-      const row = el("div", "td-row");
-      row.appendChild(el("span", "", label));
-      for (const v of TrackThemes.LOOK[key]) {
-        const b = btn(v.toUpperCase(), "sel-chip", () => setLook(key, v)); b.dataset.look = key + ":" + v;
-        b.setAttribute("aria-label", label + " " + v); b.setAttribute("aria-pressed", "false");
-        row.appendChild(b);
-      }
-      ui.look[key] = row; theme.appendChild(row);
-    }
-    // Slice H: capped place/remove props palette (themes stay primary).
-    ui.propsLabel = el("div", "td-label", "PROPS");
-    theme.appendChild(ui.propsLabel);
-    ui.props = el("div", "td-chips");
-    ui.props.dataset.role = "props";
-    ui.props.setAttribute("role", "group");
-    ui.props.setAttribute("aria-label", "Scenery props");
-    if (typeof TrackDesignerProps !== "undefined") {
-      for (const id of TrackDesignerProps.KINDS) {
-        const b = btn(TrackDesignerProps.LABELS[id] || id.toUpperCase(), "sel-chip", () => setPropKind(id));
-        b.dataset.prop = id;
-        b.setAttribute("aria-pressed", "false");
-        ui.props.appendChild(b);
-      }
-    }
-    theme.appendChild(ui.props);
-    const propActs = el("div", "td-chips");
-    propActs.dataset.role = "prop-actions";
-    ui.propPlace = btn("PLACE AT POINT", "sel-chip", () => placeProp());
-    ui.propRemove = btn("REMOVE LAST", "sel-chip", () => removeProp());
-    ui.propPlace.setAttribute("aria-label", "Place the selected prop at the selected control point");
-    ui.propRemove.setAttribute("aria-label", "Remove the last placed prop of the selected kind");
-    propActs.append(ui.propPlace, ui.propRemove);
-    theme.appendChild(propActs);
-    ui.propsHint = el("div", "td-hint", "");
-    ui.propsHint.dataset.role = "props-hint";
-    theme.appendChild(ui.propsHint);
+    // Scenery owns discovery and placement controls; all writes remain in this
+    // module so history, validation, autosave and race hand-off share one path.
+    scenery = DesignerScenery.create({ el, btn, group, stepper,
+      onTheme: setTheme, onLook: setLook, onPreset: setAtmosphere, onKind: setPropKind,
+      onPlace: () => placeProp(), onRemove: () => removeProp(), onRemoveAt: removePropAt });
+    const theme = scenery.root; ui.themeGroup = theme;
     // circuit
     const circuit = group("4 DETAILS");
     ui.name = el("input", "td-input"); ui.name.type = "text"; ui.name.maxLength = CustomTracks.LIMITS.name; ui.name.autocomplete = "off"; ui.name.spellcheck = false;
@@ -1000,7 +958,7 @@ const TrackDesigner = (function () {
     ui.load = btn("LOAD", "sel-chip", () => loadFrom(ui.code.value));
     loadRow.appendChild(ui.load);
     sharing.append(ui.code, loadRow);
-    pane.append(modes, tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
+    pane.append(tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
     buildDesigned(circuit);
@@ -1089,7 +1047,6 @@ const TrackDesigner = (function () {
     if (ui.modes) for (const b of ui.modes.children) {
       const on = b.dataset.mode === mode;
       b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.setAttribute("aria-selected", on ? "true" : "false");
     }
     for (const b of ui.tools.children) { const on = b.dataset.tool === tool; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     const kind = TrackStamps.KINDS[tool];
@@ -1119,33 +1076,7 @@ const TrackDesigner = (function () {
     } else if (ui.shapeLabel) {
       ui.shapeLabel.textContent = "2 CORNERS";
     }
-    for (const b of ui.themes.children) { const on = b.dataset.theme === design.theme; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
-    ui.themeBlurb.textContent = TrackThemes.get(design.theme).blurb || "";
-    const look = TrackThemes.lookOf(design);
-    for (const key of Object.keys(ui.look)) for (const b of ui.look[key].children) {
-      if (!b.dataset || !b.dataset.look) continue;
-      const on = b.dataset.look === key + ":" + look[key]; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
-    }
-    if (ui.props && typeof TrackDesignerProps !== "undefined") {
-      const c = TrackDesignerProps.counts(design.props);
-      for (const b of ui.props.children) {
-        if (!b.dataset || !b.dataset.prop) continue;
-        const id = b.dataset.prop;
-        const on = propKind === id;
-        b.classList.toggle("active", on);
-        b.setAttribute("aria-pressed", on ? "true" : "false");
-        const n = c[id] || 0, cap = TrackDesignerProps.CAPS[id];
-        b.textContent = (TrackDesignerProps.LABELS[id] || id.toUpperCase()) + " " + n + "/" + cap;
-        b.disabled = !TrackDesignerProps.canPlace(design.props, id) && !on;
-      }
-      if (ui.propsHint) {
-        ui.propsHint.textContent = c.total
-          ? (c.total + "/" + TrackDesignerProps.TOTAL + " props · select a kind, select a point, PLACE AT POINT")
-          : "Optional · select a kind, select a point, PLACE AT POINT · caps keep the circuit cheap";
-      }
-      if (ui.propPlace) ui.propPlace.disabled = !(design.pts && design.pts.length) || !TrackDesignerProps.canPlace(design.props, propKind);
-      if (ui.propRemove) ui.propRemove.disabled = !(design.props && design.props.length);
-    }
+    if (scenery) scenery.refresh({ design, sel, propKind });
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     if (ui.country) ui.country.value = design.country || "";
     ui.width._refresh();
@@ -2096,7 +2027,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setPropKind, placeProp, removeProp, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };

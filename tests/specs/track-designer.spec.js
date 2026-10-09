@@ -166,6 +166,24 @@ test.describe("Track designer", () => {
     await bootClean(page);
     await openDesigner(page);
     await randomiseGreen(page, 19);
+    await page.locator('#trackdesigner [data-mode="scenery"]').click();
+    await page.locator('#trackdesigner [data-category="nature"]').click();
+    await page.getByRole("searchbox", { name: "Find a scenery theme" }).fill("pine walls");
+    await expect(page.locator('#trackdesigner [data-theme]:visible')).toHaveCount(1);
+    await page.locator('#trackdesigner [data-theme="alpine"]').click();
+    await expect(page.locator('#trackdesigner [data-role="theme-blurb"]')).toContainText("Dark pine walls");
+    await page.getByRole("searchbox", { name: "Find a scenery theme" }).fill("no matching scenery");
+    await expect(page.locator('#trackdesigner [data-role="theme-results"]')).toContainText("No themes found");
+    await page.getByRole("button", { name: "Clear theme search and filters" }).click();
+    await expect(page.locator('#trackdesigner [data-theme]:not([hidden])')).toHaveCount(25);
+    const u0 = await page.evaluate(() => TrackDesigner.state().undo);
+    await page.locator('#trackdesigner [data-preset="golden"]').click();
+    expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(u0 + 1);
+    await page.getByRole("button", { name: "UNDO", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.look)).toBeUndefined();
+    await page.locator('#trackdesigner [data-preset="race"]').click();
+    await page.locator('#trackdesigner [data-side="-1"]').click();
+    await page.getByRole("button", { name: "ROADSIDE GAP m up", exact: true }).click();
     await page.evaluate(() => {
       TrackDesigner.setMode("scenery");
       TrackDesigner.setPropKind("stand");
@@ -184,7 +202,8 @@ test.describe("Track designer", () => {
     });
     expect(before.n).toBe(3);
     expect(before.kinds).toBe("stand,gantry,billboard");
-    await page.evaluate(() => TrackDesigner.removeProp("billboard"));
+    expect(await page.evaluate(() => TrackDesigner.state().design.props[0])).toMatchObject({ side: -1, gap: 20 });
+    await page.getByRole("button", { name: "Remove placed board 3", exact: true }).click();
     const mid = await page.evaluate(() => (TrackDesigner.state().design.props || []).map((p) => p.kind).join(","));
     expect(mid).toBe("stand,gantry");
     const saved = await page.evaluate(() => TrackDesigner.save());
@@ -199,10 +218,16 @@ test.describe("Track designer", () => {
       return {
         props: it && it.props ? it.props.map((p) => p.kind).join(",") : "",
         hasScenery: !!(t && typeof t.scenery === "function"),
+        side: it && it.props && it.props[0].side,
+        gap: it && it.props && it.props[0].gap,
+        look: it && it.look,
       };
     }, saved.id);
     expect(stored.props).toBe("stand,gantry");
     expect(stored.hasScenery).toBe(true);
+    expect(stored.side).toBe(-1);
+    expect(stored.gap).toBe(20);
+    expect(stored.look).toEqual({ time: "night", trees: "normal", crowd: "packed" });
     await page.evaluate((id) => window.__apex.race(id), saved.id);
     await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
@@ -313,8 +338,8 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     const st = await randomiseGreen(page, 7);
     expect(st.corners.length).toBeGreaterThanOrEqual(3);
-    // TURNS is the design pane's second .td-issues list (5 CHECKS is the first): one info row per corner.
-    const rows = page.locator('#trackdesigner .td-pane[data-pane="design"] .td-issues').nth(1).locator(".td-issue");
+    // Address the corners by name; scenery and validation have their own lists.
+    const rows = page.getByRole("list", { name: "Corners, in driving order", exact: true }).locator(".td-issue");
     await expect(rows).toHaveCount(st.corners.length);
     await expect(rows.nth(1)).toHaveAttribute("data-level", "info");
     await expect(rows.nth(1)).toHaveText(/^T2 · (LEFT|RIGHT) \d+° · R \d+ m · \d+ km\/h · \d+ m$/);

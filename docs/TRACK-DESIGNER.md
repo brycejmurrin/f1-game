@@ -79,10 +79,16 @@ start needs a long straight behind it: the grid and the pit entry stand there,
 and the pit exit needs some straight after it. The checks say how many metres
 are missing.
 
-## 3 LOOK — themes
+## SCENERY — themes and atmosphere
 
-A theme sets the scenery, the sky and the ground. There are sixteen; the line
-under the chips describes the one you picked.
+A theme sets the scenery, the sky and the ground. Browse 25 themes using
+**ALL**, **NATURE**, **COAST**, **CITY**, **DESERT** or **NIGHT**, or search by
+name and description. Search and category work together; **CLEAR** resets both.
+Browsing does not change the circuit until you choose a theme. The current
+theme and its description stay above the browser, even when filtered out.
+
+The mode bar stays above the canvas while the inspector scrolls. Select
+**SCENERY** from any inspector tab to return to these controls.
 
 | theme | what you get |
 |---|---|
@@ -102,8 +108,20 @@ under the chips describes the one you picked.
 | RED ROCK CANYON | Rust-red ground and towering sandstone buttes |
 | WINTER SNOW | Snow to the horizon, dark firs, white peaks |
 | TWILIGHT RESORT | Purple dusk, a floodlit lagoon, a hotel by the start |
+| RAINFOREST | Green hills, palms and emerald peaks in humid haze |
+| NORDIC LAKES | Fir forests, cold blue water and red timber houses |
+| HIGHLAND MOOR | Heather ridges, stone cottages and low cloud |
+| METROPOLIS | Glass towers and a downtown street circuit |
+| INDUSTRIAL DOCKS | Concrete quays, cranes and grey water |
+| SALT FLATS | Bright white ground, scrub and hard noon sun |
+| VINEYARD VALLEY | Golden rows, olive trees and warm afternoon sun |
+| STADIUM NIGHT | A floodlit bowl with packed steel grandstands |
+| TROPICAL ISLAND | Turquoise water, palms and bright sand |
 
-Three rows under the themes tune the scenery of this circuit:
+**ATMOSPHERE** offers three one-click presets. **THEME DEFAULT** restores the
+original sky and normal trees/crowd; **GOLDEN HOUR** combines dusk, many trees
+and few spectators; **RACE NIGHT** combines night, normal trees and a packed
+crowd. Each preset is one **UNDO** step. The three rows below can fine-tune it:
 
 - **TIME OF DAY** — AUTO keeps the theme's own sky. DAY, DUSK (a low orange
   sun) or NIGHT (floodlights and lamps along the lap) override it; a street
@@ -113,6 +131,21 @@ Three rows under the themes tune the scenery of this circuit:
 
 They are part of the circuit: a share link or exported file carries them, and
 changing one makes it a new circuit for time-trial boards.
+
+### Trackside props
+
+Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD** or **BOARD**, then
+select a control point on the map. Choose **LEFT** or **RIGHT** in driving
+direction and set **ROADSIDE GAP m** (distance from the road edge). Each prop
+kind remembers its spacing while the designer is open. Clearances match the
+renderer, up to 120 m; gantries span the road and have no side/gap controls.
+
+**PLACE AT POINT** adds at the selected point; with nothing selected the button
+explicitly says **PLACE AT START**. The list shows each object's type, lap
+position, side and spacing. **REMOVE** deletes that specific object; **REMOVE
+LAST** removes only the selected kind. Placement and removal support undo/redo,
+autosave, saved circuits and share links. Existing per-kind caps and the total
+limit of 16 props still apply.
 
 ## 4 DETAILS
 
