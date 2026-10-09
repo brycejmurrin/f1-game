@@ -275,3 +275,32 @@ test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying she
     assert.equal(G.session, "race", "the session is the race itself, not a qualifying lap");
   } finally { g.close(); }
 });
+
+test("3.4 practice is per-session: quitToMenu and the top of startRace clear it before the loading card reads it", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false;
+    G.practice = true;
+    assert.equal(G.practice, true);
+    G.quitToMenu();
+    assert.equal(G.practice, false, "a practice session quit from the pause menu is not the next GP's");
+    G.practice = true;   // armed again, then a start request (the body clears it only after several awaits)
+    const p = G.startRace();
+    assert.equal(G.practice, false, "cleared synchronously, before loadingInfo() paints the card");
+    await p;
+  } finally { g.close(); }
+});
+
+test("3.5 quitToMenu after a time trial restores the race tyre model", async () => {
+  const g = await createGame({ track: "monza", storage: { tyreWear: "real" } });
+  try {
+    const G = g.G;
+    assert.equal(G.raceTyreWear, "real");
+    await g.apex.tt("monza");   // awaitable: resolves when the time trial has started
+    assert.equal(G.tyres.on(), false, "the time trial runs with the model off");
+    G.quitToMenu();
+    assert.equal(G.tyres.on(), G.raceTyreWear !== "off", "back at the menu the GP's tyre model is back");
+    assert.equal(G.tyres.on(), true);
+  } finally { g.close(); }
+});
