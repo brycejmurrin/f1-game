@@ -356,3 +356,17 @@ test("3.12 a finished or retired car's squeal / smoke / ERS cue state is zeroed 
     }
   } finally { g.close(); }
 });
+
+test("7.6 the AI's mistake-roll key for a braking zone just past the start line is wrapped, like its siblings", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, a = g.apex, L = G.track.total;
+    G.track.toTurnIn.fill(30 + L / G.track.n);   // a turn-in ~30 m ahead of the car, wherever it is (attackAt subtracts the offset within the cell)
+    const i = G.cars.findIndex((c) => !c.human), c = G.cars[i];
+    a.aiPlace(i, (L - 20) / L, 60, 0);   // 20 m before the line: s + toTurnIn runs 10 m past the lap's end
+    c.zoneKey = -1; c.errT = 0;
+    g.step(1);
+    assert.ok(c.zoneKey >= 0, "the roll fires for a zone within a second of the car");
+    assert.ok(c.zoneKey < L, `the key is an arc position on THIS lap (${c.zoneKey} of ${L.toFixed(0)}), not one past the line: the first corner would get two rolls per lap`);
+  } finally { g.close(); }
+});
