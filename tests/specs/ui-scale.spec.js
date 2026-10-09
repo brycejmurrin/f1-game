@@ -458,6 +458,122 @@ test.describe("UI scale", () => {
     }
   });
 
+  // DESKTOP-SIZED WINDOWS AT 200% NEVER HIT THE 1.25 CAP (that media query is
+  // max-width 899 / max-height 699), so #menu-buttons zooms the full 2x - and
+  // the compact-wide live Home used to zoom its door groups by --ui-scale AGAIN
+  // on top (#1238's display:contents leftover): 4x geometry on 1280x742. CAREER's
+  // save line and CONTINUE's ran past the viewport's right edge and RACE sat
+  // ~950px down a 742px window. Contract here: one zoom, every door subtitle
+  // inside its door and the viewport, RACE on screen without scrolling, and
+  // the column scrolls (never clips) to its last door.
+  test("200% home doors keep subtitles inside the door and RACE on screen on desktop windows", async ({ page }) => {
+    const SETTLE_FRAMES = 6;
+    for (const viewport of [{ width: 1280, height: 742 }, { width: 1920, height: 1080 }]) {
+      const name = `${viewport.width}x${viewport.height}`;
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
+        null, { polling: 100, timeout: BOOT_MS });
+      // Same frame contract as the phone test above: write, then count
+      // rendered frames until compact + no zoom transition is pending.
+      // Returning-player strings (refreshCareerButton writes the same nodes)
+      // so the subtitles are long enough to need their ellipsis.
+      const settle = await page.evaluate(async ({ frames, capMs }) => {
+        const cont = document.getElementById("mb-continue");
+        if (cont) cont.hidden = false;
+        const cs = document.getElementById("mb-continue-sub");
+        if (cs) cs.textContent = "2026 · ROUND 1 · BAHRAIN INTERNATIONAL CIRCUIT";
+        const ks = document.getElementById("mb-career-sub");
+        if (ks) ks.textContent = "YOU · ALPINE · 2026 R1 · SAKHIR";
+        window.__apex.uiScale(200);
+        const snap = () => {
+          const anims = ["menu-brand", "menu-buttons"].flatMap((id) => {
+            const el = document.getElementById(id);
+            if (!el) return [id + ":missing"];
+            return el.getAnimations().filter((a) => a.pending || a.playState === "running")
+              .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
+          });
+          const zoom = +getComputedStyle(document.getElementById("menu-buttons")).zoom;
+          const density = document.body.dataset.density;
+          return { density, anims, zoom, ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2) < 0.001 };
+        };
+        let n = 0, starved = false, s = snap();
+        while (!s.ok && n < frames) {
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          if (!framed) { starved = true; break; }
+          n++;
+          s = snap();
+        }
+        // One more rendered frame so layout reflects the settled zoom.
+        if (!starved) await new Promise((resolve) => requestAnimationFrame(() => resolve(true)));
+        return { ...s, frames: n, starved };
+      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      const dump = JSON.stringify(settle);
+      expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms (starved, not a layout answer) ${dump}`).toBe(false);
+      expect(settle.density, `${name}: compact within ${SETTLE_FRAMES} frames ${dump}`).toBe("compact");
+      expect(settle.anims, `${name}: zoom transitions retire within ${SETTLE_FRAMES} frames ${dump}`).toEqual([]);
+      expect(settle.zoom, `${name}: uncapped desktop geometry is the requested 2x ${dump}`).toBeCloseTo(2, 2);
+
+      const fit = await page.evaluate(() => {
+        const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+        const menu = document.getElementById("menu-buttons");
+        const mz = menu.currentCSSZoom;
+        const doubled = ["menu-hero", "menu-retention", "menu-primary", "menu-explore", "menu-secondary"]
+          .map((id) => document.getElementById(id))
+          .filter((el) => el && typeof el.currentCSSZoom === "number" && Math.abs(el.currentCSSZoom - mz) > 0.001)
+          .map((el) => `${el.id}:${el.currentCSSZoom}`);
+        const over = [];
+        let subs = 0;
+        for (const btn of menu.querySelectorAll(".bigbtn")) {
+          if (btn.hidden || !btn.getClientRects().length) continue;
+          const b = btn.getBoundingClientRect();
+          for (const sub of btn.querySelectorAll(".mb-sub")) {
+            if (getComputedStyle(sub).display === "none" || !sub.getClientRects().length) continue;
+            subs++;
+            const r = sub.getBoundingClientRect();
+            if (r.right > b.right + 1 || r.right > vw + 1) {
+              over.push(`${btn.id} sub R${r.right.toFixed(1)} door R${b.right.toFixed(1)} vw ${vw}`);
+            }
+          }
+        }
+        const race = document.getElementById("mb-race").getBoundingClientRect();
+        const m = menu.getBoundingClientRect();
+        // The doors below RACE may run past the fold at 2x; the column must
+        // then scroll (not clip) and its last door must come fully on screen.
+        const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+        const last = doors.reduce((a, b) => (b.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? b : a));
+        const overflowY = getComputedStyle(menu).overflowY;
+        const overflows = menu.scrollHeight > menu.clientHeight + 1;
+        const top0 = menu.scrollTop;
+        menu.scrollTop = menu.scrollHeight;
+        const lr = last.getBoundingClientRect();
+        menu.scrollTop = top0;
+        const reach = {
+          last: last.id, overflowY, overflows,
+          lastAfterScroll: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
+          ok: (!overflows || /^(auto|scroll)$/.test(overflowY)) && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
+        };
+        return {
+          doubled, over, subs, reach,
+          race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
+          raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
+            && race.left >= -1 && race.right <= vw + 1,
+        };
+      });
+      const fitDump = JSON.stringify(fit);
+      expect(fit.doubled, `${name}: door groups do not zoom on top of #menu-buttons ${fitDump}`).toEqual([]);
+      expect(fit.subs, `${name}: the save-line subtitles are measured ${fitDump}`).toBeGreaterThan(0);
+      expect(fit.over, `${name}: every door subtitle ends inside its door and the viewport ${fitDump}`).toEqual([]);
+      expect(fit.raceInView, `${name}: RACE is on screen without scrolling ${fitDump}`).toBe(true);
+      expect(fit.reach.ok, `${name}: the door column scrolls to its last door ${fitDump}`).toBe(true);
+    }
+  });
+
   // applyScale() (js/game.js) runs on every boot, reading straight from
   // localStorage — the slider's own oninput can't produce an out-of-range value
   // (the native <input type=range> clamps .value on assignment), but a value

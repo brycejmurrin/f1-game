@@ -1,7 +1,8 @@
 {
-  "why": "Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx suppressed on the Craner fold; bespoke positive-rake modelGroup). East Midlands Airport departure path — one low-poly airliner over McLeans/Coppice (Wikipedia ~365 m to runway; spotters note aircraft overhead).",
+  "why": "Wave 6 — Donington Park: 2017–18 MSV Hollywood grandstand (grandstandEx suppressed on the Craner fold; bespoke positive-rake modelGroup). East Midlands Airport departure path — one low-poly airliner over McLeans/Coppice (Wikipedia ~365 m to runway; spotters note aircraft overhead). NE horizon — Ratcliffe-on-Soar power station (eight towers + chimney; closed 2024, towers until ≥2029).",
   "ids": [
     "donington-hollywood-stand",
-    "donington-ema-airliner"
+    "donington-ema-airliner",
+    "donington-ratcliffe-power"
   ]
 }

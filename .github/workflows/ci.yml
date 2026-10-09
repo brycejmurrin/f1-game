@@ -431,8 +431,12 @@ jobs:
         env:
           RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || (inputs.concurrency_key != '' && github.sha) || 'origin/claude/f1-game-project-26h3ng' }}
           RATCHET_MODE: ${{ (github.event_name == 'push' || inputs.concurrency_key != '') && '--advisory' || '' }}
+          EVENT: ${{ github.event_name }}
         run: |
           base="$RATCHET_BASE"
+          # The event base can lag the base that this PR merge was built on;
+          # count only this PR's ceiling changes, not intervening ship raises.
+          [ "$EVENT" = pull_request ] && base="$(bash tools/ci/ci-pr-base.sh "$base")"
           case "$base" in 0000000000000000000000000000000000000000|"") base=origin/claude/f1-game-project-26h3ng ;; esac
           git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
           echo "ratchet base: $base ${RATCHET_MODE:+(advisory)}"

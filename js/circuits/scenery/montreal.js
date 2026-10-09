@@ -599,6 +599,58 @@
             }
           }
         }
+        // Casino de Montréal — Expo 67 French pavilion mass + Quebec annex.
+        // https://en.wikipedia.org/wiki/Montreal_Casino — Île Notre-Dame beside
+        // the Olympic Basin; defines the “casino straight” sight-line from the
+        // existing plaza / footbridge cues (side +1, basin side of the island).
+        // DRY GROUND: the river band on this side (waterBand 72–180 m, s 5/16–11/16)
+        // begins at s≈0.3125, so the earlier (0.308, 138 m) site stood in the river
+        // (headless probe: 99 % of the footprint under water triangles). s 0.274 /
+        // 95 m keeps the whole footprint (gap 47–143, incl. the annex) on the
+        // terrain ribbon / grass floor with 0 water cells and ≥ 40 m to any road.
+        {
+          const ca = anchor(K(0.274), 1, 95);
+          const cb = [ca.r, ca.u, ca.t];
+          const foot = ca.c.slice();
+          const gy = groundUnder(foot[0], foot[2]);
+          if (gy !== null) foot[1] = gy;
+          const FACE = [0.82, 0.84, 0.86];
+          const FACE_D = [0.72, 0.74, 0.78];
+          const GLINT = [0.58, 0.72, 0.88];
+          const GOLD = [0.82, 0.68, 0.32];
+          modelGroup("montreal-casino", {
+            center: vadd(vadd(foot, ca.u, 28), ca.t, 9.5),
+            size: [76, 58, 82],   // x: plinth ±36; t: −30 (tiers) … +48 (annex)
+            basis: cb,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(foot, ca.u, 1.2), [72, 2.4, 58], FACE_D, cb);
+            const tiers = [
+              { w: 68, d: 52, h: 12, y: 2.4 },
+              { w: 58, d: 44, h: 11, y: 14.4 },
+              { w: 48, d: 36, h: 10, y: 25.4 },
+              { w: 36, d: 28, h: 9, y: 35.4 },
+            ];
+            for (let ti = 0; ti < tiers.length; ti++) {
+              const tier = tiers[ti];
+              const inset = ti * 0.35;
+              addBox(stage, vadd(vadd(foot, ca.u, tier.y + tier.h / 2 + inset * 0.2), ca.t, -4 + inset),
+                [tier.w - inset * 2, tier.h - 0.08, tier.d - inset * 2],
+                ti % 2 ? FACE : FACE_D, cb);
+              for (const sideOff of [-1, 1]) {
+                addPrism(stage, vadd(vadd(vadd(foot, ca.u, tier.y + tier.h * 0.82 + inset * 0.2),
+                  ca.r, sideOff * (tier.w * 0.38 + 0.6)), ca.t, -4 + inset),
+                  [tier.w * 0.20, tier.h * 0.32, tier.d * 0.50], GLINT, cb);
+              }
+            }
+            addBox(stage, vadd(vadd(vadd(foot, ca.u, 8.2), ca.t, 30), ca.r, 20),
+              [21, 15.5, 36], GOLD, cb);
+            addBox(stage, vadd(vadd(vadd(foot, ca.u, 18.4), ca.t, 30), ca.r, 20),
+              [17, 9.5, 30], [0.88, 0.74, 0.38], cb);
+            stage._mat = 0;
+            return true;
+          }, { required: true });
+        }
         for (let i = 0; i < 14; i++) {
           const sf = 0.21 + i * 0.045;
           if (sf > 0.52 && sf < 0.58) continue;
@@ -682,7 +734,7 @@
         }, emitBio, { required: true });
       }
 
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 5; i++) {
         farBank(K(0.32 + i * 0.019), -1, 1500, 1760, 320, [0.36, 0.41, 0.40]);
       }
 
