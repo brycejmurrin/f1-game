@@ -333,6 +333,17 @@ test("free listener basis is replaced when chase vantage publishes after dbgCam 
   assert.equal(GameCams.getListenerBasis().external, false, "no stale external basis after chase solve");
 });
 
+test("applyFreeCam copies dbgCam into the camera vectors and publishes an external free basis", () => {
+  const GameCams = loadGameCams();
+  const eyeOut = [0, 0, 0], tgtOut = [0, 0, 0];
+  GameCams.applyFreeCam({ eye: [1, 2, 3], target: [11, 2, 3] }, eyeOut, tgtOut);
+  assert.deepEqual(eyeOut, [1, 2, 3]);
+  assert.deepEqual(tgtOut, [11, 2, 3]);
+  const b = GameCams.getListenerBasis();
+  assert.equal(b.external, true);
+  assert.ok(Math.abs(b.fwdX - 1) < 1e-9 && Math.abs(b.fwdZ) < 1e-9, "forward follows eye->target");
+});
+
 test("render republishes listener basis from dbgCam after camVantage (TV director / free cam)", () => {
   const body = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const renderStart = body.indexOf("function render(");
@@ -340,7 +351,7 @@ test("render republishes listener basis from dbgCam after camVantage (TV directo
   const vantIdx = body.indexOf("const vant = camVantage(mode", renderStart);
   assert.ok(vantIdx > renderStart && vantIdx < dbgIdx, "camVantage runs in render before dbgCam overrides the picture");
   assert.match(body.slice(dbgIdx, dbgIdx + 520),
-    /publishListenerBasis\("free", dbgCam\.eye, dbgCam\.target\)/,
+    /GameCams\.applyFreeCam\(dbgCam, camEye, camTgt\)/,
     "dbgCam must be the last listener-basis write before audio reads it");
 });
 

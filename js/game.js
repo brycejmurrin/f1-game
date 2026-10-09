@@ -6937,9 +6937,7 @@ function render(dt) {
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
   if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
   if (dbgCam) {
-    camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
-    camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
-    GameCams.publishListenerBasis("free", dbgCam.eye, dbgCam.target);
+    GameCams.applyFreeCam(dbgCam, camEye, camTgt);
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
