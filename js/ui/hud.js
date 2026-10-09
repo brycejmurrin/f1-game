@@ -367,7 +367,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
-let _fitKey = "", _fitWait = 0, _fitRetry = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
+let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];   // _fitRetry: ticks spent re-measuring while nothing is laid out
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
 // all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
@@ -594,6 +594,37 @@ function mirrorClear(root) {
   const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
+/** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
+function _hudRectsHit(a, b) {
+  return !!(a && b && a.width > 0 && b.width > 0
+    && a.left < b.right - 0.5 && b.left < a.right - 0.5
+    && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
+}
+function _boostOnRightHalf() {
+  const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
+  if (!boost || boost.hidden) return null;
+  const br = boost.getBoundingClientRect();
+  if (!(br.width && br.height)) return null;
+  if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
+  return boost;
+}
+/** Painted phone readout-on-control clashes the spec measures (not budget math). */
+function phonePaintedClash() {
+  if (document.body.classList.contains("desktop")) return false;
+  const sectors = els.hudSectors;
+  const boost = _boostOnRightHalf();
+  if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
+  const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
+  if (rel && !rel.hidden && _dockL) {
+    const rr = rel.getBoundingClientRect();
+    for (const g of _dockL.children) {
+      if (g.hidden) continue;
+      const box = g.getBoundingClientRect();
+      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
+    }
+  }
+  return false;
+}
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
   // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
@@ -665,11 +696,10 @@ function fitHud() {
     let clash = false;
     if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
       const s = els.hudSectors.getBoundingClientRect();
-      const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-      const b = boost && !boost.hidden ? boost.getBoundingClientRect() : null;
+      const boost = _boostOnRightHalf();
+      const b = boost ? boost.getBoundingClientRect() : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && b.width && (b.left + b.right) / 2 >= window.innerWidth / 2
-          && s.width && s.right > b.left - 8) clash = true;
+      if (b && b.width && s.width && s.right > b.left - 8) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
         if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
@@ -679,6 +709,7 @@ function fitHud() {
         }
       }
     }
+    if (!clash && phonePaintedClash()) clash = true;
     if (!clash) return;
     _fitWait = 0;
   }
@@ -1279,6 +1310,35 @@ function fitHud() {
   }
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
+  // Published fit signal: specs wait on --hud-fit-stamp after PAINTED clearance
+  // (dock-r-w / max-width can land a frame before zoom — identical sub-pixel
+  // boxes under CI load). Never bump the stamp while a clash remains.
+  if (!document.body.classList.contains("desktop")) {
+    if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+    for (let pass = 0; pass < 5 && phonePaintedClash(); pass++) {
+      if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+      const secEl = els.hudSectors;
+      const boost = _boostOnRightHalf();
+      if (secEl && !secEl.hidden && boost) {
+        const secR = secEl.getBoundingClientRect();
+        const br = boost.getBoundingClientRect();
+        if (_hudRectsHit(secR, br)) {
+          const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
+          const live = secEl.currentCSSZoom > 0 ? secEl.currentCSSZoom : zTop;
+          const z = Math.min(zTop, live) || 1;
+          let dockRW = parseFloat(root.style.getPropertyValue("--dock-r-w")) || 0;
+          dockRW += Math.max(0, (secR.right - br.left + DOCK_AIR) / z);
+          hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
+          void secEl.offsetHeight;
+          if (_dockR) void _dockR.offsetHeight;
+        }
+      }
+    }
+    if (!phonePaintedClash()) {
+      _fitClearSeq = (_fitClearSeq + 1) | 0;
+      hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
+    }
+  }
 }
 
 /* THE TEAM ACCENT for a team css/tokens.css has no row for.
@@ -2072,6 +2132,7 @@ function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
+  hStyle(root, "--hud-fit-stamp", "");
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
   mirrorClear(root);
 }
