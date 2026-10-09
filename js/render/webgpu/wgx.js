@@ -5735,7 +5735,7 @@ const WGX = (function () {
       backendState: () => ({
         api: "webgpu", lite: WGX_LITE, minimal: WGX_MINIMAL, softGpu: _softGpu,
         isMobile: IS_MOBILE, gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstMsg,
-        lost: _lost, format,
+        lost: _lost, ctxLost: !!_lost, format,
       }),
 
       // Cull-test helpers (Frustum shared module; GLX parity surface).

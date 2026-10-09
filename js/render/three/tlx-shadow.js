@@ -448,7 +448,11 @@
       } catch (e) {
         // Depth TSL compile must not escape into tick() (full-screen overlay).
         try { Log.warn("gfx", "TLX: shadow pass failed —", e); } catch (_) { /* Log absent */ }
-        S.enabled = false;
+        // Disable only the pass that failed: S.enabled is the SUN flag (the sun map,
+        // god-rays), and a car/lamp throw must not freeze it.
+        if (target === carRT) S.carEnabled = false;
+        else if (target === lampRT || target === lampStaticRT) S.lampEnabled = false;
+        else S.enabled = false;
         S.depthPassOn = false;
       } finally { renderer.autoClear = autoClear0; }
       // Blocker refresh rides the SUN pass only (GLX shadowEnd): the snap

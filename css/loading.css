@@ -117,6 +117,9 @@
 /* Out of the accessibility tree too, not just transparent: a screen reader would
    otherwise read a card no sighted player can see yet. */
 #loading[data-phase="garage"] #ld-card { visibility: hidden; }
+/* PREP: cold compilation before the garage leave (LoadingScreen prep phase). Scrim
+   stays (unlike garage); the race/session card stays hidden until garage-out ends. */
+#loading[data-phase="prep"] #ld-card { visibility: hidden; }
 /* LETTERBOX — 2.35:1 bars over the flyby, which is what makes the same shots
    read as a title sequence rather than a paused game. One bar per pseudo so
    each moves on `transform` alone (compositor-only; the flyby is already
