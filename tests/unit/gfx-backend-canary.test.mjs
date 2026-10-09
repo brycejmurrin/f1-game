@@ -4173,12 +4173,15 @@ test("Gfx seam lists instancing on all three backends", () => {
     "gfx.js must not still say TLX exports instancing as undefined");
 });
 
-test("TLX garage (no proj) paints the canvas, not the HDR scene target", () => {
-  // Setup preview only sends viewProj. The HDR RT stayed black on software
-  // GL (viz=scene was empty) so the turntable vanished while GLX was fine.
+test("TLX garage (noEnv) paints the canvas, not the HDR scene target", () => {
+  // Setup preview sets noEnv (and may still pass proj for SSAO). The HDR RT
+  // stayed black on software GL (viz=scene was empty) so the turntable
+  // vanished while GLX was fine — gate the post chain on !noEnv.
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(src, /if \(post && _postF\.proj\)/,
-    "post chain must require begin() proj — garage frames must not render into sceneRT");
+  assert.match(src, /if \(post && _postF\.proj && !_postF\.noEnv\)/,
+    "post chain must skip noEnv garage frames — they must not render into sceneRT");
+  assert.match(src, /_postF\.noEnv\s*=/,
+    "begin() must latch frame.noEnv onto _postF for present()");
 });
 
 test("TLX copies matrix → matrixWorld on every pooled mesh (cars otherwise sit at origin)", () => {
