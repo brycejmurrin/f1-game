@@ -42,6 +42,7 @@ const FIELD = {
   yK: { label: "HEIGHT (LANDMARK HEIGHTS)", min: -1, max: 3, step: 0.05, unit: "", def: 0.4 },
 };
 const FIELD_IDS = Object.keys(FIELD);
+const POSE_NUMS = FIELD_IDS.concat("rank");   // every numeric a pose may carry (n is separate: name or number)
 // `rank` is a landmark index and `n` a corner, and neither is a continuous
 // quantity — both are pickers, and both live outside FIELD for that reason.
 const RANKS = [0, 1, 2, 3, 4, 5];
@@ -176,6 +177,14 @@ function shotErrors(list) {
       s[k].forEach((p, j) => {
         if (!p || typeof p !== "object") { bad.push(at + " " + k + "[" + j + "] is not a pose"); return; }
         if (AT_KINDS.indexOf(p.at) === -1) bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at));
+        // A pose number is read straight into the eye: a corrupted settings
+        // import (off: "x", bear: null, y: 1e999) must not reach the loading
+        // flyby as a NaN eye. `n` is a corner name OR a number.
+        for (const f of POSE_NUMS) {
+          if (p[f] !== undefined && (typeof p[f] !== "number" || !isFinite(p[f])))
+            bad.push(at + " " + k + "[" + j + "]." + f + " must be a finite number");
+        }
+        if (typeof p.n === "number" && !isFinite(p.n)) bad.push(at + " " + k + "[" + j + "].n must be finite");
       });
     }
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
