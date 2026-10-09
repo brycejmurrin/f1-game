@@ -136,7 +136,11 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   const warm = game.slice(game.indexOf('function introWarm(go)'), game.indexOf('function startRaceCovered()'));
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
   assert.match(game, /if \(!built && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too (reduce-motion included)');
-  assert.ok(warm.indexOf('await introPrepare(') >= 0 && warm.indexOf('await introPrepare(') < warm.indexOf('if (cold && _introSkip !== n) { studioOpen'), 'cold motion starts only after compilation settles');
+  assert.match(warm,
+    /if \(cold\) \{\s*\/\/ Cold:[^\n]*\n\s*const ready = await introPrepare\(live, key, info, n, true\);[\s\S]*?studioOpen\(n, info\); await studioDone\(live, n\);/,
+    'cold motion starts only after compilation settles');
+  assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\);\s*await studioDone\(live, n\);/,
+    'warm path: garage-out overlaps prepare, never blocked behind it');
   assert.match(game, /if \(built && _introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/, 'a skip in the garage goes to the race, not the flyby');
   assert.match(game, /\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/, 'the studio shows through the build card');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
