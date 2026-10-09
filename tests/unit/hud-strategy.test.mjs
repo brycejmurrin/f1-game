@@ -87,6 +87,10 @@ test("tick: race + wear only; shows laps, loss, next, and the cue with the rival
   assert.equal(root.hidden, true, "TYRE WEAR off: no strategy");
   wear = true; G.session = "quali"; S.tick(G, p);
   assert.equal(root.hidden, true, "races only");
+  G.session = "race"; S.tick(G, p);
+  assert.equal(root.hidden, false, "control: back to a race session");
+  G.practice = true; S.tick(G, p);   // PRACTICE is a flag on a race session (bug-hunt 5.5)
+  assert.equal(root.hidden, true, "practice shows no strategy panel");
 });
 
 test("never reads track curvature (the arc must not reach the driver)", () => {
