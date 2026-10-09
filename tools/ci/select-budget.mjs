@@ -5,6 +5,7 @@
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import { loadDb, unionDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
@@ -161,6 +162,16 @@ function circuitDefCount() {
   } catch { return null; }
 }
 
+/** How many circuits `auditTracks()` (tests/helpers/track-helpers.js) returns
+ *  with TRACK unset — tools/manifest.cjs's CIRCUITS, the roster it reads. CI
+ *  never sets TRACK, so the selected gate runs the whole roster. */
+function auditRosterCount() {
+  try {
+    const list = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;
+    return Array.isArray(list) ? list.length : null;
+  } catch { return null; }
+}
+
 /** True when an AST node names the circuits directory (Literal / template). */
 function mentionsCircuitsDir(node) {
   if (!node || typeof node !== "object") return false;
@@ -218,6 +229,18 @@ function staticArrayLen(node, bindings) {
       if (args.length) return Math.max(0, Math.min(base, a1) - Math.max(0, a0));
     }
     return base;
+  }
+  // auditTracks() — the shared all-circuit AUDIT roster (terrain-over-road).
+  // Unresolved, it billed `for (const trk of TRACKS)` once: terrain-over-road
+  // read as 5 tests / ~69 s while Playwright ran 56 (~10-13 min on llvmpipe),
+  // so it packed into a 10-minute `selected-N` job beside five other specs and
+  // the job died at its cap with 0 failures (CI runs 37603233990 selected-3,
+  // 37607617812 selected-4). Since #1075 split the old single 1500 s body into
+  // one 180 s test per circuit, the solo/mega-sweep rule no longer catches it,
+  // so the COUNT is the only thing that can send it to its own shards.
+  if (node.type === "CallExpression" && node.callee?.type === "Identifier"
+      && node.callee.name === "auditTracks") {
+    return auditRosterCount();
   }
   // fs.readdirSync(path.join(ROOT, "js/circuits")) — same source tracks-walls
   // and friends use to build their per-circuit list at module load.

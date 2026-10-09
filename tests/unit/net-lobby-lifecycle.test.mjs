@@ -959,7 +959,7 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     assert.equal(made.length, 1);
     made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
     made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
-    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "relayed guest is in the roster");
+    assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
     made[0].deliver("go", {});
     assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
     assert.equal(closers.length, 1);
@@ -968,6 +968,60 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     assert.match(h.status.textContent, /rivals are now AI/i);
     assert.equal(h.lobby.roomState().peers.length, 0,
       "relayed guest must die with the host — otherwise QualiNet.waiting() stays locked");
+  } finally { h.lobby.cancel(); }
+});
+
+test("mid-race one guest leaving of two keeps the other — occupancy is transports, not lobby sessions", async () => {
+  // finishStart() hands sessions to NetPlay and clears the lobby sessions map,
+  // but leaves transports populated. onClose used to gate "anyone left?" on
+  // !sessions.size — always true after the handoff — so one guest dropping in
+  // a 3p race took the empty-room path: "Connection closed." / "Your friend
+  // left the room.", _peers cleared, and the multi-peer "A player left…"
+  // branch (plus lobby LEFT relay) was unreachable. NetPlay still kept the
+  // race; the lobby lied. 2p hides it (the only guest leaving DOES empty the
+  // room). Live smoke covered 2p disconnect + 3p lobby READY, not 3p mid-race.
+  const made = [], closers = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = { status: "open", onClose(fn) { closers.push(fn); }, close() { t.status = "closed"; } };
+    return t;
+  });
+  h.G.startRace = async () => ({ ok: true });
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  try {
+    h.lobby.wire();
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 1, "guest 1 bound");
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2, "guest 2 bound");
+    assert.equal(closers.length, 2, "two close handlers");
+    made[1].deliver("hello", { team: "beta", driver: 1 });
+    made[1].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), true, "host starts the race");
+    // finishStart is async (awaits startRace); wait for the handoff.
+    for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    // After finishStart, lobby sessions are empty but both transports remain.
+    assert.equal(h.lobby.status().guests, 2, "transports still hold both guests");
+    closers[0]("peer_closed");                       // guest 1 drops mid-race
+    assert.match(h.status.textContent, /player left/i,
+      "remaining guest is still in — not the empty-room copy");
+    assert.doesNotMatch(h.status.textContent, /left the room|Connection closed/i);
+    assert.equal(h.lobby.status().guests, 1, "one transport remains");
+    assert.equal(h.lobby.roomState().peers.length, 1,
+      "the surviving guest's profile must stay — finishStart keeps _peers on purpose");
   } finally { h.lobby.cancel(); }
 });
 
@@ -1216,4 +1270,149 @@ test("codeJoin and phone-pad acceptInvite do not pass gatherTimeoutMs: 2500", as
   const phone = await readFile(new URL("../../js/input/phone-pad.js", import.meta.url), "utf8");
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(phone),
     "phone-pad acceptInvite must not force gatherTimeoutMs: 2500");
+});
+
+// Live build 14296 / tip after #1237: guest ICE opened and onConnected said
+// "Connected.", but codeJoin's onTick (and a racing expired swap) still painted
+// "Looking for that room…" / "Nobody answered…" over it during the answer
+// re-post window. Once connected, status must never regress and no expiry
+// error may be emitted.
+test("once guest connected, status never regresses and no expiry error", async () => {
+  const made = [];
+  let transport = null;
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: {
+      acceptInvite: async () => ({ ok: true, code: "answer", peer: null }),
+    },
+    rendezvous: {
+      usingPrivateRelay: () => false,
+      normalise: (c) => String(c || "").toUpperCase().replace(/[^0-9A-Z]/g, ""),
+      valid: (c) => /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/.test(String(c || "").toUpperCase()),
+      swap: async (o) => {
+        const out = await o.reply("host-invite");
+        assert.ok(out, "guest posted an answer");
+        // Open ICE while the exchange is still live (nostr ~5.2 s re-post).
+        transport.status = "open";
+        for (let i = 0; i < 40 && !h.lobby.status().connected; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        assert.equal(h.lobby.status().connected, true,
+          "guest reached Connected before swap settles");
+        // openRoom advances past "Connected." to the waiting-room line — that
+        // is forward progress. onTick/expiry must not go backwards to looking
+        // or "Nobody answered…".
+        const afterConnected = h.status.textContent;
+        assert.doesNotMatch(afterConnected, /Looking for that room|Nobody answered/i);
+        if (typeof o.onTick === "function") o.onTick();
+        assert.equal(h.status.textContent, afterConnected,
+          "onTick must not overwrite Connected/room status with Looking for that room");
+        assert.doesNotMatch(h.status.textContent, /Looking for that room|Nobody answered/i);
+        // Expiry racing clearExpire while the transport is adopted.
+        return {
+          ok: false,
+          error: "expired",
+          message: "Nobody answered that code. Check the six characters, or ask "
+            + "your friend for a fresh one — if it keeps happening, both "
+            + "reload the game and try a new code.",
+        };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    transport = {
+      status: "new",
+      onClose() {},
+      close() { transport.status = "closed"; },
+      stats: () => ({ ice: "connected", connection: "connected" }),
+    };
+    return transport;
+  });
+  try {
+    const result = await h.lobby.codeJoin("ABC234");
+    assert.equal(result.ok, true, "expired + adopted transport still counts as joined");
+    assert.equal(h.lobby.status().connected, true);
+    assert.doesNotMatch(h.status.textContent,
+      /Looking for that room|Nobody answered|Could not join/i,
+      "no looking/joining/expiry line after Connected");
+  } finally {
+    h.lobby.cancel();
+  }
+});
+
+// Host room-code expiry / courier fail (onFail) must close the half-built
+// pending RTCPeerConnection + transport. Leaving it leaked blocked a retry
+// from the same guest (stale pending offer / PC) after #1237's longer host
+// timeout window.
+test("host onFail during a half-built join closes that peer PC and clears pending", async () => {
+  const made = [], rooms = [], ts = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: { acceptAnswer: async () => ({ ok: true, peer: null }) },
+    rendezvous: {
+      usingPrivateRelay: () => false, makeCode: () => "ABC234",
+      hostRoom: async (o) => {
+        const room = {
+          code: o.code, onJoiner: o.onJoiner, onFail: o.onFail,
+          stopped: 0, stop() { room.stopped++; }, rotate() {},
+        };
+        rooms.push(room);
+        return { ok: true, stop: () => room.stop(), rotate: () => {} };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    const pc = {
+      signalingState: "have-local-offer",
+      connectionState: "new",
+      closed: 0,
+      close() { pc.closed++; pc.connectionState = "closed"; pc.signalingState = "closed"; },
+    };
+    const t = {
+      status: "new", pc, closers: [],
+      onClose(fn) { t.closers.push(fn); },
+      close() {
+        if (t.status === "closed") return;
+        t.status = "closed";
+        try { pc.close(); } catch (e) { /* already gone */ }
+        for (const fn of t.closers) fn("local");
+      },
+    };
+    ts.push(t);
+    return t;
+  });
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(rooms.length, 1);
+    assert.equal(typeof rooms[0].onFail, "function", "hostRoom received onFail");
+    const pending = ts[0];
+    assert.equal(pending.status, "new", "half-built transport is waiting for an answer");
+    assert.equal(h.lobby.status().pending, true);
+    assert.equal(pending.pc.closed, 0);
+
+    // Courier expiry with nobody connected — the primary leak path.
+    rooms[0].onFail({
+      ok: false, error: "expired",
+      message: "Nobody answered that code. Check the six characters, or ask "
+        + "your friend for a fresh one.",
+    });
+
+    assert.equal(pending.status, "closed", "onFail must close the half-built transport");
+    assert.equal(pending.pc.closed, 1, "…and its RTCPeerConnection");
+    assert.equal(h.lobby.status().pending, false, "no pending entry left behind");
+    assert.equal(h.lobby.status().guests, 0);
+
+    // Same guest can retry: a fresh codeHost must mint a new transport/PC.
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(ts.length, 2, "retry minted a fresh host transport");
+    assert.notEqual(ts[1], pending);
+    assert.equal(ts[1].status, "new");
+    assert.equal(ts[1].pc.closed, 0);
+    assert.equal(h.lobby.status().pending, true);
+  } finally {
+    h.lobby.cancel();
+  }
 });

@@ -195,6 +195,7 @@ function lazyFiles() {
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
+    ...(MANIFEST.LAZY_RACE_SESSION || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -242,7 +243,8 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // circuit builds BARE — road and terrain, no dressing — with no exception to
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
-  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_CIRCUIT || []),
+  for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_RACE_SESSION || []),
+                   ...(MANIFEST.LAZY_CIRCUIT || []),
                    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -265,6 +267,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   // source text: the question is which paths actually get the ?v= suffix.
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
+    ...(MANIFEST.LAZY_RACE_SESSION || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -341,6 +344,16 @@ test("LAZY_RACE files have no <script> tag", () => {
   const tagged = new Set(scriptSrcs.map(stripV));
   for (const f of (MANIFEST.LAZY_RACE || [])) {
     assert.ok(!tagged.has(f), `${f} is LAZY_RACE but still has a <script> tag in index.html`);
+  }
+});
+
+test("LAZY_RACE_SESSION is tagless; FULL keeps the session stub", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  assert.ok(MANIFEST.FULL.includes("js/race/session-stub.js"), "session stub must stay on FULL");
+  assert.ok((MANIFEST.LAZY_RACE_SESSION || []).includes("js/race/pit-lane.js"));
+  for (const f of (MANIFEST.LAZY_RACE_SESSION || [])) {
+    assert.ok(!tagged.has(f), `${f} is LAZY_RACE_SESSION but still has a <script> tag`);
+    assert.ok(!MANIFEST.FULL.includes(f), `${f} must leave FULL when it joins LAZY_RACE_SESSION`);
   }
 });
 

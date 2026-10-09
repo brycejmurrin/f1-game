@@ -107,3 +107,45 @@ test("codec: empty props stay APXT1; placed props ride APXT2 and round-trip", as
   // Caps still apply after decode.
   assert.ok(P.counts(back2.design.props).total <= P.TOTAL);
 });
+
+function floodDress(P, side) {
+  const calls = [];
+  const api = {
+    K: (f) => Math.round(f * 100),
+    floodMast: (k, s, gap, opts) => { calls.push({ k, side: s, gap, opts }); },
+  };
+  const n = P.dress(api, { n: 1000 }, [{ kind: "flood", s: 0.25, side, gap: 20 }]);
+  assert.equal(n, 1);
+  return calls;
+}
+
+test("flood prop dress: one floodMast on the authored side (+1)", () => {
+  const { P } = bootEditor();
+  const calls = floodDress(P, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].side, 1);
+  assert.equal(calls[0].gap, 20);
+  assert.equal(calls[0].opts.h, 24);
+  assert.equal(calls[0].opts.cool, true);
+  assert.equal(calls[0].opts.pool, true);
+});
+
+test("flood prop dress: one floodMast on the authored side (-1)", () => {
+  const { P } = bootEditor();
+  const calls = floodDress(P, -1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].side, -1);
+});
+
+test("flood prop dress: default side +1 when omitted (codec stores 0/1 only)", () => {
+  const { P } = bootEditor();
+  const calls = [];
+  const api = {
+    K: () => 0,
+    floodMast: (k, s, gap) => { calls.push({ side: s, gap }); },
+  };
+  P.dress(api, { n: 1 }, [{ kind: "flood", s: 0.5, gap: 28 }]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].side, 1);
+  assert.equal(calls[0].gap, 28);
+});

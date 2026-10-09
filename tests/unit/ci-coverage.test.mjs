@@ -612,8 +612,23 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:m[process.argv[1]]||[]}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
   const script = new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url).pathname;
-  // A READY PR's run: the sweeps job ran and passed (a draft's is skipped).
-  const fullJobs = { 7: [{ name: "Per-circuit geometry sweeps", conclusion: "success" }] };
+  // A READY PR's run / a full Pages gate: CI, sweeps, selected verdict and
+  // smoke all ran and passed (a draft's sweeps and smoke are skipped).
+  const gateJobs = (prefix = "", over = {}) => [
+    ["CI", "success"], ["Per-circuit geometry sweeps", "success"], ["Selected specs (verdict)", "success"],
+    ["Smoke (page boots, __apex responds) (1)", "success"], ["Structural guards", "success"],
+  ].map(([name, conclusion]) => ({ name: prefix + name, conclusion: over[name] || conclusion }));
+  const fullJobs = {
+    7: gateJobs(),
+    // Pages run 3112 (37689226760): ship_only smoke, sweeps/selection/guards skipped.
+    9: gateJobs("ci / ", { "Per-circuit geometry sweeps": "skipped", "Selected specs (verdict)": "skipped", "Structural guards": "skipped" }),
+    // A Pages run that itself reused an earlier pass: no ci jobs at all.
+    10: [{ name: "Anything new, and was this exact tree already gated?", conclusion: "success" }, { name: "publishable", conclusion: "success" }, { name: "deploy", conclusion: "success" }],
+    // A real Pages gate (jobs prefixed by the reusable-workflow call).
+    11: gateJobs("ci / "),
+    12: gateJobs("ci / ", { "Smoke (page boots, __apex responds) (1)": "cancelled" }),
+    13: gateJobs("", { "Selected specs (verdict)": "skipped" }),
+  };
   const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
@@ -636,10 +651,26 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
     { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7", ship_only: "false" },
     "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
-  const fastOnly = verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] });
-  assert.equal(fastOnly.reuse, "true", "exact-SHA ship fast-tier reuses as Pages smoke-only");
-  assert.equal(fastOnly.ship_only, "true");
-  assert.equal(fastOnly.fast_run, "7", "…and names the fast-tier run");
+  // Pages run 3112 (37689226760, 2026-10-07) published 61e0a6442 on its own
+  // green ship fast tier as smoke-only, after dispatch 3110 (37687308660) had
+  // FAILED the full gate on that tree. The fast tier is never a gate: the
+  // full gate runs, reusing only the fast tier's tree-only jobs.
+  assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }),
+    { reuse: "false", source: "", run: "", fast_run: "7", ship_only: "false" },
+    "an exact-SHA ship fast tier alone runs the gate (fast_run named, ship_only never)");
+  assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" }), run({ id: 99, path: ".github/workflows/pages.yml", event: "workflow_dispatch", conclusion: "failure" })] }).reuse, "false",
+    "a failed Pages gate beside a green fast tier on the same sha: the gate runs again");
+  // A successful run is not proof the gate RAN: the CI aggregator passes skipped jobs.
+  assert.equal(verdict(M2, { [D]: [run({ id: 9, path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "false",
+    "a smoke-only Pages run (sweeps, selection skipped) concluded success but is not a gate");
+  assert.equal(verdict(M2, { [D]: [run({ id: 10, path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "false",
+    "a Pages run that skipped ci (it reused an earlier pass) is not a gate: no chaining");
+  assert.equal(verdict(M2, { [D]: [run({ id: 11, path: ".github/workflows/pages.yml", event: "workflow_dispatch" })] }).reuse, "true",
+    "a Pages run whose `ci / ` gate jobs all passed is a gate");
+  assert.equal(verdict(M2, { [D]: [run({ id: 12, path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "false",
+    "a cancelled smoke shard is not a pass");
+  assert.equal(verdict(M2, { [D]: [run({ id: 13 })] }).reuse, "false", "a skipped selected verdict is not a pass");
+  assert.equal(verdict(M2, { [D]: [run({ id: 14, event: "merge_group" })] }).reuse, "false", "merge_group needs its gate jobs too (no jobs on record: not a gate)");
   assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy", conclusion: "failure" })] }).fast_run, "",
     "a red fast tier is not reused");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",

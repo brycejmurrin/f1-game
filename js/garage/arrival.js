@@ -83,6 +83,8 @@ const GarageArrival = (function () {
    * from the camera so the car sweeps across the doorway rather than out of it.
    * x and yaw ride the pose (setup-camera.js builds the car matrix from them). */
   const OUT_HOLD = 1.1, OUT_RUN = 4.4, OUT_DURATION = DOOR_S + OUT_HOLD + OUT_RUN + 0.3;
+  // Reduce-motion Start Race: same path, ~4× wall speed (~1.9 s), never skipped.
+  const OUT_REDUCE_SPEED = 4;
   const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = 1.3;   // ~75 degrees
   // PACE: it pulls away (OUT_ACCEL s), holds its speed through the turn, and leaves
   // it still rolling, then coasts OUT_COAST m on down the pit lane and eases to a
@@ -148,5 +150,5 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, DURATION, OUT_DURATION, OUT_SETTLE, OUT_REDUCE_SPEED, DEFAULT, settings, bindSettings });
 })();

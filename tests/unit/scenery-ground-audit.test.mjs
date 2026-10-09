@@ -45,7 +45,7 @@ test("baseline names every check and only real circuits", () => {
     assert.equal(typeof base[c], "object", `baseline lacks the "${c}" table`);
     for (const [id, n] of Object.entries(base[c])) {
       assert.ok(roster.has(id), `${c}: unknown circuit "${id}"`);
-      assert.ok(Number.isInteger(n) && n > 0, `${c}.${id}: caps are positive integers (absent = 0)`);
+      assert.ok(Number.isInteger(n) && n >= 0, `${c}.${id}: caps are non-negative integers (absent = 0)`);
     }
   }
 });
