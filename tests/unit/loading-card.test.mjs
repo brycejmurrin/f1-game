@@ -211,7 +211,7 @@ test("the streak: a skip extends it, a watched flyby clears it, hostile input is
 /** A LoadingScreen instance over stubs: every $() id is a do-nothing element,
  *  timers and Date are fake, the store is a Map, and the announcer records the
  *  budget it was handed. */
-function harness(stored = {}, storeOverride = null, docEl = null) {
+function harness(stored = {}, storeOverride = null, docEl = null, nav = undefined) {
   let now = 5000, seq = 0;
   const q = [], listeners = {}, saved = new Map(Object.entries(stored));
   const plays = [];
@@ -231,6 +231,7 @@ function harness(stored = {}, storeOverride = null, docEl = null) {
     document: { createElement: () => elem(), documentElement: docEl },
     Log: { warn() {}, info() {} },
   };
+  if (nav !== undefined) sb.navigator = nav;
   sb.window = sb;
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: "js/ui/loading-screen.js" });
@@ -273,6 +274,18 @@ test("SETTINGS › MOTION: REDUCED still runs the card, the flyby and the announ
   const on = harness({}, null, { dataset: {} });
   on.run();
   assert.equal(on.els.loading.dataset.phase, "run", "motion ON keeps the flyby");
+});
+
+test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and hands off to the grid promptly; a player's reduced motion still flies", () => {
+  const bot = harness({}, null, { dataset: { motion: "reduce" } }, { webdriver: true });
+  bot.run();
+  assert.equal(bot.els.loading.dataset.phase, "card", "automation: the card, not a 20-60 s flyby on software GL");
+  assert.equal(bot.plays.length, 0, "no announcer read over a 700 ms card");
+  bot.tick(LS.CARD_MS);
+  assert.equal(bot.races.length, 1, "the race starts after the card");
+  const player = harness({}, null, { dataset: { motion: "reduce" } }, { webdriver: false });
+  player.run();
+  assert.equal(player.els.loading.dataset.phase, "run", "a player under REDUCED still gets the flyby (#1290)");
 });
 
 test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {

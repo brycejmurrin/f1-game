@@ -57,3 +57,52 @@ test("every workflow step that diffs a pull request resolves its base through th
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");
 });
+
+test("Structural guards ignores ship ceiling raises but still rejects a PR raise", () => {
+  // Run the actual workflow shell and ratchet CLI on a GitHub-shaped merge.
+  // A stale event base must not attribute ship's +100 raise to a scenery PR.
+  const shell = ci.match(/- name: Ratchet ceilings vs the base[\s\S]*?        run: \|\n((?:          .*\n)+)/)?.[1]
+    .replace(/^          /gm, "");
+  assert.ok(shell, "the Structural guards ratchet shell is present");
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "ci-ratchet-base-"));
+  const g = (...args) => cp.execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const ceiling = (lines) => fs.writeFileSync(path.join(dir, "tests/data/ratchets.json"),
+    JSON.stringify({ files: { "js/game.js": { lines } } }) + "\n");
+  const commit = (message) => { g("add", "-A"); g("commit", "-qm", message); };
+  const run = (base, event = "pull_request", mode = "") => cp.spawnSync("bash", ["-e", "-c", shell], {
+    cwd: dir, encoding: "utf8", env: { ...process.env, RATCHET_BASE: base, RATCHET_MODE: mode, EVENT: event },
+  });
+  try {
+    g("init", "-q", "-b", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    for (const file of ["tools/ci/ci-pr-base.sh", "tools/check/ratchets.mjs"]) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, file), path.join(dir, file));
+    }
+    fs.mkdirSync(path.join(dir, "tests/data"), { recursive: true });
+    ceiling(100); commit("original ship ceiling");
+    const staleBase = g("rev-parse", "HEAD");
+    g("checkout", "-qb", "scenery");
+    fs.writeFileSync(path.join(dir, "scenery"), "one circuit change\n"); commit("scenery only");
+    g("checkout", "-q", "main"); ceiling(200); commit("ship ceiling moved");
+    const baseTip = g("rev-parse", "HEAD");
+    g("merge", "-q", "--no-ff", "-m", "synthetic PR merge", "scenery");
+    let result = run(staleBase);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, new RegExp(`ratchet base: ${baseTip}`));
+    assert.match(result.stdout, /0 ceiling\(s\) moved/);
+    // Pushes keep their explicit previous SHA and existing advisory behavior.
+    result = run(staleBase, "push", "--advisory");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /100 -> 200 \(\+100\)/);
+    assert.match(result.stdout, /advisory/);
+    // A PR-owned raise remains fatal even though the stale base is normalized.
+    ceiling(250);
+    result = run(staleBase);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stdout, /200 -> 250 \(\+50\)/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

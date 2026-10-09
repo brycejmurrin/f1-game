@@ -133,11 +133,10 @@
         backdrop(kM, -1, 200 + hash(i * 9 + 22) * 70, [22 + hash(i * 3 + 22) * 12, 26 + hash(i * 13 + 22) * 34, 20], [0.08, 0.09, 0.14]);
         backdrop(kM, 1,  340 + hash(i * 15 + 22) * 160, [34 + hash(i * 17 + 22) * 28, 52 + hash(i * 19 + 22) * 104, 24], DARK);
       }
-      // s 0.58–0.97: Caspian seafront — city skyline R, dark sea haze L
+      // s 0.58–0.97: Caspian seafront — city skyline R, open Caspian L (no backdrops)
       for (let i = 0; i < 12; i++) {
         const kS = K(0.58 + i / 12 * 0.39);
         backdrop(kS, 1,  150 + hash(i * 5 + 58) * 70, [28 + hash(i * 7 + 58) * 20, 38 + hash(i * 11 + 58) * 62, 22], DARK2);
-        backdrop(kS, -1, 220 + hash(i * 9 + 58) * 90, [16 + hash(i * 3 + 58) * 8, 12, 16], SEA);
         backdrop(kS, 1,  320 + hash(i * 15 + 58) * 180, [32 + hash(i * 17 + 58) * 26, 48 + hash(i * 19 + 58) * 92, 24], DARK);
       }
 
@@ -424,23 +423,29 @@
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 2.5,
       });
 
-      wall(0.42, 0.50, -1, 2.0, 11, SAND, 1.4);
-      wall(0.42, 0.50,  1, 2.0, 11, SAND, 1.4);
-      along(0.42, 0.50, 7.2, (k) => {
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 2.0);
-          // Measured (float-audit): this merlon cap sat flush on the wall
-          // top (y=11, from wall()'s own h=11) with zero gap, but the wall
-          // itself is emitted through instance()/along() on its OWN node
-          // spacing (6 m) — different from this loop's (7.2 m) — and
-          // extending the cap's own reach down by up to a full wall height
-          // made no difference, so whatever is beneath it there isn't the
-          // wall either. A slim buttress pier from grade up to the cap
-          // gives it its own real support instead of chasing the wall.
-          addBox(out, vadd(a.c, a.u, 5.5), [1.0, 11.4, 1.0], SAND, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, [a.r, a.u, a.t]);
-        }
-      });
+      // Castle squeeze (0.42–0.50): wall() drops every node in the narrowed
+      // hwZone (onTrack at gap 2.0) — one solid curtain per side, built per node
+      // at the REAL walk spacing (step*ds) so it follows the road, + crenellated
+      // piers. Curtain top sits 0.5 m under the pier tops (no coplanar faces).
+      {
+        const sqGap = 2.0, sqTh = 1.4, sqH = 11, sqTop = sqH + 0.4;
+        // One node per box (step 4 ≈ ds): a 4 m tangent box barely leaves the
+        // road's curve, where the 8 m one was culled on the tight inner bends.
+        along(0.42, 0.50, 4, (k, spacing) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, sqGap);
+            addBox(out, vadd(a.c, a.u, 5.1), [sqTh, sqTop - 0.2, spacing * 0.98], SAND, [a.r, a.u, a.t]);
+          }
+        });
+        along(0.42, 0.50, 7.2, (k) => {
+          for (const side of [-1, 1]) {
+            const a = anchor(k, side, sqGap);
+            const b = [a.r, a.u, a.t];
+            addBox(out, vadd(a.c, a.u, 5.5), [1.0, 11.4, 1.0], SAND, b);
+            addBox(out, vadd(a.c, a.u, 11.7), [1.8, 1.4, 2.2], SAND, b);
+          }
+        });
+      }
       // Gateway towers flank the narrowest point without entering the road mesh.
       {
         const aL = anchor(K(0.46), -1, 2.0);
@@ -629,12 +634,6 @@
         const s = 0.58 + i * 0.031;
         const a = anchor(K(s), -1, 5.7);
         addCyl(out, vadd(a.c, a.u, -0.1), 0.16, 1.9, [0.80, 0.74, 0.62], 6, [a.r, a.u, a.t]);   // from grade: at 0.7 up they hovered
-      }
-
-      for (let i = 0; i < 5; i++) {
-        const a = anchor(K(0.66 + i * 0.06), -1, 160 + hash(i * 5) * 100);
-        addBox(out, vadd(a.c, a.u, 3), [14 + hash(i) * 8, 5 + hash(i * 2) * 3, 3.5],
-          [0.10, 0.12, 0.18], [a.r, a.u, a.t]);
       }
 
       // One far breakwater silhouette only (near piers culled for sea void)
