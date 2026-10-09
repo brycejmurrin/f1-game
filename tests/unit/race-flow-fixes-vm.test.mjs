@@ -333,3 +333,26 @@ test("3.6 the derived MIXED-weather plan is cached until a setting it reads chan
     assert.deepEqual({ ...G.wxArcPlan }, { to: "rain", dur: 200 });
   } finally { g.close(); }
 });
+
+test("3.12 a finished or retired car's squeal / smoke / ERS cue state is zeroed by its early-out, not frozen at the last value", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    g.step(60 * 3);
+    const [A, B] = G.cars.filter((c) => !c.human);
+    const dirty = (c) => { c.skidIntensity = 0.8; c.wheelLock = 1; c.brakeDemand = 1; c.throttleDemand = 1; c.deploying = true; c.towing = 0.5; c.wake = 0.5; c.collideT = 0.35; };
+    dirty(A); A.finished = true; A.finishT = G.raceT;
+    a.retire(G.cars.indexOf(B)); dirty(B);
+    g.step(1);
+    for (const [name, c] of [["finished", A], ["retired", B]]) {
+      assert.equal(c.skidIntensity, 0, `${name}: skidIntensity`);
+      assert.equal(c.wheelLock, 0, `${name}: wheelLock`);
+      assert.equal(c.brakeDemand, 0, `${name}: brakeDemand`);
+      assert.equal(c.throttleDemand, 0, `${name}: throttleDemand`);
+      assert.equal(c.deploying, false, `${name}: deploying`);
+      assert.equal(c.towing, 0, `${name}: towing`);
+      assert.equal(c.wake, 0, `${name}: wake`);
+      assert.ok(c.collideT < 0.35, `${name}: collideT decays (${c.collideT})`);
+    }
+  } finally { g.close(); }
+});
