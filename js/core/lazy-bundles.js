@@ -163,18 +163,20 @@ function fetchScenery(id) {
   }
   return p;
 }
-// Resolves true once the closure is resident, false when it is not (after ONE
-// retry, the ensureCircuit shape): the caller can tell, because Tracks.build()
-// of a circuit whose closure never landed is a bare world that the rebuild
-// guard (id, night, grid) then keeps for the session. It does not throw — a
-// bare world is playable, a rejection at the title is the red overlay.
+// Resolves true once the closure is resident, false when it is not: the caller
+// can tell, because Tracks.build() of a circuit whose closure never landed is a
+// bare world that the rebuild guard (id, night, grid) then keeps for the
+// session. It does not throw — a bare world is playable, a rejection at the
+// title is the red overlay. ONE fetch per ask, no in-call retry: a failed
+// script is a completed request (the track has fallback scenery, and
+// session-entry-vm holds the request to prove a start survives it); the next
+// ask fetches again, so nothing is negatively cached.
 async function ensureScenery(idx) {
   // Path payload before scenery: Tracks.build / buildCenterline need def.path.
   await ensureCircuit(idx);
   const def = Tracks.LIST[idx];
   if (def && !def.scenery && !sceneryResident(def.id)) {   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
     await fetchScenery(def.id);
-    if (!sceneryResident(def.id)) await fetchScenery(def.id);
     if (!sceneryResident(def.id)) {
       Log.warn("track", "scenery closure did not load: " + def.id + " — the world builds bare");
       return false;
