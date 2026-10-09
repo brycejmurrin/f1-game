@@ -39,8 +39,9 @@
 // (and deploy-research) own the public Pages check — this box cannot reach github.io.
 // What changed underneath it (see pages.yml "Stamp the shell generation"): the
 // build number is stamped by the deploy from the commit count, so there is no
-// union re-bump; version.json/index.html conflicts resolve to EITHER side plus a
-// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps ran here again from
+// union re-bump; a version.json/index.html conflict inside a @gen-shell span
+// resolves by regeneration (tags read ?v=dev; the deploy stamps hashes) and
+// keeps both sides' hand-written markup; one outside a span stops. Sweeps ran here again from
 // 2026-09-18, conditionally: they are CI's too, but CI runs them AFTER the
 // push, and one float-equality failure that only test:sweeps could catch broke
 // Pages for hours past a green deploy (the reversal is argued at
@@ -59,6 +60,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
+import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -368,8 +370,10 @@ function cureRatchets() {
 /* Which conflicts a deploy may resolve ON ITS OWN. A file this repo GENERATES
    carries no intent to reconcile: its content is a function of a source that
    merged cleanly, so the answer is to re-derive it, not to choose a side.
-   index.html/version.json come from the manifest, ratchets.json from measuring
-   the tree, and package.json's script block from tests/groups.json.
+   index.html's @gen-shell blocks/version.json come from the manifest,
+   ratchets.json from measuring the tree, and package.json's script block from
+   tests/groups.json — the rest of those two files is hand-written and is
+   merged, not replaced (tools/lib/conflict-cure.mjs, ledger L13).
 
    package.json earns its place the hard way: two sessions adding a test suite
    each conflict there EVERY time, and it was hand-resolved twice on
@@ -474,26 +478,44 @@ export function mergeDeployTip() {
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
   const did = [];
+  // L13 (2026-10-09): index.html and package.json are only PARTLY generated.
+  // The cure used to take a whole side (`--theirs` / `--ours`) and so dropped
+  // the other side's hand edits where git had merged them cleanly (a DOM
+  // element, a dependency). It now resolves only what a generator rewrites
+  // (tools/lib/conflict-cure.mjs) and stops on anything else.
+  const stop = (why) => {
+    git(["merge", "--abort"]);
+    throw new Error(`real conflicts (not just generated files): ${why} — resolve by hand`);
+  };
   if (shellF.length) {
-    for (const f of shellF) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
+    for (const f of shellF) {
+      if (f === "version.json") { must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`); continue; }   // wholly generated
+      must(git(["checkout", "--merge", "--", f]), `checkout --merge ${f}`);                                              // markers back in place
+      const r = resolveGenBlocks(fs.readFileSync(path.join(ROOT, f), "utf8"));
+      if (r.unresolved.length) stop(`${f} (hand-written markup conflicts outside the @gen-shell blocks, line ${r.unresolved.join(", ")})`);
+      fs.writeFileSync(path.join(ROOT, f), r.text);
+    }
     run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
-    // `--theirs` above threw away OUR index.html wholesale, so every generated
-    // block in it has to be rewritten, not just gen-shell's. title-art.mjs owns
-    // @gen-shell:title-art (the #title-car car art); without this line a shell
-    // conflict silently reverts the art to whatever the deploy tip carried,
-    // which looks exactly like nobody having changed it.
+    // Every generated block has to be rewritten, not just gen-shell's.
+    // title-art.mjs owns @gen-shell:title-art (the #title-car car art); without
+    // this line a shell conflict silently reverts the art to whatever the
+    // other side carried, which looks exactly like nobody having changed it.
     run("node", ["tools/gen/title-art.mjs"], "regenerate the title art into the union shell");
     must(git(["add", ...shellF]), "add");
-    did.push("shell hashes re-applied");
+    did.push("shell blocks re-applied (hand-written markup from both sides kept)");
   }
   if (ratchetF.length) { did.push(cureRatchets()); must(git(["add", RATCHETS]), "add"); }
   if (pkgF.length) {
-    // --ours only to give the generator a parseable file to overwrite; every
-    // script line it cares about is rewritten from the merged groups.json.
-    must(git(["checkout", "--ours", "--", "package.json"]), "checkout --ours package.json");
+    // A three-way merge by key, so a dependency or a non-test script from
+    // either side survives; the generator then rewrites every test script
+    // from the merged groups.json.
+    const stage = (n) => git(["show", `:${n}:package.json`]).out;
+    const m = mergePackageJson(stage(1), stage(2), stage(3));
+    if (m.conflicts.length) stop(`package.json (fields edited differently on both sides: ${m.conflicts.join(", ")})`);
+    fs.writeFileSync(path.join(ROOT, "package.json"), m.text);
     run("node", ["tools/gen/gen-test-groups.mjs"], "regenerate the test scripts from the merged groups.json");
     must(git(["add", "package.json"]), "add");
-    did.push("test scripts regenerated from groups.json");
+    did.push("package.json merged by key; test scripts regenerated from groups.json");
   }
   if (toolsF.length) {
     must(git(["checkout", "--ours", "--", TOOLS_README]), "checkout --ours tools/README.md");
