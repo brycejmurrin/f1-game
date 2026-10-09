@@ -373,10 +373,14 @@ const DataTelemetry = (function () {
       detail.appendChild(spinner());
       Promise.all(lanes.map(function (e, i) {
         telLanes++;
+        // The lane count drops inside this ONE then-stage (both arms), not a
+        // trailing .finally(): that is an extra microtask hop per lane, and the
+        // popup then opens one tick later than the harness drains for.
         return fetchDriverTel(e.sessionKey, e.d, i === 0).then(function (tel) {
+          telLanes--;
           tel.sessionLabel = e.sessionLabel; tel.sessionName = e.sessionName;
           return tel;
-        }).finally(function () { telLanes--; });
+        }, function (err) { telLanes--; throw err; });
       }))
         .then(function (tels) {
           if (myGen !== telGen) return;
