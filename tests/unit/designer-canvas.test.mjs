@@ -52,7 +52,7 @@ function boot(hooksExtra = {}, pts = null) {
   let cv = null;
   cv = DC.create(canvas, Object.assign({
     onChange: (p, kind) => { ev.changes.push({ pts: p, kind }); cv.setPoints(p); },
-    onPick: (i, e) => ev.picks.push(i), onSelect: (i) => ev.selects.push(i),
+    onPick: (i, e) => ev.picks.push(i), onSelect: (i, j) => ev.selects.push({ i, j: j == null ? -1 : j }),
     onContext: (i, at) => ev.contexts.push({ i, at }),
   }, hooksExtra));
   if (!pts) {
@@ -310,6 +310,61 @@ test("pickOnly: tap selects; drag / insert / long-press / Delete do not edit geo
   h.fire("pointerup", h.off(a, 30, 0), 5, { pointerType: "mouse" });
   assert.equal(h.ev.changes.length, 1);
   assert.equal(h.ev.changes[0].kind, "move");
+});
+
+test("TrackShape.spanIndices / inSpan: forward walk inclusive; one point when ends match", () => {
+  const h = boot();
+  const S = h.S;
+  assert.deepEqual(plain(S.spanIndices(2, 5, 10)), [2, 3, 4, 5]);
+  assert.deepEqual(plain(S.spanIndices(8, 1, 10)), [8, 9, 0, 1], "wraps past the start");
+  assert.deepEqual(plain(S.spanIndices(3, 3, 10)), [3]);
+  assert.deepEqual(plain(S.spanIndices(-1, 4, 10)), []);
+  assert.equal(S.inSpan(4, 2, 5, 10), true);
+  assert.equal(S.inSpan(6, 2, 5, 10), false);
+  assert.equal(S.inSpan(0, 8, 1, 10), true);
+});
+
+test("span group move: drag a member translates every point on the selected span by the same delta", () => {
+  const h = boot();
+  h.cv.setSelection(3, 6);
+  const before = plain(h.pts);
+  // Press a mid-span handle (already in the group) and drag past the mouse threshold.
+  const a = h.scr(h.pts[4]);
+  h.fire("pointerdown", a, 1, { pointerType: "mouse" });
+  h.fire("pointermove", h.off(a, 40, 0), 1, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(a, 40, 0), 1, { pointerType: "mouse" });
+  assert.equal(h.ev.changes.length, 1);
+  assert.equal(h.ev.changes[0].kind, "move-span");
+  const after = plain(h.ev.changes[0].pts);
+  const dx = after[4][0] - before[4][0], dz = after[4][1] - before[4][1];
+  assert.ok(Math.abs(dx) > 1 || Math.abs(dz) > 1, "the dragged handle moved");
+  for (const i of [3, 4, 5, 6]) {
+    assert.ok(Math.abs(after[i][0] - (before[i][0] + dx)) < 1e-9, "point " + i + " x");
+    assert.ok(Math.abs(after[i][1] - (before[i][1] + dz)) < 1e-9, "point " + i + " z");
+  }
+  assert.deepEqual(after[0], before[0], "outside the span stays put");
+  assert.deepEqual(after[2], before[2]);
+  // Keyboard nudge moves the whole span.
+  h.cv.setPoints(before);
+  h.cv.setSelection(3, 6);
+  h.ev.changes.length = 0;
+  h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowRight", shiftKey: true, preventDefault() {} });
+  assert.equal(h.ev.changes[0].kind, "nudge-span");
+  const nudged = plain(h.ev.changes[0].pts);
+  for (const i of [3, 4, 5, 6]) assert.deepEqual(nudged[i], [before[i][0] + 10, before[i][1]]);
+  assert.deepEqual(nudged[1], before[1]);
+});
+
+test("shift-click a second handle keeps the anchor and reports the pick with shiftKey", () => {
+  const h = boot();
+  h.cv.setSelection(2, -1);
+  const a = h.scr(h.pts[7]);
+  h.fire("pointerdown", a, 1, { pointerType: "mouse", shiftKey: true });
+  // Anchor must stay 2 through the press (so the designer can set span=7 on pick).
+  assert.deepEqual(plain(h.cv.selection()), { sel: 2, span: -1 });
+  h.fire("pointerup", a, 1, { pointerType: "mouse", shiftKey: true });
+  assert.deepEqual(h.ev.picks, [7]);
+  assert.deepEqual(plain(h.cv.selection()), { sel: 2, span: -1 }, "canvas leaves span to the screen's onPick");
 });
 
 test("thumb(): one fitted outline in the asked colour and the start tick; nothing for a missing road", () => {

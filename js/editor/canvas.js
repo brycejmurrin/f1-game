@@ -3,9 +3,10 @@
    what the player sees is what the car will meet), the start line and the
    validator's markers, and turns pointer, wheel and keyboard input into the few
    callbacks the screen (TrackDesigner) owns: move / insert / pick / delete a
-   control point, draw a freehand loop, pan, pinch and zoom. It never edits the
-   array it is handed — a drag works on a copy and hands the result back — and
-   touches no store and no engine: TrackShape at eval only. LAZY_EDITOR. */
+   control point (a selected SPAN moves as a group), draw a freehand loop, pan,
+   pinch and zoom. It never edits the array it is handed — a drag works on a
+   copy and hands the result back — and touches no store and no engine:
+   TrackShape at eval only. LAZY_EDITOR. */
 const DesignerCanvas = (function () {
   "use strict";
   const S = TrackShape;
@@ -41,7 +42,7 @@ const DesignerCanvas = (function () {
   const place = (x, z) => [clamp(snap(x), -COORD, COORD), clamp(snap(z), -COORD, COORD)];
 
   /** Mount on a <canvas>. hooks: onBegin(), onChange(pts, kind), onPick(i, ev),
-   *  onSelect(i), onDelete(i), onDraw(path), onView(), onContext(i, {x, y})
+   *  onSelect(sel, span), onDelete(i), onDraw(path), onView(), onContext(i, {x, y})
    *  (a long-press on a handle; x/y canvas-relative css px). Returns the api. */
   function create(canvas, hooks) {
     hooks = hooks || {};
@@ -55,6 +56,9 @@ const DesignerCanvas = (function () {
     let sel = -1, span = -1, hover = -1, tool = "select";
     let scale = 0.1, cx = 0, cz = 0, fitted = false;
     let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null;
+    // Group drag: when a SPAN is selected, moving any member translates the whole
+    // group by the same delta (origins snapshotted at beginDrag).
+    let dragGroup = null, dragOrigins = null, drag0 = null;
     const pointers = new Map();
     let pinch0 = null;
     // The last two presses: a double-tap deletes only when BOTH picked the same
@@ -64,10 +68,13 @@ const DesignerCanvas = (function () {
     let hold = null;                 // a long-press in flight { id, timer }
     // A press on a handle before a deliberate drag: select-only until the
     // threshold (and, on touch, a short hold or a prior selection) is met.
-    let press = null;                // { id, i, wasSel, t0, touch }
+    let press = null;                // { id, i, wasSel, t0, touch, shift }
     // pickOnly: select handles only (scenery / elevation / test) — no insert,
     // drag, nudge or double-tap delete. Tap still selects without moving.
     let pickOnly = false;
+    const members = (a, b) => S.spanIndices(a, b, (work || base).length);
+    const isInSpan = (i) => S.inSpan(i, sel, span, (work || base).length);
+    function tellSelect() { if (hooks.onSelect) hooks.onSelect(sel, span); }
     let preview = null;              // setTool's ghost: (i) → { pts: [[x, z]…] } | null
     let ghost = null, ghostKey = null; // its last answer, and the (fn, anchor, loop) it answered
     let last = null;                 // the pointer's latest canvas-relative position
@@ -108,9 +115,17 @@ const DesignerCanvas = (function () {
     }
 
     // ── size ────────────────────────────────────────────────────────────────
+    let resizeRetry = 0;
     function resize() {
       const r = canvas.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+      /* Flex/grid can report a 0–2px box before the stage row earns height (layout-audit 2026-10-07). */
+      if (h < 8 && resizeRetry < 4) {
+        resizeRetry++;
+        requestAnimationFrame(resize);
+        return;
+      }
+      resizeRetry = 0;
       dpr = Math.min(3, window.devicePixelRatio || 1);
       if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
       W = w; H = h;
@@ -156,22 +171,39 @@ const DesignerCanvas = (function () {
       work = base.map((p) => [p[0], p[1]]);
       if (isInsert) { work.splice(i, 0, [0, 0]); inserted = true; } else inserted = false;
       dragI = i; moved = false; mode = "drag"; stale = false; press = null;
+      // A span member (not an insert) moves every point on the selected span together.
+      if (!isInsert && span >= 0 && sel >= 0 && sel !== span && isInSpan(i)) {
+        dragGroup = members(sel, span);
+        dragOrigins = dragGroup.map((j) => [work[j][0], work[j][1]]);
+        drag0 = [work[i][0], work[i][1]];
+      } else {
+        dragGroup = [i]; dragOrigins = [[work[i][0], work[i][1]]]; drag0 = [work[i][0], work[i][1]];
+      }
       if (hooks.onBegin) hooks.onBegin();
+    }
+    /** Apply the dragged handle's world delta to every member of the drag group. */
+    function placeGroup(wx, wz) {
+      if (!work || !dragGroup || !dragOrigins || !drag0) return;
+      const tgt = place(wx, wz);
+      const dx = tgt[0] - drag0[0], dz = tgt[1] - drag0[1];
+      for (let k = 0; k < dragGroup.length; k++) {
+        work[dragGroup[k]] = place(dragOrigins[k][0] + dx, dragOrigins[k][1] + dz);
+      }
     }
     /** Promote a select-only press into a real drag once the gesture is deliberate. */
     function tryArmDrag(p) {
       if (pickOnly) return false;
-      if (mode !== "press" || !press || !start) return false;
+      if (mode !== "press" || !press || !start || press.shift) return false;
       const dist = Math.hypot(p.x - start.x, p.y - start.y);
       if (dist <= dragThresh()) return false;
       const held = (Date.now() - press.t0) >= TOUCH_ARM_MS;
-      // Mouse: threshold alone. Touch: already selected, or a short hold, then threshold.
+      // Mouse: threshold alone. Touch: already selected (or in the span), or a short hold.
       const may = press.wasSel || ptype === "mouse" || held;
       if (!may) return false;
       cancelHold();
       beginDrag(press.i, false);
       moved = true; stale = true;
-      work[dragI] = place(toWX(p.x), toWZ(p.y));
+      placeGroup(toWX(p.x), toWZ(p.y));
       return true;
     }
     // ── long-press ──────────────────────────────────────────────────────────
@@ -211,7 +243,10 @@ const DesignerCanvas = (function () {
       if (pointers.size >= 2) cancelHold();
       if (pointers.size === 2) {
         // A second finger turns whatever was happening into a pinch; a drag is abandoned.
-        if (mode === "drag" || mode === "held" || mode === "press") { work = null; stale = false; dragI = -1; press = null; }
+        if (mode === "drag" || mode === "held" || mode === "press") {
+          work = null; stale = false; dragI = -1; press = null;
+          dragGroup = null; dragOrigins = null; drag0 = null;
+        }
         if (mode === "draw") { path = null; }
         const [a, b] = [...pointers.values()];
         pinch0 = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, scale, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, wx: toWX((a.x + b.x) / 2), wz: toWZ((a.y + b.y) / 2) };
@@ -227,10 +262,18 @@ const DesignerCanvas = (function () {
       if (i >= 0) {
         // Select first — never move on down. A later deliberate drag (threshold /
         // already-selected / short touch hold) promotes this press into a move.
+        // Shift (or span-end arm): keep the anchor so onPick can set the span end.
         taps[taps.length - 1] = { kind: "pick", i };
-        const wasSel = sel === i;
-        if (sel !== i) { sel = i; if (hooks.onSelect) hooks.onSelect(i); }
-        press = { id: ev.pointerId, i, wasSel, t0: Date.now(), touch: ptype === "touch" };
+        const shift = !!ev.shiftKey;
+        const wasSel = sel === i || isInSpan(i);
+        if (!shift) {
+          if (wasSel && isInSpan(i)) {
+            // Pressing a span member keeps the whole group selected for a group drag.
+          } else if (sel !== i) {
+            sel = i; span = -1; tellSelect();
+          }
+        }
+        press = { id: ev.pointerId, i, wasSel, t0: Date.now(), touch: ptype === "touch", shift };
         mode = "press";
         armHold(ev.pointerId, i);
         render();
@@ -240,8 +283,8 @@ const DesignerCanvas = (function () {
       if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
         taps[taps.length - 1] = { kind: "insert", i: k + 1 };
         beginDrag(k + 1, true);
-        work[dragI] = place(toWX(p.x), toWZ(p.y));
-        sel = dragI; if (hooks.onSelect) hooks.onSelect(sel);
+        placeGroup(toWX(p.x), toWZ(p.y));
+        sel = dragI; span = -1; tellSelect();
         render();
         return;
       }
@@ -276,7 +319,7 @@ const DesignerCanvas = (function () {
       }
       if (mode === "drag" && work) {
         if (!moved && Math.hypot(p.x - start.x, p.y - start.y) > dragThresh()) { moved = true; stale = true; }
-        if (moved || inserted) work[dragI] = place(toWX(p.x), toWZ(p.y));
+        if (moved || inserted) placeGroup(toWX(p.x), toWZ(p.y));
         render();
         return;
       }
@@ -301,17 +344,21 @@ const DesignerCanvas = (function () {
       if (mode === "press") {
         // Tap / click / below-threshold jitter: select only — coordinates unchanged.
         const i = press ? press.i : -1;
+        const shift = !!(ev.shiftKey || (press && press.shift));
         press = null; mode = "none";
-        if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey });
+        if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: shift, altKey: !!ev.altKey });
         render();
         return;
       }
       if (mode === "drag") {
         if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
-        const out = work; work = null; mode = "none"; stale = false; press = null;
-        if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, inserted ? "insert" : "move"); }
-        else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey });
-        dragI = -1; render();
+        const out = work; work = null; mode = "none"; stale = false;
+        const kind = inserted ? "insert" : (dragGroup && dragGroup.length > 1 ? "move-span" : "move");
+        const pickShift = !!ev.shiftKey;
+        press = null;
+        if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, kind); }
+        else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: pickShift, altKey: !!ev.altKey });
+        dragI = -1; dragGroup = null; dragOrigins = null; drag0 = null; render();
         return;
       }
       if (mode === "draw") {
@@ -337,6 +384,7 @@ const DesignerCanvas = (function () {
       cancelHold();
       pointers.clear(); taps = []; last = null; press = null;
       work = null; path = null; pinch0 = null; mode = "none"; dragI = -1; inserted = false; moved = false; stale = false; hover = -1;
+      dragGroup = null; dragOrigins = null; drag0 = null;
       render();
     }
     function onWheel(ev) {
@@ -361,7 +409,8 @@ const DesignerCanvas = (function () {
       const N = base.length; if (!N) return;
       hover = -1;
       sel = sel < 0 ? (dir > 0 ? 0 : N - 1) : (sel + dir + N) % N;
-      if (hooks.onSelect) hooks.onSelect(sel);
+      span = -1;
+      tellSelect();
       render();
     }
     function onKey(ev) {
@@ -377,7 +426,7 @@ const DesignerCanvas = (function () {
         case "[": cycleSel(-1); ev.preventDefault(); return;
         case "]": cycleSel(1); ev.preventDefault(); return;
         case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
-        case "Escape": if (sel >= 0) { sel = -1; span = -1; if (hooks.onSelect) hooks.onSelect(-1); render(); ev.preventDefault(); } return;
+        case "Escape": if (sel >= 0 || span >= 0) { sel = -1; span = -1; tellSelect(); render(); ev.preventDefault(); } return;
         case "Delete": case "Backspace": if (pickOnly) return; if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;
         default: return;
@@ -388,8 +437,9 @@ const DesignerCanvas = (function () {
       ev.preventDefault();
       if (hooks.onBegin) hooks.onBegin();
       const out = pts.map((p) => [p[0], p[1]]);
-      out[sel] = place(out[sel][0] + dx, out[sel][1] + dz);
-      if (hooks.onChange) hooks.onChange(out, "nudge");
+      const group = (span >= 0 && span !== sel) ? members(sel, span) : [sel];
+      for (const j of group) out[j] = place(out[j][0] + dx, out[j][1] + dz);
+      if (hooks.onChange) hooks.onChange(out, group.length > 1 ? "nudge-span" : "nudge");
     }
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
@@ -508,10 +558,12 @@ const DesignerCanvas = (function () {
         g.strokeStyle = COL.span; g.lineWidth = 6; g.stroke();
       }
       const touch = ptype === "touch";
+      const groupOn = span >= 0 && sel >= 0 && span !== sel;
       for (let i = 0; i < N; i++) {
         const sx = toSX(pts[i][0]), sy = toSY(pts[i][1]);
         if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
-        const isSel = i === sel || (i === dragI && mode === "drag") || (press && press.i === i);
+        const inGroup = groupOn && S.inSpan(i, sel, span, N);
+        const isSel = i === sel || inGroup || (i === dragI && mode === "drag") || (press && press.i === i);
         const r = (isSel ? 7 : i === hover ? 6 : 4.5) * (touch ? 1.5 : 1);
         // Soft hit halo under a finger so the ≥44 px target reads on the map.
         if (touch && (isSel || i === hover)) {

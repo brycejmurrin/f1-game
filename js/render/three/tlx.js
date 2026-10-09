@@ -1081,6 +1081,11 @@ const TLX = (function () {
       // (three's setSize is a no-op under XRManager presenting; we likewise
       // must not fight the immersive layer's drawing-buffer size).
       let _xrActive = false;
+      // The post chain's factory, callable AGAIN: a one-off throw in present()
+      // retires the chain ("Post-only death") and the next render-target realloc
+      // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
+      function buildPost() {
+      let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
@@ -1112,6 +1117,10 @@ const TLX = (function () {
         try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
         post = null;
       }
+      return post;
+      }
+      post = buildPost();
+      let _postStrikes = 0, _postRebuild = false;   // post-only deaths so far; a rebuild is owed
 
       const ENV_SIZE = 64;
       const ENV_CULL_M = 150;
@@ -2784,6 +2793,7 @@ const TLX = (function () {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
           }
+          if (_postRebuild && !post) { _postRebuild = false; post = buildPost(); }
           if (post) post.resize(rw, rh);
         }
       }
@@ -3924,6 +3934,9 @@ const TLX = (function () {
           if (lit && lit.uniforms && lit.uniforms.lgRoad)
             lit.uniforms.lgRoad.value = (framePerChunk > 0 && +(frame && frame.roadChunkLamps) > 0) ? 1.0 : 0.0;
           _postF.proj = (frame && frame.proj) || null;
+          // Garage begin() sets noEnv so present() can keep proj (SSAO) without
+          // routing the bay into the HDR scene target that stays black on soft GL.
+          _postF.noEnv = !!(frame && frame.noEnv);
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
           _postF.invProj = (frame && frame.invProj) || null;
@@ -4270,11 +4283,13 @@ const TLX = (function () {
           // retried the SAME render unwrapped, so a compile error became the
           // crash. Every paint below stays inside try; the pick is never
           // written to webgl2 (session skip + reload if even classic dies).
-          const persistFail = (e) => {
+          // postOnly: the failure may be the post chain alone and the canvas repaint
+          // below still paints on TLX — then the session stays bound to three.
+          const persistFail = (e, postOnly) => {
             const reason = (e && e.message) || String(e);
             _lastFailure = { reason, at: Date.now() };
             try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
-            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+            if (!postOnly) try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
             try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
@@ -4326,6 +4341,7 @@ const TLX = (function () {
             _drawMatMode = mode;
             const deadPost = post;
             post = null;
+            _postRebuild = false;   // lit/fx go too: no chain to rebuild for
             _cancelSoftBlits();
             try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
@@ -4359,12 +4375,12 @@ const TLX = (function () {
           };
           let painted = false;
           try {
-            // Garage / menu frames only send viewProj (no proj/invProj).
-            // Routing those through the HDR scene target left the
-            // turntable black — software GL's half-float FBO never got
-            // the car, and ?viz=scene confirmed the RT itself is empty.
-            // View-space post already self-disables; paint the default
-            // framebuffer like GLX.
+            // Garage / menu frames set noEnv (setup-camera may still pass
+            // proj/invProj for SSAO-capable hardware). Routing noEnv through
+            // the HDR scene target left the turntable black — software GL's
+            // half-float FBO never got the car, and ?viz=scene confirmed the
+            // RT itself is empty. View-space post already self-disables;
+            // paint the default framebuffer like GLX.
             //
             // SOFT-PRESENT BACK-PRESSURE. On a software adapter the visible
             // frame is a readback, and a readback completes only after every
@@ -4379,7 +4395,7 @@ const TLX = (function () {
             if (_softBlit && _softReadPending
                 && ((typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince) <= _softReadStaleMs()) {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
-            } else if (post && _postF.proj) {
+            } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
               if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
@@ -4409,12 +4425,14 @@ const TLX = (function () {
               paintCanvas();
             }
             painted = true;
-          } catch (e) { persistFail(e); }
-          // Post-only death: same materials, canvas (the 1269 intent).
+          } catch (e) { persistFail(e, !!post); }
+          // Post-only death: same materials, canvas (the 1269 intent). The chain is
+          // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
             const deadPost = post;
             post = null;
             _cancelSoftBlits();
+            _postRebuild = ++_postStrikes <= 3;
             try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
             finally {
               try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }

@@ -50,6 +50,35 @@ test("the saved camera's audio mix survives the LAZY_AUDIO reinjection", async (
   } finally { g.close(); }
 });
 
+test("desktop shell binds LAZY_AUDIO at boot without a title gesture", async () => {
+  let fa = null;
+  const g = await createGame({
+    carMeshes: false,
+    onSandbox: (sb) => {
+      sb.window.__APEX_NATIVE__ = Object.freeze({ desktop: true });
+      fa = install(sb);
+    },
+  });
+  const sb = g.sandbox;
+  try {
+    assert.equal(sb.GameAudio._stub, true, "precondition: title still starts on the stub");
+    await settle(() => !sb.GameAudio._stub, 4000);
+    await turns(50);
+    assert.equal(fa.made.length, 1, "desktop: AudioContext exists without a title tap");
+    assert.equal(sb.GameAudio.debug().contextState, "running");
+  } finally { g.close(); }
+});
+
+test("web boot still waits for the first gesture before creating an AudioContext", async () => {
+  let fa = null;
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  try {
+    await turns(80);
+    assert.equal(g.sandbox.GameAudio._stub, true);
+    assert.equal(fa.made.length, 0, "web: no AudioContext until the player gestures");
+  } finally { g.close(); }
+});
+
 test("the saved AUDIO DRIVING CUES level survives the LAZY_AUDIO reinjection", async () => {
   const { g, sb } = await bootAndGesture({ audioCues: 7 });
   try {

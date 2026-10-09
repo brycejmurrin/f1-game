@@ -70,6 +70,10 @@ const TyreModel = (function () {
   // overdriving costs a quarter of the grip, enough to make smooth inputs
   // faster than flicks without turning the limit into a cliff on a keyboard.
   const CURVE_PEAK_X = Math.PI / 2;
+  // Front-only peak abscissa (x = cs·α/μ). The exported CURVE_PEAK_X stays π/2
+  // so frontUtil/rearUtil keep 1.0 = at the curve's nominal peak; the front
+  // path reaches |F| = μ here earlier in α (~8° vs ~10.5° at CS_FRONT 130).
+  const CURVE_PEAK_X_F = (Math.PI / 2) * (8.5 / 10.5); // ~8.4° peak slip at CS_FRONT 130 (was ~10.5°)
   const CURVE_FLOOR = 0.75;
   const CURVE_FALL_W = 1.4;
   // The REAR's fall is gentler and shallower than the front's. Two reasons,
@@ -85,13 +89,19 @@ const TyreModel = (function () {
   const CURVE_FALL_W_R = 2.0;
   const CURVE_HOLD_R = 2.6;    // the rear holds its peak out to here before the fall starts (x; ≈ 11° at 30 m/s)
   function lateralCurve(x, floor, fallW, hold) {
+    if (hold != null) {
+      const ax = Math.abs(x);
+      if (ax <= CURVE_PEAK_X) return Math.sin(x);
+      if (ax <= hold) return x < 0 ? -1 : 1;
+      const d = (ax - hold) / fallW;
+      const g = floor + (1 - floor) * Math.exp(-d * d);
+      return x < 0 ? -g : g;
+    }
     const ax = Math.abs(x);
-    if (ax <= CURVE_PEAK_X) return Math.sin(x);
-    const h = hold == null ? CURVE_PEAK_X : hold;
-    if (ax <= h) return x < 0 ? -1 : 1;
-    const fl = floor == null ? CURVE_FLOOR : floor, w = fallW == null ? CURVE_FALL_W : fallW;
-    const d = (ax - h) / w;
-    const g = fl + (1 - fl) * Math.exp(-d * d);
+    const k = (Math.PI / 2) / CURVE_PEAK_X_F;
+    if (ax <= CURVE_PEAK_X_F) return Math.sin(x * k);
+    const d = (ax - CURVE_PEAK_X_F) / CURVE_FALL_W;
+    const g = CURVE_FLOOR + (1 - CURVE_FLOOR) * Math.exp(-d * d);
     return x < 0 ? -g : g;
   }
 
@@ -931,7 +941,7 @@ const TyreModel = (function () {
   }
 
   return {
-    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
+    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_PEAK_X_F, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,

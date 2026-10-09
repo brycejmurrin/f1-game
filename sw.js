@@ -26,19 +26,27 @@ const OPTIONAL_ASSET_MS = 4000;
 // exercises this branch; the deployed site never does.
 const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
-// Written after the BACKGROUND optional pool: the cache holds everything its
-// build will eventually precache. Every sweep (fetch path and activate) waits
-// for it; install calls skipWaiting only after writing it.
+// Written after the BACKGROUND optional pool: the cache holds everything this
+// build install-precaches (not runtime-only opt-ins). Every sweep (fetch path
+// and activate) waits for it; install calls skipWaiting only after writing it.
 const INSTALL_SETTLED_URL = "__apex_install_settled__";
 
 // Default chosen backend at install: TLX (three) is the shipped picker default.
-// GLX stays in the required pool separately. WGX + scenery + data/net are the
+// GLX stays in the required pool separately. Scenery + data/net are the
 // background pool, fetched after it (download priority only — see install).
+// WGX stays in the optional Set (gen-shell lockstep with DEFERRED) but is
+// skipped at install — explicit opt-in; fetch handler runtime-caches on use.
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
 }
+// Default-off / explicit opt-in: still seeded in `optional` when gen-shell
+// requires lockstep (WGX), but never install-precached. Hand-authored vendors
+// (Rapier, jsQR, trystero) are omitted from the Set entirely — same outcome.
+function isRuntimeOnlyOptional(u) {
+  return /^js\/render\/webgpu\//.test(u);
+}
 function isBackgroundOptional(u) {
-  return !isInstallCriticalOptional(u);
+  return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
 }
 
 let _cacheNamePromise = null;
@@ -242,25 +250,11 @@ async function precacheAssetLists() {
     "vendor/three-0.186.0/three.webgpu.min.js",
     "vendor/three-0.186.0/three.core.min.js",
     "vendor/three-0.186.0/three.tsl.min.js",
-    // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
-    // someone scans an answer code, so the tag parser below never sees it.
-    // OPTIONAL for the same reason as three.js: most sessions never scan, and
-    // an install must not fail over 257 KB they will not run.
-    "vendor/jsqr-1.4.0/jsQR.js",
-    // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
-    // the parser below cannot find it either. Unlike the entries around it this
-    // one is ON by default — an installed-but-not-yet-raced PWA that never
-    // seeded it loses debris/incident physics offline. Still OPTIONAL, not
-    // essential: debrisworld degrades to "no side world" on a load failure, so
-    // an install must not fail over it.
-    "vendor/rapier-0.19.3/rapier.mjs",
-    // Trystero + its schnorr dependency, reached by dynamic import() through
-    // the importmap for the room-code path only. OPTIONAL for the same reason
-    // as three.js: most sessions never open a room code, and an install must
-    // not fail over ~170 KB they will not run.
-    "vendor/trystero-0.25.4/nostr/index.js",
-    "vendor/trystero-0.25.4/core/index.js",
-    "vendor/trystero-0.25.4/noble-secp256k1.js",
+    // jsQR / Rapier / trystero are NOT install-precached. Each is default-off
+    // or path-only (QR scan, apex26.debris==="1", room code): ~2.5 MB that a
+    // title/garage/race session never needs. Fetch-miss still cache.put on
+    // first use (same as LAZY_AGENT). debris-world degrades to "no side world"
+    // when Rapier is absent; scan/room code load on demand.
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to
@@ -621,9 +615,13 @@ self.addEventListener("install", (event) => {
     // (LAZY_RACE_SESSION) and js/workers/ (bitmap-decode). Keep both path classes.
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$|^js\/workers\//.test(u)
-        ? u + "?v=" + build : u).filter((u) => !isGlx(u));   // GLX went in `required` above
+        ? u + "?v=" + build : u).filter((u) => {
+          const bare = u.replace(/\?v=.*$/, "");
+          // GLX went in `required` above; WGX is runtime-only (opt-in).
+          return !isGlx(bare) && !isRuntimeOnlyOptional(bare);
+        });
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
-    // BACKGROUND pool (scenery / WGX / data / net), then SETTLED, then
+    // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
     // skipWaiting. The order of the pools is a download priority, nothing
     // more: skipWaiting() only SETS A FLAG, and the browser reads it after
     // every install extend-lifetime promise has settled
@@ -684,6 +682,9 @@ self.addEventListener("message", (event) => {
   })());
 });
 
+// Unversioned same-origin assets (no ?v= on the wire): network-first with cache
+// fallback. Used for assets/pack/ (MAT layer index) and assets/voice/ (.json +
+// .bin pairs from voice-pack.js).
 function packNetworkFirst(event, req) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
@@ -845,6 +846,15 @@ self.addEventListener("fetch", (event) => {
   // revalidation makes an unchanged file a 304), the cache when the network
   // fails or a cached copy exists and the network is slower than NAV_RACE_MS.
   if (url.pathname.includes("/assets/pack/") && !DEV_HOST) {
+    packNetworkFirst(event, req);
+    return;
+  }
+
+  // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
+  // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
+  // serve a stale index with a fresh bin (or the reverse) after a deploy and
+  // corrupt clip offsets for the whole cache generation. Same strategy as pack.
+  if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
     packNetworkFirst(event, req);
     return;
   }

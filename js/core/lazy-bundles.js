@@ -221,6 +221,57 @@ let audioLoad = null;
 // master and levels (the setters clamp to 0..1) as soon as the engine lands.
 let audioRestored = false;
 let audioStub = null;   // the title stub, captured before reinjection replaces it
+// game-vm stubs requestIdleCallback as a no-op (tools/lib/game-vm.cjs) and has
+// no frame pump. Deferrals that must complete for VM tests skip under that UA
+// (same mark startRaceBody uses) so ensureAudio still resolves deterministically.
+function audioIsGameVm() {
+  return typeof navigator !== "undefined" && /apex-game-vm/.test(navigator.userAgent || "");
+}
+// Yield so a title-tap menu transition can paint before ~449 KB of LAZY_AUDIO
+// eval / onAudioReady DOM work. Skip entirely under the apex-game-vm UA.
+function audioYieldToMain(kind) {
+  if (audioIsGameVm()) return Promise.resolve();
+  // Do NOT wait on rAF here: a GARAGE tap starts WebGL, and software GL
+  // ReadPixels stall animation frames for seconds (the hitch we are moving
+  // audio *off*). scheduler.yield lets the browser paint + handle input;
+  // a trailing setTimeout(0) is the Safari / no-scheduler fallback and a
+  // second hop after yield so presentation can commit. Never rIC — game-vm
+  // stubs it as a no-op and would hang awaiters.
+  const macrotask = () => new Promise((r) => setTimeout(r, 0));
+  if (kind === "paint") {
+    // One frame of wall time (not rAF): lets the tap's next paint commit
+    // before script eval. rAF would wait on garage WebGL; a 0-delay task
+    // often resumes at ~2 ms, still inside the same vsync as the click.
+    const afterFrame = () => new Promise((r) => setTimeout(r, 16));
+    if (typeof scheduler !== "undefined" && typeof scheduler.yield === "function") {
+      return scheduler.yield().then(afterFrame);
+    }
+    return afterFrame();
+  }
+  if (typeof scheduler !== "undefined" && typeof scheduler.yield === "function") {
+    return scheduler.yield();
+  }
+  return macrotask();
+}
+function prefetchAudio() {
+  // HTTP-cache only — do not evaluate. Evaluating at idle would create no
+  // AudioContext (restoreOnEngine still gates on userActivation) but would
+  // still compete with title paint; #1135 forbids putting these 449 KB on
+  // the title networkidle wall, so this runs on a late idle timeout.
+  if (audioIsGameVm() || audioLoad) return;
+  if (typeof document === "undefined" || !document.createElement) return;
+  for (let i = 0; i < AUDIO_FILES.length; i++) {
+    const src = AUDIO_FILES[i];
+    const href = src + "?v=" + (window.__APEX_BUILD || 0);
+    if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
+    const el = document.createElement("link");
+    el.rel = "prefetch";
+    el.as = "script";
+    el.href = href;
+    el.crossOrigin = "anonymous";
+    document.head.appendChild(el);
+  }
+}
 function restoreOnEngine() {
   if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
   audioRestored = true;
@@ -230,6 +281,8 @@ function restoreOnEngine() {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
     GameAudio.setSfxVolume(store.get("volSfx"));
+    const radio = G.radio;
+    if (radio && radio.setVolume) radio.setVolume(store.get("volRadio", 0.8));
   } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }
   // EVERYTHING ELSE BOOT SAID TO THE STUB. PlatformSession.firstGesture ran
   // GameAudio.init() + startMusic(-1) on the noop (the gesture is what pulls
@@ -242,7 +295,8 @@ function restoreOnEngine() {
     if (hook && GameAudio.onInterrupted) GameAudio.onInterrupted(hook);
     if (typeof CamModes !== "undefined" && CamModes.CAM_MODES && CamModes.CAM_MODES[G.camMode]) GameAudio.setCameraMix(CamModes.CAM_MODES[G.camMode].id);
     const ua = typeof navigator !== "undefined" ? navigator.userActivation : null;
-    if (G.soundOn && (!ua || ua.hasBeenActive)) GameAudio.init();   // AudioPanel.init's setSound then starts the title loop on it
+    const desktopShell = typeof Native !== "undefined" && Native.platform() === "desktop";
+    if (G.soundOn && (desktopShell || !ua || ua.hasBeenActive)) GameAudio.init();   // AudioPanel.init's setSound then starts the title loop on it
   } catch (e) { Log.warn("audio", "first-gesture replay failed: " + (e && e.message)); }
   return true;
 }
@@ -254,15 +308,24 @@ function ensureAudio() {
     return audioLoad;
   }
   audioStub = typeof GameAudio !== "undefined" ? GameAudio : null;
-  audioLoad = loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, { ready: restoreOnEngine }).then(() => {
-    if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
+  // Approach (b): yield AFTER the title tap so the menu transition paints
+  // before LAZY_AUDIO script eval lands on the main thread, then yield again
+  // before onAudioReady (panel DOM). restoreOnEngine still runs from each
+  // script's onload (ready:) under sticky userActivation — AudioContext is
+  // created/resumed the same way as before; awaiting callers still get a
+  // fully ready engine when this promise resolves.
+  audioLoad = (async () => {
+    await audioYieldToMain("paint");
+    const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, { ready: restoreOnEngine });
+    if (!ok || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");
       audioLoad = null;
       return false;
     }
+    await audioYieldToMain("task");
     if (typeof deps.onAudioReady === "function") deps.onAudioReady();
     return true;
-  });
+  })();
   return audioLoad;
 }
 
@@ -322,10 +385,11 @@ function scheduleIdle(fn, timeoutMs) {
   else setTimeout(fn, Math.min(ms, 800));
 }
 function raceAssets() {
-  // Do NOT prefetch LAZY_AUDIO here — that put ~449 KB back on the title
-  // networkidle wall. First pointerdown / SOUND click / Settings /
-  // MUSIC & SOUND / startRace pulls it (startRace awaits ensureAudio
+  // Do NOT evaluate LAZY_AUDIO here — that put ~449 KB back on the title
+  // networkidle wall (#1135). First pointerdown / SOUND click / Settings /
+  // MUSIC & SOUND / startRace still pulls it (startRace awaits ensureAudio
   // before startEngine; openSettings and the audio door also call it).
+  // A late idle prefetch fills the HTTP cache only (no eval / no AudioContext).
   const kickScenery = () => {
     // Selected circuit (persisted trackIdx / default): most likely RACE! and
     // the __apex no-track fallback — fetch scenery (and its path payload) here.
@@ -347,9 +411,30 @@ function raceAssets() {
   // Prefetch the session stub's real modules on idle so startRace's await is
   // usually a no-op. Do not put them on the title paint path (microtask).
   scheduleIdle(() => { ensureRaceSession(); }, 2800);
+  scheduleIdle(() => { prefetchAudio(); }, 4500);
+  bootDesktopAudio();
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface };
+function bootDesktopAudio() {
+  if (typeof Native === "undefined" || Native.platform() !== "desktop") return;
+  const bind = () => {
+    ensureAudio().then((ok) => {
+      if (!ok) return;
+      const G = deps.getContext();
+      if (!G || !G.soundOn) return;
+      try {
+        GameAudio.init();
+        if (G.musicEnabled !== false) GameAudio.startMusic(-1);
+      } catch (e) { Log.warn("audio", "desktop boot audio bind failed: " + (e && e.message)); }
+    });
+  };
+  // game-vm stubs requestIdleCallback as a no-op — use a microtask so unit tests
+  // see the bind without a title gesture. Real Electron still prefers idle paint.
+  if (audioIsGameVm()) queueMicrotask(bind);
+  else scheduleIdle(bind, 400);
+}
+
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio };
 }
   return { create };
 })();

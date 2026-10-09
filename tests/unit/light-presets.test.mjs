@@ -152,6 +152,7 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
   assert.ok(shared, "expected LightPresets['*|dawn|dry']");
   assert.equal(shared.ambientMul, 0.5);
   assert.equal(shared.keyMul, 0.29);
+  assert.equal(shared.bloomMul, 0.115);
   const pinned = Object.keys(P).filter((k) => {
     if (!/\|dawn\|dry$/.test(k) || k.startsWith("*")) return false;
     const o = P[k];
@@ -159,6 +160,16 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
       || Object.prototype.hasOwnProperty.call(o, "keyMul");
   });
   assert.deepEqual(pinned, [], "per-track dawn|dry must defer ambientMul/keyMul to *|dawn|dry");
+  const bloomRedundant = [];
+  for (const key of Object.keys(P)) {
+    if (!/\|dawn\|dry$/.test(key) || key.startsWith("*")) continue;
+    const o = P[key];
+    if (Object.prototype.hasOwnProperty.call(o, "bloomMul") && o.bloomMul === shared.bloomMul) {
+      bloomRedundant.push(`${key}.bloomMul=${o.bloomMul}`);
+    }
+  }
+  assert.deepEqual(bloomRedundant, [],
+    "per-track dawn|dry must not re-pin bloomMul at the same value as *|dawn|dry");
 });
 
 test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () => {

@@ -682,14 +682,15 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
-  assert.match(css, /body\.steer-touch #hud-sectors[\s\S]*?body\.steer-buttons #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
-    "touch and buttons sectors take the same --dock-r-w clearance as limits/damage");
+  assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
+    "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane, not at 10px+sal over TILT's left dock");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
-  assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*body\.steer-touch #dock-right[\s\S]*anchor-name: --apex-dock-right;[\s\S]*body\.steer-(?:touch|buttons) #hud-sectors \{[^}]*position-anchor: --apex-dock-right;/,
-    "touch and buttons sectors tether to the right dock via CSS anchor positioning");
+  assert.doesNotMatch(css,
+    /body:not\(\.desktop\) #hud-sectors \{[^}]*position-anchor: --apex-dock-right/,
+    "phone sectors clear BOOST via measured --dock-r-w only (#1191 anchor max overshot into #announce)");
   // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
   // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
   assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
