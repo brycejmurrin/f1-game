@@ -5565,7 +5565,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip,
+    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {

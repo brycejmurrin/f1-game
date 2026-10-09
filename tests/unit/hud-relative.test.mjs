@@ -155,6 +155,44 @@ test("fitRows caps max-height above an overlapping BRAKE", () => {
     "either height-cap (brake below) or slide right of a left pedal: cap=" + cap + " left=" + left);
 });
 
+test("fitRows resets left / max-height once the clash is gone (STEERING change, HUD SIZE, rotation)", () => {
+  // A CSSStyleDeclaration maps max-height <-> maxHeight; the plain-object mock
+  // above cannot tell a removed property from one it never cleared.
+  const decl = () => {
+    const d = {};
+    const camel = (k) => k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    d.setProperty = (k, v) => { d[camel(k)] = v; };
+    d.removeProperty = (k) => { d[camel(k)] = ""; };
+    return d;
+  };
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", style: decl(),
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 40; root.scrollHeight = 160; root.currentCSSZoom = 1;
+  root.getBoundingClientRect = () => ({ left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 });
+  const brake = mk();
+  brake.hidden = false;
+  let brakeLeft = 60;
+  brake.getBoundingClientRect = () => ({ left: brakeLeft, right: brakeLeft + 80, top: 180, bottom: 260, width: 80, height: 80 });
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 }), car("A2", 1400, 3), car("B1", 900, 3, { rank: 3 }), car("B2", 600, 3, { rank: 4 })],
+    track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);
+  assert.ok(root.style.left && root.style.maxHeight, "the TILT clash slid and capped the card");
+  brakeLeft = 900;        // STEERING -> BUTTONS: BRAKE leaves the REL box
+  root.scrollHeight = 40; // and the card fits again
+  R.tick(G, p);
+  assert.equal(root.style.left, "", "left is released");
+  assert.equal(root.style.maxHeight, "", "max-height is released");
+});
+
 test("never reads track curvature (the arc must not reach the driver)", () => {
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });

@@ -25,7 +25,7 @@ const MODULES = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/cu
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
 /** The engine + the registry over a store seeded with `stored` (short keys). */
-function boot(stored = {}) {
+function boot(stored = {}, pre) {
   const Tracks = buildContext(undefined, { quiet: true });
   const ctx = Tracks._vmContext;
   const data = Object.assign({}, stored);
@@ -37,6 +37,7 @@ function boot(stored = {}) {
     rawDel: (k) => { delete data[k]; },
   };
   ctx.GameStore = { store };
+  if (pre) pre(ctx);   // globals the registry reads at eval (e.g. a stub TrackDesignerProps)
   for (const f of MODULES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   return { Tracks, ctx, data, writes, C: ctx.CustomTracks, T: ctx.TrackThemes };
 }
@@ -242,7 +243,7 @@ test("the picker knows the custom tail (source contract)", () => {
   assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
   assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
   assert.match(read("js/net/lobby.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index");
-  assert.match(read("js/core/lazy-bundles.js"), /def\.scenery \|\| sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+  assert.match(read("js/core/lazy-bundles.js"), /!def\.scenery && !sceneryResident/, "ensureScenery fetches nothing for an inline closure");
 });
 
 test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
@@ -360,4 +361,81 @@ test("TIME OF DAY: AUTO keeps the preset; NIGHT lights a day preset; DAY / DUSK 
   // The stored record keeps a look only when it is off default, and the id follows it.
   assert.equal(C.sanitize(design({ look: { time: "auto", trees: "normal", crowd: "normal" } })).look, undefined);
   assert.notEqual(C.sanitize(design({ look: { crowd: "packed" } })).id, C.sanitize(design()).id);
+});
+
+test("remove() and a replacing upsert clear the circuit's pose ghost and input ghost with its board", () => {
+  const { ctx, C } = boot();
+  const cleared = [];
+  ctx.Ghost = { clear: (id) => cleared.push("pose:" + id) };
+  ctx.InputGhost = { clear: (id) => cleared.push("input:" + id) };
+  const a = C.upsert(design({ pts: ellipse(36, 700, 450) })).id;
+  const b = C.upsert(design({ pts: ellipse(36, 720, 450) })).id;
+  assert.deepEqual(cleared, [], "a plain save clears nothing");
+  C.remove(a);
+  assert.deepEqual(cleared, ["pose:" + a, "input:" + a], "remove clears both ghosts");
+  cleared.length = 0;
+  const r = C.upsert(design({ pts: ellipse(36, 760, 455) }), { replace: b });
+  assert.equal(r.replaced, b);
+  assert.deepEqual(cleared, ["pose:" + b, "input:" + b], "a replacing save clears the OLD geometry's ghosts");
+  // A throwing ghost store never blocks the delete; the registry also loads without either module.
+  ctx.Ghost = { clear: () => { throw new Error("storage full"); } };
+  assert.equal(C.remove(r.id).ok, true);
+  delete ctx.Ghost; delete ctx.InputGhost;
+  const c = C.upsert(design({ pts: ellipse(36, 780, 450) })).id;
+  assert.equal(C.remove(c).ok, true, "no Ghost / InputGhost loaded: nothing to clear");
+});
+
+test("sanitize refuses a loop thousands of km long before anything walks it (6.2)", () => {
+  // A 5-point star on a 10 km box: each chord ~19 km, ~2,000 km of perimeter in 200 points.
+  const star = [];
+  for (let i = 0; i < 200; i++) star.push(i % 2 ? [-9990, 9990 - (i % 7)] : [9990, -9990 + (i % 5)]);
+  const { C } = boot();
+  const t0 = performance.now();
+  assert.equal(C.sanitize(design({ pts: star })), null, "strict");
+  assert.equal(C.sanitize(design({ pts: star }), { loose: true }), null, "an autosaved draft of it is refused too");
+  assert.ok(performance.now() - t0 < 500, "O(points): no centreline is built to decide");
+  // The ceiling sits well above a sound design (lenMax 7 km) and below the freeze.
+  assert.ok(C.sanitize(design({ pts: ellipse(36, 2000, 1400) })), "a ~11 km polygon is a (red) design, not garbage");
+  assert.equal(C.sanitize(design({ pts: ellipse(36, 3000, 2000) })), null, "~16 km: over the strict ceiling");
+  assert.ok(C.sanitize(design({ pts: ellipse(36, 3000, 2000) }), { loose: true }), "…but a loose WIP draft may run to the loose one");
+  const stored = boot({ customTracks: { v: 1, items: [design({ pts: star }), design()] } });
+  assert.equal(stored.Tracks.LIST.filter((t) => t.custom).length, 1, "the stored giant never registers; the sound design does");
+});
+
+test("a record's lengthM is kept only when it is near the polygon's; otherwise derived (6.5)", () => {
+  const { C } = boot();
+  const honest = C.sanitize(design());
+  const poly = honest.lengthM;   // no lengthM on the record: the polygon's perimeter
+  assert.ok(poly > 3500 && poly < 4500);
+  // The designer saves the BUILT lap, a few per cent off the polygon: that value stays.
+  const built = Math.round(poly * 0.96);
+  assert.equal(C.sanitize(design({ lengthM: built })).lengthM, built, "a sane saved value is kept");
+  assert.equal(C.sanitize(design({ lengthM: Math.round(poly * 0.75) })).lengthM, Math.round(poly * 0.75), "…down to 0.75x");
+  assert.equal(C.sanitize(design({ lengthM: Math.round(poly * 1.24) })).lengthM, Math.round(poly * 1.24), "…and up to ~1.25x");
+  for (const lie of [1, 49, 50000, -5, NaN, "9", Math.round(poly * 0.7), Math.round(poly * 1.3)]) {
+    const it = C.sanitize(design({ lengthM: lie }));
+    assert.equal(it.lengthM, poly, "an imported lengthM of " + lie + " is replaced by the polygon's");
+    assert.equal(C.toRaw(it).lengthKm, Math.round(poly / 100) / 10, "…so the lap count preset sees a real length");
+  }
+  assert.equal(C.sanitize(design({ lengthM: 1 })).id, honest.id, "and it was never part of the content id");
+});
+
+test("one throwing stored record is skipped, not fatal, at eval and on sync (6.6a)", () => {
+  // A stub props sanitiser that throws on one record's props: load() isolates it.
+  const bad = design({ name: "Bad", seed: 99, props: "boom" });
+  const pre = (ctx) => { ctx.TrackDesignerProps = { sanitize(p) { if (p === "boom") throw new Error("props exploded"); return null; } }; };
+  const { Tracks } = boot({ customTracks: { v: 1, items: [design({ name: "First" }), bad, design({ name: "Third", seed: 8, pts: ellipse(36, 900, 420) })] } }, pre);
+  assert.deepEqual(plain(Tracks.LIST.filter((t) => t.custom).map((t) => t.name)), ["FIRST", "THIRD"], "the good records load");
+  // And a record that sanitises but cannot BUILD (toRaw / fromRaw throws) is skipped by sync().
+  const { Tracks: T2, ctx, data, C: C2 } = boot({ customTracks: { v: 1, items: [design({ name: "One" }), design({ name: "Two", seed: 5, pts: ellipse(36, 900, 420) })] } });
+  assert.equal(T2.LIST.filter((t) => t.custom).length, 2);
+  // TrackThemes is frozen, but the registry reads the GLOBAL at call time: swap in a wrapper.
+  const real = ctx.TrackThemes;
+  let armed = true;
+  ctx.TrackThemes = Object.assign({}, real, { sceneryFor(it) { if (armed && it.name === "ONE") throw new Error("scenery exploded"); return real.sceneryFor(it); } });
+  assert.equal(C2.sync(), 1, "sync reports what registered");
+  assert.deepEqual(plain(T2.LIST.filter((t) => t.custom).map((t) => t.name)), ["TWO"]);
+  armed = false;
+  assert.equal(C2.sync(), 2, "the skipped record stayed in storage and loads once it can");
+  assert.equal(data.customTracks.items.length, 2);
 });

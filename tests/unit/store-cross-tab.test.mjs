@@ -35,13 +35,14 @@ const SRC = readFileSync(join(ROOT, "js/core/store.js"), "utf8");
  *  installed (null if it installed none — which is itself a failure). */
 function load(writeError = null) {
   const disk = new Map();
+  let failWith = writeError;   // fail(null) lets the next write through (the quota freed up)
   const listeners = new Map();
   const sandbox = {
     Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console,
     localStorage: {
       getItem: (k) => (disk.has(k) ? disk.get(k) : null),
       setItem: (k, v) => {
-        if (writeError) { const e = new Error("blocked"); e.name = writeError; throw e; }
+        if (failWith) { const e = new Error("blocked"); e.name = failWith; throw e; }
         disk.set(k, String(v));
       },
       removeItem: (k) => { disk.delete(k); },
@@ -56,7 +57,8 @@ function load(writeError = null) {
   seedSaveMigrate(ctx);
   vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
   const GameStore = vm.runInContext("GameStore", ctx);
-  return { store: GameStore.store, GameStore, disk, onStorage: listeners.get("storage") || null };
+  return { store: GameStore.store, GameStore, disk, sandbox, fail: (name) => { failWith = name; },
+    onStorage: listeners.get("storage") || null };
 }
 
 test("write reports session success separately from reload durability", () => {
@@ -188,6 +190,7 @@ function fakeIndexedDb(seed = []) {
   let writeFailures = 0;
   let writeHolds = 0;
   let writeTransactions = 0;
+  let opens = 0;
   const heldWrites = [];
   const request = (result) => {
     const r = { result, error: null, onsuccess: null, onerror: null };
@@ -230,7 +233,10 @@ function fakeIndexedDb(seed = []) {
     releaseNextWrite() { const settle = heldWrites.shift(); if (settle) settle(); },
     get heldWrites() { return heldWrites.length; },
     get writeTransactions() { return writeTransactions; },
+    get opens() { return opens; },
+    db,
     open() {
+      opens++;
       const r = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null };
       queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
       return r;
@@ -752,4 +758,91 @@ test("legacy slot migration cannot displace a newer current-layout mirror save",
     next.Career.load(); await next.store.mirror.ready; await next.store.mirrorFlush();
     assert.equal(next.Career.data().money, 200, "another boot keeps the recovered save");
   }
+});
+
+test("a storage event from another storage area (sessionStorage) leaves the cache alone", () => {
+  const { store, disk, sandbox } = load();
+  disk.set("apex26.career", JSON.stringify({ money: 100 }));
+  assert.equal(store.get("career", null).money, 100);
+  const rev = store.rev;
+  const session = { getItem: () => null };   // a sibling window's sessionStorage
+  assert.equal(store.onForeignWrite({ key: "apex26.career", newValue: "{}", storageArea: session }), false);
+  assert.equal(store.onForeignWrite({ key: null, newValue: null, storageArea: session }), false,
+    "sessionStorage.clear() must not drop the localStorage cache either");
+  assert.equal(store.foreign, 0);
+  assert.equal(store.rev, rev);
+  disk.set("apex26.career", JSON.stringify({ money: 900 }));
+  assert.equal(store.get("career", null).money, 100, "the key must still be served from cache");
+  // A localStorage-area event is the foreign write this module exists for.
+  assert.equal(store.onForeignWrite({ key: "apex26.career", newValue: "{}", storageArea: sandbox.localStorage }), true);
+  assert.equal(store.get("career", null).money, 900);
+});
+
+test("retryFailed rewrites a refused JSON write once storage has room, and clears writeFailed", () => {
+  const { store, disk, fail } = load("QuotaExceededError");
+  assert.equal(store.set("volMusic", 0.3), false, "the outage refuses the write");
+  assert.equal(store.writeFailed(), "QuotaExceededError");
+  assert.equal(disk.has("apex26.volMusic"), false);
+  const still = store.retryFailed();
+  assert.equal(still.durable, false, "while the quota is still full the retry reports failure");
+  assert.equal(still.reason, "QuotaExceededError");
+  assert.equal(store.writeFailed(), "QuotaExceededError");
+  fail(null);
+  const res = store.retryFailed();
+  assert.equal(res.durable, true);
+  assert.equal(res.retried, 1);
+  assert.equal(disk.get("apex26.volMusic"), "0.3", "the REFUSED value is what lands");
+  assert.equal(store.writeFailed(), null);
+  assert.equal(store.retryFailed().retried, 0, "nothing left to retry");
+});
+
+test("retryFailed carries the raw lane too, and a later successful write drops the entry", () => {
+  const { store, disk, fail } = load("QuotaExceededError");
+  assert.equal(store.rawSet("gfxQuality", "high"), false);
+  assert.equal(store.set("track", 4), false);
+  fail(null);
+  store.set("track", 5);   // newer, durable: must not be rewritten with the stale 4
+  const res = store.retryFailed();
+  assert.equal(res.retried, 1);
+  assert.equal(res.durable, true);
+  assert.equal(disk.get("apex26.gfxQuality"), "high");
+  assert.equal(disk.get("apex26.track"), "5");
+  assert.equal(store.writeFailed(), null);
+});
+
+test("a value JSON cannot serialise is refused whole: cache, rev and mirror are untouched", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  store.set("career.driver.0", { money: 1 });
+  await store.mirrorFlush();
+  const rev = store.rev, keyRev = store.keyRevision("career.driver.0"), flushed = store.mirror.flushed;
+  const cyc = { money: 2 }; cyc.self = cyc;
+  for (const bad of [cyc, { n: 10n }]) {
+    let r;
+    assert.doesNotThrow(() => { r = store.write("career.driver.0", bad); }, "write reports the failure, it does not throw");
+    assert.equal(r.ok, false);
+    assert.equal(r.durable, false);
+    assert.ok(r.reason, "a reason is named");
+    assert.equal(store.get("career.driver.0", null).money, 1, "the cache still holds the last good value");
+    assert.equal(store.rev, rev, "rev did not move");
+    assert.equal(store.keyRevision("career.driver.0"), keyRev, "the key revision did not move");
+    assert.equal(store.mirror.pending, 0, "no mirror op (a null json would tombstone the old row)");
+  }
+  await store.mirrorFlush();
+  assert.equal(store.mirror.flushed, flushed, "nothing was flushed");
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 1, "the mirror row survives");
+  assert.equal(store.writeFailed() !== null, true, "the failure is on record for the save banner");
+  assert.equal(store.write("career.driver.0", { money: 3 }).ok, true, "a good write after it works");
+  assert.equal(store.writeFailed(), null, "and clears the record");
+});
+
+test("onversionchange drops the memoised IndexedDB handle, so the next flush reopens instead of using a closed db", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  assert.equal(idb.opens, 1);
+  idb.db.onversionchange();   // another tab upgrades the schema: the handle is closed
+  store.set("career.driver.0", { money: 5 });
+  await store.mirrorFlush();
+  assert.equal(idb.opens, 2, "the memo was dropped and the store was opened again");
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 5);
 });

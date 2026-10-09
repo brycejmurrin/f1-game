@@ -214,3 +214,17 @@ test("restarting results releases its montage before the next qualifying field i
   assert.equal(g.G.dbgCam, null, "old control cannot acquire qualifying results");
   } finally { doc.getElementById = get; }
 });
+
+test("commit receives a current() check that goes false after cancel()", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  let seen = null, whileCurrent = null;
+  const p = entry.begin("race", "k", () => Promise.resolve(), (current) => {
+    seen = current; whileCurrent = current();
+    return Promise.resolve(true);
+  }, () => true);
+  assert.equal(await p, true);
+  assert.equal(typeof seen, "function", "commit is handed the supersession check");
+  assert.equal(whileCurrent, true, "true while this request is the live one");
+  entry.cancel();
+  assert.equal(seen(), false, "false once cancel() bumps the generation");
+});

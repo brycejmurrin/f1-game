@@ -27,6 +27,14 @@ const CustomTracks = (function () {
     // registered as raceable with curvature NaN), and a control polygon no
     // shorter than this (validate.js's lap floor is 2.5 km on the BUILT road).
     spacing: 8, loopMin: 1000,
+    // ...and no longer than this. validate.js caps the BUILT lap at lenMax 7 km, and
+    // the control polygon (chords cut the corners) runs a little longer than the
+    // road it makes, so 2x that cap is generous for a sound design. Without a
+    // ceiling a share code / import / autosaved draft of a 2,000 km star made
+    // validate.check build and scan a half-million-node centreline on open (7 s,
+    // 388 MB). The loose ceiling lets a red work-in-progress draft restore while
+    // still refusing the tab-freezing ones.
+    loopMax: 14000, loopMaxLoose: 20000,
   });
   // Road-edge styles the designer authors (mesh.js buildKerbs). Default flat
   // matches the engine's historic ribbon so older saves keep their look + id.
@@ -150,6 +158,14 @@ const CustomTracks = (function () {
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
 
+  /** Control-polygon perimeter (m, the closing chord included). O(points): no
+   *  centreline is built, so it is safe to ask of hostile input. */
+  function polyLength(pts) {
+    let C = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    return C;
+  }
+  const lengthOf = (claimed, perimeter) => (Number.isFinite(claimed) && claimed >= 0.75 * perimeter && claimed <= 1.25 * perimeter ? Math.round(claimed) : Math.round(perimeter));
   /** Control-polygon perimeter (the closing chord included), or -1 when two
    *  consecutive points sit closer than LIMITS.spacing. */
   function loopLength(pts) {
@@ -171,8 +187,11 @@ const CustomTracks = (function () {
     if (!raw || typeof raw !== "object") return null;
     const pts = sanitizePts(raw.pts);
     if (!pts) return null;
-    const L = loopLength(pts);
-    if (!(opts && opts.loose) && L < LIMITS.loopMin) return null;
+    const loose = !!(opts && opts.loose);
+    const L = loopLength(pts), perimeter = polyLength(pts);
+    if (!loose && L < LIMITS.loopMin) return null;
+    // Before anything walks this design: a loop thousands of km long is refused here.
+    if (perimeter > (loose ? LIMITS.loopMaxLoose : LIMITS.loopMax)) return null;
     const heights = sanitizeHeights(pts, raw.heights);
     const it = {
       name: sanitizeName(raw.name),
@@ -186,7 +205,11 @@ const CustomTracks = (function () {
       elevations: sanitizeZones(raw.elevations, BUMP),
       bridges: sanitizeZones(raw.bridges, BUMP),
       turns: Array.isArray(raw.turns) ? raw.turns.map(frac).filter((v) => v != null).slice(0, 40) : [],
-      lengthM: num(raw.lengthM, 0, 50000, 0),
+      // The record's lengthM is the designer's BUILT lap, a few per cent off the
+      // polygon, so it is kept while it is plausible; an imported 1 gave lengthKm
+      // 0.1 and 3,050 laps for the full-distance preset (gpLaps), so anything far
+      // from the polygon's own perimeter is replaced by it.
+      lengthM: lengthOf(raw.lengthM, perimeter),
       created: num(raw.created, 0, 8.64e15, Date.now()),
       updated: num(raw.updated, 0, 8.64e15, Date.now()),
     };
@@ -202,7 +225,6 @@ const CustomTracks = (function () {
       const props = TrackDesignerProps.sanitize(raw.props);
       if (props) it.props = props;
     }
-    if (!it.lengthM) { let C = 0; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); } it.lengthM = Math.round(C); }
     it.id = idOf(it);
     return it;
   }
@@ -214,7 +236,8 @@ const CustomTracks = (function () {
     if (v && typeof v === "object" && Array.isArray(v.items)) {
       let dropped = 0;
       for (const raw of v.items.slice(0, LIMITS.items)) {
-        const it = sanitize(raw);
+        let it = null;
+        try { it = sanitize(raw); } catch (e) { Log.warn("track", "customTracks: unreadable design skipped: " + (e && e.message || e)); }
         if (!it) { dropped++; continue; }
         // Two records with one content id: the newer edit wins.
         if (seen.has(it.id)) { const i = items.findIndex((x) => x.id === it.id); if (items[i].updated < it.updated) items[i] = it; continue; }
@@ -283,8 +306,15 @@ const CustomTracks = (function () {
     if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return -1;
     for (let i = Tracks.LIST.length - 1; i >= 0; i--) if (Tracks.LIST[i].custom) Tracks.LIST.splice(i, 1);
     const items = load().items;
-    for (const it of items) Tracks.LIST.push(TrackDef.fromRaw(toRaw(it)));
-    return items.length;
+    // Per record: this runs at script EVAL, and one stored design that throws
+    // (a hostile shape the sanitiser missed, a theme that cannot build) must not
+    // take game.js's boot down with it. A skipped record stays in storage.
+    let n = 0;
+    for (const it of items) {
+      try { Tracks.LIST.push(TrackDef.fromRaw(toRaw(it))); n++; }
+      catch (e) { Log.warn("track", "customTracks: skipped " + it.id + ": " + (e && e.message || e)); }
+    }
+    return n;
   }
 
   function list() { return load().items; }
@@ -309,6 +339,18 @@ const CustomTracks = (function () {
     return idx;
   }
 
+  /** A circuit's time-trial board and recorded runs go with it: a stale pose or
+   *  input ghost would otherwise haunt a different circuit that reuses the id's
+   *  slot, or a replaced geometry it no longer fits. Each module is optional
+   *  (the registry loads alone in a unit test) and a failed clear never blocks
+   *  the save / delete. */
+  function dropRuns(id) {
+    try { store.rawDel("ttlb." + id); } catch (_) { /* never had one */ }
+    for (const M of [typeof Ghost !== "undefined" ? Ghost : null, typeof InputGhost !== "undefined" ? InputGhost : null]) {
+      try { if (M && typeof M.clear === "function") M.clear(id); } catch (e) { Log.warn("track", "customTracks: ghost not cleared for " + id + ": " + (e && e.message || e)); }
+    }
+  }
+
   /** Save (new id = new entry; same content id = refresh the label).
    *  opts.replace: the id this design was opened from (the designer's EDIT) —
    *  a geometry change makes a new content id, and the edited circuit is
@@ -325,7 +367,7 @@ const CustomTracks = (function () {
     else { if (items.length >= LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items }; items.push(it); }
     it.updated = Date.now();
     const r = write(items);
-    if (origin >= 0) { try { store.rawDel("ttlb." + opts.replace); } catch (_) { /* never had one */ } }
+    if (origin >= 0) dropRuns(opts.replace);
     if (sync() >= 0 && sel) reselect(sel === (opts && opts.replace) ? it.id : sel);
     return { ok: true, id: it.id, replaced: origin >= 0 ? opts.replace : null, durable: !!(r && r.durable), reason: r && r.reason };
   }
@@ -334,8 +376,8 @@ const CustomTracks = (function () {
     const sel = selectedId();
     const items = load().items.filter((x) => x.id !== id);
     const r = write(items);
-    // Its time-trial board goes with it (GameStore.ttBoard key shape).
-    try { store.rawDel("ttlb." + id); } catch (_) { /* never had one */ }
+    // Its time-trial board (GameStore.ttBoard key shape) and ghosts go with it.
+    dropRuns(id);
     // Re-resolve by id: the tail re-syncs, so the removed circuit's index now
     // names its successor (or nothing) and every later custom slid down one.
     if (sync() >= 0 && sel) reselect(sel === id ? null : sel);

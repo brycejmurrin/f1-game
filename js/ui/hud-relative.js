@@ -179,6 +179,12 @@ const HudRelative = (function () {
       return;
     }
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      // Re-derive from the CSS box every pass: left / max-height are only ever
+      // SET on a clash, so a clash that went away (STEERING back to BUTTONS, a
+      // lower HUD SIZE, a rotation) otherwise left the card offset and truncated
+      // until reload (a stale max-height also makes scrollHeight > clientHeight
+      // hide rows).
+      if (root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
       const rootEl = doc.documentElement;
       let zPub = 1;
       if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {

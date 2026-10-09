@@ -32,6 +32,14 @@ test("fitHud publishes --hud-fit-stamp after painted phone clearance", () => {
     "specs can force one painted phone-fit pass before probe");
 });
 
+test("the stamp is published on a clash-to-clear transition or a probe, not every 10 Hz tick", () => {
+  // Behavioural twin: hud-fit-idempotent.test.mjs ticks a booted HUD and counts the writes.
+  const fn = HUD_JS.slice(HUD_JS.indexOf("function phoneFitStampSync("), HUD_JS.indexOf("function fitHud("));
+  assert.match(fn, /if \(force \|\| !_fitStamped\)/, "an already-published stamp is not rewritten");
+  assert.match(fn, /_fitStamped = false/, "a clash voids it, so its clearing publishes a new one");
+  assert.match(HUD_JS, /phoneFitStampSync\([^\n]*_cssScale,\s*true\)/, "syncPhoneFit (the spec's probe) forces a fresh stamp");
+});
+
 test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => {
   // game.js only toggles body.steer-touch / body.steer-buttons — tilt is the
   // unmarked phone mode. body:not(.desktop) covers tilt + touch + buttons;

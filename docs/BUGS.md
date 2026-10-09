@@ -279,7 +279,10 @@ consumer read them.
 
 ## Deliberately not listed as defects
 
-- Race-mode cut laps still set `c.best` / FL with +5 s pricing — product ladder.
+- Race-mode cut laps are no longer timed laps: a counted cut sets
+  `incidentInvalidLap` in every session (game.js, "A LAP WITH A COUNTED CUT IS
+  NOT A TIMED LAP"), so a cut lap cannot be `c.best` or FL; the +5 s ladder
+  still prices the classification — product ladder.
 - Pit-lane lap setting FL — matches real F1.
 - Prior 2026-09-22 FIXED batches — re-checked; still fixed.
 - S3 residual `_sceneryShift` — documented above; needs per-circuit probes.

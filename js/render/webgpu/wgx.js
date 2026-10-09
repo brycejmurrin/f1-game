@@ -1202,7 +1202,7 @@ const WGX = (function () {
     // Scene targets (allocated on resize / size change).
     let sceneTex = null, depthTex = null, sceneView = null, depthView = null,
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
-        _targetRetryAt = 0, _targetRetryW = 0, _targetRetryH = 0;
+        _targetRetryAt = 0, _targetRetryW = 0, _targetRetryH = 0, _targetFails = 0;
 
     //    _buildPost; size-dependent targets + bind groups (re)built in
     //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
@@ -2415,6 +2415,20 @@ const WGX = (function () {
         if (err) Log.warn("gfx", "WGX target realloc " + p.w + "x" + p.h + " failed (" + (oErr ? "out-of-memory" : "validation") + "): " + (err.message || err) + " — keeping the previous set");
       }, () => { p.state = "bad"; });
     }
+    // A device that cannot hold this size's scene + depth + MSAA set failed it
+    // every second for ever, allocating and destroying the whole set each time.
+    // Back off 1 s → 30 s over consecutive failures AT THE SAME SIZE, and stop
+    // after TARGET_RETRY_MAX of them (the previous set keeps rendering); a new
+    // size starts the count again, and a success clears it (_swapTargets).
+    const TARGET_RETRY_MAX = 8, TARGET_RETRY_CAP_MS = 30000;
+    function _targetFailed(w, h) {
+      _targetFails = (_targetRetryW === w && _targetRetryH === h) ? _targetFails + 1 : 1;
+      _targetRetryW = w; _targetRetryH = h;
+      if (_targetFails >= TARGET_RETRY_MAX) {
+        _targetRetryAt = Infinity;
+        Log.warn("gfx", "WGX target realloc " + w + "x" + h + " failed " + _targetFails + " times — keeping the previous set until the size changes");
+      } else _targetRetryAt = Date.now() + Math.min(TARGET_RETRY_CAP_MS, 1000 * 2 ** (_targetFails - 1));
+    }
     function ensureTargets() {
       if (width < 1 || height < 1) return;
       if (_pendingTargets) {
@@ -2423,7 +2437,7 @@ const WGX = (function () {
         _pendingTargets = null;
         if (p.state === "ok" && p.w === width && p.h === height) { _swapTargets(p.next); return; }
         _destroyTargetSet(p.next);        // failed, or the size moved on while it was checked
-        if (p.state === "bad") { _targetRetryW = p.w; _targetRetryH = p.h; _targetRetryAt = Date.now() + 1000; }
+        if (p.state === "bad") _targetFailed(p.w, p.h);
       }
       if (sceneTex && _texW === width && _texH === height) {
         _syncSpatialAa();
@@ -2651,8 +2665,7 @@ const WGX = (function () {
         // and retry after a cooldown (same-size) or immediately (new size).
         if (scoped) { device.popErrorScope().catch(() => {}); device.popErrorScope().catch(() => {}); }
         _destroyTargetSet(next);
-        _targetRetryW = width; _targetRetryH = height;
-        _targetRetryAt = Date.now() + 1000;
+        _targetFailed(width, height);
         return;
       }
       if (scoped) { _scopedTargets(next); return; }
@@ -2689,7 +2702,7 @@ const WGX = (function () {
       _postReady = next.postReady;
       _ssrReady = next.ssrReady;
       _texW = width; _texH = height;
-      _targetRetryAt = 0;
+      _targetRetryAt = 0; _targetFails = 0;
       _destroyTargetSet(old);
       _syncSpatialAa();
     }

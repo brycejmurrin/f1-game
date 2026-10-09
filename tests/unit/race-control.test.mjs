@@ -761,3 +761,64 @@ test("a red flag applied with the CAUTIONS switch off still runs its procedure a
   assert.equal(rc.info().level, 0);
   assert.equal(rc.info().enabled, false, "the switch stayed off throughout");
 });
+
+test("Time Trial and qualifying never raise a caution from the player's own debris", () => {
+  // Six pieces on the surface is a VSC in a race; alone on track it only
+  // slowed the lap (cautionV) with no CAUTIONS row to turn off.
+  for (const over of [{ session: "quali" }, { timeTrial: true }]) {
+    const rc = load({ active: () => true, hazards: () => hazards(6, 2) }).create(makeCtx(over));
+    run(rc, 2);
+    assert.equal(rc.info().level, 0, JSON.stringify(over));
+  }
+  // The same hazards in a race still raise the VSC (the gate is not vacuous).
+  const race = load({ active: () => true, hazards: () => hazards(6, 2) }).create(makeCtx({ session: "race", timeTrial: false }));
+  run(race, 2);
+  assert.equal(race.info().level, 2);
+});
+
+test("a caution flying when a session turns into a lone lap is dropped", () => {
+  const ctx = makeCtx({ session: "race", timeTrial: false });
+  const rc = load({ active: () => true, hazards: () => hazards(6, 2) }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  ctx.session = "quali";
+  run(rc, 1);
+  assert.equal(rc.info().level, 0);
+});
+
+test("scQueueFrac and holdCap read the per-tick snapshot, so cars[] order cannot change the verdict", () => {
+  const R = load({ active: () => false });
+  const total = 5000;
+  // `ahead` has already been moved this tick (live prog 1.3 m past its snapshot);
+  // `me` has not. The verdict must use the snapshot whichever one comes first.
+  const mk = () => ({
+    me: { prog: 100, speed: 50, _snapProg: 100, _snapSpeed: 50 },
+    ahead: { prog: 138.8, speed: 52, _snapProg: 137.5, _snapSpeed: 50 },
+  });
+  const vTop = 80;
+  const frac = (order) => { const w = mk(); return R.scQueueFrac(w.me, order.map((k) => w[k]), total, null, vTop); };
+  assert.equal(frac(["me", "ahead"]), frac(["ahead", "me"]));
+  const w = mk();
+  const live = ((w.ahead.prog - w.me.prog) % total) / (R.SC_PACE * vTop);
+  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (R.SC_PACE * vTop);
+  const t = (g) => R.SC_PACE + (R.SC_CATCH - R.SC_PACE) * Math.min(1, Math.max(0, g - R.SC_QUEUE_GAP));
+  assert.equal(R.scQueueFrac(w.me, [w.me, w.ahead], total, null, vTop), t(snap));
+  assert.notEqual(t(snap), t(live), "the fixture must distinguish snapshot from live");
+  // The leader pick (leader out of the queue) rides the snapshot too.
+  const out = { prog: 900, retired: true, _snapProg: 900 };
+  const a = { prog: 300, _snapProg: 290 }, b = { prog: 295, _snapProg: 295 };
+  const me = { prog: 10, _snapProg: 10 };
+  assert.equal(R.scQueueFrac(me, [a, b, me, out], total, out, vTop), R.scQueueFrac(me, [b, a, me, out], total, out, vTop));
+  // holdCap: the ceiling is the snapshot speed, and the gap uses the snapshot prog.
+  // Live gap 13.3 m would read "nobody to hold behind"; the snapshot gap 10 m holds at 50.
+  const h = { me: { prog: 100, speed: 50, _snapProg: 100 }, ahead: { prog: 113.3, speed: 52, _snapProg: 110, _snapSpeed: 50 } };
+  assert.equal(R.holdCap(h.me, [h.ahead, h.me], null), 50);
+});
+
+test("settleLineStep with no or one entry never sorts, and the comparator is not rebuilt per call", () => {
+  const R = load({ active: () => false });
+  R.settleLineStep();   // empty: must not throw
+  const src = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
+  const body = src.slice(src.indexOf("function settleLineStep"), src.indexOf("function endLineStep"));
+  assert.ok(!/=>/.test(body), "settleLineStep must not allocate an arrow comparator per call");
+});

@@ -105,3 +105,25 @@ test("a car just behind a leader that has crossed is NOT a lap down after the re
   const lapped = live[2];
   assert.equal(a.lap - lapped.lap, 5, "a car genuinely laps down keeps them (5 laps and 90 m behind at the flag)");
 });
+
+test("a queue held under the red flag is parked, not wedged: no AI accrues stuckT", async () => {
+  // Level 4 caps the field near 0.02 x vTop, so a queued car is under 7 m/s with a blocker inside 6 m
+  // by design. That was "boxed and going nowhere": stuckT climbed, unstuckActive cancelled the car's
+  // braking and it dug out sideways under a red. Measured before the gate: stuckT 2.98 s inside 10 s.
+  const m = await createGame({ track: "monza" });
+  try {
+    const G = m.G, A = m.apex, L = G.track.total;
+    A.go(); m.step(60);
+    G.applyCaution({ level: 4, cause: "test" });
+    for (let i = 1; i < G.cars.length; i++) A.aiPlace(i, 0.40 + (i - 1) * 5 / L, 2, 0);   // bumper to bumper
+    const ai = G.cars.filter((c) => !c.human && !c.retired);
+    let maxStuck = 0, slow = 0;
+    for (let i = 0; i < 600; i++) {   // 10 s: the red procedure runs 14 s before it asks for a restart
+      m.step(1, 1 / 60);
+      for (const c of ai) { maxStuck = Math.max(maxStuck, c.stuckT || 0); if (c.speed < 7) slow++; }
+    }
+    assert.equal(G.cautionLevel(), 4, "the red flag should still be flying");
+    assert.ok(slow > ai.length * 300, "the queue must actually be crawling, or the test proves nothing");
+    assert.equal(maxStuck, 0, "no AI may count a red-flag queue as stuck");
+  } finally { m.close(); }
+});

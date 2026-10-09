@@ -219,3 +219,91 @@ test("the career seat is clamped to the team's grid row (MY TEAM: seat 0)", () =
   const once = JSON.stringify(SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { seat: 9 })));
   assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
 });
+
+// review-race-career-data (WP-B #1): tdev/dev/seats/offers/results passed
+// through on a bare typeof-object check, so a hand-edited or imported save put
+// NaN / 1e308 into every AI car's pace and a string salary into the balance.
+test("hostile tdev / dev / offers / results / seats are coerced to finite, bounded values", () => {
+  const SM = load();
+  const c = SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), {
+    tdev: { x: "abc", y: 1e308, z: -1e308, w: "3", ["__proto__"]: 5 },
+    dev: { "a:0": { pace: "x", craft: 1e308, awareness: -99, consistency: "4", experience: 1e9 }, "b:1": 7 },
+    offers: [{ teamId: "haas", salary: "9", years: "x" }, { teamId: "haas", salary: 1e308, years: 99 }],
+    results: [{ r: "2", p: "1", pts: "x" }, { r: -3, p: 1e309, pts: -5 }],
+    seats: { "haas:1": { name: 5, code: 7, num: "z" }, "haas:0": { name: "N", code: "NNN", num: 1e9 } },
+  }));
+  const L = SM.LIMITS;
+  for (const [k, v] of Object.entries(c.tdev)) {
+    assert.ok(Number.isFinite(v) && Math.abs(v) <= L.TDEV_MAX, `tdev.${k}=${v}`);
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(c.tdev)), { y: L.TDEV_MAX, z: -L.TDEV_MAX, w: 3 }, "non-numeric entries are dropped, the rest clamped");
+  assert.deepEqual(JSON.parse(JSON.stringify(c.dev["a:0"])), { craft: L.DEV_MAX, awareness: -L.DEV_MAX, consistency: 4, experience: L.EXP_MAX });
+  assert.equal(c.dev["b:1"], undefined, "a non-object dev row is dropped");
+  for (const o of c.offers) {
+    assert.ok(Number.isFinite(o.salary) && o.salary >= 0, `offer salary ${o.salary}`);
+    assert.ok(Number.isInteger(o.years) && o.years >= 1 && o.years <= 3, `offer years ${o.years}`);
+  }
+  assert.equal(c.offers[0].salary, 9, "a numeric string is kept as the number it spells");
+  assert.deepEqual(c.results.map((r) => [r.r, r.p, r.pts]).flat(), [2, 1, 0, 0, 0, 0],
+    "strings become numbers; negatives and Infinity become 0");
+  assert.deepEqual(JSON.parse(JSON.stringify(c.seats)), { "haas:0": { name: "N", code: "NNN", num: 999 } }, "an entry without a named, coded driver is dropped");
+  const once = JSON.stringify(c);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+test("SaveMigrate's clamp limits equal career.js's TDEV_MAX / DEV_MAX / EXP_MAX", () => {
+  const careerSrc = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
+  const L = load().LIMITS;
+  for (const name of ["TDEV_MAX", "DEV_MAX", "EXP_MAX"]) {
+    assert.equal(Number(new RegExp(`const ${name} = (\\d+);`).exec(careerSrc)?.[1]), L[name], name);
+  }
+});
+
+test("a save from before the tally derives it once from its history; a present tally is kept", () => {
+  const SM = load();
+  const hist = [{ pos: 1, cPos: 2, wins: 5, podiums: 8, pts: 300 }, { pos: 3, cPos: 1, wins: 1, podiums: 4, pts: 150 }, null];
+  const c = SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { history: hist }));
+  assert.deepEqual(JSON.parse(JSON.stringify(c.tally)), { seasons: 2, wins: 6, podiums: 12, titles: 1, cTitles: 1, pts: 450 });
+  c.history.length = 0;                       // the archive trimmed: the tally must not shrink with it
+  assert.equal(SM.migrateCareer(c).tally.seasons, 2);
+  const bad = SM.migrateCareer(Object.assign(RUNG_INPUTS.v1(), { tally: { seasons: "x", wins: -4, titles: 1e309 } }));
+  assert.ok(Object.values(bad.tally).every((n) => Number.isFinite(n) && n >= 0), "a poisoned tally is made finite");
+});
+
+test("a missing or junk team defaults as Career.start does, so the title's team.toUpperCase() cannot throw at boot", () => {
+  const SM = load();
+  for (const bad of [undefined, null, 7, "", {}]) {
+    assert.equal(SM.migrateCareer({ money: 100, team: bad }).team, "haas", `driver team ${JSON.stringify(bad)}`);
+    assert.equal(SM.migrateCareer({ flavour: "myteam", money: 100, team: bad }).team, "custom", `myteam team ${JSON.stringify(bad)}`);
+  }
+  assert.equal(SM.migrateCareer({ money: 100 }).team, "haas", "the bare {money:100} backup row");
+  assert.equal(SM.migrateCareer({ flavour: "driver", team: "haas", money: 1 }).team, "haas", "a real team is kept");
+});
+
+test("an imported season.config is dropped: a huge round must not make SeasonCal.netPts loop round times", () => {
+  const SM = load();
+  const c = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1,
+    season: { round: 2e9, pts: { AAA: 5 }, teamPts: {}, driverCodes: {}, roundPts: { AAA: [1, 2] }, config: { drop: 1, trackIds: [] } } });
+  assert.ok(!("config" in c.season), "config is not carried into a career season");
+  assert.equal(c.season.round, 2e9, "the rest of the season is untouched");
+  assert.ok(!("config" in SM.migrateCareer(JSON.parse(JSON.stringify(c))).season), "idempotent");
+});
+
+test("a deal goal whose type names an Object.prototype member is normalised to champPos; a plain unknown type is kept", () => {
+  const SM = load();
+  const goalOf = (goal) => SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", deal: { salary: 1, bonusPt: 1, left: 1, years: 1, goal } }).deal.goal;
+  for (const type of ["constructor", "__proto__", "toString", 7, null]) assert.equal(goalOf({ type, value: 2 }).type, "champPos", String(type));
+  assert.equal(goalOf({ type: "beatRival", value: "haas:0" }).type, "beatRival");
+  assert.equal(goalOf({ type: "no-such-kind", value: 1 }).type, "no-such-kind", "unknown plain types already resolve as champPos downstream");
+  assert.equal(goalOf(undefined), undefined, "no goal stays no goal");
+});
+
+test("remapPoints leaves season.config alone: the standalone season keeps its frozen rules (only migrateCareer strips it)", () => {
+  const SM = load();
+  const cfg = { drop: 1, trackIds: ["monza"] };
+  const s = SM.remapPoints({ round: 1, pts: { AAA: 5 }, teamPts: {}, driverCodes: {}, config: cfg });
+  assert.equal(s.config, cfg, "remapPoints does not touch config");
+  const viaStandalone = { round: 1, pts: {}, config: { drop: 2 } };
+  SM.migrateSeasonPoints({ get: () => null, set() {} }, viaStandalone);
+  assert.deepEqual(JSON.parse(JSON.stringify(viaStandalone.config)), { drop: 2 }, "migrateSeasonPoints keeps it too");
+});
