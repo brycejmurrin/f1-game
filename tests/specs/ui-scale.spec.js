@@ -464,7 +464,8 @@ test.describe("UI scale", () => {
   // on top (#1238's display:contents leftover): 4x geometry on 1280x742. CAREER's
   // save line and CONTINUE's ran past the viewport's right edge and RACE sat
   // ~950px down a 742px window. Contract here: one zoom, every door subtitle
-  // inside its door and the viewport, RACE on screen without scrolling.
+  // inside its door and the viewport, RACE on screen without scrolling, and
+  // the column scrolls (never clips) to its last door.
   test("200% home doors keep subtitles inside the door and RACE on screen on desktop windows", async ({ page }) => {
     const SETTLE_FRAMES = 6;
     for (const viewport of [{ width: 1280, height: 742 }, { width: 1920, height: 1080 }]) {
@@ -542,8 +543,23 @@ test.describe("UI scale", () => {
         }
         const race = document.getElementById("mb-race").getBoundingClientRect();
         const m = menu.getBoundingClientRect();
+        // The doors below RACE may run past the fold at 2x; the column must
+        // then scroll (not clip) and its last door must come fully on screen.
+        const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+        const last = doors.reduce((a, b) => (b.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? b : a));
+        const overflowY = getComputedStyle(menu).overflowY;
+        const overflows = menu.scrollHeight > menu.clientHeight + 1;
+        const top0 = menu.scrollTop;
+        menu.scrollTop = menu.scrollHeight;
+        const lr = last.getBoundingClientRect();
+        menu.scrollTop = top0;
+        const reach = {
+          last: last.id, overflowY, overflows,
+          lastAfterScroll: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
+          ok: (!overflows || /^(auto|scroll)$/.test(overflowY)) && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
+        };
         return {
-          doubled, over, subs,
+          doubled, over, subs, reach,
           race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
           raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
             && race.left >= -1 && race.right <= vw + 1,
@@ -554,6 +570,7 @@ test.describe("UI scale", () => {
       expect(fit.subs, `${name}: the save-line subtitles are measured ${fitDump}`).toBeGreaterThan(0);
       expect(fit.over, `${name}: every door subtitle ends inside its door and the viewport ${fitDump}`).toEqual([]);
       expect(fit.raceInView, `${name}: RACE is on screen without scrolling ${fitDump}`).toBe(true);
+      expect(fit.reach.ok, `${name}: the door column scrolls to its last door ${fitDump}`).toBe(true);
     }
   });
 
