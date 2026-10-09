@@ -533,6 +533,27 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
 });
 
 // ---- bug-hunt 2026-10-09 7.3 (W5 game) — its own game, so the load-bearing order above is untouched ----
+describe("per-frame pit uniforms are pooled (bug-hunt 4.3a)", () => {
+  test("laneUniform() / boxUniform() hand back the same array each frame, with the live numbers in it", async () => {
+    const g2 = await createGame({ track: ID });
+    try {
+      g2.apex.tyres({ level: "real" });
+      g2.step(5);
+      const pits = g2.G.pits;
+      if (g2.G.track.pit) g2.G.track.pit.painted = true;   // bahrain builds a ribbon (no shader lane): ask the painted-lane branch
+      const lane = pits.laneUniform(), box = pits.boxUniform();
+      assert.ok(lane && box, "a painted lane and your box");
+      assert.equal(lane.length, 4); assert.equal(box.length, 2);
+      const z = pits.info().lane;
+      assert.deepEqual(Array.from(lane), Array.from(z), "the lane row is (entry s, window length, side, lap length)");
+      assert.equal(lane[3], g2.G.track.total);
+      assert.equal(pits.laneUniform(), lane, "the same array on the next frame");
+      assert.equal(pits.boxUniform(), box);
+      assert.ok(box[0] > 0 && box[1] > 0, `box row is live (${box})`);
+    } finally { g2.close(); }
+  });
+});
+
 describe("retirement clears the pit state", () => {
   test("a car that retires mid-stop in the box leaves no crew / jacks around it", async () => {
     const g2 = await createGame({ track: "monza" });

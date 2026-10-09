@@ -1128,6 +1128,8 @@ var PitLane = (function () {
       return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
     }
 
+    const _boxU = [0, 0], _laneU = [0, 0, 0, 0];   // the per-frame uniform rows: one array each, not two fresh ones a frame while a stop is armed
+
     /** The numbers the lit shaders paint THIS CAR's BOX from: how far into the
      *  window it sits, and how long it is. Null when there is no lane, or no
      *  car with a team to have a box in the row.
@@ -1140,7 +1142,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
+      _boxU[0] = boxThroughFor(car, zz, t.total); _boxU[1] = BOX_TOL * 0.75;
+      return _boxU;   // pooled: read by the frame's uniform upload within the same frame, never retained
     }
 
     /** The four numbers the lit shaders paint the PAINTED lane from, or null.
@@ -1153,7 +1156,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [zz.sIn, zz.lenM, zz.side, t.total];
+      _laneU[0] = zz.sIn; _laneU[1] = zz.lenM; _laneU[2] = zz.side; _laneU[3] = t.total;
+      return _laneU;   // pooled (see boxUniform)
     }
 
     /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
