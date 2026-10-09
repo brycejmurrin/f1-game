@@ -240,8 +240,11 @@ test("ensureNet: a throwing createNetwork / wire resolves false and a later call
   assert.equal(wires, 2, "wired once it succeeded");
 });
 
-// ensureScenery tells the caller whether the closure is resident, retrying once.
-test("ensureScenery: a failed fetch resolves false after one retry; the next call fetches again; a landed one is true", async () => {
+// ensureScenery tells the caller whether the closure is resident: ONE fetch per
+// ask (a failed script is a completed request with fallback scenery, and
+// session-entry-vm holds that request to prove a start survives it), no
+// negative cache, so the next ask fetches again.
+test("ensureScenery: a failed fetch resolves false after one attempt; the next call fetches again; a landed one is true", async () => {
   let fetches = 0, land = false;
   const w = world({
     globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true } },
@@ -256,23 +259,12 @@ test("ensureScenery: a failed fetch resolves false after one retry; the next cal
     },
   });
   assert.equal(await w.lb.ensureScenery(0), false, "not resident: the caller can tell");
-  assert.equal(fetches, 2, "one retry before giving up");
+  assert.equal(fetches, 1, "one attempt per ask: a held retry would hang a start (session-entry-vm)");
   assert.equal(await w.lb.ensureScenery(0), false);
-  assert.equal(fetches, 4, "no negative cache: every ask fetches again");
+  assert.equal(fetches, 2, "no negative cache: every ask fetches again");
   land = true;
   assert.equal(await w.lb.ensureScenery(0), true);
-  assert.equal(fetches, 5);
+  assert.equal(fetches, 3);
   assert.equal(await w.lb.ensureScenery(0), true);
-  assert.equal(fetches, 5, "resident: nothing to fetch");
-});
-
-test("ensureScenery: a first-attempt failure that the retry repairs resolves true", async () => {
-  let fetches = 0;
-  const w = world({
-    globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true } },
-    body: () => "",
-    deps: { loadBackendScripts: async () => { if (++fetches === 2) { w.ctx.TrackScenery = { monza() {} }; return true; } return false; } },
-  });
-  assert.equal(await w.lb.ensureScenery(0), true);
-  assert.equal(fetches, 2);
+  assert.equal(fetches, 3, "resident: nothing to fetch");
 });
