@@ -1,6 +1,6 @@
 /* Comparable time-trial classes and lap configuration continuity. */
 "use strict";
-const SessionRecords = (function () {
+var SessionRecords = (function () {
   const PHYS = ["PACE", "DRIFT", "FRONT_GRIP", "PLAYER_GRIP", "ROAD_FOLLOW", "STEER_EXPO", "STEER_MAX_SLIP", "STEER_SPEED_REF", "WHEELBASE", "YAW_DAMP", "YAW_INERTIA", "raceLineAssist"];
   function create(G) {
     let key = null, revision = -1, spoiled = false, dailyRestore = null;

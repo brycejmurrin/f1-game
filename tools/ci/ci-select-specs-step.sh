@@ -73,7 +73,11 @@ node -e '
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.overflow || []))
     console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
-  for (const s of r.skipped) console.log(`::warning::DROPPED (over budget; the overflow is full): ${s.file} (${s.tests} tests)`);
+  for (const s of (r.spill || []))
+    console.log(`SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
+  // Past overflow AND spill: never a quiet skip. An error annotation names it
+  // on the PR checks page, and `dropped` below reds selected-verdict.
+  for (const s of r.skipped) console.log(`::error::DROPPED (over budget; overflow AND spill are full — NOT RUN ANYWHERE): ${s.file} (${s.tests} tests) — run its group with tools/ci/remote-group.mjs or split the change`);
   for (const s of (r.oversize || []))
     console.log(`OVERSIZE (outside the budget, packed by expected time, ~${s.sec} s): ${s.file} (${s.tests} tests)`);
   const shards = r.shards || [];

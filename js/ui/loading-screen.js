@@ -589,7 +589,8 @@ const LoadingScreen = (function () {
       if (e && e.type === "keydown" && e.repeat) return;
       // THE GARAGE PHASE skips too, straight to the race: the drive-out and the
       // flyby are one cinematic, and a skip is a verdict on it (the streak counts it).
-      if (phase === "garage" || (phase === "build" && skipCb)) {
+      // "prep" is cold compilation before the garage leave — same skip contract as build.
+      if (phase === "garage" || ((phase === "build" || phase === "prep") && skipCb)) {
         if (!skipCb || Date.now() - flyT0 < SKIP_GRACE_MS) return;
         if (e) { if (e.cancelable && e.preventDefault) e.preventDefault(); if (e.stopPropagation) e.stopPropagation(); }
         const cb = skipCb; skipCb = null;
@@ -730,6 +731,21 @@ const LoadingScreen = (function () {
       return true;
     }
 
+    /* PREP before the garage leave: scrim over a cold compile, #ld-card hidden
+     * (css/loading.css). The race/session card must not appear until studioDone
+     * hands off — introCover uses this instead of building(). Skip = studioSkip. */
+    function prep(info, onSkipCb) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      cur = info; paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("prep");
+      armSkip(onSkipCb);
+      return true;
+    }
+
     /* THE GARAGE. RACE! opens on the car driving out of the setup screen's
      * garage (js/garage/setup-camera.js startDriveOut), after cold preparation,
      * and that shot is the
@@ -796,16 +812,20 @@ const LoadingScreen = (function () {
      * frame). #loading is a .screen: css/hud.css then keeps the docks at
      * visibility:hidden. Call this when state is already "race". */
     function lowerWaitPlate() {
-      if (phase === "handoff" || phase === "busy" || phase === "build" || phase === "garage") stop();
+      if (phase === "handoff" || phase === "busy" || phase === "build" || phase === "garage" || phase === "prep") stop();
     }
 
     function busy(label) {
       if (phase === "run" || phase === "card" || phase === "build" || phase === "handoff"
-        || phase === "garage" || phase === "busy") return true;
+        || phase === "garage" || phase === "busy" || phase === "prep") return true;
       const r = root();
       if (!r) return false;
       const title = (typeof label === "string" && label.trim()) ? label.trim() : "Loading";
       applyCard();
+      // Unhide synchronously so a Start Race tap can paint this plate in the
+      // same turn (after the race-settings <dialog> is sync-closed). Callers
+      // must still yield (RaceEntryProfile.afterPaint) before heavy work, or
+      // the browser never paints and the player sees a frozen dialog.
       r.hidden = false;
       if (typeof r.setAttribute === "function") r.setAttribute("aria-label", title);
       const name = $("ld-name"); if (name) name.textContent = title.toUpperCase();
@@ -818,7 +838,7 @@ const LoadingScreen = (function () {
     }
 
     return {
-      run, stop, hold, building, garage, handoff, busy, lowerWaitPlate,
+      run, stop, hold, building, prep, garage, handoff, busy, lowerWaitPlate,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. Pass
        *  warmReady=false to keep FLY_MS while the backend is still compiling. */
