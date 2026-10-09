@@ -8,7 +8,7 @@ import { bootEditor, design, plain, ellipse } from "../helpers/editor-vm.mjs";
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
-  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard");
+  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge");
   assert.equal(P.TOTAL, 16);
   assert.equal(P.sanitize(null), null);
   assert.equal(P.sanitize([]), null);
@@ -54,6 +54,45 @@ test("pointFrac walks the control polygon arc", () => {
   assert.equal(P.pointFrac(pts, 0), 0);
   const mid = P.pointFrac(pts, 20);
   assert.ok(mid > 0.4 && mid < 0.6, "halfway around ≈ 0.5: " + mid);
+});
+
+test("batch placement distributes a wrapped range, pairs sides and refuses caps atomically", () => {
+  const { P } = bootEditor();
+  const next = P.placeBatch([], "hedge", { start: 0.9, end: 0.1, count: 3, side: 0, gap: 1 });
+  assert.equal(next.length, 6);
+  for (let i = 0; i < 3; i++) {
+    assert.deepEqual(plain(next.slice(i * 2, i * 2 + 2).map((p) => p.side)), [-1, 1]);
+    const expected = [0.9, 0, 0.1][i];
+    assert.ok(Math.abs(next[i * 2].s - expected) < 1e-4);
+    assert.equal(next[i * 2].gap, P.MIN_GAP.hedge);
+  }
+  const before = JSON.stringify(next);
+  assert.equal(P.placeBatch(next, "hedge", { start: 0.5, count: 1 }), null);
+  assert.equal(JSON.stringify(next), before);
+  assert.equal(P.placeBatch([], "stand", { start: 0, end: 0.5, count: 3, side: 0 }), null);
+  assert.equal(P.placeBatch([], "trees", { start: 0.2, end: 0.2, count: 2 }), null);
+  assert.equal(P.placeBatch([], "trees", { start: 0, end: 0.5, count: 2.5 }), null);
+  assert.equal(P.placeBatch([], "gantry", { start: 0, end: 0.5, count: 2, side: 0 }).length, 2);
+});
+
+test("palms and hedges render through existing APIs and survive the share codec", async () => {
+  const { P, CD, C } = bootEditor();
+  const props = P.sanitize([{ kind: "palms", s: 0.25, side: -1, gap: 24 }, { kind: "hedge", s: 0.5, side: 1, gap: 12 }]);
+  const palms = [], hedges = [];
+  assert.equal(P.dress({ K: (f) => f * 1000, palm: (...a) => palms.push(a), hedge: (...a) => hedges.push(a) }, { n: 1000, total: 5000 }, props), 2);
+  assert.equal(palms.length, 3); assert.equal(hedges.length, 1);
+  assert.equal(palms[0][1], -1); assert.equal(palms[0][2], 24);
+  assert.ok(Math.abs((hedges[0][1] - hedges[0][0]) * 5000 - 48) < 1e-8);
+  const d = C.sanitize(design({ theme: "blossom", props }));
+  const back = await CD.decode(await CD.encode(d));
+  assert.equal(back.ok, true); assert.equal(back.id, d.id);
+  assert.deepEqual(plain(back.design.props), plain(props));
+  const edited = P.updateAt(props, 0, { s: 1.2, side: 1, gap: 1 });
+  assert.equal(edited[0].kind, "palms"); assert.equal(edited[0].gap, 16);
+  assert.ok(Math.abs(edited[0].s - 0.2) < 1e-4);
+  assert.equal(props[0].side, -1, "editing does not mutate the original");
+  assert.equal(P.updateAt(props, -1, { s: 0.5 }), null);
+  assert.equal(P.updateAt(props, 0, { s: NaN }), null);
 });
 
 test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {
