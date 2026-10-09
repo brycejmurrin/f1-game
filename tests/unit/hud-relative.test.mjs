@@ -79,6 +79,7 @@ test("fmtGap: sign carries ahead/behind; hundredths under 10 s (the chip's spell
     assert.equal(R.fmtGap(0.94, true), "-0.94");
     assert.equal(R.fmtGap(0.04, false), "+0.04");
     assert.equal(R.fmtGap(12.6, false), "+12.6");
+    assert.equal(R.fmtGap(12.6, false, "broadcast"), "+12.60", "broadcast fallback preserves hundredths");
     assert.equal(R.fmtGap(250, true), "-99+");
     assert.equal(R.fmtGap(NaN, true), "---");
     assert.equal(R.fmtGap(0.94, true), "-" + HR.fmtGapSec(0.94), "REL = the chip's magnitude");
@@ -127,6 +128,24 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   assert.match(rows[1].attrs["aria-label"], /AHD, 1\.00 seconds ahead/);
   assert.equal(rows[0].hidden, true, "no second car ahead");
   assert.equal(JSON.stringify([p.s, p.prog, p.speed, a.s, a.prog, a.speed]), snap, "the HUD reads only");
+  // A stationary gap must refresh when the driver's profile changes.
+  p.speed = 60 / 12.6;
+  G.vTop = () => 1;
+  for (let i = 0; i < 60; i++) R.tick(G, p);
+  assert.equal(rows[1].children[2].textContent, "-12.6");
+  G.hudProfile = "broadcast";
+  R.tick(G, p);
+  assert.equal(rows[1].children[2].textContent, "-12.60");
+  assert.match(rows[1].attrs["aria-label"], /12\.60 seconds ahead/);
+  G.hudProfile = "standard";
+  R.tick(G, p);
+  assert.equal(rows[1].children[2].textContent, "-12.6");
+  // Both sides round to 995 hundredths, but crossing 9.95 changes precision.
+  for (const [sec, expected] of [[9.949, "-9.95"], [9.951, "-10.0"]]) {
+    p.speed = 60 / sec;
+    for (let i = 0; i < 60; i++) R.tick(G, p);
+    assert.equal(rows[1].children[2].textContent, expected);
+  }
   G.timeTrial = true;
   R.tick(G, p);
   assert.equal(root.hidden, true, "no relative in a time trial");
