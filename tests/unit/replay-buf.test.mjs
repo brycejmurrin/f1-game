@@ -1,6 +1,7 @@
 /* replay-buf.test.mjs — instant-replay ring (js/camera/replay-buf.js).
  * Budget, wrap, interpolate, restore equality, solo/net scrub gates,
- * career-settle / endRace source pins. Run: node --test tests/unit/replay-buf.test.mjs
+ * career-settle / endRace source pins, pause-menu scrub audio (game-vm).
+ * Run: node --test tests/unit/replay-buf.test.mjs
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,8 +9,12 @@ import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
+const { createGame, settle: vmSettle } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
+const { install: installFakeAudio } = require("./fake-audio-vm.cjs");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
 function boot(document) {
@@ -307,4 +312,139 @@ test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every
     assert.ok(w.frames >= R.HZ * 2 - 1, n + " cars: frames=" + w.frames);
     assert.equal(w.cars, Math.min(R.MAX_CARS, n));
   }
+});
+
+async function bootSoloRaceForScrubAudio() {
+  let fa = null;
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); } });
+  const sb = g.sandbox;
+  sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
+  await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
+  for (let i = 0; i < 50; i++) await new Promise((r) => setImmediate(r));
+  sb.GameAudio.init();
+  g.G.soundOn = true;
+  await g.race("monza", "day", "dry");
+  g.apex.headless(true);
+  g.apex.setInput({ throttle: true, steer: 0 });
+  const t0 = sb.performance.now();
+  for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
+  return { g, sb, G: g.G, t0, frameBase: 240 };
+}
+
+test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
+  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  try {
+    const doc = g.sandbox.document;
+    G.els.pausebtn.onclick();
+    assert.equal(G.paused, true);
+    assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause silences the engine");
+    const rb = G.replayBuf;
+    assert.ok(rb && rb.window().frames >= 90, "need ~3 s of ring before scrub");
+    let radioCalls = 0;
+    const origRadio = sb.GameAudio.radioVoice.bind(sb.GameAudio);
+    sb.GameAudio.radioVoice = (...a) => { radioCalls++; return origRadio(...a); };
+    assert.equal(rb.beginScrub(false), true);
+    assert.equal(rb.isScrubbing(), true);
+    const player = G.player;
+    for (let i = 1; i <= 20; i++) g.pumpFrame(t0 + (frameBase + i) * 1000 / 60);
+    assert.equal(sb.GameAudio.debug().engineOn, true, "scrub/play feeds the engine voice");
+    const rivals = sb.GameAudio.rivalState().filter((v) => v.gain > 0.001);
+    assert.ok(rivals.some((v) => v.hz > 200), "at least one rival above idle pitch during scrub");
+    assert.equal(radioCalls, 0, "no new radio voice lines during replay scrub");
+    const w = rb.window();
+    rb.apply(w.t0);
+    const slow = player.speed, rpmSlow = player.rpm;
+    rb.apply(w.t1);
+    const fast = player.speed, rpmFast = player.rpm;
+    assert.notEqual(slow, fast, "precondition: scrub window spans different speeds");
+    assert.notEqual(rpmSlow, rpmFast, "rpm must follow replayed speed, not stay pinned");
+    assert.ok(rpmFast > rpmSlow === fast > slow, "rpm ordering matches speed ordering");
+    rb.endScrub();
+    g.pumpFrame(t0 + (frameBase + 25) * 1000 / 60);
+    assert.equal(sb.GameAudio.debug().engineOn, false, "back on the pause menu: engine off again");
+    doc.getElementById("pm-resume").onclick();
+    assert.equal(G.paused, false);
+    g.step(3);
+    assert.equal(sb.GameAudio.debug().engineOn, true, "resume restores live race engine");
+  } finally { g.close(); }
+});
+
+function rivalPanWithGain(sb) {
+  const rows = sb.GameAudio.rivalState().filter((v) => v.gain > 0.001);
+  assert.ok(rows.length, "need at least one audible rival voice");
+  return rows[0].pan;
+}
+
+test("dbgCam during replay scrub pans rivals from the free camera, not chase", async () => {
+  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  try {
+    G.els.pausebtn.onclick();
+    assert.equal(G.replayBuf.beginScrub(false), true);
+    const rival = G.cars.find((c) => c !== G.player);
+    assert.ok(rival, "need a rival car");
+    g.apex.headless(false);
+    const saveFrustum = G.gfx.makeFrustumPlanes;
+    G.gfx.makeFrustumPlanes = null;
+    const origTickScrub = G.replayBuf.tickScrub.bind(G.replayBuf);
+    G.replayBuf.tickScrub = (dt) => {
+      origTickScrub(dt);
+      G.player.s = 500; G.player.x = 0;
+      rival.s = 502; rival.x = 0;
+      G.player.px = 0; G.player.pz = 0; G.player.py = 5;
+      rival.px = 0; rival.pz = -18; rival.py = 5;
+    };
+    const eye = [0, 5, 0];
+    G.dbgCam = { eye: eye.slice(), target: [100, 5, 0], fov: 70, far: 2500 };
+    g.pumpFrame(t0 + (frameBase + 1) * 1000 / 60);
+    const panLeft = rivalPanWithGain(sb);
+    G.dbgCam = { eye: eye.slice(), target: [-100, 5, 0], fov: 70, far: 2500 };
+    g.pumpFrame(t0 + (frameBase + 2) * 1000 / 60);
+    const panFlip = rivalPanWithGain(sb);
+    assert.ok(panLeft < -0.15, `rival on visual left should pan negative, got ${panLeft}`);
+    assert.ok(panFlip > 0.15, `180° free cam should flip pan positive, got ${panFlip}`);
+    assert.notEqual(Math.sign(panLeft), Math.sign(panFlip), "pan follows dbgCam heading");
+    G.gfx.makeFrustumPlanes = saveFrustum;
+  } finally { g.close(); }
+});
+
+test("pause + free camera without scrub stays silent (#1262)", async () => {
+  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  try {
+    G.els.pausebtn.onclick();
+    assert.equal(G.paused, true);
+    assert.equal(sb.GameAudio.debug().engineOn, false);
+    g.sandbox.document.getElementById("pc-toggle").onclick();
+    assert.equal(G.photoMode, true);
+    assert.equal(G.replayBuf.isScrubbing(), false);
+    for (let i = 1; i <= 5; i++) g.pumpFrame(t0 + (frameBase + i) * 1000 / 60);
+    assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause + photo cam: no engine");
+    assert.ok(sb.GameAudio.rivalState().every((v) => v.gain < 0.001), "no rival voices open");
+  } finally { g.close(); }
+});
+
+test("clearing dbgCam and resuming chase restores player-track rival pan", async () => {
+  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  try {
+    G.els.pausebtn.onclick();
+    assert.equal(G.replayBuf.beginScrub(false), true);
+    g.apex.headless(false);
+    const saveFrustum = G.gfx.makeFrustumPlanes;
+    G.gfx.makeFrustumPlanes = null;
+    G.dbgCam = { eye: [0, 5, 0], target: [100, 5, 0], fov: 70, far: 2500 };
+    g.pumpFrame(t0 + (frameBase + 1) * 1000 / 60);
+    assert.equal(sb.GameCams.getListenerBasis().external, true, "dbgCam publishes external basis");
+    G.replayBuf.endScrub();
+    G.dbgCam = null;
+    g.sandbox.document.getElementById("pm-resume").onclick();
+    assert.equal(G.paused, false);
+    const rival = G.cars.find((c) => c !== G.player);
+    assert.ok(rival);
+    const me = G.player;
+    me.s = 500; me.x = 0; me.speed = 55;
+    rival.s = 500; rival.x = -3; rival.speed = 50; rival.retired = false;
+    g.apex.setInput({ throttle: true, steer: 0 });
+    for (let i = 1; i <= 30; i++) g.pumpFrame(t0 + (frameBase + 10 + i) * 1000 / 60);
+    assert.equal(sb.GameCams.getListenerBasis().external, false, "chase cam republishes non-external basis");
+    G.gfx.makeFrustumPlanes = saveFrustum;
+  } finally { g.close(); }
 });

@@ -102,7 +102,7 @@ function yawDampFromSlider(v) {
   return v <= 5 ? 0.90 + (1.00 - 0.90) * (v - 1) / 4
                 : 1.00 + (1.40 - 1.00) * (v - 5) / 5;
 }
-function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
+function lockFromSlider(v)   { return 0.18 + (0.435 - 0.18) * (v - 1) / 9; } // rad, .18..0.435, v5≈0.293, v7=0.35
 // SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
 // js/game.js. That taper is now `1 / (1 + v/ref)` (hyperbolic — see the comment
 // at lockTaper in game.js), so ref only needs to be in the same NEIGHBOURHOOD as

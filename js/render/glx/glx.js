@@ -629,8 +629,20 @@ const GLXBackend = (function () {
     try { if (PST && PST.invalidateUniformCache) PST.invalidateUniformCache(); } catch (_) { /* harness */ }
   }
 
+  // awaitSoftPresent(ms, "frame"): a headed GLX drawing buffer is cleared after
+  // compositing, so SAVE SCREENSHOT must read it in the task that presented.
+  // Resolves "frame" from INSIDE present() (the caller's microtask runs before
+  // the compositor), or "stale" when none came in `ms` (paused).
+  const _frameWaiters = [];
+  function _awaitFrame(ms) {
+    return new Promise(function (resolve) {
+      const w = function () { clearTimeout(t); resolve("frame"); };
+      const t = setTimeout(function () { _frameWaiters.splice(_frameWaiters.indexOf(w), 1); resolve("stale"); }, ms);
+      _frameWaiters.push(w);
+    });
+  }
   function awaitSoftPresent(timeoutMs) {
-    if (!_softPresent) return Promise.resolve(_softBlitGen);
+    if (!_softPresent) return arguments[1] === "frame" ? _awaitFrame(timeoutMs == null ? 8000 : timeoutMs) : Promise.resolve(_softBlitGen);
     if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
     // Wait for a NEWER blit, not the last one already on the overlay.
     // A wrap/indexOf(waiter) mismatch leaves timed-out waiters on the list
@@ -1961,9 +1973,12 @@ const GLXBackend = (function () {
         gl.activeTexture(gl.TEXTURE0);
         ufI(litU.uLampShadowMap, _litUf, "u.lampShadow", 9);
         ufM4(litU.uLampShadowVP, _litUf, "lampLightVP", SHD.lampLightVP);
-        uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", SHD.lampArmed ? 1.0 : 0.0);
+        // SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its
+        // own list (viewLights), so there it names another lamp: shadow off.
+        const _lampOn = SHD.lampArmed && !PST.mirror.active();
+        uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", _lampOn ? 1.0 : 0.0);
         ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", SHD.lampIdx | 0);
-        uf3(litU.uBakeShCol, _litUf, "bakeShCol", (typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, SHD.lampIdx | 0, _bakeShScr) : _bakeShScr));
+        uf3(litU.uBakeShCol, _litUf, "bakeShCol", (typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, _lampOn ? SHD.lampIdx | 0 : -1, _bakeShScr) : _bakeShScr));
       } else {
         uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
       }
@@ -2785,6 +2800,7 @@ const GLXBackend = (function () {
       try { r = PST.present(opts); PST.mirror.composite(opts); }
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
       if (_softPresentWaiters.length || _softCaptureDue) softBlit();
+      if (_frameWaiters.length) _frameWaiters.splice(0).forEach(function (w) { w(); });
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },

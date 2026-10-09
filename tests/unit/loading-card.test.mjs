@@ -318,12 +318,16 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   const game = read("js/game.js");
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
     "startRace raises the card before ensureScenery / stopHome");
-  assert.match(game, /const rs = \$\("race-settings"\); if \(rs\) rs\.hidden = true;/,
+  assert.match(game, /const rs = \$\("race-settings"\);\s*if \(rs\) \{\s*rs\.hidden = true;/,
     "startRace closes the settings dialog so #loading is not under a top-layer sheet");
+  assert.match(game, /rs\.open && typeof rs\.close === "function"\) rs\.close\(\)/,
+    "startRace sync-closes :modal (TopModal MutationObserver is a later task)");
   assert.match(game, /if \(garageReturn !== "pit" && !loadingScreen\.phase\(\)\) loadingScreen\.busy\("Returning"\)/,
     "CLOSE GARAGE / BACK raise the plate before hiding #carsetup");
-  assert.match(game, /if \(!_introSheet\) loadingScreen\.building\(info, \(\) => studioSkip\(n\)\);/,
-    "race settings covers prep with the sheet — race card waits until after the garage leave");
+  assert.match(game, /if \(!_introSheet\) loadingScreen\.prep\(info, \(\) => studioSkip\(n\)\);/,
+    "race settings covers prep with the sheet — race card waits until after the garage leave (else prep scrim, card hidden)");
+  assert.match(game, /body:yield/,
+    "startRaceBody yields after the plate is up and before ensureAudio");
   assert.match(game, /els\.overlay\.hidden = false; \}   \/\/ no vt: snapshot after hiding #carsetup is a black hold/,
     "title return skips the view-transition snapshot that held a blank page");
 });
@@ -342,6 +346,22 @@ test("building(): the card over the scrim, no timer, no skip, not active — the
   h.tick(LS.FLY_MS);
   assert.equal(h.races.length, 1);
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="build"\] #ld-card/, "the build phase shows the card");
+});
+
+test("prep(): scrim up, race card hidden, skip arms studioSkip — garage-out owns the leave", () => {
+  const h = harness();
+  let skips = 0;
+  assert.equal(h.screen.prep({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }, () => { skips++; }), true);
+  assert.equal(h.els.loading.dataset.phase, "prep");
+  assert.equal(h.els.loading.hidden, false, "prep owns the screen over a cold compile");
+  assert.equal(h.screen.active(), false);
+  assert.match(read("css/loading.css"), /#loading\[data-phase="prep"\] #ld-card \{ visibility: hidden; \}/,
+    "prep keeps #ld-card out of sight until garage-out ends");
+  h.tick(LS.SKIP_GRACE_MS + 1);
+  h.skip();
+  assert.equal(skips, 1, "prep skip reaches studioSkip like build");
+  assert.equal(h.screen.garage({ track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5 }), true);
+  assert.equal(h.els.loading.dataset.phase, "garage");
 });
 
 test("handoff(): the card stays up, disarmed, until render() lowers it with the race's first PRESENTED frame", () => {
@@ -886,7 +906,8 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
-  assert.match(intro, /await introPrepare\(live, key, info, n, cold\)/, "a built but unwarmed world joins planning and warm under the card before motion");
+  assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\);\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");

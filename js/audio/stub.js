@@ -27,7 +27,7 @@ var GameAudio = (function () {
     setRadioDuck: noop, radioLeadS: noop0, radioSting: noop, radioStingStop: noop,
     startMusic: noop, stopMusic: noop, startEngine: noop, stopEngine: noop,
     startRain: noop, stopRain: noop, setEngine: noop, setSkid: noop,
-    setRivals: noop, setGridIdle: noop, setVoice: noop, setVenue: noop,
+    setRivals: noop, setGridIdle: noop, feedReplayScrub: noop, syncReplayRpms: noop, resetReplayScrub: noop, setVoice: noop, setVenue: noop,
     setCameraMix: noop, setCarSfx: noop, brakeCue: noop, shift: noop,
     collision: noop, penalty: noop, finish: noop, lap: noop, offtrack: noop,
     rumble: noop, lightOn: noop, lightsOut: noop, deployBoost: noop,
