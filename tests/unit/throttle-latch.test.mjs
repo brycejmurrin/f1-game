@@ -197,3 +197,13 @@ test("Cmd/Ctrl + a driving key never latches: macOS eats the key-up (bug-hunt 5.
   key("KeyD", false, { metaKey: true });
   assert.equal(Input.debugState().key.right, false, "a key-up under a modifier still clears the latch");
 });
+
+test("a MIRROR press on the grid does not survive clearDriveEdges / lights-out (bug-hunt 5.6)", () => {
+  const { Input, key } = boot();
+  const code = "KeyM";   // bindings.js default
+  key(code, true);
+  Input.clearDriveEdges();
+  assert.equal(Input.consumeMirror(), false, "the grid tap must not toggle the mirror after lights-out");
+  key(code, true);
+  assert.equal(Input.consumeMirror(), true, "a press in the race is still consumed once");
+});

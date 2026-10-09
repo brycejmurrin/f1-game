@@ -2005,8 +2005,10 @@ const Input = (function () {
   /* THE DRIVE EDGES ALONE, at lights-out (game.js). Every consumer of these
      runs only once the car steps, so a press during the countdown stayed latched
      and fired on the first green frame: RECOVER re-placed the car at rescue
-     speed, a shift-up started it in 2nd. Camera, radio and mirror are left
-     alone — those work on the grid and are consumed there. */
+     speed, a shift-up started it in 2nd. Camera and radio are left alone —
+     those work on the grid and are consumed there. The MIRROR is not: it is
+     neither drawn nor consumed during the countdown, so a grid tap toggled it
+     a few seconds into the race. */
   function clearDriveEdges() {
     overtakePressed = false;
     boostTogglePressed = false;
@@ -2014,12 +2016,12 @@ const Input = (function () {
     shiftUpPressed = false;
     shiftDownPressed = false;
     recoverPressed = false;
+    mirrorPressed = false;
   }
   function clearEdges() {
     clearDriveEdges();
     cameraCyclePressed = false;
     radioPressed = false;
-    mirrorPressed = false;
   }
 
   function debugState() {
