@@ -589,8 +589,13 @@ const Input = (function () {
     }
     return into;
   }
-  function beginAxisCapture(cb) {
+  /* `exclude`: axis indices this wizard run already mapped. The step is the axis
+     that travelled furthest from rest, so releasing the wheel during the
+     THROTTLE prompt (travel > AXIS_CAPTURE_MOVE) would otherwise map the
+     steering axis to a pedal as well. */
+  function beginAxisCapture(cb, exclude) {
     axisCaptureCb = typeof cb === "function" ? cb : null;
+    axisCaptureSkip = exclude && typeof exclude.has === "function" ? exclude : null;
     axisCaptureRest = null;
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
@@ -606,6 +611,7 @@ const Input = (function () {
       if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
       const axes = p.axes || [];
       for (let i = 0; i < axes.length; i++) {
+        if (axisCaptureSkip && axisCaptureSkip.has(i)) continue;
         const rest = typeof rests[i] === "number" ? rests[i] : 0;
         const d = Math.abs((axes[i] || 0) - rest);
         if (d > best) { best = d; bestI = i; bestRest = rest; bestV = axes[i] || 0; }
@@ -668,6 +674,7 @@ const Input = (function () {
   const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1 };
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureSkip = null;    // axes already mapped this run; never offered again
   let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
   function readPadAxis(axes, i) {
     if (i == null) return 0;

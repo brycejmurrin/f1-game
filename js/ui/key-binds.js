@@ -452,6 +452,10 @@ function create(G) {
       running = true;
       wheelBtn.textContent = "CANCEL";
       const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null });
+      // Axes this run has already mapped: a later step must not take one again
+      // (letting go of the wheel during the THROTTLE prompt travels > the
+      // capture threshold and would map steering to a pedal too).
+      const taken = new Set();
       let i = 0;
       const step = () => {
         if (!running) return;
@@ -461,6 +465,7 @@ function create(G) {
           if (!running) return;
           const st = STEPS[i];
           map[st.key] = axis;
+          taken.add(axis);
           // The steering sign is whatever the wheel reports for LEFT; we asked
           // for left, so a POSITIVE reading means this wheel is inverted.
           if (st.key === "steer") map.steerInvert = dir > 0 ? -1 : 1;
@@ -469,7 +474,7 @@ function create(G) {
           tick();
           clearTimeout(stepTimer);
           stepTimer = setTimeout(step, 600);   // let the pedal come back up before listening again
-        });
+        }, taken);
       };
       step();
     };

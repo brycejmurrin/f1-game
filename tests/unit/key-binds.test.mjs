@@ -552,6 +552,23 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   assert.equal(disk.padRest, 0, "…and not stored");
 });
 
+test("the wheel wizard never maps an axis it already took (bug-hunt 5.2)", () => {
+  const disk = {};
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const { pad } = fakePad(sb, fire);
+  $("pm-pad-wheel").onclick();
+  pad.axes[0] = -0.9; Input.poll();     // STEER: wheel held hard left -> axis 0
+  // THROTTLE prompt: the wheel is let go (travel 0.9 from its held-left rest,
+  // far over the capture threshold) before any pedal moves.
+  pad.axes[0] = 0; Input.poll();
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "releasing the wheel is not an answer");
+  pad.axes[2] = 0.9; Input.poll();      // THROTTLE -> axis 2, a different axis
+  pad.axes[0] = -0.9; Input.poll();     // wheel moves again during BRAKE: still skipped
+  pad.axes[3] = 0.9; Input.poll();      // BRAKE -> axis 3
+  assert.deepEqual([disk.padAxes.steer, disk.padAxes.throttle, disk.padAxes.brake], [0, 2, 3],
+    "three distinct axes, the steering axis never re-offered to a pedal");
+});
+
 test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map", () => {
   // Bug hunt 2026-10-06: RESET called Input.resetPad() alone. SET UP A WHEEL /
   // CALIBRATE STICK kept driving after "Controller reset to the defaults", and
