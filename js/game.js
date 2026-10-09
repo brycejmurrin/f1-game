@@ -6682,8 +6682,10 @@ function render(dt) {
   // Warming used to return before the visibility pass. openGarage's Home→bay
   // gap hides #game via menuBlank; if a program warm then latched, the lid
   // stayed up until an unrelated present (a panel click) cleared warming.
+  // Intro staging (_studio.cardUp) must keep both canvases hidden under
+  // PREPARING until the first successful garage present (garage-arrival).
   if (gfx.warming && gfx.warming()) {
-    if (setupPreviewOn) {
+    if (setupPreviewOn && !(_studio && _studio.cardUp)) {
       if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
       if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
       if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
