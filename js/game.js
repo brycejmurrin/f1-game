@@ -2794,8 +2794,6 @@ async function startRaceBody() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   // (#soundbtn rides #overlay now — see css/overlays.css for why.)
   document.body.classList.add("in-race");
-  syncRotateBlocker(true);
-  holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
@@ -2810,6 +2808,7 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
   if (!vmNoFramePump) await yieldMain();   // do not glue car-mesh warm onto the settings/grid sync stretch
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame

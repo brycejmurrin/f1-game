@@ -229,3 +229,25 @@ test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3
     assert.equal(g.sandbox.__stings, 1, "one squelch for the wait, not one per refresh");
   } finally { g.close(); }
 });
+
+// ---- bug-hunt 2026-10-09 (W5 game) --------------------------------------------------------
+
+const portraitPhone = (sandbox) => {   // only the rotate blocker's own query matches; every other query stays inert
+  const noop = () => {};
+  sandbox.matchMedia = (q) => ({ matches: /orientation: portrait/.test(q), media: q, onchange: null, addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop });
+};
+
+test("3.1 a race started on a portrait phone does not start the engine / rain under the rotate blocker", async () => {
+  const g = await createGame({ track: "monza", onSandbox: portraitPhone });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    const GA = vm.runInContext("GameAudio", g.ctx), seen = [];
+    for (const k of ["startEngine", "startRain"]) { const f = GA[k]; GA[k] = function (...a) { seen.push(k + ":" + (G.paused ? "paused" : "live")); return f.apply(this, a); }; }
+    G.raceWeather = "rain";
+    await G.startRace(); g.apex.headless(true);
+    assert.equal(G.state, "count");
+    assert.equal(G.paused, true, "the rotate blocker paused the race");
+    assert.ok(!seen.some((e) => /:paused$/.test(e)), `engine / rain were started while paused: ${seen}`);
+  } finally { g.close(); }
+});
