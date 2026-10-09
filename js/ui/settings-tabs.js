@@ -16,6 +16,14 @@ const SettingsNav = (function () {
     files: "BACKUP & RESTORE",
   };
   let live = null;
+  // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
+  // wizard disarms itself here). Module-level so a subscriber needs no instance.
+  const leaveFns = [];
+  function fireLeave(id) {
+    for (const fn of leaveFns) {
+      try { fn(id); } catch (e) { Log.warn("game", "SettingsNav.onLeave handler failed: " + (e && e.message)); }
+    }
+  }
 
   // Each page's panel element, looked up by its own literal id (dynamicIdReads
   // ratchet: getElementById must never take a computed argument).
@@ -71,13 +79,17 @@ const SettingsNav = (function () {
       return quietFocus(firstIn(pages[id]));
     }
 
-    function show(want, focus, after) {
+    function show(want, focus, after, ensured) {
       const id = TITLES[want] ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
-      // #audioset is revealed (programmatic show("audio") included).
-      if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+      // #audioset is revealed (programmatic show("audio") included). `ensured`
+      // marks the re-entry: ensureAudio resolves false (never rejects) and nulls
+      // its memo when the bundle cannot load, so without it the stub gate is
+      // taken again and again. A failed load reveals the page on the stub rows.
+      if (!ensured && id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
           && (typeof GameAudio === "undefined" || GameAudio._stub)) {
-        AudioPanel._ensure().then(() => show(want, focus, after));
+        const again = () => show(want, focus, after, true);
+        AudioPanel._ensure().then(again, again);
         return;
       }
       const index = document.getElementById("pm-settings-index");
@@ -110,6 +122,7 @@ const SettingsNav = (function () {
         const active = document.activeElement;
         originDoor = active && index.contains && index.contains(active) ? active : null;
       }
+      if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
       if (title) title.textContent = TITLES[id];
@@ -155,13 +168,13 @@ const SettingsNav = (function () {
     };
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
       originDoor = door;
-      const go = () => show(id, true, () => { if (onSelect) onSelect(id); });
+      const go = () => show(id, true, () => { if (onSelect) onSelect(id); }, true);
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
       // Reveal only after ensureAudio so MenuNav.items matches a wired panel
       // (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
       if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
           && (typeof GameAudio === "undefined" || GameAudio._stub)) {
-        AudioPanel._ensure().then(go);
+        AudioPanel._ensure().then(go, go);
       } else go();
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
@@ -181,6 +194,7 @@ const SettingsNav = (function () {
   return {
     create,
     show: (id, focus) => { if (live) live.show(id, focus); },
+    onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
   };
 })();
 Object.freeze(SettingsNav);
