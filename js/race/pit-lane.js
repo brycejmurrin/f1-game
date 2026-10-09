@@ -1176,6 +1176,11 @@ var PitLane = (function () {
       // intact leaves game.js applying zero speed/the limiter forever.
       if (!enabled()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
+      // think() guards ARMING on the last lap / a flagged leader, but an AI that
+      // armed on lap L-1 and missed its entry (it comes in next time round) was
+      // still armed past it: the stop paid nothing and was taken anyway.
+      if (!c.human && c.pitArmed && st === "none" &&
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
