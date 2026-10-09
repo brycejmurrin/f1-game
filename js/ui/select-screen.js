@@ -884,7 +884,7 @@ function updateTrackPreview() {
       const idx = G.trackIdx;
       G.ensureCircuit(idx).then(() => {
         if (G.trackIdx === idx) updateTrackPreview();
-      });
+      }).catch(() => { /* payload unavailable (offline / UPDATE READY): the caption is already painted and ensureCircuit rejects by design */ });
     }
   }
   const crns = TrackMaps.corners(t);

@@ -148,7 +148,7 @@ function bootMenus(disk = {}, o = {}) {
     },
     rawDel: (k) => { data.delete(k); return true; },
   };
-  const LIST = [
+  const LIST = o.list || [
     { id: "monza", name: "Monza", country: "Italy" },
     { id: "spa", name: "Spa", country: "Belgium" },
     { id: "imola", name: "Imola", country: "Italy", classic: true },
@@ -171,13 +171,15 @@ function bootMenus(disk = {}, o = {}) {
   // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
   Object.defineProperty(selTracks, "textContent", { get: () => "", set() { selTracks.children.length = 0; } });
   const announced = [];
+  const baseEls = { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
+    selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") };
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
-    els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
-      selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") },
+    els: baseEls,
     trackIdx: 1, teamIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,
     announce: (m) => announced.push(m), ...o,
   };
+  if (o.els) G.els = { ...baseEls, ...o.els };
   const menus = sb.Menus.create(G);
   menus.buildSelect();
   const tiles = () => selTracks.querySelectorAll(".track-row");
@@ -185,6 +187,28 @@ function bootMenus(disk = {}, o = {}) {
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
   return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
+
+// bug-hunt 2.2: ensureCircuit rejects BY DESIGN when a payload cannot load; the
+// preview's hydrate-then-redraw chain had no catch, and index.html turns every
+// unhandled rejection into the full-screen crash overlay.
+test("updateTrackPreview on an un-hydrated circuit swallows an ensureCircuit rejection", async () => {
+  const seen = [];
+  const onRej = (e) => seen.push(e);
+  process.on("unhandledRejection", onRej);
+  try {
+    let asked = 0;
+    const dom = makeDom();
+    const h = bootMenus({}, {
+      list: [{ id: "monza", name: "Monza", country: "Italy" }, { id: "spa", name: "Spa", country: "Belgium", _metaOnly: true }],
+      ensureCircuit: () => { asked++; return Promise.reject(new Error("circuit payload not resident: spa")); },
+      els: { selPreviewMap: {}, selPreviewName: {}, selPreviewGp: {}, selPreviewMeta: dom.byId("m"), selPreviewRec: {} },
+    });
+    h.menus.updateTrackPreview();
+    assert.ok(asked >= 1, "the meta-only circuit asks for its payload");
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(seen.map(String), [], "no unhandled rejection reaches the crash overlay");
+  } finally { process.off("unhandledRejection", onRej); }
+});
 
 test("select titles and CTAs name Practice, Time Trial, and Race", () => {
   const race = bootMenus();
