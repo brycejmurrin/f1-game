@@ -136,3 +136,108 @@ test("restoreOnEngine does not init without user activation", async () => {
   assert.equal(await ctx.__ensure(), true);
   assert.equal(bag.inits, 0, "no AudioContext init before activation");
 });
+
+function bootEnsureWithRadio(opts) {
+  const loader = src("js/core/script-loader.js");
+  const bundles = src("js/core/lazy-bundles.js");
+  const bag = opts.bag;
+  const savedVol = opts.volRadio != null ? opts.volRadio : 0.15;
+  const radio = {
+    _v: opts.staleRadioVol != null ? opts.staleRadioVol : 0.8,
+    setVolume(v) { this._v = v; bag.radioApplied = v; return v; },
+    volume() { return this._v; },
+  };
+  const hold = { ctx: null };
+  hold.ctx = vm.createContext({
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+      LAZY_RACE: [], LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+      LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
+      SCENERY_DIR: "", LAZY_SCENERY: [], LAZY_DATA: [], LAZY_DATA_EDGES: [],
+      LAZY_NET: [], LAZY_NET_EDGES: [],
+    },
+    window: { __APEX_BUILD: "test" },
+    navigator: {
+      userAgent: opts.ua || "Mozilla/5.0 Chrome/128",
+      userActivation: { hasBeenActive: !!opts.hasBeenActive },
+    },
+    GameAudio: {
+      _stub: true,
+      setEnabled() {}, setMusicVolume() {}, setSfxVolume() {}, radioLeadS: () => 0,
+      onInterrupted() {}, setCameraMix() {},
+      init() { bag.inits++; },
+      _interruptHook: () => null,
+    },
+    Log: { warn() {}, info() {} },
+    els: {},
+    scheduler: { yield() { bag.yields = bag.yields || []; bag.yields.push("sched"); return Promise.resolve(); } },
+    setTimeout(fn, ms) {
+      bag.yields = bag.yields || [];
+      bag.yields.push("timer");
+      return setTimeout(fn, ms);
+    },
+    queueMicrotask: (fn) => queueMicrotask(fn),
+    requestIdleCallback() { return 0; },
+    document: {
+      createElement() { return { dataset: {}, remove() {}, src: "" }; },
+      head: {
+        appendChild(node) {
+          hold.ctx.GameAudio = {
+            _stub: false,
+            setEnabled() {}, setMusicVolume() {}, setSfxVolume() {}, radioLeadS: () => 0,
+            onInterrupted() {}, setCameraMix() {},
+            init() { bag.inits++; },
+          };
+          queueMicrotask(() => node.onload());
+        },
+      },
+      hidden: false, addEventListener() {}, removeEventListener() {},
+    },
+    MutationObserver: function () { this.observe = () => {}; },
+    __bag: bag,
+  });
+  vm.runInContext(loader + "\n" + bundles + `
+    globalThis.__ensure = LazyBundles.create({
+      els, loadBackendScripts: ScriptLoader.create().load,
+      getContext: () => ({
+        store: {
+          get(k, d) {
+            if (k === "volRadio") return ${JSON.stringify(savedVol)};
+            if (k === "volMusic") return 0.5;
+            if (k === "volSfx") return 0.2;
+            return d;
+          },
+        },
+        soundOn: true,
+        camMode: 0,
+        radio: globalThis.__testRadio,
+      }),
+      applyLightTuneIfReady() {},
+      bindAgent() {}, createNetwork() { return { wire() {} }; },
+      onAudioReady() { __bag.ready++; },
+    }).ensureAudio;
+    globalThis.__testRadio = null;
+  `, hold.ctx);
+  hold.ctx.__testRadio = radio;
+  return { ctx: hold.ctx, radio, bag };
+}
+
+test("restoreOnEngine source restores volRadio alongside volMusic and volSfx", () => {
+  const bundles = src("js/core/lazy-bundles.js");
+  const block = bundles.slice(bundles.indexOf("function restoreOnEngine"), bundles.indexOf("function ensureAudio"));
+  assert.match(block, /setMusicVolume\(store\.get\("volMusic"\)\)/);
+  assert.match(block, /setSfxVolume\(store\.get\("volSfx"\)\)/);
+  assert.match(block, /volRadio/);
+  assert.match(block, /setVolume\(store\.get\("volRadio"/);
+});
+
+test("saved volRadio reaches G.radio when the real engine binds, before onAudioReady", async () => {
+  const bag = { ready: 0, inits: 0 };
+  const { ctx, radio } = bootEnsureWithRadio({ bag, volRadio: 0.15, staleRadioVol: 0.8, hasBeenActive: true });
+  assert.equal(radio.volume(), 0.8, "precondition: stale in-memory radio level before panel init");
+  assert.equal(await ctx.__ensure(), true);
+  assert.equal(bag.ready, 1, "onAudioReady still runs after restore");
+  assert.equal(radio.volume(), 0.15,
+    "restoreOnEngine must apply apex26.volRadio before AudioPanel.init — engineer lines in the gap were loud");
+  assert.equal(bag.radioApplied, 0.15);
+});

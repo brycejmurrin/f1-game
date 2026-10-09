@@ -876,6 +876,7 @@
         "tests/specs/custom-team.spec.js",
         "tests/specs/garage-aero.spec.js",
         "tests/specs/garage-first-frame.spec.js",
+        "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
         "tests/specs/parts-*.spec.js"
       ],
