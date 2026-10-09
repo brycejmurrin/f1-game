@@ -112,12 +112,17 @@
       const SKY_SIL  = [0.26, 0.29, 0.38];   // dark blue-grey tower silhouette (lifted so it reads)
       const SKY_SIL2 = [0.21, 0.24, 0.34];   // deeper varied tone
       (function manamaSkyline() {
-        // Manama CBD sits northwest of Sakhir; read from the back straight, not
-        // over the open desert at the T3–T4 kink (0.22 was the old diagonal frame).
-        const clusters = [[0.640, 6, -1]];   // [arcStart, count, side]
-        for (const [arc0, count, side] of clusters) {
+        // Manama CBD is ~23 km away at compass bearing ~19 deg (NNE) of the circuit
+        // (26.0325 N 50.5106 E -> 26.23 N 50.59 E). World +X = west, +Z = north, so
+        // the sightline is (-sin, cos) = (-0.33, 0.95). Scanning the built lap, the
+        // outboard normal best matches it on the LEFT of the T3-T4 straight (authored
+        // 0.896-0.975, dot >= 0.99), the lap's NNE edge: a distant silhouette 560+ m
+        // behind the verge there reads as the city on the horizon (the right-hand
+        // side, and the back straight the cluster used to sit on, face away).
+        const clusters = [[0.900, 6, -1, 0.014]];   // [arcStart, count, side, arcStep]
+        for (const [arc0, count, side, step] of clusters) {
           for (let i = 0; i < count; i++) {
-            const sFrac = (arc0 + i * 0.024) % 1;
+            const sFrac = (arc0 + i * step) % 1;
             const hf = hash(i * 7 + arc0 * 30), wf = hash(i * 3 + arc0 * 17);
             const dist = 560 + hash(i * 5 + arc0 * 70) * 200;
             const landmark = hash(i * 4.4 + arc0) > 0.86;
@@ -690,12 +695,15 @@
       building(K(0.90), -1, 46, 12, 8, 18,
         { kind: "hall", wall: [0.70, 0.65, 0.54], window: WIN_COOL, lit: true, floor: 2 });
 
-      // Pit-exit floods (+1 paddock side) — old 0.912/0.940 were scenery absolutes
-      // that K() landed on the T3–T4 leg; key off SF like the Sakhir tower.
-      grandstandEx(SF + 0.142, 1, 32, 36, null, null,
+      // Pit-exit stand + floods (+1 paddock side), inside the in-game pit window
+      // (<= ~110 m + 90 m road after the line, js/track/core/pit.js): SF+0.034 is
+      // ~185 m on. Gap 42 clears the motorhome row (26-34 m) and sits in front of
+      // the Sakhir Tower (62) and the paddock mast (88). The old 0.912/0.940
+      // absolutes and the SF+0.142..0.182 re-key both land on the T3-T4 leg.
+      grandstandEx(SF + 0.034, 1, 42, 36, null, null,
         { livery: "steel", roof: "flat", endWalls: true });
-      floodMast(K(SF + 0.158), 1, 42, 40);
-      floodMast(K(SF + 0.182), 1, 42, 40);
+      floodMast(K(SF + 0.026), 1, 44, 40);
+      floodMast(K(SF + 0.044), 1, 44, 40);
       billboard(K(SF - 0.022), 1, 20, 14, 4, BILLBOARD_LITE);
       // Fourth hero broadcast vantage — final corner onto the pit straight.
       cameraTower(K(FC + 0.012), -1, 40, { h: 20 });
@@ -754,11 +762,13 @@
       // wherever a single-point guard finds the next leg's tarmac.
       if (typeof every === "function" && typeof apiFloodMast === "function") {
         const half = Math.max(1, Math.round(27.5 / (ds || 4)));
+        // AUTHORED frame (`every` is the wrapped one: f = k/n is authored), so the
+        // pit/apron rows hang off SF/FC, never a racing fraction.
         const SKIP = [
-          [-1, 0.962, 0.028],   // pit lane, pit buildings, paddock edge (SF band)
+          [-1, SF - 0.038, SF + 0.028],   // pit-side wall, main stands, tribuna (SF band)
           [ 1, 0.975, 0.020],   // main grandstand at gap 18
           [-1, 0.475, 0.560],   // blue runoff paint 9-17 m out
-          [ 1, 0.868, 0.892],   // pink final-corner apron (FC ≈ racing 0.878)
+          [ 1, FC - 0.044, FC + 0.006],   // pink final-corner apron paint (FC-0.038..FC+0.002)
           [ 1, 0.105, 0.125],   // fold-side legs (ring exceptions above)
           [-1, 0.195, 0.215],
           [ 1, 0.815, 0.845],
@@ -965,8 +975,9 @@
         out._mat = 0;
       };
 
-      windTower(K(SF + 0.168), -1, 58, 16);
-      windTower(K(SF + 0.192),  1, 64, 14);
+      // Pit-straight wind towers, past the pit complex (not the T3-T4 leg).
+      windTower(K(SF + 0.060), -1, 58, 16);
+      windTower(K(SF + 0.072),  1, 64, 14);
       windTower(K(0.63),  -1, 56, 15);
       windTower(K(0.80),   1, 58, 14);
       // F1 Village marquee — back straight hospitality terrace only (T4 outside
