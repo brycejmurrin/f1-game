@@ -491,12 +491,25 @@
         const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];
         // Real bearings from the OSM centre (Wikipedia 25.49°N 51.454°E): Katara
         // ~153° / 16 km, Lusail Stadium ~155° / 8.5 km, Aspire ~182° / 25 km
-        // (Aspire deliberately omitted — not on the Lusail horizon). Track frame:
-        // s≈0.82 right shoulder @ ~720 m ≈ 151°; stadium slightly earlier / farther.
+        // (Aspire deliberately omitted — not on the Lusail horizon).
+        // PLACED BY COMPASS from the lap centroid (the Fuji pattern), NOT by a
+        // road-normal anchor: the normal tracks the road's heading, and Qatar's
+        // right-hand anchors at s 0.80/0.82 measured 305°/356° (NW/N, engine
+        // build 2026-10), the opposite horizon. World frame: +X west, +Z north,
+        // so bearing θ clockwise from north is (x, z) = (-sin θ, cos θ).
+        // Every 140-170° ray clears the centreline by >= 120 m out to 900 m.
+        const lb = lapBounds();
+        const compass = (deg, dist) => {
+          const th = deg * Math.PI / 180, ux = -Math.sin(th), uz = Math.cos(th);
+          const x = lb.cx + ux * dist, z = lb.cz + uz * dist;
+          const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
+          const y = (gy != null && Number.isFinite(gy)) ? gy - 0.3 : pyMin;
+          const t = [-uz, 0, ux];                 // across the sightline
+          return { c: [x, y, z], t, u: [0, 1, 0], r: [-ux, 0, -uz] };
+        };
 
         (function kataraTowers() {
-          const s = 0.82, dist = 720;
-          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
+          const a = compass(151, 740), b = [a.r, a.u, a.t];
           modelGroup("qatar-katara-towers", {
             center: vadd(a.c, a.u, 55), size: [40, 112, 40], basis: b,
           }, (stage) => {
@@ -512,8 +525,7 @@
 
         // Lusail Stadium: wide low golden bowl/drum, ~45 m tall x 90 m wide.
         (function lusailStadium() {
-          const s = 0.80, dist = 740;
-          const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
+          const a = compass(163, 720), b = [a.r, a.u, a.t];
           modelGroup("qatar-lusail-stadium", {
             center: vadd(a.c, a.u, 22.5), size: [92, 46, 92], basis: b,
           }, (stage) => {

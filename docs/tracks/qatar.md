@@ -34,7 +34,7 @@ Near-flat but not billiard-table: two long, gentle swells (~3.5 m and ~5.5 m, bo
 | 0.18 | R | mid | T2/T3 grandstands: paired low grey slabs, ~14 m |
 | 0.28 | L | far | Low sand dunes: rounded tan wedges, 3–6 m (seated on local `terrainYAt`) |
 | 0.40 | both | far | Flowing Turns 4–6 sweep flanked by green-grass verge + flat sand |
-| 0.80–0.82 | R | far | **Katara Towers** + **Lusail Stadium** on the SSE horizon (~151–165° from lap centre; ~720–740 m game scale) |
+| compass | SSE | far | **Katara Towers** (151°, 740 m) + **Lusail Stadium** (163°, 720 m) placed by compass from the lap centroid, not by a road anchor |
 | 0.62 | R | mid | Marshal/timing huts: small white cubes, ~4 m, dark-tan service track |
 | 0.74 | both | mid | Repeating floodlight masts + catch-fence: dark verticals, white caps |
 | 0.86 | L | far | Sparse palm row + sand flats, near-ground tan plane |
@@ -77,8 +77,8 @@ Coordinates from [Wikipedia Lusail International Circuit](https://en.wikipedia.o
 
 | Landmark | Distance | Bearing (N clockwise) | In-game |
 |----------|----------|------------------------|---------|
-| Katara Towers | ~16 km | ~153° | `qatar-katara-towers` @ s≈0.82, right, 720 m |
-| Lusail Stadium | ~8.5 km | ~155° | `qatar-lusail-stadium` @ s≈0.80, right, 740 m |
+| Katara Towers | ~16 km | ~153° | `qatar-katara-towers` @ 151° / 740 m from lap centroid (engine-measured) |
+| Lusail Stadium | ~8.5 km | ~155° | `qatar-lusail-stadium` @ 163° / 720 m from lap centroid (engine-measured) |
 | Aspire Tower (Doha) | ~25 km | ~182° | **Not modelled** — beyond plausible desert horizon; landmarks list omits by design |
 
 ### Uncertain (not asserted as fact)
