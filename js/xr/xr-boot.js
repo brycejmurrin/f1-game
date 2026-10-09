@@ -132,6 +132,8 @@ const XrBoot = (function () {
   }
 
   let _xrLoad = null;
+  // Files that evaluated on an earlier (failed) attempt: re-injecting a const-declaring one throws "already declared".
+  const _xrLoaded = new Set();
   let _bindApi = null;
   function ensureXr() {
     if (typeof XrSession !== "undefined" && typeof XrUi !== "undefined" && typeof ApexXR !== "undefined") {
@@ -145,7 +147,7 @@ const XrBoot = (function () {
       Log.warn("xr", "XR bundle is not in this build");
       return Promise.resolve(false);
     }
-    _xrLoad = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+    _xrLoad = ScriptLoader.create().load(files, edges, { strict: true, loaded: _xrLoaded }).then((ok) => {
       if (!ok) {
         _xrLoad = null;
         Log.warn("xr", "the XR bundle did not load");
