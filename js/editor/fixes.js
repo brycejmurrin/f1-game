@@ -79,10 +79,20 @@ const TrackFixes = (function () {
     out.forEach((p, j) => { if (idx.has(p)) pairs.push([idx.get(p), j]); });
     return pairs.length && pairs[0][0] === 0 && pairs[0][1] === 0 ? pairs : null;
   }
-  /** The new design: a clone with `pts` (on the lattice) and zones remapped by `pairs` (null: fractions stand). */
+  /** The parallel heights[] through the same `pairs` as the zones: a surviving
+   *  control point keeps its own height. A heights list that never matched pts
+   *  (an old save) is left for the designer's ensureHeights to pad. */
+  function mapHeights(d, oldN, newN, pairs) {
+    if (!pairs || !Array.isArray(d.heights) || d.heights.length !== oldN) return;
+    const h = new Array(newN).fill(0);
+    for (const [o, n] of pairs) h[n] = d.heights[o];
+    d.heights = h;
+  }
+  /** The new design: a clone with `pts` (on the lattice), zones and heights remapped by `pairs` (null: fractions stand). */
   function rebuilt(d, oldPts, newPts, pairs) {
     const out = clone(d);
     out.pts = lattice(newPts);
+    mapHeights(out, oldPts.length, out.pts.length, pairs);
     return pairs ? remap(out, oldPts, out.pts, pairs) : out;
   }
 
@@ -144,7 +154,7 @@ const TrackFixes = (function () {
    *  second click would not move it again. */
   function fixStart(d, pts) {
     if (typeof TrackRandom === "undefined") return null;
-    let cur = pts, f = 0;
+    let cur = pts, f = 0, rot = 0;
     for (let pass = 0; pass < 2; pass++) {
       const ls = TrackRandom.longestStraight(cur);
       if (!ls || !ls.dense || !ls.dense.length || !(ls.lenM > 0)) break;
@@ -155,10 +165,12 @@ const TrackFixes = (function () {
       const c = cum(cur);
       f += c[j] / c[cur.length];
       cur = S.rotate(cur, j);
+      rot = (rot + j) % pts.length;
     }
     if (cur === pts || samePts(lattice(cur), lattice(pts))) return null;   // already there (or a full turn)
     const out = clone(d);
     out.pts = lattice(cur);
+    if (Array.isArray(out.heights) && out.heights.length === pts.length) out.heights = out.heights.slice(rot).concat(out.heights.slice(0, rot));
     Object.assign(out, mapZones(out, (v) => v - f));
     return { design: out, msg: "Moved the start to the longest straight" };
   }

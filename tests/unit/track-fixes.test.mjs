@@ -169,6 +169,35 @@ test("spacing / points: merges points under 8 m, thins to ≤ 180 with RDP, neve
   assert.equal(apply(design({ pts: ellipse(6) }), { code: "points", level: "red", fix: "points" }, null), null);
 });
 
+test("heights[] follows the control points through every remedy that rebuilds them (bug-hunt 6.1)", () => {
+  // heights[i] = i, so a point's height names the control point it belongs to.
+  const key = (p) => p[0] + "," + p[1];
+  const heightOfPt = (d) => new Map(d.pts.map((p, i) => [key(p), d.heights[i]]));
+  const base = ellipse(36, 800, 500);
+  const crowded = design(zones({ pts: base.slice(0, 11).concat([[base[10][0] + 3, base[10][1] + 3]], base.slice(11)) }));
+  crowded.heights = crowded.pts.map((_, i) => i);
+  const { r } = fix(crowded, "spacing");
+  assert.equal(r.design.pts.length, 36);
+  assert.equal(r.design.heights.length, r.design.pts.length, "spacing merge: one height per point");
+  const was = heightOfPt(crowded);
+  r.design.pts.forEach((p, i) => assert.equal(r.design.heights[i], was.get(key(p)), "a surviving point keeps its own height"));
+  // RDP thinning (the POINTS remedy) keeps the survivors' heights too.
+  const dense = design(zones({ pts: ellipse(240, 800, 500) }));
+  dense.heights = dense.pts.map((_, i) => i);
+  const rt = apply(dense, reds(V.check(dense), "points")[0], V.check(dense));
+  assert.ok(rt && rt.design.heights.length === rt.design.pts.length, "points thinning: one height per point");
+  const wasD = heightOfPt(dense);
+  rt.design.pts.forEach((p, i) => assert.equal(rt.design.heights[i], wasD.get(key(p))));
+  // START rotates heights by the index it rotates pts by.
+  const st = design(zones({ pts: stadium() }));
+  st.heights = st.pts.map((_, i) => i);
+  const rs = fix(st, "start", { movesStart: true }).r;
+  assert.equal(rs.design.heights.length, rs.design.pts.length);
+  const wasS = heightOfPt(st);
+  rs.design.pts.forEach((p, i) => assert.equal(rs.design.heights[i], wasS.get(key(p)), "start: heights rotate with the points"));
+  assert.notEqual(rs.design.heights[0], 0, "the line moved, so index 0 is a different point");
+});
+
 test("kink / radius / fold: relaxes the points under the issue; point 0 and far zones stay put", () => {
   for (const [code, pts] of [["radius", zig(60, 8, 2)], ["kink", spike(200, 4)], ["fold", zig(12, 9, 3)]]) {
     const d = design(zones({ pts }));
