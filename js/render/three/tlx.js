@@ -3924,6 +3924,9 @@ const TLX = (function () {
           if (lit && lit.uniforms && lit.uniforms.lgRoad)
             lit.uniforms.lgRoad.value = (framePerChunk > 0 && +(frame && frame.roadChunkLamps) > 0) ? 1.0 : 0.0;
           _postF.proj = (frame && frame.proj) || null;
+          // Garage begin() sets noEnv so present() can keep proj (SSAO) without
+          // routing the bay into the HDR scene target that stays black on soft GL.
+          _postF.noEnv = !!(frame && frame.noEnv);
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
           _postF.invProj = (frame && frame.invProj) || null;
@@ -4359,12 +4362,12 @@ const TLX = (function () {
           };
           let painted = false;
           try {
-            // Garage / menu frames only send viewProj (no proj/invProj).
-            // Routing those through the HDR scene target left the
-            // turntable black — software GL's half-float FBO never got
-            // the car, and ?viz=scene confirmed the RT itself is empty.
-            // View-space post already self-disables; paint the default
-            // framebuffer like GLX.
+            // Garage / menu frames set noEnv (setup-camera may still pass
+            // proj/invProj for SSAO-capable hardware). Routing noEnv through
+            // the HDR scene target left the turntable black — software GL's
+            // half-float FBO never got the car, and ?viz=scene confirmed the
+            // RT itself is empty. View-space post already self-disables;
+            // paint the default framebuffer like GLX.
             //
             // SOFT-PRESENT BACK-PRESSURE. On a software adapter the visible
             // frame is a readback, and a readback completes only after every
@@ -4379,7 +4382,7 @@ const TLX = (function () {
             if (_softBlit && _softReadPending
                 && ((typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince) <= _softReadStaleMs()) {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
-            } else if (post && _postF.proj) {
+            } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
               if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
