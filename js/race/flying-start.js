@@ -10,7 +10,7 @@
    start either. One `create(G)`; the module never reaches into game.js. */
 "use strict";
 
-const FlyingStart = (function () {
+var FlyingStart = (function () {
   const HANDOVER_S = 3;      // s the AI drives the run-up before the wheel is yours
   const MARGIN_S = 2.5;      // s of road left to the line after GO, at drop speed
   const MIN_RUN_M = 150;     // m: never dropped in closer to the line than this

@@ -402,7 +402,11 @@ const RealReplay = (function () {
         const s = at.prog - (lap - 1) * total;
         Tracks.sample(track, s, smp);
         const x = clamp(at.x, -(smp.hw + MAX_X), smp.hw + MAX_X);
-        c.lap = lap; c.prog = at.prog; c.s = s; c.x = x; c.xVis = x; c.speed = at.speed;
+        c.lap = lap; c.prog = at.prog; c.s = s; c.x = x; c.xVis = x;
+        // Trace speed is the car's real m/s; the transport clock runs faster at 2×–8×,
+        // so engine/rival pitch must scale too (game.js revs replay puppets from c.speed).
+        // At 1× this is a no-op; rpmFor still caps redline on extreme 8× straights.
+        c.speed = at.speed * run.speed;
         const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;
         c.px = smp.p[0] + smp.r[0] / rl * x; c.pz = smp.p[2] + smp.r[2] / rl * x;
         c.head = Math.atan2(smp.t[0], smp.t[2]);

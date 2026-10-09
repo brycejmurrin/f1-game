@@ -559,11 +559,18 @@ function saveScreenshot() {
   };
   const run = async () => {
     try {
-      if (typeof GLX !== "undefined" && typeof GLX.awaitSoftPresent === "function") {
-        try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
-      }
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
       const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
+      if (typeof GLX !== "undefined" && typeof GLX.awaitSoftPresent === "function") {
+        // Headed GLX has no #game-soft and no preserved drawing buffer: the canvas
+        // is only readable in the task that presented it. "frame" = resolved from
+        // inside present(), so the read below (no await in between) sees it;
+        // "stale" = nothing presented (paused), and #game would read back black.
+        const live = !softEl && !(typeof GLX.softPresent === "function" && GLX.softPresent());
+        let r = null;
+        try { r = await GLX.awaitSoftPresent(live ? 1500 : 8000, live ? "frame" : undefined); } catch (_) { /* still try the canvas */ }
+        if (live && r === "stale") { done(false, "NO LIVE FRAME"); return; }
+      }
       let href = null;
       // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
       // often the GPU swapchain (black under software). capturePixels is fallback.

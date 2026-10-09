@@ -34,23 +34,37 @@ import re
 import shlex
 import sys
 
-SEPS = {";", "&", "|", "&&", "||", ";;", "(", ")", "\n", "|&", "&;"}
+SEPS = {"`", ";", "&", "|", "&&", "||", ";;", "(", ")", "\n", "|&", "&;"}
 REDIRS = {">", ">>", ">|", "&>", "&>>", "1>", "2>", "1>>", "2>>"}
 WRAPPERS = {"sudo", "exec", "nice", "nohup", "command", "time", "builtin", "stdbuf", "timeout", "xargs"}
 SHELLS = {"sh", "bash", "dash", "zsh"}
+# Reserved words that open a command position without being the command
+# (2026-10-09, ledger L12): `if …; then git commit; fi` splits on `;` and the
+# second simple command's argv[0] is `then`, so the commit read as a command
+# named "then". Peeled like a wrapper; the closers (fi, done, esac, }) are
+# commands of their own after the split and simply name nothing.
+RESERVED_LEAD = {"if", "then", "else", "elif", "while", "until", "do", "!", "{", "time", "coproc"}
+
+
+class ParseError(ValueError):
+    """The text is not tokenisable; a strict reader (commit) must fail CLOSED."""
 
 
 def strip_heredocs(text):
     """Drop heredoc BODIES (keep the line that opens them), so a commit
     message or a file body never reads as commands."""
+    lines = text.split("\n")
     out, term = [], None
-    for ln in text.split("\n"):
+    for n, ln in enumerate(lines):
         if term is not None:
             if ln.strip() == term:
                 term = None
             continue
-        m = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", ln)
-        if m and "<<<" not in ln[max(0, m.start() - 1):m.start() + 3]:
+        m = re.search(r"(?<!<)<<(?!<)-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", ln)
+        # A heredoc needs its closing line, and `<<` inside `$(( … ))` is a
+        # shift: `echo $((1 << n))` used to swallow every line after it (L12).
+        if m and ln[:m.start()].count("((") <= ln[:m.start()].count("))") \
+                and any(x.strip() == m.group(1) for x in lines[n + 1:]):
             term = m.group(1)
         out.append(ln)
     return "\n".join(out)
@@ -61,7 +75,8 @@ def tokens(text):
     when the text is not tokenisable (unbalanced quotes). A newline INSIDE a
     quoted string stays in its word, so a multi-line -m message never reads
     as commands."""
-    lx = shlex.shlex(strip_heredocs(text), posix=True, punctuation_chars=";&|()<>\n")
+    # A backslash-newline is a line continuation, not a word character.
+    lx = shlex.shlex(strip_heredocs(text).replace("\\\n", " "), posix=True, punctuation_chars=";&|()<>\n`")
     lx.whitespace = " \t\r"
     lx.whitespace_split = True
     lx.commenters = ""
@@ -75,7 +90,7 @@ def split_commands(toks):
     """[[argv tokens incl. redirections], …] split on separators."""
     cmds, cur = [], []
     for t in toks:
-        if t in SEPS or (t and set(t) <= set(";&|()\n")):
+        if t in SEPS or (t and set(t) <= set(";&|()\n`")):
             if cur:
                 cmds.append(cur)
             cur = []
@@ -96,6 +111,9 @@ def peel(argv):
         if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", a):
             k, v = a.split("=", 1)
             env[k] = v
+            i += 1
+            continue
+        if a in RESERVED_LEAD:
             i += 1
             continue
         base = os.path.basename(a)
@@ -122,11 +140,15 @@ def peel(argv):
     return env, argv[i:]
 
 
-def commands(text, cwd=None, depth=0):
+def commands(text, cwd=None, depth=0, strict=False):
     """Yield (env, argv, redirects, cwd) for every simple command, with
-    `sh -c BODY` unwrapped and `cd` tracked."""
+    `sh -c BODY` unwrapped and `cd` tracked. `strict` raises ParseError on
+    untokenisable text (here or in a `-c` / eval body) instead of yielding
+    nothing, so a caller that must not miss a command can fail closed."""
     toks = tokens(text)
     if toks is None:
+        if strict:
+            raise ParseError("untokenisable command")
         return
     for raw in split_commands(toks):
         # Pull redirections out of the argv.
@@ -167,8 +189,11 @@ def commands(text, cwd=None, depth=0):
                     break
                 j += 1
             if body is not None:
-                yield from commands(body, cwd, depth + 1)
+                yield from commands(body, cwd, depth + 1, strict)
                 continue
+        if base == "eval" and depth < 4 and len(argv) > 1:
+            yield from commands(" ".join(argv[1:]), cwd, depth + 1, strict)
+            continue
         yield env, argv, redirs, cwd
 
 
@@ -182,9 +207,11 @@ COMMIT_SHORT_ARG = set("mFcCt")
 
 def commit_info(text):
     """Every `git … commit …` in the command: [{all, paths, include, dry,
-    skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command."""
+    skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command. Raises ParseError when the
+    text cannot be tokenised (main() prints `null`, the shell then falls back
+    to its regex: fail closed)."""
     found = []
-    for env, argv, _r, _cwd in commands(text, os.getcwd()):
+    for env, argv, _r, _cwd in commands(text, os.getcwd(), strict=True):
         if os.path.basename(argv[0]) != "git":
             continue
         i = 1
@@ -328,7 +355,10 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     text = sys.stdin.read()
     if mode == "commit":
-        print(json.dumps(commit_info(text)))
+        try:
+            print(json.dumps(commit_info(text)))
+        except ParseError:
+            print("null")
     elif mode == "writes":
         print(json.dumps(write_targets(text, sys.argv[2] if len(sys.argv) > 2 else os.getcwd())))
     else:

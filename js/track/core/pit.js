@@ -419,12 +419,21 @@ const TrackPit = (function () {
     const fastOut = h + o.fastOut * wk;
     const corrOut = fastOut + (o.corrOut - o.fastOut) * bk;
     const workOut = corrOut + (o.workOut - o.corrOut) * bk;
+    // NO BAYS, NO SEPARATE WORKING LANE: on a complex without garages (jeddah,
+    // jerez, mont_tremblant) the stop happens IN the fast lane. `corrOut` and
+    // `workOut` both collapse onto the fast lane's OUTER edge there, so
+    // `workIn`/`workCentre` sat on the pit wall while `openBoundary` keeps the
+    // car's centre 0.9 m short of it: PitLane's inBoxLat/boxSquare accepted a
+    // stop in a 10 cm band. The working position IS the fast lane. Bay
+    // circuits (`hasBays`) keep the corridor/working-lane maths untouched —
+    // including their bay-less entry and exit roads.
+    const lane = p.hasBays === false;
     return {
       side: sd, w: wk, v: vk,
       inner: sd * fastIn, outer: sd * workOut,
       centre: sd * (fastIn + Math.max(fastIn, fastOut)) / 2,
-      fastOut: sd * fastOut, workIn: sd * corrOut,
-      workCentre: sd * (corrOut + workOut) / 2,
+      fastOut: sd * fastOut, workIn: sd * (lane ? fastIn : corrOut),
+      workCentre: sd * (lane ? (fastIn + fastOut) / 2 : (corrOut + workOut) / 2),
       width: Math.max(0, workOut - fastIn),
     };
   }

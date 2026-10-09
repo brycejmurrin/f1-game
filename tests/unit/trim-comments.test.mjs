@@ -16,6 +16,7 @@ test("trim-comments.mjs --help exits 0", () => {
 });
 
 test("trim-comments removes dividers and loc pointers on a fixture", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-fix-"));
   const file = path.join(dir, "sample.js");
   fs.writeFileSync(file, [
@@ -44,6 +45,7 @@ test("trim-comments removes dividers and loc pointers on a fixture", () => {
 });
 
 test("trim-comments removes dividers embedded in // comment runs", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-embed-"));
   const file = path.join(dir, "embed.js");
   fs.writeFileSync(file, [
@@ -63,6 +65,7 @@ test("trim-comments removes dividers embedded in // comment runs", () => {
 });
 
 test("trim-comments preserves KEEP keywords in narrative blocks", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-keep-"));
   const file = path.join(dir, "keep.js");
   fs.writeFileSync(file, [
@@ -78,6 +81,7 @@ test("trim-comments preserves KEEP keywords in narrative blocks", () => {
 });
 
 test("trim-comments keeps whitespace-padded boxed prose in /* */", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-box-"));
   const file = path.join(dir, "box.js");
   fs.writeFileSync(file, [
@@ -97,6 +101,7 @@ test("trim-comments keeps whitespace-padded boxed prose in /* */", () => {
 });
 
 test("trim-comments keeps an open divider run followed by prose, removes closed banners", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-open-"));
   const file = path.join(dir, "open.js");
   fs.writeFileSync(file, [
@@ -120,6 +125,7 @@ test("trim-comments keeps an open divider run followed by prose, removes closed 
 });
 
 test("trim-comments --narrative keeps licence / attribution blocks", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-lic-"));
   const file = path.join(dir, "lic.js");
   fs.writeFileSync(file, [
@@ -147,6 +153,7 @@ test("trim-comments --narrative with no explicit path exits 2", () => {
 });
 
 test("trim-comments --dry-run --narrative lists candidates on stderr and writes nothing", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "trim-list-"));
   const file = path.join(dir, "list.js");
   const src = [

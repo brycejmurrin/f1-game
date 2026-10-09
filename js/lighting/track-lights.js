@@ -185,7 +185,10 @@ function applyLampDensity(posts, track, height, onlyAlways) {
       const side = (j % 2 === 0) ? a.side : -a.side;
       const hwk = track.hw[k] || 7;
       fill.push({
-        k, side, synth: true, densified: true, kind: a.kind || null,
+        k, side, synth: true, densified: true,
+        // A fill lamp has no hand-set aim, so it never takes the `signal` kind (or an aimAt
+        // lamp's): copied here the pit-entrance aspect threw a red pool at the near lane.
+        kind: (a.kind === "signal" || a.aimAt) ? null : (a.kind || null),
         x: track.px[k] + track.rx[k] * (hwk + 6) * side,
         y: track.py[k] + height,
         z: track.pz[k] + track.rz[k] * (hwk + 6) * side,

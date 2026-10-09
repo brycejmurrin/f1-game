@@ -306,18 +306,25 @@ Pins the wrap always applies (you cannot override them):
 - `apex_ci_status` → `ci-watch.mjs --once --sha <hex|HEAD>`, never `--timeout` /
   `--pages`; exits 0/1/2/124 are verdicts (`ok:true`, `out.verdict`), 3 (no
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
-- `apex_shot_survey` → one `track-session.mjs --serve` boot, then 1–32 shots,
-  a contact `sheet`, and `index.html`; presets `scenery`|`lap`|`dual`|`inspect`
-  or explicit `fracs` / `shots`; never spawns N separate `shot.mjs` boots
+- `apex_shot_survey` → one `track-session.mjs --serve` boot per circuit, then
+  1–32 shots, contact `sheet`, `index.html`, `progress.json`, `findings.json`;
+  presets `quick`|`dual_lite`|`night_pass`|`scenery`|`full`|`lap`|`dual`|`inspect`
+  or explicit `fracs` / `shots`; `tracks[]` queues circuits sequentially; long or
+  multi-track runs default to async (`apex_job_start` kind `shot_survey`, returns
+  `jobId`); `resume` skips existing PNGs; `gl` prefers `llvmpipe` when Mesa dri
+  is present; never spawns N separate `shot.mjs` boots
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `op survey` is the same batch as
   `apex_shot_survey`; `cam`/`tod`/`frac` are enum- and range-checked,
   `az`/`el`/`dist`/`h` bounded, `track` must be a `Tracks.LIST` id, `out` stays under
   `artifacts/`/`scratch/`. `h` is metres above the road (eye height on `eye`, aim
   point on `orbit` — frames a prop far overhead); `el` on `eye` is the pitch
-- `apex_job_start` → `kind` from a fixed list, each with its own argv builder;
-  callers pass values (ids, comma lists), never flags; at most two jobs run;
-  browser kinds hold the lock until they exit; `apex_job_cancel` kills the group.
+- `apex_job_start` → `kind` from a fixed list (includes `shot_survey`), each with
+  its own argv builder; callers pass values (ids, comma lists), never flags; at
+  most two jobs run; browser kinds hold the lock until they exit; `hud_shot` /
+  `hud_survey` start only from the HUD tools (their pinned argv rides a Symbol
+  key no JSON caller can set; a direct call is refused);
+  `apex_job_cancel` kills the group.
   The reported `log` is the CLI's stdout (its report; the status `tail` reads it),
   `stderr` the file beside it, both in `artifacts/logs/apex-jobs/`
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
@@ -328,9 +335,12 @@ Pins the wrap always applies (you cannot override them):
   enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
   under `artifacts/` or `scratch/`) are validated by the CLI's own pure
   validators before the lock; `matrix: exhaustive` (~4 h) is refused without
-  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). Results carry `structuredContent`, its
-  serialized copy as the first text block, and `resource_link`s (PNG /
-  findings.md / index.html / report.json)
+  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). A cell is ~2 min
+  and the quick matrix ~10, past the host's ~60–120 s MCP call, so both default
+  to `apex_job_start` kinds `hud_shot` / `hud_survey` and return a `jobId`
+  (poll `apex_job_status`). `async: false` blocks instead; only that path's
+  results carry `structuredContent`, its serialized copy as the first text
+  block, and `resource_link`s (PNG / findings.md / index.html / report.json)
 - Browser wraps never take `--url`; output paths (`out`) must stay under
   `artifacts/` or `scratch/`
 

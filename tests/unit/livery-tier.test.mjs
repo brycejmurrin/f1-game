@@ -154,15 +154,18 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
 function decalRig() {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
-  const built = [], freed = [], idle = [];
-  const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => "std",
+  const built = [], freed = [], idle = [], hiLiveries = [];
+  const live = { id: "std" };   // the livery the garage has selected NOW
+  const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => live.id,
     gfx: { createTexture: (a) => { const t = { atlas: a }; built.push(a); return t; }, freeTexture: (t) => freed.push(t.atlas) } };
   // 5th arg hiRes: preview vs deferred full. isPlayer without hiRes → preview.
   const LiveryTex = {
     IS_MOBILE: false,
     playerHiResDeferred: (mobile) => !mobile,
-    buildAtlas: (team, _l, num, isPlayer, hiRes) =>
-      team + "#" + num + (hiRes ? ":hi" : (isPlayer ? ":prev" : ":half")),
+    buildAtlas: (team, l, num, isPlayer, hiRes) => {
+      if (hiRes) hiLiveries.push(team + "#" + num + "=" + (l && l.id));
+      return team + "#" + num + (hiRes ? ":hi" : (isPlayer ? ":prev" : ":half"));
+    },
   };
   const make = new Function("G", "LiveryTex", "deps", "Log", "requestIdleCallback", "setTimeout", "idle", `
     const DECAL_TEX_CACHE_MAX = 36;
@@ -192,9 +195,10 @@ function decalRig() {
       hiResDone: () => _hiResDone.size,
       invalidate(teamId) { invalidateDecalTextures(teamId); },
     };`);
-  const api = make(G, LiveryTex, { resolveLivery: () => ({}) }, { warn() {} },
+  const api = make(G, LiveryTex, { resolveLivery: () => ({ id: live.id }) }, { warn() {} },
     (cb) => { idle.push(cb); }, (cb) => { idle.push(cb); }, idle);
-  return { G, api, built, freed, idle };
+  const pick = (id) => { live.id = id; G.store.rev++; };   // a garage livery click: a store write
+  return { G, api, built, freed, idle, hiLiveries, pick };
 }
 const team = (id) => ({ id });
 function grid(n) {
@@ -227,6 +231,36 @@ test("a starved idle callback re-queues instead of painting 2048", () => {
   assert.ok(idle.length >= 1, "the callback was re-queued");
   api.flushHiRes();
   assert.equal(api.hiResDone(), 1);
+});
+
+// L10: the deferred kick is keyed by the livery at SCHEDULE time but used to build from the
+// livery selected at IDLE time, so A -> B before the idle slot stored B's pixels under A's key.
+test("L10: a livery switch before the idle slot never stores the new livery's atlas under the old key", () => {
+  const { api, hiLiveries, pick } = decalRig();
+  const cars = grid(0);
+  pick("A");
+  api.frame(cars);                 // preview for A, kick(A) queued
+  pick("B");                       // the player clicks B before an idle slot with >=10 ms arrives
+  api.flushHiRes();
+  assert.deepEqual(hiLiveries, [], "kick(A) must not paint B into key A");
+  assert.equal(api.hiResDone(), 0, "A has no hi-res yet");
+  pick("A");                       // back to A: the hit path re-schedules, and builds A's own livery
+  api.frame(cars);
+  api.flushHiRes();
+  assert.deepEqual(hiLiveries, ["me#1=A"]);
+  assert.equal(api.frame(cars)[0], "me#1:hi");
+});
+
+test("L10: invalidate + re-mint under one key leaves exactly one live kick, built from the fresh livery", () => {
+  const { api, hiLiveries, pick, idle } = decalRig();
+  const cars = grid(0);
+  pick("A"); api.frame(cars);      // kick#1 queued
+  api.invalidate("me");            // editor SAVE: key dropped...
+  pick("A2"); pick("A");           // (store write) ...and re-minted below
+  api.frame(cars);                 // kick#2 queued for the same key
+  assert.equal(idle.length, 2);
+  api.flushHiRes();
+  assert.deepEqual(hiLiveries, ["me#1=A"], "the stale kick#1 bails; one hi-res build");
 });
 
 test("hi-res swap does not free prev while a material still holds it", () => {
@@ -391,4 +425,41 @@ test("sync getCarDecalTexture path never creates a canvas wider than SIZE/div", 
   const hi = paintAtlasWidths(true, true);
   assert.equal(hi.returned.width, hi.LT.SIZE, "deferred kick still authors 2048");
   assert.ok(hi.widths.includes(hi.LT.SIZE));
+});
+
+// M28: setTeamLogo decodes asynchronously. A decode that finished after CLEAR (or after a newer upload) reinstalled
+// the stale emblem into LOGOS - the car wore a logo the player had just removed or replaced.
+test("M28: an emblem that finishes decoding after CLEAR or a newer upload never reinstalls", () => {
+  const made = [];
+  class FakeImage { constructor() { made.push(this); } }
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean,
+                isFinite, isNaN, Map, Set, WeakMap, Image: FakeImage };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
+                   "js/car/livery-graphics.js", "js/car/liverytex.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+  const LT = vm.runInContext("LiveryTex", ctx);
+  let marks = 0;
+  LT.onMarkChange(() => { marks++; });
+
+  LT.setTeamLogo("custom", "data:A"); LT.setTeamLogo("custom", "data:B");
+  assert.equal(made.length, 2);
+  made[1].onload();                                   // the newer upload decodes first
+  assert.equal(LT.LOGOS.custom, made[1]);
+  made[0].onload();                                   // the older one finishes late
+  assert.equal(LT.LOGOS.custom, made[1], "a stale decode does not replace the newer emblem");
+
+  LT.setTeamLogo("custom", "data:C");                 // upload, then CLEAR before it decodes
+  LT.setTeamLogo("custom", null);
+  assert.equal(LT.LOGOS.custom, undefined);
+  const seen = marks;
+  made[2].onload();
+  assert.equal(LT.LOGOS.custom, undefined, "an emblem decoding after CLEAR stays cleared");
+  assert.equal(marks, seen, "…and the stale decode does not tell the caches either");
+
+  LT.setTeamLogo("custom", "data:D"); LT.setTeamLogo("custom", "data:E");
+  made[4].onload();
+  made[3].onerror();                                  // a stale failure must not wipe the current emblem
+  assert.equal(LT.LOGOS.custom, made[4], "a stale onerror does not delete the current emblem");
 });

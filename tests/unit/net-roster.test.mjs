@@ -24,8 +24,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -439,6 +441,24 @@ test("host: a lap actually driven still counts, through to the finish", () => {
   assert.equal(carA.finishT, G.raceT);
 });
 
+// L6: an EXTRAPOLATED crossing (the pose runs up to 250 ms past the newest packet) rose the lap and stamped
+// _nRiseT; the real packet then fell short of the line (lap falls back), and the REAL crossing a second
+// later was refused as "faster than total / SPEED_LIMIT" - the guest stayed a lap short on the host all race.
+test("host: an early extrapolated crossing, a short real packet, then the real crossing still counts", () => {
+  const { G, net, carA, pose } = hostWithGuest();
+  pose({ s: 4990, lap: 0 }); pose({ s: 5, lap: 1 });
+  assert.equal(carA.lap, 1);
+  pose({ s: 2500, lap: 1 }); G.raceT += 90;
+  pose({ s: 4994, lap: 1 });                                   // the newest REAL packet, 6 m short of the line
+  net.tick(1000 + 50 * 5 + 150);                               // 150 ms later, no packet: 9 m of extrapolation crosses
+  assert.equal(carA.lap, 2, "the extrapolated sample crossed early and rose the lap");
+  pose({ s: 4998, lap: 1 });                                   // the real packet: still short of the line
+  assert.equal(carA.lap, 1, "a fall nets zero");
+  G.raceT += 1;
+  pose({ s: 3, lap: 2 });                                      // the real crossing, 1 s of clock after the early one
+  assert.equal(carA.lap, 2, "the fall cleared the rise stamp, so the real crossing is not refused");
+});
+
 test("host: a LAP `fin` far from this race clock is refused", () => {
   const { G, sA, carA } = hostWithGuest();
   carA.lap = G.lapsTarget + 1;
@@ -556,4 +576,19 @@ test("host: a finishing LAP relays the owner's lap so guest B does not finish ea
   assert.equal(other._nFin, G.raceT - 0.5);
   assert.equal(other._nFinLap, 4);
   // The stale-pose bug would have relayed lap:3 → finishLap(3)=3 → finished now.
+});
+
+// M41 (skidIntensity): retireCar never cleared it, so the screech loop (GameAudio.setSkid(player.skidIntensity))
+// and the tyre smoke ran on the parked car for the rest of the race.
+test("retireCar clears the car's skid intensity so a parked car does not screech", () => {
+  const car = { x: 1, s: 100, lap: 1, code: "YOU", speed: 55, skidIntensity: 0.8, local: false, human: false };
+  vm.runInNewContext(fnSource(src("js/game.js"), "function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
+    car, netPlay: { active: () => false, ownsRaceControl: () => false }, incidentSim: { release() {} }, track: { total: 5000 },
+    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
+    clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
+    OvertakeMode: { reset() {} }, announce() {}, soundOn: false,
+  });
+  assert.equal(car.retired, true);
+  assert.equal(car.speed, 0);
+  assert.equal(car.skidIntensity, 0, "a retired car is not slipping");
 });

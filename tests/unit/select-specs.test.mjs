@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
-  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
+  MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST,
   SOLO_OWN_TIMEOUT_SEC,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
@@ -100,9 +100,61 @@ test("a spec bigger than the whole pack runs as OVERSIZE shards, not unreachable
   assert.deepEqual(both.skipped, []);
   const planned = shards(both, EMPTY).flatMap((r) => r.specs.split(" "));
   assert.ok(planned.includes(both.overflow[0].file), "shards() packs the overflow spec into a job");
-  const none = fit([a, b], bud, { db: EMPTY, overflowShards: 0 });
-  assert.equal(none.skipped.length, 1, "no overflow allowance: skipped by name");
+  const none = fit([a, b], bud, { db: EMPTY, overflowShards: 0, spillShards: 0 });
+  assert.equal(none.skipped.length, 1, "no overflow or spill allowance: skipped by name");
   assert.deepEqual(none.overflow, []);
+  const spilled = fit([a, b], bud, { db: EMPTY, overflowShards: 0 });
+  assert.equal(spilled.spill.length, 1, "no overflow allowance: the spill leg carries it");
+  assert.deepEqual(spilled.skipped, []);
+});
+
+test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #1204, dev-tools)", () => {
+  // CI on 5f2e64b82: the selected-failed hoist + the bot/spec-timings overlay
+  // filled all MAX_OVERFLOW_SHARDS jobs, so dev-tools.spec.js (56 tests) was
+  // skipped, ran nowhere, and red the verdict (remote-group 37665046433:
+  // 74/74 pass). Reproduce: ~300 s routed fillers (fewer tests, so they sort
+  // first) fill the overflow to within less than dev-tools' 129 s, then
+  // dev-tools is the leftover.
+  const dev = "tests/specs/dev-tools.spec.js";
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  const plain = fit(all, 1000, { db: EMPTY, overflowShards: 0, spillShards: 0 }).selected
+    .filter((s) => s.file !== dev && !s.ownTimeoutSec && s.tests < declaredTests(dev)
+      && !/career|hud-layout|menu-baseline/.test(s.file))
+    .map((s) => s.file);
+  const row = (sec, n) => ({ s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", sec, n]) });
+  const plan = (nFill, opts = {}) => {
+    const fill = plain.slice(0, nFill);
+    assert.equal(fill.length, nFill, `fixture: ${nFill} plain specs available`);
+    const db = { specs: { ...Object.fromEntries(fill.map((f) => [f, row(300, declaredTests(f))])),
+      [dev]: row(129, declaredTests(dev)) } };
+    const rank = () => 3;
+    return { db, r: fit([...fill, dev], DEFAULT_BUDGET_MIN, { db, rank, overflowShards: MAX_OVERFLOW_SHARDS, ...opts }) };
+  };
+  const secOf = (xs) => xs.reduce((n, x) => n + x.sec, 0);
+  const devSec = 129;
+  const { db, r } = plan(14);
+  assert.ok(MAX_OVERFLOW_SHARDS * TARGET_SHARD_SEC - secOf(r.overflow) < devSec,
+    `fixture: overflow is full (${secOf(r.overflow)} s of ${MAX_OVERFLOW_SHARDS * TARGET_SHARD_SEC})`);
+  assert.ok(!r.overflow.some((s) => s.file === dev), "dev-tools did not fit the overflow");
+  assert.deepEqual(r.spill.map((s) => s.file), [dev], "dev-tools rides the spill leg");
+  assert.deepEqual(r.skipped, [], "nothing is skipped");
+  const jobs = shards(r, db);
+  const sp = jobs.filter((j) => j.name.startsWith("spill-"));
+  assert.equal(sp.length, 1, `one spill job in the matrix: ${jobs.map((j) => j.name)}`);
+  assert.ok(sp[0].specs.split(" ").includes(dev), "the spill job runs dev-tools");
+  // The pre-fix behaviour, reproduced with the spill turned off: skipped by name.
+  const off = plan(14, { spillShards: 0 }).r;
+  assert.deepEqual(off.skipped.map((s) => s.file), [dev], "without a spill leg dev-tools is skipped (the bug)");
+  // Past the spill: bounded, and what is left is still NAMED in skipped (the
+  // CLI/step report it as an error; the verdict reds on dropped > 0).
+  const over = plan(18).r;
+  assert.ok(secOf(over.spill) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC, `spill ${secOf(over.spill)} s is bounded`);
+  assert.ok(over.skipped.length > 0, "what the spill cannot carry is named, not silently dropped");
+  const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
+  assert.equal(placed.length, 19, "every spec lands in exactly one bucket");
+  assert.equal(new Set(placed).size, 19);
+  assert.equal(MAX_SPILL_SHARDS, 2, "the spill leg stays small");
 });
 
 test("overflow is bounded, and every spec lands in exactly one bucket at any allowance", () => {
@@ -114,7 +166,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   assert.ok(r.skipped.length > 0, "a whole-suite plan still leaves specs to name");
   const wide = fit(specs, 60, { overflowShards: 12, staleFirst: true });
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
-  const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + x.oversize.length
+  const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + (x.spill || []).length + x.oversize.length
     + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
     + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
@@ -1154,4 +1206,12 @@ test("post-edit.sh no longer tells authors to declare > 180 s to escape the gate
   const step = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
   assert.match(step, /overBudgetRun/, "the CI step names the specs the over-budget pool runs");
   assert.match(step, /::warning::DROPPED/, "a dropped spec is an annotation on the PR");
+});
+
+test("L9: circuitsOf(the ADAPTED runner) is the union of its specs' circuits (2026-10-09)", async () => {
+  const { ADAPTED, ADAPTED_RUNNER } = await import("../../tools/ci/twinned-specs.mjs");
+  const want = new Set();
+  for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) want.add(id);
+  assert.ok(want.has("cota"));
+  assert.deepEqual([...circuitsOf(ADAPTED_RUNNER)].sort(), [...want].sort());
 });
